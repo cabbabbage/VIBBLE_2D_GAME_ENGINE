@@ -184,6 +184,70 @@ void LightMapQuadrant::fade_dynamic(std::uint8_t fade) {
     dirty_ = true;
 }
 
+LightMapQuadrant::GridStatistics LightMapQuadrant::static_grid_stats() const {
+    GridStatistics stats{};
+    if (grid_width_ <= 0 || grid_height_ <= 0) {
+        return stats;
+    }
+    std::uint8_t min_value = 255;
+    std::uint8_t max_value = 0;
+    double        sum       = 0.0;
+    int           count     = 0;
+    for (int y = 0; y < grid_height_; ++y) {
+        for (int x = 0; x < grid_width_; ++x) {
+            const std::size_t idx   = index_from_cell(x, y);
+            const std::uint8_t value = static_grid_[idx];
+            min_value = std::min(min_value, value);
+            max_value = std::max(max_value, value);
+            sum += static_cast<double>(value);
+            ++count;
+        }
+    }
+    if (count > 0) {
+        stats.empty   = false;
+        stats.min     = static_cast<float>(min_value) / 255.0f;
+        stats.max     = static_cast<float>(max_value) / 255.0f;
+        stats.average = static_cast<float>(sum / static_cast<double>(count)) / 255.0f;
+    }
+    return stats;
+}
+
+LightMapQuadrant::GridStatistics LightMapQuadrant::dynamic_grid_stats() const {
+    GridStatistics stats{};
+    if (grid_width_ <= 0 || grid_height_ <= 0) {
+        return stats;
+    }
+    std::uint8_t min_value = 255;
+    std::uint8_t max_value = 0;
+    double        sum       = 0.0;
+    int           count     = 0;
+    for (int y = 0; y < grid_height_; ++y) {
+        for (int x = 0; x < grid_width_; ++x) {
+            const std::size_t idx   = index_from_cell(x, y);
+            const std::uint8_t value = dynamic_grid_[idx];
+            min_value = std::min(min_value, value);
+            max_value = std::max(max_value, value);
+            sum += static_cast<double>(value);
+            ++count;
+        }
+    }
+    if (count > 0) {
+        stats.empty   = false;
+        stats.min     = static_cast<float>(min_value) / 255.0f;
+        stats.max     = static_cast<float>(max_value) / 255.0f;
+        stats.average = static_cast<float>(sum / static_cast<double>(count)) / 255.0f;
+    }
+    return stats;
+}
+
+float LightMapQuadrant::combined_average(float static_weight, float dynamic_weight) const {
+    const GridStatistics static_stats  = static_grid_stats();
+    const GridStatistics dynamic_stats = dynamic_grid_stats();
+    const float          s             = static_stats.empty ? 0.0f : static_stats.average;
+    const float          d             = dynamic_stats.empty ? 0.0f : dynamic_stats.average;
+    return clamp_unit(base_brightness_ + (s * static_weight) + (d * dynamic_weight));
+}
+
 float LightMapQuadrant::cell_sample(int cx, int cy, float static_weight, float dynamic_weight) const {
     if (stride_ <= 0) {
         return base_brightness_;

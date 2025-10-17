@@ -17,6 +17,7 @@
 class Asset;
 class SceneRenderer;
 class LightMap;
+class LightMapManager;
 struct SDL_Renderer;
 class CurrentRoomFinder;
 class Room;
@@ -130,6 +131,8 @@ public:
     render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings();
     const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
     const LightMap* light_map() const;
+    LightMapManager*       light_map_manager();
+    const LightMapManager* light_map_manager() const;
     void set_virtual_light_map_quadrants(int quadrants);
     int  virtual_light_map_quadrants() const;
     void force_virtual_light_map_refresh();
@@ -195,6 +198,7 @@ private:
     std::unique_ptr<AssetList> active_asset_list_;
     std::atomic<bool> active_assets_dirty_{true};
     std::unique_ptr<devmode::core::ManifestStore> manifest_store_fallback_;
+    std::unique_ptr<LightMapManager> light_map_manager_;
 
     struct ScalingNotice {
         std::string message;

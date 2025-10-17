@@ -9,6 +9,7 @@
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
 #include "render/light_map.hpp"
+#include "render/light_map_manager.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 #include "map_generation/room.hpp"
@@ -1092,6 +1093,17 @@ const render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_
 
 const LightMap* Assets::light_map() const {
     return scene ? scene->light_map() : nullptr;
+}
+
+LightMapManager* Assets::light_map_manager() {
+    if (!light_map_manager_) {
+        light_map_manager_ = std::make_unique<LightMapManager>(this);
+    }
+    return light_map_manager_.get();
+}
+
+const LightMapManager* Assets::light_map_manager() const {
+    return const_cast<Assets*>(this)->light_map_manager();
 }
 
 void Assets::set_virtual_light_map_quadrants(int quadrants) {

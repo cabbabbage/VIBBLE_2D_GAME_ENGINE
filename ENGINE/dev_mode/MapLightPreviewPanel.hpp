@@ -8,10 +8,12 @@
 #include <SDL.h>
 
 #include "DockableCollapsible.hpp"
+#include "render/light_map_manager.hpp"
 
 class Assets;
 class Input;
 class LightMap;
+class LightMapManager;
 
 class MapLightPreviewPanel : public DockableCollapsible {
 public:
@@ -32,7 +34,9 @@ protected:
     void layout_custom_content(int screen_w, int screen_h) const override;
 
 private:
-    const class LightMap* current_light_map() const;
+    const class LightMap*        current_light_map() const;
+    const LightMapManager*       light_map_manager() const;
+    const LightMapManager::QuadrantSnapshot* snapshot_for_quadrant(int index) const;
     std::optional<SDL_Point>      player_screen_position() const;
     std::vector<std::string>      assets_in_quadrant(int quadrant) const;
     int                           quadrant_index_from_point(int x, int y) const;
@@ -42,6 +46,8 @@ private:
     mutable SDL_Rect preview_rect_{0, 0, 0, 0};
     mutable SDL_Rect preview_grid_rect_{0, 0, 0, 0};
     mutable std::vector<SDL_Rect> quadrant_preview_rects_{};
+    mutable std::vector<LightMapManager::QuadrantSnapshot> quadrant_snapshots_{};
+    mutable std::vector<bool> quadrant_snapshot_valid_{};
     mutable int screen_width_px_ = 0;
     mutable int screen_height_px_ = 0;
     int selected_quadrant_ = -1;

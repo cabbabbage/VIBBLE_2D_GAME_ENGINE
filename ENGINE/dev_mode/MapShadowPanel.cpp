@@ -71,7 +71,7 @@ std::string make_setting_key(std::string_view suffix) {
 }  // namespace
 
 MapShadowPanel::MapShadowPanel(MapLightPanel* light_panel, Assets* assets, int x, int y)
-    : DockableCollapsible("Virtual Light Map Shadows (Quadrant-based)", true, x, y),
+    : DockableCollapsible("Light Map Shadows (Quadrant-based)", true, x, y),
       light_panel_(light_panel),
       assets_(assets) {
     set_floating_content_width(360);

@@ -36,6 +36,17 @@ public:
     void set_dirty(bool value) { dirty_ = value; }
     void set_active(bool value) { active_ = value; }
 
+    struct GridStatistics {
+        float min      = 0.0f;
+        float max      = 0.0f;
+        float average  = 0.0f;
+        bool  empty    = true;
+    };
+
+    GridStatistics static_grid_stats() const;
+    GridStatistics dynamic_grid_stats() const;
+    float          combined_average(float static_weight, float dynamic_weight) const;
+
     void build_static(const std::vector<std::uint8_t>& grid, int width, int height);
     void stamp_moving_lights(const std::vector<std::uint8_t>& grid, int width, int height, std::uint8_t clamp = 255);
     void fade_dynamic(std::uint8_t fade);
