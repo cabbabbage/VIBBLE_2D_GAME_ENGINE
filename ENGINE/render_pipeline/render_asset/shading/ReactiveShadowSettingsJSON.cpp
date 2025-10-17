@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -50,6 +51,45 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
         read_float(json, "size_scale_factor", settings.virtual_light_map.size_scale_factor);
     settings.virtual_light_map.map_light_factor =
         read_float(json, "map_light_factor", settings.virtual_light_map.map_light_factor);
+
+    auto parse_lut = [&](const nlohmann::json& source) {
+        if (!source.is_array()) {
+            return;
+        }
+        std::vector<ReactiveShadowSettings::ShadowResponseLutEntry> entries;
+        entries.reserve(source.size());
+        for (const auto& entry : source) {
+            if (!entry.is_object()) {
+                continue;
+            }
+            ReactiveShadowSettings::ShadowResponseLutEntry node{};
+            node.brightness = read_float(entry, "brightness", node.brightness);
+            node.opacity    = read_float(entry, "opacity", node.opacity);
+            node.offset     = read_float(entry, "offset", node.offset);
+            node.scale      = read_float(entry, "scale", node.scale);
+            entries.push_back(node);
+        }
+        if (!entries.empty()) {
+            settings.response_lut.entries = std::move(entries);
+        }
+    };
+
+    if (auto lut_it = json.find("shadow_lut"); lut_it != json.end()) {
+        parse_lut(*lut_it);
+    } else if (auto alt_it = json.find("brightness_lut"); alt_it != json.end()) {
+        parse_lut(*alt_it);
+    }
+
+    if (auto weights_it = json.find("sampling_weights"); weights_it != json.end() && weights_it->is_object()) {
+        settings.sampling_weights.static_weight =
+            read_float(*weights_it, "static_weight", settings.sampling_weights.static_weight);
+        settings.sampling_weights.static_weight =
+            read_float(*weights_it, "static", settings.sampling_weights.static_weight);
+        settings.sampling_weights.dynamic_weight =
+            read_float(*weights_it, "dynamic_weight", settings.sampling_weights.dynamic_weight);
+        settings.sampling_weights.dynamic_weight =
+            read_float(*weights_it, "dynamic", settings.sampling_weights.dynamic_weight);
+    }
 }
 
 }  // namespace
@@ -82,6 +122,22 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
         { "shadow_scale", sanitized.virtual_light_map.shadow_scale },
         { "size_scale_factor", sanitized.virtual_light_map.size_scale_factor },
         { "map_light_factor", sanitized.virtual_light_map.map_light_factor }
+    });
+
+    nlohmann::json lut = nlohmann::json::array();
+    for (const auto& entry : sanitized.response_lut.entries) {
+        lut.push_back(nlohmann::json::object({
+            { "brightness", entry.brightness },
+            { "opacity", entry.opacity },
+            { "offset", entry.offset },
+            { "scale", entry.scale }
+        }));
+    }
+    json["shadow_lut"] = std::move(lut);
+
+    json["sampling_weights"] = nlohmann::json::object({
+        { "static_weight", sanitized.sampling_weights.static_weight },
+        { "dynamic_weight", sanitized.sampling_weights.dynamic_weight }
     });
 }
 

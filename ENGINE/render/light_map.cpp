@@ -380,19 +380,24 @@ int LightMap::find_quadrant_index(int world_x, int world_y) const {
     return -1;
 }
 
-float LightMap::sample_internal(int quadrant_index, float local_x, float local_y, bool bilinear) const {
+float LightMap::sample_internal(int quadrant_index,
+                                float local_x,
+                                float local_y,
+                                bool  bilinear,
+                                float static_weight,
+                                float dynamic_weight) const {
     const LightMapQuadrant* quadrant_ptr = quadrant(quadrant_index);
     if (!quadrant_ptr) {
         return 0.0f;
     }
     return quadrant_ptr->sample_brightness(local_x,
                                            local_y,
-                                           kDefaultStaticWeight,
-                                           kDefaultDynamicWeight,
+                                           static_weight,
+                                           dynamic_weight,
                                            bilinear);
 }
 
-float LightMap::sample_brightness(int world_x, int world_y) const {
+float LightMap::sample_brightness(int world_x, int world_y, float static_weight, float dynamic_weight) const {
     const int quadrant_index = find_quadrant_index(world_x, world_y);
     if (quadrant_index < 0) {
         return 0.0f;
@@ -409,10 +414,13 @@ float LightMap::sample_brightness(int world_x, int world_y) const {
     const float ny = static_cast<float>(world_y - rect.y) / static_cast<float>(rect.h);
     const float local_x = nx * static_cast<float>(quadrant_ptr->grid_width() - 1);
     const float local_y = ny * static_cast<float>(quadrant_ptr->grid_height() - 1);
-    return sample_internal(quadrant_index, local_x, local_y, false);
+    return sample_internal(quadrant_index, local_x, local_y, false, static_weight, dynamic_weight);
 }
 
-float LightMap::sample_brightness_bilinear(float world_x, float world_y) const {
+float LightMap::sample_brightness_bilinear(float world_x,
+                                           float world_y,
+                                           float static_weight,
+                                           float dynamic_weight) const {
     const int ix = static_cast<int>(std::round(world_x));
     const int iy = static_cast<int>(std::round(world_y));
     const int quadrant_index = find_quadrant_index(ix, iy);
@@ -431,6 +439,6 @@ float LightMap::sample_brightness_bilinear(float world_x, float world_y) const {
     const float ny = (world_y - static_cast<float>(rect.y)) / static_cast<float>(rect.h);
     const float local_x = std::clamp(nx, 0.0f, 1.0f) * static_cast<float>(quadrant_ptr->grid_width() - 1);
     const float local_y = std::clamp(ny, 0.0f, 1.0f) * static_cast<float>(quadrant_ptr->grid_height() - 1);
-    return sample_internal(quadrant_index, local_x, local_y, true);
+    return sample_internal(quadrant_index, local_x, local_y, true, static_weight, dynamic_weight);
 }
 

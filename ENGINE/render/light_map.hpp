@@ -82,8 +82,14 @@ public:
     void rebuild(SDL_Renderer* renderer);
     void update(SDL_Renderer* renderer, std::uint32_t delta_ms);
 
-    float sample_brightness(int world_x, int world_y) const;
-    float sample_brightness_bilinear(float world_x, float world_y) const;
+    float sample_brightness(int world_x,
+                            int world_y,
+                            float static_weight = kDefaultStaticWeight,
+                            float dynamic_weight = kDefaultDynamicWeight) const;
+    float sample_brightness_bilinear(float world_x,
+                                     float world_y,
+                                     float static_weight = kDefaultStaticWeight,
+                                     float dynamic_weight = kDefaultDynamicWeight) const;
 
     int screen_width() const { return screen_width_; }
     int screen_height() const { return screen_height_; }
@@ -105,7 +111,12 @@ public:
 
 private:
     int   find_quadrant_index(int world_x, int world_y) const;
-    float sample_internal(int quadrant_index, float local_x, float local_y, bool bilinear) const;
+    float sample_internal(int quadrant_index,
+                          float local_x,
+                          float local_y,
+                          bool  bilinear,
+                          float static_weight,
+                          float dynamic_weight) const;
 
     Assets* assets_ = nullptr;
     int     screen_width_  = 0;

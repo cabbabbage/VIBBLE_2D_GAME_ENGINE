@@ -47,9 +47,9 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     z_light_pass_ = std::make_unique<LightMap>(assets_, screen_width_, screen_height_);
     if (z_light_pass_) {
         z_light_pass_->rebuild(renderer_);
-        render_pipeline_.lighting().light_map = z_light_pass_.get();
+        render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
     } else {
-        render_pipeline_.lighting().light_map = nullptr;
+        render_pipeline_.lighting().light_map_sampler = nullptr;
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
     main_light_source_.update();
@@ -73,7 +73,7 @@ void SceneRenderer::force_virtual_light_map_refresh() {
         return;
     }
     z_light_pass_->rebuild(renderer_);
-    render_pipeline_.lighting().light_map = z_light_pass_.get();
+    render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
 }
 
 void SceneRenderer::set_low_quality_rendering(bool enabled){
@@ -146,9 +146,9 @@ void SceneRenderer::render(){
 
     if (z_light_pass_){
         z_light_pass_->update(renderer_, 16);
-        render_pipeline_.lighting().light_map = z_light_pass_.get();
+        render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
     } else {
-        render_pipeline_.lighting().light_map = nullptr;
+        render_pipeline_.lighting().light_map_sampler = nullptr;
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 

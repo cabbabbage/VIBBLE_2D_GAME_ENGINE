@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <tuple>
+#include <vector>
 
 namespace render_pipeline::shading {
 
@@ -27,8 +28,42 @@ struct ReactiveShadowSettings {
         bool operator!=(const VirtualLightMapSettings& other) const { return !(*this == other); }
     } virtual_light_map;
 
+    struct ShadowResponseLutEntry {
+        float brightness = 0.0f;
+        float opacity    = 1.0f;
+        float offset     = 0.0f;
+        float scale      = 1.0f;
+
+        bool operator==(const ShadowResponseLutEntry& other) const {
+            return brightness == other.brightness &&
+                   opacity == other.opacity &&
+                   offset == other.offset &&
+                   scale == other.scale;
+        }
+        bool operator!=(const ShadowResponseLutEntry& other) const { return !(*this == other); }
+    };
+
+    struct ShadowResponseLut {
+        std::vector<ShadowResponseLutEntry> entries{};
+
+        bool operator==(const ShadowResponseLut& other) const { return entries == other.entries; }
+        bool operator!=(const ShadowResponseLut& other) const { return !(*this == other); }
+    } response_lut;
+
+    struct SamplingWeights {
+        float static_weight  = 0.8f;
+        float dynamic_weight = 1.0f;
+
+        bool operator==(const SamplingWeights& other) const {
+            return static_weight == other.static_weight && dynamic_weight == other.dynamic_weight;
+        }
+        bool operator!=(const SamplingWeights& other) const { return !(*this == other); }
+    } sampling_weights;
+
     bool operator==(const ReactiveShadowSettings& other) const {
-        return virtual_light_map == other.virtual_light_map;
+        return virtual_light_map == other.virtual_light_map &&
+               response_lut == other.response_lut &&
+               sampling_weights == other.sampling_weights;
     }
     bool operator!=(const ReactiveShadowSettings& other) const { return !(*this == other); }
 };
@@ -46,6 +81,66 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.virtual_light_map.shadow_scale       = clampf(out.virtual_light_map.shadow_scale, 0.0f, 10.0f);
     out.virtual_light_map.size_scale_factor  = clampf(out.virtual_light_map.size_scale_factor, 0.0f, 10.0f);
     out.virtual_light_map.map_light_factor   = clampf(out.virtual_light_map.map_light_factor, 0.0f, 1.0f);
+
+    auto sanitize_entry = [](ReactiveShadowSettings::ShadowResponseLutEntry entry) {
+        entry.brightness = clampf(entry.brightness, 0.0f, 1.0f);
+        entry.opacity    = clampf(entry.opacity, 0.0f, 10.0f);
+        entry.offset     = clampf(entry.offset, -1000.0f, 1000.0f);
+        entry.scale      = clampf(entry.scale, 0.0f, 10.0f);
+        return entry;
+    };
+
+    std::vector<ReactiveShadowSettings::ShadowResponseLutEntry> sanitized_entries;
+    sanitized_entries.reserve(out.response_lut.entries.size());
+    for (const auto& entry : out.response_lut.entries) {
+        sanitized_entries.push_back(sanitize_entry(entry));
+    }
+
+    if (sanitized_entries.empty()) {
+        sanitized_entries.push_back({0.0f, 1.0f, 0.0f, 1.0f});
+        sanitized_entries.push_back({1.0f, 0.0f, 0.0f, 1.0f});
+    }
+
+    std::sort(sanitized_entries.begin(), sanitized_entries.end(), [](const auto& a, const auto& b) {
+        if (a.brightness == b.brightness) {
+            if (a.opacity == b.opacity) {
+                if (a.offset == b.offset) {
+                    return a.scale < b.scale;
+                }
+                return a.offset < b.offset;
+            }
+            return a.opacity < b.opacity;
+        }
+        return a.brightness < b.brightness;
+    });
+
+    sanitized_entries.erase(std::unique(sanitized_entries.begin(), sanitized_entries.end(),
+                                        [](const auto& a, const auto& b) {
+                                            return a.brightness == b.brightness &&
+                                                   a.opacity == b.opacity &&
+                                                   a.offset == b.offset &&
+                                                   a.scale == b.scale;
+                                        }),
+                            sanitized_entries.end());
+
+    if (sanitized_entries.front().brightness > 0.0f) {
+        sanitized_entries.insert(sanitized_entries.begin(),
+                                 sanitize_entry({0.0f,
+                                                sanitized_entries.front().opacity,
+                                                sanitized_entries.front().offset,
+                                                sanitized_entries.front().scale}));
+    }
+    if (sanitized_entries.back().brightness < 1.0f) {
+        sanitized_entries.push_back(sanitize_entry({1.0f,
+                                                   sanitized_entries.back().opacity,
+                                                   sanitized_entries.back().offset,
+                                                   sanitized_entries.back().scale}));
+    }
+
+    out.response_lut.entries = std::move(sanitized_entries);
+
+    out.sampling_weights.static_weight  = clampf(out.sampling_weights.static_weight, 0.0f, 10.0f);
+    out.sampling_weights.dynamic_weight = clampf(out.sampling_weights.dynamic_weight, 0.0f, 10.0f);
     return out;
 }
 
