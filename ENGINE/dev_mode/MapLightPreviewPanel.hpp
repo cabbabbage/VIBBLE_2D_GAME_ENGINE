@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <SDL.h>
+#include <nlohmann/json_fwd.hpp>
 
 #include "DockableCollapsible.hpp"
 #include "render/light_map_manager.hpp"
@@ -16,9 +17,6 @@ class Assets;
 class Input;
 class LightMap;
 class LightMapManager;
-namespace nlohmann {
-class json;
-}
 
 class MapLightPreviewPanel : public DockableCollapsible {
 public:
