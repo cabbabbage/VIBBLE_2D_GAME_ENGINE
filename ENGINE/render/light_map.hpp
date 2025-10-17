@@ -2,20 +2,15 @@
 
 #include <SDL.h>
 #include <vector>
-#include <array>
 #include <cstddef>
 #include <optional>
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
 
 struct VirtualLightMap {
-    static constexpr int kGridWidth      = 50;
-    static constexpr int kGridHeight     = 50;
-    static constexpr int kQuadrantCols   = kGridWidth;
-    static constexpr int kQuadrantRows   = kGridHeight;
-    static constexpr int kQuadrantCount  = kGridWidth * kGridHeight;
-    static constexpr int kQuadrantWidth  = 1;
-    static constexpr int kQuadrantHeight = 1;
+    static constexpr int kDefaultGridSize = 50;
+    static constexpr int kMinGridSize     = 1;
+    static constexpr int kMaxGridSize     = 100;
 
     struct ShadowCell {
         float brightness = 0.0f;
@@ -30,6 +25,8 @@ struct VirtualLightMap {
         float cell_height    = 0.0f;
         float inv_cell_width = 0.0f;
         float inv_cell_height= 0.0f;
+        int   grid_width     = 0;
+        int   grid_height    = 0;
 
         SDL_Rect  cell_bounds(int gx, int gy) const;
         SDL_FPoint cell_center(int gx, int gy) const;
@@ -44,47 +41,26 @@ struct VirtualLightMap {
         SDL_FPoint center { 0.0f, 0.0f };
     };
 
-    std::array<ShadowCell, kGridWidth * kGridHeight> grid{};
-    int                                              screen_width  = 0;
-    int                                              screen_height = 0;
+    VirtualLightMap();
 
-    void clear(float brightness = 0.0f) {
-        for (auto& cell : grid) {
-            cell.brightness = brightness;
-            cell.opacity    = 0.0f;
-            cell.offset_x   = 0.0f;
-            cell.offset_y   = 0.0f;
-            cell.scale      = 1.0f;
-        }
-    }
+    void set_square_grid(int quadrants);
+    int  grid_width() const { return grid_width_; }
+    int  grid_height() const { return grid_height_; }
+    int  quadrant_cols() const { return grid_width_; }
+    int  quadrant_rows() const { return grid_height_; }
+    int  quadrant_count() const { return grid_width_ * grid_height_; }
 
-    static constexpr std::size_t index_of(int x, int y) {
-        return static_cast<std::size_t>(y) * kGridWidth + static_cast<std::size_t>(x);
-    }
+    void clear(float brightness = 0.0f);
 
-    ShadowCell& cell(int x, int y) {
-        return grid[index_of(x, y)];
-    }
+    std::size_t index_of(int x, int y) const;
 
-    const ShadowCell& cell(int x, int y) const {
-        return grid[index_of(x, y)];
-    }
+    ShadowCell& cell(int x, int y);
+    const ShadowCell& cell(int x, int y) const;
 
-    ShadowCell& cell_by_index(std::size_t index) {
-        return grid[index];
-    }
+    ShadowCell& cell_by_index(std::size_t index);
+    const ShadowCell& cell_by_index(std::size_t index) const;
 
-    const ShadowCell& cell_by_index(std::size_t index) const {
-        return grid[index];
-    }
-
-    const ShadowCell& cell_for_index(int index) const {
-        static const ShadowCell kFallback{};
-        if (index < 0 || index >= kQuadrantCount) {
-            return kFallback;
-        }
-        return grid[static_cast<std::size_t>(index)];
-    }
+    const ShadowCell& cell_for_index(int index) const;
 
     std::optional<GridMetrics> grid_metrics() const;
     std::optional<GridCoord>   locate_index(int index) const;
@@ -94,7 +70,21 @@ struct VirtualLightMap {
     SDL_Rect quadrant_bounds(int index) const;
     int      quadrant_for_point(float x, float y) const;
     int      quadrant_for_rect(const SDL_Rect& rect) const;
-}; 
+
+    int grid_size() const { return grid_width_; }
+
+    void reserve_cells(std::size_t count);
+
+    int screen_width  = 0;
+    int screen_height = 0;
+
+private:
+    void ensure_cell_storage();
+
+    int grid_width_  = kDefaultGridSize;
+    int grid_height_ = kDefaultGridSize;
+    std::vector<ShadowCell> grid_{};
+};
 
 class LightMap {
 
@@ -113,6 +103,8 @@ public:
     void render_fullscreen_light_map(SDL_Renderer* renderer) const;
     void update_virtual_light_map(SDL_Renderer* renderer);
     const VirtualLightMap& virtual_light_map() const { return virtual_light_map_; }
+    void set_virtual_light_map_quadrants(int quadrants);
+    int  virtual_light_map_quadrants() const { return virtual_light_map_.grid_size(); }
 
 private:
     void collect_layers(std::vector<LightEntry>& out);

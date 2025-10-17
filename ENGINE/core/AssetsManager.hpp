@@ -130,6 +130,10 @@ public:
     render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings();
     const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
     const VirtualLightMap* virtual_light_map() const;
+    void set_virtual_light_map_quadrants(int quadrants);
+    int  virtual_light_map_quadrants() const;
+    void force_virtual_light_map_refresh();
+    void force_shaded_assets_rerender();
     void set_map_light_panel_visible(bool visible);
     bool is_map_light_panel_visible() const;
 

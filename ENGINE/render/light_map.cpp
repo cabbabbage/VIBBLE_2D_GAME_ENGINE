@@ -4,7 +4,6 @@
 #include "render_pipeline/ScalingLogic.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <vector>
 #include <cmath>
@@ -20,6 +19,76 @@ float compute_luminance(const SDL_Color& color) {
 }
 
 } // namespace
+
+VirtualLightMap::VirtualLightMap() {
+        ensure_cell_storage();
+        clear();
+}
+
+void VirtualLightMap::set_square_grid(int quadrants) {
+        const int clamped = std::clamp(quadrants, kMinGridSize, kMaxGridSize);
+        if (grid_width_ == clamped && grid_height_ == clamped) {
+                return;
+        }
+        grid_width_ = clamped;
+        grid_height_ = clamped;
+        ensure_cell_storage();
+        clear();
+}
+
+void VirtualLightMap::ensure_cell_storage() {
+        const std::size_t expected = static_cast<std::size_t>(grid_width_) *
+                                     static_cast<std::size_t>(grid_height_);
+        if (grid_.size() != expected) {
+                grid_.assign(expected, ShadowCell{});
+        }
+}
+
+void VirtualLightMap::reserve_cells(std::size_t count) {
+        if (grid_.capacity() < count) {
+                grid_.reserve(count);
+        }
+}
+
+void VirtualLightMap::clear(float brightness) {
+        ensure_cell_storage();
+        for (auto& cell : grid_) {
+                cell.brightness = brightness;
+                cell.opacity    = 0.0f;
+                cell.offset_x   = 0.0f;
+                cell.offset_y   = 0.0f;
+                cell.scale      = 1.0f;
+        }
+}
+
+std::size_t VirtualLightMap::index_of(int x, int y) const {
+        return static_cast<std::size_t>(y) * static_cast<std::size_t>(grid_width_) +
+               static_cast<std::size_t>(x);
+}
+
+VirtualLightMap::ShadowCell& VirtualLightMap::cell(int x, int y) {
+        return grid_[index_of(x, y)];
+}
+
+const VirtualLightMap::ShadowCell& VirtualLightMap::cell(int x, int y) const {
+        return grid_[index_of(x, y)];
+}
+
+VirtualLightMap::ShadowCell& VirtualLightMap::cell_by_index(std::size_t index) {
+        return grid_[index];
+}
+
+const VirtualLightMap::ShadowCell& VirtualLightMap::cell_by_index(std::size_t index) const {
+        return grid_[index];
+}
+
+const VirtualLightMap::ShadowCell& VirtualLightMap::cell_for_index(int index) const {
+        static const ShadowCell kFallback{};
+        if (index < 0 || index >= quadrant_count()) {
+                return kFallback;
+        }
+        return grid_[static_cast<std::size_t>(index)];
+}
 
 SDL_Rect VirtualLightMap::GridMetrics::cell_bounds(int gx, int gy) const {
         SDL_Rect rect{};
@@ -44,8 +113,10 @@ std::optional<VirtualLightMap::GridMetrics> VirtualLightMap::grid_metrics() cons
                 return std::nullopt;
         }
         GridMetrics metrics{};
-        metrics.cell_width      = static_cast<float>(screen_width) / static_cast<float>(kGridWidth);
-        metrics.cell_height     = static_cast<float>(screen_height) / static_cast<float>(kGridHeight);
+        metrics.grid_width      = grid_width_;
+        metrics.grid_height     = grid_height_;
+        metrics.cell_width      = static_cast<float>(screen_width) / static_cast<float>(grid_width_);
+        metrics.cell_height     = static_cast<float>(screen_height) / static_cast<float>(grid_height_);
         metrics.inv_cell_width  = (metrics.cell_width > 0.0f) ? (1.0f / metrics.cell_width) : 0.0f;
         metrics.inv_cell_height = (metrics.cell_height > 0.0f) ? (1.0f / metrics.cell_height) : 0.0f;
         if (metrics.cell_width <= 0.0f || metrics.cell_height <= 0.0f) {
@@ -55,15 +126,15 @@ std::optional<VirtualLightMap::GridMetrics> VirtualLightMap::grid_metrics() cons
 }
 
 std::optional<VirtualLightMap::GridCoord> VirtualLightMap::locate_index(int index) const {
-        if (index < 0 || index >= kQuadrantCount) {
+        if (index < 0 || index >= quadrant_count()) {
                 return std::nullopt;
         }
         const auto metrics = grid_metrics();
         if (!metrics) {
                 return std::nullopt;
         }
-        const int gx = index % kGridWidth;
-        const int gy = index / kGridWidth;
+        const int gx = index % grid_width_;
+        const int gy = index / grid_width_;
         GridCoord coord{};
         coord.x      = gx;
         coord.y      = gy;
@@ -88,9 +159,9 @@ std::optional<VirtualLightMap::GridCoord> VirtualLightMap::locate_screen_point(f
         SDL_FPoint grid_pos = metrics->screen_to_grid(x, y);
         int gx = static_cast<int>(std::floor(grid_pos.x));
         int gy = static_cast<int>(std::floor(grid_pos.y));
-        gx = std::clamp(gx, 0, kGridWidth - 1);
-        gy = std::clamp(gy, 0, kGridHeight - 1);
-        return locate_index(gy * kGridWidth + gx);
+        gx = std::clamp(gx, 0, grid_width_ - 1);
+        gy = std::clamp(gy, 0, grid_height_ - 1);
+        return locate_index(gy * grid_width_ + gx);
 }
 
 std::optional<VirtualLightMap::GridCoord> VirtualLightMap::locate_world_point(SDL_Point world,
@@ -163,6 +234,14 @@ void LightMap::update_virtual_light_map(SDL_Renderer* renderer) {
                 return;
         }
         compute_virtual_light_map(renderer);
+}
+
+void LightMap::set_virtual_light_map_quadrants(int quadrants) {
+        virtual_light_map_.set_square_grid(quadrants);
+        const std::size_t cell_count = static_cast<std::size_t>(virtual_light_map_.grid_width()) *
+                                       static_cast<std::size_t>(virtual_light_map_.grid_height());
+        cell_brightness_accum_.assign(cell_count, 0.0f);
+        cell_sample_counts_.assign(cell_count, 0);
 }
 
 void LightMap::collect_layers(std::vector<LightEntry>& out) {
@@ -387,29 +466,32 @@ void LightMap::compute_virtual_light_map(SDL_Renderer* renderer) {
                 return;
         }
 
-        const std::size_t cell_count = static_cast<std::size_t>(VirtualLightMap::kGridWidth) *
-                                       static_cast<std::size_t>(VirtualLightMap::kGridHeight);
+        const int grid_w = virtual_light_map_.grid_width();
+        const int grid_h = virtual_light_map_.grid_height();
+        const std::size_t cell_count = static_cast<std::size_t>(grid_w) *
+                                       static_cast<std::size_t>(grid_h);
+        virtual_light_map_.reserve_cells(cell_count);
         cell_brightness_accum_.assign(cell_count, 0.0f);
         cell_sample_counts_.assign(cell_count, 0);
 
         const float inv_screen_w = (screen_width_ > 0)
-                                        ? static_cast<float>(VirtualLightMap::kGridWidth) /
+                                        ? static_cast<float>(grid_w) /
                                                   static_cast<float>(screen_width_)
                                         : 0.0f;
         const float inv_screen_h = (screen_height_ > 0)
-                                        ? static_cast<float>(VirtualLightMap::kGridHeight) /
+                                        ? static_cast<float>(grid_h) /
                                                   static_cast<float>(screen_height_)
                                         : 0.0f;
 
         for (int y = 0; y < screen_height_; ++y) {
                 const int gy = std::clamp(static_cast<int>(std::floor(static_cast<float>(y) * inv_screen_h)),
                                            0,
-                                           VirtualLightMap::kGridHeight - 1);
+                                           grid_h - 1);
                 for (int x = 0; x < screen_width_; ++x) {
                         const int gx = std::clamp(static_cast<int>(std::floor(static_cast<float>(x) * inv_screen_w)),
                                                    0,
-                                                   VirtualLightMap::kGridWidth - 1);
-                        const std::size_t cell_index = VirtualLightMap::index_of(gx, gy);
+                                                   grid_w - 1);
+                        const std::size_t cell_index = virtual_light_map_.index_of(gx, gy);
                         const Uint32 pixel = pixel_buffer_[static_cast<std::size_t>(y) * screen_width_ +
                                                           static_cast<std::size_t>(x)];
                         Uint8 r = 0;
@@ -467,14 +549,14 @@ void LightMap::compute_virtual_light_map(SDL_Renderer* renderer) {
                 SDL_FPoint end   = metrics->screen_to_grid(static_cast<float>(light_pos.x),
                                                            static_cast<float>(light_pos.y));
 
-                start.x = clamp_grid(start.x, VirtualLightMap::kGridWidth);
-                start.y = clamp_grid(start.y, VirtualLightMap::kGridHeight);
-                end.x   = clamp_grid(end.x, VirtualLightMap::kGridWidth);
-                end.y   = clamp_grid(end.y, VirtualLightMap::kGridHeight);
+                start.x = clamp_grid(start.x, grid_w);
+                start.y = clamp_grid(start.y, grid_h);
+                end.x   = clamp_grid(end.x, grid_w);
+                end.y   = clamp_grid(end.y, grid_h);
 
                 auto attenuate_cell = [&](int gx, int gy) {
                         if (gx < 0 || gy < 0 ||
-                            gx >= VirtualLightMap::kGridWidth || gy >= VirtualLightMap::kGridHeight) {
+                            gx >= grid_w || gy >= grid_h) {
                                 return;
                         }
                         auto& cell = virtual_light_map_.cell(gx, gy);
@@ -554,14 +636,14 @@ void LightMap::compute_virtual_light_map(SDL_Renderer* renderer) {
                 return weight_x * weight_y;
         };
 
-        for (int y = 0; y < VirtualLightMap::kGridHeight; ++y) {
-                for (int x = 0; x < VirtualLightMap::kGridWidth; ++x) {
+        for (int y = 0; y < grid_h; ++y) {
+                for (int x = 0; x < grid_w; ++x) {
                         auto& cell = virtual_light_map_.cell(x, y);
 
                         float opacity_sum    = 0.0f;
                         float opacity_weight = 0.0f;
-                        for (int sample_y = y; sample_y < VirtualLightMap::kGridHeight; ++sample_y) {
-                                for (int sample_x = 0; sample_x < VirtualLightMap::kGridWidth; ++sample_x) {
+                        for (int sample_y = y; sample_y < grid_h; ++sample_y) {
+                                for (int sample_x = 0; sample_x < grid_w; ++sample_x) {
                                         const auto& sample = virtual_light_map_.cell(sample_x, sample_y);
                                         const float dx = static_cast<float>(sample_x - x);
                                         const float dy = static_cast<float>(sample_y - y);
@@ -579,8 +661,8 @@ void LightMap::compute_virtual_light_map(SDL_Renderer* renderer) {
                         float offset_weight = 0.0f;
                         float offset_x_sum  = 0.0f;
                         float offset_y_sum  = 0.0f;
-                        for (int sample_y = 0; sample_y < VirtualLightMap::kGridHeight; ++sample_y) {
-                                for (int sample_x = 0; sample_x < VirtualLightMap::kGridWidth; ++sample_x) {
+                        for (int sample_y = 0; sample_y < grid_h; ++sample_y) {
+                                for (int sample_x = 0; sample_x < grid_w; ++sample_x) {
                                         const auto& sample = virtual_light_map_.cell(sample_x, sample_y);
                                         if (sample.brightness <= 0.0f) {
                                                 continue;

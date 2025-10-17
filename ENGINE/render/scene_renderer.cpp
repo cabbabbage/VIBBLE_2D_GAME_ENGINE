@@ -62,6 +62,22 @@ const VirtualLightMap* SceneRenderer::virtual_light_map() const {
     return z_light_pass_ ? &z_light_pass_->virtual_light_map() : nullptr;
 }
 
+void SceneRenderer::set_virtual_light_map_quadrants(int quadrants) {
+    if (z_light_pass_) {
+        z_light_pass_->set_virtual_light_map_quadrants(quadrants);
+    }
+    force_virtual_light_map_refresh();
+}
+
+void SceneRenderer::force_virtual_light_map_refresh() {
+    if (!z_light_pass_ || !renderer_) {
+        return;
+    }
+    z_light_pass_->prepare_fullscreen_light_map(renderer_);
+    z_light_pass_->update_virtual_light_map(renderer_);
+    render_pipeline_.lighting().virtual_light_map = &z_light_pass_->virtual_light_map();
+}
+
 void SceneRenderer::set_low_quality_rendering(bool enabled){
     if (low_quality_rendering_==enabled) return;
     low_quality_rendering_=enabled;

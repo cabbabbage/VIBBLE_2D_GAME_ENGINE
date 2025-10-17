@@ -15,6 +15,7 @@ class ManifestStore;
 }
 class Input;
 class MapLightPanel;
+class MapLightPreviewPanel;
 class MapShadowPanel;
 class MapLayersPanel;
 class MapLayersController;
@@ -134,6 +135,7 @@ private:
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     std::unique_ptr<MapLightPanel> light_panel_;
     std::unique_ptr<MapShadowPanel> shadow_panel_;
+    std::unique_ptr<MapLightPreviewPanel> map_light_preview_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;
@@ -159,6 +161,7 @@ private:
     std::function<void(HeaderMode)> on_mode_changed_;
     bool light_panel_centered_ = false;
     bool shading_panel_centered_ = false;
+    bool preview_panel_centered_ = false;
     bool last_lights_visible_ = false;
     bool last_shading_visible_ = false;
 };

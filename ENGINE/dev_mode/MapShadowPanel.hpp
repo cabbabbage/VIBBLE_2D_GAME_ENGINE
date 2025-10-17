@@ -57,11 +57,8 @@ private:
     void write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings);
     nlohmann::json& ensure_reactive_settings_json();
 
-    void render_light_map_preview(SDL_Renderer* renderer) const;
-    const VirtualLightMap* current_virtual_light_map() const;
-    std::optional<SDL_Point> player_screen_position() const;
-    std::vector<std::string> assets_in_quadrant(int quadrant) const;
-    int quadrant_index_from_point(int x, int y) const;
+    void apply_virtual_light_map_quadrants(int quadrants, bool force_refresh);
+    void force_shading_refresh_if_needed(bool force_refresh);
 
     static int clamp_int(int v, int lo, int hi);
 
@@ -77,9 +74,7 @@ private:
     std::unique_ptr<DMSlider> max_offset_y_;
     std::unique_ptr<DMSlider> shadow_scale_;
     std::unique_ptr<DMSlider> size_scale_factor_;
-
-    class NoteLabel;
-    std::string quadrant_note_text_;
+    std::unique_ptr<DMSlider> quadrant_count_;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
 
@@ -89,15 +84,10 @@ private:
         render_pipeline::shading::sanitize_reactive_shadow_settings({});
     render_pipeline::shading::ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
     bool reactive_settings_initialized_ = false;
-
-    static constexpr int kPreviewWidth = 220;
-    static constexpr int kPreviewPadding = 8;
-    mutable SDL_Rect preview_rect_{0, 0, 0, 0};
-    mutable SDL_Rect preview_grid_rect_{0, 0, 0, 0};
-    mutable int screen_width_px_ = 0;
-    mutable int screen_height_px_ = 0;
-    mutable std::array<SDL_Rect, VirtualLightMap::kQuadrantCount> quadrant_preview_rects_{};
-    int selected_quadrant_ = -1;
+    render_pipeline::shading::ReactiveShadowSettings forced_settings_snapshot_ =
+        render_pipeline::shading::sanitize_reactive_shadow_settings({});
+    int last_quadrant_count_ = VirtualLightMap::kDefaultGridSize;
+    int forced_quadrant_snapshot_ = VirtualLightMap::kDefaultGridSize;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "lighting"; }

@@ -1059,6 +1059,51 @@ const VirtualLightMap* Assets::virtual_light_map() const {
     return scene ? scene->virtual_light_map() : nullptr;
 }
 
+void Assets::set_virtual_light_map_quadrants(int quadrants) {
+    if (scene) {
+        scene->set_virtual_light_map_quadrants(quadrants);
+    }
+}
+
+int Assets::virtual_light_map_quadrants() const {
+    if (const VirtualLightMap* map = virtual_light_map()) {
+        return map->grid_size();
+    }
+    return VirtualLightMap::kDefaultGridSize;
+}
+
+void Assets::force_virtual_light_map_refresh() {
+    if (scene) {
+        scene->force_virtual_light_map_refresh();
+    }
+}
+
+void Assets::force_shaded_assets_rerender() {
+    std::unordered_set<Asset*> visited;
+    auto flush_asset = [&](Asset* asset) {
+        if (!asset || visited.count(asset) > 0) {
+            return;
+        }
+        visited.insert(asset);
+        asset->clear_render_caches();
+        if (asset->get_final_texture()) {
+            asset->set_final_texture(nullptr);
+        }
+    };
+
+    for (Asset* asset : all) {
+        flush_asset(asset);
+    }
+    for (const auto& owned : owned_assets) {
+        flush_asset(owned.get());
+    }
+    for (Asset* asset : active_assets) {
+        flush_asset(asset);
+    }
+
+    active_assets_dirty_.store(true, std::memory_order_release);
+}
+
 void Assets::set_map_light_panel_visible(bool visible) {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->set_map_light_panel_visible(visible);

@@ -37,6 +37,8 @@ public:
     render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() { return reactive_shadow_settings_; }
     const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const { return reactive_shadow_settings_; }
     const VirtualLightMap* virtual_light_map() const;
+    void set_virtual_light_map_quadrants(int quadrants);
+    void force_virtual_light_map_refresh();
 
 private:
     bool shouldRegen(Asset* a);
