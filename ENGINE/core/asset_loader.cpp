@@ -3,6 +3,7 @@
 #include <iostream>
 #include <numeric>
 #include <algorithm>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <cmath>
@@ -377,24 +378,32 @@ void AssetLoader::finalizeAssets() {
 	}
 }
 
-std::vector<Asset> AssetLoader::extract_all_assets() {
-	std::vector<Asset> out;
-	out.reserve(rooms_.size() * 4);
-	for (Room* room : rooms_) {
-		for (auto& aup : room->assets) {
-			Asset* asset = aup.get();
-			if (!asset) continue;
-			if (asset->is_hidden()) {
-					continue;
-			}
-			out.push_back(std::move(*aup));
-		}
-	}
-	return out;
+std::vector<std::unique_ptr<Asset>> AssetLoader::extract_all_assets() {
+        std::vector<std::unique_ptr<Asset>> out;
+        out.reserve(rooms_.size() * 4);
+        for (Room* room : rooms_) {
+                if (!room) continue;
+                auto& assets = room->assets;
+                for (auto it = assets.begin(); it != assets.end();) {
+                        std::unique_ptr<Asset>& aup = *it;
+                        Asset* asset = aup.get();
+                        if (!asset) {
+                                it = assets.erase(it);
+                                continue;
+                        }
+                        if (asset->is_hidden()) {
+                                ++it;
+                                continue;
+                        }
+                        out.push_back(std::move(aup));
+                        it = assets.erase(it);
+                }
+        }
+        return out;
 }
 
-std::vector<Asset> AssetLoader::createAssets() {
-	return extract_all_assets();
+std::vector<std::unique_ptr<Asset>> AssetLoader::createAssets() {
+        return extract_all_assets();
 }
 
 std::vector<const Area*> AssetLoader::getAllRoomAndTrailAreas() const {

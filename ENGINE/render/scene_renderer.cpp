@@ -172,6 +172,22 @@ void SceneRenderer::render(){
     SDL_SetRenderDrawColor(renderer_,clear_color.r,clear_color.g,clear_color.b,clear_color.a);
     SDL_RenderClear(renderer_);
 
+    bool rendered_light_map = false;
+    auto render_light_map = [&]() {
+        if (!z_light_pass_ || rendered_light_map) {
+            return;
+        }
+        SDL_Rect screen_view{0,0,screen_width_,screen_height_};
+        SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
+        if (SDL_GetRenderDrawBlendMode(renderer_,&previous_mode) != 0) {
+            previous_mode = SDL_BLENDMODE_BLEND;
+        }
+        SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
+        z_light_pass_->render_visible_quadrants(renderer_,screen_view);
+        SDL_SetRenderDrawBlendMode(renderer_,previous_mode);
+        rendered_light_map = true;
+    };
+
     if (!light_map_only_mode_){
         const auto& camera_state=assets_->getView();
         const camera::RealismSettings& cam_settings = camera_state.realism_settings();
@@ -323,6 +339,7 @@ void SceneRenderer::render(){
         };
 
         render_commands(texture_commands);
+        render_light_map();
 
         render_commands(remaining_commands);
 
@@ -331,16 +348,7 @@ void SceneRenderer::render(){
 
     SDL_SetRenderTarget(renderer_,nullptr);
 
-    if (z_light_pass_) {
-        SDL_Rect screen_view{0, 0, screen_width_, screen_height_};
-        SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
-        if (SDL_GetRenderDrawBlendMode(renderer_, &previous_mode) != 0) {
-            previous_mode = SDL_BLENDMODE_BLEND;
-        }
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-        z_light_pass_->render_visible_quadrants(renderer_, screen_view);
-        SDL_SetRenderDrawBlendMode(renderer_, previous_mode);
-    }
+    render_light_map();
 
     if (!light_map_only_mode_ && assets_){
         assets_->render_overlays(renderer_);

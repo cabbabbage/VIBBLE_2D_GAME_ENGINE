@@ -128,7 +128,8 @@ void MainApp::setup() {
                 const auto room_count = loader_->getRooms().size();
                 Asset* player_ptr = nullptr;
                 for (auto& a : all_assets) {
-                        if (a.info && a.info->type == asset_types::player) { player_ptr = &a; break; }
+                        Asset* candidate = a.get();
+                        if (candidate && candidate->info && candidate->info->type == asset_types::player) { player_ptr = candidate; break; }
                 }
                 int start_px = player_ptr ? player_ptr->pos.x : static_cast<int>(loader_->getMapRadius());
                 int start_py = player_ptr ? player_ptr->pos.y : static_cast<int>(loader_->getMapRadius());

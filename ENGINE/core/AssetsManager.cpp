@@ -97,7 +97,7 @@ int halved_render_quality_percent(int percent) {
 
 }
 
-Assets::Assets(std::vector<Asset>&& loaded,
+Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                AssetLibrary& library,
                Asset*,
                std::vector<Room*> rooms,

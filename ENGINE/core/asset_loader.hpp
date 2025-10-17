@@ -31,7 +31,7 @@ class AssetLoader {
     std::vector<std::vector<Asset*>> group_neighboring_assets( const std::vector<Asset*>& assets, int tile_width, int tile_height, const std::string& group_type);
     void link_by_child(const std::vector<std::vector<Asset*>>& groups);
 
-    std::vector<Asset> createAssets();
+    std::vector<std::unique_ptr<Asset>> createAssets();
     std::vector<const Area*> getAllRoomAndTrailAreas() const;
     AssetLibrary* getAssetLibrary() const { return asset_library_.get(); }
     const std::vector<Room*>& getRooms() const { return rooms_; }
@@ -61,7 +61,7 @@ class AssetLoader {
     void load_map_json(const nlohmann::json& map_manifest);
     void loadRooms();
     void finalizeAssets();
-    std::vector<Asset> extract_all_assets();
+    std::vector<std::unique_ptr<Asset>> extract_all_assets();
     void removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip = nullptr);
     void mergeLockedBoundaryAssets(const std::vector<Asset*>& locked_assets);
 };

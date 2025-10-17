@@ -18,6 +18,23 @@ float clamp_unit(float value) {
     return std::clamp(value, 0.0f, 1.0f);
 }
 
+std::uint32_t pack_darkness_pixel(std::uint8_t darkness) {
+    struct PixelFormatHolder {
+        SDL_PixelFormat* format = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
+        ~PixelFormatHolder() {
+            if (format) {
+                SDL_FreeFormat(format);
+            }
+        }
+    };
+
+    static PixelFormatHolder holder{};
+    if (holder.format) {
+        return SDL_MapRGBA(holder.format, 0, 0, 0, darkness);
+    }
+    return static_cast<std::uint32_t>(darkness) << 24;
+}
+
 }  // namespace
 
 LightMapQuadrant::LightMapQuadrant(LightMapQuadrant&& other) noexcept {
@@ -308,7 +325,7 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer, float static_wei
             const float sample = cell_sample(x, y, static_weight, dynamic_weight);
             const std::uint8_t value = clamp_byte(static_cast<int>(std::round(sample * 255.0f)));
             const std::uint8_t darkness = static_cast<std::uint8_t>(255 - value);
-            const std::uint32_t rgba    = static_cast<std::uint32_t>(darkness) << 24;
+            const std::uint32_t rgba    = pack_darkness_pixel(darkness);
             pixels[idx] = rgba;
         }
     }

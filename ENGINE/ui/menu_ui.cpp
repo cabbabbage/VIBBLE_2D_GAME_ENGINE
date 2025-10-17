@@ -10,6 +10,7 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include <memory>
 #include <random>
 #include <sstream>
 #include <utility>
@@ -233,13 +234,20 @@ void MenuUI::doExit() {
 }
 
 void MenuUI::doRestart() {
-	std::cout << "[MenuUI] Restarting...\n";
+        std::cout << "[MenuUI] Restarting...\n";
         if (game_assets_)      { delete game_assets_; game_assets_ = nullptr; }
         try {
+                if (loader_) {
+                    nlohmann::json manifest_copy = loader_->map_manifest();
+                    std::string content_root = loader_->content_root();
+                    std::string map_id = loader_->map_identifier();
+                    loader_ = std::make_unique<AssetLoader>(map_id, manifest_copy, renderer_, content_root);
+                }
                 auto all_assets = loader_->createAssets();
                 Asset* player_ptr = nullptr;
                 for (auto& a : all_assets) {
-                    if (a.info && a.info->type == asset_types::player) { player_ptr = &a; break; }
+                    Asset* candidate = a.get();
+                    if (candidate && candidate->info && candidate->info->type == asset_types::player) { player_ptr = candidate; break; }
                 }
                 int start_px = player_ptr ? player_ptr->pos.x : static_cast<int>(loader_->getMapRadius());
                 int start_py = player_ptr ? player_ptr->pos.y : static_cast<int>(loader_->getMapRadius());

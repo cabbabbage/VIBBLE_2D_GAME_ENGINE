@@ -18,7 +18,7 @@ constexpr bool kAssetLoggingEnabled = false;
 }
 
 void InitializeAssets::initialize(Assets& assets,
-                                  std::vector<Asset>&& loaded,
+                                  std::vector<std::unique_ptr<Asset>>&& loaded,
                                   std::vector<Room*> rooms,
                                   int ,
                                   int ,
@@ -30,32 +30,34 @@ void InitializeAssets::initialize(Assets& assets,
                 std::cout << "[InitializeAssets] Initializing Assets manager...\n";
         }
         assets.set_rooms(std::move(rooms));
-	assets.all.reserve(loaded.size());
-	while (!loaded.empty()) {
-		Asset a = std::move(loaded.back());
-		loaded.pop_back();
-                if (!a.info) {
+        assets.all.reserve(loaded.size());
+        while (!loaded.empty()) {
+                std::unique_ptr<Asset> asset = std::move(loaded.back());
+                loaded.pop_back();
+                if (!asset) {
+                        continue;
+                }
+                if (!asset->info) {
                         if (kAssetLoggingEnabled) {
                                 std::cerr << "[InitializeAssets] Skipping asset: info is null\n";
                         }
                         continue;
                 }
-                auto it = a.info->animations.find("default");
-                if (it == a.info->animations.end() || it->second.frames.empty()) {
+                auto it = asset->info->animations.find("default");
+                if (it == asset->info->animations.end() || it->second.frames.empty()) {
                         if (kAssetLoggingEnabled) {
-                                std::cerr << "[InitializeAssets] Skipping asset '" << a.info->name
+                                std::cerr << "[InitializeAssets] Skipping asset '" << asset->info->name
                                 << "': missing or empty default animation\n";
                         }
                         continue;
                 }
-		auto newAsset = std::make_unique<Asset>(std::move(a));
-		Asset* raw = newAsset.get();
+                Asset* raw = asset.get();
                 set_camera_recursive(raw, &assets.getView());
-		set_assets_owner_recursive(raw, &assets);
-		assets.owned_assets.push_back(std::move(newAsset));
-		assets.all.push_back(raw);
-		raw->finalize_setup();
-	}
+                set_assets_owner_recursive(raw, &assets);
+                assets.owned_assets.push_back(std::move(asset));
+                assets.all.push_back(raw);
+                raw->finalize_setup();
+        }
 	find_player(assets);
         assets.initialize_active_assets(SDL_Point{screen_center_x, screen_center_y});
         assets.refresh_active_asset_lists();

@@ -34,7 +34,7 @@ struct ReactiveShadowSettings;
 
 class Assets {
 public:
-    Assets(std::vector<Asset>&& loaded,
+    Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
            AssetLibrary& library,
            Asset*,
            std::vector<Room*> rooms,
