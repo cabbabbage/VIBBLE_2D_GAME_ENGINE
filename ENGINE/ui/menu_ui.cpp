@@ -6,6 +6,7 @@
 #include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
+#include "render/precomputed_light_map.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -262,6 +263,7 @@ void MenuUI::doRestart() {
                 if (!restart_library) {
                         throw std::runtime_error("Asset library unavailable during restart.");
                 }
+                std::unique_ptr<PrecomputedLightMap> precomputed_light_map = loader_->take_precomputed_light_map();
                 game_assets_ = new Assets(std::move(all_assets),
                                           *restart_library,
                                           player_ptr,
@@ -274,7 +276,8 @@ void MenuUI::doRestart() {
                                           renderer_,
                                           loader_->map_identifier(),
                                           loader_->map_manifest(),
-                                          loader_->content_root());
+                                          loader_->content_root(),
+                                          std::move(precomputed_light_map));
                 if (!input_) input_ = new Input();
                 game_assets_->set_input(input_);
                 if (!player_ptr) {

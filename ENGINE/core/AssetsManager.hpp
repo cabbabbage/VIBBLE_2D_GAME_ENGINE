@@ -13,6 +13,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
+#include "render/precomputed_light_map.hpp"
 
 class Asset;
 class SceneRenderer;
@@ -46,7 +47,8 @@ public:
            SDL_Renderer* renderer,
            const std::string& map_id,
            const nlohmann::json& map_manifest,
-           std::string content_root = {});
+           std::string content_root = {},
+           std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr);
     ~Assets();
 
     nlohmann::json save_current_room(std::string room_name);

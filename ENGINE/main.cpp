@@ -16,6 +16,7 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "utils/loading_status_notifier.hpp"
+#include "render/precomputed_light_map.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_mixer.h>
@@ -146,6 +147,7 @@ void MainApp::setup() {
                 if (!active_library) {
                         throw std::runtime_error("Asset library unavailable during game setup.");
                 }
+                std::unique_ptr<PrecomputedLightMap> precomputed_light_map = loader_->take_precomputed_light_map();
                 game_assets_ = new Assets(std::move(all_assets),
                                           *active_library,
                                           player_ptr,
@@ -158,7 +160,8 @@ void MainApp::setup() {
                                           renderer_,
                                           loader_->map_identifier(),
                                           loader_->map_manifest(),
-                                          loader_->content_root());
+                                          loader_->content_root(),
+                                          std::move(precomputed_light_map));
                 const double spawn_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - spawn_begin).count() / 1000.0;
                 std::ostringstream init_summary;
                 init_summary << "[Init] Assets initialized: " << asset_count

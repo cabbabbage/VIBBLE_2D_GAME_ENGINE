@@ -11,6 +11,7 @@
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
+#include "render/precomputed_light_map.hpp"
 
 class Assets;
 class Asset;
@@ -23,7 +24,8 @@ public:
                  int screen_width,
                  int screen_height,
                  const nlohmann::json& map_manifest,
-                 const std::string& map_id);
+                 const std::string& map_id,
+                 std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr);
     ~SceneRenderer() = default;
     void render();
     void apply_map_light_config(const nlohmann::json& data);

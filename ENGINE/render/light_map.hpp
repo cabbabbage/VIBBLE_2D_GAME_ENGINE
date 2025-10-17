@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include "precomputed_light_map.hpp"
+
 class Assets;
 class Asset;
 class camera;
@@ -55,6 +57,8 @@ public:
     void render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod) const;
     void populate_static_base(SDL_Renderer* renderer, SDL_Texture* static_full_map);
     void copy_static_mask(SDL_Renderer* renderer) const;
+    void adopt_static_mask(SDL_Texture* texture);
+    void set_base_brightness(float value);
 
     float sample_brightness(float local_x,
                             float local_y,
@@ -96,7 +100,10 @@ public:
     static constexpr int   kMaxQuadrantSizePx    = 1024;
     static constexpr int   kDefaultQuadrantSizePx = 256;
 
-    LightMap(Assets* assets, int screen_width, int screen_height);
+    LightMap(Assets* assets,
+             int screen_width,
+             int screen_height,
+             std::unique_ptr<PrecomputedLightMap> precomputed_map = nullptr);
     ~LightMap();
 
     void rebuild(SDL_Renderer* renderer);
@@ -151,6 +158,7 @@ private:
     std::pair<int, int> padding_pixels() const;
     void build_static_full_map(SDL_Renderer* renderer);
     void destroy_static_full_map();
+    bool adopt_precomputed_map(SDL_Renderer* renderer);
 
     Assets* assets_ = nullptr;
     int     screen_width_  = 0;
@@ -167,5 +175,15 @@ private:
     std::vector<LightMapQuadrant> quadrants_{};
     SDL_Texture*                  static_full_map_ = nullptr;
     bool                          static_cache_dirty_ = true;
+    std::unique_ptr<PrecomputedLightMap> pending_precomputed_map_;
+
+    struct LayoutInfo {
+        int map_width          = 0;
+        int map_height         = 0;
+        int grid_spacing       = 0;
+        int cells_per_quadrant = 0;
+        int grid_resolution    = 32;
+        int padding_cells      = 0;
+    } layout_{};
 };
 

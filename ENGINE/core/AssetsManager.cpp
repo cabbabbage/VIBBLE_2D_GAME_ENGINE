@@ -109,7 +109,8 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                SDL_Renderer* renderer,
                const std::string& map_id,
                const nlohmann::json& map_manifest,
-               std::string content_root)
+               std::string content_root,
+               std::unique_ptr<PrecomputedLightMap> precomputed_light_map)
     : camera_(
           screen_width_,
           screen_height_,
@@ -145,7 +146,13 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
         camera_.set_up_rooms(finder_);
     }
 
-    scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_info_json_, map_id_);
+    scene = new SceneRenderer(renderer,
+                              this,
+                              screen_width_,
+                              screen_height_,
+                              map_info_json_,
+                              map_id_,
+                              std::move(precomputed_light_map));
     apply_map_light_config();
     for (Asset* a : all) {
         if (a) a->set_assets(this);

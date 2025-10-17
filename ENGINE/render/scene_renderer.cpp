@@ -29,7 +29,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              int screen_width,
                              int screen_height,
                              const nlohmann::json& map_manifest,
-                             const std::string& map_id)
+                             const std::string& map_id,
+                             std::unique_ptr<PrecomputedLightMap> precomputed_light_map)
 : renderer_(renderer),
   assets_(assets),
   screen_width_(screen_width),
@@ -46,7 +47,10 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   nullptr })
 {
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
-    z_light_pass_ = std::make_unique<LightMap>(assets_, screen_width_, screen_height_);
+    z_light_pass_ = std::make_unique<LightMap>(assets_,
+                                               screen_width_,
+                                               screen_height_,
+                                               std::move(precomputed_light_map));
     if (z_light_pass_) {
         z_light_pass_->rebuild(renderer_);
         render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();

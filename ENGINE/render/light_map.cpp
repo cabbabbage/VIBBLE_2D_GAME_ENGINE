@@ -82,6 +82,47 @@ std::optional<SDL_Rect> compute_light_screen_rect(const Assets* assets,
     return dst;
 }
 
+std::optional<SDL_Rect> compute_light_world_rect(const Asset* asset,
+                                                 const LightSource& light) {
+    if (!asset || !asset->info) {
+        return std::nullopt;
+    }
+    SDL_Texture* tex = light.texture;
+    if (!tex) {
+        return std::nullopt;
+    }
+
+    int src_w = light.cached_w > 0 ? light.cached_w : 0;
+    int src_h = light.cached_h > 0 ? light.cached_h : 0;
+    if (src_w <= 0 || src_h <= 0) {
+        SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+    }
+    if (src_w <= 0 || src_h <= 0) {
+        return std::nullopt;
+    }
+
+    float scale_factor = 1.0f;
+    if (asset->info && std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+        scale_factor = asset->info->scale_factor;
+    }
+
+    const int draw_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_w) * scale_factor)));
+    const int draw_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_h) * scale_factor)));
+    if (draw_w <= 0 || draw_h <= 0) {
+        return std::nullopt;
+    }
+
+    SDL_Point world_center{asset->pos.x + light.offset_x, asset->pos.y + light.offset_y};
+    SDL_Rect dst{world_center.x - draw_w / 2,
+                 world_center.y - draw_h / 2,
+                 draw_w,
+                 draw_h};
+    if (dst.w <= 0 || dst.h <= 0) {
+        return std::nullopt;
+    }
+    return dst;
+}
+
 }  // namespace
 
 LightMapQuadrant::LightMapQuadrant(LightMapQuadrant&& other) noexcept {
@@ -495,6 +536,18 @@ void LightMapQuadrant::copy_static_mask(SDL_Renderer* renderer) const {
     SDL_RenderCopy(renderer, static_mask_, nullptr, nullptr);
 }
 
+void LightMapQuadrant::adopt_static_mask(SDL_Texture* texture) {
+    if (static_mask_ && static_mask_ != texture) {
+        SDL_DestroyTexture(static_mask_);
+    }
+    static_mask_ = texture;
+    dirty_ = true;
+}
+
+void LightMapQuadrant::set_base_brightness(float value) {
+    base_brightness_ = clamp_unit(value);
+}
+
 void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
                                         const Assets* assets,
                                         float static_weight,
@@ -587,10 +640,19 @@ void LightMapQuadrant::render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod)
     SDL_SetTextureAlphaMod(tile_mask_, saved_alpha);
 }
 
-LightMap::LightMap(Assets* assets, int screen_width, int screen_height)
+LightMap::LightMap(Assets* assets,
+                   int screen_width,
+                   int screen_height,
+                   std::unique_ptr<PrecomputedLightMap> precomputed_map)
     : assets_(assets),
       screen_width_(screen_width),
-      screen_height_(screen_height) {}
+      screen_height_(screen_height),
+      pending_precomputed_map_(std::move(precomputed_map)) {
+    layout_.map_width = screen_width_;
+    layout_.map_height = screen_height_;
+    layout_.grid_resolution = static_grid_resolution_;
+    layout_.padding_cells = padding_cells_;
+}
 
 LightMap::~LightMap() {
     destroy_static_full_map();
@@ -604,6 +666,79 @@ void LightMap::destroy_static_full_map() {
     static_cache_dirty_ = true;
 }
 
+bool LightMap::adopt_precomputed_map(SDL_Renderer* renderer) {
+    if (!renderer || !pending_precomputed_map_) {
+        pending_precomputed_map_.reset();
+        return false;
+    }
+
+    PrecomputedLightMap& map = *pending_precomputed_map_;
+    if (map.map_width <= 0 || map.map_height <= 0 || map.quadrant_cols <= 0 || map.quadrant_rows <= 0) {
+        pending_precomputed_map_.reset();
+        return false;
+    }
+
+    const int base_size = (map.grid_spacing > 0 && map.cells_per_quadrant > 0)
+                              ? map.grid_spacing * map.cells_per_quadrant
+                              : 0;
+    if (base_size <= 0) {
+        pending_precomputed_map_.reset();
+        return false;
+    }
+
+    destroy_static_full_map();
+
+    screen_width_  = std::max(1, map.map_width);
+    screen_height_ = std::max(1, map.map_height);
+    quadrant_cols_ = std::max(1, map.quadrant_cols);
+    quadrant_rows_ = std::max(1, map.quadrant_rows);
+    quadrant_size_px_       = base_size;
+    static_grid_resolution_ = std::max(1, map.grid_resolution);
+    padding_cells_          = std::max(0, map.padding_cells);
+    requested_quadrants_    = quadrant_cols_;
+    requested_quadrant_size_px_ = quadrant_size_px_;
+
+    layout_.map_width          = screen_width_;
+    layout_.map_height         = screen_height_;
+    layout_.grid_spacing       = map.grid_spacing;
+    layout_.cells_per_quadrant = map.cells_per_quadrant;
+    layout_.grid_resolution    = static_grid_resolution_;
+    layout_.padding_cells      = padding_cells_;
+
+    static_full_map_ = map.full_texture;
+    map.full_texture = nullptr;
+
+    const int expected_quadrants = quadrant_cols_ * quadrant_rows_;
+    quadrants_.clear();
+    quadrants_.reserve(expected_quadrants);
+
+    for (int row = 0; row < quadrant_rows_; ++row) {
+        for (int col = 0; col < quadrant_cols_; ++col) {
+            const int index = row * quadrant_cols_ + col;
+            if (index >= static_cast<int>(map.quadrants.size())) {
+                continue;
+            }
+            PrecomputedLightMapQuadrant& source = map.quadrants[static_cast<std::size_t>(index)];
+
+            LightMapQuadrant quadrant;
+            quadrant.configure(renderer, source.world_rect, static_grid_resolution_, padding_cells_);
+            if (!source.light_samples.empty()) {
+                quadrant.build_static(source.light_samples, static_grid_resolution_, static_grid_resolution_);
+            }
+            quadrant.set_base_brightness(source.base_brightness);
+            quadrant.adopt_static_mask(source.texture);
+            source.texture = nullptr;
+            quadrant.update_tile_mask(renderer, assets_, kDefaultStaticWeight, kDefaultDynamicWeight);
+            quadrants_.push_back(std::move(quadrant));
+            source.light_samples.clear();
+        }
+    }
+
+    pending_precomputed_map_.reset();
+    static_cache_dirty_ = false;
+    return true;
+}
+
 void LightMap::build_static_full_map(SDL_Renderer* renderer) {
     if (!renderer) {
         destroy_static_full_map();
@@ -613,13 +748,15 @@ void LightMap::build_static_full_map(SDL_Renderer* renderer) {
         }
         return;
     }
-    if (screen_width_ <= 0 || screen_height_ <= 0) {
+    const int target_w = layout_.map_width > 0 ? layout_.map_width : screen_width_;
+    const int target_h = layout_.map_height > 0 ? layout_.map_height : screen_height_;
+    if (target_w <= 0 || target_h <= 0) {
         destroy_static_full_map();
         return;
     }
 
-    const int tex_w = std::max(1, screen_width_);
-    const int tex_h = std::max(1, screen_height_);
+    const int tex_w = std::max(1, target_w);
+    const int tex_h = std::max(1, target_h);
     bool       needs_create = false;
     if (!static_full_map_) {
         needs_create = true;
@@ -657,6 +794,8 @@ void LightMap::build_static_full_map(SDL_Renderer* renderer) {
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
 
+    const bool use_world_space = (layout_.grid_spacing > 0 && layout_.cells_per_quadrant > 0);
+
     if (assets_) {
         for (Asset* asset : assets_->getActiveStaticLightAssets()) {
             if (!asset || !asset->info) {
@@ -668,7 +807,9 @@ void LightMap::build_static_full_map(SDL_Renderer* renderer) {
                     continue;
                 }
 
-                const std::optional<SDL_Rect> dst = compute_light_screen_rect(assets_, asset, light);
+                const std::optional<SDL_Rect> dst = use_world_space
+                    ? compute_light_world_rect(asset, light)
+                    : compute_light_screen_rect(assets_, asset, light);
                 if (!dst) {
                     continue;
                 }
@@ -679,7 +820,6 @@ void LightMap::build_static_full_map(SDL_Renderer* renderer) {
                 SDL_GetTextureBlendMode(tex, &save_bm);
 
                 SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
-                SDL_SetTextureAlphaMod(tex, 255);
                 SDL_RenderCopy(renderer, tex, nullptr, &*dst);
 
                 SDL_SetTextureBlendMode(tex, save_bm);
@@ -721,23 +861,52 @@ void LightMap::rebuild(SDL_Renderer* renderer) {
         build_static_full_map(nullptr);
         return;
     }
-    if (screen_width_ <= 0 || screen_height_ <= 0) {
-        build_static_full_map(renderer);
-        return;
+    if (pending_precomputed_map_) {
+        if (adopt_precomputed_map(renderer)) {
+            return;
+        }
     }
 
-    const int desired_size = std::clamp(requested_quadrant_size_px_, kMinQuadrantSizePx, kMaxQuadrantSizePx);
-    quadrant_cols_ = std::max(1, (screen_width_ + desired_size - 1) / desired_size);
-    quadrant_rows_ = std::max(1, (screen_height_ + desired_size - 1) / desired_size);
-    requested_quadrants_ = std::max(quadrant_cols_, quadrant_rows_);
+    int base_width = 0;
+    int base_height = 0;
+    if (layout_.map_width > 0 && layout_.map_height > 0 && layout_.grid_spacing > 0 && layout_.cells_per_quadrant > 0) {
+        screen_width_  = std::max(1, layout_.map_width);
+        screen_height_ = std::max(1, layout_.map_height);
+        base_width  = layout_.grid_spacing * layout_.cells_per_quadrant;
+        base_height = base_width;
+        quadrant_cols_ = std::max(1, screen_width_ / std::max(1, base_width));
+        quadrant_rows_ = std::max(1, screen_height_ / std::max(1, base_height));
+        quadrant_size_px_       = base_width;
+        static_grid_resolution_ = std::max(1, layout_.grid_resolution);
+        padding_cells_          = std::max(0, layout_.padding_cells);
+        requested_quadrants_    = quadrant_cols_;
+        requested_quadrant_size_px_ = quadrant_size_px_;
+        layout_.map_width  = quadrant_cols_ * base_width;
+        layout_.map_height = quadrant_rows_ * base_height;
+    } else {
+        if (screen_width_ <= 0 || screen_height_ <= 0) {
+            build_static_full_map(renderer);
+            return;
+        }
+        const int desired_size = std::clamp(requested_quadrant_size_px_, kMinQuadrantSizePx, kMaxQuadrantSizePx);
+        quadrant_cols_ = std::max(1, (screen_width_ + desired_size - 1) / desired_size);
+        quadrant_rows_ = std::max(1, (screen_height_ + desired_size - 1) / desired_size);
+        requested_quadrants_ = std::max(quadrant_cols_, quadrant_rows_);
 
-    const int base_width = std::max(1, (screen_width_ + quadrant_cols_ - 1) / quadrant_cols_);
-    const int base_height = std::max(1, (screen_height_ + quadrant_rows_ - 1) / quadrant_rows_);
-    quadrant_size_px_ = std::max(base_width, base_height);
+        base_width  = std::max(1, (screen_width_ + quadrant_cols_ - 1) / quadrant_cols_);
+        base_height = std::max(1, (screen_height_ + quadrant_rows_ - 1) / quadrant_rows_);
+        quadrant_size_px_ = std::max(base_width, base_height);
+        layout_.map_width          = screen_width_;
+        layout_.map_height         = screen_height_;
+        layout_.grid_spacing       = 0;
+        layout_.cells_per_quadrant = 0;
+        layout_.grid_resolution    = static_grid_resolution_;
+        layout_.padding_cells      = padding_cells_;
+    }
 
     const int total_quadrants = quadrant_cols_ * quadrant_rows_;
     quadrants_.clear();
-    quadrants_.reserve(static_cast<std::size_t>(total_quadrants));
+    quadrants_.reserve(static_cast<std::size_t>(std::max(0, total_quadrants)));
 
     build_static_full_map(renderer);
 

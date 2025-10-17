@@ -5,6 +5,8 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 
+#include "render/precomputed_light_map.hpp"
+
 class Asset;
 class Assets;
 class Room;
@@ -41,7 +43,10 @@ class AssetLoader {
     const std::string& map_identifier() const { return map_id_; }
     const std::string& content_root() const { return map_path_; }
 
-	private:
+    std::unique_ptr<PrecomputedLightMap> take_precomputed_light_map();
+    const PrecomputedLightMap* precomputed_light_map() const { return precomputed_light_map_.get(); }
+
+        private:
     std::string map_id_;
     std::string map_path_;
     SDL_Renderer* renderer_;
@@ -55,6 +60,7 @@ class AssetLoader {
     double map_center_x_ = 0.0;
     double map_center_y_ = 0.0;
     double map_radius_   = 0.0;
+    MapGridSettings map_grid_settings_{};
     nlohmann::json map_info_json_;
     nlohmann::json* map_assets_data_   = nullptr;
     nlohmann::json* map_boundary_data_ = nullptr;
@@ -67,4 +73,6 @@ class AssetLoader {
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
     void removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip = nullptr);
     void mergeLockedBoundaryAssets(const std::vector<Asset*>& locked_assets);
+    void precompute_light_map();
+    std::unique_ptr<PrecomputedLightMap> precomputed_light_map_;
 };
