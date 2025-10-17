@@ -52,6 +52,7 @@ public:
     void update_tile_mask(SDL_Renderer* renderer, const class Assets* assets, float static_weight, float dynamic_weight);
     void render_tile_mask(SDL_Renderer* renderer) const;
     void render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod) const;
+    void populate_static_base(SDL_Renderer* renderer, SDL_Texture* static_full_map);
 
     float sample_brightness(float local_x,
                             float local_y,
@@ -62,6 +63,7 @@ public:
 private:
     void destroy_texture();
     void ensure_texture(SDL_Renderer* renderer);
+    void ensure_static_tile(SDL_Renderer* renderer);
     std::size_t index_from_cell(int cx, int cy) const;
     float       cell_sample(int cx, int cy, float static_weight, float dynamic_weight) const;
 
@@ -73,6 +75,7 @@ private:
     std::vector<std::uint8_t> static_grid_{};
     // Removed dynamic grid and all related behavior.
     SDL_Texture*        tile_mask_       = nullptr;
+    SDL_Texture*        static_tile_     = nullptr;
     float               base_brightness_ = 0.0f;
     bool                dirty_           = true;
     bool                active_          = false;
@@ -138,6 +141,8 @@ private:
                           float static_weight,
                           float dynamic_weight) const;
     std::pair<int, int> padding_pixels() const;
+    void build_static_full_map(SDL_Renderer* renderer);
+    void destroy_static_full_map();
 
     Assets* assets_ = nullptr;
     int     screen_width_  = 0;
@@ -152,5 +157,6 @@ private:
     int requested_quadrant_size_px_ = kDefaultQuadrantSizePx;
 
     std::vector<LightMapQuadrant> quadrants_{};
+    SDL_Texture*                  static_full_map_ = nullptr;
 };
 
