@@ -647,6 +647,21 @@ void LightMapQuadrant::render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod)
     SDL_SetTextureAlphaMod(tile_mask_, saved_alpha);
 }
 
+void LightMapQuadrant::render_tile_mask_with_mode(SDL_Renderer* renderer, Uint8 alpha_mod, SDL_BlendMode mode) const {
+    if (!renderer || !tile_mask_) {
+        return;
+    }
+    Uint8 saved_alpha = 255;
+    SDL_BlendMode prev_mode = SDL_BLENDMODE_BLEND;
+    SDL_GetTextureAlphaMod(tile_mask_, &saved_alpha);
+    SDL_GetTextureBlendMode(tile_mask_, &prev_mode);
+    SDL_SetTextureAlphaMod(tile_mask_, alpha_mod);
+    SDL_SetTextureBlendMode(tile_mask_, mode);
+    SDL_RenderCopy(renderer, tile_mask_, nullptr, &world_rect_);
+    SDL_SetTextureBlendMode(tile_mask_, prev_mode);
+    SDL_SetTextureAlphaMod(tile_mask_, saved_alpha);
+}
+
 LightMap::LightMap(Assets* assets,
                    int screen_width,
                    int screen_height,
@@ -1143,6 +1158,67 @@ void LightMap::render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& 
             quadrant.render_tile_mask(renderer, alpha);
         }
     }
+}
+
+void LightMap::render_visible_quadrants_debug(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const {
+    if (!renderer || view_rect.w <= 0 || view_rect.h <= 0) {
+        return;
+    }
+
+    LightMap* self = const_cast<LightMap*>(this);
+    if (static_cache_dirty_ && renderer) {
+        self->build_static_full_map(renderer);
+    }
+
+    const float clamped = std::clamp(alpha_multiplier, 0.0f, 1.0f);
+    if (!(clamped > 0.0f)) {
+        return;
+    }
+    const Uint8 alpha = static_cast<Uint8>(std::lround(clamped * 255.0f));
+
+    if (quadrants_.empty()) {
+        return;
+    }
+
+    SDL_Rect expanded = view_rect;
+    auto [pad_x, pad_y] = padding_pixels();
+    if (pad_x > 0) {
+        expanded.x -= pad_x;
+        expanded.w += pad_x * 2;
+    }
+    if (pad_y > 0) {
+        expanded.y -= pad_y;
+        expanded.h += pad_y * 2;
+    }
+
+    // Draw quadrant textures using additive blending so black becomes transparent.
+    for (const auto& quadrant : quadrants_) {
+        const SDL_Rect& rect = quadrant.world_rect();
+        if (rect.w <= 0 || rect.h <= 0) {
+            continue;
+        }
+        if (SDL_HasIntersection(&rect, &expanded)) {
+            quadrant.render_tile_mask_with_mode(renderer, alpha, SDL_BLENDMODE_ADD);
+        }
+    }
+
+    // Overlay red outlines for visible quadrants.
+    SDL_BlendMode prev_draw_blend = SDL_BLENDMODE_BLEND;
+    if (SDL_GetRenderDrawBlendMode(renderer, &prev_draw_blend) != 0) {
+        prev_draw_blend = SDL_BLENDMODE_BLEND;
+    }
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    for (const auto& quadrant : quadrants_) {
+        const SDL_Rect& rect = quadrant.world_rect();
+        if (rect.w <= 0 || rect.h <= 0) {
+            continue;
+        }
+        if (SDL_HasIntersection(&rect, &expanded)) {
+            SDL_RenderDrawRect(renderer, &rect);
+        }
+    }
+    SDL_SetRenderDrawBlendMode(renderer, prev_draw_blend);
 }
 
 void LightMap::mark_region_dirty(const SDL_Rect& screen_rect) {

@@ -34,6 +34,8 @@ public:
     bool low_quality_rendering() const { return low_quality_rendering_; }
     void toggle_light_map_only_mode() { light_map_only_mode_ = !light_map_only_mode_; }
     bool light_map_only_mode() const { return light_map_only_mode_; }
+    void toggle_quadrant_debug_mode() { quadrant_debug_mode_ = !quadrant_debug_mode_; }
+    bool quadrant_debug_mode() const { return quadrant_debug_mode_; }
     Global_Light_Source& map_light_source() { return main_light_source_; }
     const Global_Light_Source& map_light_source() const { return main_light_source_; }
     render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() { return reactive_shadow_settings_; }
@@ -60,6 +62,7 @@ private:
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
     bool           light_map_only_mode_ = false;
+    bool           quadrant_debug_mode_ = false;
 
     std::unordered_set<Asset*> last_active_assets_;
 };

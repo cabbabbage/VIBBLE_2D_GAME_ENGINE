@@ -534,6 +534,12 @@ void Assets::update(const Input& input)
                   << (scene->light_map_only_mode() ? "enabled" : "disabled")
                   << " (Ctrl+M).\n";
     }
+    if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
+        scene->toggle_quadrant_debug_mode();
+        std::cout << "[Assets] Quadrant debug view "
+                  << (scene->quadrant_debug_mode() ? "enabled" : "disabled")
+                  << " (Ctrl+Q).\n";
+    }
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
         const bool enabled = render_pipeline::ScalingLogic::ToggleUsageTracking();
         if (!enabled) {

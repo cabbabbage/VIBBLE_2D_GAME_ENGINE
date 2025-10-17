@@ -173,8 +173,10 @@ void SceneRenderer::render(){
     }
 
     if (light_map_){
-        // Defer light map update until after we stamp moving lights below.
+        // Keep the sampler available for the pipeline.
         render_pipeline_.lighting().light_map_sampler = light_map_.get();
+        // Update quadrant tile masks so moving lights affecting them are reflected this frame.
+        light_map_->update(renderer_, 0u);
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
@@ -183,7 +185,8 @@ void SceneRenderer::render(){
 
     SDL_SetRenderTarget(renderer_,nullptr);
     SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
-    const SDL_Color clear_color = light_map_only_mode_ ? SDL_Color{0,0,0,255} : SLATE_COLOR;
+    // In quadrant debug mode we explicitly keep the normal background.
+    const SDL_Color clear_color = quadrant_debug_mode_ ? SLATE_COLOR : (light_map_only_mode_ ? SDL_Color{0,0,0,255} : SLATE_COLOR);
     SDL_SetRenderDrawColor(renderer_,clear_color.r,clear_color.g,clear_color.b,clear_color.a);
     SDL_RenderClear(renderer_);
 
@@ -196,7 +199,7 @@ void SceneRenderer::render(){
         // (same logic as shading stages). Darker overlays should result from a higher
         // map-light opacity, so invert the normalized value before applying it.
         float alpha_mult = 1.0f;
-        {
+        if (!quadrant_debug_mode_) {
             const int min_opacity = main_light_source_.min_opacity();
             const int max_opacity = main_light_source_.max_opacity();
             const int cur_a       = std::clamp(static_cast<int>(main_light_source_.get_current_color().a), min_opacity, max_opacity);
@@ -211,12 +214,17 @@ void SceneRenderer::render(){
             previous_mode = SDL_BLENDMODE_BLEND;
         }
         SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
-        light_map_->render_visible_quadrants(renderer_,screen_view, alpha_mult);
+        if (quadrant_debug_mode_) {
+            // Draw quadrants with additive blending + red outlines
+            light_map_->render_visible_quadrants_debug(renderer_, screen_view, 1.0f);
+        } else {
+            light_map_->render_visible_quadrants(renderer_,screen_view, alpha_mult);
+        }
         SDL_SetRenderDrawBlendMode(renderer_,previous_mode);
         rendered_light_map = true;
     };
 
-    if (!light_map_only_mode_){
+    if (!light_map_only_mode_ && !quadrant_debug_mode_){
         const auto& camera_state=assets_->getView();
         const camera::RealismSettings& cam_settings = camera_state.realism_settings();
         const float quality_percent = std::clamp(static_cast<float>(cam_settings.render_quality_percent), 10.0f, 100.0f);
@@ -380,7 +388,7 @@ void SceneRenderer::render(){
 
     render_light_map();
 
-    if (!light_map_only_mode_ && assets_){
+    if (!light_map_only_mode_ && !quadrant_debug_mode_ && assets_){
         assets_->render_overlays(renderer_);
     }
 

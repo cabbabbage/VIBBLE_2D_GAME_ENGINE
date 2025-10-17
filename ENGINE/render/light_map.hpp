@@ -55,6 +55,7 @@ public:
     void update_tile_mask(SDL_Renderer* renderer, const class Assets* assets, float static_weight, float dynamic_weight);
     void render_tile_mask(SDL_Renderer* renderer) const;
     void render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod) const;
+    void render_tile_mask_with_mode(SDL_Renderer* renderer, Uint8 alpha_mod, SDL_BlendMode mode) const;
     void populate_static_base(SDL_Renderer* renderer, SDL_Texture* static_full_map);
     void adopt_static_mask(SDL_Texture* texture);
     void set_base_brightness(float value);
@@ -119,6 +120,7 @@ public:
 
     void render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
+    void render_visible_quadrants_debug(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
 
     void mark_region_dirty(const SDL_Rect& screen_rect);
     void mark_asset_lights_dirty(const Asset* asset);

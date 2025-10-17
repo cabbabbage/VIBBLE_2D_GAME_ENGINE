@@ -2,6 +2,7 @@
 
 #include "animation_update/animation_update_utils.hpp"
 #include "asset/Asset.hpp"
+#include "core/AssetsManager.hpp"
 #include "custom_controllers/controller_path_utils.hpp"
 #include "custom_controllers/controller_visit_threshold.hpp"
 #include "utils/input.hpp"
@@ -110,16 +111,46 @@ void VibbleController::movement(const Input& input) {
     dx_ = dy_ = 0;
     if (!player_ || !player_->anim_) return;
 
-    const bool up    = input.isScancodeDown(SDL_SCANCODE_W);
-    const bool down  = input.isScancodeDown(SDL_SCANCODE_S);
-    const bool left  = input.isScancodeDown(SDL_SCANCODE_A);
-    const bool right = input.isScancodeDown(SDL_SCANCODE_D);
+    // Support both WASD and Arrow keys for movement.
+    const bool up    = input.isScancodeDown(SDL_SCANCODE_W) || input.isScancodeDown(SDL_SCANCODE_UP);
+    const bool down  = input.isScancodeDown(SDL_SCANCODE_S) || input.isScancodeDown(SDL_SCANCODE_DOWN);
+    const bool left  = input.isScancodeDown(SDL_SCANCODE_A) || input.isScancodeDown(SDL_SCANCODE_LEFT);
+    const bool right = input.isScancodeDown(SDL_SCANCODE_D) || input.isScancodeDown(SDL_SCANCODE_RIGHT);
     const bool sprint = input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
 
     const int raw_x = (right ? 1 : 0) - (left ? 1 : 0);
     const int raw_y = (down  ? 1 : 0) - (up    ? 1 : 0);
 
     if (raw_x == 0 && raw_y == 0) {
+        // Optional mouse movement: hold left mouse to move toward cursor within neighbor radius.
+        if (Assets* owner = player_->get_assets()) {
+            if (input.isDown(Input::LEFT)) {
+                SDL_Point mouse_screen{ input.getX(), input.getY() };
+                SDL_Point world = owner->getView().screen_to_map(mouse_screen);
+
+                SDL_Point origin = player_->pos;
+                const int radius = controller_paths::neighbor_radius(player_);
+                SDL_Point desired = controller_paths::clamp_to_radius(origin, world, radius);
+
+                int mdx = desired.x - origin.x;
+                int mdy = desired.y - origin.y;
+                if (mdx != 0 || mdy != 0) {
+                    const int stride_count = sprint ? kSprintMultiplier : 1;
+                    SDL_Point boosted{ origin.x + mdx * stride_count, origin.y + mdy * stride_count };
+                    SDL_Point clamped = controller_paths::clamp_to_radius(origin, boosted, radius);
+                    mdx = clamped.x - origin.x;
+                    mdy = clamped.y - origin.y;
+
+                    std::vector<SDL_Point> path;
+                    path.push_back(SDL_Point{ mdx, mdy });
+                    player_->anim_->move(path, 0);
+                    dx_ = mdx;
+                    dy_ = mdy;
+                    return;
+                }
+            }
+        }
+
         player_->anim_->clear_manual_animation();
         player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
         player_->anim_->clear_movement_plan();
