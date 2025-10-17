@@ -8,6 +8,7 @@
                         "map_light_factor": 0.0,
                         "max_offset_x": 100.0,
                         "max_offset_y": 100.0,
+                        "quadrants": 50.0,
                         "shadow_scale": 1.0,
                         "size_scale_factor": 1.0,
                         "vertical_falloff": 3.5

@@ -52,7 +52,7 @@ private:
     void apply_immediate_settings();
     render_pipeline::shading::ReactiveShadowSettings current_settings_from_ui() const;
     void set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings);
-    render_pipeline::shading::ReactiveShadowSettings load_reactive_settings_from_dev_settings() const;
+    render_pipeline::shading::ReactiveShadowSettings load_reactive_settings_from_dev_settings();
     void persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const;
     void write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings);
     nlohmann::json& ensure_reactive_settings_json();

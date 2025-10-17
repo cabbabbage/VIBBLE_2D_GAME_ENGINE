@@ -319,7 +319,7 @@ void MapShadowPanel::set_reactive_sliders(const render_pipeline::shading::Reacti
     }
 }
 
-render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::load_reactive_settings_from_dev_settings() const {
+render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::load_reactive_settings_from_dev_settings() {
     using devmode::ui_settings::load_number;
     render_pipeline::shading::ReactiveShadowSettings settings = render_pipeline::shading::sanitize_reactive_shadow_settings({});
     settings.virtual_light_map.map_light_factor = static_cast<float>(

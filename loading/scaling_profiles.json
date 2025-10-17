@@ -825,6 +825,27 @@
             ],
             "revision": 1
         },
+        "Tree_Dark": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-17T00:25:49Z",
+            "recommended_percentages": [
+                100,
+                90,
+                80
+            ],
+            "revision": 1
+        },
         "Tree_Darker": {
             "histogram": [
                 0,

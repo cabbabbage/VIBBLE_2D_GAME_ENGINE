@@ -132,6 +132,7 @@ class Asset {
     friend class Move;
     friend class AssetInfoUI;
     friend class RenderAsset;
+    friend class Assets;
     camera* window = nullptr;
     bool highlighted = false;
     bool hidden = false;

@@ -14031,7 +14031,7 @@
         "parallax_strength": 28.0,
         "realism_enabled": true,
         "render_distance": 2200.0,
-        "render_quality_percent": 25,
+        "render_quality_percent": 10,
         "tripod_distance_y": -495.0
       },
       "content_root": "MAPS/FORREST",

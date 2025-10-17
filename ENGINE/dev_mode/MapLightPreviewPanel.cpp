@@ -89,7 +89,8 @@ bool MapLightPreviewPanel::is_point_inside(int x, int y) const {
     if (DockableCollapsible::is_point_inside(x, y)) {
         return true;
     }
-    return SDL_PointInRect(&SDL_Point{x, y}, &preview_rect_);
+    SDL_Point point{x, y};
+    return SDL_PointInRect(&point, &preview_rect_);
 }
 
 void MapLightPreviewPanel::render_content(SDL_Renderer* renderer) const {
@@ -138,7 +139,8 @@ std::vector<std::string> MapLightPreviewPanel::assets_in_quadrant(int quadrant) 
 }
 
 int MapLightPreviewPanel::quadrant_index_from_point(int x, int y) const {
-    if (!SDL_PointInRect(&SDL_Point{x, y}, &preview_grid_rect_)) {
+    SDL_Point point{x, y};
+    if (!SDL_PointInRect(&point, &preview_grid_rect_)) {
         return -1;
     }
     const VirtualLightMap* map = current_virtual_light_map();
