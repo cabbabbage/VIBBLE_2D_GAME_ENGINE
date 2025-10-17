@@ -104,12 +104,20 @@ public:
 
     void set_rect(const SDL_Rect& r) override {
         rect_ = r;
-        if (owner_) owner_->preview_widget_bounds_ = rect_;
+        if (owner_) {
+            rect_.h = owner_->preview_height_for_width(r.w);
+            owner_->preview_widget_bounds_ = rect_;
+        }
     }
 
     const SDL_Rect& rect() const override { return rect_; }
 
-    int height_for_width(int) const override { return 320; }
+    int height_for_width(int width) const override {
+        if (!owner_) {
+            return 320;
+        }
+        return owner_->preview_height_for_width(width);
+    }
 
     bool handle_event(const SDL_Event& e) override {
         if (!owner_) {
@@ -132,7 +140,7 @@ private:
 };
 
 MapLightPreviewPanel::MapLightPreviewPanel(Assets* assets, int x, int y)
-    : DockableCollapsible("Light Map Preview", true, x, y), assets_(assets) {
+    : DockableCollapsible("Light Map Panel", true, x, y), assets_(assets) {
     set_floating_content_width(360);
     set_visible_height(540);
     quadrant_note_text_ =
@@ -348,6 +356,105 @@ bool MapLightPreviewPanel::handle_preview_event(const SDL_Event& e) {
     }
 
     return false;
+}
+
+int MapLightPreviewPanel::preview_height_for_width(int width) const {
+    const int available_width = std::max(40, width);
+
+    const LightMapManager* manager = light_map_manager();
+    const LightMap*        map     = manager ? manager->light_map() : nullptr;
+    if (!map && assets_) {
+        map = assets_->light_map();
+    }
+
+    float aspect = 1.0f;
+    if (map && map->screen_width() > 0) {
+        aspect = static_cast<float>(std::max(1, map->screen_height())) /
+                 static_cast<float>(std::max(1, map->screen_width()));
+    } else if (screen_width_px_ > 0 && screen_height_px_ > 0) {
+        aspect = static_cast<float>(screen_height_px_) /
+                 static_cast<float>(std::max(1, screen_width_px_));
+    }
+
+    int grid_width_px = std::max(40, std::min(available_width, 320));
+    int grid_height_px = std::max(40, static_cast<int>(std::lround(static_cast<double>(grid_width_px) * aspect)));
+
+    int detail_gap   = DMSpacing::item_gap();
+    int detail_width = available_width - grid_width_px - detail_gap;
+    bool detail_below = (detail_width < 160);
+
+    const int lines = estimated_detail_line_count();
+    const int line_height = DMStyles::Label().font_size + DMSpacing::small_gap();
+    const int detail_height = (lines > 0) ? std::max(0, lines * line_height) : 0;
+
+    if (detail_below) {
+        if (detail_height > 0) {
+            return grid_height_px + detail_gap + detail_height;
+        }
+        return grid_height_px;
+    }
+
+    if (detail_height > 0) {
+        return std::max(grid_height_px, detail_height);
+    }
+    return grid_height_px;
+}
+
+int MapLightPreviewPanel::estimated_detail_line_count() const {
+    int count = 0;
+
+    const LightMapManager* manager = light_map_manager();
+    const LightMap*        map     = manager ? manager->light_map() : nullptr;
+    if (!map && assets_) {
+        map = assets_->light_map();
+    }
+
+    const int total_quadrants = map ? map->quadrant_count() : 0;
+    const int detail_quadrant =
+        (selected_quadrant_ >= 0 && selected_quadrant_ < total_quadrants) ? selected_quadrant_ : -1;
+
+    if (detail_quadrant >= 0) {
+        count += 1;  // Tile header
+
+        // Assume full snapshot metrics when available.
+        count += 7;
+
+        if (map) {
+            count += 2;  // Grid resolution + padding
+        }
+
+        count += 1;  // Blank line before assets
+        count += 1;  // Assets Sampling header
+
+        int asset_lines = 1;
+        if (manager) {
+            const auto assets = manager->assets_sampling_quadrant(detail_quadrant);
+            asset_lines = static_cast<int>(assets.empty() ? 1 : assets.size());
+        }
+        count += asset_lines;
+    } else {
+        count += 1;  // No quadrant selected
+    }
+
+    if (!quadrant_note_text_.empty()) {
+        count += 1;  // Blank line before note
+        count += count_lines(quadrant_note_text_);
+    }
+
+    return count;
+}
+
+int MapLightPreviewPanel::count_lines(std::string_view text) {
+    if (text.empty()) {
+        return 0;
+    }
+    int lines = 1;
+    for (char c : text) {
+        if (c == '\n') {
+            ++lines;
+        }
+    }
+    return lines;
 }
 
 void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
@@ -713,12 +820,6 @@ void MapLightPreviewPanel::rebuild_rows() {
     if (max_offset_y_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(max_offset_y_.get())) });
     }
-    if (shadow_scale_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(shadow_scale_.get())) });
-    }
-    if (size_scale_factor_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(size_scale_factor_.get())) });
-    }
     if (search_radius_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(search_radius_.get())) });
     }
@@ -738,10 +839,6 @@ void MapLightPreviewPanel::build_ui() {
                                             last_applied_settings_.virtual_light_map.max_offset_x, 100);
     max_offset_y_       = make_float_slider("Max Offset Y", 0.0f, 500.0f,
                                             last_applied_settings_.virtual_light_map.max_offset_y, 100);
-    shadow_scale_       = make_float_slider("Shadow Scale", 0.0f, 10.0f,
-                                            last_applied_settings_.virtual_light_map.shadow_scale, 100);
-    size_scale_factor_  = make_float_slider("Size Scale Factor", 0.0f, 10.0f,
-                                            last_applied_settings_.virtual_light_map.size_scale_factor, 100);
     map_light_factor_   = make_float_slider("Map Light Factor", 0.0f, 1.0f,
                                             last_applied_settings_.virtual_light_map.map_light_factor, 100);
     search_radius_      = std::make_unique<DMSlider>(
@@ -834,8 +931,6 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::current_s
     settings.virtual_light_map.vertical_falloff = slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
     settings.virtual_light_map.max_offset_x = slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
     settings.virtual_light_map.max_offset_y = slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
-    settings.virtual_light_map.shadow_scale = slider_value_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
-    settings.virtual_light_map.size_scale_factor = slider_value_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, 100);
     if (search_radius_) {
         settings.virtual_light_map.search_radius = search_radius_->displayed_value();
     }
@@ -848,8 +943,6 @@ void MapLightPreviewPanel::set_reactive_sliders(const render_pipeline::shading::
     set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
     set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
     set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
-    set_slider_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
-    set_slider_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, 100);
     if (search_radius_) {
         search_radius_->set_value(settings.virtual_light_map.search_radius);
     }

@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <SDL.h>
@@ -54,6 +55,9 @@ private:
     int                           quadrant_index_from_point(int x, int y) const;
     void                          render_preview(SDL_Renderer* renderer) const;
     bool                          handle_preview_event(const SDL_Event& e);
+    int                           preview_height_for_width(int width) const;
+    int                           estimated_detail_line_count() const;
+    static int                    count_lines(std::string_view text);
     void                          rebuild_rows();
     void                          build_ui();
     void                          sync_ui_from_json();
@@ -88,8 +92,6 @@ private:
     std::unique_ptr<class DMSlider> vertical_falloff_;
     std::unique_ptr<class DMSlider> max_offset_x_;
     std::unique_ptr<class DMSlider> max_offset_y_;
-    std::unique_ptr<class DMSlider> shadow_scale_;
-    std::unique_ptr<class DMSlider> size_scale_factor_;
     std::unique_ptr<class DMSlider> search_radius_;
     std::unique_ptr<class DMSlider> quadrant_size_px_;
     std::unique_ptr<class DMButton> regenerate_button_;

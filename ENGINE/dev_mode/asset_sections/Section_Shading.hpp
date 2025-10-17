@@ -104,13 +104,11 @@ public:
             return used;
         }
 
-        if (!used) {
-            if (expansion_ratio_slider_ && expansion_ratio_slider_->handle_event(e)) used = true;
-            if (blur_scale_slider_ && blur_scale_slider_->handle_event(e)) used = true;
-            if (falloff_start_slider_ && falloff_start_slider_->handle_event(e)) used = true;
-            if (falloff_exponent_slider_ && falloff_exponent_slider_->handle_event(e)) used = true;
-            if (alpha_multiplier_slider_ && alpha_multiplier_slider_->handle_event(e)) used = true;
-        }
+        if (expansion_ratio_slider_ && expansion_ratio_slider_->handle_event(e)) used = true;
+        if (blur_scale_slider_ && blur_scale_slider_->handle_event(e)) used = true;
+        if (falloff_start_slider_ && falloff_start_slider_->handle_event(e)) used = true;
+        if (falloff_exponent_slider_ && falloff_exponent_slider_->handle_event(e)) used = true;
+        if (alpha_multiplier_slider_ && alpha_multiplier_slider_->handle_event(e)) used = true;
 
         const ShadowMaskSettings previous = info_->shadow_mask_settings;
         ShadowMaskSettings       updated  = previous;
