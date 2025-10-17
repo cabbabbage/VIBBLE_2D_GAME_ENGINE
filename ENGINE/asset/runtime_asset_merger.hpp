@@ -37,14 +37,12 @@ private:
     bool smooth_scaling_ = true;
     bool is_shaded_ = false;
     bool moving_asset_ = false;
-    bool generate_rays_ = false;
     bool is_light_source_ = false;
     int shading_factor_ = 0;
     int min_same_type_distance_ = std::numeric_limits<int>::max();
     int min_distance_all_ = std::numeric_limits<int>::max();
     int neighbor_radius_ = 0;
     int z_threshold_ = 0;
-    int ray_strength_ = 0;
     float scale_factor_sum_ = 0.0f;
     int scale_factor_count_ = 0;
     std::unordered_set<std::string> tags_;

@@ -577,10 +577,6 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
         min_same_type_distance = data.value("min_same_type_distance", 0);
         min_distance_all = data.value("min_distance_all", 0);
         flipable = data.value("can_invert", false);
-        generate_rays = data.value("generate_rays", false);
-        info_json_["generate_rays"] = generate_rays;
-        ray_strength = std::clamp(data.value("ray_strength", 0), 0, 100);
-        info_json_["ray_strength"] = ray_strength;
         NeighborSearchRadius = std::clamp( data.value("neighbor_search_distance", NeighborSearchRadius), 20, 1000);
         info_json_["neighbor_search_distance"] = NeighborSearchRadius;
 }
@@ -768,12 +764,6 @@ void AssetInfo::set_passable(bool v) {
         add_tag("passable");
         else
         remove_tag("passable");
-}
-
-void AssetInfo::set_ray_strength(int strength) {
-        int clamped = std::clamp(strength, 0, 100);
-        ray_strength = clamped;
-        info_json_["ray_strength"] = ray_strength;
 }
 
 void AssetInfo::set_shadow_mask_settings(const ShadowMaskSettings& settings) {

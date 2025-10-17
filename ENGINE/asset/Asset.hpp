@@ -113,8 +113,6 @@ class Asset {
     int z_offset = 0;
     bool active = false;
     bool flipped = false;
-    bool generate_rays = false;
-    int ray_strength = 0;
     float distance_from_camera = 0.0f;
     float angle_from_camera = 0.0f;
 

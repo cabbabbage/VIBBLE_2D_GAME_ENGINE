@@ -92,14 +92,12 @@ void TemporaryMergedAssetInfo::absorb(const Asset& asset, SDL_Point merged_origi
     smooth_scaling_ = smooth_scaling_ && src.smooth_scaling;
     is_shaded_ = is_shaded_ || src.is_shaded;
     moving_asset_ = moving_asset_ || src.moving_asset;
-    generate_rays_ = generate_rays_ || src.generate_rays;
     is_light_source_ = is_light_source_ || src.is_light_source;
     shading_factor_ = std::max(shading_factor_, src.shading_factor);
     min_same_type_distance_ = std::min(min_same_type_distance_, src.min_same_type_distance);
     min_distance_all_ = std::min(min_distance_all_, src.min_distance_all);
     neighbor_radius_ = std::max(neighbor_radius_, src.NeighborSearchRadius);
     z_threshold_ = std::max(z_threshold_, src.z_threshold);
-    ray_strength_ = std::max(ray_strength_, src.ray_strength);
 
     if (src.scale_factor > 0.0f && std::isfinite(src.scale_factor)) {
         scale_factor_sum_ += src.scale_factor;
@@ -167,7 +165,6 @@ std::shared_ptr<AssetInfo> TemporaryMergedAssetInfo::finalize(const std::vector<
     info_->smooth_scaling = smooth_scaling_;
     info_->is_shaded = is_shaded_;
     info_->moving_asset = moving_asset_;
-    info_->generate_rays = generate_rays_;
     info_->is_light_source = is_light_source_;
     info_->shading_factor = shading_factor_;
     info_->min_same_type_distance = (min_same_type_distance_ == std::numeric_limits<int>::max())
@@ -178,7 +175,6 @@ std::shared_ptr<AssetInfo> TemporaryMergedAssetInfo::finalize(const std::vector<
                                   : min_distance_all_;
     info_->NeighborSearchRadius = neighbor_radius_;
     info_->z_threshold = z_threshold_;
-    info_->ray_strength = ray_strength_;
     if (shadow_settings_) {
         info_->shadow_mask_settings = *shadow_settings_;
     }

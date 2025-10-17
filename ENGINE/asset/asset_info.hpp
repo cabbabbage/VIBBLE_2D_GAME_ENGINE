@@ -80,8 +80,6 @@ class AssetInfo {
     std::vector<std::string> anti_tags;
     bool is_light_source = false;
     bool moving_asset = false;
-    bool generate_rays = false;
-    int ray_strength = 0;
     std::vector<float>  scale_variants;
     std::uint64_t       scale_profile_revision = 0;
     struct NamedArea {
@@ -134,7 +132,6 @@ class AssetInfo {
     void set_children(const std::vector<ChildInfo>& children);
 
     void set_lighting(bool is_shaded, const LightSource& shading, int shading_factor, const std::vector<LightSource>& lights);
-    void set_ray_strength(int strength);
     void set_shadow_mask_settings(const ShadowMaskSettings& settings);
     void set_shading_enabled(bool enabled);
     void set_virtual_light_map_quadrants(int quadrants);

@@ -113,7 +113,7 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data){
 bool SceneRenderer::shouldRegen(Asset* a){
     if (!a) return false;
 
-    if (a->is_shaded || a->generate_rays || a->is_shading_group_set()) {
+    if (a->is_shaded || a->is_shading_group_set()) {
         return true;
     }
 

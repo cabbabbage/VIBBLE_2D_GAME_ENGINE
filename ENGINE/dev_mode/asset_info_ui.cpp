@@ -534,18 +534,14 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     sync_map_light_panel_visibility(false);
 
-    bool lighting_requires_high_quality = false;
     bool shading_requires_high_quality = false;
     if (visible_ && info_) {
-        if (lighting_section_ && lighting_section_->is_expanded()) {
-            lighting_requires_high_quality = info_->generate_rays;
-        }
         if (shading_section_ && shading_section_->is_expanded()) {
             shading_requires_high_quality = shading_section_->shading_enabled();
         }
     }
 
-    const bool need_high_quality = lighting_requires_high_quality || shading_requires_high_quality;
+    const bool need_high_quality = shading_requires_high_quality;
     if (assets_) {
         if (need_high_quality != forcing_high_quality_rendering_) {
             assets_->set_force_high_quality_rendering(need_high_quality);
@@ -897,8 +893,6 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
 
     bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
         asset->is_shaded = info_->is_shaded;
-        asset->generate_rays = info_->generate_rays;
-        asset->ray_strength = info_->ray_strength;
         asset->clear_render_caches();
     });
 

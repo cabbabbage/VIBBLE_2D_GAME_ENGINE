@@ -31,7 +31,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": false,
       "has_shading": false,
       "impassable_area": null,
       "layout": {
@@ -61,7 +60,6 @@
       "min_distance_all": 0,
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "render_radius": 2191,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -313,7 +311,6 @@
       "duplicatable": false,
       "duplication_interval_max": 3766,
       "duplication_interval_min": 2161,
-      "generate_rays": false,
       "has_shading": true,
       "lighting_info": [
         {
@@ -331,7 +328,6 @@
       "min_distance_all": 0,
       "min_same_type_distance": 194,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -1278,7 +1274,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": true,
       "has_shading": true,
       "impassable_area": null,
       "layout": {
@@ -1310,7 +1305,6 @@
       "min_distance_all": 254,
       "min_same_type_distance": 466,
       "neighbor_search_distance": 500,
-      "ray_strength": 100,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -5063,7 +5057,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": false,
       "impassable_area": null,
       "layout": {
         "__view": {
@@ -5079,7 +5072,6 @@
       "min_distance_all": 0,
       "min_same_type_distance": 40,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -5180,7 +5172,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": false,
       "impassable_area": null,
       "layout": {
         "__view": {
@@ -5196,7 +5187,6 @@
       "min_distance_all": 40,
       "min_same_type_distance": 40,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -5722,11 +5712,9 @@
       "asset_name": "Mushroom_3",
       "asset_type": "Object",
       "can_invert": false,
-      "generate_rays": false,
       "impassable_area": null,
       "min_same_type_distance": 400,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "size_settings": {
@@ -6076,12 +6064,10 @@
       "asset_name": "Small_Rock",
       "asset_type": "texture",
       "can_invert": true,
-      "generate_rays": false,
       "impassable_area": null,
       "min_distance_all": 0,
       "min_same_type_distance": 300,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -9920,7 +9906,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": false,
       "has_shading": true,
       "layout": {
         "__view": {
@@ -9949,7 +9934,6 @@
       "min_distance_all": 0,
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -11010,7 +10994,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": false,
       "has_shading": true,
       "lighting_info": [
         {
@@ -11030,7 +11013,6 @@
       "min_distance_all": 0,
       "min_same_type_distance": 39,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -12265,7 +12247,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": false,
       "has_shading": true,
       "lighting_info": [
         {
@@ -12286,7 +12267,6 @@
       "min_distance_all": 0,
       "min_same_type_distance": 21,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -12742,7 +12722,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": false,
       "has_shading": false,
       "impassable_area": null,
       "lighting_info": [
@@ -12781,7 +12760,6 @@
       "min_child_depth": 0,
       "min_distance_all": 106,
       "neighbor_search_distance": 400,
-      "ray_strength": 0,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
@@ -12990,7 +12968,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": false,
       "has_shading": false,
       "impassable_area": null,
       "lighting_info": [
@@ -13029,7 +13006,6 @@
       "min_distance_all": 0,
       "min_same_type_distance": 1299,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "size_settings": {
@@ -13527,7 +13503,6 @@
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
-      "generate_rays": false,
       "impassable_area": null,
       "lighting_info": [
         {
@@ -13552,7 +13527,6 @@
       "min_distance_all": 0,
       "min_same_type_distance": 500,
       "neighbor_search_distance": 500,
-      "ray_strength": 0,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "size_settings": {
@@ -14181,33 +14155,6 @@
             ]
           ]
         ],
-        "lens_flare": {
-          "axis_factors": [
-            -0.5,
-            -0.20000000298023224,
-            0.25,
-            0.6000000238418579,
-            0.949999988079071,
-            1.399999976158142,
-            1.899999976158142
-          ],
-          "enabled": false,
-          "ghost_alpha_cap": 0.09000000357627869,
-          "ghost_alpha_fall": 0.0025510203558951616,
-          "ghost_alpha_rise": 0.004081632476300001,
-          "ghost_drift": 0.019999999552965164,
-          "ghost_follow_ema": 0.25,
-          "ghost_intensity_gain": 0.27000001072883606,
-          "ghost_size_max": 210.0,
-          "ghost_size_min": 70.0,
-          "ghost_spawn_speed": 0.0,
-          "max_new_per_frame": 12,
-          "offscreen_spawn_bias": 0.0,
-          "seed_pos_ema": 0.800000011920929,
-          "seed_stride_px": 28,
-          "seed_threshold_norm": 1.0,
-          "streak_angle_lean": 0.0
-        },
         "max_opacity": 154,
         "min_opacity": 0,
         "mult": 0.32,

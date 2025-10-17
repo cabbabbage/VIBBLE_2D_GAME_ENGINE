@@ -18,15 +18,7 @@ public:
 
     void build() override {
         rows_.clear();
-        s_ray_strength_.reset();
         if (!info_) return;
-        if (info_->generate_rays) {
-            const int strength = std::clamp(info_->ray_strength, 0, 100);
-            s_ray_strength_ = std::make_unique<DMSlider>("Ray Strength", 0, 100, strength);
-            s_ray_strength_->set_defer_commit_until_unfocus(true);
-        } else {
-            info_->set_ray_strength(0);
-        }
 
         for (const auto& ls : info_->light_sources) {
             Row r;
@@ -62,9 +54,6 @@ public:
             y += h + DMSpacing::item_gap();
 };
 
-        if (s_ray_strength_) {
-            place(s_ray_strength_, DMSlider::height());
-        }
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
             if (r.lbl) {
@@ -102,16 +91,6 @@ public:
         bool regenerate_lighting = false;
         bool reset_scaling_profile = false;
         bool purge_light_cache = false;
-        if (s_ray_strength_) {
-            if (s_ray_strength_->handle_event(e)) {
-                used = true;
-                const int new_strength = std::clamp(s_ray_strength_->value(), 0, 100);
-                if (info_ && info_->ray_strength != new_strength) {
-                    changed = true;
-                    regenerate_lighting = true;
-                }
-            }
-        }
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
             if (r.lbl && r.lbl->handle_event(e)) used = true;
@@ -231,7 +210,6 @@ public:
     }
 
     void render_content(SDL_Renderer* r) const override {
-        if (s_ray_strength_) s_ray_strength_->render(r);
         for (const auto& rrow : rows_) {
             if (rrow.lbl)      rrow.lbl->render(r);
             if (rrow.b_delete) rrow.b_delete->render(r);
@@ -284,13 +262,6 @@ private:
         if (!info_) return;
         std::vector<LightSource> lights;
         for (const auto& r : rows_) lights.push_back(r.light);
-        if (info_) {
-            int strength = 0;
-            if (s_ray_strength_) {
-                strength = std::clamp(s_ray_strength_->value(), 0, 100);
-            }
-            info_->set_ray_strength(strength);
-        }
         LightSource shading_light{};
         if (info_ && !info_->orbital_light_sources.empty()) {
             shading_light = info_->orbital_light_sources.front();
@@ -299,8 +270,6 @@ private:
         bool is_shaded = info_ ? info_->is_shaded : false;
         info_->set_lighting(is_shaded, shading_light, shading_factor, lights);
     }
-
-    std::unique_ptr<DMSlider> s_ray_strength_;
 
     std::vector<Row> rows_;
     std::unique_ptr<DMButton> b_add_;

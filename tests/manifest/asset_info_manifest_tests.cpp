@@ -52,8 +52,6 @@ TEST_CASE("AssetInfo manifest constructor populates metadata without disk access
         {"min_same_type_distance", 4},
         {"min_distance_all", 2},
         {"neighbor_search_distance", 123},
-        {"generate_rays", true},
-        {"ray_strength", 54},
         {"tags", nlohmann::json::array({"passable", "pixel_art"})},
         {"anti_tags", nlohmann::json::array({"no_spawn"})},
         {"size_settings", {
@@ -130,8 +128,6 @@ TEST_CASE("AssetInfo manifest constructor populates metadata without disk access
     CHECK(info.passable);
     CHECK(info.min_same_type_distance == 4);
     CHECK(info.min_distance_all == 2);
-    CHECK(info.generate_rays);
-    CHECK(info.ray_strength == 54);
     CHECK(info.NeighborSearchRadius == 123);
 
     CHECK(info.has_tag("passable"));
