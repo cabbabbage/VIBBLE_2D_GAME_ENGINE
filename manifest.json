@@ -14086,16 +14086,8 @@
           {
             "candidates": [
               {
-                "chance": 79,
-                "name": "Tree_Dark"
-              },
-              {
-                "chance": 80,
-                "name": "Tree_Darker"
-              },
-              {
-                "chance": 19,
-                "name": "Tree"
+                "chance": 0,
+                "name": "null"
               }
             ],
             "display_name": "batch_map_boundary",
@@ -14707,13 +14699,13 @@
                 }
               ],
               "display_name": "Big_Rock",
-              "dx": -33,
-              "dy": -302,
+              "dx": -65,
+              "dy": -278,
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
-              "origional_height": 2022,
-              "origional_width": 1949,
+              "origional_height": 1991,
+              "origional_width": 1934,
               "position": "Exact",
               "priority": 2,
               "spawn_id": "spn-4e301c5e26b7"

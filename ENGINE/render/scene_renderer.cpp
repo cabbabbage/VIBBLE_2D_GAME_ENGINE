@@ -4,6 +4,7 @@
 #include "asset/asset_types.hpp"
 #include "light_map.hpp"
 #include "render/camera.hpp"
+#include "render/light_map_manager.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
@@ -41,7 +42,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   main_light_source_,
                                   assets->player,
                                   nullptr,
-                                  &reactive_shadow_settings_ })
+                                  &reactive_shadow_settings_,
+                                  nullptr })
 {
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
     z_light_pass_ = std::make_unique<LightMap>(assets_, screen_width_, screen_height_);
@@ -50,6 +52,9 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
         render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
+    }
+    if (assets_) {
+        render_pipeline_.lighting().light_map_manager = assets_->light_map_manager();
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
     main_light_source_.update();
@@ -74,6 +79,9 @@ void SceneRenderer::force_virtual_light_map_refresh() {
     }
     z_light_pass_->rebuild(renderer_);
     render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
+    if (assets_) {
+        render_pipeline_.lighting().light_map_manager = assets_->light_map_manager();
+    }
 }
 
 void SceneRenderer::set_low_quality_rendering(bool enabled){
@@ -144,12 +152,18 @@ void SceneRenderer::render(){
     }
     if (should_update_light){ main_light_source_.update(); }
 
+    LightMapManager* light_map_manager = assets_ ? assets_->light_map_manager() : nullptr;
+    if (light_map_manager) {
+        light_map_manager->begin_frame();
+    }
+
     if (z_light_pass_){
         z_light_pass_->update(renderer_, 16);
         render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
+    render_pipeline_.lighting().light_map_manager = light_map_manager;
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
     SDL_SetRenderTarget(renderer_,nullptr);

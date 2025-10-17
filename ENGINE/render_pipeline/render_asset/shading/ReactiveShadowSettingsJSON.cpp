@@ -36,6 +36,31 @@ float read_float(const nlohmann::json& obj, const char* key, float fallback) {
     return fallback;
 }
 
+int read_int(const nlohmann::json& obj, const char* key, int fallback) {
+    auto it = obj.find(key);
+    if (it == obj.end()) {
+        return fallback;
+    }
+    try {
+        if (it->is_number_integer()) {
+            return it->get<int>();
+        }
+        if (it->is_number_float()) {
+            return static_cast<int>(std::lround(it->get<double>()));
+        }
+        if (it->is_string()) {
+            const std::string text = it->get<std::string>();
+            size_t            idx  = 0;
+            int               parsed = static_cast<int>(std::lround(std::stof(text, &idx)));
+            if (idx == text.size()) {
+                return parsed;
+            }
+        }
+    } catch (...) {
+    }
+    return fallback;
+}
+
 void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
     settings.virtual_light_map.horizontal_falloff =
         read_float(json, "horizontal_falloff", settings.virtual_light_map.horizontal_falloff);
@@ -51,6 +76,8 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
         read_float(json, "size_scale_factor", settings.virtual_light_map.size_scale_factor);
     settings.virtual_light_map.map_light_factor =
         read_float(json, "map_light_factor", settings.virtual_light_map.map_light_factor);
+    settings.virtual_light_map.search_radius =
+        read_int(json, "search_radius", settings.virtual_light_map.search_radius);
 
     auto parse_lut = [&](const nlohmann::json& source) {
         if (!source.is_array()) {
@@ -121,7 +148,8 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
         { "max_offset_y", sanitized.virtual_light_map.max_offset_y },
         { "shadow_scale", sanitized.virtual_light_map.shadow_scale },
         { "size_scale_factor", sanitized.virtual_light_map.size_scale_factor },
-        { "map_light_factor", sanitized.virtual_light_map.map_light_factor }
+        { "map_light_factor", sanitized.virtual_light_map.map_light_factor },
+        { "search_radius", sanitized.virtual_light_map.search_radius }
     });
 
     nlohmann::json lut = nlohmann::json::array();

@@ -192,6 +192,11 @@ void MapShadowPanel::build_ui() {
                                             last_applied_settings_.virtual_light_map.size_scale_factor, 100);
     map_light_factor_   = make_float_slider("Map Light Factor", 0.0f, 1.0f,
                                             last_applied_settings_.virtual_light_map.map_light_factor, 100);
+    search_radius_      = std::make_unique<DMSlider>(
+        "Search Radius", 0, 64, last_applied_settings_.virtual_light_map.search_radius);
+    if (search_radius_) {
+        search_radius_->set_defer_commit_until_unfocus(false);
+    }
 
     const int clamped_quadrants = clamp_int(last_quadrant_count_, LightMap::kMinQuadrantCount,
                                             LightMap::kMaxQuadrantCount);
@@ -234,6 +239,9 @@ void MapShadowPanel::rebuild_rows() {
     }
     if (size_scale_factor_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(size_scale_factor_.get())) });
+    }
+    if (search_radius_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(search_radius_.get())) });
     }
     if (map_light_factor_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(map_light_factor_.get())) });
@@ -304,6 +312,9 @@ render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::current_setting
     settings.virtual_light_map.max_offset_y = slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
     settings.virtual_light_map.shadow_scale = slider_value_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
     settings.virtual_light_map.size_scale_factor = slider_value_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, 100);
+    if (search_radius_) {
+        settings.virtual_light_map.search_radius = search_radius_->displayed_value();
+    }
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
@@ -315,6 +326,9 @@ void MapShadowPanel::set_reactive_sliders(const render_pipeline::shading::Reacti
     set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
     set_slider_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, 100);
     set_slider_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, 100);
+    if (search_radius_) {
+        search_radius_->set_value(settings.virtual_light_map.search_radius);
+    }
     if (quadrant_count_) {
         quadrant_count_->set_value(last_quadrant_count_);
     }
@@ -337,6 +351,9 @@ render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::load_reactive_s
         load_number(make_setting_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale));
     settings.virtual_light_map.size_scale_factor = static_cast<float>(
         load_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor));
+    settings.virtual_light_map.search_radius = static_cast<int>(
+        std::lround(load_number(make_setting_key("virtual_light_map.search_radius"),
+                                 static_cast<double>(settings.virtual_light_map.search_radius))));
     int stored_quadrants = static_cast<int>(
         load_number(make_setting_key("virtual_light_map.quadrants"), last_quadrant_count_));
     last_quadrant_count_ = clamp_int(stored_quadrants, LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount);
@@ -352,6 +369,7 @@ void MapShadowPanel::persist_reactive_settings_to_dev_settings(const render_pipe
     save_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y);
     save_number(make_setting_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale);
     save_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor);
+    save_number(make_setting_key("virtual_light_map.search_radius"), settings.virtual_light_map.search_radius);
     save_number(make_setting_key("virtual_light_map.quadrants"), last_quadrant_count_);
 }
 

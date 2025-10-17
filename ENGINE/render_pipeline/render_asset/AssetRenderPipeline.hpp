@@ -13,6 +13,7 @@ class Asset;
 class camera;
 class Global_Light_Source;
 class LightMap;
+class LightMapManager;
 
 namespace render_pipeline::shading {
 struct ReactiveShadowSettings;
@@ -23,6 +24,7 @@ struct SceneLighting {
     Asset*                 player = nullptr;
     const LightMap*        light_map_sampler = nullptr;
     render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings = nullptr;
+    LightMapManager*       light_map_manager = nullptr;
 };
 
 struct StageContext {
@@ -55,6 +57,7 @@ struct StageContext {
     const camera&            camera_view() const;
     Asset*                   player() const;
     const LightMap*   light_map() const { return lighting ? lighting->light_map_sampler : nullptr; }
+    LightMapManager*   light_map_manager() const { return lighting ? lighting->light_map_manager : nullptr; }
     const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
 
     void update_projection(Asset& asset);

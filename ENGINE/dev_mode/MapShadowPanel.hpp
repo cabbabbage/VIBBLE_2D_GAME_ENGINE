@@ -74,6 +74,7 @@ private:
     std::unique_ptr<DMSlider> max_offset_y_;
     std::unique_ptr<DMSlider> shadow_scale_;
     std::unique_ptr<DMSlider> size_scale_factor_;
+    std::unique_ptr<DMSlider> search_radius_;
     std::unique_ptr<DMSlider> quadrant_count_;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;

@@ -15,6 +15,7 @@ struct ReactiveShadowSettings {
         float shadow_scale       = 1.0f;
         float size_scale_factor  = 1.0f;
         float map_light_factor   = 0.0f;
+        int   search_radius      = 2;
 
         bool operator==(const VirtualLightMapSettings& other) const {
             return horizontal_falloff == other.horizontal_falloff &&
@@ -23,7 +24,8 @@ struct ReactiveShadowSettings {
                    max_offset_y == other.max_offset_y &&
                    shadow_scale == other.shadow_scale &&
                    size_scale_factor == other.size_scale_factor &&
-                   map_light_factor == other.map_light_factor;
+                   map_light_factor == other.map_light_factor &&
+                   search_radius == other.search_radius;
         }
         bool operator!=(const VirtualLightMapSettings& other) const { return !(*this == other); }
     } virtual_light_map;
@@ -72,6 +74,10 @@ inline float clampf(float value, float min_value, float max_value) {
     return std::max(min_value, std::min(value, max_value));
 }
 
+inline int clampi(int value, int min_value, int max_value) {
+    return std::max(min_value, std::min(value, max_value));
+}
+
 inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveShadowSettings& raw) {
     ReactiveShadowSettings out = raw;
     out.virtual_light_map.horizontal_falloff = clampf(out.virtual_light_map.horizontal_falloff, 0.0f, 10.0f);
@@ -81,6 +87,7 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.virtual_light_map.shadow_scale       = clampf(out.virtual_light_map.shadow_scale, 0.0f, 10.0f);
     out.virtual_light_map.size_scale_factor  = clampf(out.virtual_light_map.size_scale_factor, 0.0f, 10.0f);
     out.virtual_light_map.map_light_factor   = clampf(out.virtual_light_map.map_light_factor, 0.0f, 1.0f);
+    out.virtual_light_map.search_radius      = clampi(out.virtual_light_map.search_radius, 0, 64);
 
     auto sanitize_entry = [](ReactiveShadowSettings::ShadowResponseLutEntry entry) {
         entry.brightness = clampf(entry.brightness, 0.0f, 1.0f);

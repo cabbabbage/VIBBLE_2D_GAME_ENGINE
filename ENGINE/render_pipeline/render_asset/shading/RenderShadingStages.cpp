@@ -5,12 +5,11 @@
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
+#include "render/light_map_manager.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-
-#include "render/light_map.hpp"
 
 namespace render_pipeline::shading {
 
@@ -25,48 +24,6 @@ const ReactiveShadowSettings& reactive_settings_or_default(const StageContext& c
     return defaults;
 }
 
-struct ShadowResponseSample {
-    float opacity = 1.0f;
-    float offset  = 0.0f;
-    float scale   = 1.0f;
-};
-
-ShadowResponseSample evaluate_shadow_response(const ReactiveShadowSettings& settings, float brightness) {
-    ShadowResponseSample result{};
-    const auto& entries = settings.response_lut.entries;
-    if (entries.empty()) {
-        return result;
-    }
-
-    const float clamped_brightness = clampf(brightness, 0.0f, 1.0f);
-    if (entries.size() == 1 || clamped_brightness <= entries.front().brightness) {
-        const auto& entry = entries.front();
-        result.opacity    = entry.opacity;
-        result.offset     = entry.offset;
-        result.scale      = entry.scale;
-        return result;
-    }
-
-    for (std::size_t i = 1; i < entries.size(); ++i) {
-        const auto& prev = entries[i - 1];
-        const auto& next = entries[i];
-        if (clamped_brightness <= next.brightness) {
-            const float span = std::max(1e-6f, next.brightness - prev.brightness);
-            const float t    = (clamped_brightness - prev.brightness) / span;
-            result.opacity    = prev.opacity + (next.opacity - prev.opacity) * t;
-            result.offset     = prev.offset + (next.offset - prev.offset) * t;
-            result.scale      = prev.scale + (next.scale - prev.scale) * t;
-            return result;
-        }
-    }
-
-    const auto& tail = entries.back();
-    result.opacity    = tail.opacity;
-    result.offset     = tail.offset;
-    result.scale      = tail.scale;
-    return result;
-}
-
 float compute_screen_light_opacity_factor(const StageContext& context) {
     if (!context.lighting) {
         return 1.0f;
@@ -78,45 +35,6 @@ float compute_screen_light_opacity_factor(const StageContext& context) {
     const int range                  = std::max(1, max_opacity - min_opacity);
     const float normalized           = static_cast<float>(current_alpha - min_opacity) / static_cast<float>(range);
     return clampf(normalized, 0.0f, 1.0f);
-}
-
-SDL_FPoint normalized_map_light_direction(const StageContext& context) {
-    if (!context.lighting) {
-        return SDL_FPoint{ 0.0f, 0.0f };
-    }
-    const Global_Light_Source& light = context.main_light();
-    const SDL_Point            ref   = light.get_direction_reference();
-    const SDL_Point            target = light.get_direction_target();
-    const float                dx     = static_cast<float>(target.x - ref.x);
-    const float                dy     = static_cast<float>(target.y - ref.y);
-    const float                len    = std::sqrt((dx * dx) + (dy * dy));
-    if (!(len > 1e-3f)) {
-        return SDL_FPoint{ 0.0f, 0.0f };
-    }
-    return SDL_FPoint{ dx / len, dy / len };
-}
-
-float compute_map_direction_factor(const StageContext& context, const SDL_FPoint& light_dir) {
-    if (!context.lighting) {
-        return 1.0f;
-    }
-    const float dir_len_sq = (light_dir.x * light_dir.x) + (light_dir.y * light_dir.y);
-    if (!(dir_len_sq > 1e-6f)) {
-        return 1.0f;
-    }
-
-    const Global_Light_Source& light = context.main_light();
-    const SDL_Point            ref   = light.get_direction_reference();
-    SDL_FPoint asset_vec{ context.screen_center.x - static_cast<float>(ref.x),
-                          context.screen_center.y - static_cast<float>(ref.y) };
-    const float asset_len = std::sqrt((asset_vec.x * asset_vec.x) + (asset_vec.y * asset_vec.y));
-    if (!(asset_len > 1e-3f)) {
-        return 1.0f;
-    }
-    asset_vec.x /= asset_len;
-    asset_vec.y /= asset_len;
-    const float dot = std::clamp(asset_vec.x * light_dir.x + asset_vec.y * light_dir.y, -1.0f, 1.0f);
-    return (dot + 1.0f) * 0.5f;
 }
 
 float compute_parallax_shift(const StageContext& context, const Asset& asset, int height, float weight) {
@@ -310,97 +228,26 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
     const ReactiveShadowSettings& cfg = reactive_settings_or_default(context);
 
-    const LightMap* map = context.light_map();
-
     float base_opacity = clampf(context.base_shadow_opacity, 0.0f, 1.0f);
+    const float screen_light_factor      = compute_screen_light_opacity_factor(context);
     float scale        = std::max(context.base_shadow_scale, 0.0f);
 
-    float brightness = 0.0f;
-    if (map) {
-        const SDL_Rect& rect = context.screen_rect;
-        const float     center_x = static_cast<float>(rect.x) + static_cast<float>(rect.w) * 0.5f;
-        const float     center_y = static_cast<float>(rect.y) + static_cast<float>(rect.h) * 0.5f;
+    float opacity_multiplier = 1.0f;
+    float offset_x           = 0.0f;
+    float offset_y           = 0.0f;
+    float scale_multiplier   = cfg.virtual_light_map.shadow_scale;
 
-        bool single_quadrant = true;
-        if (rect.w > 1 && rect.h > 1) {
-            int reference_quadrant = -1;
-            const SDL_Point corners[4] = { SDL_Point{ rect.x, rect.y },
-                                           SDL_Point{ rect.x + rect.w - 1, rect.y },
-                                           SDL_Point{ rect.x, rect.y + rect.h - 1 },
-                                           SDL_Point{ rect.x + rect.w - 1, rect.y + rect.h - 1 } };
-            for (const SDL_Point& pt : corners) {
-                const int q = map->quadrant_for_point(static_cast<float>(pt.x), static_cast<float>(pt.y));
-                if (q < 0) {
-                    continue;
-                }
-                if (reference_quadrant < 0) {
-                    reference_quadrant = q;
-                } else if (q != reference_quadrant) {
-                    single_quadrant = false;
-                    break;
-                }
-            }
+    if (const LightMapManager* manager = context.light_map_manager()) {
+        if (auto params = manager->get_quadrant_params(context.screen_center)) {
+            opacity_multiplier = params->opacity_q;
+            offset_x           = params->offset_x_q;
+            offset_y           = params->offset_y_q;
+            scale_multiplier   = params->scale_q;
         }
-
-        const auto& weights = cfg.sampling_weights;
-        if (single_quadrant) {
-            brightness = map->sample_brightness(static_cast<int>(std::lround(center_x)),
-                                                static_cast<int>(std::lround(center_y)),
-                                                weights.static_weight,
-                                                weights.dynamic_weight);
-        } else {
-            brightness = map->sample_brightness_bilinear(center_x,
-                                                         center_y,
-                                                         weights.static_weight,
-                                                         weights.dynamic_weight);
-        }
-        brightness = clampf(brightness, 0.0f, 1.0f);
     }
 
-    const ShadowResponseSample response = evaluate_shadow_response(cfg, brightness);
-    SDL_FPoint light_dir                 = normalized_map_light_direction(context);
-    const float direction_factor         = compute_map_direction_factor(context, light_dir);
-    const float direction_weight         = clampf(cfg.virtual_light_map.map_light_factor, 0.0f, 1.0f);
-    const float direction_mix            = 1.0f + (direction_factor - 1.0f) * direction_weight;
-    const float screen_light_factor      = compute_screen_light_opacity_factor(context);
-
-    float opacity = clampf(base_opacity * response.opacity * screen_light_factor * direction_mix, 0.0f, 1.0f);
-    float offset_x = light_dir.x * response.offset * direction_mix;
-    float offset_y = light_dir.y * response.offset * direction_mix;
-    scale *= cfg.virtual_light_map.shadow_scale;
-    scale *= response.scale;
-    scale = std::max(scale, 0.0f);
-
-    float asset_scale = 1.0f;
-    if (asset.info && std::isfinite(asset.info->scale_factor) && asset.info->scale_factor >= 0.0f) {
-        asset_scale = asset.info->scale_factor;
-    }
-    const float cam_scale = context.camera_view().get_scale();
-    float       inv_cam   = 1.0f;
-    if (std::isfinite(cam_scale) && cam_scale > 1e-6f) {
-        inv_cam = 1.0f / cam_scale;
-    }
-
-    const float screen_width  = static_cast<float>(width) * asset_scale * inv_cam;
-    const float screen_height = static_cast<float>(height) * asset_scale * inv_cam;
-    const float reference     = std::max(context.reference_screen_height, 1.0f);
-    float       screen_size   = std::max(screen_width, screen_height);
-    if (!std::isfinite(screen_size) || screen_size <= 0.0f) {
-        screen_size = 1.0f;
-    }
-
-    const float size_multiplier = std::max(cfg.virtual_light_map.size_scale_factor, 0.0f) * (screen_size / reference);
-    const float offset_length   = std::sqrt((offset_x * offset_x) + (offset_y * offset_y));
-    if (offset_length > 0.0f && size_multiplier > 0.0f) {
-        const float dir_x = offset_x / offset_length;
-        const float dir_y = offset_y / offset_length;
-        const float scaled_length = offset_length * size_multiplier;
-        offset_x = dir_x * scaled_length;
-        offset_y = dir_y * scaled_length;
-    } else if (size_multiplier <= 0.0f) {
-        offset_x = 0.0f;
-        offset_y = 0.0f;
-    }
+    float opacity = clampf(base_opacity * screen_light_factor * opacity_multiplier, 0.0f, 1.0f);
+    scale *= std::max(scale_multiplier, 0.0f);
 
     const float parallax_shift = compute_parallax_shift(context, asset, height, 1.0f);
     offset_x += parallax_shift;
