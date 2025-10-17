@@ -400,8 +400,11 @@ std::optional<LightMapManager::QuadrantSnapshot> LightMapManager::snapshot_for_q
     snapshot.dirty           = quadrant->dirty();
     snapshot.base_brightness = quadrant->base_brightness();
 
-    const auto static_stats  = quadrant->static_grid_stats();
-    snapshot.static_average  = static_stats.empty ? 0.0f : static_stats.average;
+    const auto static_stats = quadrant->static_grid_stats();
+    snapshot.static_empty   = static_stats.empty;
+    snapshot.static_min     = static_stats.empty ? 0.0f : static_stats.min;
+    snapshot.static_max     = static_stats.empty ? 0.0f : static_stats.max;
+    snapshot.static_average = static_stats.empty ? 0.0f : static_stats.average;
 
     const ReactiveShadowSettings settings = sanitized_settings(assets_);
     const float static_weight             = settings.sampling_weights.static_weight;

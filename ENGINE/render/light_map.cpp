@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <optional>
 
@@ -295,6 +296,118 @@ float LightMapQuadrant::cell_sample(int cx, int cy, float static_weight, float /
     return clamp_unit(base_brightness_ + (s * static_weight));
 }
 
+void LightMapQuadrant::clear_static_samples() {
+    std::fill(static_grid_.begin(), static_grid_.end(), static_cast<std::uint8_t>(0));
+    base_brightness_ = 0.0f;
+}
+
+bool LightMapQuadrant::sample_static_mask(SDL_Renderer* renderer) {
+    if (!renderer || !static_mask_ || grid_width_ <= 0 || grid_height_ <= 0) {
+        clear_static_samples();
+        return false;
+    }
+
+    int tex_w = 0;
+    int tex_h = 0;
+    if (SDL_QueryTexture(static_mask_, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+        clear_static_samples();
+        return false;
+    }
+
+    std::vector<std::uint32_t> pixels(static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h));
+    if (pixels.empty()) {
+        clear_static_samples();
+        return false;
+    }
+
+    SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, static_mask_);
+    const int pitch = tex_w * static_cast<int>(sizeof(std::uint32_t));
+    if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, pixels.data(), pitch) != 0) {
+        SDL_SetRenderTarget(renderer, prev_target);
+        clear_static_samples();
+        return false;
+    }
+    SDL_SetRenderTarget(renderer, prev_target);
+
+    std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> format(
+        SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
+    if (!format) {
+        clear_static_samples();
+        return false;
+    }
+
+    clear_static_samples();
+
+    double accum        = 0.0;
+    int    sample_count = 0;
+
+    auto compute_bounds = [](int coord, int divisions, int extent) {
+        const double start = static_cast<double>(coord) * static_cast<double>(extent) /
+                             static_cast<double>(divisions);
+        const double end = static_cast<double>(coord + 1) * static_cast<double>(extent) /
+                           static_cast<double>(divisions);
+        int min_v = static_cast<int>(std::floor(start));
+        int max_v = static_cast<int>(std::ceil(end));
+        min_v     = std::clamp(min_v, 0, extent - 1);
+        max_v     = std::clamp(std::max(min_v + 1, max_v), 1, extent);
+        return std::pair<int, int>{min_v, max_v};
+    };
+
+    for (int gy = 0; gy < grid_height_; ++gy) {
+        const auto [top, bottom] = compute_bounds(gy, grid_height_, tex_h);
+        for (int gx = 0; gx < grid_width_; ++gx) {
+            const auto [left, right] = compute_bounds(gx, grid_width_, tex_w);
+
+            double cell_sum    = 0.0;
+            int    pixel_count = 0;
+            for (int py = top; py < bottom; ++py) {
+                const std::size_t row_offset = static_cast<std::size_t>(py) * static_cast<std::size_t>(tex_w);
+                for (int px = left; px < right; ++px) {
+                    const std::uint32_t pixel = pixels[row_offset + static_cast<std::size_t>(px)];
+                    Uint8               r = 0, g = 0, b = 0, a = 0;
+                    SDL_GetRGBA(pixel, format.get(), &r, &g, &b, &a);
+                    const double luminance = (0.2126 * static_cast<double>(r) +
+                                              0.7152 * static_cast<double>(g) +
+                                              0.0722 * static_cast<double>(b)) /
+                                             255.0;
+                    cell_sum += luminance;
+                    ++pixel_count;
+                }
+            }
+
+            if (pixel_count == 0) {
+                const int sample_x = std::clamp((left + right) / 2, 0, tex_w - 1);
+                const int sample_y = std::clamp((top + bottom) / 2, 0, tex_h - 1);
+                const std::uint32_t pixel = pixels[static_cast<std::size_t>(sample_y) *
+                                                    static_cast<std::size_t>(tex_w) +
+                                                    static_cast<std::size_t>(sample_x)];
+                Uint8 r = 0, g = 0, b = 0, a = 0;
+                SDL_GetRGBA(pixel, format.get(), &r, &g, &b, &a);
+                cell_sum    = (0.2126 * static_cast<double>(r) + 0.7152 * static_cast<double>(g) +
+                            0.0722 * static_cast<double>(b)) /
+                           255.0;
+                pixel_count = 1;
+            }
+
+            const double average = (pixel_count > 0) ? (cell_sum / static_cast<double>(pixel_count)) : 0.0;
+            const int    stored  = std::clamp(static_cast<int>(std::lround(average * 255.0)), 0, 255);
+            const std::size_t dst_index = index_from_cell(gx, gy);
+            static_grid_[dst_index]     = static_cast<std::uint8_t>(stored);
+            accum += average;
+            ++sample_count;
+        }
+    }
+
+    if (sample_count > 0) {
+        base_brightness_ = static_cast<float>(std::clamp(accum / static_cast<double>(sample_count), 0.0, 1.0));
+    } else {
+        base_brightness_ = 0.0f;
+    }
+
+    return true;
+}
+
 float LightMapQuadrant::sample_brightness(float local_x,
                                           float local_y,
                                           float static_weight,
@@ -333,22 +446,26 @@ float LightMapQuadrant::sample_brightness(float local_x,
 void LightMapQuadrant::populate_static_base(SDL_Renderer* renderer, SDL_Texture* static_full_map) {
     if (!renderer) {
         ensure_static_mask(nullptr);
+        clear_static_samples();
         dirty_ = true;
         return;
     }
     if (!static_full_map) {
         ensure_static_mask(nullptr);
+        clear_static_samples();
         dirty_ = true;
         return;
     }
     if (world_rect_.w <= 0 || world_rect_.h <= 0) {
         ensure_static_mask(nullptr);
+        clear_static_samples();
         return;
     }
 
     ensure_texture(renderer);
     ensure_static_mask(renderer);
     if (!static_mask_) {
+        clear_static_samples();
         dirty_ = true;
         return;
     }
@@ -364,6 +481,10 @@ void LightMapQuadrant::populate_static_base(SDL_Renderer* renderer, SDL_Texture*
     SDL_RenderCopy(renderer, static_full_map, &src, &dst);
 
     SDL_SetRenderTarget(renderer, prev_target);
+
+    if (!sample_static_mask(renderer)) {
+        clear_static_samples();
+    }
     dirty_ = true;
 }
 

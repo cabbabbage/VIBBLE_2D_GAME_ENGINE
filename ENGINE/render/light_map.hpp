@@ -68,6 +68,8 @@ private:
     void ensure_static_mask(SDL_Renderer* renderer);
     std::size_t index_from_cell(int cx, int cy) const;
     float       cell_sample(int cx, int cy, float static_weight, float dynamic_weight) const;
+    void        clear_static_samples();
+    bool        sample_static_mask(SDL_Renderer* renderer);
 
     SDL_Rect            world_rect_{0, 0, 0, 0};
     int                 grid_width_      = 0;

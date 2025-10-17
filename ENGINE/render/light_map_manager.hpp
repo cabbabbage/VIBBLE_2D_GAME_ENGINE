@@ -30,7 +30,10 @@ public:
         bool     dirty               = false;
         float    base_brightness     = 0.0f;
         float    combined_brightness = 0.0f;
+        float    static_min          = 0.0f;
+        float    static_max          = 0.0f;
         float    static_average      = 0.0f;
+        bool     static_empty        = true;
         float    shadow_opacity_min  = 0.0f;
         float    shadow_opacity_max  = 0.0f;
     };

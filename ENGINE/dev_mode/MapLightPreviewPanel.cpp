@@ -595,7 +595,12 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         }
         std::ostringstream stream;
         stream << (snap->active ? "A" : "-") << ' ' << (snap->dirty ? "D" : "-") << '\n';
-        stream << "S:" << format_float(snap->static_average, 2) << '\n';
+        if (snap->static_empty) {
+            stream << "S:--" << '\n';
+        } else {
+            stream << "S:" << format_float(snap->static_min, 2) << '/' << format_float(snap->static_average, 2)
+                   << '/' << format_float(snap->static_max, 2) << '\n';
+        }
         stream << "C:" << format_float(snap->combined_brightness, 2);
         const std::string text = stream.str();
 
@@ -825,7 +830,13 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                                    " | Dirty: " + (snap->dirty ? "yes" : "no"));
             detail_lines.push_back("Base Brightness: " + format_float(snap->base_brightness, 3));
             detail_lines.push_back("Combined Brightness: " + format_float(snap->combined_brightness, 3));
-            detail_lines.push_back("Static Avg: " + format_float(snap->static_average, 3));
+            if (snap->static_empty) {
+                detail_lines.push_back("Static Grid: (empty)");
+            } else {
+                detail_lines.push_back("Static Min: " + format_float(snap->static_min, 3));
+                detail_lines.push_back("Static Avg: " + format_float(snap->static_average, 3));
+                detail_lines.push_back("Static Max: " + format_float(snap->static_max, 3));
+            }
             detail_lines.push_back("Dynamic Lighting: disabled");
             detail_lines.push_back("Shadow Strength: " + format_float(snap->shadow_opacity_min, 3) + " - " +
                                    format_float(snap->shadow_opacity_max, 3));
