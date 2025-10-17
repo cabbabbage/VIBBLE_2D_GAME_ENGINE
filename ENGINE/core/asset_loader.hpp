@@ -63,4 +63,5 @@ class AssetLoader {
     void finalizeAssets();
     std::vector<Asset> extract_all_assets();
     void removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip = nullptr);
+    void mergeLockedBoundaryAssets(const std::vector<Asset*>& locked_assets);
 };

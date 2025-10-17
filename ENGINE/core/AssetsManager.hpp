@@ -160,6 +160,8 @@ private:
     void update_filtered_active_assets();
     void ensure_dev_controls();
     void update_scene_render_quality();
+    int  saved_render_quality_percent() const;
+    int  effective_render_quality_percent() const;
 
     friend class SceneRenderer;
     friend class Asset;

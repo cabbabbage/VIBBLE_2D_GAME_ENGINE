@@ -69,6 +69,30 @@ TTF_Font* scaling_notice_font() {
     return font.get();
 }
 
+constexpr int kQualityOptions[] = {100, 75, 50, 25, 10};
+constexpr int kMinRenderQuality = kQualityOptions[sizeof(kQualityOptions) / sizeof(kQualityOptions[0]) - 1];
+
+int align_render_quality_percent(int percent) {
+    int best = kQualityOptions[0];
+    int best_diff = std::abs(percent - best);
+    for (int option : kQualityOptions) {
+        const int diff = std::abs(percent - option);
+        if (diff < best_diff) {
+            best_diff = diff;
+            best = option;
+        }
+    }
+    return best;
+}
+
+int halved_render_quality_percent(int percent) {
+    if (percent <= kMinRenderQuality) {
+        return kMinRenderQuality;
+    }
+    const int halved = static_cast<int>(std::lround(percent * 0.5));
+    return std::max(kMinRenderQuality, align_render_quality_percent(halved));
+}
+
 }
 
 Assets::Assets(std::vector<Asset>&& loaded,
@@ -330,13 +354,27 @@ void Assets::reload_camera_settings() {
     load_camera_settings_from_json();
 }
 
-void Assets::apply_camera_runtime_settings() {
+int Assets::saved_render_quality_percent() const {
     const camera::RealismSettings& settings = camera_.realism_settings();
-    const float percent = std::clamp(static_cast<float>(settings.render_quality_percent), 10.0f, 100.0f);
-    const float quality_cap = percent / 100.0f;
+    const int clamped = std::clamp(settings.render_quality_percent, kMinRenderQuality, kQualityOptions[0]);
+    return align_render_quality_percent(clamped);
+}
+
+int Assets::effective_render_quality_percent() const {
+    int percent = saved_render_quality_percent();
+    if (dev_mode && !force_high_quality_rendering_) {
+        percent = halved_render_quality_percent(percent);
+    }
+    return percent;
+}
+
+void Assets::apply_camera_runtime_settings() {
+    const int effective_percent = effective_render_quality_percent();
+    const float quality_cap = static_cast<float>(effective_percent) / 100.0f;
     render_pipeline::ScalingLogic::SetQualityCap(quality_cap);
     if (scene) {
-        scene->set_low_quality_rendering(settings.render_quality_percent < 100);
+        const bool low_quality = (effective_percent < 100) && !force_high_quality_rendering_;
+        scene->set_low_quality_rendering(low_quality);
     }
 }
 
@@ -662,11 +700,7 @@ void Assets::set_force_high_quality_rendering(bool enable) {
 }
 
 void Assets::update_scene_render_quality() {
-    if (!scene) {
-        return;
-    }
-    const bool low_quality = dev_mode && !force_high_quality_rendering_;
-    scene->set_low_quality_rendering(low_quality);
+    apply_camera_runtime_settings();
 }
 
 void Assets::set_render_suppressed(bool suppressed) {

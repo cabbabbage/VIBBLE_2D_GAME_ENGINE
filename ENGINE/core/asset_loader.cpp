@@ -8,6 +8,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <chrono>
+#include <limits>
 #include <SDL.h>
 #include "asset/Asset.hpp"
 #include "asset/asset_library.hpp"
@@ -206,6 +207,8 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
 
         const double remove_distance = static_cast<double>(remove_threshold);
         const double lock_distance = static_cast<double>(lock_threshold);
+        std::vector<Asset*> locked_boundary_assets;
+        locked_boundary_assets.reserve(rooms_.size());
         for (Room* room : rooms_) {
                 for (auto& asset_up : room->assets) {
                         Asset* asset = asset_up.get();
@@ -237,10 +240,113 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                         const bool should_remove = minDist >= remove_distance;
 
                         asset->static_frame = should_lock;
-                        if (should_remove) distant_assets.push_back(asset);
+                        if (should_remove) {
+                                distant_assets.push_back(asset);
+                                continue;
+                        }
+                        if (should_lock) {
+                                locked_boundary_assets.push_back(asset);
+                        }
                 }
         }
+        if (!locked_boundary_assets.empty()) {
+                mergeLockedBoundaryAssets(locked_boundary_assets);
+        }
         return distant_assets;
+}
+
+void AssetLoader::mergeLockedBoundaryAssets(const std::vector<Asset*>& locked_assets) {
+        constexpr std::size_t group_size = 4;
+        std::vector<Asset*> eligible;
+        eligible.reserve(locked_assets.size());
+        for (Asset* asset : locked_assets) {
+                if (!asset) {
+                        continue;
+                }
+                if (asset->is_hidden()) {
+                        continue;
+                }
+                eligible.push_back(asset);
+        }
+        if (eligible.size() < group_size) {
+                return;
+        }
+
+        struct Candidate {
+                Asset* asset;
+                double angle;
+        };
+
+        std::vector<Candidate> ordered;
+        ordered.reserve(eligible.size());
+        const double center_x = static_cast<double>(map_center_x_);
+        const double center_y = static_cast<double>(map_center_y_);
+        for (Asset* asset : eligible) {
+                const double dx = static_cast<double>(asset->pos.x) - center_x;
+                const double dy = static_cast<double>(asset->pos.y) - center_y;
+                ordered.push_back({asset, std::atan2(dy, dx)});
+        }
+
+        std::sort(ordered.begin(), ordered.end(), [](const Candidate& lhs, const Candidate& rhs) {
+                return lhs.angle < rhs.angle;
+        });
+
+        auto distance_between = [](const Asset* lhs, const Asset* rhs) {
+                const double dx = static_cast<double>(lhs->pos.x) - static_cast<double>(rhs->pos.x);
+                const double dy = static_cast<double>(lhs->pos.y) - static_cast<double>(rhs->pos.y);
+                return std::sqrt(dx * dx + dy * dy);
+        };
+
+        std::vector<double> neighbor_distances;
+        neighbor_distances.reserve(ordered.size() > 1 ? ordered.size() - 1 : 0);
+        for (std::size_t i = 1; i < ordered.size(); ++i) {
+                neighbor_distances.push_back(distance_between(ordered[i - 1].asset, ordered[i].asset));
+        }
+
+        double spacing_threshold = 0.0;
+        if (!neighbor_distances.empty()) {
+                double sum = std::accumulate(neighbor_distances.begin(), neighbor_distances.end(), 0.0);
+                const double largest_gap = *std::max_element(neighbor_distances.begin(), neighbor_distances.end());
+                if (neighbor_distances.size() > 1) {
+                        sum -= largest_gap;
+                        spacing_threshold = (sum / static_cast<double>(neighbor_distances.size() - 1)) * 1.5;
+                } else {
+                        spacing_threshold = neighbor_distances.front() * 1.5;
+                }
+        }
+
+        if (spacing_threshold <= 0.0) {
+                spacing_threshold = std::numeric_limits<double>::infinity();
+        }
+
+        std::vector<Asset*> current_group;
+        current_group.reserve(group_size);
+        Asset* previous_asset = nullptr;
+        for (const Candidate& candidate : ordered) {
+                if (previous_asset) {
+                        const double gap = distance_between(previous_asset, candidate.asset);
+                        if (gap > spacing_threshold) {
+                                current_group.clear();
+                        }
+                }
+
+                current_group.push_back(candidate.asset);
+                if (current_group.size() == group_size) {
+                        Asset* center_asset = findCenterAsset(current_group);
+                        if (center_asset) {
+                                for (Asset* asset : current_group) {
+                                        if (asset == center_asset) {
+                                                continue;
+                                        }
+                                        center_asset->add_child(asset);
+                                }
+                                removeMergedAssets(current_group, center_asset);
+                        }
+                        current_group.clear();
+                }
+
+                previous_asset = candidate.asset;
+        }
 }
 
 void AssetLoader::loadRooms() {
