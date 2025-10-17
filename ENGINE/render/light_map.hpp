@@ -56,7 +56,6 @@ public:
     void render_tile_mask(SDL_Renderer* renderer) const;
     void render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod) const;
     void populate_static_base(SDL_Renderer* renderer, SDL_Texture* static_full_map);
-    void copy_static_mask(SDL_Renderer* renderer) const;
     void adopt_static_mask(SDL_Texture* texture);
     void set_base_brightness(float value);
 
@@ -157,7 +156,7 @@ private:
                           float dynamic_weight) const;
     std::pair<int, int> padding_pixels() const;
     void build_static_full_map(SDL_Renderer* renderer);
-    void destroy_static_full_map();
+    void destroy_static_full_map(bool mark_dirty = true);
     bool adopt_precomputed_map(SDL_Renderer* renderer);
 
     Assets* assets_ = nullptr;

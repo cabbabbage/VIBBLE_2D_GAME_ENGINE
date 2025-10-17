@@ -529,13 +529,6 @@ void LightMapQuadrant::populate_static_base(SDL_Renderer* renderer, SDL_Texture*
     dirty_ = true;
 }
 
-void LightMapQuadrant::copy_static_mask(SDL_Renderer* renderer) const {
-    if (!renderer || !static_mask_) {
-        return;
-    }
-    SDL_RenderCopy(renderer, static_mask_, nullptr, nullptr);
-}
-
 void LightMapQuadrant::adopt_static_mask(SDL_Texture* texture) {
     if (static_mask_ && static_mask_ != texture) {
         SDL_DestroyTexture(static_mask_);
@@ -560,13 +553,26 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
 
     // Prepare render target
     SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+    SDL_BlendMode prev_draw_mode = SDL_BLENDMODE_BLEND;
+    if (SDL_GetRenderDrawBlendMode(renderer, &prev_draw_mode) != 0) {
+        prev_draw_mode = SDL_BLENDMODE_BLEND;
+    }
     SDL_SetRenderTarget(renderer, tile_mask_);
 
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderClear(renderer);
 
-    copy_static_mask(renderer);
+    if (static_mask_) {
+        SDL_BlendMode prev_static_blend = SDL_BLENDMODE_BLEND;
+        SDL_GetTextureBlendMode(static_mask_, &prev_static_blend);
+        SDL_SetTextureBlendMode(static_mask_, SDL_BLENDMODE_NONE);
+        SDL_Rect dst{0, 0, world_rect_.w, world_rect_.h};
+        SDL_RenderCopy(renderer, static_mask_, nullptr, &dst);
+        SDL_SetTextureBlendMode(static_mask_, prev_static_blend);
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
 
     // If we have assets, composite every moving light texture that overlaps this quadrant
     if (assets) {
@@ -618,6 +624,7 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
     }
 
     // Restore target and mark clean
+    SDL_SetRenderDrawBlendMode(renderer, prev_draw_mode);
     SDL_SetRenderTarget(renderer, prev_target);
     dirty_ = false;
 }
@@ -655,15 +662,17 @@ LightMap::LightMap(Assets* assets,
 }
 
 LightMap::~LightMap() {
-    destroy_static_full_map();
+    destroy_static_full_map(true);
 }
 
-void LightMap::destroy_static_full_map() {
+void LightMap::destroy_static_full_map(bool mark_dirty) {
     if (static_full_map_) {
         SDL_DestroyTexture(static_full_map_);
         static_full_map_ = nullptr;
     }
-    static_cache_dirty_ = true;
+    if (mark_dirty) {
+        static_cache_dirty_ = true;
+    }
 }
 
 bool LightMap::adopt_precomputed_map(SDL_Renderer* renderer) {
@@ -686,7 +695,7 @@ bool LightMap::adopt_precomputed_map(SDL_Renderer* renderer) {
         return false;
     }
 
-    destroy_static_full_map();
+    destroy_static_full_map(true);
 
     screen_width_  = std::max(1, map.map_width);
     screen_height_ = std::max(1, map.map_height);
@@ -705,8 +714,10 @@ bool LightMap::adopt_precomputed_map(SDL_Renderer* renderer) {
     layout_.grid_resolution    = static_grid_resolution_;
     layout_.padding_cells      = padding_cells_;
 
-    static_full_map_ = map.full_texture;
-    map.full_texture = nullptr;
+    if (map.full_texture) {
+        SDL_DestroyTexture(map.full_texture);
+        map.full_texture = nullptr;
+    }
 
     const int expected_quadrants = quadrant_cols_ * quadrant_rows_;
     quadrants_.clear();
@@ -741,7 +752,7 @@ bool LightMap::adopt_precomputed_map(SDL_Renderer* renderer) {
 
 void LightMap::build_static_full_map(SDL_Renderer* renderer) {
     if (!renderer) {
-        destroy_static_full_map();
+        destroy_static_full_map(true);
         for (auto& quadrant : quadrants_) {
             quadrant.populate_static_base(nullptr, nullptr);
             quadrant.set_dirty(true);
@@ -751,7 +762,7 @@ void LightMap::build_static_full_map(SDL_Renderer* renderer) {
     const int target_w = layout_.map_width > 0 ? layout_.map_width : screen_width_;
     const int target_h = layout_.map_height > 0 ? layout_.map_height : screen_height_;
     if (target_w <= 0 || target_h <= 0) {
-        destroy_static_full_map();
+        destroy_static_full_map(true);
         return;
     }
 
@@ -767,7 +778,7 @@ void LightMap::build_static_full_map(SDL_Renderer* renderer) {
         int    current_access = 0;
         if (SDL_QueryTexture(static_full_map_, &current_format, &current_access, &current_w, &current_h) != 0 ||
             current_w != tex_w || current_h != tex_h) {
-            destroy_static_full_map();
+            destroy_static_full_map(true);
             needs_create = true;
         }
     }
@@ -836,6 +847,7 @@ void LightMap::build_static_full_map(SDL_Renderer* renderer) {
         quadrant.populate_static_base(renderer, static_full_map_);
         quadrant.set_dirty(true);
     }
+    destroy_static_full_map(false);
     static_cache_dirty_ = false;
 }
 
@@ -1088,40 +1100,26 @@ std::pair<int, int> LightMap::padding_pixels() const {
 }
 
 void LightMap::render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {
-    if (!renderer || quadrants_.empty()) {
-        return;
-    }
-    if (view_rect.w <= 0 || view_rect.h <= 0) {
-        return;
-    }
-
-    SDL_Rect expanded = view_rect;
-    auto [pad_x, pad_y] = padding_pixels();
-    if (pad_x > 0) {
-        expanded.x -= pad_x;
-        expanded.w += pad_x * 2;
-    }
-    if (pad_y > 0) {
-        expanded.y -= pad_y;
-        expanded.h += pad_y * 2;
-    }
-
-    for (const auto& quadrant : quadrants_) {
-        const SDL_Rect& rect = quadrant.world_rect();
-        if (rect.w <= 0 || rect.h <= 0) {
-            continue;
-        }
-        if (SDL_HasIntersection(&rect, &expanded)) {
-            quadrant.render_tile_mask(renderer);
-        }
-    }
+    render_visible_quadrants(renderer, view_rect, 1.0f);
 }
 
 void LightMap::render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const {
-    if (!renderer || quadrants_.empty()) {
+    if (!renderer || view_rect.w <= 0 || view_rect.h <= 0) {
         return;
     }
-    if (view_rect.w <= 0 || view_rect.h <= 0) {
+
+    LightMap* self = const_cast<LightMap*>(this);
+    if (static_cache_dirty_ && renderer) {
+        self->build_static_full_map(renderer);
+    }
+
+    const float clamped = std::clamp(alpha_multiplier, 0.0f, 1.0f);
+    if (!(clamped > 0.0f)) {
+        return;
+    }
+    const Uint8 alpha = static_cast<Uint8>(std::lround(clamped * 255.0f));
+
+    if (quadrants_.empty()) {
         return;
     }
 
@@ -1135,9 +1133,6 @@ void LightMap::render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& 
         expanded.y -= pad_y;
         expanded.h += pad_y * 2;
     }
-
-    const float clamped = std::clamp(alpha_multiplier, 0.0f, 1.0f);
-    const Uint8 alpha    = static_cast<Uint8>(std::lround(clamped * 255.0f));
 
     for (const auto& quadrant : quadrants_) {
         const SDL_Rect& rect = quadrant.world_rect();

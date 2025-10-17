@@ -47,13 +47,13 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   nullptr })
 {
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
-    z_light_pass_ = std::make_unique<LightMap>(assets_,
-                                               screen_width_,
-                                               screen_height_,
-                                               std::move(precomputed_light_map));
-    if (z_light_pass_) {
-        z_light_pass_->rebuild(renderer_);
-        render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
+    light_map_ = std::make_unique<LightMap>(assets_,
+                                            screen_width_,
+                                            screen_height_,
+                                            std::move(precomputed_light_map));
+    if (light_map_) {
+        light_map_->rebuild(renderer_);
+        render_pipeline_.lighting().light_map_sampler = light_map_.get();
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
@@ -67,7 +67,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
 
 LightMap* SceneRenderer::light_map() {
-    return z_light_pass_ ? z_light_pass_.get() : nullptr;
+    return light_map_ ? light_map_.get() : nullptr;
 }
 
 const LightMap* SceneRenderer::light_map() const {
@@ -75,25 +75,25 @@ const LightMap* SceneRenderer::light_map() const {
 }
 
 void SceneRenderer::set_virtual_light_map_quadrants(int quadrants) {
-    if (z_light_pass_) {
-        z_light_pass_->set_virtual_light_map_quadrants(quadrants);
+    if (light_map_) {
+        light_map_->set_virtual_light_map_quadrants(quadrants);
     }
     force_virtual_light_map_refresh();
 }
 
 void SceneRenderer::set_virtual_light_map_quadrant_size(int size_px) {
-    if (z_light_pass_) {
-        z_light_pass_->set_virtual_light_map_quadrant_size(size_px);
+    if (light_map_) {
+        light_map_->set_virtual_light_map_quadrant_size(size_px);
     }
     force_virtual_light_map_refresh();
 }
 
 void SceneRenderer::force_virtual_light_map_refresh() {
-    if (!z_light_pass_ || !renderer_) {
+    if (!light_map_ || !renderer_) {
         return;
     }
-    z_light_pass_->rebuild(renderer_);
-    render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
+    light_map_->rebuild(renderer_);
+    render_pipeline_.lighting().light_map_sampler = light_map_.get();
     if (assets_) {
         render_pipeline_.lighting().light_map_manager = assets_->light_map_manager();
     }
@@ -172,9 +172,9 @@ void SceneRenderer::render(){
         light_map_manager->begin_frame();
     }
 
-    if (z_light_pass_){
+    if (light_map_){
         // Defer light map update until after we stamp moving lights below.
-        render_pipeline_.lighting().light_map_sampler = z_light_pass_.get();
+        render_pipeline_.lighting().light_map_sampler = light_map_.get();
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
@@ -189,7 +189,7 @@ void SceneRenderer::render(){
 
     bool rendered_light_map = false;
     auto render_light_map = [&]() {
-        if (!z_light_pass_ || rendered_light_map) {
+        if (!light_map_ || rendered_light_map) {
             return;
         }
         // Compute a global alpha multiplier from the map light's current opacity window
@@ -211,7 +211,7 @@ void SceneRenderer::render(){
             previous_mode = SDL_BLENDMODE_BLEND;
         }
         SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
-        z_light_pass_->render_visible_quadrants(renderer_,screen_view, alpha_mult);
+        light_map_->render_visible_quadrants(renderer_,screen_view, alpha_mult);
         SDL_SetRenderDrawBlendMode(renderer_,previous_mode);
         rendered_light_map = true;
     };

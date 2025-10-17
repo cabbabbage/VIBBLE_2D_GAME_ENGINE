@@ -56,7 +56,7 @@ private:
     Global_Light_Source main_light_source_;
     render_pipeline::shading::ReactiveShadowSettings reactive_shadow_settings_{};
     AssetRenderPipeline render_pipeline_;
-    std::unique_ptr<LightMap> z_light_pass_;
+    std::unique_ptr<LightMap> light_map_;
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
     bool           light_map_only_mode_ = false;
