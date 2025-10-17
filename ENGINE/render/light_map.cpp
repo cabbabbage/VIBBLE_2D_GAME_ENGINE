@@ -53,7 +53,6 @@ LightMapQuadrant& LightMapQuadrant::operator=(LightMapQuadrant&& other) noexcept
     padding_cells_   = other.padding_cells_;
     stride_          = other.stride_;
     static_grid_     = std::move(other.static_grid_);
-    dynamic_grid_    = std::move(other.dynamic_grid_);
     tile_mask_       = other.tile_mask_;
     base_brightness_ = other.base_brightness_;
     dirty_           = other.dirty_;
@@ -65,7 +64,6 @@ LightMapQuadrant& LightMapQuadrant::operator=(LightMapQuadrant&& other) noexcept
     other.padding_cells_ = 0;
     other.stride_        = 0;
     other.static_grid_.clear();
-    other.dynamic_grid_.clear();
     other.base_brightness_ = 0.0f;
     other.dirty_           = true;
     other.active_          = false;
@@ -168,53 +166,7 @@ void LightMapQuadrant::build_static(const std::vector<std::uint8_t>& grid, int w
     dirty_ = true;
 }
 
-void LightMapQuadrant::stamp_moving_lights(const std::vector<std::uint8_t>& grid,
-                                           int width,
-                                           int height,
-                                           std::uint8_t clamp) {
-    if (width <= 0 || height <= 0) {
-        return;
-    }
-    const int expected = grid_width_ * grid_height_;
-    if (static_cast<int>(grid.size()) < expected) {
-        return;
-    }
-    for (int y = 0; y < grid_height_; ++y) {
-        for (int x = 0; x < grid_width_; ++x) {
-            const int src_index = y * width + x;
-            const std::uint8_t value = clamp_byte(grid[static_cast<std::size_t>(src_index)]);
-            const std::size_t dst_index = index_from_cell(x, y);
-            const std::uint8_t clamped = std::min<std::uint8_t>(value, clamp);
-            if (clamped > dynamic_grid_[dst_index]) {
-                dynamic_grid_[dst_index] = clamped;
-            }
-        }
-    }
-    dirty_  = true;
-    active_ = true;
-}
-
-void LightMapQuadrant::fade_dynamic(std::uint8_t fade) {
-    if (fade == 0) {
-        return;
-    }
-    const std::size_t total = dynamic_grid_.size();
-    bool changed = false;
-    for (std::size_t i = 0; i < total; ++i) {
-        const std::uint8_t value = dynamic_grid_[i];
-        if (value == 0) {
-            continue;
-        }
-        const std::uint8_t next = (value > fade) ? static_cast<std::uint8_t>(value - fade) : 0;
-        if (next != value) {
-            dynamic_grid_[i] = next;
-            changed = true;
-        }
-    }
-    if (changed) {
-        dirty_ = true;
-    }
-}
+// Dynamic light ray stamping and fading removed.
 
 LightMapQuadrant::GridStatistics LightMapQuadrant::static_grid_stats() const {
     GridStatistics stats{};
@@ -244,56 +196,27 @@ LightMapQuadrant::GridStatistics LightMapQuadrant::static_grid_stats() const {
     return stats;
 }
 
-LightMapQuadrant::GridStatistics LightMapQuadrant::dynamic_grid_stats() const {
-    GridStatistics stats{};
-    if (grid_width_ <= 0 || grid_height_ <= 0) {
-        return stats;
-    }
-    std::uint8_t min_value = 255;
-    std::uint8_t max_value = 0;
-    double        sum       = 0.0;
-    int           count     = 0;
-    for (int y = 0; y < grid_height_; ++y) {
-        for (int x = 0; x < grid_width_; ++x) {
-            const std::size_t idx   = index_from_cell(x, y);
-            const std::uint8_t value = dynamic_grid_[idx];
-            min_value = std::min(min_value, value);
-            max_value = std::max(max_value, value);
-            sum += static_cast<double>(value);
-            ++count;
-        }
-    }
-    if (count > 0) {
-        stats.empty   = false;
-        stats.min     = static_cast<float>(min_value) / 255.0f;
-        stats.max     = static_cast<float>(max_value) / 255.0f;
-        stats.average = static_cast<float>(sum / static_cast<double>(count)) / 255.0f;
-    }
-    return stats;
-}
+// Dynamic statistics removed.
 
-float LightMapQuadrant::combined_average(float static_weight, float dynamic_weight) const {
+float LightMapQuadrant::combined_average(float static_weight, float /*dynamic_weight*/) const {
     const GridStatistics static_stats  = static_grid_stats();
-    const GridStatistics dynamic_stats = dynamic_grid_stats();
     const float          s             = static_stats.empty ? 0.0f : static_stats.average;
-    const float          d             = dynamic_stats.empty ? 0.0f : dynamic_stats.average;
-    return clamp_unit(base_brightness_ + (s * static_weight) + (d * dynamic_weight));
+    return clamp_unit(base_brightness_ + (s * static_weight));
 }
 
-float LightMapQuadrant::cell_sample(int cx, int cy, float static_weight, float dynamic_weight) const {
+float LightMapQuadrant::cell_sample(int cx, int cy, float static_weight, float /*dynamic_weight*/) const {
     if (stride_ <= 0) {
         return base_brightness_;
     }
     const std::size_t idx = index_from_cell(cx, cy);
     const float s = static_cast<float>(static_grid_[idx]) / 255.0f;
-    const float d = static_cast<float>(dynamic_grid_[idx]) / 255.0f;
-    return clamp_unit(base_brightness_ + (s * static_weight) + (d * dynamic_weight));
+    return clamp_unit(base_brightness_ + (s * static_weight));
 }
 
 float LightMapQuadrant::sample_brightness(float local_x,
                                           float local_y,
                                           float static_weight,
-                                          float dynamic_weight,
+                                          float /*dynamic_weight*/,
                                           bool bilinear) const {
     if (grid_width_ <= 0 || grid_height_ <= 0) {
         return 0.0f;
@@ -305,7 +228,7 @@ float LightMapQuadrant::sample_brightness(float local_x,
     if (!bilinear) {
         const int ix = static_cast<int>(std::round(clamped_x));
         const int iy = static_cast<int>(std::round(clamped_y));
-        return cell_sample(ix, iy, static_weight, dynamic_weight);
+        return cell_sample(ix, iy, static_weight, 0.0f);
     }
 
     const int   x0 = static_cast<int>(std::floor(clamped_x));
@@ -315,10 +238,10 @@ float LightMapQuadrant::sample_brightness(float local_x,
     const float tx = clamped_x - static_cast<float>(x0);
     const float ty = clamped_y - static_cast<float>(y0);
 
-    const float s00 = cell_sample(x0, y0, static_weight, dynamic_weight);
-    const float s10 = cell_sample(x1, y0, static_weight, dynamic_weight);
-    const float s01 = cell_sample(x0, y1, static_weight, dynamic_weight);
-    const float s11 = cell_sample(x1, y1, static_weight, dynamic_weight);
+    const float s00 = cell_sample(x0, y0, static_weight, 0.0f);
+    const float s10 = cell_sample(x1, y0, static_weight, 0.0f);
+    const float s01 = cell_sample(x0, y1, static_weight, 0.0f);
+    const float s11 = cell_sample(x1, y1, static_weight, 0.0f);
 
     const float sx0 = s00 + (s10 - s00) * tx;
     const float sx1 = s01 + (s11 - s01) * tx;
