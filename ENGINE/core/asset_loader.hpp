@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include "render/precomputed_light_map.hpp"
+#include "utils/map_grid_settings.hpp"
 
 class Asset;
 class Assets;
