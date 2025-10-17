@@ -357,10 +357,11 @@ void AnimationEditorWindow::render(SDL_Renderer* renderer) const {
     render_header(renderer);
     if (list_panel_) list_panel_->render(renderer);
     render_status(renderer);
-    DMDropdown::render_active_options(renderer);
     if (frame_editor_visible_) {
         render_frame_editor_overlay(renderer);
     }
+    // Render dropdown overlays last to ensure proper z-order
+    DMDropdown::render_active_options(renderer);
 }
 
 bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
