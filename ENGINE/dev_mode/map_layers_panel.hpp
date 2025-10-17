@@ -57,6 +57,8 @@ public:
 private:
     class PreviewWidget;
     class DetailsWidget;
+    friend class PreviewWidget;
+    friend class DetailsWidget;
 
     enum class DetailsMode {
         None,
@@ -89,6 +91,8 @@ private:
     void refresh_room_list();
     void refresh_layer_details();
     void refresh_room_details();
+    void recalculate_preview_scale();
+    double compute_preview_scale() const;
 
     void ensure_details_container();
     void update_details_container();
@@ -160,8 +164,6 @@ private:
     bool dirty_ = false;
     bool preview_dirty_ = true;
     bool embedded_mode_ = false;
-    bool details_needs_rebuild_ = true;
-
     int screen_w_ = 0;
     int screen_h_ = 0;
 
