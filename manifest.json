@@ -309,10 +309,11 @@
       "anti_tags": [],
       "asset_name": "Big_Rock",
       "asset_type": "boundary",
-      "can_invert": true,
+      "can_invert": false,
       "duplicatable": false,
       "duplication_interval_max": 3766,
       "duplication_interval_min": 2161,
+      "generate_rays": false,
       "has_shading": true,
       "lighting_info": [
         {
@@ -329,11 +330,20 @@
       "min_child_depth": 0,
       "min_distance_all": 0,
       "min_same_type_distance": 194,
+      "neighbor_search_distance": 500,
+      "ray_strength": 0,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
       "size_settings": {
-        "scale_percentage": 68
+        "scale_percentage": 83.0
       },
       "tags": [
         "rock",
@@ -14030,7 +14040,7 @@
         "min_visible_screen_ratio": 0.007000000216066837,
         "parallax_strength": 28.0,
         "realism_enabled": true,
-        "render_distance": 2200.0,
+        "render_distance": 1040.0,
         "render_quality_percent": 10,
         "tripod_distance_y": -495.0
       },
@@ -14725,6 +14735,28 @@
               "priority": 1,
               "radius": 426,
               "spawn_id": "spn-dbc1671870c3"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Big_Rock"
+                }
+              ],
+              "display_name": "Big_Rock",
+              "dx": -33,
+              "dy": -302,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 2022,
+              "origional_width": 1949,
+              "position": "Exact",
+              "spawn_id": "spn-4e301c5e26b7"
             }
           ],
           "tags": {

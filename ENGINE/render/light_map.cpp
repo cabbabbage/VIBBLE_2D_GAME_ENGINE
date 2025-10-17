@@ -84,7 +84,7 @@ void LightMapQuadrant::ensure_texture(SDL_Renderer* renderer) {
                                    grid_width_,
                                    grid_height_);
     if (tile_mask_) {
-        SDL_SetTextureBlendMode(tile_mask_, SDL_BLENDMODE_MOD);
+        SDL_SetTextureBlendMode(tile_mask_, SDL_BLENDMODE_BLEND);
 #if SDL_VERSION_ATLEAST(2,0,12)
         SDL_SetTextureScaleMode(tile_mask_, SDL_ScaleModeBest);
 #endif
@@ -307,10 +307,8 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer, float static_wei
                                     static_cast<std::size_t>(x);
             const float sample = cell_sample(x, y, static_weight, dynamic_weight);
             const std::uint8_t value = clamp_byte(static_cast<int>(std::round(sample * 255.0f)));
-            const std::uint32_t rgba = (static_cast<std::uint32_t>(value) << 24) |
-                                       (static_cast<std::uint32_t>(value) << 16) |
-                                       (static_cast<std::uint32_t>(value) << 8) |
-                                       static_cast<std::uint32_t>(value);
+            const std::uint8_t darkness = static_cast<std::uint8_t>(255 - value);
+            const std::uint32_t rgba    = static_cast<std::uint32_t>(darkness) << 24;
             pixels[idx] = rgba;
         }
     }

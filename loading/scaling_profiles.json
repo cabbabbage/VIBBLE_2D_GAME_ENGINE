@@ -78,7 +78,7 @@
                 0,
                 0
             ],
-            "last_updated": "2025-10-16T06:49:43Z",
+            "last_updated": "2025-10-17T04:15:00Z",
             "recommended_percentages": [
                 100,
                 90,
@@ -1219,6 +1219,6 @@
             "revision": 1
         }
     },
-    "new_values": true,
+    "new_values": false,
     "version": 1
 }
