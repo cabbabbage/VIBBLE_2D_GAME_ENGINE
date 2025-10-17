@@ -12281,10 +12281,10 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "shadow_mask_settings": {
-        "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
-        "expansion_ratio": 0.800000011920929,
-        "falloff_exponent": 1.0499999523162842,
+        "alpha_multiplier": 2.690000057220459,
+        "blur_scale": 0.0,
+        "expansion_ratio": 0.6299999952316284,
+        "falloff_exponent": 2.859999895095825,
         "falloff_start": 0.0
       },
       "size_settings": {
@@ -14076,7 +14076,7 @@
           {
             "candidates": [
               {
-                "chance": 25.0,
+                "chance": 79,
                 "name": "Tree_Dark"
               },
               {
@@ -14224,6 +14224,36 @@
         "update_interval": 9
       },
       "map_name": "FORREST",
+      "reactive_shadows": {
+        "sampling_weights": {
+          "dynamic_weight": 1.0,
+          "static_weight": 0.800000011920929
+        },
+        "shadow_lut": [
+          {
+            "brightness": 0.0,
+            "offset": 0.0,
+            "opacity": 1.0,
+            "scale": 1.0
+          },
+          {
+            "brightness": 1.0,
+            "offset": 0.0,
+            "opacity": 0.0,
+            "scale": 1.0
+          }
+        ],
+        "virtual_light_map": {
+          "horizontal_falloff": 1.6200000047683716,
+          "map_light_factor": 0.0,
+          "max_offset_x": 100.0,
+          "max_offset_y": 100.0,
+          "shadow_scale": 1.0,
+          "size_scale_factor": 1.0,
+          "vertical_falloff": 3.5
+        },
+        "virtual_light_map_quadrants": 32
+      },
       "rooms_data": {
         "bar": {
           "edge_smoothness": 101,
@@ -14683,8 +14713,8 @@
                 }
               ],
               "display_name": "Axe",
-              "dx": -77,
-              "dy": -1306,
+              "dx": -78,
+              "dy": -1304,
               "enforce_spacing": false,
               "max_number": 20,
               "min_number": 12,
@@ -14693,7 +14723,7 @@
               "perimeter_radius": 377,
               "position": "Perimeter",
               "priority": 1,
-              "radius": 377,
+              "radius": 426,
               "spawn_id": "spn-dbc1671870c3"
             }
           ],
