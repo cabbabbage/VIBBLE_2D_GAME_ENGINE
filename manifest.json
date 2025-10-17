@@ -14088,6 +14088,18 @@
               {
                 "chance": 0,
                 "name": "null"
+              },
+              {
+                "chance": 5,
+                "name": "Tree_Dark"
+              },
+              {
+                "chance": 4.25,
+                "name": "Tree_Darker"
+              },
+              {
+                "chance": 1.25,
+                "name": "Tree"
               }
             ],
             "display_name": "batch_map_boundary",
