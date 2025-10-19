@@ -11,10 +11,11 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 #include "render/precomputed_light_map.hpp"
-#include "util/grid.hpp"
+#include "world/grid.hpp"
 
 class Asset;
 class SceneRenderer;
@@ -49,8 +50,7 @@ public:
            const std::string& map_id,
            const nlohmann::json& map_manifest,
            std::string content_root = {},
-           std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr,
-           grid::Grid& grid = grid::global_grid());
+           std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr);
     ~Assets();
 
     nlohmann::json save_current_room(std::string room_name);
@@ -119,8 +119,8 @@ public:
     const std::string& map_path() const { return map_path_; }
     const std::string& map_info_path() const { return map_info_path_; }
     const std::string& map_id() const { return map_id_; }
-    grid::Grid& grid() { return grid_; }
-    const grid::Grid& grid() const { return grid_; }
+    world::Grid& world_grid() { return world_grid_; }
+    const world::Grid& world_grid() const { return world_grid_; }
 
     AssetLibrary& library();
     const AssetLibrary& library() const;
@@ -160,6 +160,8 @@ public:
     Asset* player = nullptr;
 
     Asset* spawn_asset(const std::string& name, SDL_Point world_pos);
+    // Temporary: expose active chunks for early adopters (renderer/tests)
+    const std::vector<world::Chunk*>& active_chunks() const { return world_grid_.active_chunks(); }
 
 private:
     void save_map_info_json();
@@ -202,7 +204,8 @@ private:
     bool dev_mode = false;
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
-    grid::Grid& grid_;
+    world::Grid world_grid_{};
+    std::unordered_map<Asset*, SDL_Point> last_grid_pos_;
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;

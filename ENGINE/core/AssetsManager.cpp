@@ -111,8 +111,7 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                const std::string& map_id,
                const nlohmann::json& map_manifest,
                std::string content_root,
-               std::unique_ptr<PrecomputedLightMap> precomputed_light_map,
-               grid::Grid& grid)
+               std::unique_ptr<PrecomputedLightMap> precomputed_light_map)
     : camera_(
           screen_width_,
           screen_height_,
@@ -131,8 +130,7 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
       library_(library),
       map_id_(map_id),
       map_path_(std::move(content_root)),
-      map_info_path_(map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json")),
-      grid_(grid)
+      map_info_path_(map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json"))
 {
     map_info_json_ = map_manifest;
     if (!map_info_json_.is_object()) {
@@ -158,7 +156,10 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                               std::move(precomputed_light_map));
     apply_map_light_config();
     for (Asset* a : all) {
-        if (a) a->set_assets(this);
+        if (!a) continue;
+        a->set_assets(this);
+        // Register into world grid residency
+        world_grid_.register_asset(a);
     }
 
     update_filtered_active_assets();
@@ -564,6 +565,14 @@ void Assets::update(const Input& input)
 
     camera_.update_zoom(active_room, finder_, player);
 
+    // Keep world grid active chunk set in sync with camera
+    {
+        const Area view = camera_.get_camera_area();
+        auto [minx, miny, maxx, maxy] = view.get_bounds();
+        SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
+        world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
+    }
+
     update_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
 
@@ -584,6 +593,10 @@ void Assets::update(const Input& input)
         dy = player->pos.y - start_py;
         if (dx != 0 || dy != 0) {
             camera_.update_zoom(active_room, finder_, player);
+            const Area view = camera_.get_camera_area();
+            auto [minx2, miny2, maxx2, maxy2] = view.get_bounds();
+            SDL_Rect cam_rect2{minx2, miny2, std::max(0, maxx2 - minx2), std::max(0, maxy2 - miny2)};
+            world_grid_.update_active_chunks(cam_rect2, camera_.get_render_distance_world_margin());
             update_active_assets(camera_.get_screen_center());
             rebuild_active_assets_if_needed();
             update_filtered_active_assets();
@@ -624,6 +637,23 @@ void Assets::update(const Input& input)
                     }
                 }
             }
+        }
+    }
+    // Sync asset residency; re-home moving assets
+    for (Asset* asset : all) {
+        if (!asset) continue;
+        SDL_Point curr{asset->pos.x, asset->pos.y};
+        auto it = last_grid_pos_.find(asset);
+        if (it == last_grid_pos_.end()) {
+            // ensure registered
+            world_grid_.register_asset(asset);
+            last_grid_pos_[asset] = curr;
+            continue;
+        }
+        SDL_Point prev = it->second;
+        if (prev.x != curr.x || prev.y != curr.y) {
+            world_grid_.move_asset(asset, prev, curr);
+            it->second = curr;
         }
     }
 
@@ -998,6 +1028,8 @@ void Assets::process_removals() {
 
     for (Asset* asset : pending_removals) {
         render_pipeline::shading::ClearShadowStateFor(asset);
+        // Unregister from world grid residency
+        world_grid_.unregister_asset(asset);
         if (asset && asset->info && !asset->info->light_sources.empty()) {
             if (asset->info->moving_asset) {
                 notify_light_map_asset_moved(asset);
