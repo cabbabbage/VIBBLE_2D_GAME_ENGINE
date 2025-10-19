@@ -21,6 +21,7 @@
 #include "render/camera.hpp"
 #include "render/light_map.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
+#include "world/chunk.hpp"
 
 namespace {
 constexpr std::string_view kReactiveSettingsKey = "dev_ui.lighting.map_panel.reactive";
@@ -757,8 +758,8 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                 if (world_rect.w > 0 && world_rect.h > 0) {
                     cell_rect = world_rect;
                 }
-            } else if (const LightMapQuadrant* quadrant = map->quadrant(index)) {
-                SDL_Rect world_rect = rect_from_world(quadrant->world_rect());
+            } else if (const world::Chunk* chunk = map->quadrant(index)) {
+                SDL_Rect world_rect = rect_from_world(chunk->world_bounds);
                 if (world_rect.w > 0 && world_rect.h > 0) {
                     cell_rect = world_rect;
                 }
@@ -771,8 +772,8 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             const LightMapManager::QuadrantSnapshot* snap = snapshot_for_quadrant(index);
             float brightness = snap ? snap->combined_brightness : 0.0f;
             if (!snap) {
-                if (const LightMapQuadrant* quadrant = map->quadrant(index)) {
-                    SDL_Rect world_rect = quadrant->world_rect();
+                if (const world::Chunk* chunk = map->quadrant(index)) {
+                    SDL_Rect world_rect = chunk->world_bounds;
                     const float cx = static_cast<float>(world_rect.x) + static_cast<float>(world_rect.w) * 0.5f;
                     const float cy = static_cast<float>(world_rect.y) + static_cast<float>(world_rect.h) * 0.5f;
                     brightness = map->sample_brightness(static_cast<int>(std::round(cx)),
@@ -842,10 +843,11 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                                    format_float(snap->shadow_opacity_max, 3));
         }
 
-        if (const LightMapQuadrant* quadrant = map->quadrant(detail_quadrant)) {
-            detail_lines.push_back("Grid Resolution: " + std::to_string(quadrant->grid_width()) + "x" +
-                                   std::to_string(quadrant->grid_height()));
-            detail_lines.push_back("Padding: " + std::to_string(quadrant->padding()));
+        if (const world::Chunk* chunk = map->quadrant(detail_quadrant)) {
+            detail_lines.push_back("Chunk Bounds: " + std::to_string(chunk->world_bounds.x) + ", " +
+                                   std::to_string(chunk->world_bounds.y) + " " +
+                                   std::to_string(chunk->world_bounds.w) + "x" +
+                                   std::to_string(chunk->world_bounds.h));
         }
 
         detail_lines.push_back("");
