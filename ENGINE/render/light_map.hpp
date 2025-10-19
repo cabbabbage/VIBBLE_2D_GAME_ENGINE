@@ -26,7 +26,8 @@ public:
     void configure(SDL_Renderer* renderer,
                    const SDL_Rect& world_rect,
                    int grid_resolution,
-                   int padding_cells);
+                   int padding_cells,
+                   float texture_scale);
 
     const SDL_Rect& world_rect() const { return world_rect_; }
     int              grid_width() const { return grid_width_; }
@@ -66,7 +67,9 @@ public:
     void populate_static_base(SDL_Renderer* renderer,
                               SDL_Texture* static_full_map,
                               const Assets* assets,
-                              bool use_world_space);
+                              bool use_world_space,
+                              float full_map_scale,
+                              const SDL_Rect& full_map_bounds);
     void adopt_static_mask(SDL_Texture* texture);
     void set_base_brightness(float value);
 
@@ -90,6 +93,9 @@ private:
     int                 grid_height_     = 0;
     int                 padding_cells_   = 0;
     int                 stride_          = 0;
+    float               texture_scale_   = 1.0f;
+    int                 texture_width_px_  = 0;
+    int                 texture_height_px_ = 0;
     std::vector<std::uint8_t> static_grid_{};
     // Removed dynamic grid and all related behavior.
     SDL_Texture*        tile_mask_       = nullptr;
@@ -109,6 +115,7 @@ public:
     static constexpr int   kMinQuadrantSizePx    = 32;
     static constexpr int   kMaxQuadrantSizePx    = 1024;
     static constexpr int   kDefaultQuadrantSizePx = 256;
+    static constexpr float kTextureDownscale     = 0.25f;
 
     LightMap(Assets* assets,
              int screen_width,
@@ -192,6 +199,9 @@ private:
     bool                          static_full_map_supported_ = true;
     int                           last_static_full_map_fail_w_ = 0;
     int                           last_static_full_map_fail_h_ = 0;
+    float                         static_full_map_scale_factor_ = 1.0f;
+    SDL_Rect                      static_full_map_bounds_{0, 0, 0, 0};
+    float                         quadrant_texture_scale_ = kTextureDownscale;
 
     struct LayoutInfo {
         int map_width          = 0;

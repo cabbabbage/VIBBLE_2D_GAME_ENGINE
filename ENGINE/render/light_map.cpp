@@ -200,11 +200,15 @@ void LightMapQuadrant::ensure_texture(SDL_Renderer* renderer) {
     if (grid_width_ <= 0 || grid_height_ <= 0) {
         return;
     }
-    // Create a texture that matches the quadrant's world-rect size.
-    // We will resample our internal light grids into this texture so that
-    // each quadrant owns a tile of size (world_rect_.w x world_rect_.h).
-    const int tex_w = std::max(1, world_rect_.w);
-    const int tex_h = std::max(1, world_rect_.h);
+    if (texture_width_px_ <= 0 || texture_height_px_ <= 0) {
+        return;
+    }
+    // Create a texture that matches the quadrant's scaled size. We will
+    // resample our internal light grids into this smaller texture so that
+    // each quadrant owns a tile of size (world_rect_.w x world_rect_.h) when
+    // scaled during rendering.
+    const int tex_w = texture_width_px_;
+    const int tex_h = texture_height_px_;
     // Use a render target so we can composite overlapping light textures directly
     tile_mask_ = SDL_CreateTexture(renderer,
                                    SDL_PIXELFORMAT_RGBA8888,
@@ -234,8 +238,11 @@ void LightMapQuadrant::ensure_static_mask(SDL_Renderer* renderer) {
     if (world_rect_.w <= 0 || world_rect_.h <= 0) {
         return;
     }
-    const int tex_w = std::max(1, world_rect_.w);
-    const int tex_h = std::max(1, world_rect_.h);
+    if (texture_width_px_ <= 0 || texture_height_px_ <= 0) {
+        return;
+    }
+    const int tex_w = texture_width_px_;
+    const int tex_h = texture_height_px_;
     static_mask_ = SDL_CreateTexture(renderer,
                                      SDL_PIXELFORMAT_RGBA8888,
                                      SDL_TEXTUREACCESS_TARGET,
@@ -252,7 +259,8 @@ void LightMapQuadrant::ensure_static_mask(SDL_Renderer* renderer) {
 void LightMapQuadrant::configure(SDL_Renderer* renderer,
                                  const SDL_Rect& world_rect,
                                  int grid_resolution,
-                                 int padding_cells) {
+                                 int padding_cells,
+                                 float texture_scale) {
     destroy_texture();
 
     world_rect_    = world_rect;
@@ -262,6 +270,9 @@ void LightMapQuadrant::configure(SDL_Renderer* renderer,
     stride_        = grid_width_ + (padding_cells_ * 2);
     const int total_rows = grid_height_ + (padding_cells_ * 2);
     static_grid_.assign(static_cast<std::size_t>(stride_) * static_cast<std::size_t>(total_rows), 0);
+    texture_scale_     = (texture_scale > 0.0f) ? texture_scale : 1.0f;
+    texture_width_px_  = std::max(1, static_cast<int>(std::ceil(static_cast<float>(world_rect_.w) * texture_scale_)));
+    texture_height_px_ = std::max(1, static_cast<int>(std::ceil(static_cast<float>(world_rect_.h) * texture_scale_)));
     base_brightness_ = 0.0f;
     dirty_           = true;
     active_          = false;
@@ -500,7 +511,9 @@ float LightMapQuadrant::sample_brightness(float local_x,
 void LightMapQuadrant::populate_static_base(SDL_Renderer* renderer,
                                             SDL_Texture* static_full_map,
                                             const Assets* assets,
-                                            bool use_world_space) {
+                                            bool use_world_space,
+                                            float full_map_scale,
+                                            const SDL_Rect& full_map_bounds) {
     if (!renderer) {
         ensure_static_mask(nullptr);
         clear_static_samples();
@@ -522,6 +535,8 @@ void LightMapQuadrant::populate_static_base(SDL_Renderer* renderer,
         return;
     }
 
+    const int tex_w = std::max(1, texture_width_px_);
+    const int tex_h = std::max(1, texture_height_px_);
     SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
     SDL_SetRenderTarget(renderer, static_mask_);
 
@@ -533,12 +548,92 @@ void LightMapQuadrant::populate_static_base(SDL_Renderer* renderer,
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
+    const float safe_full_map_scale = (full_map_scale > 0.0f) ? full_map_scale : 1.0f;
+
     if (static_full_map) {
-        SDL_Rect src = world_rect_;
-        SDL_Rect dst{0, 0, world_rect_.w, world_rect_.h};
-        SDL_RenderCopy(renderer, static_full_map, &src, &dst);
+        int map_tex_w = 0;
+        int map_tex_h = 0;
+        if (SDL_QueryTexture(static_full_map, nullptr, nullptr, &map_tex_w, &map_tex_h) == 0 &&
+            map_tex_w > 0 && map_tex_h > 0) {
+            SDL_Rect src{};
+            if (use_world_space) {
+                const float local_x = static_cast<float>(world_rect_.x - full_map_bounds.x);
+                const float local_y = static_cast<float>(world_rect_.y - full_map_bounds.y);
+                src.x = static_cast<int>(std::floor(local_x * safe_full_map_scale));
+                src.y = static_cast<int>(std::floor(local_y * safe_full_map_scale));
+            } else {
+                src.x = static_cast<int>(std::floor(static_cast<float>(world_rect_.x) * safe_full_map_scale));
+                src.y = static_cast<int>(std::floor(static_cast<float>(world_rect_.y) * safe_full_map_scale));
+            }
+            src.w = std::max(1, static_cast<int>(std::ceil(static_cast<float>(world_rect_.w) * safe_full_map_scale)));
+            src.h = std::max(1, static_cast<int>(std::ceil(static_cast<float>(world_rect_.h) * safe_full_map_scale)));
+
+            if (src.x < 0) {
+                src.w += src.x;
+                src.x = 0;
+            }
+            if (src.y < 0) {
+                src.h += src.y;
+                src.y = 0;
+            }
+            if (src.x >= map_tex_w || src.y >= map_tex_h) {
+                src.w = 0;
+                src.h = 0;
+            }
+
+            if (src.w > 0 && src.h > 0) {
+                if (src.w > map_tex_w - src.x) {
+                    src.w = map_tex_w - src.x;
+                }
+                if (src.h > map_tex_h - src.y) {
+                    src.h = map_tex_h - src.y;
+                }
+            }
+
+            if (src.w > 0 && src.h > 0) {
+                SDL_Rect dst{0, 0, tex_w, tex_h};
+                SDL_RenderCopy(renderer, static_full_map, &src, &dst);
+            }
+        }
     } else if (assets && use_world_space) {
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
+
+        auto world_to_local = [&](const SDL_Rect& rect_world) -> std::optional<SDL_Rect> {
+            SDL_Rect local{};
+            local.x = static_cast<int>(std::floor((rect_world.x - world_rect_.x) * texture_scale_));
+            local.y = static_cast<int>(std::floor((rect_world.y - world_rect_.y) * texture_scale_));
+            local.w = std::max(1, static_cast<int>(std::ceil(static_cast<float>(rect_world.w) * texture_scale_)));
+            local.h = std::max(1, static_cast<int>(std::ceil(static_cast<float>(rect_world.h) * texture_scale_)));
+
+            if (local.x + local.w <= 0 || local.y + local.h <= 0 ||
+                local.x >= tex_w || local.y >= tex_h) {
+                return std::nullopt;
+            }
+            if (local.x < 0) {
+                const int diff = -local.x;
+                local.w -= diff;
+                local.x = 0;
+            }
+            if (local.y < 0) {
+                const int diff = -local.y;
+                local.h -= diff;
+                local.y = 0;
+            }
+            if (local.w <= 0 || local.h <= 0) {
+                return std::nullopt;
+            }
+            if (local.x + local.w > tex_w) {
+                local.w = tex_w - local.x;
+            }
+            if (local.y + local.h > tex_h) {
+                local.h = tex_h - local.y;
+            }
+            if (local.w <= 0 || local.h <= 0) {
+                return std::nullopt;
+            }
+            return local;
+        };
+
         auto composite_assets = [&](const std::vector<Asset*>& asset_list) {
             for (Asset* asset : asset_list) {
                 if (!asset || !asset->info) {
@@ -558,10 +653,12 @@ void LightMapQuadrant::populate_static_base(SDL_Renderer* renderer,
                         continue;
                     }
 
-                    SDL_Rect dst_local{dst_world->x - world_rect_.x,
-                                       dst_world->y - world_rect_.y,
-                                       dst_world->w,
-                                       dst_world->h};
+                    const std::optional<SDL_Rect> local_rect = world_to_local(*dst_world);
+                    if (!local_rect) {
+                        continue;
+                    }
+
+                    SDL_Rect dst_local = *local_rect;
 
                     Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
                     SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
@@ -620,6 +717,8 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
     if (!tile_mask_ || !renderer) {
         return;
     }
+    const int tex_w = std::max(1, texture_width_px_);
+    const int tex_h = std::max(1, texture_height_px_);
 
     // Prepare render target
     SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
@@ -637,7 +736,7 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
         SDL_BlendMode prev_static_blend = SDL_BLENDMODE_BLEND;
         SDL_GetTextureBlendMode(static_mask_, &prev_static_blend);
         SDL_SetTextureBlendMode(static_mask_, SDL_BLENDMODE_NONE);
-        SDL_Rect dst{0, 0, world_rect_.w, world_rect_.h};
+        SDL_Rect dst{0, 0, tex_w, tex_h};
         SDL_RenderCopy(renderer, static_mask_, nullptr, &dst);
         SDL_SetTextureBlendMode(static_mask_, prev_static_blend);
     }
@@ -646,6 +745,42 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
 
     // If we have assets, composite every moving light texture that overlaps this quadrant
     if (assets) {
+        auto world_to_local = [&](const SDL_Rect& rect_world) -> std::optional<SDL_Rect> {
+            SDL_Rect local{};
+            local.x = static_cast<int>(std::floor((rect_world.x - world_rect_.x) * texture_scale_));
+            local.y = static_cast<int>(std::floor((rect_world.y - world_rect_.y) * texture_scale_));
+            local.w = std::max(1, static_cast<int>(std::ceil(static_cast<float>(rect_world.w) * texture_scale_)));
+            local.h = std::max(1, static_cast<int>(std::ceil(static_cast<float>(rect_world.h) * texture_scale_)));
+
+            if (local.x + local.w <= 0 || local.y + local.h <= 0 ||
+                local.x >= tex_w || local.y >= tex_h) {
+                return std::nullopt;
+            }
+            if (local.x < 0) {
+                const int diff = -local.x;
+                local.w -= diff;
+                local.x = 0;
+            }
+            if (local.y < 0) {
+                const int diff = -local.y;
+                local.h -= diff;
+                local.y = 0;
+            }
+            if (local.w <= 0 || local.h <= 0) {
+                return std::nullopt;
+            }
+            if (local.x + local.w > tex_w) {
+                local.w = tex_w - local.x;
+            }
+            if (local.y + local.h > tex_h) {
+                local.h = tex_h - local.y;
+            }
+            if (local.w <= 0 || local.h <= 0) {
+                return std::nullopt;
+            }
+            return local;
+        };
+
         auto composite_assets = [&](const std::vector<Asset*>& asset_list) {
             for (Asset* asset : asset_list) {
                 if (!asset || !asset->info) {
@@ -665,10 +800,12 @@ void LightMapQuadrant::update_tile_mask(SDL_Renderer* renderer,
                         continue;
                     }
 
-                    SDL_Rect dst_local{dst_world->x - world_rect_.x,
-                                       dst_world->y - world_rect_.y,
-                                       dst_world->w,
-                                       dst_world->h};
+                    const std::optional<SDL_Rect> local_rect = world_to_local(*dst_world);
+                    if (!local_rect) {
+                        continue;
+                    }
+
+                    SDL_Rect dst_local = *local_rect;
 
                     // Draw with additive blending so lights punch through static cache
                     Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
