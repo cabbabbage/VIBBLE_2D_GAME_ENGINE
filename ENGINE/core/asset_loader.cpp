@@ -740,12 +740,10 @@ void AssetLoader::precompute_light_map() {
 
         SDL_SetRenderTarget(renderer_, prev_target);
 
-        map->full_texture = full_tex;
-
         const int quadrant_size_px = spacing * kPrecomputedCellsPerQuadrant;
         for (int row = 0; row < map->quadrant_rows; ++row) {
-                for (int col = 0; col < map->quadrant_cols; ++col) {
-                        SDL_Rect world_rect{col * quadrant_size_px,
+            for (int col = 0; col < map->quadrant_cols; ++col) {
+                SDL_Rect world_rect{col * quadrant_size_px,
                                             row * quadrant_size_px,
                                             quadrant_size_px,
                                             quadrant_size_px};
@@ -782,6 +780,12 @@ void AssetLoader::precompute_light_map() {
                         quad.texture = quad_tex;
                         map->quadrants.push_back(std::move(quad));
                 }
+        }
+
+        // Full map texture no longer needed once quadrant textures are built.
+        if (full_tex) {
+                SDL_DestroyTexture(full_tex);
+                full_tex = nullptr;
         }
 
         precomputed_light_map_ = std::move(map);

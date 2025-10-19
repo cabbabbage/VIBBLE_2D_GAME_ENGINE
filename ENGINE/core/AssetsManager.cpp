@@ -28,6 +28,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <execution>
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <vector>
@@ -587,47 +588,37 @@ void Assets::update(const Input& input)
         }
     }
     if (!dev_mode) {
-        std::vector<Asset*> non_player_assets;
-        non_player_assets.reserve(active_assets.size());
+        constexpr std::size_t kParallelThreshold = 4;
+        non_player_update_buffer_.clear();
+        non_player_update_buffer_.reserve(active_assets.size());
         for (Asset* asset : active_assets) {
             if (asset && asset != player) {
-                non_player_assets.push_back(asset);
+                non_player_update_buffer_.push_back(asset);
             }
         }
 
-        const std::size_t task_count = non_player_assets.size();
+        const std::size_t task_count = non_player_update_buffer_.size();
         if (task_count == 1) {
-            non_player_assets.front()->update();
+            non_player_update_buffer_.front()->update();
         } else if (task_count > 1) {
+#if defined(__cpp_lib_execution)
             const unsigned hardware_threads = std::max(1u, std::thread::hardware_concurrency());
-            const std::size_t thread_count = std::min<std::size_t>(hardware_threads, task_count);
-
-            if (thread_count <= 1) {
-                for (Asset* asset : non_player_assets) {
-                    asset->update();
-                }
-            } else {
-                std::atomic<std::size_t> next_index{0};
-                std::vector<std::thread> workers;
-                workers.reserve(thread_count);
-
-                for (std::size_t i = 0; i < thread_count; ++i) {
-                    workers.emplace_back([&non_player_assets, &next_index, task_count]() {
-                        for (;;) {
-                            const std::size_t idx = next_index.fetch_add(1, std::memory_order_relaxed);
-                            if (idx >= task_count) {
-                                break;
-                            }
-                            if (Asset* asset = non_player_assets[idx]) {
-                                asset->update();
-                            }
-                        }
-                    });
-                }
-
-                for (std::thread& worker : workers) {
-                    if (worker.joinable()) {
-                        worker.join();
+            const bool can_parallelize = hardware_threads > 1 && task_count >= kParallelThreshold;
+            if (can_parallelize) {
+                std::for_each(std::execution::par_unseq,
+                              non_player_update_buffer_.begin(),
+                              non_player_update_buffer_.end(),
+                              [](Asset* asset) {
+                                  if (asset) {
+                                      asset->update();
+                                  }
+                              });
+            } else
+#endif
+            {
+                for (Asset* asset : non_player_update_buffer_) {
+                    if (asset) {
+                        asset->update();
                     }
                 }
             }

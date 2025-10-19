@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
@@ -52,6 +53,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                             screen_height_,
                                             std::move(precomputed_light_map));
     if (light_map_) {
+        // Use 2 grid-spaces per quadrant by default
+        light_map_->set_cells_per_quadrant(2);
         light_map_->rebuild(renderer_);
         render_pipeline_.lighting().light_map_sampler = light_map_.get();
     } else {
@@ -125,14 +128,24 @@ bool SceneRenderer::shouldRegen(Asset* a){
         return true;
     }
 
-    SDL_Texture* final_texture=a->get_final_texture();
+    SDL_Texture* final_texture = a->get_final_texture();
     if (!final_texture) {
         return true;
     }
 
-    const bool locked=a->is_current_animation_locked_in_progress();
-    const bool treat_static=a->static_frame||locked;
-    return !treat_static;
+    const bool locked = a->is_current_animation_locked_in_progress();
+    const bool treat_static = a->static_frame || locked;
+    if (treat_static) {
+        return false;
+    }
+
+    const AnimationFrame* current_frame = a->current_frame;
+    auto it = last_rendered_frames_.find(a);
+    if (it == last_rendered_frames_.end()) {
+        return true;
+    }
+
+    return it->second != current_frame;
 }
 
 SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){
@@ -256,23 +269,12 @@ void SceneRenderer::render(){
         if (player_sh<=0.f) player_sh=1.f;
 
         const auto& active = assets_->getActive();
-        std::unordered_set<Asset*> cur_active;
-        cur_active.reserve(active.size());
-
-        struct AssetRenderCommand {
-            SDL_Texture* source_texture        = nullptr;
-            SDL_Texture* final_texture         = nullptr;
-            SDL_Rect     dst                   { 0, 0, 0, 0 };
-            bool         uses_scaled_texture   = false;
-            bool         highlighted           = false;
-            bool         selected              = false;
-            bool         flipped               = false;
-        };
-
-        std::vector<AssetRenderCommand> texture_commands;
-        std::vector<AssetRenderCommand> remaining_commands;
-        texture_commands.reserve(active.size());
-        remaining_commands.reserve(active.size());
+        current_active_assets_.clear();
+        current_active_assets_.reserve(active.size());
+        texture_commands_.clear();
+        texture_commands_.reserve(active.size());
+        remaining_commands_.clear();
+        remaining_commands_.reserve(active.size());
 
         auto enqueue_command = [&](Asset* asset,
                                    SDL_Texture* final_tex,
@@ -287,11 +289,10 @@ void SceneRenderer::render(){
             cmd.selected            = asset->is_selected();
             cmd.flipped             = asset->flipped;
 
-            if (asset->info->type == asset_types::texture) {
-                texture_commands.push_back(cmd);
-            } else {
-                remaining_commands.push_back(cmd);
-            }
+            auto& target_commands = (asset->info->type == asset_types::texture)
+                                        ? texture_commands_
+                                        : remaining_commands_;
+            target_commands.push_back(std::move(cmd));
         };
 
         for (Asset* a : active) {
@@ -299,7 +300,7 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            cur_active.insert(a);
+            current_active_assets_.insert(a);
             const bool newly = last_active_assets_.find(a) == last_active_assets_.end();
             if (newly) {
                 SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
@@ -311,6 +312,7 @@ void SceneRenderer::render(){
 
             SDL_Texture* final_tex = a->get_final_texture();
             if (!final_tex) {
+                last_rendered_frames_.erase(a);
                 continue;
             }
 
@@ -324,11 +326,22 @@ void SceneRenderer::render(){
 
             SDL_Rect dst = get_scaled_position_rect(a, fw, fh, inv_scale, min_w, min_h, player_sh);
             if (dst.w == 0 && dst.h == 0) {
+                if (a->current_frame) {
+                    last_rendered_frames_[a] = a->current_frame;
+                } else {
+                    last_rendered_frames_.erase(a);
+                }
                 continue;
             }
 
             SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(a, final_tex, fw, fh, dst.w, dst.h);
             enqueue_command(a, final_tex, draw_tex, dst);
+
+            if (a->current_frame) {
+                last_rendered_frames_[a] = a->current_frame;
+            } else {
+                last_rendered_frames_.erase(a);
+            }
         }
 
         // Dynamic light-ray stamping removed.
@@ -376,12 +389,20 @@ void SceneRenderer::render(){
             SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         };
 
-        render_commands(texture_commands);
+        render_commands(texture_commands_);
         render_light_map();
 
-        render_commands(remaining_commands);
+        render_commands(remaining_commands_);
 
-        last_active_assets_ = std::move(cur_active);
+        last_active_assets_.swap(current_active_assets_);
+        for (auto it = last_rendered_frames_.begin(); it != last_rendered_frames_.end();) {
+            if (last_active_assets_.find(it->first) == last_active_assets_.end()) {
+                it = last_rendered_frames_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        current_active_assets_.clear();
     }
 
     SDL_SetRenderTarget(renderer_,nullptr);

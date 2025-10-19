@@ -1662,6 +1662,33 @@ void DevControls::configure_header_button_sets() {
     }
 
     {
+        MapModeUI::HeaderButtonConfig light_map_btn;
+        light_map_btn.id = "light_map";
+        light_map_btn.label = "Light Map";
+        light_map_btn.active = map_mode_ui_ && map_mode_ui_->is_light_map_panel_visible();
+        light_map_btn.on_toggle = [this](bool active) {
+            if (room_editor_) {
+                room_editor_->close_room_config();
+            }
+            if (!map_mode_ui_) {
+                sync_header_button_states();
+                return;
+            }
+            const bool currently_open = map_mode_ui_->is_light_map_panel_visible();
+            if (active != currently_open) {
+                if (active && !currently_open && is_modal_blocking_panels()) {
+                    pulse_modal_header();
+                    sync_header_button_states();
+                    return;
+                }
+                map_mode_ui_->toggle_light_map_panel();
+            }
+            sync_header_button_states();
+        };
+        map_buttons.push_back(std::move(light_map_btn));
+    }
+
+    {
         MapModeUI::HeaderButtonConfig grid_btn;
         grid_btn.id = "map_grid";
         grid_btn.label = "Map Grid";
@@ -1850,6 +1877,8 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "camera", camera_open);
     const bool lights_open = map_mode_ui_->is_light_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
+    const bool light_map_open = map_mode_ui_->is_light_map_panel_visible();
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "light_map", light_map_open);
     const bool grid_open = map_mode_ui_->is_grid_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_grid", grid_open);
     const bool layers_open = map_mode_ui_->is_layers_footer_visible();

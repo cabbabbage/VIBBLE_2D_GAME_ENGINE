@@ -185,13 +185,15 @@ void MainApp::setup() {
 }
 
 void MainApp::game_loop() {
-        constexpr float TARGET_FPS = 24.0f;
-        constexpr float TARGET_FRAME_MS = 1000.0f / TARGET_FPS;
+        constexpr double TARGET_FPS = 60.0;
+        constexpr double TARGET_FRAME_SECONDS = 1.0 / TARGET_FPS;
+        const double perf_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
+        const double target_counts  = TARGET_FRAME_SECONDS * perf_frequency;
         bool quit = false;
         SDL_Event e;
         std::cout << "game loop started!\n";
         while (!quit) {
-                Uint32 start = SDL_GetTicks();
+                const Uint64 frame_begin = SDL_GetPerformanceCounter();
                 while (SDL_PollEvent(&e)) {
                         if (e.type == SDL_QUIT) quit = true;
 			if (input_) input_->handleEvent(e);
@@ -201,10 +203,17 @@ void MainApp::game_loop() {
                         game_assets_->update(*input_);
                 }
                 if (input_) input_->update();
-                const float elapsed_ms = static_cast<float>(SDL_GetTicks() - start);
-                const float remaining_ms = TARGET_FRAME_MS - elapsed_ms;
-                if (remaining_ms > 0.0f) {
-                        SDL_Delay(static_cast<Uint32>(remaining_ms));
+                const Uint64 frame_end = SDL_GetPerformanceCounter();
+                const double work_counts = static_cast<double>(frame_end - frame_begin);
+                if (work_counts < target_counts) {
+                        double remaining_counts = target_counts - work_counts;
+                        double remaining_ms = (remaining_counts * 1000.0) / perf_frequency;
+                        if (remaining_ms >= 1.0) {
+                                SDL_Delay(static_cast<Uint32>(remaining_ms));
+                        }
+                        while (static_cast<double>(SDL_GetPerformanceCounter() - frame_begin) < target_counts) {
+                                SDL_Delay(0);
+                        }
                 }
         }
 }

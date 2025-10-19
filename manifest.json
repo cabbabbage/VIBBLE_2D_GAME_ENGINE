@@ -9975,7 +9975,6 @@
         "SRC/assets/Tree/spawn"
       ],
       "update_radius": 1000,
-      "virtual_light_map_quadrants": 27,
       "z_threshold": 0
     },
     "Tree_Dark": {
@@ -14078,128 +14077,6 @@
               "required_children": []
             }
           ]
-        },
-        {
-          "level": 3,
-          "max_rooms": 6,
-          "min_rooms": 3,
-          "name": "layer_3",
-          "rooms": [
-            {
-              "max_instances": 2,
-              "min_instances": 1,
-              "name": "glowshroom_grotto",
-              "required_children": []
-            },
-            {
-              "max_instances": 2,
-              "min_instances": 1,
-              "name": "frog_song_basin",
-              "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 1,
-              "name": "whispering_flowers",
-              "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "starlit_bog",
-              "required_children": []
-            }
-          ]
-        },
-        {
-          "level": 4,
-          "max_rooms": 6,
-          "min_rooms": 2,
-          "name": "layer_4",
-          "rooms": [
-            {
-              "max_instances": 2,
-              "min_instances": 1,
-              "name": "stone_sigil_circle",
-              "required_children": []
-            },
-            {
-              "max_instances": 2,
-              "min_instances": 0,
-              "name": "runestone_ridge",
-              "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "bonefire_camp",
-              "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 1,
-              "name": "gravekeepers_watch",
-              "required_children": []
-            }
-          ]
-        },
-        {
-          "level": 5,
-          "max_rooms": 5,
-          "min_rooms": 2,
-          "name": "layer_5",
-          "rooms": [
-            {
-              "max_instances": 2,
-              "min_instances": 1,
-              "name": "hermit_woodshop",
-              "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 1,
-              "name": "traders_cache",
-              "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "booze_smugglers_den",
-              "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "daveys_hideout",
-              "required_children": []
-            }
-          ]
-        },
-        {
-          "level": 6,
-          "max_rooms": 3,
-          "min_rooms": 2,
-          "name": "layer_6",
-          "rooms": [
-            {
-              "max_instances": 1,
-              "min_instances": 1,
-              "name": "lantern_lagoon",
-              "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 1,
-              "name": "spirit_vigil_shrine",
-              "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "noose_hollow",
-              "required_children": []
-            }
-          ]
         }
       ],
       "map_light_data": {
@@ -14292,8 +14169,7 @@
           "shadow_scale": 1.0,
           "size_scale_factor": 1.0,
           "vertical_falloff": 3.5
-        },
-        "virtual_light_map_quadrant_size": 256
+        }
       },
       "rooms_data": {
         "bar": {

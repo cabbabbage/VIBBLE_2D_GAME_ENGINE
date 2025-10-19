@@ -200,6 +200,7 @@ private:
     bool force_high_quality_rendering_ = false;
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
+    std::vector<Asset*> non_player_update_buffer_;
 
     AssetLibrary& library_;
     std::string map_id_;

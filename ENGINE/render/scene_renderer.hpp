@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
 #include "light_map.hpp"
@@ -15,6 +16,7 @@
 
 class Assets;
 class Asset;
+class AnimationFrame;
 
 class SceneRenderer {
 
@@ -51,6 +53,16 @@ private:
     SDL_Rect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
 
 private:
+    struct AssetRenderCommand {
+        SDL_Texture* source_texture      = nullptr;
+        SDL_Texture* final_texture       = nullptr;
+        SDL_Rect     dst                 { 0, 0, 0, 0 };
+        bool         uses_scaled_texture = false;
+        bool         highlighted         = false;
+        bool         selected            = false;
+        bool         flipped             = false;
+    };
+
     SDL_Renderer*  renderer_;
     Assets*        assets_;
     int            screen_width_;
@@ -65,4 +77,8 @@ private:
     bool           quadrant_debug_mode_ = false;
 
     std::unordered_set<Asset*> last_active_assets_;
+    std::unordered_map<Asset*, const AnimationFrame*> last_rendered_frames_;
+    std::unordered_set<Asset*> current_active_assets_;
+    std::vector<AssetRenderCommand> texture_commands_;
+    std::vector<AssetRenderCommand> remaining_commands_;
 };

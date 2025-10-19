@@ -52,11 +52,21 @@ public:
     void build_static(const std::vector<std::uint8_t>& grid, int width, int height);
     // Dynamic light rays removed.
 
-    void update_tile_mask(SDL_Renderer* renderer, const class Assets* assets, float static_weight, float dynamic_weight);
+    void update_tile_mask(SDL_Renderer* renderer,
+                          const class Assets* assets,
+                          float static_weight,
+                          float dynamic_weight,
+                          bool include_static_lights);
     void render_tile_mask(SDL_Renderer* renderer) const;
     void render_tile_mask(SDL_Renderer* renderer, Uint8 alpha_mod) const;
     void render_tile_mask_with_mode(SDL_Renderer* renderer, Uint8 alpha_mod, SDL_BlendMode mode) const;
-    void populate_static_base(SDL_Renderer* renderer, SDL_Texture* static_full_map);
+    void render_tile_mask_at(SDL_Renderer* renderer, const SDL_Rect& dst) const;
+    void render_tile_mask_at(SDL_Renderer* renderer, const SDL_Rect& dst, Uint8 alpha_mod) const;
+    void render_tile_mask_with_mode_at(SDL_Renderer* renderer, const SDL_Rect& dst, Uint8 alpha_mod, SDL_BlendMode mode) const;
+    void populate_static_base(SDL_Renderer* renderer,
+                              SDL_Texture* static_full_map,
+                              const Assets* assets,
+                              bool use_world_space);
     void adopt_static_mask(SDL_Texture* texture);
     void set_base_brightness(float value);
 
@@ -142,7 +152,8 @@ public:
     int padding_cells() const { return padding_cells_; }
 
     void set_virtual_light_map_quadrants(int quadrants);
-    void set_virtual_light_map_quadrant_size(int size_px);
+    void set_virtual_light_map_quadrant_size(int size_px); // deprecated: pixel-sized quadrants no longer used
+    void set_cells_per_quadrant(int cells);
     int  virtual_light_map_quadrant_size() const { return requested_quadrant_size_px_; }
     int  virtual_light_map_quadrants() const { return requested_quadrants_; }
 
@@ -157,6 +168,7 @@ private:
                           float static_weight,
                           float dynamic_weight) const;
     std::pair<int, int> padding_pixels() const;
+    bool use_world_space_coordinates() const;
     void build_static_full_map(SDL_Renderer* renderer);
     void destroy_static_full_map(bool mark_dirty = true);
     bool adopt_precomputed_map(SDL_Renderer* renderer);
@@ -177,6 +189,9 @@ private:
     SDL_Texture*                  static_full_map_ = nullptr;
     bool                          static_cache_dirty_ = true;
     std::unique_ptr<PrecomputedLightMap> pending_precomputed_map_;
+    bool                          static_full_map_supported_ = true;
+    int                           last_static_full_map_fail_w_ = 0;
+    int                           last_static_full_map_fail_h_ = 0;
 
     struct LayoutInfo {
         int map_width          = 0;
@@ -185,6 +200,10 @@ private:
         int cells_per_quadrant = 0;
         int grid_resolution    = 32;
         int padding_cells      = 0;
+        int origin_x           = 0;
+        int origin_y           = 0;
     } layout_{};
+
+    int desired_cells_per_quadrant_ = 2; // default: 2 grid-spaces per quadrant
 };
 

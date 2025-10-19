@@ -24,19 +24,9 @@ const ReactiveShadowSettings& reactive_settings_or_default(const StageContext& c
     return defaults;
 }
 
-float compute_screen_light_opacity_factor(const StageContext& context) {
-    if (!context.lighting) {
-        return 1.0f;
-    }
-    const Global_Light_Source& light = context.main_light();
-    const int min_opacity            = light.min_opacity();
-    const int max_opacity            = light.max_opacity();
-    const int current_alpha          = std::clamp(static_cast<int>(light.get_current_color().a), min_opacity, max_opacity);
-    const int range                  = std::max(1, max_opacity - min_opacity);
-    const float normalized           = static_cast<float>(current_alpha - min_opacity) / static_cast<float>(range);
-    // Higher map-light opacity should darken the screen, so invert the normalized
-    // result before clamping.
-    return clampf(1.0f - normalized, 0.0f, 1.0f);
+float compute_screen_light_opacity_factor(const StageContext&) {
+    // Screen-light factor is now handled by the LightMap overlay, not per-asset.
+    return 1.0f;
 }
 
 float compute_parallax_shift(const StageContext& context, const Asset& asset, int height, float weight) {
@@ -231,7 +221,6 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     const ReactiveShadowSettings& cfg = reactive_settings_or_default(context);
 
     float base_opacity = clampf(context.base_shadow_opacity, 0.0f, 1.0f);
-    const float screen_light_factor      = compute_screen_light_opacity_factor(context);
     float scale        = std::max(context.base_shadow_scale, 0.0f);
 
     float opacity_multiplier = 1.0f;
@@ -241,14 +230,15 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
     if (const LightMapManager* manager = context.light_map_manager()) {
         if (auto params = manager->get_quadrant_params(context.screen_center)) {
-            opacity_multiplier = params->opacity_q;
-            offset_x           = params->offset_x_q;
-            offset_y           = params->offset_y_q;
-            scale_multiplier   = params->scale_q;
+            // Opacity modifier is now applied by LightMap overlay; keep parallax/scale only.
+            offset_x         = params->offset_x_q;
+            offset_y         = params->offset_y_q;
+            scale_multiplier = params->scale_q;
         }
     }
 
-    float opacity = clampf(base_opacity * screen_light_factor * opacity_multiplier, 0.0f, 1.0f);
+    // Asset shadow opacity no longer receives global screen-light or map-direction opacity.
+    float opacity = clampf(base_opacity * opacity_multiplier, 0.0f, 1.0f);
     scale *= std::max(scale_multiplier, 0.0f);
 
     const float parallax_shift = compute_parallax_shift(context, asset, height, 1.0f);

@@ -15,8 +15,8 @@ class ManifestStore;
 }
 class Input;
 class MapLightPanel;
-class MapLightPreviewPanel;
 class MapShadowPanel;
+class MapLightPreviewPanel;
 class MapLayersPanel;
 class MapLayersController;
 class MapGridPanel;
@@ -55,6 +55,9 @@ public:
     void open_light_panel();
     void close_light_panel();
     void toggle_light_panel();
+    void open_light_map_panel();
+    void close_light_map_panel();
+    void toggle_light_map_panel();
     void open_shading_panel();
     void close_shading_panel();
     void toggle_shading_panel();
@@ -66,6 +69,7 @@ public:
 
     bool is_light_panel_visible() const;
     bool is_shading_panel_visible() const;
+    bool is_light_map_panel_visible() const;
     bool is_grid_panel_visible() const;
     using LightSaveCallback = std::function<bool()>;
     using GridSaveCallback = std::function<bool()>;
@@ -135,7 +139,7 @@ private:
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     std::unique_ptr<MapLightPanel> light_panel_;
     std::unique_ptr<MapShadowPanel> shadow_panel_;
-    std::unique_ptr<MapLightPreviewPanel> map_light_preview_panel_;
+    std::unique_ptr<MapLightPreviewPanel> preview_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;
@@ -164,5 +168,6 @@ private:
     bool preview_panel_centered_ = false;
     bool last_lights_visible_ = false;
     bool last_shading_visible_ = false;
+    bool last_preview_visible_ = false;
 };
 

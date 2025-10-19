@@ -1,8 +1,8 @@
 #include "map_mode_ui.hpp"
 
 #include "MapLightPanel.hpp"
-#include "MapLightPreviewPanel.hpp"
 #include "MapShadowPanel.hpp"
+#include "MapLightPreviewPanel.hpp"
 #include "map_grid_panel.hpp"
 #include "DockableCollapsible.hpp"
 #include "full_screen_collapsible.hpp"
@@ -29,6 +29,7 @@ constexpr int kDefaultPanelX = 48;
 constexpr int kDefaultPanelY = 48;
 constexpr const char* kButtonIdLights = "lights";
 constexpr const char* kButtonIdShading = "shading";
+constexpr const char* kButtonIdLightMap = "light_map";
 }
 
 MapModeUI::MapModeUI(Assets* assets)
@@ -64,7 +65,7 @@ void MapModeUI::set_screen_dimensions(int w, int h) {
     SDL_Rect bounds{0, 0, screen_w_, screen_h_};
     if (light_panel_) light_panel_->set_work_area(bounds);
     if (shadow_panel_) shadow_panel_->set_work_area(bounds);
-    if (map_light_preview_panel_) map_light_preview_panel_->set_work_area(bounds);
+    if (preview_panel_) preview_panel_->set_work_area(bounds);
     if (layers_panel_) layers_panel_->set_work_area(bounds);
     update_footer_visibility();
 }
@@ -235,14 +236,14 @@ bool MapModeUI::pointer_inside_floating_panel(int x, int y) const {
             }
             continue;
         }
-        if (auto* preview = dynamic_cast<MapLightPreviewPanel*>(panel)) {
-            if (preview->is_visible() && preview->is_point_inside(p.x, p.y)) {
+        if (auto* shadows = dynamic_cast<MapShadowPanel*>(panel)) {
+            if (shadows->is_visible() && shadows->is_point_inside(p.x, p.y)) {
                 return true;
             }
             continue;
         }
-        if (auto* shadows = dynamic_cast<MapShadowPanel*>(panel)) {
-            if (shadows->is_visible() && shadows->is_point_inside(p.x, p.y)) {
+        if (auto* preview = dynamic_cast<MapLightPreviewPanel*>(panel)) {
+            if (preview->is_visible() && preview->is_point_inside(p.x, p.y)) {
                 return true;
             }
             continue;
@@ -285,10 +286,10 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
         bool handled_special = false;
         if (lights) {
             handled_special = handle_and_check(lights);
-        } else if (preview) {
-            handled_special = handle_and_check(preview);
         } else if (shadows) {
             handled_special = handle_and_check(shadows);
+        } else if (preview) {
+            handled_special = handle_and_check(preview);
         } else {
             if (!panel->is_visible()) continue;
             if (panel->handle_event(e)) {
@@ -307,9 +308,9 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
         }
 
         const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) ||
-                            (preview && preview->is_visible() && preview->is_point_inside(p.x, p.y)) ||
                             (shadows && shadows->is_visible() && shadows->is_point_inside(p.x, p.y)) ||
-                            (!lights && !preview && !shadows && panel->is_visible() && panel->is_point_inside(p.x, p.y));
+                            (preview && preview->is_visible() && preview->is_point_inside(p.x, p.y)) ||
+                            (!lights && !shadows && !preview && panel->is_visible() && panel->is_point_inside(p.x, p.y));
 
         if ((pointer_event || wheel_event) && inside) {
             if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -341,15 +342,14 @@ void MapModeUI::ensure_panels() {
     if (shadow_panel_) {
         shadow_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
     }
-    if (!map_light_preview_panel_) {
-        map_light_preview_panel_ =
-            std::make_unique<MapLightPreviewPanel>(assets_, kDefaultPanelX + 560, kDefaultPanelY);
-        map_light_preview_panel_->close();
-        track_floating_panel(map_light_preview_panel_.get());
+    if (!preview_panel_) {
+        preview_panel_ = std::make_unique<MapLightPreviewPanel>(assets_, kDefaultPanelX + 520, kDefaultPanelY);
+        preview_panel_->close();
+        track_floating_panel(preview_panel_.get());
     }
-    if (map_light_preview_panel_) {
-        map_light_preview_panel_->set_assets(assets_);
-        map_light_preview_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+    if (preview_panel_) {
+        preview_panel_->set_assets(assets_);
+        preview_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
     }
     if (!grid_panel_) {
         grid_panel_ = std::make_unique<MapGridPanel>(kDefaultPanelX + 96, kDefaultPanelY + 48);
@@ -465,6 +465,10 @@ void MapModeUI::configure_footer_buttons() {
                                                     [](const HeaderButtonConfig& cfg) {
                                                         return cfg.id == kButtonIdShading;
                                                     });
+        const bool has_light_map_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
+                                                      [](const HeaderButtonConfig& cfg) {
+                                                          return cfg.id == kButtonIdLightMap;
+                                                      });
 
         if (!has_lights_button) {
             FullScreenCollapsible::HeaderButton lights_btn;
@@ -492,6 +496,20 @@ void MapModeUI::configure_footer_buttons() {
                 }
             };
             buttons.push_back(std::move(shading_btn));
+        }
+
+        if (!has_light_map_button) {
+            FullScreenCollapsible::HeaderButton light_map_btn;
+            light_map_btn.id = kButtonIdLightMap;
+            light_map_btn.label = "Light Map";
+            light_map_btn.on_toggle = [this](bool active) {
+                if (active) {
+                    this->open_light_map_panel();
+                } else {
+                    this->close_light_map_panel();
+                }
+            };
+            buttons.push_back(std::move(light_map_btn));
         }
 
     } else if (header_mode_ == HeaderMode::Room) {
@@ -524,10 +542,11 @@ void MapModeUI::sync_footer_button_states() {
     if (!footer_panel_) return;
     if (header_mode_ == HeaderMode::Map) {
         const bool lights_visible = light_panel_ && light_panel_->is_visible();
-        const bool shading_visible = (shadow_panel_ && shadow_panel_->is_visible()) ||
-                                     (map_light_preview_panel_ && map_light_preview_panel_->is_visible());
+        const bool shading_visible = (shadow_panel_ && shadow_panel_->is_visible());
+        const bool light_map_visible = preview_panel_ && preview_panel_->is_visible();
         footer_panel_->set_button_active_state(kButtonIdLights, lights_visible);
         footer_panel_->set_button_active_state(kButtonIdShading, shading_visible);
+        footer_panel_->set_button_active_state(kButtonIdLightMap, light_map_visible);
         footer_panel_->set_button_active_state("layers", layers_footer_visible_);
         for (const auto& config : map_mode_buttons_) {
             footer_panel_->set_button_active_state(config.id, config.active);
@@ -733,13 +752,14 @@ void MapModeUI::sync_panel_map_info() {
         }
         shadow_panel_->set_map_info(map_info_, callback);
     }
-    if (map_light_preview_panel_) {
-        map_light_preview_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+    if (preview_panel_) {
+        preview_panel_->set_assets(assets_);
+        preview_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
         LightSaveCallback callback = light_save_callback_;
         if (!callback) {
             callback = [this]() { return save_map_info_to_disk(); };
         }
-        map_light_preview_panel_->set_map_info(map_info_, callback);
+        preview_panel_->set_map_info(map_info_, callback);
     }
     if (grid_panel_) {
         GridSaveCallback save_cb = grid_save_callback_;
@@ -801,11 +821,14 @@ void MapModeUI::update(const Input& input) {
     }
 
     const bool lights_visible = light_panel_ && light_panel_->is_visible();
-    const bool shading_visible = (shadow_panel_ && shadow_panel_->is_visible()) ||
-                                 (map_light_preview_panel_ && map_light_preview_panel_->is_visible());
-    if (lights_visible != last_lights_visible_ || shading_visible != last_shading_visible_) {
+    const bool shading_visible = (shadow_panel_ && shadow_panel_->is_visible());
+    const bool light_map_visible = preview_panel_ && preview_panel_->is_visible();
+    if (lights_visible != last_lights_visible_ ||
+        shading_visible != last_shading_visible_ ||
+        light_map_visible != last_preview_visible_) {
         last_lights_visible_ = lights_visible;
         last_shading_visible_ = shading_visible;
+        last_preview_visible_ = light_map_visible;
         sync_footer_button_states();
     }
 }
@@ -915,20 +938,56 @@ void MapModeUI::toggle_light_panel() {
     open_light_panel();
 }
 
+void MapModeUI::open_light_map_panel() {
+    ensure_panels();
+    if (!ensure_panel_unlocked(preview_panel_.get(), "Light Map")) {
+        sync_footer_button_states();
+        return;
+    }
+    if (!preview_panel_centered_) {
+        ensure_light_and_shading_positions();
+    }
+    if (preview_panel_) {
+        preview_panel_->open();
+        bring_panel_to_front(preview_panel_.get());
+    }
+    sync_footer_button_states();
+}
+
+void MapModeUI::close_light_map_panel() {
+    ensure_panels();
+    if (preview_panel_) {
+        preview_panel_->close();
+    }
+    preview_panel_centered_ = false;
+    sync_footer_button_states();
+}
+
+void MapModeUI::toggle_light_map_panel() {
+    ensure_panels();
+    if (!ensure_panel_unlocked(preview_panel_.get(), "Light Map")) {
+        sync_footer_button_states();
+        return;
+    }
+    if (preview_panel_ && preview_panel_->is_visible()) {
+        preview_panel_->close();
+        preview_panel_centered_ = false;
+        sync_footer_button_states();
+        return;
+    }
+    open_light_map_panel();
+}
+
 void MapModeUI::open_shading_panel() {
     ensure_panels();
     if (!ensure_panel_unlocked(shadow_panel_.get(), "Shading")) {
         sync_footer_button_states();
         return;
     }
-    if (!shading_panel_centered_ || !preview_panel_centered_) {
+    if (!shading_panel_centered_) {
         ensure_light_and_shading_positions();
     }
-    // Open both panels, but ensure the shading panel is on top if they overlap
-    if (map_light_preview_panel_) {
-        map_light_preview_panel_->open();
-        bring_panel_to_front(map_light_preview_panel_.get());
-    }
+    // Open only the shading panel now.
     if (shadow_panel_) {
         shadow_panel_->open();
         // Bring shading panel to the front last for safer interaction
@@ -942,11 +1001,7 @@ void MapModeUI::close_shading_panel() {
     if (shadow_panel_) {
         shadow_panel_->close();
     }
-    if (map_light_preview_panel_) {
-        map_light_preview_panel_->close();
-    }
     shading_panel_centered_ = false;
-    preview_panel_centered_ = false;
     sync_footer_button_states();
 }
 
@@ -959,11 +1014,7 @@ void MapModeUI::toggle_shading_panel() {
     const bool shading_visible = shadow_panel_ && shadow_panel_->is_visible();
     if (shading_visible) {
         shadow_panel_->close();
-        if (map_light_preview_panel_) {
-            map_light_preview_panel_->close();
-        }
         shading_panel_centered_ = false;
-        preview_panel_centered_ = false;
         sync_footer_button_states();
         return;
     }
@@ -1022,8 +1073,8 @@ void MapModeUI::close_all_panels() {
     if (shadow_panel_) {
         shadow_panel_->close();
     }
-    if (map_light_preview_panel_) {
-        map_light_preview_panel_->close();
+    if (preview_panel_) {
+        preview_panel_->close();
     }
     shading_panel_centered_ = false;
     preview_panel_centered_ = false;
@@ -1035,8 +1086,11 @@ bool MapModeUI::is_light_panel_visible() const {
 }
 
 bool MapModeUI::is_shading_panel_visible() const {
-    return (shadow_panel_ && shadow_panel_->is_visible()) ||
-           (map_light_preview_panel_ && map_light_preview_panel_->is_visible());
+    return (shadow_panel_ && shadow_panel_->is_visible());
+}
+
+bool MapModeUI::is_light_map_panel_visible() const {
+    return preview_panel_ && preview_panel_->is_visible();
 }
 
 bool MapModeUI::is_grid_panel_visible() const {
@@ -1066,9 +1120,9 @@ void MapModeUI::ensure_light_and_shading_positions() {
 
     auto [light_w, light_h] = resolve_dimensions(light_panel_.get(), fallback_w, fallback_h);
     auto [shading_w, shading_h] = resolve_dimensions(shadow_panel_.get(), fallback_w, fallback_h);
-    auto [preview_w, preview_h] = resolve_dimensions(map_light_preview_panel_.get(), fallback_w, fallback_h);
+    auto [preview_w, preview_h] = resolve_dimensions(preview_panel_.get(), fallback_w, fallback_h);
 
-    if (!light_panel_ && !shadow_panel_ && !map_light_preview_panel_) {
+    if (!light_panel_ && !shadow_panel_ && !preview_panel_) {
         return;
     }
 
@@ -1088,8 +1142,8 @@ void MapModeUI::ensure_light_and_shading_positions() {
     if (shadow_panel_) {
         layout_sequence.push_back({shadow_panel_.get(), shading_w, shading_h, &shading_panel_centered_});
     }
-    if (map_light_preview_panel_) {
-        layout_sequence.push_back({map_light_preview_panel_.get(), preview_w, preview_h, &preview_panel_centered_});
+    if (preview_panel_) {
+        layout_sequence.push_back({preview_panel_.get(), preview_w, preview_h, &preview_panel_centered_});
     }
 
     if (layout_sequence.empty()) {
@@ -1148,6 +1202,13 @@ void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
             callback = [this]() { return save_map_info_to_disk(); };
         }
         shadow_panel_->set_map_info(map_info_, callback);
+    }
+    if (preview_panel_) {
+        LightSaveCallback callback = light_save_callback_;
+        if (!callback) {
+            callback = [this]() { return save_map_info_to_disk(); };
+        }
+        preview_panel_->set_map_info(map_info_, callback);
     }
 }
 
