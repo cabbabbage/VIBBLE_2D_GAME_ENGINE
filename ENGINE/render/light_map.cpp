@@ -1005,7 +1005,7 @@ bool LightMap::adopt_precomputed_map(SDL_Renderer* renderer) {
             PrecomputedLightMapQuadrant& source = map.quadrants[static_cast<std::size_t>(index)];
 
             LightMapQuadrant quadrant;
-            quadrant.configure(renderer, source.world_rect, static_grid_resolution_, padding_cells_);
+            quadrant.configure(renderer, source.world_rect, static_grid_resolution_, padding_cells_, quadrant_texture_scale_);
             if (!source.light_samples.empty()) {
                 quadrant.build_static(source.light_samples, static_grid_resolution_, static_grid_resolution_);
             }
@@ -1023,182 +1023,6 @@ bool LightMap::adopt_precomputed_map(SDL_Renderer* renderer) {
     return true;
 }
 
-void LightMap::build_static_full_map(SDL_Renderer* renderer) {
-    const bool world_space = use_world_space_coordinates();
-
-    if (!renderer) {
-        destroy_static_full_map(true);
-        for (auto& quadrant : quadrants_) {
-            quadrant.populate_static_base(nullptr, nullptr, assets_, world_space);
-            quadrant.set_dirty(true);
-        }
-        return;
-    }
-    if (!static_full_map_supported_) {
-        static_cache_dirty_ = false;
-        return;
-    }
-
-    const int target_w = layout_.map_width > 0 ? layout_.map_width : screen_width_;
-    const int target_h = layout_.map_height > 0 ? layout_.map_height : screen_height_;
-    if (target_w <= 0 || target_h <= 0) {
-        std::cerr << "[LightMap][ERROR] Cannot build static_full_map: invalid target size ("
-                  << target_w << "x" << target_h << ")" << "\n";
-        destroy_static_full_map(true);
-        for (auto& quadrant : quadrants_) {
-            quadrant.populate_static_base(nullptr, nullptr, assets_, world_space);
-        }
-        return;
-    }
-
-    const int tex_w = std::max(1, target_w);
-    const int tex_h = std::max(1, target_h);
-
-    SDL_RendererInfo renderer_info{};
-    int              max_tex_w = 0;
-    int              max_tex_h = 0;
-    if (SDL_GetRendererInfo(renderer, &renderer_info) == 0) {
-        max_tex_w = renderer_info.max_texture_width;
-        max_tex_h = renderer_info.max_texture_height;
-    }
-
-    bool build_full_texture = true;
-    const bool exceeds_w = (max_tex_w > 0) && (tex_w > max_tex_w);
-    const bool exceeds_h = (max_tex_h > 0) && (tex_h > max_tex_h);
-    if (exceeds_w || exceeds_h) {
-        build_full_texture = false;
-        if (tex_w != last_static_full_map_fail_w_ || tex_h != last_static_full_map_fail_h_) {
-            std::cerr << "[LightMap][INFO] static_full_map " << tex_w << "x" << tex_h
-                      << " exceeds renderer limits ";
-            if (max_tex_w > 0) {
-                std::cerr << max_tex_w;
-            } else {
-                std::cerr << "unbounded";
-            }
-            std::cerr << "x";
-            if (max_tex_h > 0) {
-                std::cerr << max_tex_h;
-            } else {
-                std::cerr << "unbounded";
-            }
-            std::cerr << "; using per-quadrant cache." << "\n";
-        }
-        loading_status::notify("Static light map: using per-quadrant cache");
-        last_static_full_map_fail_w_ = tex_w;
-        last_static_full_map_fail_h_ = tex_h;
-    }
-
-    bool texture_ready = false;
-    if (build_full_texture) {
-        bool needs_create = false;
-        if (!static_full_map_) {
-            needs_create = true;
-        } else {
-            int    current_w = 0;
-            int    current_h = 0;
-            Uint32 current_format = 0;
-            int    current_access = 0;
-            if (SDL_QueryTexture(static_full_map_, &current_format, &current_access, &current_w, &current_h) != 0 ||
-                current_w != tex_w || current_h != tex_h) {
-                destroy_static_full_map(true);
-                needs_create = true;
-            }
-        }
-
-        if (needs_create) {
-            static_full_map_ = SDL_CreateTexture(renderer,
-                                                 SDL_PIXELFORMAT_RGBA8888,
-                                                 SDL_TEXTUREACCESS_TARGET,
-                                                 tex_w,
-                                                 tex_h);
-            if (!static_full_map_) {
-                if (tex_w != last_static_full_map_fail_w_ || tex_h != last_static_full_map_fail_h_) {
-                    std::cerr << "[LightMap][ERROR] SDL_CreateTexture failed for static_full_map_ ("
-                              << tex_w << "x" << tex_h << "): " << SDL_GetError() << "\n";
-                }
-                loading_status::notify("Static light map: using per-quadrant cache (texture allocation failed)");
-                last_static_full_map_fail_w_ = tex_w;
-                last_static_full_map_fail_h_ = tex_h;
-                build_full_texture = false;
-            }
-        }
-
-        if (build_full_texture && static_full_map_) {
-            SDL_SetTextureBlendMode(static_full_map_, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2,0,12)
-            SDL_SetTextureScaleMode(static_full_map_, SDL_ScaleModeBest);
-#endif
-
-            SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-            SDL_SetRenderTarget(renderer, static_full_map_);
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-            SDL_RenderClear(renderer);
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
-
-            loading_status::notify("Static light map: rendering base texture");
-
-            if (assets_) {
-                for (Asset* asset : assets_->getActiveStaticLightAssets()) {
-                    if (!asset || !asset->info) {
-                        continue;
-                    }
-                    for (const auto& light : asset->info->light_sources) {
-                        SDL_Texture* tex = light.texture;
-                        if (!tex) {
-                            continue;
-                        }
-
-                        const std::optional<SDL_Rect> dst = world_space
-                            ? compute_light_world_rect(asset, light)
-                            : compute_light_screen_rect(assets_, asset, light);
-                        if (!dst) {
-                            continue;
-                        }
-
-                        Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
-                        SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
-                        SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
-                        SDL_GetTextureAlphaMod(tex, &save_a);
-                        SDL_GetTextureBlendMode(tex, &save_bm);
-
-                        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
-                        SDL_RenderCopy(renderer, tex, nullptr, &*dst);
-
-                        SDL_SetTextureBlendMode(tex, save_bm);
-                        SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
-                        SDL_SetTextureAlphaMod(tex, save_a);
-                    }
-                }
-            }
-
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderTarget(renderer, prev_target);
-
-            texture_ready = true;
-            last_static_full_map_fail_w_ = 0;
-            last_static_full_map_fail_h_ = 0;
-            loading_status::notify("Static light map: base texture complete");
-            std::cerr << "[LightMap][INFO] static_full_map build complete (" << tex_w << "x" << tex_h << ")" << "\n";
-        }
-    } else {
-        destroy_static_full_map(false);
-    }
-
-    for (auto& quadrant : quadrants_) {
-        quadrant.populate_static_base(renderer,
-                                      texture_ready ? static_full_map_ : nullptr,
-                                      assets_,
-                                      world_space);
-        quadrant.set_dirty(true);
-    }
-
-    if (texture_ready) {
-        destroy_static_full_map(false);
-    }
-
-    static_cache_dirty_ = false;
-}
 
 void LightMap::set_virtual_light_map_quadrants(int quadrants) {
     requested_quadrants_ = std::clamp(quadrants, kMinQuadrantCount, kMaxQuadrantCount);
@@ -1342,13 +1166,18 @@ void LightMap::rebuild(SDL_Renderer* renderer) {
             if (rect.y + rect.h > max_y) rect.h = std::max(1, max_y - rect.y);
 
             LightMapQuadrant quadrant;
-            quadrant.configure(renderer, rect, static_grid_resolution_, padding_cells_);
+            quadrant.configure(renderer, rect, static_grid_resolution_, padding_cells_, quadrant_texture_scale_);
 
             std::vector<std::uint8_t> static_grid(static_cast<std::size_t>(static_grid_resolution_) *
                                                   static_cast<std::size_t>(static_grid_resolution_),
                                                   0);
             quadrant.build_static(static_grid, static_grid_resolution_, static_grid_resolution_);
-            quadrant.populate_static_base(renderer, static_full_map_, assets_, world_space);
+            quadrant.populate_static_base(renderer,
+                                          static_full_map_,
+                                          assets_,
+                                          world_space,
+                                          static_full_map_scale_factor_,
+                                          static_full_map_bounds_);
             quadrant.update_tile_mask(renderer, assets_, kDefaultStaticWeight, kDefaultDynamicWeight, !static_full_map_supported_);
             quadrants_.push_back(std::move(quadrant));
 
@@ -1371,7 +1200,12 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
     if (!renderer) {
         build_static_full_map(nullptr);
         for (auto& quadrant : quadrants_) {
-            quadrant.populate_static_base(nullptr, nullptr, assets_, world_space);
+            quadrant.populate_static_base(nullptr,
+                                          nullptr,
+                                          assets_,
+                                          world_space,
+                                          static_full_map_scale_factor_,
+                                          static_full_map_bounds_);
             quadrant.update_tile_mask(nullptr, assets_, kDefaultStaticWeight, kDefaultDynamicWeight, !static_full_map_supported_);
             quadrant.set_active(false);
         }
@@ -1855,3 +1689,243 @@ void LightMap::mark_static_cache_dirty() {
 }
 
 
+void LightMap::build_static_full_map(SDL_Renderer* renderer) {
+    const bool world_space = use_world_space_coordinates();
+    const int  target_w    = layout_.map_width > 0 ? layout_.map_width : screen_width_;
+    const int  target_h    = layout_.map_height > 0 ? layout_.map_height : screen_height_;
+
+    static_full_map_bounds_.x = world_space ? layout_.origin_x : 0;
+    static_full_map_bounds_.y = world_space ? layout_.origin_y : 0;
+    static_full_map_bounds_.w = target_w;
+    static_full_map_bounds_.h = target_h;
+    static_full_map_scale_factor_ = (quadrant_texture_scale_ > 0.0f) ? quadrant_texture_scale_ : 1.0f;
+
+    if (!renderer) {
+        destroy_static_full_map(true);
+        for (auto& quadrant : quadrants_) {
+            quadrant.populate_static_base(nullptr,
+                                          nullptr,
+                                          assets_,
+                                          world_space,
+                                          static_full_map_scale_factor_,
+                                          static_full_map_bounds_);
+            quadrant.set_dirty(true);
+        }
+        return;
+    }
+
+    if (!static_full_map_supported_) {
+        static_cache_dirty_ = false;
+        return;
+    }
+
+    if (target_w <= 0 || target_h <= 0) {
+        std::cerr << "[LightMap][ERROR] Cannot build static_full_map: invalid target size ("
+                  << target_w << "x" << target_h << ")" << "\n";
+        destroy_static_full_map(true);
+        for (auto& quadrant : quadrants_) {
+            quadrant.populate_static_base(renderer,
+                                          nullptr,
+                                          assets_,
+                                          world_space,
+                                          static_full_map_scale_factor_,
+                                          static_full_map_bounds_);
+        }
+        return;
+    }
+
+    const float build_scale = static_full_map_scale_factor_;
+    const int   tex_w       = std::max(1, static_cast<int>(std::ceil(static_cast<float>(target_w) * build_scale)));
+    const int   tex_h       = std::max(1, static_cast<int>(std::ceil(static_cast<float>(target_h) * build_scale)));
+
+    SDL_RendererInfo renderer_info{};
+    int              max_tex_w = 0;
+    int              max_tex_h = 0;
+    if (SDL_GetRendererInfo(renderer, &renderer_info) == 0) {
+        max_tex_w = renderer_info.max_texture_width;
+        max_tex_h = renderer_info.max_texture_height;
+    }
+
+    bool build_full_texture = true;
+    const bool exceeds_w = (max_tex_w > 0) && (tex_w > max_tex_w);
+    const bool exceeds_h = (max_tex_h > 0) && (tex_h > max_tex_h);
+    if (exceeds_w || exceeds_h) {
+        build_full_texture = false;
+        if (tex_w != last_static_full_map_fail_w_ || tex_h != last_static_full_map_fail_h_) {
+            std::cerr << "[LightMap][INFO] static_full_map scaled texture " << tex_w << "x" << tex_h
+                      << " exceeds renderer limits ";
+            if (max_tex_w > 0) {
+                std::cerr << max_tex_w;
+            } else {
+                std::cerr << "unbounded";
+            }
+            std::cerr << "x";
+            if (max_tex_h > 0) {
+                std::cerr << max_tex_h;
+            } else {
+                std::cerr << "unbounded";
+            }
+            std::cerr << "; using per-quadrant cache." << "\n";
+        }
+        loading_status::notify("Static light map: using per-quadrant cache");
+        last_static_full_map_fail_w_ = tex_w;
+        last_static_full_map_fail_h_ = tex_h;
+    }
+
+    bool texture_ready = false;
+    if (build_full_texture) {
+        bool needs_create = false;
+        if (!static_full_map_) {
+            needs_create = true;
+        } else {
+            int    current_w = 0;
+            int    current_h = 0;
+            Uint32 current_format = 0;
+            int    current_access = 0;
+            if (SDL_QueryTexture(static_full_map_, &current_format, &current_access, &current_w, &current_h) != 0 ||
+                current_w != tex_w || current_h != tex_h) {
+                destroy_static_full_map(true);
+                needs_create = true;
+            }
+        }
+
+        if (needs_create) {
+            static_full_map_ = SDL_CreateTexture(renderer,
+                                                 SDL_PIXELFORMAT_RGBA8888,
+                                                 SDL_TEXTUREACCESS_TARGET,
+                                                 tex_w,
+                                                 tex_h);
+            if (!static_full_map_) {
+                if (tex_w != last_static_full_map_fail_w_ || tex_h != last_static_full_map_fail_h_) {
+                    std::cerr << "[LightMap][ERROR] SDL_CreateTexture failed for scaled static_full_map_ ("
+                              << tex_w << "x" << tex_h << "): " << SDL_GetError() << "\n";
+                }
+                loading_status::notify("Static light map: using per-quadrant cache (texture allocation failed)");
+                last_static_full_map_fail_w_ = tex_w;
+                last_static_full_map_fail_h_ = tex_h;
+                build_full_texture = false;
+            }
+        }
+
+        if (build_full_texture && static_full_map_) {
+            SDL_SetTextureBlendMode(static_full_map_, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+            SDL_SetTextureScaleMode(static_full_map_, SDL_ScaleModeBest);
+#endif
+
+            SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+            SDL_SetRenderTarget(renderer, static_full_map_);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_RenderClear(renderer);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
+
+            loading_status::notify("Static light map: rendering base texture");
+
+            auto to_texture_rect = [&](const SDL_Rect& rect) -> std::optional<SDL_Rect> {
+                SDL_Rect out{};
+                const float local_x = static_cast<float>(rect.x - static_full_map_bounds_.x);
+                const float local_y = static_cast<float>(rect.y - static_full_map_bounds_.y);
+                out.x = static_cast<int>(std::floor(local_x * build_scale));
+                out.y = static_cast<int>(std::floor(local_y * build_scale));
+                out.w = std::max(1, static_cast<int>(std::ceil(static_cast<float>(rect.w) * build_scale)));
+                out.h = std::max(1, static_cast<int>(std::ceil(static_cast<float>(rect.h) * build_scale)));
+
+                if (out.x + out.w <= 0 || out.y + out.h <= 0 ||
+                    out.x >= tex_w || out.y >= tex_h) {
+                    return std::nullopt;
+                }
+                if (out.x < 0) {
+                    const int diff = -out.x;
+                    out.w -= diff;
+                    out.x = 0;
+                }
+                if (out.y < 0) {
+                    const int diff = -out.y;
+                    out.h -= diff;
+                    out.y = 0;
+                }
+                if (out.w <= 0 || out.h <= 0) {
+                    return std::nullopt;
+                }
+                if (out.x + out.w > tex_w) {
+                    out.w = tex_w - out.x;
+                }
+                if (out.y + out.h > tex_h) {
+                    out.h = tex_h - out.y;
+                }
+                if (out.w <= 0 || out.h <= 0) {
+                    return std::nullopt;
+                }
+                return out;
+            };
+
+            if (assets_) {
+                for (Asset* asset : assets_->getActiveStaticLightAssets()) {
+                    if (!asset || !asset->info) {
+                        continue;
+                    }
+                    for (const auto& light : asset->info->light_sources) {
+                        SDL_Texture* tex = light.texture;
+                        if (!tex) {
+                            continue;
+                        }
+
+                        const std::optional<SDL_Rect> dst = world_space
+                            ? compute_light_world_rect(asset, light)
+                            : compute_light_screen_rect(assets_, asset, light);
+                        if (!dst) {
+                            continue;
+                        }
+
+                        const std::optional<SDL_Rect> target_rect = to_texture_rect(*dst);
+                        if (!target_rect) {
+                            continue;
+                        }
+
+                        Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
+                        SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
+                        SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
+                        SDL_GetTextureAlphaMod(tex, &save_a);
+                        SDL_GetTextureBlendMode(tex, &save_bm);
+
+                        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
+                        SDL_RenderCopy(renderer, tex, nullptr, &*target_rect);
+
+                        SDL_SetTextureBlendMode(tex, save_bm);
+                        SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
+                        SDL_SetTextureAlphaMod(tex, save_a);
+                    }
+                }
+            }
+
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderTarget(renderer, prev_target);
+
+            texture_ready = true;
+            last_static_full_map_fail_w_ = 0;
+            last_static_full_map_fail_h_ = 0;
+            loading_status::notify("Static light map: base texture complete");
+            std::cerr << "[LightMap][INFO] static_full_map build complete (scaled "
+                      << tex_w << "x" << tex_h << ")" << "\n";
+        }
+    } else {
+        destroy_static_full_map(false);
+    }
+
+    for (auto& quadrant : quadrants_) {
+        quadrant.populate_static_base(renderer,
+                                      texture_ready ? static_full_map_ : nullptr,
+                                      assets_,
+                                      world_space,
+                                      static_full_map_scale_factor_,
+                                      static_full_map_bounds_);
+        quadrant.set_dirty(true);
+    }
+
+    if (texture_ready) {
+        destroy_static_full_map(false);
+    }
+
+    static_cache_dirty_ = false;
+}
