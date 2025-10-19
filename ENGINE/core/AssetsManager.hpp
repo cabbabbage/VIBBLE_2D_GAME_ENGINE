@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 #include "render/precomputed_light_map.hpp"
+#include "util/grid.hpp"
 
 class Asset;
 class SceneRenderer;
@@ -48,7 +49,8 @@ public:
            const std::string& map_id,
            const nlohmann::json& map_manifest,
            std::string content_root = {},
-           std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr);
+           std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr,
+           grid::Grid& grid = grid::global_grid());
     ~Assets();
 
     nlohmann::json save_current_room(std::string room_name);
@@ -117,6 +119,8 @@ public:
     const std::string& map_path() const { return map_path_; }
     const std::string& map_info_path() const { return map_info_path_; }
     const std::string& map_id() const { return map_id_; }
+    grid::Grid& grid() { return grid_; }
+    const grid::Grid& grid() const { return grid_; }
 
     AssetLibrary& library();
     const AssetLibrary& library() const;
@@ -198,6 +202,7 @@ private:
     bool dev_mode = false;
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
+    grid::Grid& grid_;
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;

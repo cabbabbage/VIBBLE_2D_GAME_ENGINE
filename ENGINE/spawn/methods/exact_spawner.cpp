@@ -32,10 +32,10 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
 
         SDL_Point pos = final_pos;
 
-        MapGrid::Point* snapped = nullptr;
-        if (auto* g = ctx.grid()) {
-            snapped = g->get_nearest_point(pos);
-            if (snapped) pos = snapped->pos;
+        vibble::grid::Occupancy::Vertex* snapped = nullptr;
+        if (auto* occupancy = ctx.occupancy()) {
+            snapped = occupancy->nearest_vertex(pos);
+            if (snapped) pos = snapped->world;
         }
 
         if (ctx.checker().check(info, pos, ctx.exclusion_zones(), ctx.all_assets(),
@@ -46,8 +46,8 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
         auto* result = ctx.spawnAsset(candidate->name, info, *area, pos, 0, nullptr, item.spawn_id, item.position);
         if (!result) continue;
 
-        if (snapped && ctx.grid()) {
-            ctx.grid()->set_occupied(snapped, true);
+        if (snapped && ctx.occupancy()) {
+            ctx.occupancy()->set_occupied(snapped, true);
         }
 
     }

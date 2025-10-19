@@ -111,7 +111,8 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                const std::string& map_id,
                const nlohmann::json& map_manifest,
                std::string content_root,
-               std::unique_ptr<PrecomputedLightMap> precomputed_light_map)
+               std::unique_ptr<PrecomputedLightMap> precomputed_light_map,
+               grid::Grid& grid)
     : camera_(
           screen_width_,
           screen_height_,
@@ -130,7 +131,8 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
       library_(library),
       map_id_(map_id),
       map_path_(std::move(content_root)),
-      map_info_path_(map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json"))
+      map_info_path_(map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json")),
+      grid_(grid)
 {
     map_info_json_ = map_manifest;
     if (!map_info_json_.is_object()) {

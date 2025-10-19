@@ -11,6 +11,7 @@
 #include <cmath>
 #include <optional>
 #include <string>
+#include "util/grid.hpp"
 using json = nlohmann::json;
 
 namespace {
@@ -429,11 +430,13 @@ void Room::load_named_areas_from_json() {
 
                         auto anchor = RoomAreaSerialization::resolve_anchor(item, default_anchor, kind);
 
+                        const int resolution = vibble::grid::clamp_resolution(item.value("resolution", 0));
                         auto pts = RoomAreaSerialization::decode_points(item, anchor.world);
                         if (pts.size() < 3) continue;
 
                         RoomAreaSerialization::write_anchor(item, anchor, kind);
                         item["points"] = RoomAreaSerialization::encode_points(pts, anchor.world);
+                        item["resolution"] = resolution;
                         item.erase("relative_points");
                         item.erase("origional_width");
                         item.erase("origional_height");
@@ -445,6 +448,9 @@ void Room::load_named_areas_from_json() {
                         na.type = type;
                         na.kind = RoomAreaSerialization::to_string(kind);
                         na.area = std::make_unique<Area>(name, pts);
+                        if (na.area) {
+                                na.area->set_resolution(resolution);
+                        }
                         if (na.area) na.area->set_type(type);
                         areas.push_back(std::move(na));
                 }
@@ -580,6 +586,8 @@ void Room::upsert_named_area(const Area& area, const std::string& type) {
         }
         entry["kind"] = RoomAreaSerialization::to_string(kind);
         RoomAreaSerialization::write_anchor(entry, anchor, kind);
+
+        entry["resolution"] = vibble::grid::clamp_resolution(area.resolution());
 
         if (existing_entry) {
                 *existing_entry = entry;

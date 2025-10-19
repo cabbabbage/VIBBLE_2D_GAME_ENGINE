@@ -7,10 +7,11 @@
 
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
+#include "util/grid.hpp"
 
 namespace {
-constexpr int kMinSpacing = 8;
-constexpr int kMaxSpacing = 2048;
+constexpr int kMinResolution = 0;
+constexpr int kMaxResolution = vibble::grid::kMaxResolution;
 constexpr int kMinJitter = 0;
 constexpr int kMaxJitter = 1024;
 }
@@ -59,11 +60,11 @@ bool MapGridPanel::is_visible() const {
 
 void MapGridPanel::update(const Input& input, int screen_w, int screen_h) {
     DockableCollapsible::update(input, screen_w, screen_h);
-    if (spacing_slider_) {
-        const int spacing_value = spacing_slider_->value();
-        if (spacing_value != last_spacing_value_) {
-            last_spacing_value_ = spacing_value;
-            handle_spacing_changed();
+    if (resolution_slider_) {
+        const int resolution_value = resolution_slider_->value();
+        if (resolution_value != last_resolution_value_) {
+            last_resolution_value_ = resolution_value;
+            handle_resolution_changed();
         }
     }
     if (jitter_slider_) {
@@ -90,7 +91,7 @@ bool MapGridPanel::is_point_inside(int x, int y) const {
 void MapGridPanel::build_ui() {
     settings_ = MapGridSettings::defaults();
 
-    spacing_slider_ = std::make_unique<DMSlider>("Grid Spacing (px)", kMinSpacing, kMaxSpacing, settings_.spacing);
+    resolution_slider_ = std::make_unique<DMSlider>("Grid Resolution (2^r px)", kMinResolution, kMaxResolution, settings_.resolution);
 
     jitter_slider_ = std::make_unique<DMSlider>("Grid Jitter (px)", kMinJitter, kMaxJitter, settings_.jitter);
 
@@ -107,8 +108,8 @@ void MapGridPanel::rebuild_rows() {
         return raw;
     };
 
-    if (spacing_slider_) {
-        rows.push_back({add_widget(std::make_unique<SliderWidget>(spacing_slider_.get()))});
+    if (resolution_slider_) {
+        rows.push_back({add_widget(std::make_unique<SliderWidget>(resolution_slider_.get()))});
     }
     if (jitter_slider_) {
         rows.push_back({add_widget(std::make_unique<SliderWidget>(jitter_slider_.get()))});
@@ -129,31 +130,36 @@ void MapGridPanel::sync_from_json() {
         }
     }
     settings_.clamp();
-    if (spacing_slider_) {
-        spacing_slider_->set_value(settings_.spacing);
+    if (resolution_slider_) {
+        resolution_slider_->set_value(settings_.resolution);
     }
     if (jitter_slider_) {
         jitter_slider_->set_value(settings_.jitter);
     }
-    last_spacing_value_ = settings_.spacing;
+    last_resolution_value_ = settings_.resolution;
     last_jitter_value_ = settings_.jitter;
 }
 
 void MapGridPanel::apply_settings(bool trigger_save) {
-    if (spacing_slider_) {
-        settings_.spacing = std::clamp(spacing_slider_->value(), kMinSpacing, kMaxSpacing);
+    if (resolution_slider_) {
+        settings_.resolution = std::clamp(resolution_slider_->value(), kMinResolution, kMaxResolution);
     }
     if (jitter_slider_) {
-        settings_.jitter = std::clamp(jitter_slider_->value(), kMinJitter, kMaxJitter);
+        const int jitter_cap = std::min(kMaxJitter, std::max(kMinJitter, settings_.spacing() / 2));
+        settings_.jitter = std::clamp(jitter_slider_->value(), kMinJitter, jitter_cap);
     }
     settings_.clamp();
-    if (spacing_slider_ && spacing_slider_->value() != settings_.spacing) {
-        spacing_slider_->set_value(settings_.spacing);
+    if (resolution_slider_ && resolution_slider_->value() != settings_.resolution) {
+        resolution_slider_->set_value(settings_.resolution);
     }
-    if (jitter_slider_ && jitter_slider_->value() != settings_.jitter) {
-        jitter_slider_->set_value(settings_.jitter);
+    if (jitter_slider_) {
+        const int jitter_cap = std::min(kMaxJitter, std::max(kMinJitter, settings_.spacing() / 2));
+        const int corrected = std::clamp(jitter_slider_->value(), kMinJitter, jitter_cap);
+        if (corrected != settings_.jitter) {
+            jitter_slider_->set_value(settings_.jitter);
+        }
     }
-    last_spacing_value_ = settings_.spacing;
+    last_resolution_value_ = settings_.resolution;
     last_jitter_value_ = settings_.jitter;
 
     if (map_info_ && map_info_->is_object()) {
@@ -165,7 +171,7 @@ void MapGridPanel::apply_settings(bool trigger_save) {
     }
 }
 
-void MapGridPanel::handle_spacing_changed() {
+void MapGridPanel::handle_resolution_changed() {
     apply_settings(true);
 }
 

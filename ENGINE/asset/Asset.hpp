@@ -39,7 +39,8 @@ class Asset {
           int depth,
           Asset* parent = nullptr,
           const std::string& spawn_id = std::string{},
-          const std::string& spawn_method = std::string{});
+          const std::string& spawn_method = std::string{},
+          int grid_resolution = 0);
     Asset(const Asset& other);
     Asset& operator=(const Asset& other);
     Asset(Asset&&) noexcept = default;
@@ -109,6 +110,7 @@ class Asset {
     std::shared_ptr<AssetInfo> info;
     std::string current_animation;
     SDL_Point pos{0, 0};
+    int grid_resolution = 0;
     int z_index = 0;
     int z_offset = 0;
     bool active = false;

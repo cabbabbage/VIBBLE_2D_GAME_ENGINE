@@ -25,6 +25,7 @@ class AssetSpawner {
     void spawn_children(const Area& spawn_area, AssetSpawnPlanner* planner);
     std::vector<std::unique_ptr<Asset>> spawn_boundary_from_json(const nlohmann::json& boundary_json, const Area& spawn_area, const std::string& source_name);
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
+    void set_map_grid_settings(const MapGridSettings& settings) { map_grid_settings_ = settings; }
 
         private:
     void run_spawning(AssetSpawnPlanner* planner, const Area& area);

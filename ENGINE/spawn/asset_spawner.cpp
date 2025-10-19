@@ -14,7 +14,8 @@
 #include <numeric>
 #include <sstream>
 #include <nlohmann/json.hpp>
-#include "utils/map_grid.hpp"
+#include "util/grid.hpp"
+#include "util/grid_occupancy.hpp"
 AssetSpawner::AssetSpawner(AssetLibrary* asset_library,
                            std::vector<Area> exclusion_zones)
 : asset_library_(asset_library),
@@ -68,14 +69,11 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 run_boundary_spawning(area);
                 return;
         }
-    int spacing = map_grid_settings_.spacing;
-    if (spacing <= 0) spacing = 100;
-
-    auto [minx, miny, maxx, maxy] = area.get_bounds();
-    int w = std::max(0, maxx - minx);
-    int h = std::max(0, maxy - miny);
-    MapGrid grid(w, h, spacing, SDL_Point{minx, miny});
-    SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
+    const int resolution = std::max(0, map_grid_settings_.resolution);
+    vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+    vibble::grid::Occupancy occupancy(area, resolution, grid_service);
+    SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
+    ctx.set_spawn_resolution(resolution);
         ExactSpawner exact;
         CenterSpawner center;
         RandomSpawner random;
@@ -107,15 +105,15 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                 std::fill(base_weights.begin(), base_weights.end(), 1.0);
                         }
 
-                        auto grid_points = grid.get_all_points_in_area(area);
-                        if (grid_points.empty()) {
+                        auto vertices = occupancy.vertices_in_area(area);
+                        if (vertices.empty()) {
                                 continue;
                         }
-                        std::shuffle(grid_points.begin(), grid_points.end(), ctx.rng());
+                        std::shuffle(vertices.begin(), vertices.end(), ctx.rng());
 
-                        for (auto* gp : grid_points) {
-                                if (!gp) continue;
-                                SDL_Point spawn_pos{ gp->pos.x, gp->pos.y };
+                        for (auto* vertex : vertices) {
+                                if (!vertex) continue;
+                                SDL_Point spawn_pos{ vertex->world.x, vertex->world.y };
                                 spawn_pos = apply_map_grid_jitter(map_grid_settings_, spawn_pos, ctx.rng(), area);
                                 bool placed = false;
                                 std::vector<double> attempt_weights = base_weights;
@@ -133,7 +131,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                         const SpawnCandidate& candidate = queue_item.candidates[idx];
 
                                         if (candidate.is_null || !candidate.info) {
-                                                grid.set_occupied(gp, true);
+                                                occupancy.set_occupied(vertex, true);
                                                 placed = true;
                                                 break;
                                         }
@@ -146,12 +144,12 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                                 attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
-                                        grid.set_occupied(gp, true);
+                                        occupancy.set_occupied(vertex, true);
                                         placed = true;
                                         break;
                                 }
                                 if (!placed) {
-                                        grid.set_occupied(gp, true);
+                                        occupancy.set_occupied(vertex, true);
                                 }
                         }
                         continue;
@@ -176,12 +174,15 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                 [&](const Area& zone) { return zone.contains_point(pt); });
 };
 
+        vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
 
-                constexpr int kBoundarySpacing = 100;
-                MapGrid grid = MapGrid::from_area_bounds(area, kBoundarySpacing);
-                SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, &grid);
+                constexpr int kBoundaryResolution = 7;
+                vibble::grid::Occupancy occupancy(area, kBoundaryResolution, grid_service);
+                SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
+                ctx.set_spawn_resolution(kBoundaryResolution);
 
                 if (current_room_ && !queue_item.link_area_name.empty()) {
                         Area* link = current_room_->find_area(queue_item.link_area_name);
@@ -203,13 +204,13 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                         std::fill(base_weights.begin(), base_weights.end(), 1.0);
                 }
 
-                auto grid_points = grid.get_all_points_in_area(area);
-                std::vector<MapGrid::Point*> eligible;
-                eligible.reserve(grid_points.size());
-                for (auto* gp : grid_points) {
-                        if (!gp) continue;
-                        if (point_in_exclusion(gp->pos)) continue;
-                        eligible.push_back(gp);
+                auto vertices = occupancy.vertices_in_area(area);
+                std::vector<vibble::grid::Occupancy::Vertex*> eligible;
+                eligible.reserve(vertices.size());
+                for (auto* vertex : vertices) {
+                        if (!vertex) continue;
+                        if (point_in_exclusion(vertex->world)) continue;
+                        eligible.push_back(vertex);
                 }
 
                 if (eligible.empty()) {
@@ -218,9 +219,9 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
 
                 std::shuffle(eligible.begin(), eligible.end(), rng_);
 
-                for (auto* gp : eligible) {
-                        if (!gp) continue;
-                        SDL_Point spawn_pos = gp->pos;
+                for (auto* vertex : eligible) {
+                        if (!vertex) continue;
+                        SDL_Point spawn_pos = vertex->world;
 
                         bool success = false;
                         std::vector<double> attempt_weights = base_weights;
@@ -238,7 +239,7 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                                 const SpawnCandidate& candidate = queue_item.candidates[idx];
 
                                 if (candidate.is_null || !candidate.info) {
-                                        grid.set_occupied(gp, true);
+                                        occupancy.set_occupied(vertex, true);
                                         break;
                                 }
 
@@ -253,13 +254,13 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
                                         continue;
                                 }
 
-                                grid.set_occupied(gp, true);
+                                occupancy.set_occupied(vertex, true);
                                 success = true;
                                 break;
                         }
 
                         if (!success) {
-                                grid.set_occupied(gp, true);
+                                occupancy.set_occupied(vertex, true);
                         }
                 }
         }
@@ -269,7 +270,8 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner, const Area& ar
         asset_info_library_ = asset_library_->all();
         spawn_queue_ = planner->get_spawn_queue();
 
-        SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, nullptr);
+        SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, vibble::grid::global_grid(), nullptr);
+        ctx.set_spawn_resolution(map_grid_settings_.resolution);
         ChildrenSpawner childMethod;
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;

@@ -42,9 +42,9 @@ void PercentSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext
         SDL_Point final_pos{
             center.x + static_cast<int>(std::lround(offset_x)), center.y + static_cast<int>(std::lround(offset_y)) };
 
-        MapGrid::Point* snapped = ctx.grid() ? ctx.grid()->get_nearest_point(final_pos) : nullptr;
+        vibble::grid::Occupancy::Vertex* snapped = ctx.occupancy() ? ctx.occupancy()->nearest_vertex(final_pos) : nullptr;
         if (snapped) {
-            final_pos = snapped->pos;
+            final_pos = snapped->world;
         }
 
         const SpawnCandidate* candidate = item.select_candidate(ctx.rng());
@@ -65,8 +65,8 @@ void PercentSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext
             continue;
         }
 
-        if (snapped && ctx.grid()) {
-            ctx.grid()->set_occupied(snapped, true);
+        if (snapped && ctx.occupancy()) {
+            ctx.occupancy()->set_occupied(snapped, true);
         }
 
         ++slots_used;

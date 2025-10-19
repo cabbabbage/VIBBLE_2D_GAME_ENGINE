@@ -6,6 +6,8 @@
 #include <optional>
 #include <SDL.h>
 
+#include "util/grid.hpp"
+
 class Area {
 
 	public:
@@ -39,6 +41,8 @@ class Area {
     Point random_point_within() const;
     Point get_center() const;
     double get_size() const;
+    int resolution() const { return resolution_; }
+    void set_resolution(int r) { resolution_ = vibble::grid::clamp_resolution(r); }
 
 	public:
     const std::string& get_name() const { return area_name_; }
@@ -66,4 +70,5 @@ class Area {
     mutable int max_x_ = 0;
     mutable int max_y_ = 0;
     mutable bool bounds_valid_ = false;
+    int resolution_ = 0;
 };

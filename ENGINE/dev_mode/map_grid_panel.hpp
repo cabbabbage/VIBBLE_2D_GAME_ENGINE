@@ -38,7 +38,7 @@ private:
     void rebuild_rows();
     void sync_from_json();
     void apply_settings(bool trigger_save = true);
-    void handle_spacing_changed();
+    void handle_resolution_changed();
     void handle_jitter_changed();
     void trigger_regen();
 
@@ -47,11 +47,11 @@ private:
     RegenCallback on_regen_;
     MapGridSettings settings_{};
 
-    std::unique_ptr<DMSlider> spacing_slider_;
+    std::unique_ptr<DMSlider> resolution_slider_;
     std::unique_ptr<DMSlider> jitter_slider_;
     std::unique_ptr<DMButton> regen_button_;
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
 
-    int last_spacing_value_ = 0;
+    int last_resolution_value_ = 0;
     int last_jitter_value_ = 0;
 };

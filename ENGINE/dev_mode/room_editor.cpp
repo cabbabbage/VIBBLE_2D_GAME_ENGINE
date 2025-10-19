@@ -28,7 +28,8 @@
 #include "spawn/methods/random_spawner.hpp"
 #include "spawn/spawn_context.hpp"
 #include "utils/input.hpp"
-#include "utils/map_grid.hpp"
+#include "util/grid.hpp"
+#include "util/grid_occupancy.hpp"
 #include "utils/relative_room_position.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 
@@ -2272,26 +2273,24 @@ void RoomEditor::handle_spawn_config_change(const nlohmann::json& entry) {
     respawn_spawn_group(entry);
 }
 
-std::unique_ptr<MapGrid> RoomEditor::build_room_grid(const std::string& ignore_spawn_id) const {
+std::unique_ptr<vibble::grid::Occupancy> RoomEditor::build_room_grid(const std::string& ignore_spawn_id) const {
     if (!current_room_ || !current_room_->room_area) return nullptr;
-    int spacing = 0;
-    if (current_room_) {
-        spacing = current_room_->map_grid_settings().spacing;
-    }
-    if (spacing <= 0) {
-        spacing = MapGridSettings::defaults().spacing;
-    }
-    auto grid = std::make_unique<MapGrid>(MapGrid::from_area_bounds(*current_room_->room_area, spacing));
-    if (!assets_) return grid;
+    MapGridSettings grid_settings = current_room_->map_grid_settings();
+    const int resolution = std::max(0, grid_settings.resolution);
+    vibble::grid::Grid& grid_service = assets_ ? assets_->grid() : vibble::grid::global_grid();
+    auto occupancy = std::make_unique<vibble::grid::Occupancy>(*current_room_->room_area, resolution, grid_service);
+    if (!assets_) return occupancy;
     for (Asset* asset : assets_->all) {
         if (!asset || asset->dead) continue;
         if (!asset_belongs_to_room(asset)) continue;
         if (!asset->spawn_id.empty() && asset->spawn_id == ignore_spawn_id) continue;
         SDL_Point pos{asset->pos.x, asset->pos.y};
         if (current_room_->room_area && !current_room_->room_area->contains_point(pos)) continue;
-        grid->set_occupied_at(pos, true);
+        if (auto* vertex = occupancy->vertex_at_world(pos)) {
+            occupancy->set_occupied(vertex, true);
+        }
     }
-    return grid;
+    return occupancy;
 }
 
 void RoomEditor::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned) {
@@ -2333,7 +2332,8 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
         asset->Delete();
     }
 
-    auto grid = build_room_grid(spawn_id);
+    auto occupancy = build_room_grid(spawn_id);
+    vibble::grid::Grid& grid_service = assets_ ? assets_->grid() : vibble::grid::global_grid();
 
     nlohmann::json root;
     root["spawn_groups"] = nlohmann::json::array();
@@ -2348,7 +2348,10 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     std::vector<Area> exclusion;
     std::mt19937 rng(std::random_device{}());
     Check checker(false);
-    SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
+    SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, occupancy.get());
+    if (occupancy) {
+        ctx.set_spawn_resolution(occupancy->resolution());
+    }
     ExactSpawner exact;
     CenterSpawner center;
     RandomSpawner random;
@@ -2503,13 +2506,17 @@ void RoomEditor::regenerate_current_room() {
     planner_contexts.push_back(room_context);
     current_room_->planner = std::make_unique<AssetSpawnPlanner>(planner_sources, *current_room_->room_area, assets_->library(), planner_contexts);
 
-    auto grid = build_room_grid(std::string{});
+    auto occupancy = build_room_grid(std::string{});
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library().all();
     std::vector<std::unique_ptr<Asset>> spawned;
     std::vector<Area> exclusion;
     Check checker(false);
     std::mt19937 regen_rng(std::random_device{}());
-    SpawnContext ctx(regen_rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid ? grid.get() : nullptr);
+    vibble::grid::Grid& grid_service = assets_ ? assets_->grid() : vibble::grid::global_grid();
+    SpawnContext ctx(regen_rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, occupancy.get());
+    if (occupancy) {
+        ctx.set_spawn_resolution(occupancy->resolution());
+    }
     ExactSpawner exact;
     CenterSpawner center_spawn;
     RandomSpawner random;
@@ -2551,9 +2558,11 @@ void RoomEditor::regenerate_current_room() {
         }
 
         if (!boundary_options.empty()) {
-            MapGrid boundary_grid = MapGrid::from_area_bounds(*old_area_copy, boundary_spacing);
-            auto points = boundary_grid.get_all_points_in_area(*old_area_copy);
-            if (!points.empty()) {
+            const int boundary_resolution = std::clamp(static_cast<int>(std::lround(std::log2(static_cast<double>(std::max(1, boundary_spacing)))))), 0, vibble::grid::kMaxResolution);
+            vibble::grid::Grid& grid_service = assets_ ? assets_->grid() : vibble::grid::global_grid();
+            vibble::grid::Occupancy boundary_grid(*old_area_copy, boundary_resolution, grid_service);
+            auto vertices = boundary_grid.vertices_in_area(*old_area_copy);
+            if (!vertices.empty()) {
                 std::vector<int> weights;
                 weights.reserve(boundary_options.size());
                 for (const auto& opt : boundary_options) {
@@ -2562,16 +2571,16 @@ void RoomEditor::regenerate_current_room() {
                 std::discrete_distribution<int> pick(weights.begin(), weights.end());
                 std::mt19937 boundary_rng(std::random_device{}());
                 std::vector<std::unique_ptr<Asset>> boundary_spawned;
-                for (auto* pt : points) {
-                    if (!pt) continue;
-                    if (current_room_->room_area->contains_point(pt->pos)) continue;
+                for (auto* vertex : vertices) {
+                    if (!vertex) continue;
+                    if (current_room_->room_area->contains_point(vertex->world)) continue;
                     int idx = pick(boundary_rng);
                     const std::string& asset_name = boundary_options[idx].first;
                     auto info = assets_->library().get(asset_name);
                     if (!info) continue;
                     std::string spawn_id = generate_spawn_id();
-                    Area spawn_area(asset_name, pt->pos, 1, 1, "Point", 1, 1, 1);
-                    auto asset = std::make_unique<Asset>(info, spawn_area, pt->pos, 0, nullptr, spawn_id, std::string(asset_types::boundary));
+                    Area spawn_area(asset_name, vertex->world, 1, 1, "Point", 1, 1, 1);
+                    auto asset = std::make_unique<Asset>(info, spawn_area, vertex->world, 0, nullptr, spawn_id, std::string(asset_types::boundary));
                     boundary_spawned.push_back(std::move(asset));
                 }
                 integrate_spawned_assets(boundary_spawned);

@@ -375,6 +375,7 @@ nlohmann::json AssetInfo::AreaCodec::encode_entry(
     const SDL_Point canonical_anchor_point = canonical_anchor(canonical_canvas);
     entry["anchor"] = { {"x", canonical_anchor_point.x}, {"y", canonical_anchor_point.y} };
     entry["points"] = encode_canonical_points(area.get_points(), render_anchor, save_scale);
+    entry["resolution"] = area.resolution();
     return entry;
 }
 
@@ -465,6 +466,7 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
         named.kind = named.type;
     }
     named.area = std::make_unique<Area>(name, points);
+    named.area->set_resolution(entry.value("resolution", 0));
     const std::string& applied_type = !named.type.empty() ? named.type : named.kind;
     if (!applied_type.empty()) {
         named.area->set_type(applied_type);

@@ -1061,7 +1061,7 @@ void LightMap::rebuild(SDL_Renderer* renderer) {
         const auto& rms = assets_->rooms();
         for (Room* r : rms) {
             if (!r) continue;
-            layout_.grid_spacing = std::max(layout_.grid_spacing, r->map_grid_settings().spacing);
+            layout_.grid_spacing = std::max(layout_.grid_spacing, r->map_grid_settings().spacing());
         }
     }
     if (layout_.grid_spacing <= 0 && assets_) {
@@ -1077,7 +1077,7 @@ void LightMap::rebuild(SDL_Renderer* renderer) {
         }
     }
     if (layout_.grid_spacing <= 0) {
-        layout_.grid_spacing = MapGridSettings::defaults().spacing;
+        layout_.grid_spacing = MapGridSettings::defaults().spacing();
         std::cerr << "[LightMap][WARN] grid_spacing unavailable; defaulting to " << layout_.grid_spacing << "\n";
     }
 

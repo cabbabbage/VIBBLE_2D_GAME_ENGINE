@@ -10,7 +10,8 @@
 #include "utils/area.hpp"
 #include "asset/asset_info.hpp"
 #include "spawn/check.hpp"
-#include "utils/map_grid.hpp"
+#include "util/grid.hpp"
+#include "util/grid_occupancy.hpp"
 
 class Asset;
 class Area;
@@ -29,7 +30,8 @@ class SpawnContext {
                  std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
                  std::vector<std::unique_ptr<Asset>>& all,
                  AssetLibrary* asset_library,
-                 MapGrid* grid);
+                 vibble::grid::Grid& grid,
+                 vibble::grid::Occupancy* occupancy = nullptr);
     Asset* spawnAsset(const std::string& name,
                       const std::shared_ptr<AssetInfo>& info,
                       const Area& area,
@@ -45,7 +47,11 @@ class SpawnContext {
     std::vector<Area>& exclusion_zones() { return exclusion_zones_; }
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& info_library() { return asset_info_library_; }
     std::vector<std::unique_ptr<Asset>>& all_assets() { return all_; }
-    MapGrid* grid() { return grid_; }
+    vibble::grid::Grid& grid() { return grid_; }
+    vibble::grid::Occupancy* occupancy() { return occupancy_; }
+    const vibble::grid::Occupancy* occupancy() const { return occupancy_; }
+    int spawn_resolution() const { return spawn_resolution_; }
+    void set_spawn_resolution(int resolution) { spawn_resolution_ = vibble::grid::clamp_resolution(resolution); }
 
     void set_clip_area(const Area* a) { clip_area_ = a; }
     const Area* clip_area() const { return clip_area_; }
@@ -57,6 +63,8 @@ class SpawnContext {
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library_;
     std::vector<std::unique_ptr<Asset>>& all_;
     AssetLibrary* asset_library_;
-    MapGrid* grid_ = nullptr;
+    vibble::grid::Grid& grid_;
+    vibble::grid::Occupancy* occupancy_ = nullptr;
+    int spawn_resolution_ = 0;
     const Area* clip_area_ = nullptr;
 };

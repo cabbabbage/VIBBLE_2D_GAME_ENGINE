@@ -7,7 +7,7 @@
 class Area;
 
 struct MapGridSettings {
-    int spacing = 100;
+    int resolution = 7;
     int jitter = 0;
 
     static MapGridSettings defaults();
@@ -15,6 +15,8 @@ struct MapGridSettings {
 
     void clamp();
     void apply_to_json(nlohmann::json& obj) const;
+
+    int spacing() const;
 };
 
 void ensure_map_grid_settings(nlohmann::json& map_info);

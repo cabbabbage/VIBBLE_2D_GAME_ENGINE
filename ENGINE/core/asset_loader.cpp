@@ -645,7 +645,7 @@ void AssetLoader::precompute_light_map() {
         if (!renderer_) {
                 return;
         }
-        const int spacing = std::max(1, map_grid_settings_.spacing);
+        const int spacing = std::max(1, map_grid_settings_.spacing());
         const double diameter = std::max(0.0, map_radius_ * 2.0);
         const int base_size = static_cast<int>(std::ceil(std::max(1.0, diameter)));
         int cells_per_side = (base_size + spacing - 1) / spacing;

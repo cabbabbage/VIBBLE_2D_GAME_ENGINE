@@ -67,7 +67,25 @@ void InitializeAssets::initialize(Assets& assets,
         }
     assets.mark_active_assets_dirty();
     assets.refresh_active_asset_lists();
-    assets.getView().zoom_to_scale(1.0, 200);
+
+    // Set an intuitive starting view: frame the spawn room if available.
+    // Fallback to a neutral 1.0 scale without animation.
+    {
+        Room* spawn_room = nullptr;
+        for (Room* r : assets.rooms()) {
+            if (r && r->is_spawn_room()) {
+                spawn_room = r;
+                break;
+            }
+        }
+        if (spawn_room && spawn_room->room_area) {
+            const Area& area = *spawn_room->room_area;
+            assets.getView().set_screen_center(area.get_center());
+            assets.getView().zoom_to_area(area, 0);
+        } else {
+            assets.getView().zoom_to_scale(1.0, 0);
+        }
+    }
 }
 
 void InitializeAssets::find_player(Assets& assets) {

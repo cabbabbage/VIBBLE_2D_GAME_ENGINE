@@ -13,9 +13,9 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
 
     SDL_Point center = ctx.get_area_center(*area);
 
-    if (auto* g = ctx.grid()) {
-        if (auto* np = g->get_nearest_point(center)) {
-            center = np->pos;
+    if (auto* occupancy = ctx.occupancy()) {
+        if (auto* vertex = occupancy->nearest_vertex(center)) {
+            center = vertex->world;
         }
     }
 

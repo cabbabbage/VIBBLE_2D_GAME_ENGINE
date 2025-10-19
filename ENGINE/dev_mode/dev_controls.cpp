@@ -41,7 +41,8 @@
 #include "utils/map_grid_settings.hpp"
 #include "spawn/spawn_context.hpp"
 #include "utils/area.hpp"
-#include "utils/map_grid.hpp"
+#include "util/grid.hpp"
+#include "util/grid_occupancy.hpp"
 #include "utils/input.hpp"
 
 #include <algorithm>
@@ -2064,11 +2065,12 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         AssetSpawnPlanner planner(sources, *room->room_area, assets_->library());
 
         MapGridSettings grid_settings = room->map_grid_settings();
-        int spacing = grid_settings.spacing;
-        if (spacing <= 0) spacing = 100;
-        MapGrid grid = MapGrid::from_area_bounds(*room->room_area, spacing);
+        const int resolution = std::max(0, grid_settings.resolution);
+        vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+        vibble::grid::Occupancy occupancy(*room->room_area, resolution, grid_service);
         std::vector<Area> exclusion;
-        SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), &grid);
+        SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, &occupancy);
+        ctx.set_spawn_resolution(resolution);
 
         const auto& queue = planner.get_spawn_queue();
         const Area* area_ptr = room->room_area.get();
@@ -2087,16 +2089,16 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                     std::fill(base_weights.begin(), base_weights.end(), 1.0);
                 }
 
-                auto grid_points = grid.get_all_points_in_area(*area_ptr);
-                if (grid_points.empty()) {
+                auto vertices = occupancy.vertices_in_area(*area_ptr);
+                if (vertices.empty()) {
                     continue;
                 }
 
-                std::shuffle(grid_points.begin(), grid_points.end(), ctx.rng());
+                std::shuffle(vertices.begin(), vertices.end(), ctx.rng());
 
-                for (auto* gp : grid_points) {
-                    if (!gp) continue;
-                    SDL_Point spawn_pos{ gp->pos.x, gp->pos.y };
+                for (auto* vertex : vertices) {
+                    if (!vertex) continue;
+                    SDL_Point spawn_pos{ vertex->world.x, vertex->world.y };
                     spawn_pos = apply_map_grid_jitter(grid_settings, spawn_pos, ctx.rng(), *area_ptr);
                     bool placed = false;
                     std::vector<double> attempt_weights = base_weights;
@@ -2113,7 +2115,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                         }
                         const SpawnCandidate& candidate = info.candidates[idx];
                         if (candidate.is_null || !candidate.info) {
-                            grid.set_occupied(gp, true);
+                            occupancy.set_occupied(vertex, true);
                             placed = true;
                             break;
                         }
@@ -2126,12 +2128,12 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                             attempt_weights[idx] = 0.0;
                             continue;
                         }
-                        grid.set_occupied(gp, true);
+                        occupancy.set_occupied(vertex, true);
                         placed = true;
                         break;
                     }
                     if (!placed) {
-                        grid.set_occupied(gp, true);
+                        occupancy.set_occupied(vertex, true);
                     }
                 }
 

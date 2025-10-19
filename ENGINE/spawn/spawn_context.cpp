@@ -19,14 +19,17 @@ SpawnContext::SpawnContext(std::mt19937& rng,
                            std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
                            std::vector<std::unique_ptr<Asset>>& all,
                            AssetLibrary* asset_library,
-                           MapGrid* grid)
+                           vibble::grid::Grid& grid,
+                           vibble::grid::Occupancy* occupancy)
 : rng_(rng),
 checker_(checker),
 exclusion_zones_(exclusion_zones),
 asset_info_library_(asset_info_library),
 all_(all),
 asset_library_(asset_library),
-grid_(grid)
+grid_(grid),
+occupancy_(occupancy),
+spawn_resolution_(occupancy ? occupancy->resolution() : grid_.default_resolution())
 {}
 
 SpawnContext::Point SpawnContext::get_area_center(const Area& area) const {
@@ -56,7 +59,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
         if (clip_area_ && !clip_area_->contains_point(pos)) {
                 return nullptr;
         }
-        auto assetPtr = std::make_unique<Asset>(info, area, pos, depth, parent, spawn_id, spawn_method);
+        auto assetPtr = std::make_unique<Asset>(info, area, pos, depth, parent, spawn_id, spawn_method, spawn_resolution_);
         Asset* raw = assetPtr.get();
         all_.push_back(std::move(assetPtr));
         if (raw->info && !raw->info->children.empty()) {
@@ -99,6 +102,10 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                                        childArea,
                                                        *asset_library_);
                         AssetSpawner childSpawner(asset_library_, exclusion_zones_);
+                        MapGridSettings child_settings = MapGridSettings::defaults();
+                        child_settings.resolution = spawn_resolution_;
+                        child_settings.clamp();
+                        childSpawner.set_map_grid_settings(child_settings);
                         childSpawner.spawn_children(childArea, &childPlanner);
                         auto kids = childSpawner.extract_all_assets();
                         for (auto& uptr : kids) {

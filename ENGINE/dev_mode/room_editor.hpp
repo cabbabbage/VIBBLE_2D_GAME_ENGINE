@@ -22,7 +22,10 @@ class AreaOverlayEditor;
 class RoomConfigurator;
 class AssetInfo;
 class Room;
-class MapGrid;
+namespace vibble::grid {
+class Occupancy;
+class Grid;
+}
 class DMButton;
 class FullScreenCollapsible;
 class DevControls;
@@ -160,7 +163,7 @@ private:
     void update_percent_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void save_perimeter_json(nlohmann::json& entry, int dx, int dy, int orig_w, int orig_h, int radius);
     void respawn_spawn_group(const nlohmann::json& entry);
-    std::unique_ptr<MapGrid> build_room_grid(const std::string& ignore_spawn_id) const;
+    std::unique_ptr<vibble::grid::Occupancy> build_room_grid(const std::string& ignore_spawn_id) const;
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
     void regenerate_current_room();
     void configure_shared_panel();

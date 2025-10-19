@@ -1,20 +1,21 @@
 #include "map_grid_settings.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include <nlohmann/json.hpp>
 
 #include "utils/area.hpp"
+#include "util/grid.hpp"
 
 namespace {
-constexpr int kMinSpacing = 8;
-constexpr int kMaxSpacing = 2048;
+constexpr int kMinResolution = 0;
+constexpr int kMaxResolution = vibble::grid::kMaxResolution;
 constexpr int kMinJitter = 0;
-constexpr int kMaxJitter = 1024;
 }
 
 MapGridSettings MapGridSettings::defaults() {
-    return MapGridSettings{100, 0};
+    return MapGridSettings{7, 0};
 }
 
 MapGridSettings MapGridSettings::from_json(const nlohmann::json* obj) {
@@ -23,11 +24,15 @@ MapGridSettings MapGridSettings::from_json(const nlohmann::json* obj) {
         return settings;
     }
     try {
-        if (obj->contains("spacing") && (*obj)["spacing"].is_number_integer()) {
-            settings.spacing = (*obj)["spacing"].get<int>();
+        if (obj->contains("resolution") && (*obj)["resolution"].is_number_integer()) {
+            settings.resolution = (*obj)["resolution"].get<int>();
+        } else if (obj->contains("spacing") && (*obj)["spacing"].is_number_integer()) {
+            const int spacing = std::max(1, (*obj)["spacing"].get<int>());
+            const double log_value = std::log2(static_cast<double>(spacing));
+            settings.resolution = static_cast<int>(std::lround(log_value));
         }
     } catch (...) {
-        settings.spacing = defaults().spacing;
+        settings.resolution = defaults().resolution;
     }
     try {
         if (obj->contains("jitter") && (*obj)["jitter"].is_number_integer()) {
@@ -41,8 +46,9 @@ MapGridSettings MapGridSettings::from_json(const nlohmann::json* obj) {
 }
 
 void MapGridSettings::clamp() {
-    spacing = std::clamp(spacing, kMinSpacing, kMaxSpacing);
-    const int jitter_max = std::clamp(spacing, kMinSpacing, kMaxJitter);
+    resolution = std::clamp(resolution, kMinResolution, kMaxResolution);
+    const int step = spacing();
+    const int jitter_max = std::max(kMinJitter, step / 2);
     jitter = std::clamp(jitter, kMinJitter, jitter_max);
 }
 
@@ -50,7 +56,7 @@ void MapGridSettings::apply_to_json(nlohmann::json& obj) const {
     if (!obj.is_object()) {
         obj = nlohmann::json::object();
     }
-    obj["spacing"] = spacing;
+    obj["resolution"] = resolution;
     obj["jitter"] = jitter;
 }
 
@@ -84,4 +90,8 @@ SDL_Point apply_map_grid_jitter(const MapGridSettings& settings,
         }
     }
     return base;
+}
+
+int MapGridSettings::spacing() const {
+    return vibble::grid::delta(resolution);
 }

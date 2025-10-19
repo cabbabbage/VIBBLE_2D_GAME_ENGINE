@@ -7,6 +7,7 @@
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 #include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
+#include "util/grid.hpp"
 #include <filesystem>
 #include <iostream>
 #include <random>
@@ -37,13 +38,15 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
              int depth_,
              Asset* parent_,
              const std::string& spawn_id_,
-             const std::string& spawn_method_)
+             const std::string& spawn_method_,
+             int grid_resolution_)
 : parent(parent_)
 , info(std::move(info_))
 , current_animation()
 , static_frame(false)
 , active(false)
 , pos(start_pos)
+, grid_resolution(vibble::grid::clamp_resolution(grid_resolution_))
 , z_index(0)
 , z_offset(0)
 , depth(depth_)
@@ -107,6 +110,7 @@ Asset::Asset(const Asset& o)
 , info(o.info)
 , current_animation(o.current_animation)
 , pos(o.pos)
+, grid_resolution(vibble::grid::clamp_resolution(o.grid_resolution))
 , z_index(o.z_index)
 , z_offset(o.z_offset)
 , active(o.active)
@@ -156,6 +160,7 @@ Asset& Asset::operator=(const Asset& o) {
         info                 = o.info;
         current_animation    = o.current_animation;
     pos                  = o.pos;
+    grid_resolution      = vibble::grid::clamp_resolution(o.grid_resolution);
 	z_index              = o.z_index;
 	z_offset             = o.z_offset;
 	active               = o.active;
