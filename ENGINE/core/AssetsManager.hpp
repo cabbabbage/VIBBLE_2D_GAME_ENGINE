@@ -152,6 +152,10 @@ public:
     void set_map_light_panel_visible(bool visible);
     bool is_map_light_panel_visible() const;
 
+    void apply_map_grid_settings(const MapGridSettings& settings, bool persist_json = true);
+    int  map_grid_chunk_resolution() const;
+    const MapGridSettings& map_grid_settings() const { return map_grid_settings_; }
+
     bool is_dev_mode() const { return dev_mode; }
 
     int shading_group_count() const { return num_groups_; }
@@ -218,6 +222,7 @@ private:
     nlohmann::json map_info_json_;
     std::unique_ptr<AssetList> active_asset_list_;
     std::atomic<bool> active_assets_dirty_{true};
+    MapGridSettings map_grid_settings_{};
     std::unique_ptr<devmode::core::ManifestStore> manifest_store_fallback_;
     std::unique_ptr<LightMapManager> light_map_manager_;
 
@@ -232,3 +237,4 @@ private:
     void update_active_assets(SDL_Point center);
     int active_search_radius() const;
 };
+#include "utils/map_grid_settings.hpp"

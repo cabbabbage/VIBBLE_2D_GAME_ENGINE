@@ -40,6 +40,7 @@ private:
     void apply_settings(bool trigger_save = true);
     void handle_resolution_changed();
     void handle_jitter_changed();
+    void handle_chunk_changed();
     void trigger_regen();
 
     nlohmann::json* map_info_ = nullptr;
@@ -48,10 +49,12 @@ private:
     MapGridSettings settings_{};
 
     std::unique_ptr<DMSlider> resolution_slider_;
+    std::unique_ptr<DMSlider> chunk_slider_;
     std::unique_ptr<DMSlider> jitter_slider_;
     std::unique_ptr<DMButton> regen_button_;
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
 
     int last_resolution_value_ = 0;
     int last_jitter_value_ = 0;
+    int last_chunk_value_ = 0;
 };

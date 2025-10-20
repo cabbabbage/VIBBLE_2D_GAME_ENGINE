@@ -100,18 +100,101 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
 
     SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
-    if (SDL_SetRenderTarget(renderer, texture) == 0) {
-        const float brightness      = std::max(0.0f, chunk.base_brightness);
-        const Uint8 brightness_byte = clamp_alpha(brightness);
-        SDL_SetRenderDrawColor(renderer, brightness_byte, brightness_byte, brightness_byte, brightness_byte);
-        SDL_RenderClear(renderer);
-        SDL_SetRenderTarget(renderer, previous_target);
-    } else {
+    if (SDL_SetRenderTarget(renderer, texture) != 0) {
         SDL_DestroyTexture(texture);
-        texture = nullptr;
         SDL_SetRenderTarget(renderer, previous_target);
         return;
     }
+
+    // Start fully black and fully opaque: this is our darkness mask.
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+#if SDL_VERSION_ATLEAST(2, 0, 6)
+    // Custom blend to "carve" transparency: keep destination color, reduce destination alpha by src alpha.
+    const SDL_BlendMode erase_alpha_blend = SDL_ComposeCustomBlendMode(
+        SDL_BLENDFACTOR_ZERO,                // srcRGB factor -> ignored (0)
+        SDL_BLENDFACTOR_ONE,                 // dstRGB factor -> keep dest color
+        SDL_BLENDOPERATION_ADD,
+        SDL_BLENDFACTOR_ZERO,                // srcA factor   -> 0
+        SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, // dstA factor   -> dstA * (1 - srcA)
+        SDL_BLENDOPERATION_ADD);
+#else
+    const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD; // Fallback (won't carve alpha properly)
+#endif
+
+    // Stamp all static light sources that intersect this chunk into the alpha channel.
+    if (assets_) {
+        const auto& static_lights = assets_->getActiveStaticLightAssets();
+        for (const Asset* asset : static_lights) {
+            if (!asset || !asset->info) {
+                continue;
+            }
+            if (asset->info->light_sources.empty()) {
+                continue;
+            }
+
+            float scale_factor = 1.0f;
+            if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+                scale_factor = asset->info->scale_factor;
+            }
+
+            for (const auto& light : asset->info->light_sources) {
+                SDL_Texture* tex = light.texture;
+                if (!tex) {
+                    continue;
+                }
+
+                int src_w = light.cached_w > 0 ? light.cached_w : 0;
+                int src_h = light.cached_h > 0 ? light.cached_h : 0;
+                if (src_w <= 0 || src_h <= 0) {
+                    SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+                }
+                if (src_w <= 0 || src_h <= 0) {
+                    continue;
+                }
+
+                const int draw_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_w) * scale_factor)));
+                const int draw_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_h) * scale_factor)));
+
+                SDL_Point world_center{ asset->pos.x + light.offset_x, asset->pos.y + light.offset_y };
+                SDL_Rect  world_dst{ world_center.x - draw_w / 2,
+                                     world_center.y - draw_h / 2,
+                                     draw_w,
+                                     draw_h };
+
+                SDL_Rect intersection{};
+                if (!SDL_IntersectRect(&world_dst, &chunk.world_bounds, &intersection)) {
+                    continue;
+                }
+
+                // Save texture state
+                Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
+                SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
+                SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
+                SDL_GetTextureAlphaMod(tex, &save_a);
+                SDL_GetTextureBlendMode(tex, &save_bm);
+
+                // Apply alpha-erasing blend and draw in chunk-local space
+                SDL_SetTextureBlendMode(tex, erase_alpha_blend);
+                SDL_SetTextureColorMod(tex, 255, 255, 255);
+                SDL_SetTextureAlphaMod(tex, 255);
+
+                SDL_Rect local_dst = world_dst;
+                local_dst.x -= chunk.world_bounds.x;
+                local_dst.y -= chunk.world_bounds.y;
+                SDL_RenderCopy(renderer, tex, nullptr, &local_dst);
+
+                // Restore texture state
+                SDL_SetTextureBlendMode(tex, save_bm);
+                SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
+                SDL_SetTextureAlphaMod(tex, save_a);
+            }
+        }
+    }
+
+    SDL_SetRenderTarget(renderer, previous_target);
 
     chunk.static_light_map = texture;
     chunk.lighting_dirty   = false;

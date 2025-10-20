@@ -72,6 +72,7 @@ private:
     void                          apply_virtual_light_map_quadrant_size(int size_px, bool apply_to_assets, bool mark_pending = true);
     void                          request_light_map_regeneration();
     void                          force_shading_refresh_if_needed(bool force_refresh);
+    void                          handle_chunk_resolution_changed();
 
     Assets* assets_ = nullptr;
     nlohmann::json* map_info_ = nullptr;
@@ -93,6 +94,7 @@ private:
     std::unique_ptr<class DMSlider> max_offset_x_;
     std::unique_ptr<class DMSlider> max_offset_y_;
     std::unique_ptr<class DMSlider> search_radius_;
+    std::unique_ptr<class DMSlider> chunk_resolution_;
     std::unique_ptr<class DMSlider> quadrant_size_px_;
     std::unique_ptr<class DMButton> regenerate_button_;
 
@@ -109,5 +111,6 @@ private:
         render_pipeline::shading::sanitize_reactive_shadow_settings({});
     int last_quadrant_size_px_ = LightMap::kDefaultQuadrantSizePx;
     int forced_quadrant_size_snapshot_ = LightMap::kDefaultQuadrantSizePx;
+    int last_chunk_resolution_ = 0;
 };
 

@@ -15,7 +15,7 @@ constexpr int kMinJitter = 0;
 }
 
 MapGridSettings MapGridSettings::defaults() {
-    return MapGridSettings{7, 0};
+    return MapGridSettings{7, 0, 9};
 }
 
 MapGridSettings MapGridSettings::from_json(const nlohmann::json* obj) {
@@ -41,12 +41,32 @@ MapGridSettings MapGridSettings::from_json(const nlohmann::json* obj) {
     } catch (...) {
         settings.jitter = defaults().jitter;
     }
+    try {
+        if (obj->contains("r_chunk") && (*obj)["r_chunk"].is_number_integer()) {
+            settings.r_chunk = (*obj)["r_chunk"].get<int>();
+        } else if (obj->contains("chunk_resolution") && (*obj)["chunk_resolution"].is_number_integer()) {
+            settings.r_chunk = (*obj)["chunk_resolution"].get<int>();
+        } else {
+            const char* size_keys[] = {"chunk_size", "chunk_size_px"};
+            for (const char* key : size_keys) {
+                if (obj->contains(key) && (*obj)[key].is_number_integer()) {
+                    const int size_px = std::max(1, (*obj)[key].get<int>());
+                    const double log_value = std::log2(static_cast<double>(size_px));
+                    settings.r_chunk = static_cast<int>(std::lround(log_value));
+                    break;
+                }
+            }
+        }
+    } catch (...) {
+        settings.r_chunk = defaults().r_chunk;
+    }
     settings.clamp();
     return settings;
 }
 
 void MapGridSettings::clamp() {
     resolution = std::clamp(resolution, kMinResolution, kMaxResolution);
+    r_chunk = std::clamp(r_chunk, kMinResolution, kMaxResolution);
     const int step = spacing();
     const int jitter_max = std::max(kMinJitter, step / 2);
     jitter = std::clamp(jitter, kMinJitter, jitter_max);
@@ -57,7 +77,10 @@ void MapGridSettings::apply_to_json(nlohmann::json& obj) const {
         obj = nlohmann::json::object();
     }
     obj["resolution"] = resolution;
+    obj["spacing"] = spacing();
     obj["jitter"] = jitter;
+    obj["r_chunk"] = r_chunk;
+    obj["chunk_size"] = chunk_size();
 }
 
 void ensure_map_grid_settings(nlohmann::json& map_info) {
@@ -94,4 +117,9 @@ SDL_Point apply_map_grid_jitter(const MapGridSettings& settings,
 
 int MapGridSettings::spacing() const {
     return vibble::grid::delta(resolution);
+}
+
+int MapGridSettings::chunk_size() const {
+    const int clamped = std::clamp(r_chunk, kMinResolution, kMaxResolution);
+    return 1 << clamped;
 }

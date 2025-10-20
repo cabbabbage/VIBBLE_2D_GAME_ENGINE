@@ -1,10 +1,20 @@
 #include "world/grid.hpp"
 
 #include <algorithm>
+#include <vector>
 
 #include "asset/Asset.hpp"
 
 namespace world {
+
+void Grid::set_chunk_resolution(int r) {
+    const int clamped = std::max(0, r);
+    if (clamped == r_chunk_) {
+        return;
+    }
+    r_chunk_ = clamped;
+    rebuild_chunks();
+}
 
 void Grid::register_asset(Asset* a) {
     if (!a) return;
@@ -47,6 +57,21 @@ void Grid::unregister_asset(Asset* a) {
     Chunk* c = it->second;
     remove_from_chunk(a, c);
     residency_.erase(it);
+}
+
+void Grid::rebuild_chunks() {
+    std::vector<Asset*> assets;
+    assets.reserve(residency_.size());
+    for (auto& entry : residency_) {
+        if (entry.first) {
+            assets.push_back(entry.first);
+        }
+    }
+    residency_.clear();
+    chunks_ = ChunkManager{};
+    for (Asset* asset : assets) {
+        register_asset(asset);
+    }
 }
 
 void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {

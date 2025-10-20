@@ -22,6 +22,17 @@ public:
     static constexpr float kDefaultStaticWeight  = 0.8f;
     static constexpr float kDefaultDynamicWeight = 1.0f;
 
+    // Legacy UI constants kept for backward compatibility with
+    // developer panels and persisted settings. These values are
+    // only used for clamping and defaults in the dev UI and do
+    // not affect the chunk-based light map implementation.
+    static constexpr int kMinQuadrantCount       = 1;
+    static constexpr int kMaxQuadrantCount       = 64;
+    static constexpr int kDefaultQuadrantCount   = 16;
+    static constexpr int kMinQuadrantSizePx      = 16;
+    static constexpr int kMaxQuadrantSizePx      = 4096;
+    static constexpr int kDefaultQuadrantSizePx  = 256;
+
     LightMap(Assets* assets,
              int screen_width,
              int screen_height,

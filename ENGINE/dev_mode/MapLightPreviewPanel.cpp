@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <iomanip>
+#include <cstdio>
 #include <optional>
 #include <sstream>
 
@@ -21,6 +22,8 @@
 #include "render/camera.hpp"
 #include "render/light_map.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
+#include "utils/map_grid_settings.hpp"
+#include "util/grid.hpp"
 #include "world/chunk.hpp"
 
 namespace {
@@ -146,6 +149,7 @@ MapLightPreviewPanel::MapLightPreviewPanel(Assets* assets, int x, int y)
     set_visible_height(540);
     quadrant_note_text_ =
         "Note: Light map tiles update from static + dynamic samples and fade when inactive.";
+    last_chunk_resolution_ = MapGridSettings::defaults().r_chunk;
 
     build_ui();
     rebuild_rows();
@@ -159,6 +163,10 @@ void MapLightPreviewPanel::set_assets(Assets* assets) {
         last_quadrant_size_px_ = clamp_int(assets_->virtual_light_map_quadrant_size(),
                                            LightMap::kMinQuadrantSizePx,
                                            LightMap::kMaxQuadrantSizePx);
+        last_chunk_resolution_ = clamp_int(assets_->map_grid_chunk_resolution(), 0, vibble::grid::kMaxResolution);
+        if (chunk_resolution_) {
+            chunk_resolution_->set_value(last_chunk_resolution_);
+        }
     }
     apply_virtual_light_map_quadrant_size(last_quadrant_size_px_, false, false);
     pending_light_map_regeneration_ = false;
@@ -170,6 +178,9 @@ void MapLightPreviewPanel::set_assets(Assets* assets) {
 void MapLightPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
     on_save_  = std::move(on_save);
+    if (map_info_ && map_info_->is_object()) {
+        ensure_map_grid_settings(*map_info_);
+    }
     if (!reactive_settings_initialized_) {
         last_applied_settings_ = load_reactive_settings_from_dev_settings();
         set_reactive_sliders(last_applied_settings_);
@@ -203,6 +214,13 @@ void MapLightPreviewPanel::update(const Input& input, int screen_w, int screen_h
     DockableCollapsible::update(input, screen_w, screen_h);
     if (!is_visible()) {
         return;
+    }
+    if (chunk_resolution_) {
+        const int chunk_value = chunk_resolution_->value();
+        if (chunk_value != last_chunk_resolution_) {
+            last_chunk_resolution_ = chunk_value;
+            handle_chunk_resolution_changed();
+        }
     }
     if (needs_sync_to_json_) {
         sync_json_from_ui();
@@ -933,14 +951,32 @@ void MapLightPreviewPanel::rebuild_rows() {
 
     Rows rows;
 
-    // Preview-only: do not attach any sliders or buttons here.
+    if (chunk_resolution_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(chunk_resolution_.get())) });
+    }
+
+    // Preview-only: do not attach any other sliders or buttons here.
     rows.push_back({ add_widget(std::make_unique<PreviewWidget>(this)) });
 
     set_rows(rows);
 }
 
 void MapLightPreviewPanel::build_ui() {
-    // Preview-only: sliders are managed by MapShadowPanel now.
+    chunk_resolution_ = std::make_unique<DMSlider>("Chunk Resolution (2^r px)",
+                                                  0,
+                                                  vibble::grid::kMaxResolution,
+                                                  last_chunk_resolution_);
+    if (chunk_resolution_) {
+        chunk_resolution_->set_defer_commit_until_unfocus(false);
+        chunk_resolution_->set_value_formatter([](int value,
+                                                  std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
+                                                   -> std::string_view {
+            const int clamped = clamp_int(value, 0, vibble::grid::kMaxResolution);
+            const int size_px = 1 << clamped;
+            std::snprintf(buffer.data(), buffer.size(), "r=%d (%d px)", clamped, size_px);
+            return buffer.data();
+        });
+    }
 }
 
 void MapLightPreviewPanel::sync_ui_from_json() {
@@ -974,12 +1010,42 @@ void MapLightPreviewPanel::sync_ui_from_json() {
         apply_virtual_light_map_quadrant_size(last_quadrant_size_px_, false, false);
         apply_immediate_settings();
     }
+    int chunk_value = last_chunk_resolution_;
+    if (map_info_ && map_info_->is_object()) {
+        auto grid_it = map_info_->find("map_grid_settings");
+        if (grid_it != map_info_->end() && grid_it->is_object()) {
+            MapGridSettings grid_settings = MapGridSettings::from_json(&(*grid_it));
+            chunk_value = grid_settings.r_chunk;
+        }
+    }
+    chunk_value = clamp_int(chunk_value, 0, vibble::grid::kMaxResolution);
+    last_chunk_resolution_ = chunk_value;
+    if (chunk_resolution_) {
+        chunk_resolution_->set_value(chunk_value);
+    }
     needs_sync_to_json_ = false;
 }
 
 void MapLightPreviewPanel::sync_json_from_ui() {
     if (!map_info_) {
         return;
+    }
+    MapGridSettings grid_settings = MapGridSettings::defaults();
+    if (map_info_->contains("map_grid_settings") && (*map_info_)["map_grid_settings"].is_object()) {
+        grid_settings = MapGridSettings::from_json(&(*map_info_)["map_grid_settings"]);
+    }
+    if (chunk_resolution_) {
+        grid_settings.r_chunk = clamp_int(chunk_resolution_->value(), 0, vibble::grid::kMaxResolution);
+    }
+    grid_settings.clamp();
+    last_chunk_resolution_ = grid_settings.r_chunk;
+    if (chunk_resolution_ && chunk_resolution_->value() != grid_settings.r_chunk) {
+        chunk_resolution_->set_value(grid_settings.r_chunk);
+    }
+    nlohmann::json& grid_section = (*map_info_)["map_grid_settings"];
+    grid_settings.apply_to_json(grid_section);
+    if (assets_) {
+        assets_->apply_map_grid_settings(grid_settings);
     }
     render_pipeline::shading::ReactiveShadowSettings settings = current_settings_from_ui();
     int size_px = last_quadrant_size_px_;
@@ -1159,4 +1225,8 @@ void MapLightPreviewPanel::force_shading_refresh_if_needed(bool force_refresh) {
     if (refresh_shading || refresh_light_map) {
         assets_->force_shaded_assets_rerender();
     }
+}
+
+void MapLightPreviewPanel::handle_chunk_resolution_changed() {
+    needs_sync_to_json_ = true;
 }

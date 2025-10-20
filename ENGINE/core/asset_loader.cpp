@@ -444,7 +444,7 @@ std::vector<std::unique_ptr<Asset>> AssetLoader::extract_all_assets() {
 }
 
 void AssetLoader::createAssets(world::Grid& grid) {
-        grid.set_chunk_resolution(std::max(0, map_grid_settings_.resolution));
+        grid.set_chunk_resolution(std::max(0, map_grid_settings_.r_chunk));
         spawned_assets_ = extract_all_assets();
         for (const auto& asset_up : spawned_assets_) {
                 Asset* asset = asset_up.get();

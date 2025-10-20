@@ -12916,7 +12916,7 @@
           "light_intensity": 255,
           "offset_x": -18,
           "offset_y": 0,
-          "radius": 774
+          "radius": 1589
         }
       ],
       "max_child_depth": 2,
@@ -14014,8 +14014,11 @@
         ]
       },
       "map_grid_settings": {
+        "chunk_size": 512,
         "jitter": 10,
-        "spacing": 161
+        "r_chunk": 9,
+        "resolution": 5,
+        "spacing": 32
       },
       "map_layers": [
         {
@@ -14135,7 +14138,7 @@
           "max_opacity": 154,
           "min_opacity": 68
         },
-        "update_interval": 1
+        "update_interval": 10
       },
       "map_name": "FORREST",
       "reactive_shadows": {

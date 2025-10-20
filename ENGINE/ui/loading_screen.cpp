@@ -131,35 +131,50 @@ void LoadingScreen::set_status(std::string status) {
 }
 
 void LoadingScreen::draw_frame() {
-        if (images_.empty()) return;
-        Uint32 now = SDL_GetTicks();
-        if (!images_.empty() && now - last_switch_time_ > 250) {
-                current_index_ = (current_index_ + 1) % images_.size();
-                last_switch_time_ = now;
-        }
-        const fs::path& target_path = images_[current_index_];
-        if (!current_texture_ || target_path != current_texture_path_) {
-                if (current_texture_) {
-                        SDL_DestroyTexture(current_texture_);
-                        current_texture_ = nullptr;
-                        current_texture_path_.clear();
+        // Always clear and draw text, even if there are no images.
+        // This ensures a visible loading screen regardless of content files.
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+        SDL_RenderClear(renderer_);
+
+        // Advance slideshow if we have images.
+        if (!images_.empty()) {
+                Uint32 now = SDL_GetTicks();
+                if (now - last_switch_time_ > 250) {
+                        current_index_ = (current_index_ + 1) % images_.size();
+                        last_switch_time_ = now;
                 }
-                SDL_Surface* surf = IMG_Load(target_path.string().c_str());
-                if (surf) {
-                        current_texture_ = SDL_CreateTextureFromSurface(renderer_, surf);
-                        SDL_FreeSurface(surf);
+
+                const fs::path& target_path = images_[current_index_];
+                if (!current_texture_ || target_path != current_texture_path_) {
                         if (current_texture_) {
-                                current_texture_path_ = target_path;
+                                SDL_DestroyTexture(current_texture_);
+                                current_texture_ = nullptr;
+                                current_texture_path_.clear();
+                        }
+                        SDL_Surface* surf = IMG_Load(target_path.string().c_str());
+                        if (surf) {
+                                current_texture_ = SDL_CreateTextureFromSurface(renderer_, surf);
+                                SDL_FreeSurface(surf);
+                                if (current_texture_) {
+                                        current_texture_path_ = target_path;
+                                }
                         }
                 }
         }
-        SDL_SetRenderDrawColor(renderer_,0,0,0,255); SDL_RenderClear(renderer_);
+
+        // Title and status text
         const std::string mono_font = ui_fonts::monospace();
-        TTF_Font* title_font=TTF_OpenFont(mono_font.c_str(),48);
-        SDL_Color white={255,255,255,255};
+        TTF_Font* title_font = TTF_OpenFont(mono_font.c_str(), 48);
+        SDL_Color white{255, 255, 255, 255};
         int title_height = 0;
-        if(title_font){int tw,th; TTF_SizeText(title_font,"LOADING...",&tw,&th); int tx=(screen_w_-tw)/2;
-                draw_text(title_font,"LOADING...",tx,40,white); title_height = th; TTF_CloseFont(title_font);}
+        if (title_font) {
+                int tw = 0, th = 0;
+                TTF_SizeText(title_font, "LOADING...", &tw, &th);
+                int tx = (screen_w_ - tw) / 2;
+                draw_text(title_font, "LOADING...", tx, 40, white);
+                title_height = th;
+                TTF_CloseFont(title_font);
+        }
         if (!status_text_.empty()) {
                 TTF_Font* status_font = TTF_OpenFont(mono_font.c_str(), 28);
                 if (status_font) {
@@ -172,8 +187,20 @@ void LoadingScreen::draw_frame() {
                         TTF_CloseFont(status_font);
                 }
         }
-        render_scaled_center(current_texture_,screen_w_/3,screen_h_/3,screen_w_/2,screen_h_/2);
-        TTF_Font* body_font=TTF_OpenFont(mono_font.c_str(),26);
-        SDL_Rect msg_rect{screen_w_/3,(screen_h_*2)/3,screen_w_/3,screen_h_/4};
-        if(body_font && !message_.empty()){render_justified_text(body_font,message_,msg_rect,white); TTF_CloseFont(body_font);}
+
+        // Image (if available)
+        if (current_texture_) {
+                render_scaled_center(current_texture_, screen_w_ / 3, screen_h_ / 3, screen_w_ / 2, screen_h_ / 2);
+        }
+
+        // Body message (optional; only if provided)
+        const bool has_message = !message_.empty();
+        if (has_message) {
+                TTF_Font* body_font = TTF_OpenFont(mono_font.c_str(), 26);
+                SDL_Rect msg_rect{screen_w_ / 3, (screen_h_ * 2) / 3, screen_w_ / 3, screen_h_ / 4};
+                if (body_font) {
+                        render_justified_text(body_font, message_, msg_rect, white);
+                        TTF_CloseFont(body_font);
+                }
+        }
 }

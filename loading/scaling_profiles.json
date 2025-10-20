@@ -817,25 +817,6 @@
             ],
             "revision": 1
         },
-        "candle": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0
-            ],
-            "last_updated": "2025-10-17T10:58:00Z",
-            "recommended_percentages": [
-                50
-            ],
-            "revision": 1
-        },
         "candle_3": {
             "histogram": [
                 0,

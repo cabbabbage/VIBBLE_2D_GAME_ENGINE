@@ -12,6 +12,8 @@
 namespace {
 constexpr int kMinResolution = 0;
 constexpr int kMaxResolution = vibble::grid::kMaxResolution;
+constexpr int kMinChunkResolution = 0;
+constexpr int kMaxChunkResolution = vibble::grid::kMaxResolution;
 constexpr int kMinJitter = 0;
 constexpr int kMaxJitter = 1024;
 }
@@ -67,6 +69,13 @@ void MapGridPanel::update(const Input& input, int screen_w, int screen_h) {
             handle_resolution_changed();
         }
     }
+    if (chunk_slider_) {
+        const int chunk_value = chunk_slider_->value();
+        if (chunk_value != last_chunk_value_) {
+            last_chunk_value_ = chunk_value;
+            handle_chunk_changed();
+        }
+    }
     if (jitter_slider_) {
         const int jitter_value = jitter_slider_->value();
         if (jitter_value != last_jitter_value_) {
@@ -93,6 +102,8 @@ void MapGridPanel::build_ui() {
 
     resolution_slider_ = std::make_unique<DMSlider>("Grid Resolution (2^r px)", kMinResolution, kMaxResolution, settings_.resolution);
 
+    chunk_slider_ = std::make_unique<DMSlider>("Chunk Resolution (2^r px)", kMinChunkResolution, kMaxChunkResolution, settings_.r_chunk);
+
     jitter_slider_ = std::make_unique<DMSlider>("Grid Jitter (px)", kMinJitter, kMaxJitter, settings_.jitter);
 
     regen_button_ = std::make_unique<DMButton>("Regenerate Grid Spawns", &DMStyles::AccentButton(), 220, DMButton::height());
@@ -110,6 +121,9 @@ void MapGridPanel::rebuild_rows() {
 
     if (resolution_slider_) {
         rows.push_back({add_widget(std::make_unique<SliderWidget>(resolution_slider_.get()))});
+    }
+    if (chunk_slider_) {
+        rows.push_back({add_widget(std::make_unique<SliderWidget>(chunk_slider_.get()))});
     }
     if (jitter_slider_) {
         rows.push_back({add_widget(std::make_unique<SliderWidget>(jitter_slider_.get()))});
@@ -133,16 +147,23 @@ void MapGridPanel::sync_from_json() {
     if (resolution_slider_) {
         resolution_slider_->set_value(settings_.resolution);
     }
+    if (chunk_slider_) {
+        chunk_slider_->set_value(settings_.r_chunk);
+    }
     if (jitter_slider_) {
         jitter_slider_->set_value(settings_.jitter);
     }
     last_resolution_value_ = settings_.resolution;
     last_jitter_value_ = settings_.jitter;
+    last_chunk_value_ = settings_.r_chunk;
 }
 
 void MapGridPanel::apply_settings(bool trigger_save) {
     if (resolution_slider_) {
         settings_.resolution = std::clamp(resolution_slider_->value(), kMinResolution, kMaxResolution);
+    }
+    if (chunk_slider_) {
+        settings_.r_chunk = std::clamp(chunk_slider_->value(), kMinChunkResolution, kMaxChunkResolution);
     }
     if (jitter_slider_) {
         const int jitter_cap = std::min(kMaxJitter, std::max(kMinJitter, settings_.spacing() / 2));
@@ -151,6 +172,9 @@ void MapGridPanel::apply_settings(bool trigger_save) {
     settings_.clamp();
     if (resolution_slider_ && resolution_slider_->value() != settings_.resolution) {
         resolution_slider_->set_value(settings_.resolution);
+    }
+    if (chunk_slider_ && chunk_slider_->value() != settings_.r_chunk) {
+        chunk_slider_->set_value(settings_.r_chunk);
     }
     if (jitter_slider_) {
         const int jitter_cap = std::min(kMaxJitter, std::max(kMinJitter, settings_.spacing() / 2));
@@ -161,6 +185,7 @@ void MapGridPanel::apply_settings(bool trigger_save) {
     }
     last_resolution_value_ = settings_.resolution;
     last_jitter_value_ = settings_.jitter;
+    last_chunk_value_ = settings_.r_chunk;
 
     if (map_info_ && map_info_->is_object()) {
         nlohmann::json& section = (*map_info_)["map_grid_settings"];
@@ -177,6 +202,10 @@ void MapGridPanel::handle_resolution_changed() {
 
 void MapGridPanel::handle_jitter_changed() {
     apply_settings(true);
+}
+
+void MapGridPanel::handle_chunk_changed() {
+    trigger_regen();
 }
 
 void MapGridPanel::trigger_regen() {

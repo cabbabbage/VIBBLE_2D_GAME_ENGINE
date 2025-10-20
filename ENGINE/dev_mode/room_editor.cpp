@@ -2277,7 +2277,7 @@ std::unique_ptr<vibble::grid::Occupancy> RoomEditor::build_room_grid(const std::
     if (!current_room_ || !current_room_->room_area) return nullptr;
     MapGridSettings grid_settings = current_room_->map_grid_settings();
     const int resolution = std::max(0, grid_settings.resolution);
-    vibble::grid::Grid& grid_service = assets_ ? assets_->grid() : vibble::grid::global_grid();
+    vibble::grid::Grid& grid_service = vibble::grid::global_grid();
     auto occupancy = std::make_unique<vibble::grid::Occupancy>(*current_room_->room_area, resolution, grid_service);
     if (!assets_) return occupancy;
     for (Asset* asset : assets_->all) {
@@ -2333,7 +2333,7 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     }
 
     auto occupancy = build_room_grid(spawn_id);
-    vibble::grid::Grid& grid_service = assets_ ? assets_->grid() : vibble::grid::global_grid();
+    vibble::grid::Grid& grid_service = vibble::grid::global_grid();
 
     nlohmann::json root;
     root["spawn_groups"] = nlohmann::json::array();
@@ -2512,7 +2512,7 @@ void RoomEditor::regenerate_current_room() {
     std::vector<Area> exclusion;
     Check checker(false);
     std::mt19937 regen_rng(std::random_device{}());
-    vibble::grid::Grid& grid_service = assets_ ? assets_->grid() : vibble::grid::global_grid();
+    vibble::grid::Grid& grid_service = vibble::grid::global_grid();
     SpawnContext ctx(regen_rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, occupancy.get());
     if (occupancy) {
         ctx.set_spawn_resolution(occupancy->resolution());
@@ -2558,8 +2558,11 @@ void RoomEditor::regenerate_current_room() {
         }
 
         if (!boundary_options.empty()) {
-            const int boundary_resolution = std::clamp(static_cast<int>(std::lround(std::log2(static_cast<double>(std::max(1, boundary_spacing)))))), 0, vibble::grid::kMaxResolution);
-            vibble::grid::Grid& grid_service = assets_ ? assets_->grid() : vibble::grid::global_grid();
+            const int boundary_resolution = std::clamp(
+                static_cast<int>(std::lround(std::log2(static_cast<double>(std::max(1, boundary_spacing))))),
+                0,
+                vibble::grid::kMaxResolution);
+            vibble::grid::Grid& grid_service = vibble::grid::global_grid();
             vibble::grid::Occupancy boundary_grid(*old_area_copy, boundary_resolution, grid_service);
             auto vertices = boundary_grid.vertices_in_area(*old_area_copy);
             if (!vertices.empty()) {

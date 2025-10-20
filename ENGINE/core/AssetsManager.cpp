@@ -157,6 +157,7 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                               map_id_,
                               std::move(precomputed_light_map));
     apply_map_light_config();
+    apply_map_grid_settings(map_grid_settings_, false);
     for (Asset* a : all) {
         if (!a) continue;
         a->set_assets(this);
@@ -241,6 +242,7 @@ void Assets::hydrate_map_info_sections() {
     ensure_object("trails_data");
 
     ensure_map_grid_settings(map_info_json_);
+    map_grid_settings_ = MapGridSettings::from_json(&map_info_json_["map_grid_settings"]);
 
     {
         nlohmann::json& L = map_info_json_["map_light_data"];
@@ -1272,6 +1274,45 @@ void Assets::force_shaded_assets_rerender() {
     }
 
     active_assets_dirty_.store(true, std::memory_order_release);
+}
+
+void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persist_json) {
+    MapGridSettings sanitized = settings;
+    sanitized.clamp();
+
+    const bool chunk_changed = sanitized.r_chunk != map_grid_settings_.r_chunk;
+    map_grid_settings_ = sanitized;
+
+    if (persist_json) {
+        nlohmann::json& section = map_info_json_["map_grid_settings"];
+        sanitized.apply_to_json(section);
+    }
+
+    world_grid_.set_chunk_resolution(std::max(0, sanitized.r_chunk));
+
+    if (chunk_changed || last_grid_pos_.empty()) {
+        last_grid_pos_.clear();
+        for (Asset* asset : all) {
+            if (!asset) {
+                continue;
+            }
+            world_grid_.register_asset(asset);
+            last_grid_pos_[asset] = SDL_Point{asset->pos.x, asset->pos.y};
+        }
+    }
+
+    if (chunk_changed) {
+        const Area view = camera_.get_camera_area();
+        auto [minx, miny, maxx, maxy] = view.get_bounds();
+        SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
+        world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
+        force_virtual_light_map_refresh();
+        force_shaded_assets_rerender();
+    }
+}
+
+int Assets::map_grid_chunk_resolution() const {
+    return std::max(0, map_grid_settings_.r_chunk);
 }
 
 void Assets::set_map_light_panel_visible(bool visible) {

@@ -2161,6 +2161,11 @@ void DevControls::regenerate_map_grid_assets() {
     if (!map_info_json_ || !map_info_json_->is_object()) {
         return;
     }
+    ensure_map_grid_settings(*map_info_json_);
+    if (assets_) {
+        MapGridSettings settings = MapGridSettings::from_json(&(*map_info_json_)["map_grid_settings"]);
+        assets_->apply_map_grid_settings(settings);
+    }
     auto section_it = map_info_json_->find("map_assets_data");
     if (section_it == map_info_json_->end() || !section_it->is_object()) {
         return;

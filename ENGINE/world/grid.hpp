@@ -15,7 +15,7 @@ class Grid {
 public:
     Grid(SDL_Point origin = SDL_Point{0,0}, int r_chunk = 9) : origin_(origin), r_chunk_(r_chunk) {}
 
-    void set_chunk_resolution(int r) { r_chunk_ = std::max(0, r); }
+    void set_chunk_resolution(int r);
     int  chunk_resolution() const { return r_chunk_; }
     SDL_Point origin() const { return origin_; }
 
@@ -35,6 +35,7 @@ public:
 
 private:
     void remove_from_chunk(Asset* a, Chunk* c);
+    void rebuild_chunks();
 
 private:
     SDL_Point origin_{0,0};

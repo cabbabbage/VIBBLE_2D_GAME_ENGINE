@@ -9,6 +9,7 @@ class Area;
 struct MapGridSettings {
     int resolution = 7;
     int jitter = 0;
+    int r_chunk = 9;
 
     static MapGridSettings defaults();
     static MapGridSettings from_json(const nlohmann::json* obj);
@@ -17,6 +18,7 @@ struct MapGridSettings {
     void apply_to_json(nlohmann::json& obj) const;
 
     int spacing() const;
+    int chunk_size() const;
 };
 
 void ensure_map_grid_settings(nlohmann::json& map_info);
