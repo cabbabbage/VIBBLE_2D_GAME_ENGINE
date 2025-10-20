@@ -6,6 +6,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include "utils/map_grid_settings.hpp"
+#include "util/grid.hpp"
+
 namespace devmode::spawn {
 namespace {
 
@@ -187,7 +190,8 @@ bool sanitize_spawn_group_candidates(nlohmann::json& entry) {
 }
 
 bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
-                                       const std::string& default_display_name) {
+                                       const std::string& default_display_name,
+                                       std::optional<int> default_resolution) {
     bool changed = false;
     if (!entry.is_object()) {
         entry = nlohmann::json::object();
@@ -232,6 +236,17 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
 
     if (!entry.contains("enforce_spacing") || !entry["enforce_spacing"].is_boolean()) {
         entry["enforce_spacing"] = false;
+        changed = true;
+    }
+
+    const int fallback_resolution = default_resolution
+        ? vibble::grid::clamp_resolution(*default_resolution)
+        : vibble::grid::clamp_resolution(MapGridSettings::defaults().resolution);
+    int resolution = read_int(entry, "resolution", fallback_resolution);
+    resolution = vibble::grid::clamp_resolution(resolution);
+    if (!entry.contains("resolution") || !entry["resolution"].is_number_integer() ||
+        entry["resolution"].get<int>() != resolution) {
+        entry["resolution"] = resolution;
         changed = true;
     }
 

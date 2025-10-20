@@ -12,6 +12,7 @@
 #include "dev_mode/widgets.hpp"
 #include "asset/asset_info.hpp"
 #include "dev_mode/asset_info_ui.hpp"
+#include "utils/map_grid_settings.hpp"
 
 Section_SpawnGroups::Section_SpawnGroups()
     : DockableCollapsible("Spawn Groups", false) {
@@ -32,7 +33,10 @@ void Section_SpawnGroups::build() {
 
     DockableCollapsible::Rows rows;
     if (!list_) list_ = std::make_unique<SpawnGroupConfig>();
-    if (list_) list_->set_embedded_mode(true);
+    if (list_) {
+        list_->set_default_resolution(MapGridSettings::defaults().resolution);
+        list_->set_embedded_mode(true);
+    }
     reload_from_file();
 
     auto on_change = [this]() {

@@ -25,6 +25,8 @@ public:
         bool quantity_changed = false;
         bool candidates_changed = false;
         std::string method;
+        bool resolution_changed = false;
+        int resolution = 0;
     };
 
     struct Callbacks {
@@ -88,6 +90,8 @@ public:
     void refresh_row_configuration();
 
     void set_embedded_mode(bool embedded);
+
+    void set_default_resolution(int resolution);
 
     void expand_group(const std::string& id);
     void collapse_group(const std::string& id);
@@ -156,6 +160,7 @@ private:
     SDL_Point anchor_{0, 0};
     std::optional<std::string> pending_focus_id_{};
     std::function<void(const nlohmann::json&)> pending_save_callback_{};
+    int default_resolution_ = 0;
 
     bool suppress_layout_change_callback_ = false;
     std::unique_ptr<DMButton> add_button_{};

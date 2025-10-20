@@ -150,6 +150,7 @@ private:
     void begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier);
     void update_drag_session(const SDL_Point& world_mouse);
     void apply_perimeter_drag(const SDL_Point& world_mouse);
+    void snap_dragged_assets_to_grid();
     void finalize_drag_session();
     void reset_drag_state();
     nlohmann::json* find_spawn_entry(const std::string& spawn_id);
@@ -230,6 +231,7 @@ private:
     int drag_perimeter_orig_w_ = 0;
     int drag_perimeter_orig_h_ = 0;
     int drag_perimeter_curr_w_ = 0;
+    int drag_resolution_ = 0;
 
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     int drag_perimeter_curr_h_ = 0;

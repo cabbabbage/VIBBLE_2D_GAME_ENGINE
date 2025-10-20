@@ -17,6 +17,8 @@
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
 #include "spawn_method_control_widgets/LinkToAreaButton.hpp"
 #include "utils/input.hpp"
+#include "utils/map_grid_settings.hpp"
+#include "util/grid.hpp"
 
 class SpawnGroupLabelWidget : public Widget {
 public:
@@ -439,6 +441,7 @@ struct SpawnGroupConfig::Entry {
           area_provider_(empty_provider()),
           candidate_graph_(std::make_unique<CandidateEditorPieGraphWidget>()) {
         editable_ = (owner_->bound_array_ != nullptr) || (owner_->bound_entry_ != nullptr);
+        current_resolution_ = owner_ ? owner_->default_resolution_ : vibble::grid::clamp_resolution(MapGridSettings::defaults().resolution);
         method_options_ = build_method_options(kDefaultMethod);
 
         if (candidate_graph_) {
@@ -547,6 +550,16 @@ struct SpawnGroupConfig::Entry {
         auto exact_box = std::make_unique<DMTextBox>("Quantity", "");
         exact_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(exact_box),
             [this](const std::string& text) { on_exact_changed(text); }, false, editable_);
+
+        auto resolution_slider = std::make_unique<DMSlider>("Grid Resolution (2^r px)",
+                                                            0,
+                                                            vibble::grid::kMaxResolution,
+                                                            current_resolution_);
+        resolution_slider->set_defer_commit_until_unfocus(false);
+        resolution_widget_ = std::make_unique<SpawnGroupCallbackSliderWidget>(
+            std::move(resolution_slider),
+            [this](int value) { on_resolution_changed(value); },
+            editable_);
 
         auto radius_slider = std::make_unique<DMSlider>("Perimeter Radius (px)",
                                                         kPerimeterRadiusSliderMin,
@@ -695,6 +708,13 @@ struct SpawnGroupConfig::Entry {
         bool previous_show_radius = show_perimeter_radius_widget_;
         show_perimeter_radius_widget_ = (method == "Perimeter");
 
+        int resolution_value = vibble::grid::clamp_resolution(safe_int(entry, "resolution", owner_ ? owner_->default_resolution_ : current_resolution_));
+        current_resolution_ = resolution_value;
+        if (resolution_widget_) {
+            resolution_widget_->set_value(resolution_value);
+            resolution_widget_->set_editable(editable_);
+        }
+
         int radius_value = safe_int(entry, "radius", safe_int(entry, "perimeter_radius", kPerimeterRadiusSliderMin));
         if (radius_value < kPerimeterRadiusSliderMin) {
             radius_value = kPerimeterRadiusSliderMin;
@@ -758,6 +778,9 @@ struct SpawnGroupConfig::Entry {
         min_widget_->set_editable(editable_);
         max_widget_->set_editable(editable_);
         exact_widget_->set_editable(editable_);
+        if (resolution_widget_) {
+            resolution_widget_->set_editable(editable_);
+        }
         if (perimeter_radius_widget_) {
             perimeter_radius_widget_->set_editable(editable_ && show_perimeter_radius_widget_);
         }
@@ -812,6 +835,10 @@ struct SpawnGroupConfig::Entry {
                 }
             }
 
+            if (resolution_widget_) {
+                rows.push_back({resolution_widget_.get()});
+            }
+
             if (show_perimeter_radius_widget_ && perimeter_radius_widget_) {
                 rows.push_back({perimeter_radius_widget_.get()});
             }
@@ -837,13 +864,15 @@ struct SpawnGroupConfig::Entry {
     }
 
 private:
-    void notify_change(bool method_changed, bool quantity_changed, bool candidates_changed) {
+    void notify_change(bool method_changed, bool quantity_changed, bool candidates_changed, bool resolution_changed = false) {
         if (!owner_) return;
         SpawnGroupConfig::ChangeSummary summary;
         summary.method_changed = method_changed;
         summary.quantity_changed = quantity_changed;
         summary.candidates_changed = candidates_changed;
         summary.method = current_method_;
+        summary.resolution_changed = resolution_changed;
+        summary.resolution = current_resolution_;
 
         nlohmann::json entry_copy = entry_view();
 
@@ -1160,6 +1189,20 @@ private:
         }
     }
 
+    void on_resolution_changed(int value) {
+        if (!editable_) return;
+        int clamped = vibble::grid::clamp_resolution(value);
+        if (auto* entry = mutable_entry()) {
+            int current = safe_int(*entry, "resolution", current_resolution_);
+            if (current == clamped) {
+                return;
+            }
+            (*entry)["resolution"] = clamped;
+            current_resolution_ = clamped;
+            notify_change(false, false, false, true);
+        }
+    }
+
     void on_perimeter_radius_changed(int value) {
         if (!editable_) return;
         int clamped = std::max(kPerimeterRadiusSliderMin, value);
@@ -1222,8 +1265,10 @@ private:
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> min_widget_{};
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> max_widget_{};
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> exact_widget_{};
+    std::unique_ptr<SpawnGroupCallbackSliderWidget> resolution_widget_{};
     std::unique_ptr<SpawnGroupCallbackSliderWidget> perimeter_radius_widget_{};
     bool show_perimeter_radius_widget_ = false;
+    int current_resolution_ = 0;
 
     std::optional<size_t> array_index_{};
 
@@ -1235,6 +1280,7 @@ private:
 SpawnGroupConfig::SpawnGroupConfig(bool floatable)
     : DockableCollapsible("Spawn Groups", floatable),
       default_floatable_mode_(floatable) {
+    default_resolution_ = vibble::grid::clamp_resolution(MapGridSettings::defaults().resolution);
     set_scroll_enabled(true);
     set_cell_width(420);
     set_row_gap(8);
@@ -1246,6 +1292,15 @@ SpawnGroupConfig::SpawnGroupConfig(bool floatable)
 }
 
 SpawnGroupConfig::~SpawnGroupConfig() = default;
+
+void SpawnGroupConfig::set_default_resolution(int resolution) {
+    default_resolution_ = vibble::grid::clamp_resolution(resolution);
+    for (auto& entry : entries_) {
+        if (!entry) continue;
+        entry->sync_from_json();
+    }
+    mark_layout_dirty();
+}
 
 void SpawnGroupConfig::set_screen_dimensions(int width, int height) {
     screen_w_ = width;
@@ -1297,7 +1352,7 @@ void SpawnGroupConfig::load(const nlohmann::json& groups) {
     }
     for (auto& item : readonly_snapshot_) {
         if (!item.is_object()) continue;
-        devmode::spawn::ensure_spawn_group_entry_defaults(item, default_display_name_for(item));
+        devmode::spawn::ensure_spawn_group_entry_defaults(item, default_display_name_for(item), default_resolution_);
     }
     single_entry_shadow_.clear();
     rebuild_rows();
@@ -1311,19 +1366,19 @@ void SpawnGroupConfig::load_impl(nlohmann::json* array,
     bound_array_ = array;
     bound_entry_ = entry;
     if (bound_entry_) {
-        devmode::spawn::ensure_spawn_group_entry_defaults(*bound_entry_, default_display_name_for(*bound_entry_));
+        devmode::spawn::ensure_spawn_group_entry_defaults(*bound_entry_, default_display_name_for(*bound_entry_), default_resolution_);
     }
     if (bound_array_) {
         devmode::spawn::ensure_spawn_groups_array(*bound_array_);
         for (auto& item : *bound_array_) {
             if (!item.is_object()) continue;
-            devmode::spawn::ensure_spawn_group_entry_defaults(item, default_display_name_for(item));
+            devmode::spawn::ensure_spawn_group_entry_defaults(item, default_display_name_for(item), default_resolution_);
         }
     }
     if (bound_entry_) {
         single_entry_shadow_ = nlohmann::json::array();
         single_entry_shadow_.push_back(*bound_entry_);
-        devmode::spawn::ensure_spawn_group_entry_defaults(single_entry_shadow_.at(0), default_display_name_for(single_entry_shadow_.at(0)));
+        devmode::spawn::ensure_spawn_group_entry_defaults(single_entry_shadow_.at(0), default_display_name_for(single_entry_shadow_.at(0)), default_resolution_);
     } else {
         single_entry_shadow_.clear();
         if (bound_array_) {

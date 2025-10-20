@@ -30,6 +30,7 @@
 #include "utils/input.hpp"
 #include "util/grid.hpp"
 #include "util/grid_occupancy.hpp"
+#include "utils/map_grid_settings.hpp"
 #include "utils/relative_room_position.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 
@@ -810,7 +811,9 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     if (height > 0) entry["origional_height"] = height;
     entry["display_name"] = info->name;
 
-    devmode::spawn::ensure_spawn_group_entry_defaults(entry, info->name);
+    const int default_resolution = current_room_ ? current_room_->map_grid_settings().resolution
+                                                 : MapGridSettings::defaults().resolution;
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, info->name, default_resolution);
 
     entry["candidates"].push_back({{"name", info->name}, {"chance", 100}});
 
@@ -867,6 +870,8 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
     target_groups = nlohmann::json::array();
 
     const nlohmann::json* source_groups = find_spawn_groups_array(source_room->assets_data());
+    const int template_resolution = current_room_ ? current_room_->map_grid_settings().resolution
+                                                  : MapGridSettings::defaults().resolution;
     if (source_groups) {
         for (const auto& entry : *source_groups) {
             if (!entry.is_object()) continue;
@@ -876,7 +881,8 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
                 clone,
                 clone.contains("display_name") && clone["display_name"].is_string()
                     ? clone["display_name"].get<std::string>()
-                    : std::string{"New Spawn"});
+                    : std::string{"New Spawn"},
+                template_resolution);
             target_groups.push_back(clone);
         }
     }
@@ -1644,6 +1650,15 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     drag_anchor_asset_ = primary;
     drag_spawn_id_ = primary->spawn_id;
 
+    MapGridSettings map_settings = current_room_ ? current_room_->map_grid_settings() : MapGridSettings::defaults();
+    map_settings.clamp();
+    drag_resolution_ = vibble::grid::clamp_resolution(map_settings.resolution);
+    if (!drag_spawn_id_.empty()) {
+        if (nlohmann::json* entry = find_spawn_entry(drag_spawn_id_)) {
+            drag_resolution_ = vibble::grid::clamp_resolution(entry->value("resolution", drag_resolution_));
+        }
+    }
+
     const std::string& method = primary->spawn_method;
     if (method == "Exact" || method == "Exact Position") {
         drag_mode_ = DragMode::Exact;
@@ -1750,6 +1765,7 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
         drag_perimeter_center_offset_world_.x += delta.x;
         drag_perimeter_center_offset_world_.y += delta.y;
     }
+    snap_dragged_assets_to_grid();
     drag_last_world_ = world_mouse;
     drag_moved_ = true;
 }
@@ -1818,6 +1834,46 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
             changed = true;
         }
     }
+    if (changed) {
+        drag_moved_ = true;
+    }
+    snap_dragged_assets_to_grid();
+}
+
+void RoomEditor::snap_dragged_assets_to_grid() {
+    if (drag_states_.empty()) return;
+    const int resolution = vibble::grid::clamp_resolution(drag_resolution_);
+    vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+    bool changed = false;
+
+    if (drag_mode_ == DragMode::PerimeterCenter) {
+        SDL_Point snapped_center = grid_service.snap_to_vertex(drag_perimeter_circle_center_, resolution);
+        if (snapped_center.x != drag_perimeter_circle_center_.x || snapped_center.y != drag_perimeter_circle_center_.y) {
+            const int dx = snapped_center.x - drag_perimeter_circle_center_.x;
+            const int dy = snapped_center.y - drag_perimeter_circle_center_.y;
+            drag_perimeter_circle_center_ = snapped_center;
+            drag_perimeter_center_offset_world_.x += dx;
+            drag_perimeter_center_offset_world_.y += dy;
+            for (auto& state : drag_states_) {
+                if (!state.asset) continue;
+                state.asset->pos.x += dx;
+                state.asset->pos.y += dy;
+            }
+            changed = true;
+        }
+    }
+
+    for (auto& state : drag_states_) {
+        if (!state.asset) continue;
+        SDL_Point current{state.asset->pos.x, state.asset->pos.y};
+        SDL_Point snapped = grid_service.snap_to_vertex(current, resolution);
+        if (snapped.x != state.asset->pos.x || snapped.y != state.asset->pos.y) {
+            state.asset->pos.x = snapped.x;
+            state.asset->pos.y = snapped.y;
+            changed = true;
+        }
+    }
+
     if (changed) {
         drag_moved_ = true;
     }
@@ -1907,6 +1963,7 @@ void RoomEditor::reset_drag_state() {
     drag_perimeter_orig_w_ = 0;
     drag_perimeter_orig_h_ = 0;
     drag_perimeter_curr_w_ = 0;
+    drag_resolution_ = 0;
     drag_perimeter_curr_h_ = 0;
     drag_moved_ = false;
     drag_spawn_id_.clear();
@@ -2061,7 +2118,9 @@ void RoomEditor::add_spawn_group_internal() {
     auto& arr = ensure_spawn_groups_array(root);
     nlohmann::json entry;
     entry["spawn_id"] = generate_spawn_id();
-    devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn");
+    const int add_default_resolution = current_room_ ? current_room_->map_grid_settings().resolution
+                                                     : MapGridSettings::defaults().resolution;
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn", add_default_resolution);
     arr.push_back(entry);
 
     for (size_t i = 0; i < arr.size(); ++i) {
@@ -2095,11 +2154,14 @@ void RoomEditor::duplicate_spawn_group_internal(const std::string& spawn_id) {
         std::string name = duplicate["display_name"].get<std::string>();
         duplicate["display_name"] = name + " Copy";
     }
+    const int duplicate_default_resolution = current_room_ ? current_room_->map_grid_settings().resolution
+                                                           : MapGridSettings::defaults().resolution;
     devmode::spawn::ensure_spawn_group_entry_defaults(
         duplicate,
         duplicate.contains("display_name") && duplicate["display_name"].is_string()
             ? duplicate["display_name"].get<std::string>()
-            : std::string{"New Spawn"});
+            : std::string{"New Spawn"},
+        duplicate_default_resolution);
     arr.push_back(duplicate);
 
     for (size_t i = 0; i < arr.size(); ++i) {

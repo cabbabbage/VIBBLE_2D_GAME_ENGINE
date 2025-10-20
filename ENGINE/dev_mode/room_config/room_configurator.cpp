@@ -8,6 +8,7 @@
 #include "tag_editor_widget.hpp"
 #include "tag_utils.hpp"
 #include "utils/input.hpp"
+#include "utils/map_grid_settings.hpp"
 #include "widgets.hpp"
 #include "font_cache.hpp"
 
@@ -1029,6 +1030,18 @@ void RoomConfigurator::rebuild_spawn_rows() {
         if (!config) {
             config = std::make_unique<SpawnGroupConfig>();
         }
+
+        int default_resolution = MapGridSettings::defaults().resolution;
+        if (room_) {
+            default_resolution = room_->map_grid_settings().resolution;
+        } else if (external_room_json_) {
+            const auto it = external_room_json_->find("map_grid_settings");
+            if (it != external_room_json_->end()) {
+                MapGridSettings settings = MapGridSettings::from_json(&*it);
+                default_resolution = settings.resolution;
+            }
+        }
+        config->set_default_resolution(default_resolution);
 
         // Panels are dockable collapsibles anchored inside the container
         config->set_embedded_mode(true);
