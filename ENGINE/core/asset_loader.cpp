@@ -1,6 +1,5 @@
 #include "asset_loader.hpp"
 #include "asset_loader_internal.hpp"
-#include <iostream>
 #include <algorithm>
 #include <memory>
 #include <vector>
@@ -181,8 +180,6 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
 
         const double remove_distance = static_cast<double>(remove_threshold);
         const double lock_distance = static_cast<double>(lock_threshold);
-        std::vector<Asset*> locked_boundary_assets;
-        locked_boundary_assets.reserve(rooms_.size());
         for (Room* room : rooms_) {
                 for (auto& asset_up : room->assets) {
                         Asset* asset = asset_up.get();
@@ -217,9 +214,6 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                         if (should_remove) {
                                 distant_assets.push_back(asset);
                                 continue;
-                        }
-                        if (should_lock) {
-                                locked_boundary_assets.push_back(asset);
                         }
                 }
         }

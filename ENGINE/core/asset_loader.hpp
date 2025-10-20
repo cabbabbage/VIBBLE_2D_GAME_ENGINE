@@ -49,8 +49,6 @@ class AssetLoader {
     const std::string& content_root() const { return map_path_; }
 
     std::unique_ptr<PrecomputedLightMap> take_precomputed_light_map();
-    const PrecomputedLightMap* precomputed_light_map() const { return precomputed_light_map_.get(); }
-
         private:
     std::string map_id_;
     std::string map_path_;
