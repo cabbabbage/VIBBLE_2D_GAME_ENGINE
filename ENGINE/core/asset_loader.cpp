@@ -25,6 +25,7 @@
 #include "map_generation/map_layers_geometry.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
+#include "util/grid.hpp"
 #include <nlohmann/json.hpp>
 #include "utils/loading_status_notifier.hpp"
 #include "utils/log.hpp"
@@ -39,6 +40,32 @@ namespace {
         constexpr std::int64_t kMaxStaticLightPixels       =
             kMaxStaticLightTextureBytes / (kBytesPerPixel > 0 ? kBytesPerPixel : 1);
         static_assert(kMaxStaticLightPixels > 0, "Max static light pixels must be positive.");
+
+        std::int64_t floor_div64(std::int64_t value, std::int64_t step) {
+                if (step == 0) {
+                        return 0;
+                }
+                const std::int64_t quotient  = value / step;
+                const std::int64_t remainder = value % step;
+                if (remainder == 0) {
+                        return quotient;
+                }
+                if ((remainder < 0) != (step < 0)) {
+                        return quotient - 1;
+                }
+                return quotient;
+        }
+
+        int clamp_to_int(std::int64_t value) {
+                if (value < static_cast<std::int64_t>(std::numeric_limits<int>::min())) {
+                        return std::numeric_limits<int>::min();
+                }
+                if (value > static_cast<std::int64_t>(std::numeric_limits<int>::max())) {
+                        return std::numeric_limits<int>::max();
+                }
+                return static_cast<int>(value);
+        }
+
         Asset* findCenterAsset(const std::vector<Asset*>& group) {
                 if (group.empty()) return nullptr;
                 double avgX = std::accumulate(group.begin(), group.end(), 0.0,
@@ -639,32 +666,19 @@ void AssetLoader::precompute_light_map(world::Grid& grid) {
         vibble::log::info("[AssetLoader] Completed light map precomputation for all chunks.");
 }
 
-namespace {
-int floor_div(int value, int step) {
-        if (step == 0) {
-                return 0;
-        }
-        const int quotient = value / step;
-        const int remainder = value % step;
-        if (remainder == 0) {
-                return quotient;
-        }
-        if ((remainder < 0) != (step < 0)) {
-                return quotient - 1;
-        }
-        return quotient;
-}
-} // namespace
-
 void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
         map_chunks_.clear();
-        const int r_chunk = std::max(0, grid.chunk_resolution());
-        const int step    = 1 << r_chunk;
-        if (step <= 0) {
+        const int r_chunk = std::clamp(grid.chunk_resolution(), 0, vibble::grid::kMaxResolution);
+        const std::int64_t step64 = std::int64_t{1} << r_chunk;
+        if (step64 <= 0 || step64 > static_cast<std::int64_t>(std::numeric_limits<int>::max())) {
+                vibble::log::warn("[AssetLoader] Skipping chunk instantiation due to unsupported chunk size.");
                 return;
         }
+        const int step = static_cast<int>(step64);
 
         SDL_Point origin = grid.origin();
+        const std::int64_t origin_x64 = static_cast<std::int64_t>(origin.x);
+        const std::int64_t origin_y64 = static_cast<std::int64_t>(origin.y);
 
         const auto chunk_key = [](int i, int j) {
                 const auto hi = static_cast<std::uint32_t>(i);
@@ -691,15 +705,6 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 chunk.lighting_dirty      = true;
                 chunk.has_dynamic_overlay = false;
                 map_chunks_.push_back(&chunk);
-        };
-
-        auto expand_rect = [&](const SDL_Rect& rect) {
-                SDL_Rect expanded = rect;
-                expanded.x -= step;
-                expanded.y -= step;
-                expanded.w += step * 2;
-                expanded.h += step * 2;
-                return expanded;
         };
 
         bool discovered_static_light = false;
@@ -738,12 +743,17 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                                 draw_w,
                                 draw_h};
 
-                        SDL_Rect expanded = expand_rect(world_dst);
+                        const std::int64_t min_x = static_cast<std::int64_t>(world_dst.x) - step64 - origin_x64;
+                        const std::int64_t min_y = static_cast<std::int64_t>(world_dst.y) - step64 - origin_y64;
+                        const std::int64_t max_x = static_cast<std::int64_t>(world_dst.x) +
+                                                   static_cast<std::int64_t>(world_dst.w) - 1 + step64 - origin_x64;
+                        const std::int64_t max_y = static_cast<std::int64_t>(world_dst.y) +
+                                                   static_cast<std::int64_t>(world_dst.h) - 1 + step64 - origin_y64;
 
-                        const int i_min = floor_div(expanded.x - origin.x, step);
-                        const int j_min = floor_div(expanded.y - origin.y, step);
-                        const int i_max = floor_div(expanded.x + expanded.w - 1 - origin.x, step);
-                        const int j_max = floor_div(expanded.y + expanded.h - 1 - origin.y, step);
+                        const int i_min = clamp_to_int(floor_div64(min_x, step64));
+                        const int j_min = clamp_to_int(floor_div64(min_y, step64));
+                        const int i_max = clamp_to_int(floor_div64(max_x, step64));
+                        const int j_max = clamp_to_int(floor_div64(max_y, step64));
 
                         for (int j = j_min; j <= j_max; ++j) {
                                 for (int i = i_min; i <= i_max; ++i) {
@@ -755,10 +765,10 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
 
         if (!discovered_static_light) {
                 // Ensure at least one chunk exists so downstream systems have a stable baseline.
-                const int center_x = static_cast<int>(std::llround(map_center_x_));
-                const int center_y = static_cast<int>(std::llround(map_center_y_));
-                const int i = floor_div(center_x - origin.x, step);
-                const int j = floor_div(center_y - origin.y, step);
+                const std::int64_t center_x = static_cast<std::int64_t>(std::llround(map_center_x_));
+                const std::int64_t center_y = static_cast<std::int64_t>(std::llround(map_center_y_));
+                const int i = clamp_to_int(floor_div64(center_x - origin_x64, step64));
+                const int j = clamp_to_int(floor_div64(center_y - origin_y64, step64));
                 register_chunk(i, j);
         }
 
@@ -848,7 +858,14 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
 #endif
 
         SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
-        SDL_SetRenderTarget(renderer_, texture);
+        if (SDL_SetRenderTarget(renderer_, texture) != 0) {
+                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
+                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
+                                  ") due to SDL_SetRenderTarget failure: " + SDL_GetError());
+                SDL_DestroyTexture(texture);
+                SDL_SetRenderTarget(renderer_, previous_target);
+                return;
+        }
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
         SDL_RenderClear(renderer_);

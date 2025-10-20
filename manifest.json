@@ -11725,8 +11725,7 @@
           "zoom": 1.0
         }
       },
-      "lighting_info": [
-      ],
+      "lighting_info": [],
       "mappings": {},
       "max_child_depth": 2,
       "min_child_depth": 0,
@@ -17372,6 +17371,76 @@
           ]
         }
       }
+    },
+    "test": {
+      "camera_settings": {},
+      "content_root": "MAPS/test",
+      "map_assets_data": {},
+      "map_boundary_data": {},
+      "map_grid_settings": {
+        "jitter": 0,
+        "spacing": 100
+      },
+      "map_layers": [
+        {
+          "level": 0,
+          "max_rooms": 1,
+          "rooms": [
+            {
+              "max_instances": 1,
+              "name": "spawn",
+              "required_children": []
+            }
+          ]
+        }
+      ],
+      "map_light_data": {
+        "base_color": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "fall_off": 100,
+        "intensity": 255,
+        "keys": [
+          [
+            0.0,
+            [
+              255,
+              255,
+              255,
+              255
+            ]
+          ]
+        ],
+        "max_opacity": 255,
+        "min_opacity": 0,
+        "mult": 0.0,
+        "orbit_radius": 0,
+        "orbit_x": 0,
+        "orbit_y": 0,
+        "radius": 0,
+        "update_interval": 10
+      },
+      "map_name": "test",
+      "rooms_data": {
+        "spawn": {
+          "edge_smoothness": 2,
+          "geometry": "Circle",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": true,
+          "max_height": 3000,
+          "max_width": 3000,
+          "min_height": 3000,
+          "min_width": 3000,
+          "name": "spawn",
+          "radius": 1500,
+          "spawn_groups": []
+        }
+      },
+      "trails_data": {}
     }
   },
   "version": 1
