@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <utility>
+#include <optional>
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"

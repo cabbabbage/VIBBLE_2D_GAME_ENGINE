@@ -6,7 +6,7 @@
 
 #include "DockableCollapsible.hpp"
 
-namespace nlohmann { class json; }
+#include <nlohmann/json.hpp>
 class Assets; class Input; class SDL_Renderer;
 
 class MapShadowPanel : public DockableCollapsible {

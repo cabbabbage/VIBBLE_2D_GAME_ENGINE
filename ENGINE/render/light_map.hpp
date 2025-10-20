@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "precomputed_light_map.hpp"
+#include "world/chunk.hpp"
 
 class Assets;
 class Asset;

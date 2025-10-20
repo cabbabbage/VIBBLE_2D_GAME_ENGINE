@@ -43,8 +43,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   main_light_source_,
                                   assets->player,
                                   nullptr,
-                                  &reactive_shadow_settings_,
-                                  nullptr })
+                                  &reactive_shadow_settings_ })
 {
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
     light_map_ = std::make_unique<LightMap>(assets_,
