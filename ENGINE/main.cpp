@@ -124,9 +124,9 @@ void MainApp::setup() {
                 auto spawn_begin = std::chrono::steady_clock::now();
                 world::Grid world_grid{};
                 loader_->createAssets(world_grid);
-                std::cout << "[MainApp] Asset spawning finished for map '" << map_identifier << "'.\n";
+                log::info(std::string("[MainApp] Asset spawning finished for map '") + map_identifier + "'.");
                 auto all_assets = loader_->take_spawned_assets();
-                std::cout << "[MainApp] " << all_assets.size() << " assets created and cached.\n";
+                log::info(std::string("[MainApp] ") + std::to_string(all_assets.size()) + " assets created and cached.");
                 const auto asset_count = all_assets.size();
                 const auto room_count = loader_->getRooms().size();
                 Asset* player_ptr = nullptr;
@@ -384,22 +384,21 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
     try {
         manifest_data = manifest::load_manifest();
     } catch (const std::exception& ex) {
-        std::cerr << "[Main] Failed to load manifest: " << ex.what() << "\n";
+        log::error(std::string("[Main] Failed to load manifest: ") + ex.what());
         return;
     }
 
     std::shared_ptr<AssetLibrary> shared_asset_library = std::make_shared<AssetLibrary>(false);
-    std::cout << "[Main] Preparing asset metadata cache...\n";
+    log::info("[Main] Preparing asset metadata cache...");
     shared_asset_library->load_all_from_SRC();
-    std::cout << "[Main] Asset metadata cache ready for "
-              << shared_asset_library->all().size() << " asset(s).\n";
-    std::cout << "[Main] Loading cached asset resources...\n";
+    log::info(std::string("[Main] Asset metadata cache ready for ") + std::to_string(shared_asset_library->all().size()) + " asset(s).");
+    log::info("[Main] Loading cached asset resources...");
     shared_asset_library->loadAllAnimations(renderer);
-    std::cout << "[Main] Cached asset resources loaded.\n";
+    log::info("[Main] Cached asset resources loaded.");
 
     while (true) {
         MainMenu menu(renderer, screen_w, screen_h, manifest_data.maps);
-        std::cout << "[Main] Main menu displayed.\n";
+        log::info("[Main] Main menu displayed.");
         std::optional<MapDescriptor> chosen_map;
         bool quit_requested = false;
         SDL_Event e;
@@ -424,7 +423,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                     auto created = create_new_map_interactively();
                     if (created) {
                         chosen_map = std::move(*created);
-                        std::cout << "[Main] New map created and selected: " << chosen_map->id << "\n";
+                        log::info(std::string("[Main] New map created and selected: ") + chosen_map->id);
                         choosing = false;
                     }
                     continue;
@@ -433,7 +432,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                 descriptor.id   = result->id;
                 descriptor.data = result->data;
                 chosen_map = std::move(descriptor);
-                std::cout << "[Main] Map selected: " << chosen_map->id << "\n";
+                log::info(std::string("[Main] Map selected: ") + chosen_map->id);
                 choosing = false;
                 break;
             }
@@ -449,19 +448,16 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         MapDescriptor selected_map = std::move(*chosen_map);
         LoadingScreen loading_screen(renderer, screen_w, screen_h);
         loading_screen.init();
-        loading_screen.set_status("Loading assets");
-        loading_screen.draw_frame();
-        SDL_RenderPresent(renderer);
-        SDL_PumpEvents();
+        // Removed on-screen loading status; terminal logs will indicate progress.
         if (rebuild_cache) {
-            std::cout << "[Main] Rebuilding asset cache...\n";
+            log::info("[Main] Rebuilding asset cache...");
             RebuildAssets* rebuilder = new RebuildAssets(renderer, selected_map.id);
             delete rebuilder;
-            std::cout << "[Main] Asset cache rebuild complete.\n";
-            std::cout << "[Main] Refreshing shared asset library after cache rebuild...\n";
+            log::info("[Main] Asset cache rebuild complete.");
+            log::info("[Main] Refreshing shared asset library after cache rebuild...");
             shared_asset_library->load_all_from_SRC();
             shared_asset_library->loadAllAnimations(renderer);
-            std::cout << "[Main] Shared asset library refreshed.\n";
+            log::info("[Main] Shared asset library refreshed.");
         }
         MenuUI app(renderer,
                    screen_w,
@@ -476,44 +472,44 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
 }
 
 int main(int argc, char* argv[]) {
-	std::cout << "[Main] Starting game engine...\n";
+	log::info("[Main] Starting game engine...");
 	const bool rebuild_cache = (argc > 1 && argv[1] && std::string(argv[1]) == "-r");
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-                std::cerr << "SDL_Init failed: " << SDL_GetError() << "\n"; return 1;
+                log::error(std::string("SDL_Init failed: ") + SDL_GetError()); return 1;
         }
         if (SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2") != SDL_TRUE) {
                 SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
         }
-        std::cout << "[Main] Requested high quality texture filtering.\n";
+        log::info("[Main] Requested high quality texture filtering.");
         if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
-                std::cerr << "Mix_OpenAudio failed: " << Mix_GetError() << "\n"; SDL_Quit(); return 1;
+                log::error(std::string("Mix_OpenAudio failed: ") + Mix_GetError()); SDL_Quit(); return 1;
         }
 	if (TTF_Init() < 0) {
-		std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n"; SDL_Quit(); return 1;
+		log::error(std::string("TTF_Init failed: ") + TTF_GetError()); SDL_Quit(); return 1;
 	}
 	if (!(IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG | IMG_INIT_TIF | IMG_INIT_WEBP) &
 	(IMG_INIT_PNG | IMG_INIT_JPG | IMG_INIT_TIF | IMG_INIT_WEBP))) {
-		std::cerr << "IMG_Init failed: " << IMG_GetError() << "\n"; SDL_Quit(); return 1;
+		log::error(std::string("IMG_Init failed: ") + IMG_GetError()); SDL_Quit(); return 1;
 	}
 	SDL_Window* window = SDL_CreateWindow("Game Window", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
 	if (!window) {
-		std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << "\n";
+		log::error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
 		IMG_Quit(); TTF_Quit(); SDL_Quit(); return 1;
 	}
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 	if (!renderer) {
-		std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << "\n";
+		log::error(std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
 		SDL_DestroyWindow(window); IMG_Quit(); TTF_Quit(); SDL_Quit(); return 1;
 	}
 	SDL_RendererInfo info; SDL_GetRendererInfo(renderer, &info);
-	std::cout << "[Main] Renderer: " << (info.name ? info.name : "Unknown") << "\n";
+	log::info(std::string("[Main] Renderer: ") + (info.name ? info.name : "Unknown"));
 	int screen_width = 0, screen_height = 0;
 	SDL_GetRendererOutputSize(renderer, &screen_width, &screen_height);
-	std::cout << "[Main] Screen resolution: " << screen_width << "x" << screen_height << "\n";
+	log::info(std::string("[Main] Screen resolution: ") + std::to_string(screen_width) + "x" + std::to_string(screen_height));
 	run(window, renderer, screen_width, screen_height, rebuild_cache);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	IMG_Quit(); TTF_Quit(); SDL_Quit();
-	std::cout << "[Main] Game exited cleanly.\n";
+	log::info("[Main] Game exited cleanly.");
 	return 0;
 }

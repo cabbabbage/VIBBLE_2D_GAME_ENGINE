@@ -26,6 +26,7 @@
 #include "world/grid.hpp"
 #include <nlohmann/json.hpp>
 #include "utils/loading_status_notifier.hpp"
+#include "utils/log.hpp"
 using json = nlohmann::json;
 
 namespace {
@@ -65,7 +66,7 @@ map_path_(std::move(content_root)),
 renderer_(renderer),
 manifest_store_(manifest_store)
 {
-        std::cout << "[AssetLoader] Starting loader for map_id='" << map_id_ << "'\n";
+        log::info(std::string("[AssetLoader] Start for map '") + map_id_ + "'.");
         using_shared_asset_library_ = (shared_asset_library != nullptr);
         if (using_shared_asset_library_) {
                 asset_library_ = shared_asset_library;
@@ -80,7 +81,7 @@ manifest_store_(manifest_store)
         loading_status::notify("Loading map data");
         load_map_json(map_manifest);
         const auto map_end = std::chrono::steady_clock::now();
-        std::cout << "[AssetLoader] Map JSON parsed for '" << map_id_ << "'\n";
+        log::debug(std::string("[AssetLoader] Map JSON parsed for '") + map_id_ + "'.");
 
         const nlohmann::json& audio_manifest = map_info_json_.contains("audio") ? map_info_json_.at("audio") : nlohmann::json::object();
         AudioEngine::instance().init(map_id_, audio_manifest, map_path_);
@@ -89,15 +90,14 @@ manifest_store_(manifest_store)
         loading_status::notify("Loading assets");
         const auto library_end = std::chrono::steady_clock::now();
         if (asset_library_) {
-                std::cout << "[AssetLoader] Asset library ready with "
-                          << asset_library_->all().size() << " known assets\n";
+                log::info(std::string("[AssetLoader] Asset library ready with ") + std::to_string(asset_library_->all().size()) + " known assets");
         }
 
         const auto rooms_begin = std::chrono::steady_clock::now();
         loading_status::notify("Creating map");
         loadRooms();
         const auto rooms_end = std::chrono::steady_clock::now();
-        std::cout << "[AssetLoader] Rooms created: " << rooms_.size() << "\n";
+        log::info(std::string("[AssetLoader] Rooms created: ") + std::to_string(rooms_.size()));
         loading_status::notify("Loading assets");
     {
         const auto preload_begin = std::chrono::steady_clock::now();
@@ -112,40 +112,40 @@ manifest_store_(manifest_store)
                         }
                 }
                 const std::size_t preload_count = used.size();
-                std::cout << "[AssetLoader] Preloading animations for used assets (" << preload_count << ")...\n";
+                log::info(std::string("[AssetLoader] Preloading animations for used assets (") + std::to_string(preload_count) + ")...");
                 asset_library_->loadAnimationsFor(renderer_, used);
 
                 const auto preload_end = std::chrono::steady_clock::now();
                 const double preload_ms = std::chrono::duration_cast<std::chrono::milliseconds>(preload_end - preload_begin).count();
-                std::cout << "[AssetLoader] Preloaded animations for " << preload_count
-                          << " referenced assets in " << preload_ms << "ms\n";
+                log::info(std::string("[AssetLoader] Preloaded animations for ") + std::to_string(preload_count) +
+                          " referenced assets in " + std::to_string(preload_ms) + "ms");
         } else {
-                std::cout << "[AssetLoader] Using shared asset library cache; skipping per-map preload.\n";
+                log::info("[AssetLoader] Using shared asset library cache; skipping per-map preload.");
         }
     }
 
     if (asset_library_) {
         if (renderer_) {
                 asset_library_->ensureAllAnimationsLoaded(renderer_);
-                std::cout << "[AssetLoader] Asset library warmup complete; animations cached in renderer.\n";
+                log::info("[AssetLoader] Asset library warmup complete; animations cached in renderer.");
         } else {
-                std::cerr << "[AssetLoader] Renderer unavailable; skipping asset library cache warmup.\n";
+                log::warn("[AssetLoader] Renderer unavailable; skipping asset library cache warmup.");
         }
     }
         loading_status::notify("Loading assets");
-        std::cout << "[AssetLoader] Beginning finalizeAssets across rooms...\n";
+        log::info("[AssetLoader] Finalizing assets across rooms...");
         finalizeAssets();
-        std::cout << "[AssetLoader] Asset finalization completed; all assets are ready.\n";
+        log::info("[AssetLoader] Asset finalization completed; all assets are ready.");
 
         const auto overall_end = std::chrono::steady_clock::now();
         const double map_ms = std::chrono::duration_cast<std::chrono::milliseconds>(map_end - map_begin).count();
         const double library_ms = std::chrono::duration_cast<std::chrono::milliseconds>(library_end - library_begin).count();
         const double rooms_ms = std::chrono::duration_cast<std::chrono::milliseconds>(rooms_end - rooms_begin).count();
         const double total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(overall_end - overall_begin).count();
-        std::cout << "[AssetLoader] Map metadata loaded in " << map_ms << "ms\n";
-        std::cout << "[AssetLoader] Asset library ready in " << library_ms << "ms\n";
-        std::cout << "[AssetLoader] Rooms built in " << rooms_ms << "ms\n";
-        std::cout << "[AssetLoader] Asset loader initialization completed in " << total_ms << "ms\n";
+        log::info(std::string("[AssetLoader] Map metadata loaded in ") + std::to_string(map_ms) + "ms");
+        log::info(std::string("[AssetLoader] Asset library ready in ") + std::to_string(library_ms) + "ms");
+        log::info(std::string("[AssetLoader] Rooms built in ") + std::to_string(rooms_ms) + "ms");
+        log::info(std::string("[AssetLoader] Initialization completed in ") + std::to_string(total_ms) + "ms");
         auto distant_boundary = collectDistantAssets(150, 400);
         for (auto* asset : distant_boundary) {
                 asset->set_hidden(true);

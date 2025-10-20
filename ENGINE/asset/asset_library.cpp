@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <iostream>
 #include <chrono>
+#include "utils/log.hpp"
 
 AssetLibrary::AssetLibrary(bool auto_load) {
         if (auto_load) {
@@ -20,17 +21,18 @@ void AssetLibrary::load_all_from_SRC() {
         try {
                 manifest = manifest::load_manifest();
         } catch (const std::exception& error) {
-                std::cerr << "[AssetLibrary] Failed to load manifest: " << error.what() << "\n";
+                log::error(std::string("[AssetLibrary] Failed to load manifest: ") + error.what());
                 return;
         }
 
         if (!manifest.assets.is_object()) {
-                std::cerr << "[AssetLibrary] Manifest assets section is missing or malformed.\n";
+                log::error("[AssetLibrary] Manifest assets section is missing or malformed.");
                 return;
         }
 
         int loaded = 0;
         int failed = 0;
+        const auto start_ms = std::chrono::steady_clock::now();
 
         for (auto it = manifest.assets.begin(); it != manifest.assets.end(); ++it) {
                 const std::string name = it.key();
@@ -38,12 +40,7 @@ void AssetLibrary::load_all_from_SRC() {
 
                 if (!metadata.is_object()) {
                         ++failed;
-                        std::cerr << "[AssetLibrary] Manifest entry for asset '" << name
-                                  << "' is not a JSON object.\n";
-                        std::cout << "[AssetLibrary] Loaded: " << loaded
-                                  << "   Failed: " << failed
-                                  << "   Current: " << std::left << std::setw(20) << name << "\r"
-                                  << std::flush;
+                        log::warn(std::string("[AssetLibrary] Manifest entry for asset '") + name + "' is not a JSON object.");
                         continue;
                 }
 
@@ -63,22 +60,17 @@ void AssetLibrary::load_all_from_SRC() {
                         ++loaded;
                 } catch (const std::exception& error) {
                         ++failed;
-                        std::cerr << "[AssetLibrary] Failed to load asset '" << name
-                                  << "': " << error.what() << "\n";
+                        log::warn(std::string("[AssetLibrary] Failed to load asset '") + name + "': " + error.what());
                 } catch (...) {
                         ++failed;
-                        std::cerr << "[AssetLibrary] Failed to load asset '" << name
-                                  << "' due to an unknown error.\n";
+                        log::warn(std::string("[AssetLibrary] Failed to load asset '") + name + "' due to an unknown error.");
                 }
-
-                std::cout << "[AssetLibrary] Loaded: " << loaded
-                          << "   Failed: " << failed
-                          << "   Current: " << std::left << std::setw(20) << name << "\r"
-                          << std::flush;
         }
-
-        std::cout << std::endl
-                  << "[AssetLibrary] Loaded " << info_by_name_.size() << " assets.\n";
+        const auto end_ms = std::chrono::steady_clock::now();
+        const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_ms - start_ms).count();
+        log::info(std::string("[AssetLibrary] Loaded ") + std::to_string(info_by_name_.size()) +
+                  " assets (ok=" + std::to_string(loaded) + ", failed=" + std::to_string(failed) + ") in " +
+                  std::to_string(elapsed_ms) + "ms");
 }
 
 std::shared_ptr<AssetInfo> AssetLibrary::get(const std::string& name) const {
@@ -110,8 +102,8 @@ void AssetLibrary::loadAllAnimations(SDL_Renderer* renderer) {
     }
     const auto end = std::chrono::steady_clock::now();
     const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
-    std::cout << "[AssetLibrary] Preloaded animations for " << loaded
-              << " asset(s) in " << elapsed_ms << "ms\n";
+    log::info(std::string("[AssetLibrary] Preloaded animations for ") + std::to_string(loaded) +
+              " asset(s) in " + std::to_string(elapsed_ms) + "ms");
     animations_fully_cached_ = true;
 }
 
@@ -139,31 +131,31 @@ void AssetLibrary::ensureAllAnimationsLoaded(SDL_Renderer* renderer) {
     if (loaded_now > 0) {
         const auto end = std::chrono::steady_clock::now();
         const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
-        std::cout << "[AssetLibrary] Cached animations for " << loaded_now
-                  << " additional asset(s) (" << already_cached
-                  << " already cached) in " << elapsed_ms << "ms\n";
+        log::info(std::string("[AssetLibrary] Cached animations for ") + std::to_string(loaded_now) +
+                  " additional asset(s) (" + std::to_string(already_cached) +
+                  ") in " + std::to_string(elapsed_ms) + "ms");
     }
 }
 
 void AssetLibrary::loadAnimationsFor(SDL_Renderer* renderer, const std::unordered_set<std::string>& names) {
-    std::cout << "[AssetLibrary] loadAnimationsFor: count=" << names.size() << "\n";
+    log::debug(std::string("[AssetLibrary] loadAnimationsFor: count=") + std::to_string(names.size()));
     std::size_t idx = 0;
     for (const auto& name : names) {
-        std::cout << "[AssetLibrary] (" << idx << "/" << names.size() << ") loading '" << name << "'...\n" << std::flush;
+        // Verbose per-asset line moved to debug level
+        log::debug(std::string("[AssetLibrary] (") + std::to_string(idx) + "/" + std::to_string(names.size()) + ") loading '" + name + "'...");
         auto it = info_by_name_.find(name);
         if (it != info_by_name_.end() && it->second) {
             try {
                 it->second->loadAnimations(renderer);
             } catch (const std::exception& ex) {
-                std::cerr << "[AssetLibrary] Exception while loading animations for '" << name << "': "
-                          << ex.what() << "\n" << std::flush;
+                log::error(std::string("[AssetLibrary] Exception while loading animations for '") + name + "': " + ex.what());
                 throw;
             } catch (...) {
-                std::cerr << "[AssetLibrary] Unknown exception while loading animations for '" << name << "'\n" << std::flush;
+                log::error(std::string("[AssetLibrary] Unknown exception while loading animations for '") + name + "'");
                 throw;
             }
         } else {
-            std::cerr << "[AssetLibrary] Missing AssetInfo for '" << name << "'\n";
+            log::warn(std::string("[AssetLibrary] Missing AssetInfo for '") + name + "'");
         }
         ++idx;
     }
