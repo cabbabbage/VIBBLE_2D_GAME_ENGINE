@@ -691,9 +691,6 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
                 if (asset->info->light_sources.empty() || asset->info->moving_asset) {
                         continue;
                 }
-                const float scale_factor = (asset->info && std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f)
-                                              ? asset->info->scale_factor
-                                              : 1.0f;
                 for (const auto& light : asset->info->light_sources) {
                         SDL_Texture* tex = light.texture;
                         if (!tex) {
@@ -708,8 +705,9 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
                                 continue;
                         }
 
-                        const int draw_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_w) * scale_factor)));
-                        const int draw_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_h) * scale_factor)));
+                        // Lights should appear on the baked map at the exact size authored for them.
+                        const int draw_w = std::max(1, src_w);
+                        const int draw_h = std::max(1, src_h);
                         SDL_Point world_center{asset->pos.x + light.offset_x, asset->pos.y + light.offset_y};
                         SDL_Rect world_dst{world_center.x - draw_w / 2,
                                            world_center.y - draw_h / 2,

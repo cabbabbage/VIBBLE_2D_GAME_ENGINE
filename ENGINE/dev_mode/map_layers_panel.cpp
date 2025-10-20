@@ -337,6 +337,9 @@ void MapLayersPanel::ensure_details_container() {
 void MapLayersPanel::set_map_info(nlohmann::json* map_info, const std::string& map_path) {
     map_info_ = map_info;
     map_path_ = map_path;
+    if (controller_) {
+        controller_->bind(map_info_, map_path_);
+    }
     preview_dirty_ = true;
     rebuild_visuals();
     open_room_list();
@@ -353,6 +356,9 @@ void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> control
             this->rebuild_visuals();
             this->update_details_container();
         });
+        if (map_info_) {
+            controller_->bind(map_info_, map_path_);
+        }
     }
 }
 

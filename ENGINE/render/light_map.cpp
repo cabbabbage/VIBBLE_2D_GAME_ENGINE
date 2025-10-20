@@ -148,11 +148,6 @@ bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
         if (!asset || !asset->info) continue;
         if (asset->info->light_sources.empty()) continue;
 
-        float scale_factor = 1.0f;
-        if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
-            scale_factor = asset->info->scale_factor;
-        }
-
         for (const auto& light : asset->info->light_sources) {
             SDL_Texture* tex = light.texture;
             if (!tex) continue;
@@ -164,8 +159,10 @@ bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
             }
             if (src_w <= 0 || src_h <= 0) continue;
 
-            const int draw_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_w) * scale_factor)));
-            const int draw_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_h) * scale_factor)));
+            // The light texture already represents the authored radius. Avoid applying any
+            // additional asset scaling so the light map matches the configured size.
+            const int draw_w = std::max(1, src_w);
+            const int draw_h = std::max(1, src_h);
 
             SDL_Point world_center{ asset->pos.x + light.offset_x, asset->pos.y + light.offset_y };
             SDL_Rect  world_dst{ world_center.x - draw_w / 2,
@@ -334,11 +331,6 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
                 continue;
             }
 
-            float scale_factor = 1.0f;
-            if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
-                scale_factor = asset->info->scale_factor;
-            }
-
             for (const auto& light : asset->info->light_sources) {
                 SDL_Texture* tex = light.texture;
                 if (!tex) {
@@ -354,8 +346,10 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
                     continue;
                 }
 
-                const int draw_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_w) * scale_factor)));
-                const int draw_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_h) * scale_factor)));
+                // The baked light texture already matches the desired size. Do not reapply
+                // asset scaling so the static light map uses the original radius.
+                const int draw_w = std::max(1, src_w);
+                const int draw_h = std::max(1, src_h);
 
                 SDL_Point world_center{ asset->pos.x + light.offset_x, asset->pos.y + light.offset_y };
                 SDL_Rect  world_dst{ world_center.x - draw_w / 2,
