@@ -32,7 +32,9 @@ using json = nlohmann::json;
 
 namespace {
 
-        constexpr std::int64_t kMaxStaticLightTextureBytes = 16LL * 1024LL * 1024LL; // 16 MiB ceiling
+        // Allow very large full-map static light textures. 512 MiB default ceiling.
+        // 3072x4096 RGBA ~ 48 MiB; even 8k maps stay within this in most cases.
+        constexpr std::int64_t kMaxStaticLightTextureBytes = 512LL * 1024LL * 1024LL; // 512 MiB ceiling
         constexpr std::int64_t kBytesPerPixel              = static_cast<std::int64_t>(sizeof(std::uint32_t));
         constexpr std::int64_t kMaxStaticLightPixels       =
             kMaxStaticLightTextureBytes / (kBytesPerPixel > 0 ? kBytesPerPixel : 1);
@@ -163,6 +165,7 @@ manifest_store_(manifest_store)
         loading_status::notify("Loading assets");
         vibble::log::info("[AssetLoader] Finalizing assets across rooms...");
         finalizeAssets();
+        assets_finalized_ = true;
         vibble::log::info("[AssetLoader] Asset finalization completed; all assets are ready.");
 
         const auto overall_end = std::chrono::steady_clock::now();
@@ -394,18 +397,14 @@ void AssetLoader::createAssets(world::Grid& grid) {
                            " with_lights=" + std::to_string(lit_count) +
                            " static_light_assets=" + std::to_string(static_lights));
 
-        const auto t_chunks_begin = std::chrono::steady_clock::now();
-        instantiate_map_chunks(grid);
-        const auto t_chunks_end = std::chrono::steady_clock::now();
-        vibble::log::info(std::string("[AssetLoader] instantiate_map_chunks finished; chunks=") + std::to_string(map_chunks_.size()) +
-                          " in " + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t_chunks_end - t_chunks_begin).count()) + "ms");
+        const auto t_plan_begin = std::chrono::steady_clock::now();
+        plan_map_chunks(grid);
+        const auto t_plan_end = std::chrono::steady_clock::now();
+        vibble::log::info(std::string("[AssetLoader] plan_map_chunks finished; planned=") + std::to_string(planned_chunks_.size()) +
+                          " in " + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t_plan_end - t_plan_begin).count()) + "ms");
 
-        vibble::log::info("[AssetLoader] Beginning full-map light map texture creation...");
-        const auto t_bake_begin = std::chrono::steady_clock::now();
-        precompute_light_map(grid);
-        const auto t_bake_end = std::chrono::steady_clock::now();
-        vibble::log::info(std::string("[AssetLoader] precompute_light_map finished in ") +
-                          std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t_bake_end - t_bake_begin).count()) + "ms");
+        // Defer static light precomputation until assets are spawned and handed off
+        vibble::log::info("[AssetLoader] Deferring full-map light map texture creation until assets are spawned.");
 
         const auto t1 = std::chrono::steady_clock::now();
         vibble::log::debug(std::string("[AssetLoader] createAssets total ") +
@@ -413,7 +412,26 @@ void AssetLoader::createAssets(world::Grid& grid) {
 }
 
 std::vector<std::unique_ptr<Asset>> AssetLoader::take_spawned_assets() {
+        assets_extracted_ = true;
         return std::move(spawned_assets_);
+}
+
+void AssetLoader::bake_light_map(world::Grid& grid) {
+        if (!assets_finalized_) {
+                vibble::log::warn("[AssetLoader] bake_light_map called before finalizeAssets; proceeding cautiously.");
+        }
+        if (!assets_extracted_) {
+                vibble::log::warn("[AssetLoader] bake_light_map called before assets were handed off; proceeding anyway.");
+        }
+        if (planned_chunks_.empty()) {
+                plan_map_chunks(grid);
+        }
+        vibble::log::info("[AssetLoader] Beginning full-map light map texture creation...");
+        const auto t_bake_begin = std::chrono::steady_clock::now();
+        precompute_light_map(grid);
+        const auto t_bake_end = std::chrono::steady_clock::now();
+        vibble::log::info(std::string("[AssetLoader] precompute_light_map finished in ") +
+                          std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t_bake_end - t_bake_begin).count()) + "ms");
 }
 
 std::vector<const Area*> AssetLoader::getAllRoomAndTrailAreas() const {
@@ -505,39 +523,531 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
 
 void AssetLoader::precompute_light_map(world::Grid& grid) {
         precomputed_light_map_.reset();
-        vibble::log::info(std::string("[AssetLoader] Precomputing light map for ") +
-                          std::to_string(map_chunks_.size()) + " chunk(s).");
-        if (!renderer_) {
-                vibble::log::warn("[AssetLoader] Renderer unavailable; skipping light map precomputation.");
+
+        if (planned_chunks_.empty()) {
+                vibble::log::info("[AssetLoader] precompute_light_map: no planned chunks; skipping static lighting precomputation.");
+                map_chunks_.clear();
+                return;
         }
 
         const auto t0 = std::chrono::steady_clock::now();
-        int baked = 0, skipped = 0;
-        for (world::Chunk* chunk : map_chunks_) {
-                if (!chunk) {
-                        vibble::log::warn("[AssetLoader] Encountered null chunk pointer during light map precomputation.");
-                        ++skipped;
-                        continue;
-                }
-                const auto ts = std::chrono::steady_clock::now();
-                bake_chunk_lighting(grid, *chunk);
-                const auto te = std::chrono::steady_clock::now();
-                ++baked;
-                if ((baked <= 5) || (baked % 50 == 0)) {
-                        vibble::log::debug(std::string("[AssetLoader] bake_chunk_lighting (") + std::to_string(chunk->i) + "," + std::to_string(chunk->j) +
-                                           ") took " + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(te - ts).count()) + "ms");
+
+        bool have_bounds = false;
+        int  min_x      = 0;
+        int  min_y      = 0;
+        int  max_x      = 0;
+        int  max_y      = 0;
+        for (const PlannedChunk& planned : planned_chunks_) {
+                const SDL_Rect& bounds = planned.world_bounds;
+                if (!have_bounds) {
+                        min_x      = bounds.x;
+                        min_y      = bounds.y;
+                        max_x      = bounds.x + bounds.w;
+                        max_y      = bounds.y + bounds.h;
+                        have_bounds = true;
+                } else {
+                        min_x = std::min(min_x, bounds.x);
+                        min_y = std::min(min_y, bounds.y);
+                        max_x = std::max(max_x, bounds.x + bounds.w);
+                        max_y = std::max(max_y, bounds.y + bounds.h);
                 }
         }
+
+        if (!have_bounds) {
+                vibble::log::warn("[AssetLoader] precompute_light_map: unable to derive full-map bounds from planned chunks.");
+                map_chunks_.clear();
+                return;
+        }
+
+        std::int64_t width64  = static_cast<std::int64_t>(max_x) - static_cast<std::int64_t>(min_x);
+        std::int64_t height64 = static_cast<std::int64_t>(max_y) - static_cast<std::int64_t>(min_y);
+
+        if (width64 <= 0 || height64 <= 0) {
+                vibble::log::warn(std::string("[AssetLoader] precompute_light_map: invalid full-map dimensions (") +
+                                  std::to_string(width64) + "x" + std::to_string(height64) + "); skipping static lighting.");
+                map_chunks_.clear();
+                return;
+        }
+
+        bool size_overflow = false;
+        if (width64 > 0 && height64 > 0) {
+                size_overflow = width64 > std::numeric_limits<std::int64_t>::max() / height64;
+        } else {
+                size_overflow = true;
+        }
+
+        if (size_overflow) {
+                vibble::log::warn(std::string("[AssetLoader] precompute_light_map: size overflow for full texture (") +
+                                  std::to_string(width64) + "x" + std::to_string(height64) + ").");
+        }
+
+        const std::int64_t pixel_count64 = size_overflow ? 0 : width64 * height64;
+
+        bool can_create_full_texture = renderer_ && !size_overflow;
+        if (!renderer_) {
+                vibble::log::warn("[AssetLoader] Renderer unavailable; skipping full-map static lighting texture creation.");
+        }
+
+        if (width64 > std::numeric_limits<int>::max() || height64 > std::numeric_limits<int>::max()) {
+                vibble::log::warn(std::string("[AssetLoader] precompute_light_map: full texture dimensions exceed SDL limits (") +
+                                  std::to_string(width64) + "x" + std::to_string(height64) + ").");
+                can_create_full_texture = false;
+        }
+
+        if (!size_overflow && pixel_count64 > kMaxStaticLightPixels) {
+                vibble::log::warn(std::string("[AssetLoader] precompute_light_map: full texture exceeds size cap (") +
+                                  std::to_string(width64) + "x" + std::to_string(height64) + ").");
+                can_create_full_texture = false;
+        }
+
+        const std::int64_t clamped_width64  = std::clamp<std::int64_t>(width64, 1, static_cast<std::int64_t>(std::numeric_limits<int>::max()));
+        const std::int64_t clamped_height64 = std::clamp<std::int64_t>(height64, 1, static_cast<std::int64_t>(std::numeric_limits<int>::max()));
+        const int          full_width       = static_cast<int>(clamped_width64);
+        const int          full_height      = static_cast<int>(clamped_height64);
+        SDL_Rect  full_world_bounds{min_x, min_y, full_width, full_height};
+
+        SDL_Texture* full_texture = nullptr;
+        int          lights_considered = 0;
+        int          lights_drawn      = 0;
+
+        if (can_create_full_texture) {
+                SDL_Texture* created = SDL_CreateTexture(renderer_,
+                                                         SDL_PIXELFORMAT_RGBA8888,
+                                                         SDL_TEXTUREACCESS_TARGET,
+                                                         full_width,
+                                                         full_height);
+                if (!created) {
+                        vibble::log::warn(std::string("[AssetLoader] precompute_light_map: SDL_CreateTexture failed: ") + SDL_GetError());
+                        can_create_full_texture = false;
+                } else {
+                        full_texture = created;
+                        SDL_SetTextureBlendMode(full_texture, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+                        SDL_SetTextureScaleMode(full_texture, SDL_ScaleModeBest);
+#endif
+
+                        SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
+                        if (SDL_SetRenderTarget(renderer_, full_texture) != 0) {
+                                vibble::log::warn(std::string("[AssetLoader] precompute_light_map: SDL_SetRenderTarget failed: ") + SDL_GetError());
+                                SDL_DestroyTexture(full_texture);
+                                full_texture          = nullptr;
+                                can_create_full_texture = false;
+                                SDL_SetRenderTarget(renderer_, previous_target);
+                        } else {
+                                SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+                                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+                                SDL_RenderClear(renderer_);
+
+#if SDL_VERSION_ATLEAST(2, 0, 6)
+                                const SDL_BlendMode erase_alpha_blend = SDL_ComposeCustomBlendMode(
+                                    SDL_BLENDFACTOR_ZERO,
+                                    SDL_BLENDFACTOR_ONE,
+                                    SDL_BLENDOPERATION_ADD,
+                                    SDL_BLENDFACTOR_ZERO,
+                                    SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                                    SDL_BLENDOPERATION_ADD);
+#else
+                                const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD;
+#endif
+
+                                LogLimiter limiter{10, 100};
+
+                                // Iterate grid-registered assets chunk-by-chunk to avoid dependence
+                                // on internal transient vectors and ensure correctness after spawn.
+                                for (const PlannedChunk& planned_src : planned_chunks_) {
+                                        world::Chunk& src_chunk = grid.get_or_create_chunk_ij(planned_src.i, planned_src.j);
+                                        for (Asset* asset : src_chunk.assets) {
+                                                if (!asset || !asset->info) {
+                                                        continue;
+                                                }
+                                                if (asset->info->light_sources.empty() || asset->info->moving_asset) {
+                                                        continue;
+                                                }
+                                                for (const auto& light : asset->info->light_sources) {
+                                                SDL_Texture* tex = light.texture;
+                                                if (!tex) {
+                                                        continue;
+                                                }
+
+                                                int src_w = light.cached_w > 0 ? light.cached_w : 0;
+                                                int src_h = light.cached_h > 0 ? light.cached_h : 0;
+                                                if (src_w <= 0 || src_h <= 0) {
+                                                        SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+                                                }
+                                                if (src_w <= 0 || src_h <= 0) {
+                                                        continue;
+                                                }
+
+                                                const int draw_w = std::max(1, src_w);
+                                                const int draw_h = std::max(1, src_h);
+                                                SDL_Rect world_dst{
+                                                    asset->pos.x + light.offset_x - draw_w / 2,
+                                                    asset->pos.y + light.offset_y - draw_h / 2,
+                                                    draw_w,
+                                                    draw_h};
+
+                                                ++lights_considered;
+
+                                                SDL_Rect intersection{};
+                                                if (!SDL_IntersectRect(&world_dst, &full_world_bounds, &intersection)) {
+                                                        if (limiter(lights_considered - 1)) {
+                                                                vibble::log::debug(std::string("[AssetLoader] Full-map light skipped (out of bounds) dst=") + rect_str(world_dst));
+                                                        }
+                                                        continue;
+                                                }
+
+                                                Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
+                                                SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
+                                                SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
+                                                SDL_GetTextureAlphaMod(tex, &save_a);
+                                                SDL_GetTextureBlendMode(tex, &save_bm);
+
+                                                SDL_SetTextureBlendMode(tex, erase_alpha_blend);
+                                                SDL_SetTextureColorMod(tex, 255, 255, 255);
+                                                SDL_SetTextureAlphaMod(tex, 255);
+
+                                                SDL_Rect local_dst = world_dst;
+                                                local_dst.x -= full_world_bounds.x;
+                                                local_dst.y -= full_world_bounds.y;
+
+                                                if (limiter(lights_drawn)) {
+                                                        vibble::log::debug(std::string("[AssetLoader] Stamping static light onto full map dst=") + rect_str(local_dst));
+                                                }
+
+                                                SDL_RenderCopy(renderer_, tex, nullptr, &local_dst);
+                                                ++lights_drawn;
+
+                                                SDL_SetTextureBlendMode(tex, save_bm);
+                                                SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
+                                                SDL_SetTextureAlphaMod(tex, save_a);
+                                                }
+                                        }
+                                }
+
+                                SDL_SetRenderTarget(renderer_, previous_target);
+
+                                auto precomputed = std::make_unique<PrecomputedLightMap>();
+                                precomputed->map_width    = full_width;
+                                precomputed->map_height   = full_height;
+                                precomputed->full_texture = full_texture;
+                                precomputed_light_map_    = std::move(precomputed);
+
+                                vibble::log::info(std::string("[AssetLoader] Full-map static light texture built: size=") +
+                                                  std::to_string(full_width) + "x" + std::to_string(full_height) +
+                                                  " lights_considered=" + std::to_string(lights_considered) +
+                                                  " drawn=" + std::to_string(lights_drawn));
+                        }
+                }
+        }
+
+        map_chunks_.clear();
+        map_chunks_.reserve(planned_chunks_.size());
+
+        int baked_chunks   = 0;
+        int skipped_chunks = 0;
+
+        SDL_BlendMode full_save_blend = SDL_BLENDMODE_BLEND;
+        if (renderer_ && full_texture) {
+                SDL_GetTextureBlendMode(full_texture, &full_save_blend);
+                SDL_SetTextureBlendMode(full_texture, SDL_BLENDMODE_NONE);
+        }
+
+        const int full_src_width  = full_world_bounds.w;
+        const int full_src_height = full_world_bounds.h;
+
+        // Heuristic: avoid GPU readbacks from render targets when the full-map mask is very large.
+        // Some drivers are unstable when calling SDL_RenderReadPixels repeatedly with large RTs.
+        const bool avoid_readback = (full_src_width >= 3072 || full_src_height >= 3072);
+
+        auto estimate_chunk_brightness = [&](const SDL_Rect& bounds) -> float {
+                if (bounds.w <= 0 || bounds.h <= 0) return 0.0f;
+                const double chunk_area = static_cast<double>(bounds.w) * static_cast<double>(bounds.h);
+                if (chunk_area <= 0.0) return 0.0f;
+                double lit_area = 0.0;
+                for (const auto& asset_up : spawned_assets_) {
+                        const Asset* asset = asset_up.get();
+                        if (!asset || !asset->info) continue;
+                        if (asset->info->light_sources.empty() || asset->info->moving_asset) continue;
+                        for (const auto& light : asset->info->light_sources) {
+                                SDL_Texture* tex = light.texture;
+                                if (!tex) continue;
+                                int src_w = light.cached_w > 0 ? light.cached_w : 0;
+                                int src_h = light.cached_h > 0 ? light.cached_h : 0;
+                                if (src_w <= 0 || src_h <= 0) SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+                                if (src_w <= 0 || src_h <= 0) continue;
+                                const int draw_w = std::max(1, src_w);
+                                const int draw_h = std::max(1, src_h);
+                                SDL_Rect world_dst{
+                                    asset->pos.x + light.offset_x - draw_w / 2,
+                                    asset->pos.y + light.offset_y - draw_h / 2,
+                                    draw_w,
+                                    draw_h};
+                                SDL_Rect intersect{};
+                                if (SDL_IntersectRect(&world_dst, &bounds, &intersect)) {
+                                        lit_area += static_cast<double>(intersect.w) * static_cast<double>(intersect.h);
+                                }
+                        }
+                }
+                const double coverage = std::clamp(lit_area / chunk_area, 0.0, 1.0);
+                // Map coverage to brightness conservatively (lights carve darkness):
+                return static_cast<float>(coverage);
+        };
+
+        // Helper: stamp all static lights that intersect a destination rect, using the same
+        // erase-alpha custom blend used for the full-map path.
+        auto stamp_static_lights_into = [&](const world::Chunk& src_chunk,
+                                            SDL_Texture* dst_target,
+                                            const SDL_Rect& dst_world_bounds) -> std::pair<int,int> {
+                if (!renderer_ || !dst_target) return {0,0};
+                SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
+                if (SDL_SetRenderTarget(renderer_, dst_target) != 0) {
+                        vibble::log::warn(std::string("[AssetLoader] stamp_static_lights_into: SDL_SetRenderTarget failed: ") + SDL_GetError());
+                        SDL_SetRenderTarget(renderer_, previous_target);
+                        return {0,0};
+                }
+
+                SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+                SDL_RenderClear(renderer_);
+
+#if SDL_VERSION_ATLEAST(2, 0, 6)
+                const SDL_BlendMode erase_alpha_blend = SDL_ComposeCustomBlendMode(
+                    SDL_BLENDFACTOR_ZERO,
+                    SDL_BLENDFACTOR_ONE,
+                    SDL_BLENDOPERATION_ADD,
+                    SDL_BLENDFACTOR_ZERO,
+                    SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                    SDL_BLENDOPERATION_ADD);
+#else
+                const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD;
+#endif
+
+                int considered = 0;
+                int drawn      = 0;
+                LogLimiter limiter{10, 100};
+                for (Asset* a_ptr : src_chunk.assets) {
+                        const Asset* asset = a_ptr;
+                        if (!asset || !asset->info) continue;
+                        if (asset->info->light_sources.empty() || asset->info->moving_asset) continue;
+                        for (const auto& light : asset->info->light_sources) {
+                                SDL_Texture* tex = light.texture;
+                                if (!tex) continue;
+                                int src_w = light.cached_w > 0 ? light.cached_w : 0;
+                                int src_h = light.cached_h > 0 ? light.cached_h : 0;
+                                if (src_w <= 0 || src_h <= 0) {
+                                        SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+                                }
+                                if (src_w <= 0 || src_h <= 0) continue;
+
+                                const int draw_w = std::max(1, src_w);
+                                const int draw_h = std::max(1, src_h);
+                                SDL_Rect world_dst{
+                                    asset->pos.x + light.offset_x - draw_w / 2,
+                                    asset->pos.y + light.offset_y - draw_h / 2,
+                                    draw_w,
+                                    draw_h};
+
+                                ++considered;
+
+                                SDL_Rect intersection{};
+                                if (!SDL_IntersectRect(&world_dst, &dst_world_bounds, &intersection)) {
+                                        if (limiter(considered - 1)) {
+                                                vibble::log::debug(std::string("[AssetLoader] Chunk-light skipped (out of bounds) dst=") + rect_str(world_dst));
+                                        }
+                                        continue;
+                                }
+
+                                Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
+                                SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
+                                SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
+                                SDL_GetTextureAlphaMod(tex, &save_a);
+                                SDL_GetTextureBlendMode(tex, &save_bm);
+
+                                SDL_SetTextureBlendMode(tex, erase_alpha_blend);
+                                SDL_SetTextureColorMod(tex, 255, 255, 255);
+                                SDL_SetTextureAlphaMod(tex, 255);
+
+                                // Convert to local (chunk) coords and clip to target to avoid negative dst rects
+                                SDL_Rect local_dst = world_dst;
+                                local_dst.x -= dst_world_bounds.x;
+                                local_dst.y -= dst_world_bounds.y;
+
+                                SDL_Rect dst_clip{0, 0, dst_world_bounds.w, dst_world_bounds.h};
+                                SDL_Rect clipped_dst{};
+                                if (!SDL_IntersectRect(&local_dst, &dst_clip, &clipped_dst)) {
+                                        continue;
+                                }
+
+                                // No scaling: src_w/h == draw_w/h. Compute matching src sub-rect.
+                                // Offset from unclipped dst to clipped dst becomes src offset
+                                const int off_x = clipped_dst.x - local_dst.x;
+                                const int off_y = clipped_dst.y - local_dst.y;
+                                int tex_w = 0, tex_h = 0;
+                                SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h);
+                                // Prefer actual query for safety; fall back to src_w/h if query fails.
+                                if (tex_w <= 0) tex_w = src_w;
+                                if (tex_h <= 0) tex_h = src_h;
+                                SDL_Rect src_rect{ std::clamp(off_x, 0, tex_w),
+                                                   std::clamp(off_y, 0, tex_h),
+                                                   std::clamp(clipped_dst.w, 0, std::max(0, tex_w - std::clamp(off_x, 0, tex_w))),
+                                                   std::clamp(clipped_dst.h, 0, std::max(0, tex_h - std::clamp(off_y, 0, tex_h))) };
+                                if (src_rect.w <= 0 || src_rect.h <= 0) {
+                                        continue;
+                                }
+
+                                if (limiter(drawn)) {
+                                        vibble::log::debug(std::string("[AssetLoader] Stamping static light into chunk dst=") + rect_str(clipped_dst));
+                                }
+
+                                SDL_RenderCopy(renderer_, tex, &src_rect, &clipped_dst);
+                                ++drawn;
+
+                                SDL_SetTextureBlendMode(tex, save_bm);
+                                SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
+                                SDL_SetTextureAlphaMod(tex, save_a);
+                        }
+                }
+
+                SDL_SetRenderTarget(renderer_, previous_target);
+                return {considered, drawn};
+        };
+
+        for (const PlannedChunk& planned : planned_chunks_) {
+                world::Chunk& chunk = grid.get_or_create_chunk_ij(planned.i, planned.j);
+                chunk.base_brightness     = 0.0f;
+                chunk.brightness_strength = 1.0f;
+                chunk.opacity_strength    = 1.0f;
+                chunk.scale_strength      = 1.0f;
+                chunk.offset_x            = 0;
+                chunk.offset_y            = 0;
+                chunk.shadow              = {};
+                chunk.has_dynamic_overlay = false;
+                chunk.lighting_dirty      = true;
+                chunk.light.min_static_avg_strength = 0.0f;
+                chunk.light.max_static_avg_strength = 1.0f;
+                chunk.light.needs_update            = true;
+                map_chunks_.push_back(&chunk);
+
+                if (!renderer_) {
+                        ++skipped_chunks;
+                        continue;
+                }
+
+                if (chunk.static_light_map) {
+                        SDL_DestroyTexture(chunk.static_light_map);
+                        chunk.static_light_map = nullptr;
+                }
+
+                const SDL_Rect& bounds = planned.world_bounds;
+
+                SDL_Texture* chunk_texture = SDL_CreateTexture(renderer_,
+                                                                 SDL_PIXELFORMAT_RGBA8888,
+                                                                 SDL_TEXTUREACCESS_TARGET,
+                                                                 bounds.w,
+                                                                 bounds.h);
+                if (!chunk_texture) {
+                        vibble::log::warn(std::string("[AssetLoader] Failed to create chunk texture for (") +
+                                          std::to_string(planned.i) + ", " + std::to_string(planned.j) + "): " + SDL_GetError());
+                        ++skipped_chunks;
+                        continue;
+                }
+                SDL_SetTextureBlendMode(chunk_texture, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+                SDL_SetTextureScaleMode(chunk_texture, SDL_ScaleModeBest);
+#endif
+
+                if (full_texture) {
+                        SDL_Rect src{bounds.x - full_world_bounds.x,
+                                      bounds.y - full_world_bounds.y,
+                                      bounds.w,
+                                      bounds.h};
+
+                        if (src.x < 0 || src.y < 0 || src.x + src.w > full_src_width || src.y + src.h > full_src_height) {
+                                vibble::log::warn(std::string("[AssetLoader] Chunk (") + std::to_string(planned.i) + ", " + std::to_string(planned.j) +
+                                                  ") requested out-of-range copy from full map; will bake locally.");
+                                // Fall back to local bake for this chunk only.
+                                auto [c,d] = stamp_static_lights_into(chunk, chunk_texture, bounds);
+                                (void)c; (void)d;
+                        } else {
+                                SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
+                                if (SDL_SetRenderTarget(renderer_, chunk_texture) != 0) {
+                                        vibble::log::warn(std::string("[AssetLoader] Failed to set chunk render target (") +
+                                                          std::to_string(planned.i) + ", " + std::to_string(planned.j) + "): " + SDL_GetError());
+                                        SDL_DestroyTexture(chunk_texture);
+                                        SDL_SetRenderTarget(renderer_, previous_target);
+                                        ++skipped_chunks;
+                                        continue;
+                                }
+
+                                SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+                                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+                                SDL_RenderClear(renderer_);
+
+                                if (SDL_RenderCopy(renderer_, full_texture, &src, nullptr) != 0) {
+                                        vibble::log::warn(std::string("[AssetLoader] Failed to copy full-map lighting into chunk (") +
+                                                          std::to_string(planned.i) + ", " + std::to_string(planned.j) + "): " + SDL_GetError());
+                                        SDL_SetRenderTarget(renderer_, previous_target);
+                                        SDL_DestroyTexture(chunk_texture);
+                                        ++skipped_chunks;
+                                        continue;
+                                }
+
+                                SDL_SetRenderTarget(renderer_, previous_target);
+                        }
+                } else {
+                        // Full-map texture unavailable: bake static lights directly into this chunk.
+                        auto [considered, drawn] = stamp_static_lights_into(chunk, chunk_texture, bounds);
+                        if (drawn == 0) {
+                                vibble::log::debug(std::string("[AssetLoader] Local-baked chunk had no intersecting static lights (") +
+                                                   std::to_string(planned.i) + ", " + std::to_string(planned.j) + ")");
+                        }
+                }
+
+                chunk.static_light_map = chunk_texture;
+                chunk.lighting_dirty   = false;
+
+                if (avoid_readback) {
+                        chunk.base_brightness = estimate_chunk_brightness(bounds);
+                } else {
+                        chunk.base_brightness = compute_chunk_average_brightness(chunk.static_light_map);
+                        // Fallback to estimate if readback returned 0 and we likely had lights
+                        if (chunk.base_brightness <= 0.0f) {
+                                float est = estimate_chunk_brightness(bounds);
+                                if (est > 0.0f) chunk.base_brightness = est;
+                        }
+                }
+                chunk.base_brightness = std::clamp(chunk.base_brightness, 0.0f, 1.0f);
+                chunk.light.min_static_avg_strength = std::min(1.0f, chunk.base_brightness);
+                chunk.light.max_static_avg_strength = std::max(1.0f, chunk.base_brightness);
+                chunk.light.needs_update            = true;
+
+                ++baked_chunks;
+        }
+
+        if (renderer_ && full_texture) {
+                // Restore blend mode, then immediately free the large full-map mask to reduce GPU memory pressure
+                SDL_SetTextureBlendMode(full_texture, full_save_blend);
+                SDL_DestroyTexture(full_texture);
+                full_texture = nullptr;
+                if (precomputed_light_map_) {
+                        // We do not need to carry the full texture forward; chunk baking is complete.
+                        precomputed_light_map_->full_texture = nullptr;
+                }
+        }
+
         const auto t1 = std::chrono::steady_clock::now();
-        vibble::log::info(std::string("[AssetLoader] Completed light map precomputation for all chunks. baked=") + std::to_string(baked) +
-                          " skipped=" + std::to_string(skipped) +
+        vibble::log::info(std::string("[AssetLoader] Completed light map precomputation for all chunks. baked=") +
+                          std::to_string(baked_chunks) +
+                          " skipped=" + std::to_string(skipped_chunks) +
                           " total_ms=" + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()));
 }
 
-void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
-        vibble::log::debug("[AssetLoader] instantiate_map_chunks: begin");
+void AssetLoader::plan_map_chunks(const world::Grid& grid) {
+        vibble::log::debug("[AssetLoader] plan_map_chunks: begin");
 
+        planned_chunks_.clear();
         map_chunks_.clear();
+
         const int requested_r_chunk = grid.chunk_resolution();
         const int r_chunk = std::clamp(requested_r_chunk, 0, vibble::grid::kMaxResolution);
         if (requested_r_chunk != r_chunk) {
@@ -545,15 +1055,16 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                                   std::to_string(requested_r_chunk) + " exceeded limits; using " +
                                   std::to_string(r_chunk) + ".");
         }
+
         const std::int64_t step64 = std::int64_t{1} << r_chunk;
         if (step64 <= 0 || step64 > static_cast<std::int64_t>(std::numeric_limits<int>::max())) {
-                vibble::log::warn("[AssetLoader] Skipping chunk instantiation due to unsupported chunk size.");
+                vibble::log::warn("[AssetLoader] Skipping chunk planning due to unsupported chunk size.");
                 return;
         }
         const int step = static_cast<int>(step64);
 
         const int chunk_size_px = vibble::grid::delta(r_chunk);
-        vibble::log::debug(std::string("[AssetLoader] instantiate_map_chunks: map='") + map_id_ +
+        vibble::log::debug(std::string("[AssetLoader] plan_map_chunks: map='") + map_id_ +
                            "' requested_r_chunk=" + std::to_string(requested_r_chunk) +
                            " clamped_r_chunk=" + std::to_string(r_chunk) +
                            " chunk_size_px=" + std::to_string(chunk_size_px) +
@@ -582,27 +1093,25 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
         int debug_chunk_count = 0;
         LogLimiter limiter{10, 100};
 
-        auto register_chunk = [&](int i, int j) {
+        auto plan_chunk = [&](int i, int j) {
                 const std::uint64_t key = chunk_key(i, j);
                 if (!visited.insert(key).second) {
                         return;
                 }
-                world::Chunk& chunk = grid.get_or_create_chunk_ij(i, j);
+
+                SDL_Rect bounds{
+                        origin.x + i * step,
+                        origin.y + j * step,
+                        step,
+                        step};
+
                 if (limiter(debug_chunk_count)) {
-                        vibble::log::debug(std::string("[AssetLoader] Prepared chunk (") + std::to_string(i) + ", " +
-                                           std::to_string(j) + ") bounds=" + rect_str(chunk.world_bounds));
+                        vibble::log::debug(std::string("[AssetLoader] Planned chunk (") + std::to_string(i) + ", " +
+                                           std::to_string(j) + ") bounds=" + rect_str(bounds));
                 }
                 ++debug_chunk_count;
-                chunk.base_brightness     = 0.0f;
-                chunk.brightness_strength = 1.0f;
-                chunk.opacity_strength    = 1.0f;
-                chunk.scale_strength      = 1.0f;
-                chunk.offset_x            = 0;
-                chunk.offset_y            = 0;
-                chunk.shadow              = {};
-                chunk.lighting_dirty      = true;
-                chunk.has_dynamic_overlay = false;
-                map_chunks_.push_back(&chunk);
+
+                planned_chunks_.push_back(PlannedChunk{i, j, bounds});
         };
 
         struct Bounds {
@@ -694,7 +1203,7 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
 
                 for (int j = j_min; j <= j_max; ++j) {
                         for (int i = i_min; i <= i_max; ++i) {
-                                register_chunk(i, j);
+                                plan_chunk(i, j);
                         }
                 }
 
@@ -712,7 +1221,7 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 vibble::log::debug("[AssetLoader] No room or extent bounds available; relying on static-light coverage.");
         }
 
-        const std::size_t chunk_count_after_bounds = map_chunks_.size();
+        const std::size_t chunk_count_after_bounds = planned_chunks_.size();
         bool discovered_static_light = false;
 
         int light_assets_seen = 0;
@@ -774,235 +1283,32 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
 
                         for (int j = j_min; j <= j_max; ++j) {
                                 for (int i = i_min; i <= i_max; ++i) {
-                                        register_chunk(i, j);
+                                        plan_chunk(i, j);
                                 }
                         }
                 }
         }
 
         if (!discovered_static_light) {
-                // Ensure at least one chunk exists so downstream systems have a stable baseline.
                 const std::int64_t center_x = static_cast<std::int64_t>(std::llround(map_center_x_));
                 const std::int64_t center_y = static_cast<std::int64_t>(std::llround(map_center_y_));
                 const int i = clamp_to_int(floor_div64(center_x - origin_x64, step64));
                 const int j = clamp_to_int(floor_div64(center_y - origin_y64, step64));
-                vibble::log::debug("[AssetLoader] No static lights discovered; registering fallback center chunk.");
-                register_chunk(i, j);
+                vibble::log::debug("[AssetLoader] No static lights discovered; planning fallback center chunk.");
+                plan_chunk(i, j);
         }
 
-        const std::size_t total_chunk_count = map_chunks_.size();
+        const std::size_t total_chunk_count = planned_chunks_.size();
         const std::size_t static_light_chunk_count = total_chunk_count >= chunk_count_after_bounds
                                                              ? total_chunk_count - chunk_count_after_bounds
                                                              : 0;
 
-        vibble::log::info(std::string("[AssetLoader] Prepared ") + std::to_string(total_chunk_count) +
+        vibble::log::info(std::string("[AssetLoader] Planned ") + std::to_string(total_chunk_count) +
                           " chunk(s) for baking (bounds: " +
                           std::to_string(chunk_count_after_bounds) + ", static-light: " +
                           std::to_string(static_light_chunk_count) + ")");
 }
 
-void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
-        const auto t0 = std::chrono::steady_clock::now();
-
-        chunk.base_brightness     = 0.0f;
-        chunk.brightness_strength = 1.0f;
-        chunk.opacity_strength    = 1.0f;
-        chunk.scale_strength      = 1.0f;
-        chunk.offset_x            = 0;
-        chunk.offset_y            = 0;
-        chunk.shadow              = {};
-        chunk.has_dynamic_overlay = false;
-        chunk.lighting_dirty      = true;
-
-        if (chunk.static_light_map) {
-                SDL_DestroyTexture(chunk.static_light_map);
-                chunk.static_light_map = nullptr;
-        }
-
-        if (!renderer_) {
-                vibble::log::warn(std::string("[AssetLoader] Cannot bake lighting for chunk (") +
-                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
-                                  "): renderer is null.");
-                return;
-        }
-
-        vibble::log::info(std::string("[AssetLoader] Baking static lighting for chunk (") +
-                          std::to_string(chunk.i) + ", " + std::to_string(chunk.j) + ") with bounds " +
-                          rect_str(chunk.world_bounds) + ".");
-
-        const std::int64_t width64  = std::max<std::int64_t>(1, static_cast<std::int64_t>(chunk.world_bounds.w));
-        const std::int64_t height64 = std::max<std::int64_t>(1, static_cast<std::int64_t>(chunk.world_bounds.h));
-
-        bool dimensions_overflow = false;
-        if (width64 > 0 && height64 > 0) {
-                if (width64 > std::numeric_limits<std::int64_t>::max() / height64) {
-                        dimensions_overflow = true;
-                }
-        } else {
-                dimensions_overflow = true;
-        }
-
-        if (dimensions_overflow) {
-                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
-                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
-                                  ") due to size overflow.");
-                return;
-        }
-
-        if (width64 > std::numeric_limits<int>::max() || height64 > std::numeric_limits<int>::max()) {
-                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
-                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
-                                  ") due to unsupported texture dimensions.");
-                return;
-        }
-
-        const std::int64_t pixel_count64 = width64 * height64;
-        if (pixel_count64 > kMaxStaticLightPixels) {
-                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
-                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
-                                  ") due to excessive texture size.");
-                return;
-        }
-
-        const int width  = static_cast<int>(width64);
-        const int height = static_cast<int>(height64);
-        SDL_Texture* texture = SDL_CreateTexture(renderer_,
-                                                 SDL_PIXELFORMAT_RGBA8888,
-                                                 SDL_TEXTUREACCESS_TARGET,
-                                                 width,
-                                                 height);
-        if (!texture) {
-                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
-                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
-                                  ") due to SDL_CreateTexture failure: " + SDL_GetError());
-                return;
-        }
-        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(texture, SDL_ScaleModeBest);
-#endif
-
-        SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
-        if (SDL_SetRenderTarget(renderer_, texture) != 0) {
-                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
-                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
-                                  ") due to SDL_SetRenderTarget failure: " + SDL_GetError());
-                SDL_DestroyTexture(texture);
-                SDL_SetRenderTarget(renderer_, previous_target);
-                return;
-        }
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
-        SDL_RenderClear(renderer_);
-
-#if SDL_VERSION_ATLEAST(2, 0, 6)
-        // Match the runtime light-map blending so the cached brightness reflects actual static lighting.
-        const SDL_BlendMode erase_alpha_blend = SDL_ComposeCustomBlendMode(
-            SDL_BLENDFACTOR_ZERO,
-            SDL_BLENDFACTOR_ONE,
-            SDL_BLENDOPERATION_ADD,
-            SDL_BLENDFACTOR_ZERO,
-            SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-            SDL_BLENDOPERATION_ADD);
-#else
-        const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD;
-#endif
-
-        int lights_considered = 0;
-        int lights_drawn = 0;
-        LogLimiter limiter{10, 100};
-
-        for (const auto& asset_up : spawned_assets_) {
-                const Asset* asset = asset_up.get();
-                if (!asset || !asset->info) {
-                        continue;
-                }
-                if (asset->info->light_sources.empty() || asset->info->moving_asset) {
-                        continue;
-                }
-                for (const auto& light : asset->info->light_sources) {
-                        SDL_Texture* tex = light.texture;
-                        if (!tex) {
-                                continue;
-                        }
-                        int src_w = light.cached_w > 0 ? light.cached_w : 0;
-                        int src_h = light.cached_h > 0 ? light.cached_h : 0;
-                        if (src_w <= 0 || src_h <= 0) {
-                                SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
-                        }
-                        if (src_w <= 0 || src_h <= 0) {
-                                continue;
-                        }
-
-                        // Lights should appear on the baked map at the exact size authored for them.
-                        const int draw_w = std::max(1, src_w);
-                        const int draw_h = std::max(1, src_h);
-                        SDL_Point world_center{asset->pos.x + light.offset_x, asset->pos.y + light.offset_y};
-                        SDL_Rect world_dst{world_center.x - draw_w / 2,
-                                           world_center.y - draw_h / 2,
-                                           draw_w,
-                                           draw_h};
-
-                        ++lights_considered;
-
-                        SDL_Rect intersection{};
-                        if (!SDL_IntersectRect(&world_dst, &chunk.world_bounds, &intersection)) {
-                                if (limiter(lights_considered - 1)) {
-                                        vibble::log::debug(std::string("[AssetLoader] Light skipped: not in chunk (") +
-                                                           std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ") light_dst=" + rect_str(world_dst));
-                                }
-                                continue;
-                        }
-
-                        Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
-                        SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
-                        SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
-                        SDL_GetTextureAlphaMod(tex, &save_a);
-                        SDL_GetTextureBlendMode(tex, &save_bm);
-
-                        SDL_SetTextureBlendMode(tex, erase_alpha_blend);
-                        SDL_SetTextureColorMod(tex, 255, 255, 255);
-                        SDL_SetTextureAlphaMod(tex, 255);
-                        SDL_Rect local_dst = world_dst;
-                        local_dst.x -= chunk.world_bounds.x;
-                        local_dst.y -= chunk.world_bounds.y;
-
-                        if (limiter(lights_drawn)) {
-                                vibble::log::debug(std::string("[AssetLoader] Drawing light into chunk(") +
-                                                   std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
-                                                   ") local_dst=" + rect_str(local_dst));
-                        }
-
-                        SDL_RenderCopy(renderer_, tex, nullptr, &local_dst);
-                        ++lights_drawn;
-
-                        SDL_SetTextureBlendMode(tex, save_bm);
-                        SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
-                        SDL_SetTextureAlphaMod(tex, save_a);
-                }
-        }
-
-        SDL_SetRenderTarget(renderer_, previous_target);
-
-        chunk.static_light_map = texture;
-        chunk.lighting_dirty   = false;
-        texture                = nullptr;
-
-        vibble::log::debug(std::string("[AssetLoader] bake_chunk_lighting(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
-                           "): considered_lights=" + std::to_string(lights_considered) +
-                           " drawn=" + std::to_string(lights_drawn));
-
-        chunk.base_brightness = compute_chunk_average_brightness(chunk.static_light_map);
-        chunk.base_brightness = std::clamp(chunk.base_brightness, 0.0f, 1.0f);
-        chunk.light.min_static_avg_strength = std::min(1.0f, chunk.base_brightness);
-        chunk.light.max_static_avg_strength = std::max(1.0f, chunk.base_brightness);
-        chunk.light.needs_update            = true;
-
-        vibble::log::info(std::string("[AssetLoader] Finished baking chunk (") + std::to_string(chunk.i) + ", " +
-                          std::to_string(chunk.j) + ") avg_brightness=" +
-                          std::to_string(chunk.base_brightness) + ". took " +
-                          std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count()) + "ms");
-}
 
 float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const {
         if (!renderer_ || !texture) {

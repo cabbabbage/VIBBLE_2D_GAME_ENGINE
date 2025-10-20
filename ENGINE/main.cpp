@@ -123,8 +123,10 @@ void MainApp::setup() {
                 auto spawn_begin = std::chrono::steady_clock::now();
                 world::Grid world_grid{};
                 loader_->createAssets(world_grid);
-                vibble::log::info(std::string("[MainApp] Asset spawning finished for map '") + map_identifier + "'.");
                 auto all_assets = loader_->take_spawned_assets();
+                vibble::log::info(std::string("[MainApp] Asset spawning finished for map '") + map_identifier + "'.");
+                // Bake static lighting only after assets have been spawned and handed off
+                loader_->bake_light_map(world_grid);
                 vibble::log::info(std::string("[MainApp] ") + std::to_string(all_assets.size()) + " assets created and cached.");
                 const auto asset_count = all_assets.size();
                 const auto room_count = loader_->getRooms().size();

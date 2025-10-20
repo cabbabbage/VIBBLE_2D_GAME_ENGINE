@@ -238,14 +238,23 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 // ctor/dtor inlined in header
 
 void LightMap::apply_precomputed_light_map(SDL_Renderer* renderer) {
+    (void)renderer;
     if (!pending_precomputed_map_ || precomputed_applied_) {
         return;
     }
     if (assets_) {
         world::Grid& grid = assets_->world_grid();
         for (world::Chunk* chunk : grid.active_chunks()) {
-            if (chunk) {
+            if (!chunk) {
+                continue;
+            }
+            // If AssetLoader has already pre-baked static masks for chunks, keep them.
+            // Only mark chunks that are missing a static map as dirty so we don't thrash
+            // GPU memory creating new RTs immediately after precomputation.
+            if (!chunk->static_light_map) {
                 chunk->lighting_dirty = true;
+            } else {
+                chunk->lighting_dirty = false;
             }
         }
     }

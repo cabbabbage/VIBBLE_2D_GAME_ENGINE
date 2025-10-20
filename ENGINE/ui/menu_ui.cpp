@@ -255,6 +255,8 @@ void MenuUI::doRestart() {
                 world::Grid world_grid{};
                 loader_->createAssets(world_grid);
                 auto all_assets = loader_->take_spawned_assets();
+                // Bake static lighting only after assets have been spawned and handed off
+                loader_->bake_light_map(world_grid);
                 Asset* player_ptr = nullptr;
                 for (auto& a : all_assets) {
                     Asset* candidate = a.get();

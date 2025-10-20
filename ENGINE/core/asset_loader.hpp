@@ -13,6 +13,7 @@ class Assets;
 class Room;
 class Area;
 class AssetLibrary;
+struct SDL_Rect;
 struct SDL_Texture;
 struct SDL_Renderer;
 struct LayerSpec;
@@ -39,6 +40,8 @@ class AssetLoader {
     std::vector<Asset*> collectDistantAssets(int lock_threshold, int remove_threshold);
 
     void createAssets(world::Grid& grid);
+    // Perform static light baking after assets are spawned into the grid
+    void bake_light_map(world::Grid& grid);
     std::vector<std::unique_ptr<Asset>> take_spawned_assets();
     std::vector<const Area*> getAllRoomAndTrailAreas() const;
     AssetLibrary* getAssetLibrary() const { return asset_library_; }
@@ -75,10 +78,18 @@ class AssetLoader {
     void finalizeAssets();
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
     void precompute_light_map(world::Grid& grid);
-    void instantiate_map_chunks(world::Grid& grid);
-    void bake_chunk_lighting(world::Grid& grid, world::Chunk& chunk);
+    void plan_map_chunks(const world::Grid& grid);
     float compute_chunk_average_brightness(SDL_Texture* texture) const;
+    struct PlannedChunk {
+        int      i = 0;
+        int      j = 0;
+        SDL_Rect world_bounds{0, 0, 0, 0};
+    };
     std::vector<std::unique_ptr<Asset>> spawned_assets_{};
+    std::vector<PlannedChunk>           planned_chunks_{};
     std::vector<world::Chunk*> map_chunks_{};
     std::unique_ptr<PrecomputedLightMap> precomputed_light_map_;
+    // State gating to ensure correct baking sequence
+    bool assets_finalized_ = false;
+    bool assets_extracted_ = false;
 };
