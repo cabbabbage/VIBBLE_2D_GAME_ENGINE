@@ -242,6 +242,7 @@ target_include_directories(world_grid_chunk_tests PRIVATE
 )
 target_link_libraries(world_grid_chunk_tests PRIVATE
     SDL2::SDL2
+    vibble_log
 )
 target_compile_definitions(world_grid_chunk_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME world_grid_chunk_tests COMMAND world_grid_chunk_tests)
