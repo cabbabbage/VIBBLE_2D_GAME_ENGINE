@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace log {
+namespace vibble::log {
 
 enum class Level {
     Error = 0,
@@ -24,5 +24,5 @@ void warn(const std::string& message);
 void info(const std::string& message);
 void debug(const std::string& message);
 
-}  // namespace log
+}  // namespace vibble::log
 

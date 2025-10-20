@@ -34,7 +34,7 @@ void notify(const std::string& status) {
         copy = notifier_slot();
     }
     if (!status.empty()) {
-        log::info(std::string("[Loading] ") + status);
+        vibble::log::info(std::string("[Loading] ") + status);
     }
     if (copy) {
         copy(status);

@@ -1166,7 +1166,7 @@ void Animation::load(const std::string& trigger,
                         oss << " @ " << frame_width << "x" << frame_height;
                 }
                 oss << " from " << origin_label << " in " << std::fixed << std::setprecision(3) << elapsed_secs << "s";
-                log::debug(oss.str());
+                vibble::log::debug(oss.str());
         }
 }
 

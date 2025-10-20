@@ -70,7 +70,7 @@ MainApp::~MainApp() {
 
 void MainApp::init() {
         setup();
-        log::info("[MainApp] Loading pipeline complete. Entering main loop...");
+        vibble::log::info("[MainApp] Loading pipeline complete. Entering main loop...");
         game_loop();
 }
 
@@ -123,9 +123,9 @@ void MainApp::setup() {
                 auto spawn_begin = std::chrono::steady_clock::now();
                 world::Grid world_grid{};
                 loader_->createAssets(world_grid);
-                log::info(std::string("[MainApp] Asset spawning finished for map '") + map_identifier + "'.");
+                vibble::log::info(std::string("[MainApp] Asset spawning finished for map '") + map_identifier + "'.");
                 auto all_assets = loader_->take_spawned_assets();
-                log::info(std::string("[MainApp] ") + std::to_string(all_assets.size()) + " assets created and cached.");
+                vibble::log::info(std::string("[MainApp] ") + std::to_string(all_assets.size()) + " assets created and cached.");
                 const auto asset_count = all_assets.size();
                 const auto room_count = loader_->getRooms().size();
                 Asset* player_ptr = nullptr;
@@ -160,19 +160,19 @@ void MainApp::setup() {
                 init_summary << "[Init] Assets initialized: " << asset_count
                              << " assets across " << room_count << " rooms in "
                              << std::fixed << std::setprecision(2) << spawn_seconds << "s";
-                log::info(init_summary.str());
+                vibble::log::info(init_summary.str());
                 input_ = new Input();
                 game_assets_->set_input(input_);
                 if (!player_ptr) {
                         dev_mode_ = true;
-                        log::warn("[MainApp] No player asset found. Launching in Dev Mode.");
+                        vibble::log::warn("[MainApp] No player asset found. Launching in Dev Mode.");
                 }
                 if (game_assets_) {
                         game_assets_->set_dev_mode(dev_mode_);
                 }
                 AudioEngine::instance().update();
         } catch (const std::exception& e) {
-                log::error(std::string("[MainApp] Setup error: ") + e.what());
+                vibble::log::error(std::string("[MainApp] Setup error: ") + e.what());
                 throw;
         }
 }
@@ -184,7 +184,7 @@ void MainApp::game_loop() {
         const double target_counts  = TARGET_FRAME_SECONDS * perf_frequency;
         bool quit = false;
         SDL_Event e;
-        log::info("[MainApp] Game loop started.");
+        vibble::log::info("[MainApp] Game loop started.");
         while (!quit) {
                 const Uint64 frame_begin = SDL_GetPerformanceCounter();
                 while (SDL_PollEvent(&e)) {
@@ -383,21 +383,21 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
     try {
         manifest_data = manifest::load_manifest();
     } catch (const std::exception& ex) {
-        log::error(std::string("[Main] Failed to load manifest: ") + ex.what());
+        vibble::log::error(std::string("[Main] Failed to load manifest: ") + ex.what());
         return;
     }
 
     std::shared_ptr<AssetLibrary> shared_asset_library = std::make_shared<AssetLibrary>(false);
-    log::info("[Main] Preparing asset metadata cache...");
+    vibble::log::info("[Main] Preparing asset metadata cache...");
     shared_asset_library->load_all_from_SRC();
-    log::info(std::string("[Main] Asset metadata cache ready for ") + std::to_string(shared_asset_library->all().size()) + " asset(s).");
-    log::info("[Main] Loading cached asset resources...");
+    vibble::log::info(std::string("[Main] Asset metadata cache ready for ") + std::to_string(shared_asset_library->all().size()) + " asset(s).");
+    vibble::log::info("[Main] Loading cached asset resources...");
     shared_asset_library->loadAllAnimations(renderer);
-    log::info("[Main] Cached asset resources loaded.");
+    vibble::log::info("[Main] Cached asset resources loaded.");
 
     while (true) {
         MainMenu menu(renderer, screen_w, screen_h, manifest_data.maps);
-        log::info("[Main] Main menu displayed.");
+        vibble::log::info("[Main] Main menu displayed.");
         std::optional<MapDescriptor> chosen_map;
         bool quit_requested = false;
         SDL_Event e;
@@ -422,7 +422,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                     auto created = create_new_map_interactively();
                     if (created) {
                         chosen_map = std::move(*created);
-                        log::info(std::string("[Main] New map created and selected: ") + chosen_map->id);
+                        vibble::log::info(std::string("[Main] New map created and selected: ") + chosen_map->id);
                         choosing = false;
                     }
                     continue;
@@ -431,7 +431,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                 descriptor.id   = result->id;
                 descriptor.data = result->data;
                 chosen_map = std::move(descriptor);
-                log::info(std::string("[Main] Map selected: ") + chosen_map->id);
+                vibble::log::info(std::string("[Main] Map selected: ") + chosen_map->id);
                 choosing = false;
                 break;
             }
@@ -449,14 +449,14 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         loading_screen.init();
         // Removed on-screen loading status; terminal logs will indicate progress.
         if (rebuild_cache) {
-            log::info("[Main] Rebuilding asset cache...");
+            vibble::log::info("[Main] Rebuilding asset cache...");
             RebuildAssets* rebuilder = new RebuildAssets(renderer, selected_map.id);
             delete rebuilder;
-            log::info("[Main] Asset cache rebuild complete.");
-            log::info("[Main] Refreshing shared asset library after cache rebuild...");
+            vibble::log::info("[Main] Asset cache rebuild complete.");
+            vibble::log::info("[Main] Refreshing shared asset library after cache rebuild...");
             shared_asset_library->load_all_from_SRC();
             shared_asset_library->loadAllAnimations(renderer);
-            log::info("[Main] Shared asset library refreshed.");
+            vibble::log::info("[Main] Shared asset library refreshed.");
         }
         MenuUI app(renderer,
                    screen_w,
@@ -471,44 +471,44 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
 }
 
 int main(int argc, char* argv[]) {
-	log::info("[Main] Starting game engine...");
+	vibble::log::info("[Main] Starting game engine...");
 	const bool rebuild_cache = (argc > 1 && argv[1] && std::string(argv[1]) == "-r");
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-                log::error(std::string("SDL_Init failed: ") + SDL_GetError()); return 1;
+                vibble::log::error(std::string("SDL_Init failed: ") + SDL_GetError()); return 1;
         }
         if (SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2") != SDL_TRUE) {
                 SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
         }
-        log::info("[Main] Requested high quality texture filtering.");
+        vibble::log::info("[Main] Requested high quality texture filtering.");
         if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
-                log::error(std::string("Mix_OpenAudio failed: ") + Mix_GetError()); SDL_Quit(); return 1;
+                vibble::log::error(std::string("Mix_OpenAudio failed: ") + Mix_GetError()); SDL_Quit(); return 1;
         }
 	if (TTF_Init() < 0) {
-		log::error(std::string("TTF_Init failed: ") + TTF_GetError()); SDL_Quit(); return 1;
+		vibble::log::error(std::string("TTF_Init failed: ") + TTF_GetError()); SDL_Quit(); return 1;
 	}
 	if (!(IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG | IMG_INIT_TIF | IMG_INIT_WEBP) &
 	(IMG_INIT_PNG | IMG_INIT_JPG | IMG_INIT_TIF | IMG_INIT_WEBP))) {
-		log::error(std::string("IMG_Init failed: ") + IMG_GetError()); SDL_Quit(); return 1;
+		vibble::log::error(std::string("IMG_Init failed: ") + IMG_GetError()); SDL_Quit(); return 1;
 	}
 	SDL_Window* window = SDL_CreateWindow("Game Window", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
 	if (!window) {
-		log::error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
+		vibble::log::error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
 		IMG_Quit(); TTF_Quit(); SDL_Quit(); return 1;
 	}
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 	if (!renderer) {
-		log::error(std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
+		vibble::log::error(std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
 		SDL_DestroyWindow(window); IMG_Quit(); TTF_Quit(); SDL_Quit(); return 1;
 	}
 	SDL_RendererInfo info; SDL_GetRendererInfo(renderer, &info);
-	log::info(std::string("[Main] Renderer: ") + (info.name ? info.name : "Unknown"));
+	vibble::log::info(std::string("[Main] Renderer: ") + (info.name ? info.name : "Unknown"));
 	int screen_width = 0, screen_height = 0;
 	SDL_GetRendererOutputSize(renderer, &screen_width, &screen_height);
-	log::info(std::string("[Main] Screen resolution: ") + std::to_string(screen_width) + "x" + std::to_string(screen_height));
+	vibble::log::info(std::string("[Main] Screen resolution: ") + std::to_string(screen_width) + "x" + std::to_string(screen_height));
 	run(window, renderer, screen_width, screen_height, rebuild_cache);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	IMG_Quit(); TTF_Quit(); SDL_Quit();
-	log::info("[Main] Game exited cleanly.");
+	vibble::log::info("[Main] Game exited cleanly.");
 	return 0;
 }

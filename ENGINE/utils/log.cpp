@@ -17,8 +17,8 @@ std::mutex& log_mutex() {
     return m;
 }
 
-log::Level& global_level() {
-    static log::Level lvl = log::Level::Info;
+vibble::log::Level& global_level() {
+    static vibble::log::Level lvl = vibble::log::Level::Info;
     return lvl;
 }
 
@@ -32,14 +32,14 @@ std::chrono::steady_clock::time_point& time_origin() {
     return t0;
 }
 
-log::Level parse_level_env(std::string_view v) {
+vibble::log::Level parse_level_env(std::string_view v) {
     auto lower = std::string(v);
     for (auto& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (lower == "error") return log::Level::Error;
-    if (lower == "warn" || lower == "warning") return log::Level::Warn;
-    if (lower == "info") return log::Level::Info;
-    if (lower == "debug") return log::Level::Debug;
-    return log::Level::Info;
+    if (lower == "error") return vibble::log::Level::Error;
+    if (lower == "warn" || lower == "warning") return vibble::log::Level::Warn;
+    if (lower == "info") return vibble::log::Level::Info;
+    if (lower == "debug") return vibble::log::Level::Debug;
+    return vibble::log::Level::Info;
 }
 
 void init_from_env_once() {
@@ -52,17 +52,17 @@ void init_from_env_once() {
     }
 }
 
-const char* level_tag(log::Level level) {
+const char* level_tag(vibble::log::Level level) {
     switch (level) {
-        case log::Level::Error: return "ERROR";
-        case log::Level::Warn:  return "WARN";
-        case log::Level::Info:  return "INFO";
-        case log::Level::Debug: return "DEBUG";
+        case vibble::log::Level::Error: return "ERROR";
+        case vibble::log::Level::Warn:  return "WARN";
+        case vibble::log::Level::Info:  return "INFO";
+        case vibble::log::Level::Debug: return "DEBUG";
         default:                return "INFO";
     }
 }
 
-void log_line_impl(log::Level level, const std::string& message) {
+void log_line_impl(vibble::log::Level level, const std::string& message) {
     init_from_env_once();
     if (static_cast<int>(level) > static_cast<int>(global_level())) {
         return;
@@ -71,7 +71,7 @@ void log_line_impl(log::Level level, const std::string& message) {
     const auto now = steady_clock::now();
     const double secs = duration_cast<duration<double>>(now - time_origin()).count();
     std::lock_guard<std::mutex> lock(log_mutex());
-    std::ostream& os = (level == log::Level::Error) ? std::cerr : std::cout;
+    std::ostream& os = (level == vibble::log::Level::Error) ? std::cerr : std::cout;
     os << '[' << level_tag(level) << "] +" << std::fixed << std::setprecision(3) << secs
        << "s: " << message << '\n';
     os.flush();
@@ -79,7 +79,7 @@ void log_line_impl(log::Level level, const std::string& message) {
 
 } // namespace
 
-namespace log {
+namespace vibble::log {
 
 void set_level(Level level) {
     std::lock_guard<std::mutex> lock(log_mutex());
@@ -101,5 +101,5 @@ void warn (const std::string& message) { log_line_impl(Level::Warn,  message); }
 void info (const std::string& message) { log_line_impl(Level::Info,  message); }
 void debug(const std::string& message) { log_line_impl(Level::Debug, message); }
 
-} // namespace log
+} // namespace vibble::log
 

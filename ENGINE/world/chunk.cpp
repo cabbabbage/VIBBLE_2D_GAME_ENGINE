@@ -261,16 +261,16 @@ void LightMap::destroy_chunk_texture(world::Chunk& chunk) const {
 
 bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
     if (!assets_ || !renderer) {
-        log::debug("[LightMap] begin_full_world_mask: missing assets or renderer");
+        vibble::log::debug("[LightMap] begin_full_world_mask: missing assets or renderer");
         return false;
     }
     if (batch_active_) {
-        log::debug("[LightMap] begin_full_world_mask: batch already active (reuse)");
+        vibble::log::debug("[LightMap] begin_full_world_mask: batch already active (reuse)");
         return batch_full_mask_ != nullptr;
     }
 
     const auto& chunks = active_chunks();
-    log::debug(std::string("[LightMap] begin_full_world_mask: active_chunks=") + std::to_string(chunks.size()));
+    vibble::log::debug(std::string("[LightMap] begin_full_world_mask: active_chunks=") + std::to_string(chunks.size()));
     bool have_bounds = false;
     int min_x = 0, min_y = 0, max_x = 0, max_y = 0;
     for (const world::Chunk* c : chunks) {
@@ -290,13 +290,13 @@ bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
         }
     }
     if (!have_bounds) {
-        log::debug("[LightMap] begin_full_world_mask: no active chunk bounds");
+        vibble::log::debug("[LightMap] begin_full_world_mask: no active chunk bounds");
         return false;
     }
 
     const int full_w = std::max(1, max_x - min_x);
     const int full_h = std::max(1, max_y - min_y);
-    log::debug(std::string("[LightMap] full mask world bounds: (") + std::to_string(min_x) + "," + std::to_string(min_y) + ")-(" +
+    vibble::log::debug(std::string("[LightMap] full mask world bounds: (") + std::to_string(min_x) + "," + std::to_string(min_y) + ")-(" +
                std::to_string(max_x) + "," + std::to_string(max_y) + ") size=" + std::to_string(full_w) + "x" + std::to_string(full_h));
     SDL_Texture* full = SDL_CreateTexture(renderer,
                                          SDL_PIXELFORMAT_RGBA8888,
@@ -304,14 +304,14 @@ bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
                                          full_w,
                                          full_h);
     if (!full) {
-        log::debug(std::string("[LightMap] begin_full_world_mask: SDL_CreateTexture failed: ") + SDL_GetError());
+        vibble::log::debug(std::string("[LightMap] begin_full_world_mask: SDL_CreateTexture failed: ") + SDL_GetError());
         return false;
     }
     SDL_SetTextureBlendMode(full, SDL_BLENDMODE_BLEND);
 
     SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
     if (SDL_SetRenderTarget(renderer, full) != 0) {
-        log::debug(std::string("[LightMap] begin_full_world_mask: SDL_SetRenderTarget failed: ") + SDL_GetError());
+        vibble::log::debug(std::string("[LightMap] begin_full_world_mask: SDL_SetRenderTarget failed: ") + SDL_GetError());
         SDL_DestroyTexture(full);
         SDL_SetRenderTarget(renderer, previous_target);
         return false;
@@ -334,7 +334,7 @@ bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
 #endif
 
     const auto& static_lights = assets_->getActiveStaticLightAssets();
-    log::debug(std::string("[LightMap] stamping static lights from assets: count=") + std::to_string(static_lights.size()));
+    vibble::log::debug(std::string("[LightMap] stamping static lights from assets: count=") + std::to_string(static_lights.size()));
     for (const Asset* asset : static_lights) {
         if (!asset || !asset->info) continue;
         if (asset->info->light_sources.empty()) continue;
@@ -384,7 +384,7 @@ bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
     batch_full_mask_   = full;
     batch_full_bounds_ = SDL_Rect{ min_x, min_y, full_w, full_h };
     batch_active_      = true;
-    log::debug(std::string("[LightMap] begin_full_world_mask: CREATED full texture size=") + std::to_string(full_w) + "x" + std::to_string(full_h) +
+    vibble::log::debug(std::string("[LightMap] begin_full_world_mask: CREATED full texture size=") + std::to_string(full_w) + "x" + std::to_string(full_h) +
                " origin=(" + std::to_string(min_x) + "," + std::to_string(min_y) + ")");
     return true;
 }
@@ -392,7 +392,7 @@ bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
 void LightMap::end_full_world_mask(SDL_Renderer* renderer) const {
     (void)renderer;
     if (!batch_active_) return;
-    log::debug("[LightMap] end_full_world_mask: destroying full mask");
+    vibble::log::debug("[LightMap] end_full_world_mask: destroying full mask");
     if (batch_full_mask_) {
         SDL_DestroyTexture(batch_full_mask_);
         batch_full_mask_ = nullptr;
@@ -403,7 +403,7 @@ void LightMap::end_full_world_mask(SDL_Renderer* renderer) const {
 
 bool LightMap::rebuild_chunk_from_batch(SDL_Renderer* renderer, world::Chunk& chunk) const {
     if (!batch_active_ || !batch_full_mask_ || !renderer) {
-        log::debug(std::string("[LightMap] rebuild_chunk_from_batch: unavailable (batch_active=") + (batch_active_?"yes":"no") +
+        vibble::log::debug(std::string("[LightMap] rebuild_chunk_from_batch: unavailable (batch_active=") + (batch_active_?"yes":"no") +
                   ", has_tex=" + (batch_full_mask_?"yes":"no") + ", has_renderer=" + (renderer?"yes":"no") + ") for chunk(" +
                   std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ")");
         return false;
@@ -418,14 +418,14 @@ bool LightMap::rebuild_chunk_from_batch(SDL_Renderer* renderer, world::Chunk& ch
                                              width,
                                              height);
     if (!texture) {
-        log::warn(std::string("[LightMap] rebuild_chunk_from_batch: SDL_CreateTexture failed: ") + SDL_GetError());
+        vibble::log::warn(std::string("[LightMap] rebuild_chunk_from_batch: SDL_CreateTexture failed: ") + SDL_GetError());
         return false;
     }
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
 
     SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
     if (SDL_SetRenderTarget(renderer, texture) != 0) {
-        log::warn(std::string("[LightMap] rebuild_chunk_from_batch: SDL_SetRenderTarget failed: ") + SDL_GetError());
+        vibble::log::warn(std::string("[LightMap] rebuild_chunk_from_batch: SDL_SetRenderTarget failed: ") + SDL_GetError());
         SDL_DestroyTexture(texture);
         SDL_SetRenderTarget(renderer, previous_target);
         return false;
@@ -456,16 +456,16 @@ bool LightMap::rebuild_chunk_from_batch(SDL_Renderer* renderer, world::Chunk& ch
                       world_overlap.y - chunk.world_bounds.y,
                       world_overlap.w,
                       world_overlap.h };
-        log::debug(std::string("[LightMap] rebuild_chunk_from_batch: chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
+        vibble::log::debug(std::string("[LightMap] rebuild_chunk_from_batch: chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
                    ") src=[" + std::to_string(src.x) + "," + std::to_string(src.y) + "," + std::to_string(src.w) + "," + std::to_string(src.h) +
                    "] dst=[" + std::to_string(dst.x) + "," + std::to_string(dst.y) + "," + std::to_string(dst.w) + "," + std::to_string(dst.h) + "]");
         if (src.w > 0 && src.h > 0 && dst.w > 0 && dst.h > 0) {
             SDL_RenderCopy(renderer, batch_full_mask_, &src, &dst);
         } else {
-            log::debug("[LightMap] rebuild_chunk_from_batch: skipped copy due to non-positive rect");
+            vibble::log::debug("[LightMap] rebuild_chunk_from_batch: skipped copy due to non-positive rect");
         }
     } else {
-        log::debug(std::string("[LightMap] rebuild_chunk_from_batch: NO OVERLAP for chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
+        vibble::log::debug(std::string("[LightMap] rebuild_chunk_from_batch: NO OVERLAP for chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
                   ") full_bounds=[" + std::to_string(full_bounds.x) + "," + std::to_string(full_bounds.y) + "," + std::to_string(full_bounds.w) + "," + std::to_string(full_bounds.h) + "]");
     }
 
@@ -475,14 +475,14 @@ bool LightMap::rebuild_chunk_from_batch(SDL_Renderer* renderer, world::Chunk& ch
     chunk.static_light_map = texture;
     chunk.lighting_dirty   = false;
     update_chunk_static_brightness_extrema(renderer, chunk);
-    log::debug(std::string("[LightMap] rebuild_chunk_from_batch: COMPLETE chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
+    vibble::log::debug(std::string("[LightMap] rebuild_chunk_from_batch: COMPLETE chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
                ") base_brightness=" + std::to_string(chunk.base_brightness));
     return true;
 }
 
 void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk) const {
     if (!renderer) {
-        log::debug("[LightMap] ensure_chunk_rebaked: missing renderer");
+        vibble::log::debug("[LightMap] ensure_chunk_rebaked: missing renderer");
         return;
     }
     if (!chunk.lighting_dirty && chunk.static_light_map) {
@@ -490,18 +490,18 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
     }
 
     if (batch_active_ && batch_full_mask_) {
-        log::debug(std::string("[LightMap] ensure_chunk_rebaked: try BATCH for chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ")");
+        vibble::log::debug(std::string("[LightMap] ensure_chunk_rebaked: try BATCH for chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ")");
         if (rebuild_chunk_from_batch(renderer, chunk)) {
             return;
         }
-        log::debug("[LightMap] ensure_chunk_rebaked: batch failed; falling back");
+        vibble::log::debug("[LightMap] ensure_chunk_rebaked: batch failed; falling back");
     }
 
     destroy_chunk_texture(chunk);
 
     const int width  = std::max(1, chunk.world_bounds.w);
     const int height = std::max(1, chunk.world_bounds.h);
-    log::debug(std::string("[LightMap] ensure_chunk_rebaked: per-chunk CREATE size=") + std::to_string(width) + "x" + std::to_string(height) +
+    vibble::log::debug(std::string("[LightMap] ensure_chunk_rebaked: per-chunk CREATE size=") + std::to_string(width) + "x" + std::to_string(height) +
                " for chunk(" + std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ")");
 
     SDL_Texture* texture = SDL_CreateTexture(renderer,
@@ -510,7 +510,7 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
                                              width,
                                              height);
     if (!texture) {
-        log::warn(std::string("[LightMap] ensure_chunk_rebaked: SDL_CreateTexture failed: ") + SDL_GetError());
+        vibble::log::warn(std::string("[LightMap] ensure_chunk_rebaked: SDL_CreateTexture failed: ") + SDL_GetError());
         return;
     }
 
@@ -520,7 +520,7 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
     if (SDL_SetRenderTarget(renderer, texture) != 0) {
         SDL_DestroyTexture(texture);
         SDL_SetRenderTarget(renderer, previous_target);
-        log::warn(std::string("[LightMap] ensure_chunk_rebaked: SDL_SetRenderTarget failed: ") + SDL_GetError());
+        vibble::log::warn(std::string("[LightMap] ensure_chunk_rebaked: SDL_SetRenderTarget failed: ") + SDL_GetError());
         return;
     }
 
@@ -542,7 +542,7 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
 
     if (assets_) {
         const auto& static_lights = assets_->getActiveStaticLightAssets();
-        log::debug(std::string("[LightMap] ensure_chunk_rebaked: stamping per-chunk lights (assets=") + std::to_string(static_lights.size()) +
+        vibble::log::debug(std::string("[LightMap] ensure_chunk_rebaked: stamping per-chunk lights (assets=") + std::to_string(static_lights.size()) +
                    ") for chunk(" + std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ")");
         for (const Asset* asset : static_lights) {
             if (!asset || !asset->info) {
@@ -608,7 +608,7 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
     chunk.static_light_map = texture;
     chunk.lighting_dirty   = false;
     update_chunk_static_brightness_extrema(renderer, chunk);
-    log::debug(std::string("[LightMap] ensure_chunk_rebaked: COMPLETE chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
+    vibble::log::debug(std::string("[LightMap] ensure_chunk_rebaked: COMPLETE chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
                ") base_brightness=" + std::to_string(chunk.base_brightness));
 }
 
@@ -640,7 +640,7 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
     }
 
     if (any_dirty) {
-        log::debug(std::string("[LightMap] update: any_dirty=true (chunks=") + std::to_string(chunks.size()) + ") -> begin_full_world_mask");
+        vibble::log::debug(std::string("[LightMap] update: any_dirty=true (chunks=") + std::to_string(chunks.size()) + ") -> begin_full_world_mask");
         begin_full_world_mask(renderer);
     }
 
@@ -653,7 +653,7 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
 
     if (any_dirty) {
         end_full_world_mask(renderer);
-        log::debug("[LightMap] update: end_full_world_mask");
+        vibble::log::debug("[LightMap] update: end_full_world_mask");
     }
 
     if (!assets_) return;

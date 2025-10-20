@@ -66,7 +66,7 @@ map_path_(std::move(content_root)),
 renderer_(renderer),
 manifest_store_(manifest_store)
 {
-        log::info(std::string("[AssetLoader] Start for map '") + map_id_ + "'.");
+        vibble::log::info(std::string("[AssetLoader] Start for map '") + map_id_ + "'.");
         using_shared_asset_library_ = (shared_asset_library != nullptr);
         if (using_shared_asset_library_) {
                 asset_library_ = shared_asset_library;
@@ -81,7 +81,7 @@ manifest_store_(manifest_store)
         loading_status::notify("Loading map data");
         load_map_json(map_manifest);
         const auto map_end = std::chrono::steady_clock::now();
-        log::debug(std::string("[AssetLoader] Map JSON parsed for '") + map_id_ + "'.");
+        vibble::log::debug(std::string("[AssetLoader] Map JSON parsed for '") + map_id_ + "'.");
 
         const nlohmann::json& audio_manifest = map_info_json_.contains("audio") ? map_info_json_.at("audio") : nlohmann::json::object();
         AudioEngine::instance().init(map_id_, audio_manifest, map_path_);
@@ -90,14 +90,14 @@ manifest_store_(manifest_store)
         loading_status::notify("Loading assets");
         const auto library_end = std::chrono::steady_clock::now();
         if (asset_library_) {
-                log::info(std::string("[AssetLoader] Asset library ready with ") + std::to_string(asset_library_->all().size()) + " known assets");
+                vibble::log::info(std::string("[AssetLoader] Asset library ready with ") + std::to_string(asset_library_->all().size()) + " known assets");
         }
 
         const auto rooms_begin = std::chrono::steady_clock::now();
         loading_status::notify("Creating map");
         loadRooms();
         const auto rooms_end = std::chrono::steady_clock::now();
-        log::info(std::string("[AssetLoader] Rooms created: ") + std::to_string(rooms_.size()));
+        vibble::log::info(std::string("[AssetLoader] Rooms created: ") + std::to_string(rooms_.size()));
         loading_status::notify("Loading assets");
     {
         const auto preload_begin = std::chrono::steady_clock::now();
@@ -112,40 +112,40 @@ manifest_store_(manifest_store)
                         }
                 }
                 const std::size_t preload_count = used.size();
-                log::info(std::string("[AssetLoader] Preloading animations for used assets (") + std::to_string(preload_count) + ")...");
+                vibble::log::info(std::string("[AssetLoader] Preloading animations for used assets (") + std::to_string(preload_count) + ")...");
                 asset_library_->loadAnimationsFor(renderer_, used);
 
                 const auto preload_end = std::chrono::steady_clock::now();
                 const double preload_ms = std::chrono::duration_cast<std::chrono::milliseconds>(preload_end - preload_begin).count();
-                log::info(std::string("[AssetLoader] Preloaded animations for ") + std::to_string(preload_count) +
+                vibble::log::info(std::string("[AssetLoader] Preloaded animations for ") + std::to_string(preload_count) +
                           " referenced assets in " + std::to_string(preload_ms) + "ms");
         } else {
-                log::info("[AssetLoader] Using shared asset library cache; skipping per-map preload.");
+                vibble::log::info("[AssetLoader] Using shared asset library cache; skipping per-map preload.");
         }
     }
 
     if (asset_library_) {
         if (renderer_) {
                 asset_library_->ensureAllAnimationsLoaded(renderer_);
-                log::info("[AssetLoader] Asset library warmup complete; animations cached in renderer.");
+                vibble::log::info("[AssetLoader] Asset library warmup complete; animations cached in renderer.");
         } else {
-                log::warn("[AssetLoader] Renderer unavailable; skipping asset library cache warmup.");
+                vibble::log::warn("[AssetLoader] Renderer unavailable; skipping asset library cache warmup.");
         }
     }
         loading_status::notify("Loading assets");
-        log::info("[AssetLoader] Finalizing assets across rooms...");
+        vibble::log::info("[AssetLoader] Finalizing assets across rooms...");
         finalizeAssets();
-        log::info("[AssetLoader] Asset finalization completed; all assets are ready.");
+        vibble::log::info("[AssetLoader] Asset finalization completed; all assets are ready.");
 
         const auto overall_end = std::chrono::steady_clock::now();
         const double map_ms = std::chrono::duration_cast<std::chrono::milliseconds>(map_end - map_begin).count();
         const double library_ms = std::chrono::duration_cast<std::chrono::milliseconds>(library_end - library_begin).count();
         const double rooms_ms = std::chrono::duration_cast<std::chrono::milliseconds>(rooms_end - rooms_begin).count();
         const double total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(overall_end - overall_begin).count();
-        log::info(std::string("[AssetLoader] Map metadata loaded in ") + std::to_string(map_ms) + "ms");
-        log::info(std::string("[AssetLoader] Asset library ready in ") + std::to_string(library_ms) + "ms");
-        log::info(std::string("[AssetLoader] Rooms built in ") + std::to_string(rooms_ms) + "ms");
-        log::info(std::string("[AssetLoader] Initialization completed in ") + std::to_string(total_ms) + "ms");
+        vibble::log::info(std::string("[AssetLoader] Map metadata loaded in ") + std::to_string(map_ms) + "ms");
+        vibble::log::info(std::string("[AssetLoader] Asset library ready in ") + std::to_string(library_ms) + "ms");
+        vibble::log::info(std::string("[AssetLoader] Rooms built in ") + std::to_string(rooms_ms) + "ms");
+        vibble::log::info(std::string("[AssetLoader] Initialization completed in ") + std::to_string(total_ms) + "ms");
         auto distant_boundary = collectDistantAssets(150, 400);
         for (auto* asset : distant_boundary) {
                 asset->set_hidden(true);
@@ -450,10 +450,10 @@ void AssetLoader::finalizeAssets() {
                         try {
                                 asset_up->finalize_setup();
                         } catch (const std::exception& ex) {
-                                log::error(std::string("[AssetLoader] finalizeAssets: exception during finalize_setup for '") + name + "': " + ex.what());
+                                vibble::log::error(std::string("[AssetLoader] finalizeAssets: exception during finalize_setup for '") + name + "': " + ex.what());
                                 throw;
                         } catch (...) {
-                                log::error(std::string("[AssetLoader] finalizeAssets: unknown exception during finalize_setup for '") + name + "'");
+                                vibble::log::error(std::string("[AssetLoader] finalizeAssets: unknown exception during finalize_setup for '") + name + "'");
                                 throw;
                         }
 
@@ -467,7 +467,7 @@ void AssetLoader::finalizeAssets() {
                         if (room_skipped > 0) {
                                 msg += std::string(" (skipped ") + std::to_string(room_skipped) + ")";
                         }
-                        log::debug(msg);
+                        vibble::log::debug(msg);
                 }
 
                 ++room_index;
@@ -479,7 +479,7 @@ void AssetLoader::finalizeAssets() {
                 if (skipped_assets > 0) {
                         msg += std::string(" (") + std::to_string(skipped_assets) + " skipped)";
                 }
-                log::info(msg);
+                vibble::log::info(msg);
         }
 }
 
@@ -514,7 +514,7 @@ std::vector<std::unique_ptr<Asset>> AssetLoader::extract_all_assets() {
 void AssetLoader::createAssets(world::Grid& grid) {
         grid.set_chunk_resolution(std::max(0, map_grid_settings_.r_chunk));
         spawned_assets_ = extract_all_assets();
-        log::info(std::string("[AssetLoader] Extracted ") + std::to_string(spawned_assets_.size()) + " visible assets from rooms");
+        vibble::log::info(std::string("[AssetLoader] Extracted ") + std::to_string(spawned_assets_.size()) + " visible assets from rooms");
         for (const auto& asset_up : spawned_assets_) {
                 Asset* asset = asset_up.get();
                 if (!asset) {
@@ -523,7 +523,7 @@ void AssetLoader::createAssets(world::Grid& grid) {
                 grid.register_asset(asset);
         }
         instantiate_map_chunks(grid);
-        log::info("[AssetLoader] Beginning full-map light map texture creation...");
+        vibble::log::info("[AssetLoader] Beginning full-map light map texture creation...");
         precompute_light_map(grid);
 }
 
@@ -599,7 +599,7 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
                                                                 if (child.is_string()) {
                                                                         rs.required_children.push_back(child.get<std::string>());
                                                                 } else {
-                                                                        log::warn(std::string("[AssetLoader] Room '") + rs.name + "' has non-string entry in 'required_children'; skipping.");
+                                                                        vibble::log::warn(std::string("[AssetLoader] Room '") + rs.name + "' has non-string entry in 'required_children'; skipping.");
                                                                 }
                                                         }
                                                 }
@@ -748,7 +748,7 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 register_chunk(i, j);
         }
 
-        log::info(std::string("[AssetLoader] Prepared ") + std::to_string(map_chunks_.size()) +
+        vibble::log::info(std::string("[AssetLoader] Prepared ") + std::to_string(map_chunks_.size()) +
                   " static-light chunk(s) for baking");
 }
 
