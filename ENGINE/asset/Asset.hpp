@@ -90,7 +90,7 @@ class Asset {
     void deactivate();
     int NeighborSearchRadius;
     void set_hidden(bool state);
-    bool is_hidden();
+    bool is_hidden() const;
     void Delete();
     void set_highlighted(bool state);
     bool is_highlighted();

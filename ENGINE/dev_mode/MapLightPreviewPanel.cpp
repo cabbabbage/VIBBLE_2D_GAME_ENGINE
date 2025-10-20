@@ -217,8 +217,8 @@ void MapLightPreviewPanel::update(const Input& input, int screen_w, int screen_h
     }
     if (chunk_resolution_) {
         const int chunk_index_value = chunk_resolution_->value();
-        if (chunk_value != last_chunk_resolution_) {
-            last_chunk_resolution_ = chunk_value;
+        if (chunk_index_value != last_chunk_resolution_) {
+            last_chunk_resolution_ = chunk_index_value;
             handle_chunk_resolution_changed();
         }
     }

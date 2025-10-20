@@ -747,7 +747,7 @@ void Asset::update_scale_usage(float requested, float texture_scale, float remai
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }
-bool  Asset::is_hidden(){ return hidden; }
+bool  Asset::is_hidden() const { return hidden; }
 
 void Asset::set_merged_from_neighbors(bool state){ merged_from_neighbors_ = state; }
 bool  Asset::merged_from_neighbors() const{ return merged_from_neighbors_; }
