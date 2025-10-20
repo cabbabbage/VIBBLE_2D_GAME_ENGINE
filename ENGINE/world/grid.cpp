@@ -1,9 +1,12 @@
 #include "world/grid.hpp"
 
 #include <algorithm>
+#include <string>
 #include <vector>
 
 #include "asset/Asset.hpp"
+#include "util/grid.hpp"
+#include "utils/log.hpp"
 
 namespace world {
 
@@ -23,7 +26,12 @@ int floor_div(int value, int step) {
 }
 
 void Grid::set_chunk_resolution(int r) {
-    const int clamped = std::max(0, r);
+    const int clamped = std::clamp(r, 0, vibble::grid::kMaxResolution);
+    if (clamped != r) {
+        vibble::log::warn(std::string{"[Grid] Requested chunk resolution "} + std::to_string(r) +
+                           " clamped to " + std::to_string(clamped) +
+                           " (max=" + std::to_string(vibble::grid::kMaxResolution) + ")");
+    }
     if (clamped == r_chunk_) {
         return;
     }

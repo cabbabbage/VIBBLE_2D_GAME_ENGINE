@@ -669,13 +669,31 @@ void AssetLoader::precompute_light_map(world::Grid& grid) {
 
 void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
         map_chunks_.clear();
-        const int r_chunk = std::clamp(grid.chunk_resolution(), 0, vibble::grid::kMaxResolution);
+        const int requested_r_chunk = grid.chunk_resolution();
+        const int r_chunk = std::clamp(requested_r_chunk, 0, vibble::grid::kMaxResolution);
+        if (requested_r_chunk != r_chunk) {
+                vibble::log::warn(std::string("[AssetLoader] Chunk resolution request ") +
+                                  std::to_string(requested_r_chunk) + " exceeded limits; using " +
+                                  std::to_string(r_chunk) + ".");
+        }
         const std::int64_t step64 = std::int64_t{1} << r_chunk;
         if (step64 <= 0 || step64 > static_cast<std::int64_t>(std::numeric_limits<int>::max())) {
                 vibble::log::warn("[AssetLoader] Skipping chunk instantiation due to unsupported chunk size.");
                 return;
         }
         const int step = static_cast<int>(step64);
+
+        const int chunk_size_px = vibble::grid::delta(r_chunk);
+        vibble::log::debug(std::string("[AssetLoader] instantiate_map_chunks: map='") + map_id_ +
+                           "' requested_r_chunk=" + std::to_string(requested_r_chunk) +
+                           " clamped_r_chunk=" + std::to_string(r_chunk) +
+                           " chunk_size_px=" + std::to_string(chunk_size_px) +
+                           " (assets=" + std::to_string(spawned_assets_.size()) + ")");
+
+        if (chunk_size_px < 16 || chunk_size_px > 2048) {
+                vibble::log::warn(std::string("[AssetLoader] Chunk size outside expected range: ") +
+                                  std::to_string(chunk_size_px) + "px; manifest may need review.");
+        }
 
         SDL_Point origin = grid.origin();
         const std::int64_t origin_x64 = static_cast<std::int64_t>(origin.x);
@@ -690,12 +708,23 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
         std::unordered_set<std::uint64_t> visited;
         visited.reserve(spawned_assets_.size() * 4);
 
+        int debug_chunk_count = 0;
+
         auto register_chunk = [&](int i, int j) {
                 const std::uint64_t key = chunk_key(i, j);
                 if (!visited.insert(key).second) {
                         return;
                 }
                 world::Chunk& chunk = grid.get_or_create_chunk_ij(i, j);
+                if (debug_chunk_count < 10 || (debug_chunk_count % 100) == 0) {
+                        vibble::log::debug(std::string("[AssetLoader] Prepared chunk (") + std::to_string(i) + ", " +
+                                           std::to_string(j) + ") bounds={x=" +
+                                           std::to_string(chunk.world_bounds.x) + ", y=" +
+                                           std::to_string(chunk.world_bounds.y) + ", w=" +
+                                           std::to_string(chunk.world_bounds.w) + ", h=" +
+                                           std::to_string(chunk.world_bounds.h) + "}");
+                }
+                ++debug_chunk_count;
                 chunk.base_brightness     = 0.0f;
                 chunk.brightness_strength = 1.0f;
                 chunk.opacity_strength    = 1.0f;
