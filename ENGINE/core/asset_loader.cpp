@@ -12,6 +12,7 @@
 #include <chrono>
 #include <limits>
 #include <cstdint>
+#include <string>
 #include <SDL.h>
 #include "asset/Asset.hpp"
 #include "asset/asset_library.hpp"
@@ -32,6 +33,12 @@ using json = nlohmann::json;
 namespace {
         // Temporary guard to preserve the merging implementation without applying it.
         constexpr bool kEnableAssetMerging = false;
+
+        constexpr std::int64_t kMaxStaticLightTextureBytes = 16LL * 1024LL * 1024LL; // 16 MiB ceiling
+        constexpr std::int64_t kBytesPerPixel              = static_cast<std::int64_t>(sizeof(std::uint32_t));
+        constexpr std::int64_t kMaxStaticLightPixels       =
+            kMaxStaticLightTextureBytes / (kBytesPerPixel > 0 ? kBytesPerPixel : 1);
+        static_assert(kMaxStaticLightPixels > 0, "Max static light pixels must be positive.");
         Asset* findCenterAsset(const std::vector<Asset*>& group) {
                 if (group.empty()) return nullptr;
                 double avgX = std::accumulate(group.begin(), group.end(), 0.0,
@@ -772,8 +779,42 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
                 return;
         }
 
-        const int width  = std::max(1, chunk.world_bounds.w);
-        const int height = std::max(1, chunk.world_bounds.h);
+        const std::int64_t width64  = std::max<std::int64_t>(1, static_cast<std::int64_t>(chunk.world_bounds.w));
+        const std::int64_t height64 = std::max<std::int64_t>(1, static_cast<std::int64_t>(chunk.world_bounds.h));
+
+        bool dimensions_overflow = false;
+        if (width64 > 0 && height64 > 0) {
+                if (width64 > std::numeric_limits<std::int64_t>::max() / height64) {
+                        dimensions_overflow = true;
+                }
+        } else {
+                dimensions_overflow = true;
+        }
+
+        if (dimensions_overflow) {
+                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
+                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
+                                  ") due to size overflow.");
+                return;
+        }
+
+        if (width64 > std::numeric_limits<int>::max() || height64 > std::numeric_limits<int>::max()) {
+                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
+                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
+                                  ") due to unsupported texture dimensions.");
+                return;
+        }
+
+        const std::int64_t pixel_count64 = width64 * height64;
+        if (pixel_count64 > kMaxStaticLightPixels) {
+                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
+                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
+                                  ") due to excessive texture size.");
+                return;
+        }
+
+        const int width  = static_cast<int>(width64);
+        const int height = static_cast<int>(height64);
         SDL_Texture* texture = SDL_CreateTexture(renderer_,
                                                  SDL_PIXELFORMAT_RGBA8888,
                                                  SDL_TEXTUREACCESS_TARGET,
@@ -883,7 +924,31 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
                 return 0.0f;
         }
 
-        const std::size_t pixel_count = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
+        const std::int64_t tex_w64 = static_cast<std::int64_t>(tex_w);
+        const std::int64_t tex_h64 = static_cast<std::int64_t>(tex_h);
+        bool               overflow = false;
+        if (tex_w64 > 0 && tex_h64 > 0) {
+                if (tex_w64 > std::numeric_limits<std::int64_t>::max() / tex_h64) {
+                        overflow = true;
+                }
+        } else {
+                overflow = true;
+        }
+
+        if (overflow) {
+                vibble::log::warn(std::string("[AssetLoader] Skipping chunk brightness computation due to size overflow (") +
+                                  std::to_string(tex_w) + "x" + std::to_string(tex_h) + ").");
+                return 0.0f;
+        }
+
+        const std::int64_t pixel_count64 = tex_w64 * tex_h64;
+        if (pixel_count64 > kMaxStaticLightPixels) {
+                vibble::log::warn(std::string("[AssetLoader] Skipping chunk brightness computation due to excessive texture size (") +
+                                  std::to_string(tex_w) + "x" + std::to_string(tex_h) + ").");
+                return 0.0f;
+        }
+
+        const std::size_t pixel_count = static_cast<std::size_t>(pixel_count64);
         std::vector<std::uint32_t> pixels(pixel_count);
         if (pixels.empty()) {
                 return 0.0f;

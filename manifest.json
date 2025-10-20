@@ -10558,29 +10558,6 @@
             "path": "SRC/assets/Tree/default"
           },
           "speed_factor": -2
-        },
-        "group": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Tree",
-          "custom_animation_controller_key": "SRC/assets/Tree",
-          "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": false,
-          "movement": [
-            [
-              0,
-              0
-            ]
-          ],
-          "number_of_frames": 1,
-          "on_end": "SRC/assets/Tree/default",
-          "reverse_source": false,
-          "rnd_start": true,
-          "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "SRC/assets/Tree/group"
-          },
-          "speed_factor": -2
         }
       },
       "anti_tags": [],
