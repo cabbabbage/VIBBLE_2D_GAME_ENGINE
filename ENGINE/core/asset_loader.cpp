@@ -355,20 +355,13 @@ void AssetLoader::createAssets(world::Grid& grid) {
         spawned_assets_ = extract_all_assets();
         vibble::log::info(std::string("[AssetLoader] Extracted ") + std::to_string(spawned_assets_.size()) + " visible assets from rooms");
 
-        int lit_count = 0;
-        int static_lights = 0;
         for (const auto& asset_up : spawned_assets_) {
                 Asset* asset = asset_up.get();
                 if (!asset) continue;
                 grid.register_asset(asset);
-                if (asset->info && !asset->info->light_sources.empty()) {
-                        ++lit_count;
-                        if (!asset->info->moving_asset) ++static_lights;
-                }
         }
-        vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") + std::to_string(spawned_assets_.size()) +
-                           " with_lights=" + std::to_string(lit_count) +
-                           " static_light_assets=" + std::to_string(static_lights));
+        vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") +
+                           std::to_string(spawned_assets_.size()));
 
         const auto t1 = std::chrono::steady_clock::now();
         vibble::log::debug(std::string("[AssetLoader] createAssets total ") +
