@@ -475,7 +475,6 @@ void LightMap::render_visible_quadrants(SDL_Renderer* renderer,
     const camera& cam = assets_->getView();
 
     SDL_Rect world_view = world_rect_from_screen(cam, view_rect);
-    const Uint8 alpha   = clamp_alpha(alpha_multiplier);
 
     for (world::Chunk* chunk : active_chunks()) {
         if (!chunk || !chunk->static_light_map) {
@@ -496,7 +495,31 @@ void LightMap::render_visible_quadrants(SDL_Renderer* renderer,
         if (dst.w <= 0 || dst.h <= 0) {
             continue;
         }
-        SDL_SetTextureAlphaMod(chunk->static_light_map, alpha);
+
+        const float chunk_alpha_multiplier = std::clamp(chunk->opacity_strength, 0.0f, 1.0f);
+        const Uint8 chunk_alpha = clamp_alpha(alpha_multiplier * chunk_alpha_multiplier);
+
+        const float scale_strength = std::max(0.0f, chunk->scale_strength);
+        if (std::abs(scale_strength - 1.0f) > 1e-4f) {
+            const float center_x = static_cast<float>(dst.x) + static_cast<float>(dst.w) / 2.0f;
+            const float center_y = static_cast<float>(dst.y) + static_cast<float>(dst.h) / 2.0f;
+            const float scaled_w = static_cast<float>(dst.w) * scale_strength;
+            const float scaled_h = static_cast<float>(dst.h) * scale_strength;
+            dst.w = std::max(1, static_cast<int>(std::lround(scaled_w)));
+            dst.h = std::max(1, static_cast<int>(std::lround(scaled_h)));
+            dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(dst.w) / 2.0f));
+            dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(dst.h) / 2.0f));
+        }
+
+        if (chunk->offset_x != 0 || chunk->offset_y != 0) {
+            SDL_Point origin_screen = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
+            SDL_Point offset_screen = cam.map_to_screen({chunk->world_bounds.x + chunk->offset_x,
+                                                         chunk->world_bounds.y + chunk->offset_y});
+            dst.x += offset_screen.x - origin_screen.x;
+            dst.y += offset_screen.y - origin_screen.y;
+        }
+
+        SDL_SetTextureAlphaMod(chunk->static_light_map, chunk_alpha);
         SDL_RenderCopy(renderer, chunk->static_light_map, nullptr, &dst);
     }
 }

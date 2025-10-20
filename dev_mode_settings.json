@@ -9,7 +9,7 @@
                         "max_offset_x": 100.0,
                         "max_offset_y": 100.0,
                         "quadrant_size": 16.0,
-                        "quadrants": 120.0,
+                        "quadrants": 80.0,
                         "search_radius": 2.0,
                         "shadow_scale": 1.0,
                         "size_scale_factor": 1.0,

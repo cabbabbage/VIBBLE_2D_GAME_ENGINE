@@ -1,5 +1,6 @@
 #include "light_map_manager.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -146,14 +147,17 @@ void LightMapManager::begin_frame() {
         const float size_factor = std::max(0.0f, cfg.virtual_light_map.size_scale_factor);
         const float light_fac   = std::max(0.0f, cfg.virtual_light_map.map_light_factor);
         const float off_mag     = resp.offset * light_fac;
-        const float off_px_x    = nx * off_mag * fx * size_factor;
-        const float off_px_y    = ny * off_mag * fy * size_factor;
+        const float max_off_x = std::max(0.0f, cfg.virtual_light_map.max_offset_x);
+        const float max_off_y = std::max(0.0f, cfg.virtual_light_map.max_offset_y);
+        const float off_px_x  = nx * off_mag * fx * size_factor;
+        const float off_px_y  = ny * off_mag * fy * size_factor;
 
-        // Apply to chunk. Opacity/scale are multiplicative strengths applied in shading.
-        chunk->opacity_strength = std::max(0.0f, resp.opacity * cfg.opacity_strength);
-        chunk->scale_strength   = std::max(0.0f, resp.scale   * cfg.scale_strength);
-        chunk->offset_x         = static_cast<int>(std::lround(off_px_x));
-        chunk->offset_y         = static_cast<int>(std::lround(off_px_y));
+        // Apply to chunk. Opacity/scale are multiplicative strengths applied in shading and
+        // chunk rendering. Clamp opacity to [0, 1] because it drives texture transparency.
+        chunk->opacity_strength = std::clamp(resp.opacity * cfg.opacity_strength, 0.0f, 1.0f);
+        chunk->scale_strength   = std::max(0.0f, resp.scale * cfg.scale_strength);
+        chunk->offset_x         = static_cast<int>(std::lround(std::clamp(off_px_x, -max_off_x, max_off_x)));
+        chunk->offset_y         = static_cast<int>(std::lround(std::clamp(off_px_y, -max_off_y, max_off_y)));
         // Leave brightness_strength unchanged for now; combined in snapshot only.
     }
 }
