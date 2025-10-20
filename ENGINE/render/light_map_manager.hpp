@@ -19,7 +19,7 @@ struct Chunk;
 
 class LightMapManager {
 public:
-    using ShadowData = world::Chunk::ShadowData;
+    using UseShadowData = world::Chunk::UseShadowData;
 
     struct QuadrantSnapshot {
         int      index               = -1;
@@ -39,7 +39,7 @@ public:
         float                 scale_strength      = 1.0f;
         int                   offset_x            = 0;
         int                   offset_y            = 0;
-        world::Chunk::ShadowData shadow{};
+        world::Chunk::UseShadowData shadow{};
     };
 
     explicit LightMapManager(Assets* assets);
@@ -50,12 +50,12 @@ public:
     std::vector<QuadrantSnapshot> all_snapshots() const;
     std::vector<std::string>      assets_sampling_quadrant(int index) const;
     std::optional<QuadrantSnapshot> snapshot_for_quadrant(int index) const;
-    std::optional<ShadowData>      get_shadow_data(SDL_FPoint world_or_screen_pos) const;
-    std::optional<ShadowData>      get_shadow_data_for_index(int index) const;
+    std::optional<UseShadowData>      get_shadow_data(SDL_FPoint world_or_screen_pos) const;
+    std::optional<UseShadowData>      get_shadow_data_for_index(int index) const;
 
 private:
     std::optional<int> find_quadrant_index(SDL_FPoint world_or_screen_pos) const;
-    std::optional<ShadowData> shadow_data_for_chunk(const world::Chunk* chunk) const;
+    std::optional<UseShadowData> shadow_data_for_chunk(const world::Chunk* chunk) const;
 
     Assets* assets_ = nullptr;
 };

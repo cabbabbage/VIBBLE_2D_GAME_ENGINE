@@ -24,7 +24,7 @@ struct Chunk {
     int offset_x = 0;
     int offset_y = 0;
 
-    struct ShadowData {
+    struct UseShadowData {
         float scale = 1.0f;
         float opacity = 1.0f;
         float offset_x_percent = 0.0f;

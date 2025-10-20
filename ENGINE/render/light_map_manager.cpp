@@ -262,14 +262,14 @@ std::optional<LightMapManager::QuadrantSnapshot> LightMapManager::snapshot_for_q
     return snap;
 }
 
-std::optional<LightMapManager::ShadowData> LightMapManager::shadow_data_for_chunk(const world::Chunk* chunk) const {
+std::optional<LightMapManager::UseShadowData> LightMapManager::shadow_data_for_chunk(const world::Chunk* chunk) const {
     if (!chunk) {
         return std::nullopt;
     }
     return chunk->shadow;
 }
 
-std::optional<LightMapManager::ShadowData> LightMapManager::get_shadow_data_for_index(int index) const {
+std::optional<LightMapManager::UseShadowData> LightMapManager::get_shadow_data_for_index(int index) const {
     const LightMap* map = light_map();
     if (!map) {
         return std::nullopt;
@@ -309,7 +309,7 @@ std::optional<int> LightMapManager::find_quadrant_index(SDL_FPoint world_or_scre
     return std::nullopt;
 }
 
-std::optional<LightMapManager::ShadowData> LightMapManager::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
+std::optional<LightMapManager::UseShadowData> LightMapManager::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
     if (auto index = find_quadrant_index(world_or_screen_pos)) {
         return get_shadow_data_for_index(*index);
     }
