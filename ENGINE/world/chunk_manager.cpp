@@ -4,6 +4,8 @@
 
 namespace world {
 
+int floor_div(int value, int step);
+
 std::uint64_t ChunkManager::key(int i, int j) {
     const auto hi = static_cast<std::uint32_t>(i);
     const auto lo = static_cast<std::uint32_t>(j);
@@ -38,8 +40,8 @@ Chunk* ChunkManager::find(int i, int j) const {
 
 Chunk* ChunkManager::from_world(SDL_Point world_px, int r_chunk, SDL_Point origin) const {
     const int step = 1 << r_chunk;
-    const int i = (world_px.x - origin.x) / step;
-    const int j = (world_px.y - origin.y) / step;
+    const int i = floor_div(world_px.x - origin.x, step);
+    const int j = floor_div(world_px.y - origin.y, step);
     return find(i, j);
 }
 

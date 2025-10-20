@@ -7,6 +7,21 @@
 
 namespace world {
 
+int floor_div(int value, int step) {
+    if (step == 0) {
+        return 0;
+    }
+    const int quotient = value / step;
+    const int remainder = value % step;
+    if (remainder == 0) {
+        return quotient;
+    }
+    if ((remainder < 0) != (step < 0)) {
+        return quotient - 1;
+    }
+    return quotient;
+}
+
 void Grid::set_chunk_resolution(int r) {
     const int clamped = std::max(0, r);
     if (clamped == r_chunk_) {
@@ -20,8 +35,8 @@ void Grid::register_asset(Asset* a) {
     if (!a) return;
     const SDL_Point p{a->pos.x, a->pos.y};
     const int step = 1 << r_chunk_;
-    const int i = (p.x - origin_.x) / step;
-    const int j = (p.y - origin_.y) / step;
+    const int i = floor_div(p.x - origin_.x, step);
+    const int j = floor_div(p.y - origin_.y, step);
     Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_);
     if (std::find(c.assets.begin(), c.assets.end(), a) == c.assets.end()) {
         c.assets.push_back(a);
@@ -32,10 +47,10 @@ void Grid::register_asset(Asset* a) {
 void Grid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
     if (!a) return;
     const int step = 1 << r_chunk_;
-    const int old_i = (old_pos.x - origin_.x) / step;
-    const int old_j = (old_pos.y - origin_.y) / step;
-    const int new_i = (new_pos.x - origin_.x) / step;
-    const int new_j = (new_pos.y - origin_.y) / step;
+    const int old_i = floor_div(old_pos.x - origin_.x, step);
+    const int old_j = floor_div(old_pos.y - origin_.y, step);
+    const int new_i = floor_div(new_pos.x - origin_.x, step);
+    const int new_j = floor_div(new_pos.y - origin_.y, step);
     if (old_i == new_i && old_j == new_j) return;
 
     Chunk* current = nullptr;
@@ -84,10 +99,10 @@ void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
         camera_world.w + margin_px * 2,
         camera_world.h + margin_px * 2
     };
-    const int i_min = (expanded.x - origin_.x) / step;
-    const int j_min = (expanded.y - origin_.y) / step;
-    const int i_max = ((expanded.x + expanded.w) - origin_.x) / step;
-    const int j_max = ((expanded.y + expanded.h) - origin_.y) / step;
+    const int i_min = floor_div(expanded.x - origin_.x, step);
+    const int j_min = floor_div(expanded.y - origin_.y, step);
+    const int i_max = floor_div((expanded.x + expanded.w) - origin_.x, step);
+    const int j_max = floor_div((expanded.y + expanded.h) - origin_.y, step);
     for (int j = j_min; j <= j_max; ++j) {
         for (int i = i_min; i <= i_max; ++i) {
             Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_);

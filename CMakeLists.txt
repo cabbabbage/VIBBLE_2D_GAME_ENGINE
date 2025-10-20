@@ -228,6 +228,24 @@ target_link_libraries(asset_loader_distance_tests PRIVATE
 target_compile_definitions(asset_loader_distance_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME asset_loader_distance_tests COMMAND asset_loader_distance_tests)
 
+add_executable(world_grid_chunk_tests
+    tests/world/grid_chunk_tests.cpp
+    tests/world/chunk_stub.cpp
+    ENGINE/world/grid.cpp
+    ENGINE/world/chunk_manager.cpp
+)
+target_include_directories(world_grid_chunk_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/world
+)
+target_link_libraries(world_grid_chunk_tests PRIVATE
+    SDL2::SDL2
+)
+target_compile_definitions(world_grid_chunk_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+add_test(NAME world_grid_chunk_tests COMMAND world_grid_chunk_tests)
+
 add_executable(map_layers_controller_tests
     tests/dev_mode/map_layers_controller_tests.cpp
     tests/dev_mode/map_layers_controller_main.cpp
