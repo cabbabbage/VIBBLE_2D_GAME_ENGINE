@@ -203,22 +203,24 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     }
     SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
 
-    float base_opacity = std::clamp(context.base_shadow_opacity, 0.0f, 1.0f);
-    float scale        = std::max(context.base_shadow_scale, 0.0f);
-
+    float opacity          = 1.0f;
+    float scale            = 1.0f;
     float offset_x         = 0.0f;
     float offset_y         = 0.0f;
     float parallax_percent = 0.0f;
-    float opacity          = base_opacity;
 
     if (const LightMapManager* manager = context.light_map_manager()) {
         if (auto data = manager->get_shadow_data(context.screen_center)) {
             const auto& shadow = *data;
-            opacity = std::clamp(base_opacity * std::max(0.0f, shadow.opacity), 0.0f, 1.0f);
-            scale *= std::max(0.0f, shadow.scale);
+            opacity = std::clamp(shadow.opacity, 0.0f, 1.0f);
+            scale   = std::max(0.0f, shadow.scale);
             offset_x = static_cast<float>(width) * (shadow.offset_x_percent / 100.0f);
             offset_y = static_cast<float>(height) * (shadow.offset_y_percent / 100.0f);
             parallax_percent = shadow.parallax_intensity_percent;
+        } else {
+            // Fallback to base context values when no manager data is available.
+            opacity = std::clamp(context.base_shadow_opacity, 0.0f, 1.0f);
+            scale   = std::max(context.base_shadow_scale, 0.0f);
         }
     }
 

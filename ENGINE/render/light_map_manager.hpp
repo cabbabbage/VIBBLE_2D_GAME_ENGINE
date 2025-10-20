@@ -58,5 +58,6 @@ private:
     std::optional<UseShadowData> shadow_data_for_chunk(const world::Chunk* chunk) const;
 
     Assets* assets_ = nullptr;
+    float last_screen_light_opacity_ = -1.0f; // normalized [0,1]; forces update on first frame
 };
 

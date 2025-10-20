@@ -33,6 +33,63 @@ bool intersects(const SDL_Rect& a, const SDL_Rect& b) {
     return SDL_HasIntersection(&a, &b) == SDL_TRUE;
 }
 
+// Compute the average transparency for a RGBA8888 render-target texture.
+// Returns a value in [0,1] where 0 is fully dark/opaque and 1 is fully bright/transparent.
+float average_transparency(SDL_Renderer* renderer, SDL_Texture* texture) {
+    if (!renderer || !texture) {
+        return 0.0f;
+    }
+    int tex_w = 0;
+    int tex_h = 0;
+    if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+        return 0.0f;
+    }
+
+    const std::size_t pixel_count = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
+    std::vector<std::uint32_t> pixels(pixel_count);
+    if (pixels.empty()) {
+        return 0.0f;
+    }
+
+    SDL_Texture* prev = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, texture);
+    const int pitch = tex_w * static_cast<int>(sizeof(std::uint32_t));
+    if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, pixels.data(), pitch) != 0) {
+        SDL_SetRenderTarget(renderer, prev);
+        return 0.0f;
+    }
+    SDL_SetRenderTarget(renderer, prev);
+
+    std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> fmt(
+        SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
+    if (!fmt) {
+        return 0.0f;
+    }
+
+    double accum = 0.0;
+    for (std::uint32_t p : pixels) {
+        Uint8 a = 255;
+        SDL_GetRGBA(p, fmt.get(), nullptr, nullptr, nullptr, &a);
+        const double transparency = 1.0 - static_cast<double>(a) / 255.0;
+        accum += transparency;
+    }
+    if (pixel_count == 0) {
+        return 0.0f;
+    }
+    const double avg = accum / static_cast<double>(pixel_count);
+    return static_cast<float>(std::clamp(avg, 0.0, 1.0));
+}
+
+void update_chunk_static_brightness_extrema(SDL_Renderer* renderer, world::Chunk& chunk) {
+    const float avg_static = average_transparency(renderer, chunk.static_light_map);
+    chunk.base_brightness = std::clamp(avg_static, 0.0f, 1.0f);
+    const float case_a = 1.0f;                    // screen light brightest -> map light dimmest
+    const float case_b = chunk.base_brightness;    // screen light dimmest  -> map light brightest
+    chunk.light.min_static_avg_strength = std::min(case_a, case_b);
+    chunk.light.max_static_avg_strength = std::max(case_a, case_b);
+    chunk.light.needs_update = true;
+}
+
 } // namespace
 
 LightMap::LightMap(Assets* assets,
@@ -259,6 +316,7 @@ bool LightMap::rebuild_chunk_from_batch(SDL_Renderer* renderer, world::Chunk& ch
     SDL_SetRenderTarget(renderer, previous_target);
     chunk.static_light_map = texture;
     chunk.lighting_dirty   = false;
+    update_chunk_static_brightness_extrema(renderer, chunk);
     return true;
 }
 
@@ -391,6 +449,7 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
 
     chunk.static_light_map = texture;
     chunk.lighting_dirty   = false;
+    update_chunk_static_brightness_extrema(renderer, chunk);
 }
 
 void LightMap::rebuild(SDL_Renderer* renderer) {

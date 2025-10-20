@@ -17,12 +17,25 @@ struct Chunk {
     std::vector<Asset*> assets;
 
     SDL_Texture* static_light_map = nullptr;
+    // Average transparency of the static darkness mask for this chunk (0..1).
+    // Higher means brighter from static lights alone.
     float base_brightness = 1.0f;
+
+    // Runtime overlay control used by the existing light-map pass.
     float brightness_strength = 1.0f;
     float opacity_strength = 1.0f;
     float scale_strength = 1.0f;
     int offset_x = 0;
     int offset_y = 0;
+
+    struct LightData {
+        bool  is_active = false;
+        bool  needs_update = true;
+        bool  is_occupied_by_moving_source = false;
+        float current_strength = 0.0f;
+        float min_static_avg_strength = 0.0f;
+        float max_static_avg_strength = 1.0f;
+    } light;
 
     struct UseShadowData {
         float scale = 1.0f;
