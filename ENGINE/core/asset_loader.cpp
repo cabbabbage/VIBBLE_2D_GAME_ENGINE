@@ -951,32 +951,44 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
         const std::size_t pixel_count = static_cast<std::size_t>(pixel_count64);
         std::vector<std::uint32_t> pixels(pixel_count);
         if (pixels.empty()) {
-                return 0.0f;
-        }
-
-        SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
-        SDL_SetRenderTarget(renderer_, texture);
-        const int pitch = tex_w * static_cast<int>(sizeof(std::uint32_t));
-        if (SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGBA8888, pixels.data(), pitch) != 0) {
-                SDL_SetRenderTarget(renderer_, previous_target);
-                return 0.0f;
-        }
-        SDL_SetRenderTarget(renderer_, previous_target);
-
         std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> format(
             SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
         if (!format) {
                 return 0.0f;
         }
 
-        double accum = 0.0;
-        for (std::uint32_t pixel : pixels) {
-                Uint8 a = 255;
-                SDL_GetRGBA(pixel, format.get(), nullptr, nullptr, nullptr, &a);
-                const double transparency = 1.0 - static_cast<double>(a) / 255.0;
-                accum += transparency;
+        const std::size_t row_length = static_cast<std::size_t>(tex_w);
+        std::vector<std::uint32_t> row(row_length);
+        if (row.empty()) {
+                return 0.0f;
         }
 
+        SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
+        if (SDL_SetRenderTarget(renderer_, texture) != 0) {
+                SDL_SetRenderTarget(renderer_, previous_target);
+                return 0.0f;
+        }
+
+        const int pitch = tex_w * static_cast<int>(sizeof(std::uint32_t));
+        const double inv_255 = 1.0 / 255.0;
+        double accum = 0.0;
+
+        for (int y = 0; y < tex_h; ++y) {
+                SDL_Rect row_rect{0, y, tex_w, 1};
+                if (SDL_RenderReadPixels(renderer_, &row_rect, SDL_PIXELFORMAT_RGBA8888, row.data(), pitch) != 0) {
+                        SDL_SetRenderTarget(renderer_, previous_target);
+                        return 0.0f;
+                }
+                for (std::size_t x = 0; x < row_length; ++x) {
+                        Uint8 a = 255;
+                        SDL_GetRGBA(row[x], format.get(), nullptr, nullptr, nullptr, &a);
+                        accum += 1.0 - static_cast<double>(a) * inv_255;
+                }
+        }
+
+        SDL_SetRenderTarget(renderer_, previous_target);
+
+        const std::size_t pixel_count = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
         if (pixel_count == 0) {
                 return 0.0f;
         }
