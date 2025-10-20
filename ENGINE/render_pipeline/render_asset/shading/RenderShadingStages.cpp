@@ -4,7 +4,7 @@
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render/camera.hpp"
-#include "render/light_map.hpp"
+#include "world/chunk.hpp"
 
 #include <algorithm>
 #include <cmath>

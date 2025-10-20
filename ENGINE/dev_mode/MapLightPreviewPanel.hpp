@@ -11,7 +11,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "DockableCollapsible.hpp"
-#include "render/light_map.hpp"
+#include "world/chunk.hpp"
 #include "render/light_map_manager.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 

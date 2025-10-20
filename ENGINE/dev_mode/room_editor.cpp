@@ -12,7 +12,7 @@
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
-#include "dev_mode/full_screen_collapsible.hpp"
+#include "dev_mode/full_screen_header_bar.hpp"
 #include "room_config/room_configurator.hpp"
 #include "dev_mode/FloatingDockableManager.hpp"
 #include "dev_mode/widgets.hpp"
@@ -227,7 +227,7 @@ void RoomEditor::set_room_config_visible(bool visible) {
     refresh_room_config_visibility();
 }
 
-void RoomEditor::set_shared_fullscreen_panel(FullScreenCollapsible* panel) {
+void RoomEditor::set_shared_fullscreen_panel(FullScreenHeaderBar* panel) {
     shared_fullscreen_panel_ = panel;
     configure_shared_panel();
     update_spawn_group_config_anchor();

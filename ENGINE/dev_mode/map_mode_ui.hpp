@@ -20,7 +20,7 @@ class MapLightPreviewPanel;
 class MapLayersPanel;
 class MapLayersController;
 class MapGridPanel;
-class FullScreenCollapsible;
+class FullScreenHeaderBar;
 class DockableCollapsible;
 struct DMButtonStyle;
 struct SDL_Renderer;
@@ -80,7 +80,7 @@ public:
 
     void set_map_mode_active(bool active);
 
-    FullScreenCollapsible* get_footer_panel() const;
+    FullScreenHeaderBar* get_footer_header() const;
     void set_footer_always_visible(bool on);
     void set_headers_suppressed(bool suppressed);
     void set_sliding_headers_hidden(bool hidden);
@@ -116,6 +116,7 @@ private:
     bool handle_layers_footer_event(const SDL_Event& e);
     void render_layers_footer(SDL_Renderer* renderer) const;
     bool should_show_layers_footer() const;
+    SDL_Rect footer_content_rect() const;
     void refresh_header_suppression_state();
     void track_floating_panel(DockableCollapsible* panel);
     void rebuild_floating_stack();
@@ -143,7 +144,7 @@ private:
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;
-    std::unique_ptr<FullScreenCollapsible> footer_panel_;
+    std::unique_ptr<FullScreenHeaderBar> footer_header_;
     bool footer_buttons_configured_ = false;
     bool map_mode_active_ = false;
     bool footer_always_visible_ = false;

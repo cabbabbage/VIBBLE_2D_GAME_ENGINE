@@ -10,7 +10,7 @@
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
 #include "render/global_light_source.hpp"
-#include "render/light_map.hpp"
+#include "world/chunk.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
 

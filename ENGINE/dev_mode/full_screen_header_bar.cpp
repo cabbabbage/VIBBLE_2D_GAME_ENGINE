@@ -1,8 +1,7 @@
-#include "full_screen_collapsible.hpp"
-
-#include "utils/input.hpp"
+#include "full_screen_header_bar.hpp"
 
 #include "draw_utils.hpp"
+#include "utils/input.hpp"
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -13,7 +12,7 @@ namespace {
 constexpr int kDefaultHeaderHeight = 40;
 constexpr int kArrowButtonWidth = 36;
 
-const DMButtonStyle* button_style_for(const FullScreenCollapsible::HeaderButton& btn) {
+const DMButtonStyle* button_style_for(const FullScreenHeaderBar::HeaderButton& btn) {
     if (btn.active && btn.active_style_override) {
         return btn.active_style_override;
     }
@@ -43,21 +42,21 @@ void draw_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
     TTF_CloseFont(font);
 }
 
-}
+}  // namespace
 
-FullScreenCollapsible::FullScreenCollapsible(std::string title)
+FullScreenHeaderBar::FullScreenHeaderBar(std::string title)
     : title_(std::move(title)),
       header_height_(kDefaultHeaderHeight) {
     arrow_button_ = std::make_unique<DMButton>("▲", &DMStyles::HeaderButton(), kArrowButtonWidth, DMButton::height());
 }
 
-void FullScreenCollapsible::set_bounds(int width, int height) {
+void FullScreenHeaderBar::set_bounds(int width, int height) {
     screen_w_ = width;
     screen_h_ = height;
     layout();
 }
 
-void FullScreenCollapsible::set_header_height(int height) {
+void FullScreenHeaderBar::set_header_height(int height) {
     const int clamped = std::max(height, kDefaultHeaderHeight);
     if (clamped == header_height_) {
         return;
@@ -66,7 +65,7 @@ void FullScreenCollapsible::set_header_height(int height) {
     layout();
 }
 
-void FullScreenCollapsible::update_title_width() {
+void FullScreenHeaderBar::update_title_width() {
     title_width_ = 0;
     if (!show_title_ || title_.empty()) {
         return;
@@ -82,7 +81,7 @@ void FullScreenCollapsible::update_title_width() {
     TTF_CloseFont(font);
 }
 
-void FullScreenCollapsible::set_expanded(bool expanded) {
+void FullScreenHeaderBar::set_expanded(bool expanded) {
     if (expanded_ == expanded) return;
     expanded_ = expanded;
     if (arrow_button_) {
@@ -100,7 +99,7 @@ void FullScreenCollapsible::set_expanded(bool expanded) {
     if (on_toggle_) on_toggle_(expanded_);
 }
 
-void FullScreenCollapsible::set_header_buttons(std::vector<HeaderButton> buttons) {
+void FullScreenHeaderBar::set_header_buttons(std::vector<HeaderButton> buttons) {
     buttons_ = std::move(buttons);
     for (auto& btn : buttons_) {
         const DMButtonStyle* style = button_style_for(btn);
@@ -109,7 +108,7 @@ void FullScreenCollapsible::set_header_buttons(std::vector<HeaderButton> buttons
     layout_buttons();
 }
 
-void FullScreenCollapsible::activate_button(const std::string& id) {
+void FullScreenHeaderBar::activate_button(const std::string& id) {
     for (auto& btn : buttons_) {
         const bool new_state = (btn.id == id);
         if (btn.active != new_state) {
@@ -124,7 +123,7 @@ void FullScreenCollapsible::activate_button(const std::string& id) {
     }
 }
 
-void FullScreenCollapsible::set_active_button(const std::string& id, bool trigger_callback) {
+void FullScreenHeaderBar::set_active_button(const std::string& id, bool trigger_callback) {
     for (auto& btn : buttons_) {
         const bool new_state = (!id.empty() && btn.id == id);
         if (btn.active != new_state) {
@@ -139,11 +138,23 @@ void FullScreenCollapsible::set_active_button(const std::string& id, bool trigge
     }
 }
 
-void FullScreenCollapsible::update(const Input&) {
-
+void FullScreenHeaderBar::set_button_active_state(const std::string& id, bool active) {
+    for (auto& btn : buttons_) {
+        if (btn.id == id) {
+            btn.active = active && !btn.momentary;
+            if (btn.momentary && active) {
+                btn.active = false;
+            }
+            if (btn.widget) {
+                btn.widget->set_style(button_style_for(btn));
+            }
+        }
+    }
 }
 
-bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
+void FullScreenHeaderBar::update(const Input&) {}
+
+bool FullScreenHeaderBar::handle_event(const SDL_Event& e) {
     if (!visible_) return false;
 
     const bool pointer_event =
@@ -158,10 +169,7 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
         SDL_GetMouseState(&pointer.x, &pointer.y);
     }
 
-    const bool in_header =
-        (pointer_event || wheel_event) && SDL_PointInRect(&pointer, &header_rect_);
-    const bool in_content =
-        expanded_ && (pointer_event || wheel_event) && SDL_PointInRect(&pointer, &content_rect_);
+    const bool in_header = (pointer_event || wheel_event) && SDL_PointInRect(&pointer, &header_rect_);
 
     bool used = false;
     if (arrow_button_) {
@@ -184,19 +192,12 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
                     if (btn.active) {
                         btn.active = false;
                         if (btn.on_toggle) btn.on_toggle(false);
+                        btn.widget->set_style(button_style_for(btn));
                     } else {
                         set_active_button(btn.id, true);
                     }
                 }
             }
-        }
-    }
-
-    if (!used && expanded_ && content_event_handler_) {
-        const bool route_pointer = in_content;
-        const bool route_other = !pointer_event && !wheel_event;
-        if ((route_pointer || route_other) && content_event_handler_(e)) {
-            used = true;
         }
     }
 
@@ -208,15 +209,10 @@ bool FullScreenCollapsible::handle_event(const SDL_Event& e) {
         return true;
     }
 
-    if (in_content) {
-
-        return true;
-    }
-
     return false;
 }
 
-void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
+void FullScreenHeaderBar::render(SDL_Renderer* renderer) const {
     if (!visible_ || !renderer) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     dm_draw::DrawBeveledRect(
@@ -230,20 +226,6 @@ void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
         false,
         DMStyles::HighlightIntensity(),
         DMStyles::ShadowIntensity());
-
-    if (expanded_) {
-        dm_draw::DrawBeveledRect(
-            renderer,
-            content_rect_,
-            DMStyles::CornerRadius(),
-            DMStyles::BevelDepth(),
-            DMStyles::PanelBG(),
-            DMStyles::HighlightColor(),
-            DMStyles::ShadowColor(),
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
-    }
 
     if (show_title_ && !title_.empty()) {
         int text_x = header_rect_.x + DMSpacing::item_gap();
@@ -270,19 +252,11 @@ void FullScreenCollapsible::render(SDL_Renderer* renderer) const {
     }
 }
 
-void FullScreenCollapsible::layout() {
+void FullScreenHeaderBar::layout() {
     header_rect_.w = screen_w_;
     header_rect_.h = header_height_;
     header_rect_.x = 0;
     header_rect_.y = expanded_ ? 0 : std::max(0, screen_h_ - header_rect_.h);
-    if (expanded_) {
-        content_rect_.x = 0;
-        content_rect_.y = header_rect_.y + header_rect_.h;
-        content_rect_.w = screen_w_;
-        content_rect_.h = std::max(0, screen_h_ - header_rect_.h);
-    } else {
-        content_rect_ = SDL_Rect{0, header_rect_.y + header_rect_.h, screen_w_, 0};
-    }
     update_title_width();
     layout_buttons();
     if (arrow_button_) {
@@ -300,7 +274,7 @@ void FullScreenCollapsible::layout() {
     }
 }
 
-void FullScreenCollapsible::layout_buttons() {
+void FullScreenHeaderBar::layout_buttons() {
     int button_start = header_rect_.x + DMSpacing::item_gap();
     if (title_width_ > 0) {
         button_start += title_width_ + DMSpacing::item_gap();
@@ -325,7 +299,7 @@ void FullScreenCollapsible::layout_buttons() {
     struct ButtonLayoutInfo {
         DMButton* widget;
         int width;
-};
+    };
 
     std::vector<ButtonLayoutInfo> visible;
     visible.reserve(buttons_.size());
@@ -398,53 +372,30 @@ void FullScreenCollapsible::layout_buttons() {
     }
 }
 
-void FullScreenCollapsible::set_button_active_state(const std::string& id, bool active) {
-    for (auto& btn : buttons_) {
+const FullScreenHeaderBar::HeaderButton* FullScreenHeaderBar::find_button(const std::string& id) const {
+    for (const auto& btn : buttons_) {
         if (btn.id == id) {
-            btn.active = active && !btn.momentary;
-            if (btn.momentary && active) {
-                btn.active = false;
-            }
-            if (btn.widget) {
-                btn.widget->set_style(button_style_for(btn));
-            }
+            return &btn;
         }
     }
+    return nullptr;
 }
 
-bool FullScreenCollapsible::contains(int x, int y) const {
+void FullScreenHeaderBar::set_title(const std::string& title) {
+    if (title_ == title) return;
+    title_ = title;
+    layout();
+}
+
+void FullScreenHeaderBar::set_title_visible(bool visible) {
+    if (show_title_ == visible) return;
+    show_title_ = visible;
+    layout();
+}
+
+bool FullScreenHeaderBar::contains(int x, int y) const {
     if (!visible_) return false;
     SDL_Point p{x, y};
-    if (SDL_PointInRect(&p, &header_rect_)) {
-        return true;
-    }
-    if (expanded_ && SDL_PointInRect(&p, &content_rect_)) {
-        return true;
-    }
-    return false;
+    return SDL_PointInRect(&p, &header_rect_);
 }
 
-const FullScreenCollapsible::HeaderButton* FullScreenCollapsible::find_button(const std::string& id) const {
-    auto it = std::find_if(buttons_.begin(), buttons_.end(), [&](const HeaderButton& btn) {
-        return btn.id == id;
-    });
-    if (it == buttons_.end()) {
-        return nullptr;
-    }
-    return &(*it);
-}
-
-void FullScreenCollapsible::set_title(const std::string& title) {
-    title_ = title;
-    update_title_width();
-    layout_buttons();
-}
-
-void FullScreenCollapsible::set_title_visible(bool visible) {
-    if (show_title_ == visible) {
-        return;
-    }
-    show_title_ = visible;
-    update_title_width();
-    layout_buttons();
-}

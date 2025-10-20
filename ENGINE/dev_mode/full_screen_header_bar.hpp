@@ -3,8 +3,8 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 #include <SDL.h>
 
@@ -13,7 +13,7 @@
 
 class Input;
 
-class FullScreenCollapsible {
+class FullScreenHeaderBar {
 public:
     struct HeaderButton {
         std::string id;
@@ -25,15 +25,15 @@ public:
         const DMButtonStyle* style_override = nullptr;
         const DMButtonStyle* active_style_override = nullptr;
         std::unique_ptr<DMButton> widget;
-};
+    };
 
-    explicit FullScreenCollapsible(std::string title);
+    explicit FullScreenHeaderBar(std::string title);
+
     void set_title(const std::string& title);
     void set_title_visible(bool visible);
     bool title_visible() const { return show_title_; }
 
     void set_bounds(int width, int height);
-
     void set_header_height(int height);
 
     void set_visible(bool visible) { visible_ = visible; }
@@ -43,10 +43,6 @@ public:
     bool expanded() const { return expanded_; }
 
     void set_on_toggle(std::function<void(bool)> cb) { on_toggle_ = std::move(cb); }
-
-    void set_content_event_handler(std::function<bool(const SDL_Event&)> cb) {
-        content_event_handler_ = std::move(cb);
-    }
 
     void set_header_buttons(std::vector<HeaderButton> buttons);
     void activate_button(const std::string& id);
@@ -61,7 +57,6 @@ public:
     const HeaderButton* find_button(const std::string& id) const;
 
     const SDL_Rect& header_rect() const { return header_rect_; }
-    const SDL_Rect& content_rect() const { return content_rect_; }
     bool contains(int x, int y) const;
 
 private:
@@ -78,14 +73,12 @@ private:
     bool expanded_ = false;
     bool show_title_ = true;
 
-    SDL_Rect header_rect_{0,0,0,0};
-    SDL_Rect content_rect_{0,0,0,0};
+    SDL_Rect header_rect_{0, 0, 0, 0};
     int title_width_ = 0;
 
     std::unique_ptr<DMButton> arrow_button_;
     std::vector<HeaderButton> buttons_;
 
     std::function<void(bool)> on_toggle_;
-    std::function<bool(const SDL_Event&)> content_event_handler_;
 };
 

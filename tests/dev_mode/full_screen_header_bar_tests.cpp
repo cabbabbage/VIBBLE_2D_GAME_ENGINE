@@ -1,7 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
-#include "dev_mode/full_screen_collapsible.hpp"
+#include "dev_mode/full_screen_header_bar.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
@@ -39,7 +39,7 @@ SDLSubsystemGuard& ensure_sdl() {
     return guard;
 }
 
-const FullScreenCollapsible::HeaderButton* require_button(const FullScreenCollapsible& footer,
+const FullScreenHeaderBar::HeaderButton* require_button(const FullScreenHeaderBar& footer,
                                                           const std::string& id) {
     const auto* btn = footer.find_button(id);
     INFO("Expected footer button with id '" << id << "'");
@@ -47,7 +47,7 @@ const FullScreenCollapsible::HeaderButton* require_button(const FullScreenCollap
     return btn;
 }
 
-std::vector<std::string> button_ids(const FullScreenCollapsible& footer) {
+std::vector<std::string> button_ids(const FullScreenHeaderBar& footer) {
     std::vector<std::string> ids;
     const auto& buttons = footer.header_buttons();
     ids.reserve(buttons.size());
@@ -61,12 +61,12 @@ std::vector<std::string> button_ids(const FullScreenCollapsible& footer) {
 TEST_CASE("Header buttons preserve insertion order and state") {
     ensure_sdl();
 
-    FullScreenCollapsible footer("Dev Footer");
+    FullScreenHeaderBar footer("Dev Footer");
     footer.set_bounds(800, 400);
 
     int toggled = 0;
     std::vector<std::pair<std::string, bool>> toggles;
-    std::vector<FullScreenCollapsible::HeaderButton> buttons;
+    std::vector<FullScreenHeaderBar::HeaderButton> buttons;
 
     buttons.push_back({"switch_mode", "Switch", true, [&](bool active) {
                            ++toggled;
@@ -104,11 +104,11 @@ TEST_CASE("Header buttons preserve insertion order and state") {
 TEST_CASE("Momentary buttons never remain latched after activation") {
     ensure_sdl();
 
-    FullScreenCollapsible footer("Momentary Test");
+    FullScreenHeaderBar footer("Momentary Test");
     footer.set_bounds(640, 360);
 
     bool triggered = false;
-    std::vector<FullScreenCollapsible::HeaderButton> buttons;
+    std::vector<FullScreenHeaderBar::HeaderButton> buttons;
     buttons.push_back({"moment", "Moment", false, [&](bool active) {
                            triggered = active;
                        }, true});
@@ -137,11 +137,11 @@ TEST_CASE("Momentary buttons never remain latched after activation") {
 TEST_CASE("Manual active state updates without triggering callbacks") {
     ensure_sdl();
 
-    FullScreenCollapsible footer("Manual Active");
+    FullScreenHeaderBar footer("Manual Active");
     footer.set_bounds(1024, 300);
 
     std::vector<std::pair<std::string, bool>> events;
-    std::vector<FullScreenCollapsible::HeaderButton> buttons;
+    std::vector<FullScreenHeaderBar::HeaderButton> buttons;
     buttons.push_back({"layers", "Layers", false, [&](bool active) {
                            events.emplace_back("layers", active);
                        }});
@@ -166,40 +166,34 @@ TEST_CASE("Manual active state updates without triggering callbacks") {
 TEST_CASE("Layout reacts to expansion state and bounds") {
     ensure_sdl();
 
-    FullScreenCollapsible footer("Layout Test");
+    FullScreenHeaderBar footer("Layout Test");
     footer.set_bounds(1200, 600);
 
     footer.set_header_buttons({});
 
     CHECK_FALSE(footer.expanded());
     auto header = footer.header_rect();
-    auto content = footer.content_rect();
 
     CHECK_EQ(header.w, 1200);
     CHECK_EQ(header.h, footer.header_rect().h);
-    CHECK_EQ(content.h, 0);
+    CHECK_EQ(header.y + header.h, 600);
 
     footer.set_expanded(true);
     CHECK(footer.expanded());
     header = footer.header_rect();
-    content = footer.content_rect();
     CHECK_EQ(header.y, 0);
-    CHECK_EQ(content.y, header.y + header.h);
-    CHECK_EQ(content.w, 1200);
-    CHECK_EQ(content.h, 600 - header.h);
+    CHECK_EQ(header.w, 1200);
 
     footer.set_bounds(800, 400);
     header = footer.header_rect();
-    content = footer.content_rect();
     CHECK_EQ(header.w, 800);
-    CHECK_EQ(content.w, 800);
-    CHECK_EQ(content.h, 400 - header.h);
+    CHECK_EQ(header.y, footer.expanded() ? 0 : 400 - header.h);
 }
 
 TEST_CASE("Arrow button toggles expanded state via synthesized events") {
     ensure_sdl();
 
-    FullScreenCollapsible footer("Arrow Toggle");
+    FullScreenHeaderBar footer("Arrow Toggle");
     footer.set_bounds(640, 480);
     footer.set_header_buttons({});
 

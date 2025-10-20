@@ -20,7 +20,7 @@
 #include "dev_mode/widgets.hpp"
 #include "input.hpp"
 #include "render/camera.hpp"
-#include "render/light_map.hpp"
+#include "world/chunk.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "util/grid.hpp"

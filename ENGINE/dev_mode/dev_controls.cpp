@@ -9,7 +9,7 @@
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"
-#include "dev_mode/full_screen_collapsible.hpp"
+#include "dev_mode/full_screen_header_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 #include "dev_mode/area_mode/create_room_area_panel.hpp"
@@ -392,7 +392,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 this->set_mode(Mode::RoomEditor);
                 if (map_mode_ui_) {
                     map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-                    if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                    if (auto* footer = map_mode_ui_->get_footer_header()) {
                         std::string label = std::string("Room: ") + (current_room_ ? current_room_->room_name : std::string{});
                         footer->set_title(label);
                     }
@@ -405,7 +405,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 this->set_mode(Mode::AreaMode);
                 if (map_mode_ui_) {
                     map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
-                    if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                    if (auto* footer = map_mode_ui_->get_footer_header()) {
                         std::string label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
                         footer->set_title(label);
                     }
@@ -419,7 +419,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
         });
     }
     if (room_editor_ && map_mode_ui_) {
-        room_editor_->set_shared_fullscreen_panel(map_mode_ui_->get_footer_panel());
+        room_editor_->set_shared_fullscreen_panel(map_mode_ui_->get_footer_header());
     }
     configure_header_button_sets();
     trail_suite_ = std::make_unique<TrailEditorSuite>();
@@ -450,7 +450,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
             this->set_mode(Mode::RoomEditor);
             if (map_mode_ui_) {
                 map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-                if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                if (auto* footer = map_mode_ui_->get_footer_header()) {
                     std::string label = std::string("Room: ") +
                                         (current_room_ ? current_room_->room_name : std::string{});
                     footer->set_title(label);
@@ -463,7 +463,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
             this->set_mode(Mode::AreaMode);
             if (map_mode_ui_) {
                 map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
-                if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                if (auto* footer = map_mode_ui_->get_footer_header()) {
                     std::string label = std::string("Area Mode — Room: ") +
                                         (current_room_ ? current_room_->room_name : std::string{});
                     footer->set_title(label);
@@ -557,7 +557,7 @@ void DevControls::set_current_room(Room* room) {
     }
     asset_filter_.set_current_room(room);
     if (map_mode_ui_) {
-        if (auto* footer = map_mode_ui_->get_footer_panel()) {
+        if (auto* footer = map_mode_ui_->get_footer_header()) {
             std::string label;
             if (mode_ == Mode::AreaMode) label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
             else if (mode_ == Mode::RoomEditor) label = std::string("Room: ") + (current_room_ ? current_room_->room_name : std::string{});
@@ -693,7 +693,7 @@ void DevControls::set_enabled(bool enabled) {
         if (map_mode_ui_) {
             map_mode_ui_->set_map_mode_active(false);
             map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-            if (auto* panel = map_mode_ui_->get_footer_panel()) {
+            if (auto* panel = map_mode_ui_->get_footer_header()) {
                 panel->set_expanded(false);
             }
         }
@@ -714,7 +714,7 @@ void DevControls::set_enabled(bool enabled) {
         if (map_mode_ui_) {
             map_mode_ui_->set_map_mode_active(false);
             map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-            if (auto* panel = map_mode_ui_->get_footer_panel()) {
+            if (auto* panel = map_mode_ui_->get_footer_header()) {
                 panel->set_expanded(false);
             }
         }
@@ -814,7 +814,7 @@ void DevControls::update(const Input& input) {
         if (!hide_headers && asset_filter_.contains_point(pointer.x, pointer.y)) {
             room_editor_->clear_highlighted_assets();
         } else if (!hide_headers) {
-            FullScreenCollapsible* footer = map_mode_ui_ ? map_mode_ui_->get_footer_panel() : nullptr;
+            FullScreenHeaderBar* footer = map_mode_ui_ ? map_mode_ui_->get_footer_header() : nullptr;
             if (footer && footer->visible()) {
                 const SDL_Rect& header = footer->header_rect();
                 if (header.w > 0 && header.h > 0 && SDL_PointInRect(&pointer, &header)) {
@@ -1183,7 +1183,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         });
                         if (asset_area_editor_->begin_for_room(current_room_, area_name, area_type, world)) {
                             if (map_mode_ui_) {
-                                if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                                if (auto* footer = map_mode_ui_->get_footer_header()) {
                                     footer->set_title(std::string("Editing Room Area — ") + area_name);
                                 }
                             }
@@ -1213,7 +1213,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     if (asset_area_editor_) asset_area_editor_->attach_assets(assets_);
                     if (asset_area_editor_ && asset_area_editor_->begin(target_asset->info.get(), target_asset, area_name)) {
                         if (map_mode_ui_) {
-                            if (auto* footer = map_mode_ui_->get_footer_panel()) {
+                            if (auto* footer = map_mode_ui_->get_footer_header()) {
                                 std::string label = std::string("Editing ") + target_asset->info->name + std::string(" — Area: ") + area_name;
                                 footer->set_title(label);
                             }

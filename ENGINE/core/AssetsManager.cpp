@@ -8,7 +8,7 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
-#include "render/light_map.hpp"
+#include "world/chunk.hpp"
 #include "render/light_map_manager.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"

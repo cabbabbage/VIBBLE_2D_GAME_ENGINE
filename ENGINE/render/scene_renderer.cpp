@@ -2,7 +2,7 @@
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
-#include "light_map.hpp"
+#include "world/chunk.hpp"
 #include "render/camera.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"

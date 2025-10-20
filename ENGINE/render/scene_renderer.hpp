@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
-#include "light_map.hpp"
+#include "world/chunk.hpp"
 #include "global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
