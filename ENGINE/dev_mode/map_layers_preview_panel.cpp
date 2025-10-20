@@ -14,10 +14,10 @@
 #include "utils/input.hpp"
 #include "widgets.hpp"
 
-namespace {
-constexpr double kTau = 6.28318530717958647692;
+namespace mlprev {
+constexpr double kTau_preview = 6.28318530717958647692;
 
-SDL_Color mix_color(SDL_Color a, SDL_Color b, float t) {
+SDL_Color mix_color_p(SDL_Color a, SDL_Color b, float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     auto mix = [t](Uint8 x, Uint8 y) {
         return static_cast<Uint8>(std::lround((1.0f - t) * x + t * y));
@@ -25,10 +25,10 @@ SDL_Color mix_color(SDL_Color a, SDL_Color b, float t) {
     return SDL_Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a)};
 }
 
-SDL_Color lighten(SDL_Color c, float amount) { return mix_color(c, SDL_Color{255, 255, 255, c.a}, amount); }
-SDL_Color darken(SDL_Color c, float amount) { return mix_color(c, SDL_Color{0, 0, 0, c.a}, amount); }
+SDL_Color lighten_p(SDL_Color c, float amount) { return mix_color_p(c, SDL_Color{255, 255, 255, c.a}, amount); }
+SDL_Color darken_p(SDL_Color c, float amount) { return mix_color_p(c, SDL_Color{0, 0, 0, c.a}, amount); }
 
-void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, const DMLabelStyle& style) {
+void draw_text_p(SDL_Renderer* renderer, const std::string& text, int x, int y, const DMLabelStyle& style) {
     if (!renderer || text.empty()) return;
     TTF_Font* font = style.open_font();
     if (!font) return;
@@ -47,12 +47,12 @@ void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, co
     TTF_CloseFont(font);
 }
 
-void draw_circle(SDL_Renderer* renderer, int cx, int cy, int radius, SDL_Color color, int thickness = 2) {
+void draw_circle_p(SDL_Renderer* renderer, int cx, int cy, int radius, SDL_Color color, int thickness = 2) {
     if (!renderer || radius <= 0 || thickness <= 0) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
     const int segments = std::max(32, radius * 4);
-    const double step = kTau / static_cast<double>(segments);
+    const double step = kTau_preview / static_cast<double>(segments);
     for (int layer = 0; layer < thickness; ++layer) {
         int r = std::max(1, radius - layer);
         int prev_x = cx + r;
@@ -68,7 +68,7 @@ void draw_circle(SDL_Renderer* renderer, int cx, int cy, int radius, SDL_Color c
     }
 }
 
-void fill_circle(SDL_Renderer* renderer, int cx, int cy, int radius, SDL_Color color) {
+void fill_circle_p(SDL_Renderer* renderer, int cx, int cy, int radius, SDL_Color color) {
     if (!renderer || radius <= 0) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
@@ -77,7 +77,7 @@ void fill_circle(SDL_Renderer* renderer, int cx, int cy, int radius, SDL_Color c
         SDL_RenderDrawLine(renderer, cx - dx, cy + y, cx + dx, cy + y);
     }
 }
-} // namespace
+} // namespace mlprev
 
 class MapLayersPreviewPanel::PreviewWidget : public Widget {
 public:
@@ -241,7 +241,7 @@ void MapLayersPreviewPanel::rebuild_visuals() {
         if (rooms_it != layer_json.end() && rooms_it->is_array()) {
             const auto& rooms_array = *rooms_it;
             const size_t room_count = rooms_array.size();
-            const double angle_step = room_count > 0 ? kTau / static_cast<double>(room_count) : 0.0;
+            const double angle_step = room_count > 0 ? mlprev::kTau_preview / static_cast<double>(room_count) : 0.0;
             size_t room_idx = 0;
             for (const auto& candidate : rooms_array) {
                 if (!candidate.is_object()) continue;
@@ -396,7 +396,7 @@ void MapLayersPreviewPanel::render_content(SDL_Renderer* renderer) const {
     dm_draw::DrawRoundedOutline(renderer, rect, DMStyles::CornerRadius(), 1, border);
 
     if (layer_visuals_.empty() || max_visual_radius_ <= 0.0) {
-        draw_text(renderer, "No layers configured.", rect.x + 16, rect.y + 16, DMStyles::Label());
+        mlprev::draw_text_p(renderer, "No layers configured.", rect.x + 16, rect.y + 16, DMStyles::Label());
         return;
     }
 
@@ -409,13 +409,13 @@ void MapLayersPreviewPanel::render_content(SDL_Renderer* renderer) const {
         SDL_Color color = layer.color;
         int thickness = 3;
         if (hovered_layer == layer.index && hovered_room.empty()) {
-            color = lighten(color, 0.25f);
+            color = mlprev::lighten_p(color, 0.25f);
             thickness = std::max(thickness, 5);
         }
         const int radius_pixels = std::max(8, static_cast<int>(std::lround(layer.radius * preview_scale_)));
-        draw_circle(renderer, center.x, center.y, radius_pixels, color, thickness);
+        mlprev::draw_circle_p(renderer, center.x, center.y, radius_pixels, color, thickness);
         std::ostringstream oss; oss << layer.name;
-        draw_text(renderer, oss.str(), center.x - radius_pixels + 8, rect.y + 8, DMStyles::Label());
+        mlprev::draw_text_p(renderer, oss.str(), center.x - radius_pixels + 8, rect.y + 8, DMStyles::Label());
     }
 
     const SDL_Color hover_fill = DMStyles::AccentButton().hover_bg;
@@ -425,25 +425,25 @@ void MapLayersPreviewPanel::render_content(SDL_Renderer* renderer) const {
             const int py = center.y + static_cast<int>(std::lround(room.position.y * preview_scale_));
             const double extent_pixels = std::max(8.0, room.extent * preview_scale_ * 0.75);
             const int radius_pixels = static_cast<int>(std::round(extent_pixels));
-            SDL_Color outline = darken(layer.color, 0.15f);
+            SDL_Color outline = mlprev::darken_p(layer.color, 0.15f);
             SDL_Color fill_color{0, 0, 0, 0};
             bool filled = false;
             if (!hovered_room.empty() && hovered_room == room.key) { fill_color = hover_fill; filled = true; }
             if (filled) {
-                SDL_Color fill = fill_color; fill.a = 120; fill_circle(renderer, px, py, radius_pixels, fill);
+                SDL_Color fill = fill_color; fill.a = 120; mlprev::fill_circle_p(renderer, px, py, radius_pixels, fill);
             }
-            draw_circle(renderer, px, py, radius_pixels, outline, filled ? 3 : 2);
+            mlprev::draw_circle_p(renderer, px, py, radius_pixels, outline, filled ? 3 : 2);
         }
     }
 
     if (!hovered_room.empty()) {
         std::string label = display_name_for_room(hovered_room);
         if (label.empty()) label = hovered_room;
-        draw_text(renderer, label, rect.x + 12, rect.y + rect.h - (DMStyles::Label().font_size + 12), DMStyles::Label());
+        mlprev::draw_text_p(renderer, label, rect.x + 12, rect.y + rect.h - (DMStyles::Label().font_size + 12), DMStyles::Label());
     } else if (hovered_layer >= 0) {
         auto it = std::find_if(layer_visuals_.begin(), layer_visuals_.end(), [&](const LayerVisual& v) { return v.index == hovered_layer; });
         if (it != layer_visuals_.end()) {
-            draw_text(renderer, it->name, rect.x + 12, rect.y + rect.h - (DMStyles::Label().font_size + 12), DMStyles::Label());
+            mlprev::draw_text_p(renderer, it->name, rect.x + 12, rect.y + rect.h - (DMStyles::Label().font_size + 12), DMStyles::Label());
         }
     }
 }
