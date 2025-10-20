@@ -450,12 +450,10 @@ void AssetLoader::finalizeAssets() {
                         try {
                                 asset_up->finalize_setup();
                         } catch (const std::exception& ex) {
-                                std::cerr << "[AssetLoader] finalizeAssets: exception during finalize_setup for '"
-                                          << name << "': " << ex.what() << "\n" << std::flush;
+                                log::error(std::string("[AssetLoader] finalizeAssets: exception during finalize_setup for '") + name + "': " + ex.what());
                                 throw;
                         } catch (...) {
-                                std::cerr << "[AssetLoader] finalizeAssets: unknown exception during finalize_setup for '"
-                                          << name << "'\n" << std::flush;
+                                log::error(std::string("[AssetLoader] finalizeAssets: unknown exception during finalize_setup for '") + name + "'");
                                 throw;
                         }
 
@@ -464,23 +462,25 @@ void AssetLoader::finalizeAssets() {
                 }
 
                 if (room_total > 0) {
-                        std::cout << "[AssetLoader] finalizeAssets: room=" << room_index
-                                  << " finalized " << room_finalized << "/" << room_total;
+                        std::string msg = std::string("[AssetLoader] finalizeAssets: room=") + std::to_string(room_index) +
+                                          " finalized " + std::to_string(room_finalized) + "/" + std::to_string(room_total);
                         if (room_skipped > 0) {
-                                std::cout << " (skipped " << room_skipped << ")";
+                                msg += std::string(" (skipped ") + std::to_string(room_skipped) + ")";
                         }
-                        std::cout << "\n";
+                        log::debug(msg);
                 }
 
                 ++room_index;
         }
 
-        std::cout << "[AssetLoader] finalizeAssets complete: "
-                  << finalized_assets << "/" << total_assets << " assets ready";
-        if (skipped_assets > 0) {
-                std::cout << " (" << skipped_assets << " skipped)";
+        {
+                std::string msg = std::string("[AssetLoader] finalizeAssets complete: ") + std::to_string(finalized_assets) +
+                                  "/" + std::to_string(total_assets) + " assets ready";
+                if (skipped_assets > 0) {
+                        msg += std::string(" (") + std::to_string(skipped_assets) + " skipped)";
+                }
+                log::info(msg);
         }
-        std::cout << "\n";
 }
 
 std::unique_ptr<PrecomputedLightMap> AssetLoader::take_precomputed_light_map() {
@@ -514,7 +514,7 @@ std::vector<std::unique_ptr<Asset>> AssetLoader::extract_all_assets() {
 void AssetLoader::createAssets(world::Grid& grid) {
         grid.set_chunk_resolution(std::max(0, map_grid_settings_.r_chunk));
         spawned_assets_ = extract_all_assets();
-        std::cout << "[AssetLoader] Extracted " << spawned_assets_.size() << " visible assets from rooms\n";
+        log::info(std::string("[AssetLoader] Extracted ") + std::to_string(spawned_assets_.size()) + " visible assets from rooms");
         for (const auto& asset_up : spawned_assets_) {
                 Asset* asset = asset_up.get();
                 if (!asset) {
@@ -523,7 +523,7 @@ void AssetLoader::createAssets(world::Grid& grid) {
                 grid.register_asset(asset);
         }
         instantiate_map_chunks(grid);
-        std::cout << "[AssetLoader] Beginning full-map light map texture creation...\n";
+        log::info("[AssetLoader] Beginning full-map light map texture creation...");
         precompute_light_map(grid);
 }
 
@@ -599,8 +599,7 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
                                                                 if (child.is_string()) {
                                                                         rs.required_children.push_back(child.get<std::string>());
                                                                 } else {
-                                                                        std::cerr << "[AssetLoader] Room '" << rs.name
-                                                                                  << "' has non-string entry in 'required_children'; skipping.\n";
+                                                                        log::warn(std::string("[AssetLoader] Room '") + rs.name + "' has non-string entry in 'required_children'; skipping.");
                                                                 }
                                                         }
                                                 }
@@ -749,8 +748,8 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 register_chunk(i, j);
         }
 
-        std::cout << "[AssetLoader] Prepared " << map_chunks_.size()
-                  << " static-light chunk(s) for baking\n";
+        log::info(std::string("[AssetLoader] Prepared ") + std::to_string(map_chunks_.size()) +
+                  " static-light chunk(s) for baking");
 }
 
 void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
