@@ -131,6 +131,7 @@ public:
     int screen_height() const { return screen_height_; }
 
     const std::vector<world::Chunk*>& active_chunks() const;
+    world::Chunk* ensure_chunk_from_world(SDL_Point world_px) const;
     world::Chunk* chunk_from_world(SDL_Point world_px) const;
 
     std::optional<world::Chunk::UseShadowData> get_shadow_data(SDL_FPoint world_or_screen_pos) const;

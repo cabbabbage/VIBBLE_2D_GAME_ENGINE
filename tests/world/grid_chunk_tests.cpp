@@ -39,6 +39,23 @@ TEST_CASE("Grid::chunk_from_world matches ensure indices across origin") {
     CHECK(grid.chunk_from_world(SDL_Point{-1, -1}) == &neg_xy_chunk);
 }
 
+TEST_CASE("Grid::ensure_chunk_from_world creates chunks matching world coordinates") {
+    world::Grid grid(kOrigin, kResolution);
+
+    SDL_Point world_a{-8, 0};
+    SDL_Point world_b{16, 8};
+
+    world::Chunk* chunk_a = grid.ensure_chunk_from_world(world_a);
+    REQUIRE(chunk_a != nullptr);
+    CHECK(chunk_a == grid.chunk_from_world(world_a));
+
+    world::Chunk* chunk_b = grid.ensure_chunk_from_world(world_b);
+    REQUIRE(chunk_b != nullptr);
+    CHECK(chunk_b == grid.chunk_from_world(world_b));
+    CHECK(chunk_b->i == 2);
+    CHECK(chunk_b->j == 1);
+}
+
 TEST_CASE("Grid::update_active_chunks includes chunks on both sides of origin") {
     world::Grid grid(kOrigin, kResolution);
 

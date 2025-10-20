@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 #include "utils/log.hpp"
@@ -751,8 +752,10 @@ float LightMap::sample_brightness(int world_x,
                                   float static_weight,
                                   float dynamic_weight) const {
     (void)dynamic_weight;
-    const world::Chunk* chunk = chunk_from_world(SDL_Point{world_x, world_y});
+    world::Chunk* chunk = ensure_chunk_from_world(SDL_Point{world_x, world_y});
     if (!chunk) {
+        vibble::log::warn("[LightMap] sample_brightness missing chunk for world point (" +
+                          std::to_string(world_x) + ", " + std::to_string(world_y) + ")");
         return 1.0f;
     }
     const float weight = std::clamp(static_weight, 0.0f, 1.0f);
@@ -854,8 +857,11 @@ void LightMap::mark_asset_lights_dirty(const Asset* asset) {
     if (!asset) {
         return;
     }
-    if (world::Chunk* chunk = chunk_from_world(asset->pos)) {
+    if (world::Chunk* chunk = ensure_chunk_from_world(asset->pos)) {
         chunk->lighting_dirty = true;
+    } else {
+        vibble::log::warn("[LightMap] mark_asset_lights_dirty missing chunk for asset at (" +
+                          std::to_string(asset->pos.x) + ", " + std::to_string(asset->pos.y) + ")");
     }
 }
 
@@ -883,6 +889,13 @@ world::Chunk* LightMap::chunk_from_world(SDL_Point world_px) const {
         return nullptr;
     }
     return assets_->world_grid().chunk_from_world(world_px);
+}
+
+world::Chunk* LightMap::ensure_chunk_from_world(SDL_Point world_px) const {
+    if (!assets_) {
+        return nullptr;
+    }
+    return assets_->world_grid().ensure_chunk_from_world(world_px);
 }
 
 int LightMap::quadrant_count() const {

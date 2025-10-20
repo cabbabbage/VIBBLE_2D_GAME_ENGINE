@@ -44,6 +44,13 @@ void Grid::register_asset(Asset* a) {
     residency_[a] = &c;
 }
 
+Chunk* Grid::ensure_chunk_from_world(SDL_Point world_px) {
+    const int step = 1 << r_chunk_;
+    const int i    = floor_div(world_px.x - origin_.x, step);
+    const int j    = floor_div(world_px.y - origin_.y, step);
+    return &chunks_.ensure(i, j, r_chunk_, origin_);
+}
+
 void Grid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
     if (!a) return;
     const int step = 1 << r_chunk_;

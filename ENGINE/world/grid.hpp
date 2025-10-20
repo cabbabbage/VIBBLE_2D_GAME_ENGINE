@@ -31,6 +31,7 @@ public:
     // Queries
     Chunk* find_chunk_ij(int i, int j) const { return chunks_.find(i, j); }
     Chunk& get_or_create_chunk_ij(int i, int j) { return chunks_.ensure(i, j, r_chunk_, origin_); }
+    Chunk* ensure_chunk_from_world(SDL_Point world_px);
     Chunk* chunk_from_world(SDL_Point world_px) const { return chunks_.from_world(world_px, r_chunk_, origin_); }
 
 private:

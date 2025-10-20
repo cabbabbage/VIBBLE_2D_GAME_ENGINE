@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <optional>
 #include <cmath>
 #include <stdexcept>
 #include <chrono>
@@ -707,6 +708,107 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 map_chunks_.push_back(&chunk);
         };
 
+        struct Bounds {
+                std::int64_t min_x;
+                std::int64_t min_y;
+                std::int64_t max_x;
+                std::int64_t max_y;
+        };
+
+        std::optional<Bounds> world_bounds;
+        auto merge_bounds = [&](std::int64_t min_x, std::int64_t min_y, std::int64_t max_x, std::int64_t max_y) {
+                if (min_x > max_x || min_y > max_y) {
+                        return;
+                }
+                if (!world_bounds) {
+                        world_bounds = Bounds{min_x, min_y, max_x, max_y};
+                        return;
+                }
+                world_bounds->min_x = std::min(world_bounds->min_x, min_x);
+                world_bounds->min_y = std::min(world_bounds->min_y, min_y);
+                world_bounds->max_x = std::max(world_bounds->max_x, max_x);
+                world_bounds->max_y = std::max(world_bounds->max_y, max_y);
+        };
+
+        const auto extent_it = map_info_json_.find("map_extent");
+        if (extent_it != map_info_json_.end() && extent_it->is_object()) {
+                const nlohmann::json& extent = *extent_it;
+                const bool has_min_x = extent.contains("min_x") && extent["min_x"].is_number();
+                const bool has_min_y = extent.contains("min_y") && extent["min_y"].is_number();
+                const bool has_max_x = extent.contains("max_x") && extent["max_x"].is_number();
+                const bool has_max_y = extent.contains("max_y") && extent["max_y"].is_number();
+                if (has_min_x && has_min_y && has_max_x && has_max_y) {
+                        merge_bounds(static_cast<std::int64_t>(std::llround(extent["min_x"].get<double>())),
+                                     static_cast<std::int64_t>(std::llround(extent["min_y"].get<double>())),
+                                     static_cast<std::int64_t>(std::llround(extent["max_x"].get<double>())),
+                                     static_cast<std::int64_t>(std::llround(extent["max_y"].get<double>())));
+                }
+        }
+
+        for (const Room* room : rooms_) {
+                if (!room || !room->room_area) {
+                        continue;
+                }
+                const Area* area = room->room_area.get();
+                if (!area) {
+                        continue;
+                }
+                const auto& points = area->get_points();
+                if (points.empty()) {
+                        continue;
+                }
+                try {
+                        const auto [min_x, min_y, max_x, max_y] = area->get_bounds();
+                        merge_bounds(static_cast<std::int64_t>(min_x),
+                                     static_cast<std::int64_t>(min_y),
+                                     static_cast<std::int64_t>(max_x),
+                                     static_cast<std::int64_t>(max_y));
+                } catch (const std::exception& ex) {
+                        vibble::log::warn(std::string("[AssetLoader] Failed to query room bounds: ") + ex.what());
+                }
+        }
+
+        if (!world_bounds) {
+                const std::int64_t radius = std::max<std::int64_t>(0, static_cast<std::int64_t>(std::llround(map_radius_)));
+                const std::int64_t center_x = static_cast<std::int64_t>(std::llround(map_center_x_));
+                const std::int64_t center_y = static_cast<std::int64_t>(std::llround(map_center_y_));
+                if (radius > 0) {
+                        merge_bounds(center_x - radius, center_y - radius, center_x + radius, center_y + radius);
+                }
+        }
+
+        if (world_bounds) {
+                const std::int64_t min_x = world_bounds->min_x - origin_x64;
+                const std::int64_t min_y = world_bounds->min_y - origin_y64;
+                const std::int64_t max_x = world_bounds->max_x - origin_x64;
+                const std::int64_t max_y = world_bounds->max_y - origin_y64;
+
+                const int i_min = clamp_to_int(floor_div64(min_x, step64));
+                const int j_min = clamp_to_int(floor_div64(min_y, step64));
+                const int i_max = clamp_to_int(floor_div64(max_x, step64));
+                const int j_max = clamp_to_int(floor_div64(max_y, step64));
+
+                for (int j = j_min; j <= j_max; ++j) {
+                        for (int i = i_min; i <= i_max; ++i) {
+                                register_chunk(i, j);
+                        }
+                }
+
+                const std::int64_t width_chunks = static_cast<std::int64_t>(i_max) - static_cast<std::int64_t>(i_min) + 1;
+                const std::int64_t height_chunks = static_cast<std::int64_t>(j_max) - static_cast<std::int64_t>(j_min) + 1;
+                const std::int64_t total_slots = (width_chunks > 0 && height_chunks > 0)
+                                                        ? width_chunks * height_chunks
+                                                        : 0;
+                vibble::log::debug(std::string("[AssetLoader] Bounds-driven chunk coverage: min(") +
+                                   std::to_string(world_bounds->min_x) + ", " + std::to_string(world_bounds->min_y) +
+                                   ") max(" + std::to_string(world_bounds->max_x) + ", " +
+                                   std::to_string(world_bounds->max_y) + ") => " +
+                                   std::to_string(total_slots) + " chunk slots");
+        } else {
+                vibble::log::debug("[AssetLoader] No room or extent bounds available; relying on static-light coverage.");
+        }
+
+        const std::size_t chunk_count_after_bounds = map_chunks_.size();
         bool discovered_static_light = false;
 
         for (const auto& asset_up : spawned_assets_) {
@@ -772,8 +874,15 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 register_chunk(i, j);
         }
 
-        vibble::log::info(std::string("[AssetLoader] Prepared ") + std::to_string(map_chunks_.size()) +
-                  " static-light chunk(s) for baking");
+        const std::size_t total_chunk_count = map_chunks_.size();
+        const std::size_t static_light_chunk_count = total_chunk_count >= chunk_count_after_bounds
+                                                             ? total_chunk_count - chunk_count_after_bounds
+                                                             : 0;
+
+        vibble::log::info(std::string("[AssetLoader] Prepared ") + std::to_string(total_chunk_count) +
+                          " chunk(s) for baking (bounds: " +
+                          std::to_string(chunk_count_after_bounds) + ", static-light: " +
+                          std::to_string(static_light_chunk_count) + ")");
 }
 
 void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
