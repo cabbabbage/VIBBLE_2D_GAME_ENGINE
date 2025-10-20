@@ -392,7 +392,7 @@ bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
 void LightMap::end_full_world_mask(SDL_Renderer* renderer) const {
     (void)renderer;
     if (!batch_active_) return;
-    std::cout << "[LightMap] end_full_world_mask: destroying full mask" << std::endl;
+    log::debug("[LightMap] end_full_world_mask: destroying full mask");
     if (batch_full_mask_) {
         SDL_DestroyTexture(batch_full_mask_);
         batch_full_mask_ = nullptr;
@@ -608,8 +608,8 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
     chunk.static_light_map = texture;
     chunk.lighting_dirty   = false;
     update_chunk_static_brightness_extrema(renderer, chunk);
-    std::cout << "[LightMap] ensure_chunk_rebaked: COMPLETE chunk(" << chunk.i << "," << chunk.j
-              << ") base_brightness=" << chunk.base_brightness << std::endl;
+    log::debug(std::string("[LightMap] ensure_chunk_rebaked: COMPLETE chunk(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
+               ") base_brightness=" + std::to_string(chunk.base_brightness));
 }
 
 void LightMap::rebuild(SDL_Renderer* renderer) {
@@ -640,7 +640,7 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
     }
 
     if (any_dirty) {
-        std::cout << "[LightMap] update: any_dirty=true (chunks=" << chunks.size() << ") -> begin_full_world_mask" << std::endl;
+        log::debug(std::string("[LightMap] update: any_dirty=true (chunks=") + std::to_string(chunks.size()) + ") -> begin_full_world_mask");
         begin_full_world_mask(renderer);
     }
 
@@ -653,7 +653,7 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
 
     if (any_dirty) {
         end_full_world_mask(renderer);
-        std::cout << "[LightMap] update: end_full_world_mask" << std::endl;
+        log::debug("[LightMap] update: end_full_world_mask");
     }
 
     if (!assets_) return;
