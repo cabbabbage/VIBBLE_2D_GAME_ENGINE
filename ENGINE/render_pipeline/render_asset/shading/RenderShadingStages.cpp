@@ -230,10 +230,11 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
 
     if (const LightMapManager* manager = context.light_map_manager()) {
         if (auto params = manager->get_quadrant_params(context.screen_center)) {
-            // Opacity modifier is now applied by LightMap overlay; keep parallax/scale only.
-            offset_x         = params->offset_x_q;
-            offset_y         = params->offset_y_q;
-            scale_multiplier = params->scale_q;
+            // Use quadrant parameters computed from the light map manager.
+            opacity_multiplier = std::max(0.0f, params->opacity_q) * std::max(0.0f, cfg.opacity_strength);
+            offset_x           = params->offset_x_q;
+            offset_y           = params->offset_y_q;
+            scale_multiplier   = std::max(0.0f, cfg.virtual_light_map.shadow_scale) * std::max(0.0f, params->scale_q) * std::max(0.0f, cfg.scale_strength);
         }
     }
 
@@ -241,13 +242,10 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     float opacity = clampf(base_opacity * opacity_multiplier, 0.0f, 1.0f);
     scale *= std::max(scale_multiplier, 0.0f);
 
-    const float parallax_shift = compute_parallax_shift(context, asset, height, 1.0f);
+    const float parallax_shift = compute_parallax_shift(context, asset, height, std::max(0.0f, cfg.parallax_strength));
     offset_x += parallax_shift;
 
-    const float max_offset_x = std::max(cfg.virtual_light_map.max_offset_x, 0.0f);
-    const float max_offset_y = std::max(cfg.virtual_light_map.max_offset_y, 0.0f);
-    offset_x                 = clampf(offset_x, -max_offset_x, max_offset_x);
-    offset_y                 = clampf(offset_y, -max_offset_y, max_offset_y);
+    // Do not clamp to deprecated max offset sliders; rely on manager-calculated offsets.
 
     SDL_Texture* mask_texture = nullptr;
     const auto& scale_usage   = asset.last_scale_usage();

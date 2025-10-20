@@ -65,8 +65,7 @@ private:
     std::unique_ptr<DMSlider> scale_strength_{};
     std::unique_ptr<DMSlider> horizontal_falloff_{};
     std::unique_ptr<DMSlider> vertical_falloff_{};
-    std::unique_ptr<DMSlider> max_offset_x_{};
-    std::unique_ptr<DMSlider> max_offset_y_{};
+    // Deprecated: max offset sliders removed from the shading panel UI
     std::unique_ptr<DMSlider> search_radius_{};
     std::unique_ptr<DMSlider> map_light_factor_{};
     std::unique_ptr<DMSlider> quadrant_size_px_{};

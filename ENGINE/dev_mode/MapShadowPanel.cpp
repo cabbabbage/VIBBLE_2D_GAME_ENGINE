@@ -123,8 +123,6 @@ void MapShadowPanel::set_reactive_settings(render_pipeline::shading::ReactiveSha
         }
         shadow_set_slider_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
         shadow_set_slider_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
-        shadow_set_slider_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
-        shadow_set_slider_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
         shadow_set_slider_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
         if (search_radius_) search_radius_->set_value(last_settings_.virtual_light_map.search_radius);
         int init_quad = assets_ ? assets_->virtual_light_map_quadrant_size() : last_quadrant_size_px_;
@@ -196,10 +194,7 @@ void MapShadowPanel::build_ui() {
                                             last_settings_.virtual_light_map.horizontal_falloff, 100);
     vertical_falloff_   = make_shadow_float_slider("Vertical Falloff", 0.0f, 10.0f,
                                             last_settings_.virtual_light_map.vertical_falloff, 100);
-    max_offset_x_       = make_shadow_float_slider("Max Offset X", 0.0f, 500.0f,
-                                            last_settings_.virtual_light_map.max_offset_x, 100);
-    max_offset_y_       = make_shadow_float_slider("Max Offset Y", 0.0f, 500.0f,
-                                            last_settings_.virtual_light_map.max_offset_y, 100);
+    // Deprecated: removed Max Offset X/Y sliders
     map_light_factor_   = make_shadow_float_slider("Map Light Factor", 0.0f, 1.0f,
                                             last_settings_.virtual_light_map.map_light_factor, 100);
     search_radius_      = std::make_unique<DMSlider>("Search Radius", 0, 64,
@@ -257,12 +252,7 @@ void MapShadowPanel::rebuild_rows() {
     if (vertical_falloff_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(vertical_falloff_.get())) });
     }
-    if (max_offset_x_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(max_offset_x_.get())) });
-    }
-    if (max_offset_y_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(max_offset_y_.get())) });
-    }
+    // Max offset controls removed
 
     set_rows(rows);
 }
@@ -294,8 +284,6 @@ void MapShadowPanel::sync_ui_from_json() {
     }
     shadow_set_slider_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
     shadow_set_slider_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
-    shadow_set_slider_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
-    shadow_set_slider_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
     shadow_set_slider_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
     if (search_radius_) search_radius_->set_value(last_settings_.virtual_light_map.search_radius);
 
@@ -322,8 +310,6 @@ void MapShadowPanel::sync_json_from_ui() {
     // Virtual light map
     last_settings_.virtual_light_map.horizontal_falloff = shadow_slider_value_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff, 100);
     last_settings_.virtual_light_map.vertical_falloff   = shadow_slider_value_scaled(vertical_falloff_,   last_settings_.virtual_light_map.vertical_falloff,   100);
-    last_settings_.virtual_light_map.max_offset_x       = shadow_slider_value_scaled(max_offset_x_,       last_settings_.virtual_light_map.max_offset_x,       100);
-    last_settings_.virtual_light_map.max_offset_y       = shadow_slider_value_scaled(max_offset_y_,       last_settings_.virtual_light_map.max_offset_y,       100);
     last_settings_.virtual_light_map.map_light_factor   = shadow_slider_value_scaled(map_light_factor_,   last_settings_.virtual_light_map.map_light_factor,   100);
     if (search_radius_) last_settings_.virtual_light_map.search_radius = search_radius_->displayed_value();
     // Quadrant size: only mark pending unless applied via button
