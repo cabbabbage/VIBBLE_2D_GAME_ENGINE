@@ -949,17 +949,14 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
 
         const std::int64_t tex_w64 = static_cast<std::int64_t>(tex_w);
         const std::int64_t tex_h64 = static_cast<std::int64_t>(tex_h);
-        bool               overflow = false;
-        if (tex_w64 > 0 && tex_h64 > 0) {
-                if (tex_w64 > std::numeric_limits<std::int64_t>::max() / tex_h64) {
-                        overflow = true;
-                }
-        } else {
-                overflow = true;
+        bool overflow = tex_w64 <= 0 || tex_h64 <= 0;
+
+        if (!overflow) {
+                overflow = tex_w64 > std::numeric_limits<std::int64_t>::max() / tex_h64;
         }
 
         if (overflow) {
-                vibble::log::warn(std::string("[AssetLoader] Skipping chunk brightness computation due to size overflow (") +
+                vibble::log::warn(std::string("[AssetLoader] Skipping chunk brightness computation due to size overflow(") +
                                   std::to_string(tex_w) + "x" + std::to_string(tex_h) + ").");
                 return 0.0f;
         }
@@ -972,8 +969,10 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
         }
 
         const std::size_t pixel_count = static_cast<std::size_t>(pixel_count64);
-        std::vector<std::uint32_t> pixels(pixel_count);
-        if (pixels.empty()) {
+        if (pixel_count == 0) {
+                return 0.0f;
+        }
+
         std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> format(
             SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
         if (!format) {
@@ -1002,7 +1001,8 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
                         SDL_SetRenderTarget(renderer_, previous_target);
                         return 0.0f;
                 }
-                for (std::size_t x = 0; x < row_length; ++x) {
+
+                for (std::size_t x = 0; x < row.size(); ++x) {
                         Uint8 a = 255;
                         SDL_GetRGBA(row[x], format.get(), nullptr, nullptr, nullptr, &a);
                         accum += 1.0 - static_cast<double>(a) * inv_255;
@@ -1010,11 +1010,6 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
         }
 
         SDL_SetRenderTarget(renderer_, previous_target);
-
-        const std::size_t pixel_count = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
-        if (pixel_count == 0) {
-                return 0.0f;
-        }
 
         const double average = accum / static_cast<double>(pixel_count);
         return static_cast<float>(std::clamp(average, 0.0, 1.0));
