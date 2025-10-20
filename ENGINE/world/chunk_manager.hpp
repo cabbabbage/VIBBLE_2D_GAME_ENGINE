@@ -26,10 +26,10 @@ public:
     void clear_active() { active_.clear(); }
 
 private:
-    static std::int64_t key(int i, int j);
+    static std::uint64_t key(int i, int j);
     static SDL_Rect bounds_for(int i, int j, int r_chunk, SDL_Point origin);
 
-    std::unordered_map<std::int64_t, Chunk*> lookup_;
+    std::unordered_map<std::uint64_t, Chunk*> lookup_;
     std::vector<std::unique_ptr<Chunk>> storage_;
     std::vector<Chunk*> active_;
 };

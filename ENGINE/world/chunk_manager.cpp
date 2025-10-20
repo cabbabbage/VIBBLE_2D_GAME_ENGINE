@@ -4,8 +4,10 @@
 
 namespace world {
 
-std::int64_t ChunkManager::key(int i, int j) {
-    return (static_cast<std::int64_t>(i) << 32) | static_cast<std::uint32_t>(j);
+std::uint64_t ChunkManager::key(int i, int j) {
+    const auto hi = static_cast<std::uint32_t>(i);
+    const auto lo = static_cast<std::uint32_t>(j);
+    return (static_cast<std::uint64_t>(hi) << 32) | static_cast<std::uint64_t>(lo);
 }
 
 SDL_Rect ChunkManager::bounds_for(int i, int j, int r_chunk, SDL_Point origin) {

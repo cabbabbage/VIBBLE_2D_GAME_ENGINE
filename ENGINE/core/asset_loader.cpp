@@ -203,10 +203,13 @@ std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(
                                                                            int tile_height,
                                                                            const std::string& group_type)
 {
-	std::unordered_map<long long, std::vector<Asset*>> tile_map;
-	auto make_tile_key = [&](int tx, int ty) -> long long {
-		return (static_cast<long long>(tx) << 32) ^ static_cast<unsigned long long>(ty);
-};
+        std::unordered_map<std::uint64_t, std::vector<Asset*>> tile_map;
+        auto make_tile_key = [&](int tx, int ty) -> std::uint64_t {
+                // Pack tile coordinates into a single key using unsigned arithmetic to avoid UB.
+                const auto ux = static_cast<std::uint64_t>(static_cast<std::uint32_t>(tx));
+                const auto uy = static_cast<std::uint64_t>(static_cast<std::uint32_t>(ty));
+                return (ux << 32) | uy;
+        };
 	for (Asset* a : assets) {
 		if (!a) continue;
 		int tx = a->pos.x / tile_width;
