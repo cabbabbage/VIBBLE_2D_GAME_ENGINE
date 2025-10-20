@@ -22,6 +22,7 @@ struct Chunk {
     std::vector<Asset*> assets;
 
     SDL_Texture* static_light_map = nullptr;
+    bool         static_texture_set = false;
     // Average transparency of the static darkness mask for this chunk (0..1).
     // Higher means brighter from static lights alone.
     float base_brightness = 1.0f;
@@ -147,24 +148,14 @@ public:
     int  padding_cells() const;
 
 private:
-    void ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk) const;
+    void ensure_chunk_static_texture(SDL_Renderer* renderer, world::Chunk& chunk) const;
     void destroy_chunk_texture(world::Chunk& chunk) const;
-    void apply_precomputed_light_map(SDL_Renderer* renderer);
-
-    bool begin_full_world_mask(SDL_Renderer* renderer) const;
-    void end_full_world_mask(SDL_Renderer* renderer) const;
-    bool rebuild_chunk_from_batch(SDL_Renderer* renderer, world::Chunk& chunk) const;
 
 private:
     Assets* assets_ = nullptr;
     int     screen_width_  = 0;
     int     screen_height_ = 0;
 
-    mutable bool precomputed_applied_ = false;
-
-    mutable SDL_Texture* batch_full_mask_ = nullptr;
-    mutable SDL_Rect     batch_full_bounds_{0, 0, 0, 0};
-    mutable bool         batch_active_ = false;
     mutable float        last_screen_light_opacity_ = -1.0f;
 };
 

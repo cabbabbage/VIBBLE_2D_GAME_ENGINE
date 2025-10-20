@@ -26,11 +26,6 @@ static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
 namespace {
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
-constexpr std::int64_t kMaxStaticLightTextureBytes   = 512LL * 1024LL * 1024LL; // 512 MiB ceiling
-constexpr std::int64_t kBytesPerPixel                = static_cast<std::int64_t>(sizeof(std::uint32_t));
-constexpr std::int64_t kMaxStaticLightPixels         =
-    kMaxStaticLightTextureBytes / (kBytesPerPixel > 0 ? kBytesPerPixel : 1);
-static_assert(kMaxStaticLightPixels > 0, "Max static light pixels must be positive.");
 
 bool safe_loading_enabled() {
     const char* value = std::getenv("VIBBLE_SAFE_LOADING");
@@ -38,122 +33,6 @@ bool safe_loading_enabled() {
         return false;
     }
     return value[0] == '1' || value[0] == 'y' || value[0] == 'Y' || value[0] == 't' || value[0] == 'T';
-}
-
-// Simple helper to limit verbose logs.
-struct LogLimiter {
-    int first_n = 10;
-    int every_k = 100;
-    bool operator()(int index) const {
-        if (index < first_n) {
-            return true;
-        }
-        return (index % every_k) == 0;
-    }
-};
-
-std::string rect_str(const SDL_Rect& r) {
-    return std::string("{x=") + std::to_string(r.x) + ", y=" + std::to_string(r.y) +
-           ", w=" + std::to_string(r.w) + ", h=" + std::to_string(r.h) + "}";
-}
-
-SDL_BlendMode erase_alpha_blend_mode() {
-#if SDL_VERSION_ATLEAST(2, 0, 6)
-    static const SDL_BlendMode mode = SDL_ComposeCustomBlendMode(
-        SDL_BLENDFACTOR_ZERO,
-        SDL_BLENDFACTOR_ONE,
-        SDL_BLENDOPERATION_ADD,
-        SDL_BLENDFACTOR_ZERO,
-        SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-        SDL_BLENDOPERATION_ADD);
-    return mode;
-#else
-    return SDL_BLENDMODE_ADD;
-#endif
-}
-
-struct LightStats {
-    float min_strength   = 0.0f;
-    float max_strength   = 0.0f;
-    float average_strength = 0.0f;
-};
-
-LightStats compute_light_stats(SDL_Renderer* renderer, SDL_Texture* texture) {
-    LightStats stats{};
-    if (!renderer || !texture) {
-        return stats;
-    }
-
-    int tex_w = 0;
-    int tex_h = 0;
-    if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-        vibble::log::warn(std::string("[SceneRenderer] Failed to query chunk texture for light stats: ") + SDL_GetError());
-        return stats;
-    }
-
-    std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> format(SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888),
-                                                                       SDL_FreeFormat);
-    if (!format) {
-        vibble::log::warn("[SceneRenderer] Unable to allocate pixel format for light stats computation.");
-        return stats;
-    }
-
-    const int pitch = tex_w * static_cast<int>(sizeof(std::uint32_t));
-    std::vector<std::uint32_t> row(static_cast<std::size_t>(tex_w));
-
-    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
-    if (SDL_SetRenderTarget(renderer, texture) != 0) {
-        vibble::log::warn(std::string("[SceneRenderer] Failed to set chunk texture as render target for stats: ") + SDL_GetError());
-        return stats;
-    }
-
-    double accum = 0.0;
-    float min_strength = 1.0f;
-    float max_strength = 0.0f;
-    const double inv_255 = 1.0 / 255.0;
-    bool any_samples = false;
-
-    for (int y = 0; y < tex_h; ++y) {
-        SDL_Rect row_rect{0, y, tex_w, 1};
-        if (SDL_RenderReadPixels(renderer, &row_rect, SDL_PIXELFORMAT_RGBA8888, row.data(), pitch) != 0) {
-            vibble::log::warn(std::string("[SceneRenderer] Failed to read pixels for light stats (row=") +
-                              std::to_string(y) + "): " + SDL_GetError());
-            SDL_SetRenderTarget(renderer, previous_target);
-            return stats;
-        }
-
-        for (int x = 0; x < tex_w; ++x) {
-            Uint8 a = 255;
-            SDL_GetRGBA(row[static_cast<std::size_t>(x)], format.get(), nullptr, nullptr, nullptr, &a);
-            const float brightness = std::clamp(1.0f - static_cast<float>(a) * static_cast<float>(inv_255), 0.0f, 1.0f);
-            min_strength = std::min(min_strength, brightness);
-            max_strength = std::max(max_strength, brightness);
-            accum += brightness;
-            any_samples = true;
-        }
-    }
-
-    SDL_SetRenderTarget(renderer, previous_target);
-
-    if (any_samples) {
-        stats.min_strength     = std::clamp(min_strength, 0.0f, 1.0f);
-        stats.max_strength     = std::clamp(max_strength, 0.0f, 1.0f);
-        stats.average_strength = std::clamp(static_cast<float>(accum / static_cast<double>(tex_w * tex_h)), 0.0f, 1.0f);
-    }
-    return stats;
-}
-
-bool is_static_light_asset(const Asset* asset) {
-    if (!asset || asset->is_hidden()) {
-        return false;
-    }
-    if (!asset->info) {
-        return false;
-    }
-    if (asset->info->light_sources.empty()) {
-        return false;
-    }
-    return !asset->info->moving_asset;
 }
 
 } // namespace
@@ -228,369 +107,53 @@ void SceneRenderer::force_virtual_light_map_refresh() {
 }
 
 void SceneRenderer::initialize_static_light_chunks() {
-    if (!renderer_ || !assets_) {
-        vibble::log::debug("[SceneRenderer] Skipping static light initialization (renderer or assets unavailable).");
+    if (!assets_) {
+        vibble::log::debug("[SceneRenderer] Skipping static light initialization (assets unavailable).");
         return;
     }
 
     world::Grid& grid = assets_->world_grid();
     std::vector<world::Chunk*> chunks = grid.all_chunks();
     if (chunks.empty()) {
-        vibble::log::info("[SceneRenderer] No map chunks detected; static light precomputation skipped.");
+        vibble::log::info("[SceneRenderer] No map chunks detected; static light initialization skipped.");
         return;
     }
 
     const bool safe_mode = safe_loading_enabled();
-    if (safe_mode) {
-        vibble::log::warn("[SceneRenderer] SAFE LOADING enabled; static light textures will not be generated.");
-        for (world::Chunk* chunk : chunks) {
-            if (!chunk) {
-                continue;
-            }
-            if (chunk->static_light_map) {
-                SDL_DestroyTexture(chunk->static_light_map);
-                chunk->static_light_map = nullptr;
-            }
-            chunk->base_brightness                 = 0.0f;
-            chunk->light.min_static_avg_strength   = 0.0f;
-            chunk->light.max_static_avg_strength   = 0.0f;
-            chunk->light.needs_update              = true;
-            chunk->lighting_dirty                  = false;
-        }
-        return;
+    if (!renderer_ && !safe_mode) {
+        vibble::log::warn("[SceneRenderer] Renderer unavailable; static light textures will be generated lazily once a renderer is present.");
     }
-
-    std::vector<const Asset*> static_lights;
-    static_lights.reserve(assets_->all.size());
-    for (Asset* asset : assets_->all) {
-        if (is_static_light_asset(asset)) {
-            static_lights.push_back(asset);
-        }
-    }
-
-    if (static_lights.empty()) {
-        vibble::log::info("[SceneRenderer] No static light assets detected; clearing chunk light data.");
-        for (world::Chunk* chunk : chunks) {
-            if (!chunk) {
-                continue;
-            }
-            if (chunk->static_light_map) {
-                SDL_DestroyTexture(chunk->static_light_map);
-                chunk->static_light_map = nullptr;
-            }
-            chunk->base_brightness                 = 0.0f;
-            chunk->light.min_static_avg_strength   = 0.0f;
-            chunk->light.max_static_avg_strength   = 0.0f;
-            chunk->light.needs_update              = true;
-            chunk->lighting_dirty                  = false;
-        }
-        return;
-    }
-
-    bool have_bounds = false;
-    int min_x = 0;
-    int min_y = 0;
-    int max_x = 0;
-    int max_y = 0;
-    for (const world::Chunk* chunk : chunks) {
-        if (!chunk) {
-            continue;
-        }
-        const SDL_Rect& bounds = chunk->world_bounds;
-        if (bounds.w <= 0 || bounds.h <= 0) {
-            continue;
-        }
-        if (!have_bounds) {
-            min_x = bounds.x;
-            min_y = bounds.y;
-            max_x = bounds.x + bounds.w;
-            max_y = bounds.y + bounds.h;
-            have_bounds = true;
-        } else {
-            min_x = std::min(min_x, bounds.x);
-            min_y = std::min(min_y, bounds.y);
-            max_x = std::max(max_x, bounds.x + bounds.w);
-            max_y = std::max(max_y, bounds.y + bounds.h);
-        }
-    }
-
-    if (!have_bounds) {
-        vibble::log::warn("[SceneRenderer] Unable to determine full-map bounds for static lighting.");
-        return;
-    }
-
-    const std::int64_t width64  = static_cast<std::int64_t>(max_x) - static_cast<std::int64_t>(min_x);
-    const std::int64_t height64 = static_cast<std::int64_t>(max_y) - static_cast<std::int64_t>(min_y);
-    if (width64 <= 0 || height64 <= 0) {
-        vibble::log::warn(std::string("[SceneRenderer] Invalid full-map bounds for static lighting: ") +
-                          std::to_string(width64) + "x" + std::to_string(height64));
-        return;
-    }
-
-    bool overflow = width64 > std::numeric_limits<std::int64_t>::max() / std::max<std::int64_t>(height64, 1);
-    const std::int64_t pixel_count64 = overflow ? 0 : width64 * height64;
-
-    if (!overflow && pixel_count64 > kMaxStaticLightPixels) {
-        vibble::log::warn(std::string("[SceneRenderer] Full-map light texture exceeds size cap: ") +
-                          std::to_string(width64) + "x" + std::to_string(height64));
-        overflow = true;
-    }
-
-    SDL_Rect full_bounds{min_x, min_y, static_cast<int>(width64), static_cast<int>(height64)};
-    SDL_Texture* full_texture = nullptr;
-    SDL_Texture* previous_target = nullptr;
-    const SDL_BlendMode erase_blend = erase_alpha_blend_mode();
-    bool using_full_texture = false;
-
-    if (!overflow) {
-        full_texture = SDL_CreateTexture(renderer_,
-                                         SDL_PIXELFORMAT_RGBA8888,
-                                         SDL_TEXTUREACCESS_TARGET,
-                                         full_bounds.w,
-                                         full_bounds.h);
-        if (!full_texture) {
-            vibble::log::warn(std::string("[SceneRenderer] Failed to allocate full-map static light texture: ") + SDL_GetError());
-        } else {
-            SDL_SetTextureBlendMode(full_texture, SDL_BLENDMODE_BLEND);
-            previous_target = SDL_GetRenderTarget(renderer_);
-            if (SDL_SetRenderTarget(renderer_, full_texture) != 0) {
-                vibble::log::warn(std::string("[SceneRenderer] Failed to bind full-map texture for rendering: ") + SDL_GetError());
-                SDL_DestroyTexture(full_texture);
-                full_texture = nullptr;
-            } else {
-                SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
-                SDL_RenderClear(renderer_);
-
-                LogLimiter limiter{};
-                int stamped = 0;
-
-                for (const Asset* asset : static_lights) {
-                    if (!asset || !asset->info) {
-                        continue;
-                    }
-                    for (const auto& light : asset->info->light_sources) {
-                        SDL_Texture* source = light.texture;
-                        if (!source) {
-                            continue;
-                        }
-                        int src_w = light.cached_w > 0 ? light.cached_w : 0;
-                        int src_h = light.cached_h > 0 ? light.cached_h : 0;
-                        if (src_w <= 0 || src_h <= 0) {
-                            SDL_QueryTexture(source, nullptr, nullptr, &src_w, &src_h);
-                        }
-                        if (src_w <= 0 || src_h <= 0) {
-                            continue;
-                        }
-
-                        const int draw_w = std::max(1, src_w);
-                        const int draw_h = std::max(1, src_h);
-                        SDL_Rect world_dst{
-                            asset->pos.x + light.offset_x - draw_w / 2,
-                            asset->pos.y + light.offset_y - draw_h / 2,
-                            draw_w,
-                            draw_h
-                        };
-                        SDL_Rect local_dst = world_dst;
-                        local_dst.x -= full_bounds.x;
-                        local_dst.y -= full_bounds.y;
-
-                        Uint8 saved_r = 255, saved_g = 255, saved_b = 255, saved_a = 255;
-                        SDL_BlendMode saved_blend = SDL_BLENDMODE_BLEND;
-                        SDL_GetTextureColorMod(source, &saved_r, &saved_g, &saved_b);
-                        SDL_GetTextureAlphaMod(source, &saved_a);
-                        SDL_GetTextureBlendMode(source, &saved_blend);
-                        SDL_SetTextureBlendMode(source, erase_blend);
-                        SDL_SetTextureColorMod(source, 255, 255, 255);
-                        SDL_SetTextureAlphaMod(source, 255);
-                        SDL_RenderCopy(renderer_, source, nullptr, &local_dst);
-                        SDL_SetTextureBlendMode(source, saved_blend);
-                        SDL_SetTextureColorMod(source, saved_r, saved_g, saved_b);
-                        SDL_SetTextureAlphaMod(source, saved_a);
-
-                        if (limiter(stamped)) {
-                            vibble::log::debug(std::string("[SceneRenderer] Stamped static light onto full texture dst=") +
-                                               rect_str(local_dst));
-                        }
-                        ++stamped;
-                    }
-                }
-
-                SDL_SetRenderTarget(renderer_, previous_target);
-                using_full_texture = true;
-            }
-        }
-    } else {
-        vibble::log::warn("[SceneRenderer] Falling back to per-chunk static light baking due to size limits.");
-    }
-
-    int baked_chunks = 0;
-    int fallback_chunks = 0;
-    LogLimiter chunk_log_limiter{6, 24};
 
     for (world::Chunk* chunk : chunks) {
         if (!chunk) {
             continue;
         }
-        const SDL_Rect& bounds = chunk->world_bounds;
-        if (bounds.w <= 0 || bounds.h <= 0) {
-            continue;
-        }
-
         if (chunk->static_light_map) {
             SDL_DestroyTexture(chunk->static_light_map);
             chunk->static_light_map = nullptr;
         }
 
-        SDL_Texture* chunk_texture = SDL_CreateTexture(renderer_,
-                                                       SDL_PIXELFORMAT_RGBA8888,
-                                                       SDL_TEXTUREACCESS_TARGET,
-                                                       bounds.w,
-                                                       bounds.h);
-        if (!chunk_texture) {
-            vibble::log::warn(std::string("[SceneRenderer] Failed to allocate chunk light texture for bounds ") +
-                              rect_str(bounds) + ": " + SDL_GetError());
-            chunk->base_brightness               = 0.0f;
-            chunk->light.min_static_avg_strength = 0.0f;
-            chunk->light.max_static_avg_strength = 0.0f;
-            chunk->light.needs_update            = true;
-            chunk->lighting_dirty                = false;
-            continue;
-        }
-
-        SDL_SetTextureBlendMode(chunk_texture, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(chunk_texture, SDL_ScaleModeBest);
-#endif
-
-        SDL_Texture* restore_target = SDL_GetRenderTarget(renderer_);
-        if (SDL_SetRenderTarget(renderer_, chunk_texture) != 0) {
-            vibble::log::warn(std::string("[SceneRenderer] Failed to bind chunk light texture for rendering: ") +
-                              SDL_GetError());
-            SDL_DestroyTexture(chunk_texture);
-            chunk->static_light_map = nullptr;
-            SDL_SetRenderTarget(renderer_, restore_target);
-            continue;
-        }
-
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
-        SDL_RenderClear(renderer_);
-
-        if (using_full_texture && full_texture) {
-            SDL_Rect src_rect{
-                bounds.x - full_bounds.x,
-                bounds.y - full_bounds.y,
-                bounds.w,
-                bounds.h
-            };
-            SDL_Rect full_rect{0, 0, full_bounds.w, full_bounds.h};
-            SDL_Rect clipped_src{};
-            if (SDL_IntersectRect(&src_rect, &full_rect, &clipped_src)) {
-                SDL_Rect dst_rect{
-                    clipped_src.x - src_rect.x,
-                    clipped_src.y - src_rect.y,
-                    clipped_src.w,
-                    clipped_src.h
-                };
-                SDL_RenderCopy(renderer_, full_texture, &clipped_src, &dst_rect);
-            } else if (chunk_log_limiter(baked_chunks)) {
-                vibble::log::debug(std::string("[SceneRenderer] Chunk bounds outside full texture; left blank. bounds=") +
-                                   rect_str(bounds));
-            }
-        } else {
-            ++fallback_chunks;
-            LogLimiter light_limiter{};
-            for (const Asset* asset : static_lights) {
-                if (!asset || !asset->info) {
-                    continue;
-                }
-                for (const auto& light : asset->info->light_sources) {
-                    SDL_Texture* source = light.texture;
-                    if (!source) {
-                        continue;
-                    }
-                    int src_w = light.cached_w > 0 ? light.cached_w : 0;
-                    int src_h = light.cached_h > 0 ? light.cached_h : 0;
-                    if (src_w <= 0 || src_h <= 0) {
-                        SDL_QueryTexture(source, nullptr, nullptr, &src_w, &src_h);
-                    }
-                    if (src_w <= 0 || src_h <= 0) {
-                        continue;
-                    }
-
-                    const int draw_w = std::max(1, src_w);
-                    const int draw_h = std::max(1, src_h);
-                    SDL_Rect world_dst{
-                        asset->pos.x + light.offset_x - draw_w / 2,
-                        asset->pos.y + light.offset_y - draw_h / 2,
-                        draw_w,
-                        draw_h
-                    };
-                    SDL_Rect intersection{};
-                    if (!SDL_IntersectRect(&world_dst, &bounds, &intersection)) {
-                        continue;
-                    }
-
-                    SDL_Rect local_dst = intersection;
-                    local_dst.x -= bounds.x;
-                    local_dst.y -= bounds.y;
-
-                    SDL_Rect source_rect{
-                        intersection.x - world_dst.x,
-                        intersection.y - world_dst.y,
-                        intersection.w,
-                        intersection.h
-                    };
-
-                    Uint8 saved_r = 255, saved_g = 255, saved_b = 255, saved_a = 255;
-                    SDL_BlendMode saved_blend = SDL_BLENDMODE_BLEND;
-                    SDL_GetTextureColorMod(source, &saved_r, &saved_g, &saved_b);
-                    SDL_GetTextureAlphaMod(source, &saved_a);
-                    SDL_GetTextureBlendMode(source, &saved_blend);
-                    SDL_SetTextureBlendMode(source, erase_blend);
-                    SDL_SetTextureColorMod(source, 255, 255, 255);
-                    SDL_SetTextureAlphaMod(source, 255);
-                    SDL_RenderCopy(renderer_, source, &source_rect, &local_dst);
-                    SDL_SetTextureBlendMode(source, saved_blend);
-                    SDL_SetTextureColorMod(source, saved_r, saved_g, saved_b);
-                    SDL_SetTextureAlphaMod(source, saved_a);
-
-                    if (light_limiter(baked_chunks)) {
-                        vibble::log::debug(std::string("[SceneRenderer] Stamped static light directly into chunk dst=") +
-                                           rect_str(local_dst));
-                    }
-                }
-            }
-        }
-
-        SDL_SetRenderTarget(renderer_, restore_target);
-
-        chunk->static_light_map = chunk_texture;
-        const LightStats stats = compute_light_stats(renderer_, chunk_texture);
-        chunk->base_brightness               = stats.average_strength;
-        chunk->light.min_static_avg_strength = stats.min_strength;
-        chunk->light.max_static_avg_strength = stats.max_strength;
-        chunk->light.needs_update            = true;
-        chunk->lighting_dirty                = false;
-        chunk->brightness_strength           = 1.0f;
-        chunk->opacity_strength              = 1.0f;
-        chunk->scale_strength                = 1.0f;
-        chunk->offset_x                      = 0;
-        chunk->offset_y                      = 0;
-        chunk->has_dynamic_overlay           = false;
-        ++baked_chunks;
+        chunk->static_texture_set = safe_mode;
+        chunk->lighting_dirty     = !safe_mode;
+        chunk->light.needs_update = true;
+        chunk->base_brightness    = safe_mode ? 0.0f : 1.0f;
+        chunk->light.min_static_avg_strength = safe_mode ? 0.0f : 0.0f;
+        chunk->light.max_static_avg_strength = safe_mode ? 0.0f : 1.0f;
+        chunk->brightness_strength = 1.0f;
+        chunk->opacity_strength    = 1.0f;
+        chunk->scale_strength      = 1.0f;
+        chunk->offset_x            = 0;
+        chunk->offset_y            = 0;
+        chunk->has_dynamic_overlay = false;
     }
 
-    if (full_texture) {
-        SDL_DestroyTexture(full_texture);
+    if (safe_mode) {
+        vibble::log::warn("[SceneRenderer] SAFE LOADING enabled; static light textures remain disabled until safe mode is cleared.");
+    } else {
+        vibble::log::info("[SceneRenderer] Static light chunks marked for lazy initialization.");
     }
-
-    vibble::log::info(std::string("[SceneRenderer] Static light initialization complete: chunks=") +
-                      std::to_string(baked_chunks) +
-                      (fallback_chunks > 0 ? (", fallback_chunks=" + std::to_string(fallback_chunks)) : "") +
-                      " static_light_assets=" + std::to_string(static_lights.size()));
 }
+
 
 void SceneRenderer::set_low_quality_rendering(bool enabled){
     if (low_quality_rendering_==enabled) return;
