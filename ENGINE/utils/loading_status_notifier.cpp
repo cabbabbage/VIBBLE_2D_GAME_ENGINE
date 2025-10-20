@@ -1,7 +1,8 @@
 #include "loading_status_notifier.hpp"
 
 #include <mutex>
-#include <iostream>
+#include <string>
+#include "log.hpp"
 
 namespace {
 std::mutex& notifier_mutex() {
@@ -33,7 +34,7 @@ void notify(const std::string& status) {
         copy = notifier_slot();
     }
     if (!status.empty()) {
-        std::cout << "[Loading] " << status << "\n";
+        log::info(std::string("[Loading] ") + status);
     }
     if (copy) {
         copy(status);

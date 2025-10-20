@@ -37,6 +37,7 @@
 #include <system_error>
 #include <utility>
 #include <stdexcept>
+#include "utils/log.hpp"
 namespace fs = std::filesystem;
 
 #if defined(_WIN32)
@@ -69,28 +70,14 @@ MainApp::~MainApp() {
 
 void MainApp::init() {
         setup();
-        std::cout << "[MainApp] Loading pipeline complete. Entering main loop...\n";
+        log::info("[MainApp] Loading pipeline complete. Entering main loop...");
         game_loop();
 }
 
 void MainApp::setup() {
         std::srand(static_cast<unsigned int>(std::time(nullptr)));
-        std::unique_ptr<loading_status::ScopedNotifier> notifier;
-        if (loading_screen_) {
-                loading_screen_->set_status("Loading assets");
-                loading_screen_->draw_frame();
-                SDL_RenderPresent(renderer_);
-                SDL_PumpEvents();
-                notifier = std::make_unique<loading_status::ScopedNotifier>([this](const std::string& status) {
-                        if (!loading_screen_ || !renderer_) {
-                                return;
-                        }
-                        loading_screen_->set_status(status);
-                        loading_screen_->draw_frame();
-                        SDL_RenderPresent(renderer_);
-                        SDL_PumpEvents();
-                });
-        }
+        // Remove on-screen loading status updates; use terminal logging only.
+        std::unique_ptr<loading_status::ScopedNotifier> notifier; // intentionally unused (no UI binding)
         try {
                 nlohmann::json map_manifest_json = nlohmann::json::object();
                 std::string content_root;
@@ -174,19 +161,19 @@ void MainApp::setup() {
                 init_summary << "[Init] Assets initialized: " << asset_count
                              << " assets across " << room_count << " rooms in "
                              << std::fixed << std::setprecision(2) << spawn_seconds << "s";
-                std::cout << init_summary.str() << "\n";
+                log::info(init_summary.str());
                 input_ = new Input();
                 game_assets_->set_input(input_);
                 if (!player_ptr) {
                         dev_mode_ = true;
-                        std::cout << "[MainApp] No player asset found. Launching in Dev Mode.\n";
+                        log::warn("[MainApp] No player asset found. Launching in Dev Mode.");
                 }
                 if (game_assets_) {
                         game_assets_->set_dev_mode(dev_mode_);
                 }
                 AudioEngine::instance().update();
         } catch (const std::exception& e) {
-                std::cerr << "[MainApp] Setup error: " << e.what() << "\n";
+                log::error(std::string("[MainApp] Setup error: ") + e.what());
                 throw;
         }
 }
@@ -198,7 +185,7 @@ void MainApp::game_loop() {
         const double target_counts  = TARGET_FRAME_SECONDS * perf_frequency;
         bool quit = false;
         SDL_Event e;
-        std::cout << "game loop started!\n";
+        log::info("[MainApp] Game loop started.");
         while (!quit) {
                 const Uint64 frame_begin = SDL_GetPerformanceCounter();
                 while (SDL_PollEvent(&e)) {
