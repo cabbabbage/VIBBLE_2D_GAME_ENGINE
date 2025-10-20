@@ -16,7 +16,6 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "utils/loading_status_notifier.hpp"
-#include "render/precomputed_light_map.hpp"
 #include "world/grid.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
@@ -125,8 +124,6 @@ void MainApp::setup() {
                 loader_->createAssets(world_grid);
                 auto all_assets = loader_->take_spawned_assets();
                 vibble::log::info(std::string("[MainApp] Asset spawning finished for map '") + map_identifier + "'.");
-                // Bake static lighting only after assets have been spawned and handed off
-                loader_->bake_light_map(world_grid);
                 vibble::log::info(std::string("[MainApp] ") + std::to_string(all_assets.size()) + " assets created and cached.");
                 const auto asset_count = all_assets.size();
                 const auto room_count = loader_->getRooms().size();
@@ -141,7 +138,6 @@ void MainApp::setup() {
                 if (!active_library) {
                         throw std::runtime_error("Asset library unavailable during game setup.");
                 }
-                std::unique_ptr<PrecomputedLightMap> precomputed_light_map = loader_->take_precomputed_light_map();
                 game_assets_ = new Assets(std::move(all_assets),
                                           *active_library,
                                           player_ptr,
@@ -155,7 +151,6 @@ void MainApp::setup() {
                                           loader_->map_identifier(),
                                           loader_->map_manifest(),
                                           loader_->content_root(),
-                                          std::move(precomputed_light_map),
                                           std::move(world_grid));
                 const double spawn_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - spawn_begin).count() / 1000.0;
                 std::ostringstream init_summary;

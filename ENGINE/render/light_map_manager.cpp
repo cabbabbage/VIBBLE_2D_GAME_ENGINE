@@ -175,8 +175,8 @@ const LightMap* LightMapManager::light_map() const {
     return assets_ ? assets_->light_map() : nullptr;
 }
 
-std::vector<LightMapManager::QuadrantSnapshot> LightMapManager::all_snapshots() const {
-    std::vector<QuadrantSnapshot> snapshots;
+std::vector<LightMapManager::ChunkSnapshot> LightMapManager::all_snapshots() const {
+    std::vector<ChunkSnapshot> snapshots;
     const LightMap* map = light_map();
     if (!map) {
         return snapshots;
@@ -189,7 +189,7 @@ std::vector<LightMapManager::QuadrantSnapshot> LightMapManager::all_snapshots() 
         if (!chunk) {
             continue;
         }
-        QuadrantSnapshot snap;
+        ChunkSnapshot snap;
         snap.index               = static_cast<int>(i);
         snap.world_rect          = chunk->world_bounds;
         snap.active              = true;
@@ -213,11 +213,11 @@ std::vector<LightMapManager::QuadrantSnapshot> LightMapManager::all_snapshots() 
     return snapshots;
 }
 
-std::vector<std::string> LightMapManager::assets_sampling_quadrant(int /*index*/) const {
+std::vector<std::string> LightMapManager::assets_sampling_chunk(int /*index*/) const {
     return {};
 }
 
-std::optional<LightMapManager::QuadrantSnapshot> LightMapManager::snapshot_for_quadrant(int index) const {
+std::optional<LightMapManager::ChunkSnapshot> LightMapManager::snapshot_for_chunk(int index) const {
     const LightMap* map = light_map();
     if (!map) {
         return std::nullopt;
@@ -230,7 +230,7 @@ std::optional<LightMapManager::QuadrantSnapshot> LightMapManager::snapshot_for_q
     if (!chunk) {
         return std::nullopt;
     }
-    QuadrantSnapshot snap;
+    ChunkSnapshot snap;
     snap.index               = index;
     snap.world_rect          = chunk->world_bounds;
     snap.active              = true;
@@ -271,7 +271,7 @@ std::optional<LightMapManager::UseShadowData> LightMapManager::get_shadow_data_f
     return shadow_data_for_chunk(chunks[static_cast<std::size_t>(index)]);
 }
 
-std::optional<int> LightMapManager::find_quadrant_index(SDL_FPoint world_or_screen_pos) const {
+std::optional<int> LightMapManager::find_chunk_index(SDL_FPoint world_or_screen_pos) const {
     const LightMap* map = light_map();
     if (!map) {
         return std::nullopt;
@@ -300,9 +300,12 @@ std::optional<int> LightMapManager::find_quadrant_index(SDL_FPoint world_or_scre
 }
 
 std::optional<LightMapManager::UseShadowData> LightMapManager::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
-    if (auto index = find_quadrant_index(world_or_screen_pos)) {
+    if (auto index = find_chunk_index(world_or_screen_pos)) {
         return get_shadow_data_for_index(*index);
     }
     return std::nullopt;
 }
+
+
+
 

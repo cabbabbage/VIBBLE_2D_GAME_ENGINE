@@ -11,9 +11,6 @@ class Assets;
 class Asset;
 class camera;
 namespace world { class Grid; }
-class PrecomputedLightMap;
-#include "render/precomputed_light_map.hpp"
-
 namespace world {
 
 struct Chunk {
@@ -90,21 +87,19 @@ public:
     static constexpr float kDefaultDynamicWeight = 1.0f;
 
     // Legacy UI constants kept for dev panels and persisted settings.
-    static constexpr int kMinQuadrantCount       = 1;
-    static constexpr int kMaxQuadrantCount       = 64;
-    static constexpr int kDefaultQuadrantCount   = 16;
-    static constexpr int kMinQuadrantSizePx      = 16;
-    static constexpr int kMaxQuadrantSizePx      = 4096;
-    static constexpr int kDefaultQuadrantSizePx  = 256;
+    static constexpr int kMinChunkCount       = 1;
+    static constexpr int kMaxChunkCount       = 64;
+    static constexpr int kDefaultChunkCount   = 16;
+    static constexpr int kMinChunkSizePx      = 16;
+    static constexpr int kMaxChunkSizePx      = 4096;
+    static constexpr int kDefaultChunkSizePx  = 256;
 
     LightMap(Assets* assets,
              int screen_width,
-             int screen_height,
-             std::unique_ptr<PrecomputedLightMap> precomputed_map = nullptr)
+             int screen_height)
         : assets_(assets)
         , screen_width_(screen_width)
-        , screen_height_(screen_height)
-        , pending_precomputed_map_(std::move(precomputed_map)) {}
+        , screen_height_(screen_height) {}
     ~LightMap() = default;
 
     void rebuild(SDL_Renderer* renderer);
@@ -119,9 +114,9 @@ public:
                                      float static_weight = kDefaultStaticWeight,
                                      float dynamic_weight = kDefaultDynamicWeight) const;
 
-    void render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
-    void render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
-    void render_visible_quadrants_debug(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
+    void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
+    void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
+    void render_visible_chunks_debug(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
 
     void mark_region_dirty(const SDL_Rect& screen_rect);
     void mark_asset_lights_dirty(const Asset* asset);
@@ -137,17 +132,17 @@ public:
     std::optional<world::Chunk::UseShadowData> get_shadow_data(SDL_FPoint world_or_screen_pos) const;
     ShadowSettings shadow_settings() const { return ShadowSettings{}; }
 
-    int quadrant_count() const;
-    int quadrant_columns() const;
-    int quadrant_rows() const;
-    const world::Chunk* quadrant(int index) const;
-    SDL_Rect quadrant_bounds(int index) const;
+    int chunk_count() const;
+    int chunk_columns() const;
+    int chunk_rows() const;
+    const world::Chunk* chunk_at(int index) const;
+    SDL_Rect chunk_bounds(int index) const;
 
-    void set_virtual_light_map_quadrants(int quadrants);
-    void set_virtual_light_map_quadrant_size(int size_px);
-    void set_cells_per_quadrant(int cells);
-    int  virtual_light_map_quadrant_size() const;
-    int  virtual_light_map_quadrants() const;
+    void set_virtual_light_map_chunks(int chunks);
+    void set_virtual_light_map_chunk_size(int size_px);
+    void set_cells_per_chunk(int cells);
+    int  virtual_light_map_chunk_size() const;
+    int  virtual_light_map_chunks() const;
     int  static_grid_resolution() const;
     int  padding_cells() const;
 
@@ -165,7 +160,6 @@ private:
     int     screen_width_  = 0;
     int     screen_height_ = 0;
 
-    std::unique_ptr<PrecomputedLightMap> pending_precomputed_map_;
     mutable bool precomputed_applied_ = false;
 
     mutable SDL_Texture* batch_full_mask_ = nullptr;
@@ -173,3 +167,5 @@ private:
     mutable bool         batch_active_ = false;
     mutable float        last_screen_light_opacity_ = -1.0f;
 };
+
+

@@ -6,7 +6,6 @@
 #include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
-#include "render/precomputed_light_map.hpp"
 #include "world/grid.hpp"
 
 #include <iostream>
@@ -255,8 +254,6 @@ void MenuUI::doRestart() {
                 world::Grid world_grid{};
                 loader_->createAssets(world_grid);
                 auto all_assets = loader_->take_spawned_assets();
-                // Bake static lighting only after assets have been spawned and handed off
-                loader_->bake_light_map(world_grid);
                 Asset* player_ptr = nullptr;
                 for (auto& a : all_assets) {
                     Asset* candidate = a.get();
@@ -268,7 +265,6 @@ void MenuUI::doRestart() {
                 if (!restart_library) {
                         throw std::runtime_error("Asset library unavailable during restart.");
                 }
-                std::unique_ptr<PrecomputedLightMap> precomputed_light_map = loader_->take_precomputed_light_map();
                 game_assets_ = new Assets(std::move(all_assets),
                                           *restart_library,
                                           player_ptr,
@@ -282,7 +278,6 @@ void MenuUI::doRestart() {
                                           loader_->map_identifier(),
                                           loader_->map_manifest(),
                                           loader_->content_root(),
-                                          std::move(precomputed_light_map),
                                           std::move(world_grid));
                 if (!input_) input_ = new Input();
                 game_assets_->set_input(input_);

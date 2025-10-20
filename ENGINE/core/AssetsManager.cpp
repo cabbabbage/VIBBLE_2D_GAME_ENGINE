@@ -111,7 +111,6 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                const std::string& map_id,
                const nlohmann::json& map_manifest,
                std::string content_root,
-               std::unique_ptr<PrecomputedLightMap> precomputed_light_map,
                world::Grid&& world_grid)
     : camera_(
           screen_width_,
@@ -154,8 +153,7 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                               screen_width_,
                               screen_height_,
                               map_info_json_,
-                              map_id_,
-                              std::move(precomputed_light_map));
+                              map_id_);
     apply_map_light_config();
     apply_map_grid_settings(map_grid_settings_, false);
     for (Asset* a : all) {
@@ -541,9 +539,9 @@ void Assets::update(const Input& input)
                   << " (Ctrl+M).\n";
     }
     if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
-        scene->toggle_quadrant_debug_mode();
-        std::cout << "[Assets] Quadrant debug view "
-                  << (scene->quadrant_debug_mode() ? "enabled" : "disabled")
+        scene->toggle_chunk_debug_mode();
+        std::cout << "[Assets] Chunk debug view "
+                  << (scene->chunk_debug_mode() ? "enabled" : "disabled")
                   << " (Ctrl+Q).\n";
     }
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
@@ -1218,30 +1216,30 @@ const LightMapManager* Assets::light_map_manager() const {
     return const_cast<Assets*>(this)->light_map_manager();
 }
 
-void Assets::set_virtual_light_map_quadrants(int quadrants) {
+void Assets::set_virtual_light_map_chunks(int chunks) {
     if (scene) {
-        scene->set_virtual_light_map_quadrants(quadrants);
+        scene->set_virtual_light_map_chunks(chunks);
     }
 }
 
-void Assets::set_virtual_light_map_quadrant_size(int size_px) {
+void Assets::set_virtual_light_map_chunk_size(int size_px) {
     if (scene) {
-        scene->set_virtual_light_map_quadrant_size(size_px);
+        scene->set_virtual_light_map_chunk_size(size_px);
     }
 }
 
-int Assets::virtual_light_map_quadrants() const {
+int Assets::virtual_light_map_chunks() const {
     if (const LightMap* map = light_map()) {
-        return map->virtual_light_map_quadrants();
+        return map->virtual_light_map_chunks();
     }
-    return LightMap::kDefaultQuadrantCount;
+    return LightMap::kDefaultChunkCount;
 }
 
-int Assets::virtual_light_map_quadrant_size() const {
+int Assets::virtual_light_map_chunk_size() const {
     if (const LightMap* map = light_map()) {
-        return map->virtual_light_map_quadrant_size();
+        return map->virtual_light_map_chunk_size();
     }
-    return LightMap::kDefaultQuadrantSizePx;
+    return LightMap::kDefaultChunkSizePx;
 }
 
 void Assets::force_virtual_light_map_refresh() {
@@ -1453,3 +1451,5 @@ void Assets::set_editor_current_room(Room* room) {
         dev_controls_->set_current_room(room);
     }
 }
+
+

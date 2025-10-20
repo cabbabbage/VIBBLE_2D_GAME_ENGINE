@@ -792,13 +792,13 @@ void AssetInfo::set_shading_enabled(bool enabled) {
         info_json_["has_shading"] = enabled;
 }
 
-void AssetInfo::set_virtual_light_map_quadrants(int quadrants) {
-        int clamped = std::clamp(quadrants, 1, 100);
-        virtual_light_map_quadrants = clamped;
+void AssetInfo::set_virtual_light_map_chunks(int chunks) {
+        int clamped = std::clamp(chunks, 1, 100);
+        virtual_light_map_chunks = clamped;
         if (!info_json_.is_object()) {
                 info_json_ = nlohmann::json::object();
         }
-        info_json_["virtual_light_map_quadrants"] = clamped;
+        info_json_["virtual_light_map_chunks"] = clamped;
 }
 
 namespace {
@@ -1059,11 +1059,14 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
         set_shading_opacity_multiplier(
                 read_float_field(data, "shading_opacity_multiplier", shading_opacity_multiplier));
 
-        if (data.contains("virtual_light_map_quadrants")) {
-                int quadrants = data.value("virtual_light_map_quadrants", virtual_light_map_quadrants);
-                set_virtual_light_map_quadrants(quadrants);
+        if (data.contains("virtual_light_map_chunks")) {
+                int chunks = data.value("virtual_light_map_chunks", virtual_light_map_chunks);
+                set_virtual_light_map_chunks(chunks);
+        } else if (data.contains("virtual_light_map_quadrants")) {
+                int chunks = data.value("virtual_light_map_quadrants", virtual_light_map_chunks);
+                set_virtual_light_map_chunks(chunks);
         } else {
-                virtual_light_map_quadrants = std::clamp(virtual_light_map_quadrants, 1, 100);
+                virtual_light_map_chunks = std::clamp(virtual_light_map_chunks, 1, 100);
         }
 
         const auto &ss = data.value("size_settings", nlohmann::json::object());
@@ -1455,3 +1458,5 @@ bool AssetInfo::reload_animations_from_disk() {
 
     return apply_payload(data);
 }
+
+

@@ -38,7 +38,7 @@ public:
     void set_assets(Assets* assets);
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
     void set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings);
-    int  selected_quadrant() const { return selected_quadrant_; }
+    int  selected_chunk() const { return selected_chunk_; }
 
 protected:
     void render_content(SDL_Renderer* renderer) const override;
@@ -49,10 +49,10 @@ private:
 
     const class LightMap*        current_light_map() const;
     const LightMapManager*       light_map_manager() const;
-    const LightMapManager::QuadrantSnapshot* snapshot_for_quadrant(int index) const;
+    const LightMapManager::ChunkSnapshot* snapshot_for_chunk(int index) const;
     std::optional<SDL_Point>      player_screen_position() const;
-    std::vector<std::string>      assets_in_quadrant(int quadrant) const;
-    int                           quadrant_index_from_point(int x, int y) const;
+    std::vector<std::string>      assets_in_chunk(int Chunk) const;
+    int                           chunk_index_from_point(int x, int y) const;
     void                          render_preview(SDL_Renderer* renderer) const;
     bool                          handle_preview_event(const SDL_Event& e);
     int                           preview_height_for_width(int width) const;
@@ -69,7 +69,7 @@ private:
     void                          persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const;
     void                          write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings);
     nlohmann::json&               ensure_reactive_settings_json();
-    void                          apply_virtual_light_map_quadrant_size(int size_px, bool apply_to_assets, bool mark_pending = true);
+    void                          apply_virtual_light_map_chunk_size(int size_px, bool apply_to_assets, bool mark_pending = true);
     void                          request_light_map_regeneration();
     void                          force_shading_refresh_if_needed(bool force_refresh);
     void                          handle_chunk_resolution_changed();
@@ -80,13 +80,13 @@ private:
     mutable SDL_Rect preview_rect_{0, 0, 0, 0};
     mutable SDL_Rect preview_widget_bounds_{0, 0, 0, 0};
     mutable SDL_Rect preview_grid_rect_{0, 0, 0, 0};
-    mutable std::vector<SDL_Rect> quadrant_preview_rects_{};
-    mutable std::vector<LightMapManager::QuadrantSnapshot> quadrant_snapshots_{};
-    mutable std::vector<bool> quadrant_snapshot_valid_{};
+    mutable std::vector<SDL_Rect> chunk_preview_rects_{};
+    mutable std::vector<LightMapManager::ChunkSnapshot> chunk_snapshots_{};
+    mutable std::vector<bool> chunk_snapshot_valid_{};
     mutable int screen_width_px_ = 0;
     mutable int screen_height_px_ = 0;
-    int selected_quadrant_ = -1;
-    std::string quadrant_note_text_;
+    int selected_chunk_ = -1;
+    std::string chunk_note_text_;
 
     std::unique_ptr<class DMSlider> horizontal_falloff_;
     std::unique_ptr<class DMSlider> vertical_falloff_;
@@ -94,7 +94,7 @@ private:
     std::unique_ptr<class DMSlider> max_offset_y_;
     std::unique_ptr<class DMSlider> search_radius_;
     std::unique_ptr<class DMSlider> chunk_resolution_;
-    std::unique_ptr<class DMSlider> quadrant_size_px_;
+    std::unique_ptr<class DMSlider> chunk_size_px_;
     std::unique_ptr<class DMButton> regenerate_button_;
 
     std::vector<std::unique_ptr<class Widget>> widget_wrappers_{};
@@ -108,8 +108,11 @@ private:
     bool reactive_settings_initialized_ = false;
     render_pipeline::shading::ReactiveShadowSettings forced_settings_snapshot_ =
         render_pipeline::shading::sanitize_reactive_shadow_settings({});
-    int last_quadrant_size_px_ = LightMap::kDefaultQuadrantSizePx;
-    int forced_quadrant_size_snapshot_ = LightMap::kDefaultQuadrantSizePx;
+    int last_chunk_size_px_ = LightMap::kDefaultChunkSizePx;
+    int forced_chunk_size_snapshot_ = LightMap::kDefaultChunkSizePx;
     int last_chunk_resolution_ = 0;
 };
+
+
+
 

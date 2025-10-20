@@ -5,7 +5,6 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 
-#include "render/precomputed_light_map.hpp"
 #include "utils/map_grid_settings.hpp"
 
 class Asset;
@@ -40,8 +39,6 @@ class AssetLoader {
     std::vector<Asset*> collectDistantAssets(int lock_threshold, int remove_threshold);
 
     void createAssets(world::Grid& grid);
-    // Perform static light baking after assets are spawned into the grid
-    void bake_light_map(world::Grid& grid);
     std::vector<std::unique_ptr<Asset>> take_spawned_assets();
     std::vector<const Area*> getAllRoomAndTrailAreas() const;
     AssetLibrary* getAssetLibrary() const { return asset_library_; }
@@ -51,7 +48,6 @@ class AssetLoader {
     const std::string& map_identifier() const { return map_id_; }
     const std::string& content_root() const { return map_path_; }
 
-    std::unique_ptr<PrecomputedLightMap> take_precomputed_light_map();
         private:
     std::string map_id_;
     std::string map_path_;
@@ -77,19 +73,5 @@ class AssetLoader {
     void loadRooms();
     void finalizeAssets();
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
-    void precompute_light_map(world::Grid& grid);
-    void plan_map_chunks(const world::Grid& grid);
-    float compute_chunk_average_brightness(SDL_Texture* texture) const;
-    struct PlannedChunk {
-        int      i = 0;
-        int      j = 0;
-        SDL_Rect world_bounds{0, 0, 0, 0};
-    };
     std::vector<std::unique_ptr<Asset>> spawned_assets_{};
-    std::vector<PlannedChunk>           planned_chunks_{};
-    std::vector<world::Chunk*> map_chunks_{};
-    std::unique_ptr<PrecomputedLightMap> precomputed_light_map_;
-    // State gating to ensure correct baking sequence
-    bool assets_finalized_ = false;
-    bool assets_extracted_ = false;
 };

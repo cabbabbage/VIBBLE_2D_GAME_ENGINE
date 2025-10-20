@@ -27,6 +27,12 @@ pushd "%~dp0" >nul
 set "BUILD_CONFIG=RelWithDebInfo"
 set "EXTRA_ARGS="
 
+rem Enable robust SAFE loading mode by default unless explicitly overridden
+if not defined VIBBLE_SAFE_LOADING (
+    set "VIBBLE_SAFE_LOADING=1"
+    echo [run.bat] SAFE loading enabled (VIBBLE_SAFE_LOADING=1)
+)
+
 
 rem ----------------------------------------------------
 rem Ensure vcpkg exists (clone if missing)

@@ -14,7 +14,6 @@
 #include <unordered_map>
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
-#include "render/precomputed_light_map.hpp"
 #include "world/grid.hpp"
 
 class Asset;
@@ -50,7 +49,6 @@ public:
            const std::string& map_id,
            const nlohmann::json& map_manifest,
            std::string content_root = {},
-           std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr,
            world::Grid&& world_grid = world::Grid{});
     ~Assets();
 
@@ -143,10 +141,10 @@ public:
     LightMap*       light_map();
     LightMapManager*       light_map_manager();
     const LightMapManager* light_map_manager() const;
-    void set_virtual_light_map_quadrants(int quadrants);
-    void set_virtual_light_map_quadrant_size(int size_px);
-    int  virtual_light_map_quadrant_size() const;
-    int  virtual_light_map_quadrants() const;
+    void set_virtual_light_map_chunks(int chunks);
+    void set_virtual_light_map_chunk_size(int size_px);
+    int  virtual_light_map_chunk_size() const;
+    int  virtual_light_map_chunks() const;
     void force_virtual_light_map_refresh();
     void force_shaded_assets_rerender();
     void set_map_light_panel_visible(bool visible);
@@ -238,3 +236,5 @@ private:
     int active_search_radius() const;
 };
 #include "utils/map_grid_settings.hpp"
+
+

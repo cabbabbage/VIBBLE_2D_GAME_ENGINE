@@ -147,7 +147,7 @@ MapLightPreviewPanel::MapLightPreviewPanel(Assets* assets, int x, int y)
     : DockableCollapsible("Light Map", true, x, y), assets_(assets) {
     set_floating_content_width(360);
     set_visible_height(540);
-    quadrant_note_text_ =
+    chunk_note_text_ =
         "Note: Light map tiles update from static + dynamic samples and fade when inactive.";
     last_chunk_resolution_ = MapGridSettings::defaults().r_chunk;
 
@@ -160,15 +160,15 @@ MapLightPreviewPanel::~MapLightPreviewPanel() = default;
 void MapLightPreviewPanel::set_assets(Assets* assets) {
     assets_ = assets;
     if (assets_) {
-        last_quadrant_size_px_ = clamp_int(assets_->virtual_light_map_quadrant_size(),
-                                           LightMap::kMinQuadrantSizePx,
-                                           LightMap::kMaxQuadrantSizePx);
+        last_chunk_size_px_ = clamp_int(assets_->virtual_light_map_chunk_size(),
+                                           LightMap::kMinChunkSizePx,
+                                           LightMap::kMaxChunkSizePx);
         last_chunk_resolution_ = clamp_int(assets_->map_grid_chunk_resolution(), 0, vibble::grid::kMaxResolution);
         if (chunk_resolution_) {
             chunk_resolution_->set_value(last_chunk_resolution_);
         }
     }
-    apply_virtual_light_map_quadrant_size(last_quadrant_size_px_, false, false);
+    apply_virtual_light_map_chunk_size(last_chunk_size_px_, false, false);
     pending_light_map_regeneration_ = false;
     if (regenerate_button_) {
         regenerate_button_->set_text("Regenerate");
@@ -187,11 +187,11 @@ void MapLightPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback o
         reactive_settings_initialized_ = true;
     }
     if (assets_) {
-        last_quadrant_size_px_ = clamp_int(assets_->virtual_light_map_quadrant_size(),
-                                           LightMap::kMinQuadrantSizePx,
-                                           LightMap::kMaxQuadrantSizePx);
+        last_chunk_size_px_ = clamp_int(assets_->virtual_light_map_chunk_size(),
+                                           LightMap::kMinChunkSizePx,
+                                           LightMap::kMaxChunkSizePx);
     }
-    apply_virtual_light_map_quadrant_size(last_quadrant_size_px_, false, false);
+    apply_virtual_light_map_chunk_size(last_chunk_size_px_, false, false);
     apply_immediate_settings();
     sync_ui_from_json();
     pending_light_map_regeneration_ = false;
@@ -216,7 +216,7 @@ void MapLightPreviewPanel::update(const Input& input, int screen_w, int screen_h
         return;
     }
     if (chunk_resolution_) {
-        const int chunk_value = chunk_resolution_->value();
+        const int chunk_index_value = chunk_resolution_->value();
         if (chunk_value != last_chunk_resolution_) {
             last_chunk_resolution_ = chunk_value;
             handle_chunk_resolution_changed();
@@ -283,18 +283,18 @@ const LightMapManager* MapLightPreviewPanel::light_map_manager() const {
     return assets_ ? assets_->light_map_manager() : nullptr;
 }
 
-const LightMapManager::QuadrantSnapshot* MapLightPreviewPanel::snapshot_for_quadrant(int index) const {
+const LightMapManager::ChunkSnapshot* MapLightPreviewPanel::snapshot_for_chunk(int index) const {
     if (index < 0) {
         return nullptr;
     }
     const std::size_t idx = static_cast<std::size_t>(index);
-    if (idx >= quadrant_snapshot_valid_.size() || idx >= quadrant_snapshots_.size()) {
+    if (idx >= chunk_snapshot_valid_.size() || idx >= chunk_snapshots_.size()) {
         return nullptr;
     }
-    if (!quadrant_snapshot_valid_[idx]) {
+    if (!chunk_snapshot_valid_[idx]) {
         return nullptr;
     }
-    return &quadrant_snapshots_[idx];
+    return &chunk_snapshots_[idx];
 }
 
 std::optional<SDL_Point> MapLightPreviewPanel::player_screen_position() const {
@@ -306,20 +306,20 @@ std::optional<SDL_Point> MapLightPreviewPanel::player_screen_position() const {
     return center;
 }
 
-std::vector<std::string> MapLightPreviewPanel::assets_in_quadrant(int quadrant) const {
+std::vector<std::string> MapLightPreviewPanel::assets_in_chunk(int chunk_index) const {
     if (const LightMapManager* manager = light_map_manager()) {
-        return manager->assets_sampling_quadrant(quadrant);
+        return manager->assets_sampling_chunk(chunk_index);
     }
     return {};
 }
 
-int MapLightPreviewPanel::quadrant_index_from_point(int x, int y) const {
+int MapLightPreviewPanel::chunk_index_from_point(int x, int y) const {
     SDL_Point point{x, y};
     if (!SDL_PointInRect(&point, &preview_grid_rect_)) {
         return -1;
     }
-    for (std::size_t i = 0; i < quadrant_preview_rects_.size(); ++i) {
-        if (SDL_PointInRect(&point, &quadrant_preview_rects_[i])) {
+    for (std::size_t i = 0; i < chunk_preview_rects_.size(); ++i) {
+        if (SDL_PointInRect(&point, &chunk_preview_rects_[i])) {
             return static_cast<int>(i);
         }
     }
@@ -327,8 +327,8 @@ int MapLightPreviewPanel::quadrant_index_from_point(int x, int y) const {
     if (!map || preview_grid_rect_.w <= 0 || preview_grid_rect_.h <= 0) {
         return -1;
     }
-    const int grid_w = map->quadrant_columns();
-    const int grid_h = map->quadrant_rows();
+    const int grid_w = map->chunk_columns();
+    const int grid_h = map->chunk_rows();
     if (grid_w <= 0 || grid_h <= 0) {
         return -1;
     }
@@ -360,18 +360,18 @@ bool MapLightPreviewPanel::handle_preview_event(const SDL_Event& e) {
         return false;
     }
 
-    const int quadrant = quadrant_index_from_point(point.x, point.y);
-    if (quadrant < 0) {
+    const int chunk_index = chunk_index_from_point(point.x, point.y);
+    if (chunk_index < 0) {
         return false;
     }
 
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        selected_quadrant_ = quadrant;
+        selected_chunk_ = chunk_index;
         return true;
     }
 
     if (e.type == SDL_MOUSEMOTION) {
-        selected_quadrant_ = quadrant;
+        selected_chunk_ = chunk_index;
     }
 
     return false;
@@ -428,11 +428,11 @@ int MapLightPreviewPanel::estimated_detail_line_count() const {
         map = assets_->light_map();
     }
 
-    const int total_quadrants = map ? map->quadrant_count() : 0;
-    const int detail_quadrant =
-        (selected_quadrant_ >= 0 && selected_quadrant_ < total_quadrants) ? selected_quadrant_ : -1;
+    const int total_chunks = map ? map->chunk_count() : 0;
+    const int detail_chunk =
+        (selected_chunk_ >= 0 && selected_chunk_ < total_chunks) ? selected_chunk_ : -1;
 
-    if (detail_quadrant >= 0) {
+    if (detail_chunk >= 0) {
         count += 1;  // Tile header
 
         // Assume full snapshot metrics when available.
@@ -447,17 +447,17 @@ int MapLightPreviewPanel::estimated_detail_line_count() const {
 
         int asset_lines = 1;
         if (manager) {
-            const auto assets = manager->assets_sampling_quadrant(detail_quadrant);
+            const auto assets = manager->assets_sampling_chunk(detail_chunk);
             asset_lines = static_cast<int>(assets.empty() ? 1 : assets.size());
         }
         count += asset_lines;
     } else {
-        count += 1;  // No quadrant selected
+        count += 1;  // No Chunk selected
     }
 
-    if (!quadrant_note_text_.empty()) {
+    if (!chunk_note_text_.empty()) {
         count += 1;  // Blank line before note
-        count += count_lines(quadrant_note_text_);
+        count += count_lines(chunk_note_text_);
     }
 
     return count;
@@ -479,9 +479,9 @@ int MapLightPreviewPanel::count_lines(std::string_view text) {
 void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     preview_rect_       = SDL_Rect{0, 0, 0, 0};
     preview_grid_rect_  = SDL_Rect{0, 0, 0, 0};
-    quadrant_preview_rects_.clear();
-    quadrant_snapshots_.clear();
-    quadrant_snapshot_valid_.clear();
+    chunk_preview_rects_.clear();
+    chunk_snapshots_.clear();
+    chunk_snapshot_valid_.clear();
 
     if (!renderer || !is_visible()) {
         return;
@@ -493,23 +493,23 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         return;
     }
 
-    const int grid_w = map->quadrant_columns();
-    const int grid_h = map->quadrant_rows();
+    const int grid_w = map->chunk_columns();
+    const int grid_h = map->chunk_rows();
     if (grid_w <= 0 || grid_h <= 0) {
         return;
     }
 
-    const int total_quadrants = map->quadrant_count();
-    quadrant_preview_rects_.assign(static_cast<std::size_t>(total_quadrants), SDL_Rect{0, 0, 0, 0});
-    quadrant_snapshots_.assign(static_cast<std::size_t>(total_quadrants), LightMapManager::QuadrantSnapshot{});
-    quadrant_snapshot_valid_.assign(static_cast<std::size_t>(total_quadrants), false);
+    const int total_chunks = map->chunk_count();
+    chunk_preview_rects_.assign(static_cast<std::size_t>(total_chunks), SDL_Rect{0, 0, 0, 0});
+    chunk_snapshots_.assign(static_cast<std::size_t>(total_chunks), LightMapManager::ChunkSnapshot{});
+    chunk_snapshot_valid_.assign(static_cast<std::size_t>(total_chunks), false);
 
-    const std::vector<LightMapManager::QuadrantSnapshot> snapshots = manager->all_snapshots();
+    const std::vector<LightMapManager::ChunkSnapshot> snapshots = manager->all_snapshots();
     for (const auto& snapshot : snapshots) {
-        if (snapshot.index >= 0 && snapshot.index < total_quadrants) {
+        if (snapshot.index >= 0 && snapshot.index < total_chunks) {
             const std::size_t idx = static_cast<std::size_t>(snapshot.index);
-            quadrant_snapshots_[idx]      = snapshot;
-            quadrant_snapshot_valid_[idx] = true;
+            chunk_snapshots_[idx]      = snapshot;
+            chunk_snapshot_valid_[idx] = true;
         }
     }
 
@@ -608,7 +608,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     };
 
     auto render_tile_annotation = [&](const SDL_Rect& rect,
-                                      const LightMapManager::QuadrantSnapshot* snap) {
+                                      const LightMapManager::ChunkSnapshot* snap) {
         if (!snap || !tile_font || rect.w <= 10 || rect.h <= 14) {
             return;
         }
@@ -771,26 +771,26 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             const int index = gy * grid_w + gx;
             SDL_Rect cell_rect = fallback_cell_rect(gx, gy);
 
-            if (const auto* snap = snapshot_for_quadrant(index)) {
+            if (const auto* snap = snapshot_for_chunk(index)) {
                 SDL_Rect world_rect = rect_from_world(snap->world_rect);
                 if (world_rect.w > 0 && world_rect.h > 0) {
                     cell_rect = world_rect;
                 }
-            } else if (const world::Chunk* chunk = map->quadrant(index)) {
+            } else if (const world::Chunk* chunk = map->chunk_at(index)) {
                 SDL_Rect world_rect = rect_from_world(chunk->world_bounds);
                 if (world_rect.w > 0 && world_rect.h > 0) {
                     cell_rect = world_rect;
                 }
             }
 
-            if (static_cast<std::size_t>(index) < quadrant_preview_rects_.size()) {
-                quadrant_preview_rects_[static_cast<std::size_t>(index)] = cell_rect;
+            if (static_cast<std::size_t>(index) < chunk_preview_rects_.size()) {
+                chunk_preview_rects_[static_cast<std::size_t>(index)] = cell_rect;
             }
 
-            const LightMapManager::QuadrantSnapshot* snap = snapshot_for_quadrant(index);
+            const LightMapManager::ChunkSnapshot* snap = snapshot_for_chunk(index);
             float brightness = snap ? snap->combined_brightness : 0.0f;
             if (!snap) {
-                if (const world::Chunk* chunk = map->quadrant(index)) {
+                if (const world::Chunk* chunk = map->chunk_at(index)) {
                     SDL_Rect world_rect = chunk->world_bounds;
                     const float cx = static_cast<float>(world_rect.x) + static_cast<float>(world_rect.w) * 0.5f;
                     const float cy = static_cast<float>(world_rect.y) + static_cast<float>(world_rect.h) * 0.5f;
@@ -824,12 +824,12 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, outline_color.r, outline_color.g, outline_color.b, outline_color.a);
     SDL_RenderDrawRect(renderer, &preview_grid_rect_);
 
-    const int detail_quadrant =
-        (selected_quadrant_ >= 0 && selected_quadrant_ < total_quadrants) ? selected_quadrant_ : -1;
-    if (detail_quadrant >= 0 &&
-        static_cast<std::size_t>(detail_quadrant) < quadrant_preview_rects_.size()) {
+    const int detail_chunk =
+        (selected_chunk_ >= 0 && selected_chunk_ < total_chunks) ? selected_chunk_ : -1;
+    if (detail_chunk >= 0 &&
+        static_cast<std::size_t>(detail_chunk) < chunk_preview_rects_.size()) {
         const SDL_Rect& selected_rect =
-            quadrant_preview_rects_[static_cast<std::size_t>(detail_quadrant)];
+            chunk_preview_rects_[static_cast<std::size_t>(detail_chunk)];
         if (selected_rect.w > 0 && selected_rect.h > 0) {
             const SDL_Color accent = DMStyles::HighlightColor();
             SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, accent.a);
@@ -838,13 +838,13 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     }
 
     std::vector<std::string> detail_lines;
-    if (detail_quadrant >= 0) {
-        const int gx = detail_quadrant % grid_w;
-        const int gy = detail_quadrant / grid_w;
+    if (detail_chunk >= 0) {
+        const int gx = detail_chunk % grid_w;
+        const int gy = detail_chunk / grid_w;
         detail_lines.push_back("Tile [" + std::to_string(gx) + ", " + std::to_string(gy) + "] #" +
-                               std::to_string(detail_quadrant));
+                               std::to_string(detail_chunk));
 
-        if (const auto* snap = snapshot_for_quadrant(detail_quadrant)) {
+        if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
             detail_lines.push_back(std::string("Active: ") + (snap->active ? "yes" : "no") +
                                    " | Dirty: " + (snap->dirty ? "yes" : "no"));
             detail_lines.push_back("Base Brightness: " + format_float(snap->base_brightness, 3));
@@ -861,7 +861,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                                    format_float(snap->shadow_opacity_max, 3));
         }
 
-        if (const world::Chunk* chunk = map->quadrant(detail_quadrant)) {
+        if (const world::Chunk* chunk = map->chunk_at(detail_chunk)) {
             detail_lines.push_back("Chunk Bounds: " + std::to_string(chunk->world_bounds.x) + ", " +
                                    std::to_string(chunk->world_bounds.y) + " " +
                                    std::to_string(chunk->world_bounds.w) + "x" +
@@ -871,7 +871,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         detail_lines.push_back("");
         detail_lines.push_back("Assets Sampling:");
 
-        auto assets = assets_in_quadrant(detail_quadrant);
+        auto assets = assets_in_chunk(detail_chunk);
         if (assets.empty()) {
             detail_lines.push_back("  (none)");
         } else {
@@ -880,12 +880,12 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             }
         }
     } else {
-        detail_lines.push_back("No quadrant selected.");
+        detail_lines.push_back("No Chunk selected.");
     }
 
-    if (!quadrant_note_text_.empty()) {
+    if (!chunk_note_text_.empty()) {
         detail_lines.push_back("");
-        detail_lines.push_back(quadrant_note_text_);
+        detail_lines.push_back(chunk_note_text_);
     }
 
     std::string detail_text;
@@ -985,14 +985,27 @@ void MapLightPreviewPanel::sync_ui_from_json() {
     }
     auto it = map_info_->find("reactive_shadows");
     if (it != map_info_->end() && it->is_object()) {
-        int desired_size = last_quadrant_size_px_;
-        if (auto size_it = it->find("virtual_light_map_quadrant_size");
+        int desired_size = last_chunk_size_px_;
+        if (auto size_it = it->find("virtual_light_map_chunk_size");
             size_it != it->end() && size_it->is_number_integer()) {
             desired_size = size_it->get<int>();
-        } else if (auto quad_it = it->find("virtual_light_map_quadrants");
-                   quad_it != it->end() && quad_it->is_number_integer()) {
-            const int count = clamp_int(quad_it->get<int>(), LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount);
-            desired_size = last_quadrant_size_px_;
+        } else if (auto chunk_count_it = it->find("virtual_light_map.chunks");
+                   chunk_count_it != it->end() && chunk_count_it->is_number_integer()) {
+            const int count = clamp_int(chunk_count_it->get<int>(), LightMap::kMinChunkCount, LightMap::kMaxChunkCount);
+            desired_size = last_chunk_size_px_;
+            const LightMap* map = current_light_map();
+            if (!map && assets_) {
+                map = assets_->light_map();
+            }
+            if (map) {
+                const int approx_w = std::max(1, map->screen_width() / std::max(1, count));
+                const int approx_h = std::max(1, map->screen_height() / std::max(1, count));
+                desired_size       = std::max(approx_w, approx_h);
+            }
+        } else if (auto legacy_count_it = it->find("virtual_light_map.quadrants");
+                   legacy_count_it != it->end() && legacy_count_it->is_number_integer()) {
+            const int count = clamp_int(legacy_count_it->get<int>(), LightMap::kMinChunkCount, LightMap::kMaxChunkCount);
+            desired_size = last_chunk_size_px_;
             const LightMap* map = current_light_map();
             if (!map && assets_) {
                 map = assets_->light_map();
@@ -1003,11 +1016,11 @@ void MapLightPreviewPanel::sync_ui_from_json() {
                 desired_size       = std::max(approx_w, approx_h);
             }
         }
-        last_quadrant_size_px_ = clamp_int(desired_size, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
+        last_chunk_size_px_ = clamp_int(desired_size, LightMap::kMinChunkSizePx, LightMap::kMaxChunkSizePx);
         last_applied_settings_ = render_pipeline::shading::reactive_shadow_settings_from_json(*it, last_applied_settings_);
         last_applied_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_applied_settings_);
         set_reactive_sliders(last_applied_settings_);
-        apply_virtual_light_map_quadrant_size(last_quadrant_size_px_, false, false);
+        apply_virtual_light_map_chunk_size(last_chunk_size_px_, false, false);
         apply_immediate_settings();
     }
     int chunk_value = last_chunk_resolution_;
@@ -1048,13 +1061,13 @@ void MapLightPreviewPanel::sync_json_from_ui() {
         assets_->apply_map_grid_settings(grid_settings);
     }
     render_pipeline::shading::ReactiveShadowSettings settings = current_settings_from_ui();
-    int size_px = last_quadrant_size_px_;
-    if (quadrant_size_px_) {
-        size_px = clamp_int(quadrant_size_px_->value(),
-                             LightMap::kMinQuadrantSizePx,
-                             LightMap::kMaxQuadrantSizePx);
+    int size_px = last_chunk_size_px_;
+    if (chunk_size_px_) {
+        size_px = clamp_int(chunk_size_px_->value(),
+                             LightMap::kMinChunkSizePx,
+                             LightMap::kMaxChunkSizePx);
     }
-    apply_virtual_light_map_quadrant_size(size_px, false);
+    apply_virtual_light_map_chunk_size(size_px, false);
     write_reactive_settings_to_json(settings);
     last_applied_settings_ = settings;
     apply_immediate_settings();
@@ -1095,8 +1108,8 @@ void MapLightPreviewPanel::set_reactive_sliders(const render_pipeline::shading::
     if (search_radius_) {
         search_radius_->set_value(settings.virtual_light_map.search_radius);
     }
-    if (quadrant_size_px_) {
-        quadrant_size_px_->set_value(last_quadrant_size_px_);
+    if (chunk_size_px_) {
+        chunk_size_px_->set_value(last_chunk_size_px_);
     }
 }
 
@@ -1119,18 +1132,18 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reac
         std::lround(load_number(make_setting_key("virtual_light_map.search_radius"),
                                  static_cast<double>(settings.virtual_light_map.search_radius))));
     int stored_size = static_cast<int>(
-        std::lround(load_number(make_setting_key("virtual_light_map.quadrant_size"), last_quadrant_size_px_)));
+        std::lround(load_number(make_setting_key("virtual_light_map.chunk_size"), last_chunk_size_px_)));
     if (stored_size <= 0) {
-        int stored_quadrants = static_cast<int>(
-            load_number(make_setting_key("virtual_light_map.quadrants"), LightMap::kDefaultQuadrantCount));
-        stored_quadrants = clamp_int(stored_quadrants, LightMap::kMinQuadrantCount, LightMap::kMaxQuadrantCount);
+        int stored_chunks = static_cast<int>(
+            load_number(make_setting_key("virtual_light_map.chunks"), LightMap::kDefaultChunkCount));
+        stored_chunks = clamp_int(stored_chunks, LightMap::kMinChunkCount, LightMap::kMaxChunkCount);
         if (const LightMap* map = current_light_map()) {
-            const int approx_w = std::max(1, map->screen_width() / std::max(1, stored_quadrants));
-            const int approx_h = std::max(1, map->screen_height() / std::max(1, stored_quadrants));
+            const int approx_w = std::max(1, map->screen_width() / std::max(1, stored_chunks));
+            const int approx_h = std::max(1, map->screen_height() / std::max(1, stored_chunks));
             stored_size        = std::max(approx_w, approx_h);
         }
     }
-    last_quadrant_size_px_ = clamp_int(stored_size, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
+    last_chunk_size_px_ = clamp_int(stored_size, LightMap::kMinChunkSizePx, LightMap::kMaxChunkSizePx);
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
@@ -1143,12 +1156,12 @@ void MapLightPreviewPanel::persist_reactive_settings_to_dev_settings(const rende
     save_number(make_setting_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale);
     save_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor);
     save_number(make_setting_key("virtual_light_map.search_radius"), settings.virtual_light_map.search_radius);
-    save_number(make_setting_key("virtual_light_map.quadrant_size"), last_quadrant_size_px_);
-    int legacy_quadrants = LightMap::kDefaultQuadrantCount;
+    save_number(make_setting_key("virtual_light_map.chunk_size"), last_chunk_size_px_);
+    int legacy_chunks = LightMap::kDefaultChunkCount;
     if (assets_) {
-        legacy_quadrants = std::max(LightMap::kMinQuadrantCount, assets_->virtual_light_map_quadrants());
+        legacy_chunks = std::max(LightMap::kMinChunkCount, assets_->virtual_light_map_chunks());
     }
-    save_number(make_setting_key("virtual_light_map.quadrants"), legacy_quadrants);
+    save_number(make_setting_key("virtual_light_map.chunks"), legacy_chunks);
 }
 
 void MapLightPreviewPanel::write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings) {
@@ -1157,9 +1170,9 @@ void MapLightPreviewPanel::write_reactive_settings_to_json(const render_pipeline
     }
     nlohmann::json& json = (*map_info_)["reactive_shadows"];
     render_pipeline::shading::assign_reactive_shadow_settings(json, settings);
-    json["virtual_light_map_quadrant_size"] = last_quadrant_size_px_;
+    json["virtual_light_map_chunk_size"] = last_chunk_size_px_;
     if (assets_) {
-        json["virtual_light_map_quadrants"] = assets_->virtual_light_map_quadrants();
+        json["virtual_light_map_chunks"] = assets_->virtual_light_map_chunks();
     }
 }
 
@@ -1171,14 +1184,14 @@ nlohmann::json& MapLightPreviewPanel::ensure_reactive_settings_json() {
     return (*map_info_)["reactive_shadows"];
 }
 
-void MapLightPreviewPanel::apply_virtual_light_map_quadrant_size(int size_px,
+void MapLightPreviewPanel::apply_virtual_light_map_chunk_size(int size_px,
                                                                  bool apply_to_assets,
                                                                  bool mark_pending) {
-    const int clamped = clamp_int(size_px, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
-    const bool changed = (last_quadrant_size_px_ != clamped);
-    last_quadrant_size_px_ = clamped;
-    if (quadrant_size_px_) {
-        quadrant_size_px_->set_value(last_quadrant_size_px_);
+    const int clamped = clamp_int(size_px, LightMap::kMinChunkSizePx, LightMap::kMaxChunkSizePx);
+    const bool changed = (last_chunk_size_px_ != clamped);
+    last_chunk_size_px_ = clamped;
+    if (chunk_size_px_) {
+        chunk_size_px_->set_value(last_chunk_size_px_);
     }
 
     persist_reactive_settings_to_dev_settings(last_applied_settings_);
@@ -1189,9 +1202,9 @@ void MapLightPreviewPanel::apply_virtual_light_map_quadrant_size(int size_px,
             regenerate_button_->set_text("Regenerate");
         }
         if (assets_) {
-            assets_->set_virtual_light_map_quadrant_size(last_quadrant_size_px_);
+            assets_->set_virtual_light_map_chunk_size(last_chunk_size_px_);
         }
-        forced_quadrant_size_snapshot_ = last_quadrant_size_px_;
+        forced_chunk_size_snapshot_ = last_chunk_size_px_;
         force_shading_refresh_if_needed(true);
     } else if (changed && mark_pending) {
         request_light_map_regeneration();
@@ -1214,7 +1227,7 @@ void MapLightPreviewPanel::force_shading_refresh_if_needed(bool force_refresh) {
     }
     forced_settings_snapshot_ = last_applied_settings_;
     if (refresh_light_map) {
-        forced_quadrant_size_snapshot_ = last_quadrant_size_px_;
+        forced_chunk_size_snapshot_ = last_chunk_size_px_;
         assets_->force_virtual_light_map_refresh();
     }
     if (refresh_shading || refresh_light_map) {
@@ -1225,3 +1238,11 @@ void MapLightPreviewPanel::force_shading_refresh_if_needed(bool force_refresh) {
 void MapLightPreviewPanel::handle_chunk_resolution_changed() {
     needs_sync_to_json_ = true;
 }
+
+
+
+
+
+
+
+

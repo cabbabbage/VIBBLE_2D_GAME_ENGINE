@@ -21,7 +21,7 @@ class LightMapManager {
 public:
     using UseShadowData = world::Chunk::UseShadowData;
 
-    struct QuadrantSnapshot {
+    struct ChunkSnapshot {
         int      index               = -1;
         SDL_Rect world_rect{0, 0, 0, 0};
         bool     active              = false;
@@ -47,17 +47,19 @@ public:
     void begin_frame();
 
     const LightMap* light_map() const;
-    std::vector<QuadrantSnapshot> all_snapshots() const;
-    std::vector<std::string>      assets_sampling_quadrant(int index) const;
-    std::optional<QuadrantSnapshot> snapshot_for_quadrant(int index) const;
+    std::vector<ChunkSnapshot> all_snapshots() const;
+    std::vector<std::string>      assets_sampling_chunk(int index) const;
+    std::optional<ChunkSnapshot> snapshot_for_chunk(int index) const;
     std::optional<UseShadowData>      get_shadow_data(SDL_FPoint world_or_screen_pos) const;
     std::optional<UseShadowData>      get_shadow_data_for_index(int index) const;
 
 private:
-    std::optional<int> find_quadrant_index(SDL_FPoint world_or_screen_pos) const;
+    std::optional<int> find_chunk_index(SDL_FPoint world_or_screen_pos) const;
     std::optional<UseShadowData> shadow_data_for_chunk(const world::Chunk* chunk) const;
 
     Assets* assets_ = nullptr;
     float last_screen_light_opacity_ = -1.0f; // normalized [0,1]; forces update on first frame
 };
+
+
 

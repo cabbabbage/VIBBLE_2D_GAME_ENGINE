@@ -12,7 +12,6 @@
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
-#include "render/precomputed_light_map.hpp"
 
 class Assets;
 class Asset;
@@ -26,8 +25,7 @@ public:
                  int screen_width,
                  int screen_height,
                  const nlohmann::json& map_manifest,
-                 const std::string& map_id,
-                 std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr);
+                 const std::string& map_id);
     ~SceneRenderer() = default;
     void render();
     void apply_map_light_config(const nlohmann::json& data);
@@ -36,21 +34,22 @@ public:
     bool low_quality_rendering() const { return low_quality_rendering_; }
     void toggle_light_map_only_mode() { light_map_only_mode_ = !light_map_only_mode_; }
     bool light_map_only_mode() const { return light_map_only_mode_; }
-    void toggle_quadrant_debug_mode() { quadrant_debug_mode_ = !quadrant_debug_mode_; }
-    bool quadrant_debug_mode() const { return quadrant_debug_mode_; }
+    void toggle_chunk_debug_mode() { chunk_debug_mode_ = !chunk_debug_mode_; }
+    bool chunk_debug_mode() const { return chunk_debug_mode_; }
     Global_Light_Source& map_light_source() { return main_light_source_; }
     const Global_Light_Source& map_light_source() const { return main_light_source_; }
     render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() { return reactive_shadow_settings_; }
     const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const { return reactive_shadow_settings_; }
     LightMap* light_map();
     const LightMap* light_map() const;
-    void set_virtual_light_map_quadrants(int quadrants);
-    void set_virtual_light_map_quadrant_size(int size_px);
+    void set_virtual_light_map_chunks(int chunks);
+    void set_virtual_light_map_chunk_size(int size_px);
     void force_virtual_light_map_refresh();
 
 private:
     bool shouldRegen(Asset* a);
     SDL_Rect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
+    void initialize_static_light_chunks();
 
 private:
     struct AssetRenderCommand {
@@ -74,7 +73,7 @@ private:
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
     bool           light_map_only_mode_ = false;
-    bool           quadrant_debug_mode_ = false;
+    bool           chunk_debug_mode_ = false;
 
     std::unordered_set<Asset*> last_active_assets_;
     std::unordered_map<Asset*, const AnimationFrame*> last_rendered_frames_;
@@ -82,3 +81,5 @@ private:
     std::vector<AssetRenderCommand> texture_commands_;
     std::vector<AssetRenderCommand> remaining_commands_;
 };
+
+

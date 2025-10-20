@@ -18,7 +18,6 @@
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
 #include "render/global_light_source.hpp"
-#include "render/precomputed_light_map.hpp"
 #include "world/grid.hpp"
 
 namespace world {
@@ -239,7 +238,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
 void LightMap::apply_precomputed_light_map(SDL_Renderer* renderer) {
     (void)renderer;
-    if (!pending_precomputed_map_ || precomputed_applied_) {
+    if (precomputed_applied_) {
         return;
     }
     if (assets_) {
@@ -248,17 +247,9 @@ void LightMap::apply_precomputed_light_map(SDL_Renderer* renderer) {
             if (!chunk) {
                 continue;
             }
-            // If AssetLoader has already pre-baked static masks for chunks, keep them.
-            // Only mark chunks that are missing a static map as dirty so we don't thrash
-            // GPU memory creating new RTs immediately after precomputation.
-            if (!chunk->static_light_map) {
-                chunk->lighting_dirty = true;
-            } else {
-                chunk->lighting_dirty = false;
-            }
+            chunk->lighting_dirty = (chunk->static_light_map == nullptr);
         }
     }
-    pending_precomputed_map_.reset();
     precomputed_applied_ = true;
 }
 
@@ -781,11 +772,11 @@ float LightMap::sample_brightness_bilinear(float world_x,
                              dynamic_weight);
 }
 
-void LightMap::render_visible_quadrants(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {
-    render_visible_quadrants(renderer, view_rect, 1.0f);
+void LightMap::render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {
+    render_visible_chunks(renderer, view_rect, 1.0f);
 }
 
-void LightMap::render_visible_quadrants(SDL_Renderer* renderer,
+void LightMap::render_visible_chunks(SDL_Renderer* renderer,
                                         const SDL_Rect& view_rect,
                                         float alpha_multiplier) const {
     if (!renderer || !assets_) {
@@ -843,10 +834,10 @@ void LightMap::render_visible_quadrants(SDL_Renderer* renderer,
     }
 }
 
-void LightMap::render_visible_quadrants_debug(SDL_Renderer* renderer,
+void LightMap::render_visible_chunks_debug(SDL_Renderer* renderer,
                                               const SDL_Rect& view_rect,
                                               float alpha_multiplier) const {
-    render_visible_quadrants(renderer, view_rect, alpha_multiplier);
+    render_visible_chunks(renderer, view_rect, alpha_multiplier);
 }
 
 void LightMap::mark_region_dirty(const SDL_Rect& screen_rect) {
@@ -907,12 +898,12 @@ world::Chunk* LightMap::ensure_chunk_from_world(SDL_Point world_px) const {
     return assets_->world_grid().ensure_chunk_from_world(world_px);
 }
 
-int LightMap::quadrant_count() const {
+int LightMap::chunk_count() const {
     return static_cast<int>(active_chunks().size());
 }
 
-int LightMap::quadrant_columns() const {
-    const int count = quadrant_count();
+int LightMap::chunk_columns() const {
+    const int count = chunk_count();
     if (count <= 0) {
         return 0;
     }
@@ -920,16 +911,16 @@ int LightMap::quadrant_columns() const {
     return std::max(1, columns);
 }
 
-int LightMap::quadrant_rows() const {
-    const int count = quadrant_count();
+int LightMap::chunk_rows() const {
+    const int count = chunk_count();
     if (count <= 0) {
         return 0;
     }
-    const int columns = quadrant_columns();
+    const int columns = chunk_columns();
     return std::max(1, (count + columns - 1) / columns);
 }
 
-const world::Chunk* LightMap::quadrant(int index) const {
+const world::Chunk* LightMap::chunk_at(int index) const {
     const auto& chunks = active_chunks();
     if (index < 0 || static_cast<std::size_t>(index) >= chunks.size()) {
         return nullptr;
@@ -937,18 +928,18 @@ const world::Chunk* LightMap::quadrant(int index) const {
     return chunks[static_cast<std::size_t>(index)];
 }
 
-SDL_Rect LightMap::quadrant_bounds(int index) const {
-    if (const world::Chunk* chunk = quadrant(index)) {
+SDL_Rect LightMap::chunk_bounds(int index) const {
+    if (const world::Chunk* chunk = chunk_at(index)) {
         return chunk->world_bounds;
     }
     return SDL_Rect{0, 0, 0, 0};
 }
 
-void LightMap::set_virtual_light_map_quadrants(int /*quadrants*/) {}
-void LightMap::set_virtual_light_map_quadrant_size(int /*size_px*/) {}
-void LightMap::set_cells_per_quadrant(int /*cells*/) {}
-int  LightMap::virtual_light_map_quadrant_size() const { return 0; }
-int  LightMap::virtual_light_map_quadrants() const { return static_cast<int>(active_chunks().size()); }
+void LightMap::set_virtual_light_map_chunks(int /*chunks*/) {}
+void LightMap::set_virtual_light_map_chunk_size(int /*size_px*/) {}
+void LightMap::set_cells_per_chunk(int /*cells*/) {}
+int  LightMap::virtual_light_map_chunk_size() const { return 0; }
+int  LightMap::virtual_light_map_chunks() const { return static_cast<int>(active_chunks().size()); }
 int  LightMap::static_grid_resolution() const { return 0; }
 int  LightMap::padding_cells() const { return 0; }
 
@@ -967,3 +958,5 @@ std::optional<world::Chunk::UseShadowData> LightMap::get_shadow_data(SDL_FPoint 
     if (!chunk) return std::nullopt;
     return chunk->shadow;
 }
+
+

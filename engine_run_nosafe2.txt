@@ -1,0 +1,481 @@
+[INFO] +-0.000s: [Main] Starting game engine...
+[INFO] +0.012s: [Main] Requested high quality texture filtering.
+[INFO] +0.657s: [Main] Renderer: direct3d
+[INFO] +0.657s: [Main] Screen resolution: 1920x1080
+[INFO] +0.663s: [Main] Preparing asset metadata cache...
+[AssetInfo] Player asset 'Vibble' loaded
+
+[INFO] +0.674s: [AssetLibrary] Loaded 57 assets (ok=57, failed=0) in 5ms
+[INFO] +0.676s: [Main] Asset metadata cache ready for 57 asset(s).
+[INFO] +0.676s: [Main] Loading cached asset resources...
+[AnimationLoader] Bone_1 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Bone_1 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Bone_1::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bone_1::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bone_1::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] noose scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] noose normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] noose::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] noose::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] noose::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Skull_Pile_1 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Skull_Pile_1 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Skull_Pile_1::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Skull_Pile_1::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Skull_Pile_1::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Big_Rock scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Big_Rock normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Big_Rock::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Big_Rock::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Big_Rock::default found metadata (revision 1) expecting revision 1
+[INFO] +0.691s: [Loading] Creating texture/mask for Big_Rock
+[INFO] +0.693s: [Loading] Loading assets
+[AnimationLoader] Big_Rock::default loaded faded mask surfaces from cache
+[AnimationLoader] Big_Rock::group profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Big_Rock::group normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Big_Rock::group found metadata (revision 1) expecting revision 1
+[INFO] +0.717s: [Loading] Creating texture/mask for Big_Rock
+[INFO] +0.779s: [Loading] Loading assets
+[AnimationLoader] Big_Rock::group loaded faded mask surfaces from cache
+[AnimationLoader] Axe scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Axe normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Axe::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Axe::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Axe::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Barrel scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Barrel normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Barrel::collision profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Barrel::collision normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Barrel::collision found metadata (revision 1) expecting revision 1
+[INFO] +0.809s: [Loading] Creating texture/mask for Barrel
+[INFO] +0.815s: [Loading] Loading assets
+[AnimationLoader] Barrel::collision loaded faded mask surfaces from cache
+[AnimationLoader] Barrel::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Barrel::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Barrel::default found metadata (revision 1) expecting revision 1
+[INFO] +0.825s: [Loading] Creating texture/mask for Barrel
+[INFO] +0.832s: [Loading] Loading assets
+[AnimationLoader] Barrel::default loaded faded mask surfaces from cache
+[AnimationLoader] Bomb scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Bomb normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Bomb::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bomb::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bomb::default found metadata (revision 1) expecting revision 1
+[INFO] +0.938s: [Loading] Creating texture/mask for Bomb
+[INFO] +1.328s: [Loading] Loading assets
+[AnimationLoader] Bomb::default loaded faded mask surfaces from cache
+[AnimationLoader] Bomb::explosion profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bomb::explosion normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bomb::explosion found metadata (revision 1) expecting revision 1
+[INFO] +1.501s: [Loading] Creating texture/mask for Bomb
+[INFO] +1.692s: [Loading] Loading assets
+[AnimationLoader] Bomb::explosion loaded faded mask surfaces from cache
+[AnimationLoader] Bomb::backward profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bomb::backward normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bomb::forward profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bomb::forward normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bomb::left profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bomb::left normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bomb::right profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bomb::right normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bench scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Bench normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Bench::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bench::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bench::default found metadata (revision 1) expecting revision 1
+[INFO] +1.763s: [Loading] Creating texture/mask for Bench
+[INFO] +1.775s: [Loading] Loading assets
+[AnimationLoader] Bench::default loaded faded mask surfaces from cache
+[AnimationLoader] flower_4 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] flower_4 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] flower_4::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] flower_4::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] flower_4::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Big_Rock_Center scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Big_Rock_Center normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Big_Rock_Center::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Big_Rock_Center::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Big_Rock_Center::default found metadata (revision 1) expecting revision 1
+[INFO] +1.796s: [Loading] Creating texture/mask for Big_Rock_Center
+[INFO] +1.797s: [Loading] Loading assets
+[AnimationLoader] Big_Rock_Center::default loaded faded mask surfaces from cache
+[AnimationLoader] Bone scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Bone normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Bone::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bone::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bone::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Small_Rock scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Small_Rock normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Small_Rock::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Small_Rock::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Small_Rock::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Grass_FPS_2 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Grass_FPS_2 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Grass_FPS_2::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Grass_FPS_2::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Grass_FPS_2::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Bone_Pile scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Bone_Pile normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Bone_Pile::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bone_Pile::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bone_Pile::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] candle scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] candle normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] candle::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] candle::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] candle::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Grass_1_FPS_2 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Grass_1_FPS_2 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Grass_1_FPS_2::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Grass_1_FPS_2::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Grass_1_FPS_2::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Book scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Book normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Book::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Book::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Book::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Book_1 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Book_1 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Book_1::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Book_1::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Book_1::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Book_Pile scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Book_Pile normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Book_Pile::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Book_Pile::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Book_Pile::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Book_Pile_1 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Book_Pile_1 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Book_Pile_1::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Book_Pile_1::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Book_Pile_1::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] flower_5 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] flower_5 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] flower_5::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] flower_5::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] flower_5::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Booze_1 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Booze_1 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Booze_1::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Booze_1::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Booze_1::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Booze_2 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Booze_2 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Booze_2::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Booze_2::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Booze_2::default found metadata (revision 1) expecting revision 1
+[INFO] +2.019s: [Loading] Creating texture/mask for Booze_2
+[INFO] +2.027s: [Loading] Loading assets
+[AnimationLoader] Booze_2::default loaded faded mask surfaces from cache
+[AnimationLoader] Davey scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Davey normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Davey::FR profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Davey::FR normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Davey::FR found metadata (revision 1) expecting revision 1
+[INFO] +2.124s: [Loading] Creating texture/mask for Davey
+[INFO] +2.440s: [Loading] Loading assets
+[AnimationLoader] Davey::FR loaded faded mask surfaces from cache
+[AnimationLoader] Davey::backward profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Davey::backward normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Davey::backward found metadata (revision 1) expecting revision 1
+[INFO] +2.611s: [Loading] Creating texture/mask for Davey
+[INFO] +2.896s: [Loading] Loading assets
+[AnimationLoader] Davey::backward loaded faded mask surfaces from cache
+[AnimationLoader] Davey::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Davey::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Davey::default found metadata (revision 1) expecting revision 1
+[INFO] +3.126s: [Loading] Creating texture/mask for Davey
+[INFO] +3.695s: [Loading] Loading assets
+[AnimationLoader] Davey::default loaded faded mask surfaces from cache
+[AnimationLoader] Davey::forward profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Davey::forward normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Davey::forward found metadata (revision 1) expecting revision 1
+[INFO] +3.949s: [Loading] Creating texture/mask for Davey
+[INFO] +4.234s: [Loading] Loading assets
+[AnimationLoader] Davey::forward loaded faded mask surfaces from cache
+[AnimationLoader] Davey::right profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Davey::right normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Davey::right found metadata (revision 1) expecting revision 1
+[INFO] +4.393s: [Loading] Creating texture/mask for Davey
+[INFO] +4.682s: [Loading] Loading assets
+[AnimationLoader] Davey::right loaded faded mask surfaces from cache
+[AnimationLoader] Davey::BL profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Davey::BL normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Davey::BR profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Davey::BR normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Davey::FL profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Davey::FL normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Davey::left profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Davey::left normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Box scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Box normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Box::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Box::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Box::default found metadata (revision 1) expecting revision 1
+[INFO] +4.827s: [Loading] Creating texture/mask for Box
+[INFO] +4.833s: [Loading] Loading assets
+[AnimationLoader] Box::default loaded faded mask surfaces from cache
+[AnimationLoader] Bush_1_FPS_2 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Bush_1_FPS_2 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Bush_1_FPS_2::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bush_1_FPS_2::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bush_1_FPS_2::default found metadata (revision 1) expecting revision 1
+[INFO] +5.095s: [Loading] Creating texture/mask for Bush_1_FPS_2
+[INFO] +5.699s: [Loading] Loading assets
+[AnimationLoader] Bush_1_FPS_2::default loaded faded mask surfaces from cache
+[AnimationLoader] candle_3 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] candle_3 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] candle_3::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] candle_3::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] candle_3::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Bush_FPS_2 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Bush_FPS_2 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Bush_FPS_2::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Bush_FPS_2::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Bush_FPS_2::default found metadata (revision 1) expecting revision 1
+[INFO] +6.202s: [Loading] Creating texture/mask for Bush_FPS_2
+[INFO] +6.826s: [Loading] Loading assets
+[AnimationLoader] Bush_FPS_2::default loaded faded mask surfaces from cache
+[AnimationLoader] bouncing scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] bouncing normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] bouncing::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] bouncing::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] bouncing::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Chest scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Chest normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Chest::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Chest::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Chest::default found metadata (revision 1) expecting revision 1
+[INFO] +7.094s: [Loading] Creating texture/mask for Chest
+[INFO] +7.095s: [Loading] Loading assets
+[AnimationLoader] Chest::default loaded faded mask surfaces from cache
+[AnimationLoader] Chest::interaction profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Chest::interaction normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Chest::interaction found metadata (revision 1) expecting revision 1
+[INFO] +7.118s: [Loading] Creating texture/mask for Chest
+[INFO] +7.161s: [Loading] Loading assets
+[AnimationLoader] Chest::interaction loaded faded mask surfaces from cache
+[AnimationLoader] Tree scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Tree normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Tree::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Tree::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Tree::default found metadata (revision 1) expecting revision 1
+[INFO] +7.497s: [Loading] Creating texture/mask for Tree
+[INFO] +15.511s: [Loading] Loading assets
+[AnimationLoader] Tree::default loaded faded mask surfaces from cache
+[AnimationLoader] Fountain scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Fountain normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Fountain::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Fountain::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Fountain::default found metadata (revision 1) expecting revision 1
+[INFO] +20.463s: [Loading] Creating texture/mask for Fountain
+[INFO] +20.518s: [Loading] Loading assets
+[AnimationLoader] Fountain::default loaded faded mask surfaces from cache
+[AnimationLoader] Frog scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Frog normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Frog::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Frog::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Frog::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Frog::forward profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Frog::forward normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Frog::forward found metadata (revision 1) expecting revision 1
+[AnimationLoader] Frog::right profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Frog::right normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Frog::right found metadata (revision 1) expecting revision 1
+[AnimationLoader] Frog::backward profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Frog::backward normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Frog::left profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Frog::left normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Grave_1 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Grave_1 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Grave_1::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Grave_1::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Grave_1::default found metadata (revision 1) expecting revision 1
+[INFO] +20.785s: [Loading] Creating texture/mask for Grave_1
+[INFO] +20.788s: [Loading] Loading assets
+[AnimationLoader] Grave_1::default loaded faded mask surfaces from cache
+[AnimationLoader] table scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] table normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] table::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] table::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] table::default found metadata (revision 1) expecting revision 1
+[INFO] +20.797s: [Loading] Creating texture/mask for table
+[INFO] +20.803s: [Loading] Loading assets
+[AnimationLoader] table::default loaded faded mask surfaces from cache
+[AnimationLoader] Sigil_Of_Fortune scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Sigil_Of_Fortune normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Sigil_Of_Fortune::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Sigil_Of_Fortune::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Sigil_Of_Fortune::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Grave_2 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Grave_2 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Grave_2::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Grave_2::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Grave_2::default found metadata (revision 1) expecting revision 1
+[INFO] +20.824s: [Loading] Creating texture/mask for Grave_2
+[INFO] +20.827s: [Loading] Loading assets
+[AnimationLoader] Grave_2::default loaded faded mask surfaces from cache
+[AnimationLoader] Key scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Key normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Key::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Key::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Key::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] lantern scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] lantern normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] lantern::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] lantern::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] lantern::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Mushroom_1 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Mushroom_1 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Mushroom_1::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Mushroom_1::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Mushroom_1::default found metadata (revision 1) expecting revision 1
+[INFO] +20.872s: [Loading] Creating texture/mask for Mushroom_1
+[INFO] +20.873s: [Loading] Loading assets
+[AnimationLoader] Mushroom_1::default loaded faded mask surfaces from cache
+[AnimationLoader] Mushroom_2 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Mushroom_2 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Mushroom_2::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Mushroom_2::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Mushroom_2::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Mushroom_3 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Mushroom_3 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Mushroom_3::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Mushroom_3::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Mushroom_3::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Rock scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Rock normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Rock::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Rock::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Rock::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Vibble scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Vibble normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Vibble::backward profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Vibble::backward normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Vibble::backward found metadata (revision 1) expecting revision 1
+[AnimationLoader] Vibble::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Vibble::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Vibble::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Vibble::left profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Vibble::left normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Vibble::left found metadata (revision 1) expecting revision 1
+[AnimationLoader] Vibble::forward profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Vibble::forward normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Vibble::right profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Vibble::right normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Skull_Pile scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Skull_Pile normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Skull_Pile::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Skull_Pile::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Skull_Pile::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Sign scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Sign normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Sign::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Sign::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Sign::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Skull_1 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Skull_1 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Skull_1::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Skull_1::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Skull_1::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] Stump scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Stump normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Stump::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Stump::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Stump::default found metadata (revision 1) expecting revision 1
+[INFO] +20.991s: [Loading] Creating texture/mask for Stump
+[INFO] +20.994s: [Loading] Loading assets
+[AnimationLoader] Stump::default loaded faded mask surfaces from cache
+[AnimationLoader] Tree_Dark scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Tree_Dark normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Tree_Dark::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Tree_Dark::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Tree_Dark::default found metadata (revision 1) expecting revision 1
+[INFO] +21.078s: [Loading] Creating texture/mask for Tree_Dark
+[INFO] +21.081s: [Loading] Loading assets
+[AnimationLoader] Tree_Dark::default loaded faded mask surfaces from cache
+[AnimationLoader] Tree_Dark::group profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Tree_Dark::group normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Tree_Dark::group found metadata (revision 1) expecting revision 1
+[INFO] +21.104s: [Loading] Creating texture/mask for Tree_Dark
+[INFO] +21.119s: [Loading] Loading assets
+[AnimationLoader] Tree_Dark::group loaded faded mask surfaces from cache
+[AnimationLoader] Tree_Darker scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] Tree_Darker normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] Tree_Darker::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] Tree_Darker::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] Tree_Darker::default found metadata (revision 1) expecting revision 1
+[INFO] +21.210s: [Loading] Creating texture/mask for Tree_Darker
+[INFO] +21.215s: [Loading] Loading assets
+[AnimationLoader] Tree_Darker::default loaded faded mask surfaces from cache
+[AnimationLoader] car scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] car normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] car::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] car::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] car::default found metadata (revision 1) expecting revision 1
+[INFO] +21.277s: [Loading] Creating texture/mask for car
+[INFO] +21.285s: [Loading] Loading assets
+[AnimationLoader] car::default loaded faded mask surfaces from cache
+[AnimationLoader] flower scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] flower normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] flower::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] flower::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] flower::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] flower_1 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] flower_1 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] flower_1::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] flower_1::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] flower_1::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] vigil scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] vigil normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] vigil::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] vigil::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] vigil::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] flower_3 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] flower_3 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] flower_3::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] flower_3::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] flower_3::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] flowr_6 scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] flowr_6 normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] flowr_6::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] flowr_6::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] flowr_6::default found metadata (revision 1) expecting revision 1
+[AnimationLoader] marker scaling_refresh_pending=false, profile_revision=1, profile_steps=[0.50]
+[AnimationLoader] marker normalized asset scaling steps: [1.00, 0.50] (profile revision 1)
+[AnimationLoader] marker::default profile steps (pre-normalize): [], prefer_cached=true, scaling_refresh_pending=false
+[AnimationLoader] marker::default normalized profile steps: [1.00, 0.50]
+[AnimationLoader] marker::default found metadata (revision 1) expecting revision 1
+[INFO] +21.397s: [AssetLibrary] Preloaded animations for 57 asset(s) in 20720ms
+[INFO] +21.397s: [Main] Cached asset resources loaded.
+[INFO] +21.413s: [Main] Main menu displayed.
+[INFO] +24.039s: [Main] Map selected: FORREST
+[INFO] +24.065s: [AssetLoader] Start for map 'FORREST'.
+[INFO] +24.065s: [Loading] Loading map data
+[INFO] +24.067s: [Loading] Loading assets
+[INFO] +24.067s: [AssetLoader] Asset library ready with 57 known assets
+[INFO] +24.067s: [Loading] Creating map
+[INFO] +24.076s: [AssetLoader] Rooms created: 1
+[INFO] +24.076s: [Loading] Loading assets
+[INFO] +24.076s: [AssetLoader] Using shared asset library cache; skipping per-map preload.
+[INFO] +24.076s: [AssetLoader] Asset library warmup complete; animations cached in renderer.
+[INFO] +24.076s: [Loading] Loading assets
+[INFO] +24.076s: [AssetLoader] Finalizing assets across rooms...
+[INFO] +24.076s: [AssetLoader] finalizeAssets complete: 1545/1545 assets ready
+[INFO] +24.076s: [AssetLoader] Asset finalization completed; all assets are ready.
+[INFO] +24.077s: [AssetLoader] Map metadata loaded in 0.000000ms
+[INFO] +24.077s: [AssetLoader] Asset library ready in 0.000000ms
+[INFO] +24.077s: [AssetLoader] Rooms built in 9.000000ms
+[INFO] +24.077s: [AssetLoader] Initialization completed in 11.000000ms
+[INFO] +24.077s: [Loading] Spawning assets
+[INFO] +24.078s: [AssetLoader] Extracted 767 visible assets from rooms
+[INFO] +24.078s: [AssetLoader] Planned 36 chunk(s) for baking (bounds: 25, static-light: 11)
+[INFO] +24.078s: [AssetLoader] plan_map_chunks finished; planned=36 in 0ms
+[INFO] +24.078s: [AssetLoader] Deferring full-map light map texture creation until assets are spawned.
+[INFO] +24.078s: [MainApp] Asset spawning finished for map 'FORREST'.
+[INFO] +24.078s: [AssetLoader] Beginning full-map light map texture creation...
+[WARN] +24.078s: [AssetLoader] Disabling GPU static lighting on renderer 'direct3d'; using heuristic brightness.
+[INFO] +24.078s: [AssetLoader] Completed light map precomputation for all chunks. baked=36 skipped=0 heuristics=36 total_ms=0
+[INFO] +24.078s: [AssetLoader] precompute_light_map finished in 0ms
+[INFO] +24.078s: [MainApp] 767 assets created and cached.
+[INFO] +24.079s: [Init] Assets initialized: 767 assets across 1 rooms in 0.00s

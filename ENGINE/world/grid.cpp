@@ -59,6 +59,18 @@ Chunk* Grid::ensure_chunk_from_world(SDL_Point world_px) {
     return &chunks_.ensure(i, j, r_chunk_, origin_);
 }
 
+std::vector<Chunk*> Grid::all_chunks() const {
+    std::vector<Chunk*> result;
+    const auto& storage = chunks_.storage();
+    result.reserve(storage.size());
+    for (const auto& chunk : storage) {
+        if (chunk) {
+            result.push_back(chunk.get());
+        }
+    }
+    return result;
+}
+
 void Grid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
     if (!a) return;
     const int step = 1 << r_chunk_;
