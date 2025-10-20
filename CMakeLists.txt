@@ -47,6 +47,14 @@ file(GLOB_RECURSE ENGINE_SRC CONFIGURE_DEPENDS
 
 add_executable(engine ${ENGINE_SRC})
 
+# Shared logging library for tests and tools
+add_library(vibble_log STATIC
+    ENGINE/utils/log.cpp
+)
+target_include_directories(vibble_log PUBLIC
+    ${CMAKE_SOURCE_DIR}/ENGINE/utils
+)
+
 # Unity build (jumbo) for faster compiles
 option(ENABLE_UNITY_BUILD "Enable unity/jumbo build for faster compiles" ON)
 if(ENABLE_UNITY_BUILD)
@@ -195,6 +203,7 @@ target_link_libraries(dev_mode_ui_tests PRIVATE
     SDL2_image::SDL2_image
     SDL2_mixer::SDL2_mixer
     SDL2_ttf::SDL2_ttf
+    vibble_log
 )
 target_compile_definitions(dev_mode_ui_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}" ASSET_INFO_ENABLE_TEST_ACCESS)
 add_test(NAME dev_mode_ui_tests COMMAND dev_mode_ui_tests)
@@ -214,6 +223,7 @@ target_include_directories(asset_loader_distance_tests PRIVATE
 target_link_libraries(asset_loader_distance_tests PRIVATE
     nlohmann_json::nlohmann_json
     SDL2::SDL2
+    vibble_log
 )
 target_compile_definitions(asset_loader_distance_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME asset_loader_distance_tests COMMAND asset_loader_distance_tests)
@@ -241,6 +251,7 @@ target_link_libraries(map_layers_controller_tests PRIVATE
     SDL2_ttf::SDL2_ttf
     SDL2_image::SDL2_image
     SDL2_mixer::SDL2_mixer
+    vibble_log
 )
 target_compile_definitions(map_layers_controller_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME map_layers_controller_tests COMMAND map_layers_controller_tests)
@@ -257,6 +268,7 @@ target_include_directories(manifest_loader_tests PRIVATE
 )
 target_link_libraries(manifest_loader_tests PRIVATE
     nlohmann_json::nlohmann_json
+    vibble_log
 )
 target_compile_definitions(manifest_loader_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME manifest_loader_tests COMMAND manifest_loader_tests)
@@ -320,6 +332,7 @@ target_link_libraries(manifest_store_tests PRIVATE
     SDL2_image::SDL2_image
     SDL2_mixer::SDL2_mixer
     SDL2_ttf::SDL2_ttf
+    vibble_log
 )
 target_compile_definitions(manifest_store_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME manifest_store_tests COMMAND manifest_store_tests)
@@ -358,6 +371,7 @@ target_link_libraries(asset_info_manifest_tests PRIVATE
     SDL2_image::SDL2_image
     SDL2_mixer::SDL2_mixer
     SDL2_ttf::SDL2_ttf
+    vibble_log
 )
 target_compile_definitions(asset_info_manifest_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME asset_info_manifest_tests COMMAND asset_info_manifest_tests)
