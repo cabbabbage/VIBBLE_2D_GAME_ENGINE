@@ -4,7 +4,7 @@
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render/camera.hpp"
-#include "render/light_map_manager.hpp"
+#include "render/light_map.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -209,8 +209,8 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     float offset_y         = 0.0f;
     float parallax_percent = 0.0f;
 
-    if (const LightMapManager* manager = context.light_map_manager()) {
-        if (auto data = manager->get_shadow_data(context.screen_center)) {
+    if (const LightMap* vmap = context.light_map()) {
+        if (auto data = vmap->get_shadow_data(context.screen_center)) {
             const auto& shadow = *data;
             opacity = std::clamp(shadow.opacity, 0.0f, 1.0f);
             scale   = std::max(0.0f, shadow.scale);

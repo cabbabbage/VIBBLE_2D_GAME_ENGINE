@@ -10,6 +10,7 @@
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
+#include "render/global_light_source.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
 
@@ -88,6 +89,68 @@ void update_chunk_static_brightness_extrema(SDL_Renderer* renderer, world::Chunk
     chunk.light.min_static_avg_strength = std::min(case_a, case_b);
     chunk.light.max_static_avg_strength = std::max(case_a, case_b);
     chunk.light.needs_update = true;
+}
+
+// Simple linear interpolation helper
+template <typename T>
+T lerp(T a, T b, float t) {
+    return static_cast<T>(a + (b - a) * t);
+}
+
+// Compute a gradient hint from neighboring chunk brightness values.
+std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
+                                                    const world::Grid& grid,
+                                                    int radius,
+                                                    float falloff_x,
+                                                    float falloff_y) {
+    if (radius <= 0) return {0.0f, 0.0f};
+    const float cb = std::clamp(center.base_brightness, 0.0f, 1.0f);
+    float gx = 0.0f, gy = 0.0f;
+    for (int dj = -radius; dj <= radius; ++dj) {
+        for (int di = -radius; di <= radius; ++di) {
+            if (di == 0 && dj == 0) continue;
+            const int ni = center.i + di;
+            const int nj = center.j + dj;
+            const world::Chunk* n = grid.find_chunk_ij(ni, nj);
+            const float nb = n ? std::clamp(n->base_brightness, 0.0f, 1.0f) : 0.0f;
+            const float db = nb - cb;
+            const float dx = static_cast<float>(di);
+            const float dy = static_cast<float>(dj);
+            const float dist = std::max(1.0f, std::sqrt(dx*dx + dy*dy));
+            const float wx = falloff_x / dist;
+            const float wy = falloff_y / dist;
+            gx += db * (dx / dist) * wx;
+            gy += db * (dy / dist) * wy;
+        }
+    }
+    return {gx, gy};
+}
+
+// CALCULATE UseShadowData MEMBERS HERE:
+// Given current_strength and gradient, fill chunk.shadow using Dummy ShadowSettings.
+static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
+                                              const std::pair<float,float>& grad,
+                                              world::Chunk& chunk) {
+    const float current = std::clamp(chunk.light.current_strength, 0.0f, 1.0f);
+
+    // Opacity/Scale direct from current strength for this first pass
+    chunk.shadow.opacity = current;               // 0..1
+    chunk.shadow.scale   = settings.base_shadow_scale; // fixed for now
+
+    // Normalize gradient to get a direction; map to percentage offsets
+    float gx = grad.first, gy = grad.second;
+    float mag = std::sqrt(gx*gx + gy*gy);
+    float nx = (mag > 1e-4f) ? (gx / mag) : 0.0f;
+    float ny = (mag > 1e-4f) ? (gy / mag) : 0.0f;
+
+    // Convert to percentage relative to max offsets; percent in [-100,100]
+    const float px = (settings.max_offset_x_px > 1e-4f) ? (nx * 100.0f) : 0.0f;
+    const float py = (settings.max_offset_y_px > 1e-4f) ? (ny * 100.0f) : 0.0f;
+    chunk.shadow.offset_x_percent = std::clamp(px, -100.0f, 100.0f);
+    chunk.shadow.offset_y_percent = std::clamp(py, -100.0f, 100.0f);
+
+    // Parallax intensity as-is from settings (0..100)
+    chunk.shadow.parallax_intensity_percent = std::clamp(settings.parallax_percent, 0.0f, 100.0f);
 }
 
 } // namespace
@@ -496,6 +559,91 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
     if (any_dirty) {
         end_full_world_mask(renderer);
     }
+
+    // Merge LightMap + per-chunk shadow data here.
+    if (!assets_) return;
+
+    // Normalized screen-light opacity [0,1]
+    float screen_light_opacity = 0.0f;
+    if (const Global_Light_Source* gl = assets_->map_light_source()) {
+        const int min_a = gl->min_opacity();
+        const int max_a = gl->max_opacity();
+        const int cur_a = std::clamp(static_cast<int>(gl->get_current_color().a), min_a, max_a);
+        const int range = std::max(1, max_a - min_a);
+        screen_light_opacity = std::clamp(static_cast<float>(cur_a - min_a) / static_cast<float>(range), 0.0f, 1.0f);
+    }
+
+    const bool screen_changed = (std::abs(screen_light_opacity - last_screen_light_opacity_) > 1e-4f);
+    last_screen_light_opacity_ = screen_light_opacity;
+
+    // Build update set: all active chunks; include neighbors of edge chunks to catch radius effects.
+    const auto& chunks2 = active_chunks();
+    int min_i = INT32_MAX, max_i = INT32_MIN, min_j = INT32_MAX, max_j = INT32_MIN;
+    for (const world::Chunk* c : chunks2) {
+        if (!c) continue;
+        min_i = std::min(min_i, c->i); max_i = std::max(max_i, c->i);
+        min_j = std::min(min_j, c->j); max_j = std::max(max_j, c->j);
+    }
+
+    std::vector<world::Chunk*> update_set;
+    update_set.reserve(chunks2.size());
+    auto add_unique = [&](world::Chunk* c){ if (c && std::find(update_set.begin(), update_set.end(), c) == update_set.end()) update_set.push_back(c); };
+    for (world::Chunk* c : chunks2) add_unique(c);
+
+    const world::Grid& grid = assets_->world_grid();
+    for (world::Chunk* c : chunks2) {
+        if (!c) continue;
+        const bool is_edge = (c->i == min_i) || (c->i == max_i) || (c->j == min_j) || (c->j == max_j);
+        if (!is_edge) continue;
+        for (int dj = -1; dj <= 1; ++dj) {
+            for (int di = -1; di <= 1; ++di) {
+                if (di == 0 && dj == 0) continue;
+                if (world::Chunk* n = grid.find_chunk_ij(c->i + di, c->j + dj)) {
+                    add_unique(n);
+                }
+            }
+        }
+    }
+
+    // Moving light occupancy
+    const auto& moving = assets_->getActiveMovingLightAssets();
+    for (world::Chunk* chunk : update_set) {
+        if (!chunk) continue;
+        chunk->light.is_active = true;
+        if (screen_changed) chunk->light.needs_update = true;
+
+        bool occupied = false;
+        for (const Asset* a : moving) {
+            if (!a) continue;
+            SDL_Point p{a->pos.x, a->pos.y};
+            if (SDL_PointInRect(&p, &chunk->world_bounds)) { occupied = true; break; }
+        }
+        if (occupied != chunk->light.is_occupied_by_moving_source) {
+            chunk->light.needs_update = true;
+        }
+        chunk->light.is_occupied_by_moving_source = occupied;
+
+        if (!chunk->light.needs_update) continue; // already updated this pass
+
+        // Update current_strength
+        if (chunk->light.is_occupied_by_moving_source) {
+            chunk->light.current_strength = average_transparency(renderer, chunk->static_light_map);
+        } else {
+            chunk->light.current_strength = lerp(chunk->light.min_static_avg_strength,
+                                                 chunk->light.max_static_avg_strength,
+                                                 screen_light_opacity);
+        }
+
+        // Compute UseShadowData clearly here using dummy ShadowSettings
+        const ShadowSettings settings{};
+        const int   radius = std::max(0, settings.search_radius_cells);
+        const float fx     = std::max(0.0f, settings.falloff_horizontal);
+        const float fy     = std::max(0.0f, settings.falloff_vertical);
+        const auto grad    = compute_brightness_gradient(*chunk, grid, radius, fx, fy);
+        compute_use_shadow_data_for_chunk(settings, grad, *chunk);
+
+        chunk->light.needs_update = false;
+    }
 }
 
 float LightMap::sample_brightness(int world_x,
@@ -688,3 +836,19 @@ int LightMap::static_grid_resolution() const { return 0; }
 
 int LightMap::padding_cells() const { return 0; }
 
+
+std::optional<world::Chunk::UseShadowData> LightMap::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
+    world::Chunk* chunk = nullptr;
+    if (assets_) {
+        chunk = chunk_from_world(SDL_Point{static_cast<int>(std::lround(world_or_screen_pos.x)),
+                                           static_cast<int>(std::lround(world_or_screen_pos.y))});
+        if (!chunk) {
+            const camera& cam = assets_->getView();
+            SDL_Point from_screen = cam.screen_to_map({static_cast<int>(std::lround(world_or_screen_pos.x)),
+                                                       static_cast<int>(std::lround(world_or_screen_pos.y))});
+            chunk = chunk_from_world(from_screen);
+        }
+    }
+    if (!chunk) return std::nullopt;
+    return chunk->shadow;
+}

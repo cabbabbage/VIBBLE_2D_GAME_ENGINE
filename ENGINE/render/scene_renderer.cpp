@@ -4,7 +4,6 @@
 #include "asset/asset_types.hpp"
 #include "light_map.hpp"
 #include "render/camera.hpp"
-#include "render/light_map_manager.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
@@ -60,9 +59,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
-    if (assets_) {
-        render_pipeline_.lighting().light_map_manager = assets_->light_map_manager();
-    }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
     main_light_source_.update();
 }
@@ -97,9 +93,6 @@ void SceneRenderer::force_virtual_light_map_refresh() {
     }
     light_map_->rebuild(renderer_);
     render_pipeline_.lighting().light_map_sampler = light_map_.get();
-    if (assets_) {
-        render_pipeline_.lighting().light_map_manager = assets_->light_map_manager();
-    }
 }
 
 void SceneRenderer::set_low_quality_rendering(bool enabled){
@@ -180,10 +173,7 @@ void SceneRenderer::render(){
     }
     if (should_update_light){ main_light_source_.update(); }
 
-    LightMapManager* light_map_manager = assets_ ? assets_->light_map_manager() : nullptr;
-    if (light_map_manager) {
-        light_map_manager->begin_frame();
-    }
+    // Per-chunk shadow data is updated inside LightMap::update
 
     if (light_map_){
         // Keep the sampler available for the pipeline.
@@ -193,7 +183,6 @@ void SceneRenderer::render(){
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
-    render_pipeline_.lighting().light_map_manager = light_map_manager;
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
     SDL_SetRenderTarget(renderer_,nullptr);

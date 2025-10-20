@@ -19,14 +19,10 @@ LightMapManager::LightMapManager(Assets* assets) : assets_(assets) {}
 namespace {
 using render_pipeline::shading::ReactiveShadowSettings;
 
-// Simple linear interpolation helper
-template <typename T>
-T lerp(T a, T b, float t) {
-    return static_cast<T>(a + (b - a) * t);
-}
+// Note: LightMap owns runtime shadow data now; Manager remains for dev preview only.
 
 // Local helper: compute average transparency of a chunk mask.
-static float average_transparency(SDL_Renderer* renderer, SDL_Texture* texture) {
+static float average_transparency_mgr(SDL_Renderer* renderer, SDL_Texture* texture) {
     if (!renderer || !texture) return 0.0f;
     int tex_w = 0, tex_h = 0;
     if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
@@ -153,14 +149,14 @@ void LightMapManager::begin_frame() {
             // Recompute brightness (background + static lights; no shadows). For now,
             // approximate using the static mask average transparency.
             if (chunk->static_light_map) {
-                chunk->light.current_strength = average_transparency(renderer, chunk->static_light_map);
+                chunk->light.current_strength = average_transparency_mgr(renderer, chunk->static_light_map);
             } else {
                 chunk->light.current_strength = chunk->base_brightness;
             }
         } else {
-            chunk->light.current_strength = lerp(chunk->light.min_static_avg_strength,
-                                                 chunk->light.max_static_avg_strength,
-                                                 screen_light_opacity);
+            chunk->light.current_strength =
+                (chunk->light.min_static_avg_strength +
+                 (chunk->light.max_static_avg_strength - chunk->light.min_static_avg_strength) * screen_light_opacity);
         }
 
         // Populate UseShadowData via dummy calculators.

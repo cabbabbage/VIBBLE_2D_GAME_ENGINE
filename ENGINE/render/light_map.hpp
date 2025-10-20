@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include <optional>
 
 #include "precomputed_light_map.hpp"
 
@@ -19,6 +20,17 @@ class Grid;
 
 class LightMap {
 public:
+    // Dummy hard-coded settings used for computing UseShadowData from chunks.
+    // This replaces the dev-mode panel for shadow tuning.
+    struct ShadowSettings {
+        int   search_radius_cells     = 1;    // neighbor radius in chunk cells
+        float falloff_horizontal      = 1.0f; // gradient weight X
+        float falloff_vertical        = 1.0f; // gradient weight Y
+        float max_offset_x_px         = 64.0f; // clamp offsets when converting to px
+        float max_offset_y_px         = 48.0f;
+        float base_shadow_scale       = 1.0f;
+        float parallax_percent        = 0.0f;  // 0..100
+    };
     static constexpr float kDefaultStaticWeight  = 0.8f;
     static constexpr float kDefaultDynamicWeight = 1.0f;
 
@@ -65,6 +77,12 @@ public:
     const std::vector<world::Chunk*>& active_chunks() const;
     world::Chunk* chunk_from_world(SDL_Point world_px) const;
 
+    // Unified per-asset query for UseShadowData: LightMap now owns this.
+    std::optional<world::Chunk::UseShadowData> get_shadow_data(SDL_FPoint world_or_screen_pos) const;
+
+    // Expose the hard-coded settings
+    ShadowSettings shadow_settings() const { return ShadowSettings{}; }
+
     int quadrant_count() const;
     int quadrant_columns() const;
     int quadrant_rows() const;
@@ -101,5 +119,8 @@ private:
     mutable SDL_Texture* batch_full_mask_ = nullptr;
     mutable SDL_Rect     batch_full_bounds_{0, 0, 0, 0};
     mutable bool         batch_active_ = false;
+
+    // Cache last normalized screen-light opacity to reduce unnecessary per-frame recomputes.
+    mutable float        last_screen_light_opacity_ = -1.0f;
 };
 
