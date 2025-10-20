@@ -422,20 +422,31 @@ void AssetLoader::loadRooms() {
 }
 
 void AssetLoader::finalizeAssets() {
-        std::size_t room_index = 0;
+        std::size_t room_index         = 0;
+        std::size_t total_assets       = 0;
+        std::size_t finalized_assets   = 0;
+        std::size_t skipped_assets     = 0;
+
         for (Room* room : rooms_) {
-                std::size_t asset_index = 0;
+                if (!room) {
+                        ++room_index;
+                        continue;
+                }
+
+                const std::size_t room_total = room->assets.size();
+                std::size_t       room_finalized = 0;
+                std::size_t       room_skipped   = 0;
+
                 for (auto& asset_up : room->assets) {
+                        ++total_assets;
                         Asset* a = asset_up.get();
                         if (!a || !a->info) {
-                                std::cout << "[AssetLoader] finalizeAssets: room=" << room_index
-                                          << " asset=" << asset_index << " skipped (null info)\n";
-                                ++asset_index;
+                                ++skipped_assets;
+                                ++room_skipped;
                                 continue;
                         }
+
                         const std::string name = a->info->name;
-                        std::cout << "[AssetLoader] finalizeAssets: room=" << room_index
-                                  << " asset=" << asset_index << " name='" << name << "' -> begin\n";
                         try {
                                 asset_up->finalize_setup();
                         } catch (const std::exception& ex) {
@@ -447,12 +458,29 @@ void AssetLoader::finalizeAssets() {
                                           << name << "'\n" << std::flush;
                                 throw;
                         }
-                        std::cout << "[AssetLoader] finalizeAssets: room=" << room_index
-                                  << " asset=" << asset_index << " name='" << name << "' -> done\n";
-                        ++asset_index;
+
+                        ++finalized_assets;
+                        ++room_finalized;
                 }
+
+                if (room_total > 0) {
+                        std::cout << "[AssetLoader] finalizeAssets: room=" << room_index
+                                  << " finalized " << room_finalized << "/" << room_total;
+                        if (room_skipped > 0) {
+                                std::cout << " (skipped " << room_skipped << ")";
+                        }
+                        std::cout << "\n";
+                }
+
                 ++room_index;
         }
+
+        std::cout << "[AssetLoader] finalizeAssets complete: "
+                  << finalized_assets << "/" << total_assets << " assets ready";
+        if (skipped_assets > 0) {
+                std::cout << " (" << skipped_assets << " skipped)";
+        }
+        std::cout << "\n";
 }
 
 std::unique_ptr<PrecomputedLightMap> AssetLoader::take_precomputed_light_map() {
@@ -624,66 +652,105 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
         }
 
         SDL_Point origin = grid.origin();
-        int min_x = std::numeric_limits<int>::max();
-        int min_y = std::numeric_limits<int>::max();
-        int max_x = std::numeric_limits<int>::min();
-        int max_y = std::numeric_limits<int>::min();
-        bool has_assets = false;
+
+        const auto chunk_key = [](int i, int j) {
+                const auto hi = static_cast<std::uint32_t>(i);
+                const auto lo = static_cast<std::uint32_t>(j);
+                return (static_cast<std::uint64_t>(hi) << 32) | static_cast<std::uint64_t>(lo);
+        };
+
+        std::unordered_set<std::uint64_t> visited;
+        visited.reserve(spawned_assets_.size() * 4);
+
+        auto register_chunk = [&](int i, int j) {
+                const std::uint64_t key = chunk_key(i, j);
+                if (!visited.insert(key).second) {
+                        return;
+                }
+                world::Chunk& chunk = grid.get_or_create_chunk_ij(i, j);
+                chunk.base_brightness     = 0.0f;
+                chunk.brightness_strength = 1.0f;
+                chunk.opacity_strength    = 1.0f;
+                chunk.scale_strength      = 1.0f;
+                chunk.offset_x            = 0;
+                chunk.offset_y            = 0;
+                chunk.shadow              = {};
+                chunk.lighting_dirty      = true;
+                chunk.has_dynamic_overlay = false;
+                map_chunks_.push_back(&chunk);
+        };
+
+        auto expand_rect = [&](const SDL_Rect& rect) {
+                SDL_Rect expanded = rect;
+                expanded.x -= step;
+                expanded.y -= step;
+                expanded.w += step * 2;
+                expanded.h += step * 2;
+                return expanded;
+        };
+
+        bool discovered_static_light = false;
 
         for (const auto& asset_up : spawned_assets_) {
                 const Asset* asset = asset_up.get();
-                if (!asset) {
+                if (!asset || !asset->info) {
                         continue;
                 }
-                has_assets = true;
-                min_x = std::min(min_x, asset->pos.x);
-                min_y = std::min(min_y, asset->pos.y);
-                max_x = std::max(max_x, asset->pos.x);
-                max_y = std::max(max_y, asset->pos.y);
-        }
+                if (asset->info->light_sources.empty() || asset->info->moving_asset) {
+                        continue;
+                }
 
-        const int fallback_min_x = static_cast<int>(std::floor(map_center_x_ - map_radius_));
-        const int fallback_min_y = static_cast<int>(std::floor(map_center_y_ - map_radius_));
-        const int fallback_max_x = static_cast<int>(std::ceil(map_center_x_ + map_radius_));
-        const int fallback_max_y = static_cast<int>(std::ceil(map_center_y_ + map_radius_));
+                for (const auto& light : asset->info->light_sources) {
+                        SDL_Texture* tex = light.texture;
+                        if (!tex) {
+                                continue;
+                        }
 
-        if (!has_assets) {
-                min_x = fallback_min_x;
-                min_y = fallback_min_y;
-                max_x = fallback_max_x;
-                max_y = fallback_max_y;
-        } else {
-                min_x = std::min(min_x, fallback_min_x);
-                min_y = std::min(min_y, fallback_min_y);
-                max_x = std::max(max_x, fallback_max_x);
-                max_y = std::max(max_y, fallback_max_y);
-        }
+                        int src_w = light.cached_w > 0 ? light.cached_w : 0;
+                        int src_h = light.cached_h > 0 ? light.cached_h : 0;
+                        if (src_w <= 0 || src_h <= 0) {
+                                SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+                        }
+                        if (src_w <= 0 || src_h <= 0) {
+                                continue;
+                        }
 
-        min_x -= step;
-        min_y -= step;
-        max_x += step;
-        max_y += step;
+                        discovered_static_light = true;
 
-        const int i_min = floor_div(min_x - origin.x, step);
-        const int j_min = floor_div(min_y - origin.y, step);
-        const int i_max = floor_div(max_x - origin.x + step - 1, step);
-        const int j_max = floor_div(max_y - origin.y + step - 1, step);
+                        const int draw_w = std::max(1, src_w);
+                        const int draw_h = std::max(1, src_h);
+                        SDL_Rect world_dst{
+                                asset->pos.x + light.offset_x - draw_w / 2,
+                                asset->pos.y + light.offset_y - draw_h / 2,
+                                draw_w,
+                                draw_h};
 
-        for (int j = j_min; j <= j_max; ++j) {
-                for (int i = i_min; i <= i_max; ++i) {
-                        world::Chunk& chunk = grid.get_or_create_chunk_ij(i, j);
-                        chunk.base_brightness     = 0.0f;
-                        chunk.brightness_strength = 1.0f;
-                        chunk.opacity_strength    = 1.0f;
-                        chunk.scale_strength      = 1.0f;
-                        chunk.offset_x            = 0;
-                        chunk.offset_y            = 0;
-                        chunk.shadow              = {};
-                        chunk.lighting_dirty      = true;
-                        chunk.has_dynamic_overlay = false;
-                        map_chunks_.push_back(&chunk);
+                        SDL_Rect expanded = expand_rect(world_dst);
+
+                        const int i_min = floor_div(expanded.x - origin.x, step);
+                        const int j_min = floor_div(expanded.y - origin.y, step);
+                        const int i_max = floor_div(expanded.x + expanded.w - 1 - origin.x, step);
+                        const int j_max = floor_div(expanded.y + expanded.h - 1 - origin.y, step);
+
+                        for (int j = j_min; j <= j_max; ++j) {
+                                for (int i = i_min; i <= i_max; ++i) {
+                                        register_chunk(i, j);
+                                }
+                        }
                 }
         }
+
+        if (!discovered_static_light) {
+                // Ensure at least one chunk exists so downstream systems have a stable baseline.
+                const int center_x = static_cast<int>(std::llround(map_center_x_));
+                const int center_y = static_cast<int>(std::llround(map_center_y_));
+                const int i = floor_div(center_x - origin.x, step);
+                const int j = floor_div(center_y - origin.y, step);
+                register_chunk(i, j);
+        }
+
+        std::cout << "[AssetLoader] Prepared " << map_chunks_.size()
+                  << " static-light chunk(s) for baking\n";
 }
 
 void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
