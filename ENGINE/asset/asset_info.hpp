@@ -68,7 +68,6 @@ class AssetInfo {
     float shading_parallax_amount = 0.0f;
     float shading_screen_brightness_multiplier = 1.0f;
     float shading_opacity_multiplier = 1.0f;
-    int virtual_light_map_chunks = 50;
     int min_same_type_distance;
     int min_distance_all;
     float scale_factor;
@@ -134,7 +133,6 @@ class AssetInfo {
     void set_lighting(bool is_shaded, const LightSource& shading, int shading_factor, const std::vector<LightSource>& lights);
     void set_shadow_mask_settings(const ShadowMaskSettings& settings);
     void set_shading_enabled(bool enabled);
-    void set_virtual_light_map_chunks(int chunks);
     void set_shading_parallax_amount(float amount);
     void set_shading_screen_brightness_multiplier(float multiplier);
     void set_shading_opacity_multiplier(float multiplier);

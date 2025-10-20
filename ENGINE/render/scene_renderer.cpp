@@ -63,8 +63,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                             screen_height_);
     if (light_map_) {
         initialize_static_light_chunks();
-        // Use 2 grid-spaces per chunk by default
-        light_map_->set_cells_per_chunk(2);
         light_map_->rebuild(renderer_);
         render_pipeline_.lighting().light_map_sampler = light_map_.get();
     } else {
@@ -82,28 +80,6 @@ LightMap* SceneRenderer::light_map() {
 
 const LightMap* SceneRenderer::light_map() const {
     return const_cast<SceneRenderer*>(this)->light_map();
-}
-
-void SceneRenderer::set_virtual_light_map_chunks(int chunks) {
-    if (light_map_) {
-        light_map_->set_virtual_light_map_chunks(chunks);
-    }
-    force_virtual_light_map_refresh();
-}
-
-void SceneRenderer::set_virtual_light_map_chunk_size(int size_px) {
-    if (light_map_) {
-        light_map_->set_virtual_light_map_chunk_size(size_px);
-    }
-    force_virtual_light_map_refresh();
-}
-
-void SceneRenderer::force_virtual_light_map_refresh() {
-    if (!light_map_ || !renderer_) {
-        return;
-    }
-    light_map_->rebuild(renderer_);
-    render_pipeline_.lighting().light_map_sampler = light_map_.get();
 }
 
 void SceneRenderer::initialize_static_light_chunks() {

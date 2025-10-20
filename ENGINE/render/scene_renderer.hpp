@@ -42,9 +42,6 @@ public:
     const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const { return reactive_shadow_settings_; }
     LightMap* light_map();
     const LightMap* light_map() const;
-    void set_virtual_light_map_chunks(int chunks);
-    void set_virtual_light_map_chunk_size(int size_px);
-    void force_virtual_light_map_refresh();
 
 private:
     bool shouldRegen(Asset* a);

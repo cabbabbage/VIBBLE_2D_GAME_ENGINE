@@ -792,15 +792,6 @@ void AssetInfo::set_shading_enabled(bool enabled) {
         info_json_["has_shading"] = enabled;
 }
 
-void AssetInfo::set_virtual_light_map_chunks(int chunks) {
-        int clamped = std::clamp(chunks, 1, 100);
-        virtual_light_map_chunks = clamped;
-        if (!info_json_.is_object()) {
-                info_json_ = nlohmann::json::object();
-        }
-        info_json_["virtual_light_map_chunks"] = clamped;
-}
-
 namespace {
 constexpr float kShadingParallaxMin = 0.0f;
 constexpr float kShadingParallaxMax = 4.0f;
@@ -1058,16 +1049,6 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                                   shading_screen_brightness_multiplier));
         set_shading_opacity_multiplier(
                 read_float_field(data, "shading_opacity_multiplier", shading_opacity_multiplier));
-
-        if (data.contains("virtual_light_map_chunks")) {
-                int chunks = data.value("virtual_light_map_chunks", virtual_light_map_chunks);
-                set_virtual_light_map_chunks(chunks);
-        } else if (data.contains("virtual_light_map_chunks")) {
-                int chunks = data.value("virtual_light_map_chunks", virtual_light_map_chunks);
-                set_virtual_light_map_chunks(chunks);
-        } else {
-                virtual_light_map_chunks = std::clamp(virtual_light_map_chunks, 1, 100);
-        }
 
         const auto &ss = data.value("size_settings", nlohmann::json::object());
         scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;

@@ -87,14 +87,6 @@ public:
     static constexpr float kDefaultStaticWeight  = 0.8f;
     static constexpr float kDefaultDynamicWeight = 1.0f;
 
-    // Legacy UI constants kept for dev panels and persisted settings.
-    static constexpr int kMinChunkCount       = 1;
-    static constexpr int kMaxChunkCount       = 64;
-    static constexpr int kDefaultChunkCount   = 16;
-    static constexpr int kMinChunkSizePx      = 16;
-    static constexpr int kMaxChunkSizePx      = 4096;
-    static constexpr int kDefaultChunkSizePx  = 256;
-
     LightMap(Assets* assets,
              int screen_width,
              int screen_height)
@@ -138,14 +130,6 @@ public:
     int chunk_rows() const;
     const world::Chunk* chunk_at(int index) const;
     SDL_Rect chunk_bounds(int index) const;
-
-    void set_virtual_light_map_chunks(int chunks);
-    void set_virtual_light_map_chunk_size(int size_px);
-    void set_cells_per_chunk(int cells);
-    int  virtual_light_map_chunk_size() const;
-    int  virtual_light_map_chunks() const;
-    int  static_grid_resolution() const;
-    int  padding_cells() const;
 
 private:
     void ensure_chunk_static_texture(SDL_Renderer* renderer, world::Chunk& chunk) const;

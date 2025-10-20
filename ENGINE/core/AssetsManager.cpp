@@ -1216,38 +1216,6 @@ const LightMapManager* Assets::light_map_manager() const {
     return const_cast<Assets*>(this)->light_map_manager();
 }
 
-void Assets::set_virtual_light_map_chunks(int chunks) {
-    if (scene) {
-        scene->set_virtual_light_map_chunks(chunks);
-    }
-}
-
-void Assets::set_virtual_light_map_chunk_size(int size_px) {
-    if (scene) {
-        scene->set_virtual_light_map_chunk_size(size_px);
-    }
-}
-
-int Assets::virtual_light_map_chunks() const {
-    if (const LightMap* map = light_map()) {
-        return map->virtual_light_map_chunks();
-    }
-    return LightMap::kDefaultChunkCount;
-}
-
-int Assets::virtual_light_map_chunk_size() const {
-    if (const LightMap* map = light_map()) {
-        return map->virtual_light_map_chunk_size();
-    }
-    return LightMap::kDefaultChunkSizePx;
-}
-
-void Assets::force_virtual_light_map_refresh() {
-    if (scene) {
-        scene->force_virtual_light_map_refresh();
-    }
-}
-
 void Assets::force_shaded_assets_rerender() {
     std::unordered_set<Asset*> visited;
     auto flush_asset = [&](Asset* asset) {
@@ -1304,7 +1272,6 @@ void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persi
         auto [minx, miny, maxx, maxy] = view.get_bounds();
         SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
         world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
-        force_virtual_light_map_refresh();
         force_shaded_assets_rerender();
     }
 }

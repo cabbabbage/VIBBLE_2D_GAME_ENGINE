@@ -160,19 +160,12 @@ MapLightPreviewPanel::~MapLightPreviewPanel() = default;
 void MapLightPreviewPanel::set_assets(Assets* assets) {
     assets_ = assets;
     if (assets_) {
-        last_chunk_size_px_ = clamp_int(assets_->virtual_light_map_chunk_size(),
-                                           LightMap::kMinChunkSizePx,
-                                           LightMap::kMaxChunkSizePx);
         last_chunk_resolution_ = clamp_int(assets_->map_grid_chunk_resolution(), 0, vibble::grid::kMaxResolution);
         if (chunk_resolution_) {
             chunk_resolution_->set_value(last_chunk_resolution_);
         }
     }
-    apply_virtual_light_map_chunk_size(last_chunk_size_px_, false, false);
-    pending_light_map_regeneration_ = false;
-    if (regenerate_button_) {
-        regenerate_button_->set_text("Regenerate");
-    }
+    force_shading_refresh_if_needed(true);
 }
 
 void MapLightPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback on_save) {
@@ -186,18 +179,8 @@ void MapLightPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback o
         set_reactive_sliders(last_applied_settings_);
         reactive_settings_initialized_ = true;
     }
-    if (assets_) {
-        last_chunk_size_px_ = clamp_int(assets_->virtual_light_map_chunk_size(),
-                                           LightMap::kMinChunkSizePx,
-                                           LightMap::kMaxChunkSizePx);
-    }
-    apply_virtual_light_map_chunk_size(last_chunk_size_px_, false, false);
     apply_immediate_settings();
     sync_ui_from_json();
-    pending_light_map_regeneration_ = false;
-    if (regenerate_button_) {
-        regenerate_button_->set_text("Regenerate");
-    }
 }
 
 void MapLightPreviewPanel::set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings) {
@@ -985,42 +968,9 @@ void MapLightPreviewPanel::sync_ui_from_json() {
     }
     auto it = map_info_->find("reactive_shadows");
     if (it != map_info_->end() && it->is_object()) {
-        int desired_size = last_chunk_size_px_;
-        if (auto size_it = it->find("virtual_light_map_chunk_size");
-            size_it != it->end() && size_it->is_number_integer()) {
-            desired_size = size_it->get<int>();
-        } else if (auto chunk_count_it = it->find("virtual_light_map.chunks");
-                   chunk_count_it != it->end() && chunk_count_it->is_number_integer()) {
-            const int count = clamp_int(chunk_count_it->get<int>(), LightMap::kMinChunkCount, LightMap::kMaxChunkCount);
-            desired_size = last_chunk_size_px_;
-            const LightMap* map = current_light_map();
-            if (!map && assets_) {
-                map = assets_->light_map();
-            }
-            if (map) {
-                const int approx_w = std::max(1, map->screen_width() / std::max(1, count));
-                const int approx_h = std::max(1, map->screen_height() / std::max(1, count));
-                desired_size       = std::max(approx_w, approx_h);
-            }
-        } else if (auto legacy_count_it = it->find("virtual_light_map.chunks");
-                   legacy_count_it != it->end() && legacy_count_it->is_number_integer()) {
-            const int count = clamp_int(legacy_count_it->get<int>(), LightMap::kMinChunkCount, LightMap::kMaxChunkCount);
-            desired_size = last_chunk_size_px_;
-            const LightMap* map = current_light_map();
-            if (!map && assets_) {
-                map = assets_->light_map();
-            }
-            if (map) {
-                const int approx_w = std::max(1, map->screen_width() / std::max(1, count));
-                const int approx_h = std::max(1, map->screen_height() / std::max(1, count));
-                desired_size       = std::max(approx_w, approx_h);
-            }
-        }
-        last_chunk_size_px_ = clamp_int(desired_size, LightMap::kMinChunkSizePx, LightMap::kMaxChunkSizePx);
         last_applied_settings_ = render_pipeline::shading::reactive_shadow_settings_from_json(*it, last_applied_settings_);
         last_applied_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_applied_settings_);
         set_reactive_sliders(last_applied_settings_);
-        apply_virtual_light_map_chunk_size(last_chunk_size_px_, false, false);
         apply_immediate_settings();
     }
     int chunk_value = last_chunk_resolution_;
@@ -1061,13 +1011,6 @@ void MapLightPreviewPanel::sync_json_from_ui() {
         assets_->apply_map_grid_settings(grid_settings);
     }
     render_pipeline::shading::ReactiveShadowSettings settings = current_settings_from_ui();
-    int size_px = last_chunk_size_px_;
-    if (chunk_size_px_) {
-        size_px = clamp_int(chunk_size_px_->value(),
-                             LightMap::kMinChunkSizePx,
-                             LightMap::kMaxChunkSizePx);
-    }
-    apply_virtual_light_map_chunk_size(size_px, false);
     write_reactive_settings_to_json(settings);
     last_applied_settings_ = settings;
     apply_immediate_settings();
@@ -1108,9 +1051,6 @@ void MapLightPreviewPanel::set_reactive_sliders(const render_pipeline::shading::
     if (search_radius_) {
         search_radius_->set_value(settings.virtual_light_map.search_radius);
     }
-    if (chunk_size_px_) {
-        chunk_size_px_->set_value(last_chunk_size_px_);
-    }
 }
 
 render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reactive_settings_from_dev_settings() {
@@ -1131,19 +1071,6 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reac
     settings.virtual_light_map.search_radius = static_cast<int>(
         std::lround(load_number(make_setting_key("virtual_light_map.search_radius"),
                                  static_cast<double>(settings.virtual_light_map.search_radius))));
-    int stored_size = static_cast<int>(
-        std::lround(load_number(make_setting_key("virtual_light_map.chunk_size"), last_chunk_size_px_)));
-    if (stored_size <= 0) {
-        int stored_chunks = static_cast<int>(
-            load_number(make_setting_key("virtual_light_map.chunks"), LightMap::kDefaultChunkCount));
-        stored_chunks = clamp_int(stored_chunks, LightMap::kMinChunkCount, LightMap::kMaxChunkCount);
-        if (const LightMap* map = current_light_map()) {
-            const int approx_w = std::max(1, map->screen_width() / std::max(1, stored_chunks));
-            const int approx_h = std::max(1, map->screen_height() / std::max(1, stored_chunks));
-            stored_size        = std::max(approx_w, approx_h);
-        }
-    }
-    last_chunk_size_px_ = clamp_int(stored_size, LightMap::kMinChunkSizePx, LightMap::kMaxChunkSizePx);
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
@@ -1156,12 +1083,6 @@ void MapLightPreviewPanel::persist_reactive_settings_to_dev_settings(const rende
     save_number(make_setting_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale);
     save_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor);
     save_number(make_setting_key("virtual_light_map.search_radius"), settings.virtual_light_map.search_radius);
-    save_number(make_setting_key("virtual_light_map.chunk_size"), last_chunk_size_px_);
-    int legacy_chunks = LightMap::kDefaultChunkCount;
-    if (assets_) {
-        legacy_chunks = std::max(LightMap::kMinChunkCount, assets_->virtual_light_map_chunks());
-    }
-    save_number(make_setting_key("virtual_light_map.chunks"), legacy_chunks);
 }
 
 void MapLightPreviewPanel::write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings) {
@@ -1170,10 +1091,6 @@ void MapLightPreviewPanel::write_reactive_settings_to_json(const render_pipeline
     }
     nlohmann::json& json = (*map_info_)["reactive_shadows"];
     render_pipeline::shading::assign_reactive_shadow_settings(json, settings);
-    json["virtual_light_map_chunk_size"] = last_chunk_size_px_;
-    if (assets_) {
-        json["virtual_light_map_chunks"] = assets_->virtual_light_map_chunks();
-    }
 }
 
 nlohmann::json& MapLightPreviewPanel::ensure_reactive_settings_json() {
@@ -1184,55 +1101,14 @@ nlohmann::json& MapLightPreviewPanel::ensure_reactive_settings_json() {
     return (*map_info_)["reactive_shadows"];
 }
 
-void MapLightPreviewPanel::apply_virtual_light_map_chunk_size(int size_px,
-                                                                 bool apply_to_assets,
-                                                                 bool mark_pending) {
-    const int clamped = clamp_int(size_px, LightMap::kMinChunkSizePx, LightMap::kMaxChunkSizePx);
-    const bool changed = (last_chunk_size_px_ != clamped);
-    last_chunk_size_px_ = clamped;
-    if (chunk_size_px_) {
-        chunk_size_px_->set_value(last_chunk_size_px_);
-    }
-
-    persist_reactive_settings_to_dev_settings(last_applied_settings_);
-
-    if (apply_to_assets) {
-        pending_light_map_regeneration_ = false;
-        if (regenerate_button_) {
-            regenerate_button_->set_text("Regenerate");
-        }
-        if (assets_) {
-            assets_->set_virtual_light_map_chunk_size(last_chunk_size_px_);
-        }
-        forced_chunk_size_snapshot_ = last_chunk_size_px_;
-        force_shading_refresh_if_needed(true);
-    } else if (changed && mark_pending) {
-        request_light_map_regeneration();
-    }
-}
-
-void MapLightPreviewPanel::request_light_map_regeneration() {
-    pending_light_map_regeneration_ = true;
-    if (regenerate_button_) {
-        regenerate_button_->set_text("Regenerate*");
-    }
-}
-
 void MapLightPreviewPanel::force_shading_refresh_if_needed(bool force_refresh) {
     const bool settings_changed = forced_settings_snapshot_ != last_applied_settings_;
-    const bool refresh_light_map = force_refresh || settings_changed;
-    const bool refresh_shading   = force_refresh || settings_changed;
-    if (!assets_ || (!refresh_light_map && !refresh_shading)) {
+    const bool should_refresh   = force_refresh || settings_changed;
+    if (!assets_ || !should_refresh) {
         return;
     }
     forced_settings_snapshot_ = last_applied_settings_;
-    if (refresh_light_map) {
-        forced_chunk_size_snapshot_ = last_chunk_size_px_;
-        assets_->force_virtual_light_map_refresh();
-    }
-    if (refresh_shading || refresh_light_map) {
-        assets_->force_shaded_assets_rerender();
-    }
+    assets_->force_shaded_assets_rerender();
 }
 
 void MapLightPreviewPanel::handle_chunk_resolution_changed() {

@@ -684,14 +684,6 @@ SDL_Rect LightMap::chunk_bounds(int index) const {
     return SDL_Rect{0, 0, 0, 0};
 }
 
-void LightMap::set_virtual_light_map_chunks(int /*chunks*/) {}
-void LightMap::set_virtual_light_map_chunk_size(int /*size_px*/) {}
-void LightMap::set_cells_per_chunk(int /*cells*/) {}
-int  LightMap::virtual_light_map_chunk_size() const { return 0; }
-int  LightMap::virtual_light_map_chunks() const { return static_cast<int>(active_chunks().size()); }
-int  LightMap::static_grid_resolution() const { return 0; }
-int  LightMap::padding_cells() const { return 0; }
-
 std::optional<world::Chunk::UseShadowData> LightMap::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
     world::Chunk* chunk = nullptr;
     if (assets_) {
