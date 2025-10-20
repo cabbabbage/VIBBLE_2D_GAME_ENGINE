@@ -672,16 +672,29 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
         if (!texture) {
                 return;
         }
-        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_ADD);
+        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
 #if SDL_VERSION_ATLEAST(2,0,12)
         SDL_SetTextureScaleMode(texture, SDL_ScaleModeBest);
 #endif
 
         SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
         SDL_SetRenderTarget(renderer_, texture);
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
         SDL_RenderClear(renderer_);
+
+#if SDL_VERSION_ATLEAST(2, 0, 6)
+        // Match the runtime light-map blending so the cached brightness reflects actual static lighting.
+        const SDL_BlendMode erase_alpha_blend = SDL_ComposeCustomBlendMode(
+            SDL_BLENDFACTOR_ZERO,
+            SDL_BLENDFACTOR_ONE,
+            SDL_BLENDOPERATION_ADD,
+            SDL_BLENDFACTOR_ZERO,
+            SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+            SDL_BLENDOPERATION_ADD);
+#else
+        const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD;
+#endif
 
         for (const auto& asset_up : spawned_assets_) {
                 const Asset* asset = asset_up.get();
@@ -725,7 +738,9 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
                         SDL_GetTextureAlphaMod(tex, &save_a);
                         SDL_GetTextureBlendMode(tex, &save_bm);
 
-                        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
+                        SDL_SetTextureBlendMode(tex, erase_alpha_blend);
+                        SDL_SetTextureColorMod(tex, 255, 255, 255);
+                        SDL_SetTextureAlphaMod(tex, 255);
                         SDL_Rect local_dst = world_dst;
                         local_dst.x -= chunk.world_bounds.x;
                         local_dst.y -= chunk.world_bounds.y;
@@ -781,13 +796,10 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
 
         double accum = 0.0;
         for (std::uint32_t pixel : pixels) {
-                Uint8 r = 0, g = 0, b = 0, a = 0;
-                SDL_GetRGBA(pixel, format.get(), &r, &g, &b, &a);
-                const double luminance = (0.2126 * static_cast<double>(r) +
-                                          0.7152 * static_cast<double>(g) +
-                                          0.0722 * static_cast<double>(b)) /
-                                         255.0;
-                accum += luminance;
+                Uint8 a = 255;
+                SDL_GetRGBA(pixel, format.get(), nullptr, nullptr, nullptr, &a);
+                const double transparency = 1.0 - static_cast<double>(a) / 255.0;
+                accum += transparency;
         }
 
         if (pixel_count == 0) {
