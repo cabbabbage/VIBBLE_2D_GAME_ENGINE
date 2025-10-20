@@ -189,7 +189,7 @@ void AssetLoader::link_by_child(const std::vector<std::vector<Asset*>>& groups) 
 					total_linked++;
 			}
 		}
-		removeMergedAssets({group.begin(), group.end()}, center_asset);
+                removeMergedAssets(group, center_asset);
 	}
 }
 
