@@ -5,7 +5,6 @@
                 "reactive": {
                     "virtual_light_map": {
                         "horizontal_falloff": 1.6200000047683716,
-                        "map_light_factor": 0.0,
                         "max_offset_x": 100.0,
                         "max_offset_y": 100.0,
                         "quadrant_size": 16.0,

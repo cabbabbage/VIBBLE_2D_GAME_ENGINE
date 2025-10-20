@@ -3,7 +3,6 @@
 #include "asset/Asset.hpp"
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
 #include "render/light_map_manager.hpp"
 
@@ -14,20 +13,6 @@
 namespace render_pipeline::shading {
 
 namespace {
-
-const ReactiveShadowSettings& reactive_settings_or_default(const StageContext& context) {
-    if (const ReactiveShadowSettings* live = context.reactive_shadow_settings()) {
-        return *live;
-    }
-    static const ReactiveShadowSettings defaults =
-        sanitize_reactive_shadow_settings(ReactiveShadowSettings{});
-    return defaults;
-}
-
-float compute_screen_light_opacity_factor(const StageContext&) {
-    // Screen-light factor is now handled by the LightMap overlay, not per-asset.
-    return 1.0f;
-}
 
 float compute_parallax_shift(const StageContext& context, const Asset& asset, int height, float weight) {
     if (!context.lighting || weight <= 0.0f) {
@@ -218,31 +203,27 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     }
     SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
 
-    const ReactiveShadowSettings& cfg = reactive_settings_or_default(context);
-
-    float base_opacity = clampf(context.base_shadow_opacity, 0.0f, 1.0f);
+    float base_opacity = std::clamp(context.base_shadow_opacity, 0.0f, 1.0f);
     float scale        = std::max(context.base_shadow_scale, 0.0f);
 
-    float opacity_multiplier = 1.0f;
-    float offset_x           = 0.0f;
-    float offset_y           = 0.0f;
-    float scale_multiplier   = cfg.virtual_light_map.shadow_scale;
+    float offset_x         = 0.0f;
+    float offset_y         = 0.0f;
+    float parallax_percent = 0.0f;
+    float opacity          = base_opacity;
 
     if (const LightMapManager* manager = context.light_map_manager()) {
-        if (auto params = manager->get_quadrant_params(context.screen_center)) {
-            // Use quadrant parameters computed from the light map manager.
-            opacity_multiplier = std::max(0.0f, params->opacity_q) * std::max(0.0f, cfg.opacity_strength);
-            offset_x           = params->offset_x_q;
-            offset_y           = params->offset_y_q;
-            scale_multiplier   = std::max(0.0f, cfg.virtual_light_map.shadow_scale) * std::max(0.0f, params->scale_q) * std::max(0.0f, cfg.scale_strength);
+        if (auto data = manager->get_shadow_data(context.screen_center)) {
+            const auto& shadow = *data;
+            opacity = std::clamp(base_opacity * std::max(0.0f, shadow.opacity), 0.0f, 1.0f);
+            scale *= std::max(0.0f, shadow.scale);
+            offset_x = static_cast<float>(width) * (shadow.offset_x_percent / 100.0f);
+            offset_y = static_cast<float>(height) * (shadow.offset_y_percent / 100.0f);
+            parallax_percent = shadow.parallax_intensity_percent;
         }
     }
 
-    // Asset shadow opacity no longer receives global screen-light or map-direction opacity.
-    float opacity = clampf(base_opacity * opacity_multiplier, 0.0f, 1.0f);
-    scale *= std::max(scale_multiplier, 0.0f);
-
-    const float parallax_shift = compute_parallax_shift(context, asset, height, std::max(0.0f, cfg.parallax_strength));
+    const float parallax_weight = std::max(0.0f, parallax_percent / 100.0f);
+    const float parallax_shift  = compute_parallax_shift(context, asset, height, parallax_weight);
     offset_x += parallax_shift;
 
     // Do not clamp to deprecated max offset sliders; rely on manager-calculated offsets.

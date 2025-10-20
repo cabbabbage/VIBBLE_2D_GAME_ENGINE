@@ -15,9 +15,8 @@
 
 namespace {
 
-constexpr int kStrengthSliderScale    = 100;
-constexpr int kFloatSliderScale       = 100;
-constexpr int kMapLightFactorScale    = 1000;
+constexpr int kStrengthSliderScale = 100;
+constexpr int kFloatSliderScale    = 100;
 
 std::unique_ptr<DMSlider> make_strength_slider(const std::string& label, float value) {
     const int scaled = static_cast<int>(std::round(value * static_cast<float>(kStrengthSliderScale)));
@@ -186,8 +185,6 @@ void MapShadowPanel::build_ui() {
                                             last_settings_.virtual_light_map.vertical_falloff);
     size_scale_factor_  = make_float_slider("Size Scale Factor", 0.0f, 10.0f,
                                             last_settings_.virtual_light_map.size_scale_factor);
-    map_light_factor_   = make_float_slider("Map Light Factor", 0.0f, 1.0f,
-                                            last_settings_.virtual_light_map.map_light_factor, kMapLightFactorScale, 3);
 
     search_radius_ = std::make_unique<DMSlider>("Search Radius", 0, 64,
                                                 last_settings_.virtual_light_map.search_radius);
@@ -196,7 +193,7 @@ void MapShadowPanel::build_ui() {
 
 void MapShadowPanel::rebuild_rows() {
     widget_wrappers_.clear();
-    widget_wrappers_.reserve(9);
+    widget_wrappers_.reserve(8);
 
     auto add_widget = [this](std::unique_ptr<Widget> widget) -> Widget* {
         Widget* raw = widget.get();
@@ -216,9 +213,6 @@ void MapShadowPanel::rebuild_rows() {
     }
     if (shadow_scale_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(shadow_scale_.get())) });
-    }
-    if (map_light_factor_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(map_light_factor_.get())) });
     }
     if (size_scale_factor_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(size_scale_factor_.get())) });
@@ -268,8 +262,6 @@ void MapShadowPanel::sync_json_from_ui() {
         vertical_falloff_, last_settings_.virtual_light_map.vertical_falloff);
     last_settings_.virtual_light_map.size_scale_factor = shadow_slider_value_scaled(
         size_scale_factor_, last_settings_.virtual_light_map.size_scale_factor);
-    last_settings_.virtual_light_map.map_light_factor = shadow_slider_value_scaled(
-        map_light_factor_, last_settings_.virtual_light_map.map_light_factor, kMapLightFactorScale);
     if (search_radius_) {
         last_settings_.virtual_light_map.search_radius = search_radius_->displayed_value();
     }
@@ -311,7 +303,6 @@ void MapShadowPanel::apply_settings_to_sliders(const render_pipeline::shading::R
     set_shadow_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff);
     set_shadow_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff);
     set_shadow_slider_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor);
-    set_shadow_slider_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, kMapLightFactorScale);
     if (search_radius_) {
         search_radius_->set_value(settings.virtual_light_map.search_radius);
     }

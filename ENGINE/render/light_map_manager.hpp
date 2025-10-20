@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
+#include "world/chunk.hpp"
 
 class Assets;
 class LightMap;
@@ -18,12 +19,7 @@ struct Chunk;
 
 class LightMapManager {
 public:
-    struct QuadrantParams {
-        float opacity_q = 1.0f;
-        float offset_x_q = 0.0f;
-        float offset_y_q = 0.0f;
-        float scale_q    = 1.0f;
-    };
+    using ShadowData = world::Chunk::ShadowData;
 
     struct QuadrantSnapshot {
         int      index               = -1;
@@ -39,10 +35,11 @@ public:
         float    shadow_opacity_min  = 0.0f;
         float    shadow_opacity_max  = 0.0f;
         float    brightness_strength = 1.0f;
-        float    opacity_strength    = 1.0f;
-        float    scale_strength      = 1.0f;
-        int      offset_x            = 0;
-        int      offset_y            = 0;
+        float                 opacity_strength    = 1.0f;
+        float                 scale_strength      = 1.0f;
+        int                   offset_x            = 0;
+        int                   offset_y            = 0;
+        world::Chunk::ShadowData shadow{};
     };
 
     explicit LightMapManager(Assets* assets);
@@ -53,12 +50,12 @@ public:
     std::vector<QuadrantSnapshot> all_snapshots() const;
     std::vector<std::string>      assets_sampling_quadrant(int index) const;
     std::optional<QuadrantSnapshot> snapshot_for_quadrant(int index) const;
-    std::optional<QuadrantParams> get_quadrant_params(SDL_FPoint world_or_screen_pos) const;
-    std::optional<QuadrantParams> get_quadrant_params_for_index(int index) const;
+    std::optional<ShadowData>      get_shadow_data(SDL_FPoint world_or_screen_pos) const;
+    std::optional<ShadowData>      get_shadow_data_for_index(int index) const;
 
 private:
     std::optional<int> find_quadrant_index(SDL_FPoint world_or_screen_pos) const;
-    std::optional<QuadrantParams> params_for_chunk(const world::Chunk* chunk) const;
+    std::optional<ShadowData> shadow_data_for_chunk(const world::Chunk* chunk) const;
 
     Assets* assets_ = nullptr;
 };

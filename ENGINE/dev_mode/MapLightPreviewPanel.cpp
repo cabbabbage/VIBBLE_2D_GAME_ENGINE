@@ -1077,7 +1077,6 @@ void MapLightPreviewPanel::apply_immediate_settings() {
 
 render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::current_settings_from_ui() const {
     render_pipeline::shading::ReactiveShadowSettings settings = last_applied_settings_;
-    settings.virtual_light_map.map_light_factor = slider_value_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, 100);
     settings.virtual_light_map.horizontal_falloff = slider_value_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
     settings.virtual_light_map.vertical_falloff = slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
     settings.virtual_light_map.max_offset_x = slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
@@ -1089,7 +1088,6 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::current_s
 }
 
 void MapLightPreviewPanel::set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings) {
-    set_slider_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, 100);
     set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
     set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
     set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
@@ -1105,8 +1103,6 @@ void MapLightPreviewPanel::set_reactive_sliders(const render_pipeline::shading::
 render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reactive_settings_from_dev_settings() {
     using devmode::ui_settings::load_number;
     render_pipeline::shading::ReactiveShadowSettings settings = render_pipeline::shading::sanitize_reactive_shadow_settings({});
-    settings.virtual_light_map.map_light_factor = static_cast<float>(
-        load_number(make_setting_key("virtual_light_map.map_light_factor"), settings.virtual_light_map.map_light_factor));
     settings.virtual_light_map.horizontal_falloff = static_cast<float>(
         load_number(make_setting_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff));
     settings.virtual_light_map.vertical_falloff = static_cast<float>(
@@ -1140,7 +1136,6 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reac
 
 void MapLightPreviewPanel::persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const {
     using devmode::ui_settings::save_number;
-    save_number(make_setting_key("virtual_light_map.map_light_factor"), settings.virtual_light_map.map_light_factor);
     save_number(make_setting_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff);
     save_number(make_setting_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff);
     save_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x);

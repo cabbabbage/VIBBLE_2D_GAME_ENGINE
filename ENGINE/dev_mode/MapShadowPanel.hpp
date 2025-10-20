@@ -62,7 +62,6 @@ private:
     std::unique_ptr<DMSlider> horizontal_falloff_{};
     std::unique_ptr<DMSlider> vertical_falloff_{};
     std::unique_ptr<DMSlider> size_scale_factor_{};
-    std::unique_ptr<DMSlider> map_light_factor_{};
     std::unique_ptr<DMSlider> search_radius_{};
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_{};

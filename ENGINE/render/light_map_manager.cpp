@@ -143,21 +143,40 @@ void LightMapManager::begin_frame() {
             ny = gy / gmag;
         }
 
-        // Offset magnitude from LUT, scaled by map-light factor and chunk size factor.
+        // Offset magnitude from LUT and chunk size factor.
         const float size_factor = std::max(0.0f, cfg.virtual_light_map.size_scale_factor);
-        const float light_fac   = std::max(0.0f, cfg.virtual_light_map.map_light_factor);
-        const float off_mag     = resp.offset * light_fac;
-        const float max_off_x = std::max(0.0f, cfg.virtual_light_map.max_offset_x);
-        const float max_off_y = std::max(0.0f, cfg.virtual_light_map.max_offset_y);
-        const float off_px_x  = nx * off_mag * fx * size_factor;
-        const float off_px_y  = ny * off_mag * fy * size_factor;
+        const float off_mag     = resp.offset;
+        const float max_off_x   = std::max(0.0f, cfg.virtual_light_map.max_offset_x);
+        const float max_off_y   = std::max(0.0f, cfg.virtual_light_map.max_offset_y);
+        const float off_px_x    = nx * off_mag * fx * size_factor;
+        const float off_px_y    = ny * off_mag * fy * size_factor;
+        const float clamped_off_x = std::clamp(off_px_x, -max_off_x, max_off_x);
+        const float clamped_off_y = std::clamp(off_px_y, -max_off_y, max_off_y);
 
         // Apply to chunk. Opacity/scale are multiplicative strengths applied in shading and
         // chunk rendering. Clamp opacity to [0, 1] because it drives texture transparency.
-        chunk->opacity_strength = std::clamp(resp.opacity * cfg.opacity_strength, 0.0f, 1.0f);
-        chunk->scale_strength   = std::max(0.0f, resp.scale * cfg.scale_strength);
-        chunk->offset_x         = static_cast<int>(std::lround(std::clamp(off_px_x, -max_off_x, max_off_x)));
-        chunk->offset_y         = static_cast<int>(std::lround(std::clamp(off_px_y, -max_off_y, max_off_y)));
+        const float combined_opacity = std::clamp(resp.opacity * cfg.opacity_strength, 0.0f, 1.0f);
+        const float combined_scale   = std::max(0.0f, resp.scale * cfg.scale_strength);
+        chunk->opacity_strength      = combined_opacity;
+        chunk->scale_strength        = combined_scale;
+        chunk->offset_x              = static_cast<int>(std::lround(clamped_off_x));
+        chunk->offset_y              = static_cast<int>(std::lround(clamped_off_y));
+
+        // Populate the per-chunk shadow data exposed to asset shading.
+        chunk->shadow.opacity  = combined_opacity;
+        chunk->shadow.scale    = std::max(0.0f, cfg.virtual_light_map.shadow_scale) * combined_scale;
+        if (max_off_x > 1e-4f) {
+            chunk->shadow.offset_x_percent = std::clamp((clamped_off_x / max_off_x) * 100.0f, -100.0f, 100.0f);
+        } else {
+            chunk->shadow.offset_x_percent = 0.0f;
+        }
+        if (max_off_y > 1e-4f) {
+            chunk->shadow.offset_y_percent = std::clamp((clamped_off_y / max_off_y) * 100.0f, -100.0f, 100.0f);
+        } else {
+            chunk->shadow.offset_y_percent = 0.0f;
+        }
+        const float parallax_strength = std::clamp(cfg.parallax_strength, 0.0f, 10.0f);
+        chunk->shadow.parallax_intensity_percent = parallax_strength * 10.0f;
         // Leave brightness_strength unchanged for now; combined in snapshot only.
     }
 }
@@ -198,6 +217,7 @@ std::vector<LightMapManager::QuadrantSnapshot> LightMapManager::all_snapshots() 
         snap.scale_strength      = chunk->scale_strength;
         snap.offset_x            = chunk->offset_x;
         snap.offset_y            = chunk->offset_y;
+        snap.shadow              = chunk->shadow;
         snapshots.push_back(snap);
     }
     return snapshots;
@@ -238,22 +258,18 @@ std::optional<LightMapManager::QuadrantSnapshot> LightMapManager::snapshot_for_q
     snap.scale_strength      = chunk->scale_strength;
     snap.offset_x            = chunk->offset_x;
     snap.offset_y            = chunk->offset_y;
+    snap.shadow              = chunk->shadow;
     return snap;
 }
 
-std::optional<LightMapManager::QuadrantParams> LightMapManager::params_for_chunk(const world::Chunk* chunk) const {
+std::optional<LightMapManager::ShadowData> LightMapManager::shadow_data_for_chunk(const world::Chunk* chunk) const {
     if (!chunk) {
         return std::nullopt;
     }
-    QuadrantParams params;
-    params.opacity_q  = chunk->opacity_strength;
-    params.scale_q    = chunk->scale_strength;
-    params.offset_x_q = static_cast<float>(chunk->offset_x);
-    params.offset_y_q = static_cast<float>(chunk->offset_y);
-    return params;
+    return chunk->shadow;
 }
 
-std::optional<LightMapManager::QuadrantParams> LightMapManager::get_quadrant_params_for_index(int index) const {
+std::optional<LightMapManager::ShadowData> LightMapManager::get_shadow_data_for_index(int index) const {
     const LightMap* map = light_map();
     if (!map) {
         return std::nullopt;
@@ -262,7 +278,7 @@ std::optional<LightMapManager::QuadrantParams> LightMapManager::get_quadrant_par
     if (index < 0 || static_cast<std::size_t>(index) >= chunks.size()) {
         return std::nullopt;
     }
-    return params_for_chunk(chunks[static_cast<std::size_t>(index)]);
+    return shadow_data_for_chunk(chunks[static_cast<std::size_t>(index)]);
 }
 
 std::optional<int> LightMapManager::find_quadrant_index(SDL_FPoint world_or_screen_pos) const {
@@ -293,9 +309,9 @@ std::optional<int> LightMapManager::find_quadrant_index(SDL_FPoint world_or_scre
     return std::nullopt;
 }
 
-std::optional<LightMapManager::QuadrantParams> LightMapManager::get_quadrant_params(SDL_FPoint world_or_screen_pos) const {
+std::optional<LightMapManager::ShadowData> LightMapManager::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
     if (auto index = find_quadrant_index(world_or_screen_pos)) {
-        return get_quadrant_params_for_index(*index);
+        return get_shadow_data_for_index(*index);
     }
     return std::nullopt;
 }

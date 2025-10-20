@@ -636,6 +636,7 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                         chunk.scale_strength      = 1.0f;
                         chunk.offset_x            = 0;
                         chunk.offset_y            = 0;
+                        chunk.shadow              = {};
                         chunk.lighting_dirty      = true;
                         chunk.has_dynamic_overlay = false;
                         map_chunks_.push_back(&chunk);
@@ -650,6 +651,7 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
         chunk.scale_strength      = 1.0f;
         chunk.offset_x            = 0;
         chunk.offset_y            = 0;
+        chunk.shadow              = {};
         chunk.has_dynamic_overlay = false;
         chunk.lighting_dirty      = true;
 

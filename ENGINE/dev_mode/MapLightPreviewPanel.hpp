@@ -88,7 +88,6 @@ private:
     int selected_quadrant_ = -1;
     std::string quadrant_note_text_;
 
-    std::unique_ptr<class DMSlider> map_light_factor_;
     std::unique_ptr<class DMSlider> horizontal_falloff_;
     std::unique_ptr<class DMSlider> vertical_falloff_;
     std::unique_ptr<class DMSlider> max_offset_x_;
