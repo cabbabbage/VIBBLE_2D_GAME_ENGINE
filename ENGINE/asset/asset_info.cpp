@@ -1062,8 +1062,8 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
         if (data.contains("virtual_light_map_chunks")) {
                 int chunks = data.value("virtual_light_map_chunks", virtual_light_map_chunks);
                 set_virtual_light_map_chunks(chunks);
-        } else if (data.contains("virtual_light_map_quadrants")) {
-                int chunks = data.value("virtual_light_map_quadrants", virtual_light_map_chunks);
+        } else if (data.contains("virtual_light_map_chunks")) {
+                int chunks = data.value("virtual_light_map_chunks", virtual_light_map_chunks);
                 set_virtual_light_map_chunks(chunks);
         } else {
                 virtual_light_map_chunks = std::clamp(virtual_light_map_chunks, 1, 100);

@@ -1002,7 +1002,7 @@ void MapLightPreviewPanel::sync_ui_from_json() {
                 const int approx_h = std::max(1, map->screen_height() / std::max(1, count));
                 desired_size       = std::max(approx_w, approx_h);
             }
-        } else if (auto legacy_count_it = it->find("virtual_light_map.quadrants");
+        } else if (auto legacy_count_it = it->find("virtual_light_map.chunks");
                    legacy_count_it != it->end() && legacy_count_it->is_number_integer()) {
             const int count = clamp_int(legacy_count_it->get<int>(), LightMap::kMinChunkCount, LightMap::kMaxChunkCount);
             desired_size = last_chunk_size_px_;
