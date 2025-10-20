@@ -1079,16 +1079,19 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
 
         SDL_SetRenderTarget(renderer_, previous_target);
 
-        chunk.base_brightness = compute_chunk_average_brightness(texture);
+        chunk.static_light_map = texture;
+        chunk.lighting_dirty   = false;
+        texture                = nullptr;
+
+        chunk.base_brightness = compute_chunk_average_brightness(chunk.static_light_map);
         chunk.base_brightness = std::clamp(chunk.base_brightness, 0.0f, 1.0f);
+        chunk.light.min_static_avg_strength = std::min(1.0f, chunk.base_brightness);
+        chunk.light.max_static_avg_strength = std::max(1.0f, chunk.base_brightness);
+        chunk.light.needs_update            = true;
 
         vibble::log::info(std::string("[AssetLoader] Finished baking chunk (") + std::to_string(chunk.i) + ", " +
                           std::to_string(chunk.j) + ") with average brightness " +
                           std::to_string(chunk.base_brightness) + ".");
-
-        if (texture) {
-                SDL_DestroyTexture(texture);
-        }
 }
 
 float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const {
