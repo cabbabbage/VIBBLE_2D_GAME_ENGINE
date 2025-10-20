@@ -119,12 +119,14 @@ manifest_store_(manifest_store)
     if (asset_library_) {
         if (renderer_) {
                 asset_library_->ensureAllAnimationsLoaded(renderer_);
+                std::cout << "[AssetLoader] Asset library warmup complete; animations cached in renderer.\n";
         } else {
                 std::cerr << "[AssetLoader] Renderer unavailable; skipping asset library cache warmup.\n";
         }
     }
         loading_status::notify("Loading assets");
         finalizeAssets();
+        std::cout << "[AssetLoader] Asset finalization completed; all assets are ready.\n";
 
         const auto overall_end = std::chrono::steady_clock::now();
         const double map_ms = std::chrono::duration_cast<std::chrono::milliseconds>(map_end - map_begin).count();
@@ -454,6 +456,7 @@ void AssetLoader::createAssets(world::Grid& grid) {
                 grid.register_asset(asset);
         }
         instantiate_map_chunks(grid);
+        std::cout << "[AssetLoader] Beginning full-map light map texture creation...\n";
         precompute_light_map(grid);
 }
 

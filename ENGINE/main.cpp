@@ -68,8 +68,9 @@ MainApp::~MainApp() {
 }
 
 void MainApp::init() {
-	setup();
-	game_loop();
+        setup();
+        std::cout << "[MainApp] Loading pipeline complete. Entering main loop...\n";
+        game_loop();
 }
 
 void MainApp::setup() {
@@ -136,7 +137,9 @@ void MainApp::setup() {
                 auto spawn_begin = std::chrono::steady_clock::now();
                 world::Grid world_grid{};
                 loader_->createAssets(world_grid);
+                std::cout << "[MainApp] Asset spawning finished for map '" << map_identifier << "'.\n";
                 auto all_assets = loader_->take_spawned_assets();
+                std::cout << "[MainApp] " << all_assets.size() << " assets created and cached.\n";
                 const auto asset_count = all_assets.size();
                 const auto room_count = loader_->getRooms().size();
                 Asset* player_ptr = nullptr;
@@ -409,6 +412,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
 
     while (true) {
         MainMenu menu(renderer, screen_w, screen_h, manifest_data.maps);
+        std::cout << "[Main] Main menu displayed.\n";
         std::optional<MapDescriptor> chosen_map;
         bool quit_requested = false;
         SDL_Event e;
@@ -433,6 +437,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                     auto created = create_new_map_interactively();
                     if (created) {
                         chosen_map = std::move(*created);
+                        std::cout << "[Main] New map created and selected: " << chosen_map->id << "\n";
                         choosing = false;
                     }
                     continue;
@@ -441,6 +446,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                 descriptor.id   = result->id;
                 descriptor.data = result->data;
                 chosen_map = std::move(descriptor);
+                std::cout << "[Main] Map selected: " << chosen_map->id << "\n";
                 choosing = false;
                 break;
             }
