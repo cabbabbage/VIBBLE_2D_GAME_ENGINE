@@ -624,12 +624,19 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
 
 void AssetLoader::precompute_light_map(world::Grid& grid) {
         precomputed_light_map_.reset();
+        vibble::log::info(std::string("[AssetLoader] Precomputing light map for ") +
+                          std::to_string(map_chunks_.size()) + " chunk(s).");
+        if (!renderer_) {
+                vibble::log::warn("[AssetLoader] Renderer unavailable; skipping light map precomputation.");
+        }
         for (world::Chunk* chunk : map_chunks_) {
                 if (!chunk) {
+                        vibble::log::warn("[AssetLoader] Encountered null chunk pointer during light map precomputation.");
                         continue;
                 }
                 bake_chunk_lighting(grid, *chunk);
         }
+        vibble::log::info("[AssetLoader] Completed light map precomputation for all chunks.");
 }
 
 namespace {
@@ -776,8 +783,17 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
         }
 
         if (!renderer_) {
+                vibble::log::warn(std::string("[AssetLoader] Cannot bake lighting for chunk (") +
+                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
+                                  "): renderer is null.");
                 return;
         }
+
+        vibble::log::info(std::string("[AssetLoader] Baking static lighting for chunk (") +
+                          std::to_string(chunk.i) + ", " + std::to_string(chunk.j) + ") with bounds {x=" +
+                          std::to_string(chunk.world_bounds.x) + ", y=" + std::to_string(chunk.world_bounds.y) +
+                          ", w=" + std::to_string(chunk.world_bounds.w) + ", h=" +
+                          std::to_string(chunk.world_bounds.h) + "}.");
 
         const std::int64_t width64  = std::max<std::int64_t>(1, static_cast<std::int64_t>(chunk.world_bounds.w));
         const std::int64_t height64 = std::max<std::int64_t>(1, static_cast<std::int64_t>(chunk.world_bounds.h));
@@ -821,6 +837,9 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
                                                  width,
                                                  height);
         if (!texture) {
+                vibble::log::warn(std::string("[AssetLoader] Skipping static light baking for chunk (") +
+                                  std::to_string(chunk.i) + ", " + std::to_string(chunk.j) +
+                                  ") due to SDL_CreateTexture failure: " + SDL_GetError());
                 return;
         }
         SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
@@ -907,6 +926,10 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
 
         chunk.base_brightness = compute_chunk_average_brightness(texture);
         chunk.base_brightness = std::clamp(chunk.base_brightness, 0.0f, 1.0f);
+
+        vibble::log::info(std::string("[AssetLoader] Finished baking chunk (") + std::to_string(chunk.i) + ", " +
+                          std::to_string(chunk.j) + ") with average brightness " +
+                          std::to_string(chunk.base_brightness) + ".");
 
         if (texture) {
                 SDL_DestroyTexture(texture);
