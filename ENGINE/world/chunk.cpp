@@ -542,8 +542,8 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
 
     if (assets_) {
         const auto& static_lights = assets_->getActiveStaticLightAssets();
-        std::cout << "[LightMap] ensure_chunk_rebaked: stamping per-chunk lights (assets=" << static_lights.size()
-                  << ") for chunk(" << chunk.i << "," << chunk.j << ")" << std::endl;
+        log::debug(std::string("[LightMap] ensure_chunk_rebaked: stamping per-chunk lights (assets=") + std::to_string(static_lights.size()) +
+                   ") for chunk(" + std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ")");
         for (const Asset* asset : static_lights) {
             if (!asset || !asset->info) {
                 continue;
