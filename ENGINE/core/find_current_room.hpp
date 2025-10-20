@@ -16,7 +16,7 @@ class CurrentRoomFinder {
     void setPlayer(Asset*& player);
 
         private:
-    std::vector<Room*>& rooms_;
-    Asset*&             player_;
+    std::vector<Room*>* rooms_;
+    Asset**             player_;
     mutable Room*       last_room_ = nullptr;
 };
