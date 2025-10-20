@@ -77,7 +77,6 @@ void MainApp::init() {
 void MainApp::setup() {
         std::srand(static_cast<unsigned int>(std::time(nullptr)));
         // Remove on-screen loading status updates; use terminal logging only.
-        std::unique_ptr<loading_status::ScopedNotifier> notifier; // intentionally unused (no UI binding)
         try {
                 nlohmann::json map_manifest_json = nlohmann::json::object();
                 std::string content_root;

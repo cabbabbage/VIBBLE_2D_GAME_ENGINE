@@ -4,6 +4,7 @@
 #include "utils/generate_faded_mask.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/loading_status_notifier.hpp"
+#include "utils/log.hpp"
 #include <SDL_image.h>
 #include <SDL_mixer.h>
 #include <algorithm>
@@ -1157,12 +1158,16 @@ void Animation::load(const std::string& trigger,
                 origin_label = "animation '" + source.name + "'";
         }
 
-        std::cout << "[AnimationLoader] " << info.name << "::" << trigger << " -> "
-                  << frames.size() << " frame(s)";
-        if (frame_width > 0 && frame_height > 0) {
-                std::cout << " @ " << frame_width << "x" << frame_height;
+        {
+                std::ostringstream oss;
+                oss << "[AnimationLoader] " << info.name << "::" << trigger
+                    << " -> " << frames.size() << " frame(s)";
+                if (frame_width > 0 && frame_height > 0) {
+                        oss << " @ " << frame_width << "x" << frame_height;
+                }
+                oss << " from " << origin_label << " in " << std::fixed << std::setprecision(3) << elapsed_secs << "s";
+                log::debug(oss.str());
         }
-        std::cout << " from " << origin_label << " in " << elapsed_secs << "s\n";
 }
 
 SDL_Texture* Animation::get_frame(const AnimationFrame* frame) const {
