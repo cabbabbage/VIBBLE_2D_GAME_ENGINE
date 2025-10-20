@@ -146,11 +146,26 @@ void AssetLibrary::ensureAllAnimationsLoaded(SDL_Renderer* renderer) {
 }
 
 void AssetLibrary::loadAnimationsFor(SDL_Renderer* renderer, const std::unordered_set<std::string>& names) {
+    std::cout << "[AssetLibrary] loadAnimationsFor: count=" << names.size() << "\n";
+    std::size_t idx = 0;
     for (const auto& name : names) {
+        std::cout << "[AssetLibrary] (" << idx << "/" << names.size() << ") loading '" << name << "'...\n" << std::flush;
         auto it = info_by_name_.find(name);
         if (it != info_by_name_.end() && it->second) {
-            it->second->loadAnimations(renderer);
+            try {
+                it->second->loadAnimations(renderer);
+            } catch (const std::exception& ex) {
+                std::cerr << "[AssetLibrary] Exception while loading animations for '" << name << "': "
+                          << ex.what() << "\n" << std::flush;
+                throw;
+            } catch (...) {
+                std::cerr << "[AssetLibrary] Unknown exception while loading animations for '" << name << "'\n" << std::flush;
+                throw;
+            }
+        } else {
+            std::cerr << "[AssetLibrary] Missing AssetInfo for '" << name << "'\n";
         }
+        ++idx;
     }
     animations_fully_cached_ = false;
 }

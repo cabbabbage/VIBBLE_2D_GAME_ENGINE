@@ -65,6 +65,7 @@ map_path_(std::move(content_root)),
 renderer_(renderer),
 manifest_store_(manifest_store)
 {
+        std::cout << "[AssetLoader] Starting loader for map_id='" << map_id_ << "'\n";
         using_shared_asset_library_ = (shared_asset_library != nullptr);
         if (using_shared_asset_library_) {
                 asset_library_ = shared_asset_library;
@@ -79,6 +80,7 @@ manifest_store_(manifest_store)
         loading_status::notify("Loading map data");
         load_map_json(map_manifest);
         const auto map_end = std::chrono::steady_clock::now();
+        std::cout << "[AssetLoader] Map JSON parsed for '" << map_id_ << "'\n";
 
         const nlohmann::json& audio_manifest = map_info_json_.contains("audio") ? map_info_json_.at("audio") : nlohmann::json::object();
         AudioEngine::instance().init(map_id_, audio_manifest, map_path_);
@@ -86,11 +88,16 @@ manifest_store_(manifest_store)
         const auto library_begin = std::chrono::steady_clock::now();
         loading_status::notify("Loading assets");
         const auto library_end = std::chrono::steady_clock::now();
+        if (asset_library_) {
+                std::cout << "[AssetLoader] Asset library ready with "
+                          << asset_library_->all().size() << " known assets\n";
+        }
 
         const auto rooms_begin = std::chrono::steady_clock::now();
         loading_status::notify("Creating map");
         loadRooms();
         const auto rooms_end = std::chrono::steady_clock::now();
+        std::cout << "[AssetLoader] Rooms created: " << rooms_.size() << "\n";
         loading_status::notify("Loading assets");
     {
         const auto preload_begin = std::chrono::steady_clock::now();
@@ -105,6 +112,7 @@ manifest_store_(manifest_store)
                         }
                 }
                 const std::size_t preload_count = used.size();
+                std::cout << "[AssetLoader] Preloading animations for used assets (" << preload_count << ")...\n";
                 asset_library_->loadAnimationsFor(renderer_, used);
 
                 const auto preload_end = std::chrono::steady_clock::now();
@@ -125,6 +133,7 @@ manifest_store_(manifest_store)
         }
     }
         loading_status::notify("Loading assets");
+        std::cout << "[AssetLoader] Beginning finalizeAssets across rooms...\n";
         finalizeAssets();
         std::cout << "[AssetLoader] Asset finalization completed; all assets are ready.\n";
 
@@ -410,10 +419,36 @@ void AssetLoader::loadRooms() {
 }
 
 void AssetLoader::finalizeAssets() {
+        std::size_t room_index = 0;
         for (Room* room : rooms_) {
+                std::size_t asset_index = 0;
                 for (auto& asset_up : room->assets) {
-                        asset_up->finalize_setup();
+                        Asset* a = asset_up.get();
+                        if (!a || !a->info) {
+                                std::cout << "[AssetLoader] finalizeAssets: room=" << room_index
+                                          << " asset=" << asset_index << " skipped (null info)\n";
+                                ++asset_index;
+                                continue;
+                        }
+                        const std::string name = a->info->name;
+                        std::cout << "[AssetLoader] finalizeAssets: room=" << room_index
+                                  << " asset=" << asset_index << " name='" << name << "' -> begin\n";
+                        try {
+                                asset_up->finalize_setup();
+                        } catch (const std::exception& ex) {
+                                std::cerr << "[AssetLoader] finalizeAssets: exception during finalize_setup for '"
+                                          << name << "': " << ex.what() << "\n" << std::flush;
+                                throw;
+                        } catch (...) {
+                                std::cerr << "[AssetLoader] finalizeAssets: unknown exception during finalize_setup for '"
+                                          << name << "'\n" << std::flush;
+                                throw;
+                        }
+                        std::cout << "[AssetLoader] finalizeAssets: room=" << room_index
+                                  << " asset=" << asset_index << " name='" << name << "' -> done\n";
+                        ++asset_index;
                 }
+                ++room_index;
         }
 }
 
@@ -448,6 +483,7 @@ std::vector<std::unique_ptr<Asset>> AssetLoader::extract_all_assets() {
 void AssetLoader::createAssets(world::Grid& grid) {
         grid.set_chunk_resolution(std::max(0, map_grid_settings_.r_chunk));
         spawned_assets_ = extract_all_assets();
+        std::cout << "[AssetLoader] Extracted " << spawned_assets_.size() << " visible assets from rooms\n";
         for (const auto& asset_up : spawned_assets_) {
                 Asset* asset = asset_up.get();
                 if (!asset) {
