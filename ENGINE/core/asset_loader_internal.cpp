@@ -6,6 +6,26 @@
 
 namespace asset_loader_internal {
 
+namespace {
+
+double distance_sq_to_aabb(const SDL_Point& point,
+                           double min_x,
+                           double min_y,
+                           double max_x,
+                           double max_y) {
+    const double px = static_cast<double>(point.x);
+    const double py = static_cast<double>(point.y);
+    double dx = 0.0;
+    if (px < min_x) dx = min_x - px;
+    else if (px > max_x) dx = px - max_x;
+    double dy = 0.0;
+    if (py < min_y) dy = min_y - py;
+    else if (py > max_y) dy = py - max_y;
+    return dx * dx + dy * dy;
+}
+
+} // namespace
+
 std::vector<ZoneCacheEntry> build_zone_cache(const std::vector<const Area*>& zones) {
     std::vector<ZoneCacheEntry> cache;
     cache.reserve(zones.size());
@@ -29,26 +49,6 @@ bool point_inside_any_zone(const SDL_Point& point, const std::vector<ZoneCacheEn
         }
     }
     return false;
-}
-
-namespace {
-
-double distance_sq_to_aabb(const SDL_Point& point,
-                           double min_x,
-                           double min_y,
-                           double max_x,
-                           double max_y) {
-    const double px = static_cast<double>(point.x);
-    const double py = static_cast<double>(point.y);
-    double dx = 0.0;
-    if (px < min_x) dx = min_x - px;
-    else if (px > max_x) dx = px - max_x;
-    double dy = 0.0;
-    if (py < min_y) dy = min_y - py;
-    else if (py > max_y) dy = py - max_y;
-    return dx * dx + dy * dy;
-}
-
 }
 
 double min_distance_sq_to_zones(const SDL_Point& point,
@@ -98,5 +98,5 @@ double min_distance_sq_to_zones(const SDL_Point& point,
     return minDistSq;
 }
 
-}
+} // namespace asset_loader_internal
 

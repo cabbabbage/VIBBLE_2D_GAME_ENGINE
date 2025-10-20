@@ -8,7 +8,9 @@
 #include <cmath>
 
 CurrentRoomFinder::CurrentRoomFinder(std::vector<Room*>& rooms, Asset*& player)
-: rooms_(rooms), player_(player), last_room_(nullptr) {}
+    : rooms_(rooms)
+    , player_(player)
+    , last_room_(nullptr) {}
 
 void CurrentRoomFinder::setRooms(std::vector<Room*>& rooms) {
     rooms_ = rooms;
@@ -29,8 +31,10 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
     const int px = player_->pos.x;
     const int py = player_->pos.y;
     auto contains_player = [&](Room* room) -> bool {
-        return room && room->room_area && room->room_area->contains_point(SDL_Point{px, py});
-};
+        return room &&
+               room->room_area &&
+               room->room_area->contains_point(SDL_Point{px, py});
+    };
 
     auto try_room = [&](Room* room) -> Room* {
         if (contains_player(room)) {
@@ -38,7 +42,7 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
             return room;
         }
         return nullptr;
-};
+    };
 
     if (Room* matched = try_room(last_room_)) return matched;
 
