@@ -4,15 +4,11 @@
 #include <limits>
 #include <vector>
 
-namespace asset_loader_internal {
-
-namespace {
-
-double distance_sq_to_aabb(const SDL_Point& point,
-                           double min_x,
-                           double min_y,
-                           double max_x,
-                           double max_y) {
+static double distance_sq_to_aabb(const SDL_Point& point,
+                                  double min_x,
+                                  double min_y,
+                                  double max_x,
+                                  double max_y) {
     const double px = static_cast<double>(point.x);
     const double py = static_cast<double>(point.y);
     double dx = 0.0;
@@ -24,7 +20,7 @@ double distance_sq_to_aabb(const SDL_Point& point,
     return dx * dx + dy * dy;
 }
 
-} // namespace
+namespace asset_loader_internal {
 
 std::vector<ZoneCacheEntry> build_zone_cache(const std::vector<const Area*>& zones) {
     std::vector<ZoneCacheEntry> cache;

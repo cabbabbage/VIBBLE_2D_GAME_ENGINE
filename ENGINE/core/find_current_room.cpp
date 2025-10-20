@@ -7,10 +7,7 @@
 #include <limits>
 #include <cmath>
 
-CurrentRoomFinder::CurrentRoomFinder(std::vector<Room*>& rooms, Asset*& player)
-    : rooms_(&rooms)
-    , player_(&player)
-    , last_room_(nullptr) {}
+CurrentRoomFinder::CurrentRoomFinder(std::vector<Room*>& rooms, Asset*& player) : rooms_(&rooms), player_(&player), last_room_(nullptr) {}
 
 void CurrentRoomFinder::setRooms(std::vector<Room*>& rooms) {
     rooms_ = &rooms;
