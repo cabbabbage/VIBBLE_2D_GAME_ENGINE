@@ -12,6 +12,7 @@ class Asset;
 class camera;
 namespace world { class Grid; }
 class PrecomputedLightMap;
+#include "render/precomputed_light_map.hpp"
 
 namespace world {
 

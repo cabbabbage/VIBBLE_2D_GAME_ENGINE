@@ -161,7 +161,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 } // namespace
 
 // LightMap implementation
-// ctor/dtor defined inline in header
+// ctor/dtor inlined in header
 
 void LightMap::apply_precomputed_light_map(SDL_Renderer* renderer) {
     if (!pending_precomputed_map_ || precomputed_applied_) {
