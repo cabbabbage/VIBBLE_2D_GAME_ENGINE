@@ -137,14 +137,53 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
     return {gx, gy};
 }
 
+// Compute average brightness in front of the chunk (negative j direction),
+// adjusted by anisotropic horizontal/vertical falloff. Returns [0,1].
+static float compute_front_average_strength(const LightMap::ShadowSettings& settings,
+                                            const world::Grid& grid,
+                                            const world::Chunk& center) {
+    const int R  = std::max(0, settings.search_radius_cells);
+    const float fh = std::max(0.0f, settings.falloff_horizontal);
+    const float fv = std::max(0.0f, settings.falloff_vertical);
+
+    double accum_w = 0.0;
+    double accum_v = 0.0;
+
+    for (int dj = -R; dj <= -1; ++dj) { // only in-front rows (towards negative j)
+        for (int di = -R; di <= R; ++di) {
+            const int ni = center.i + di;
+            const int nj = center.j + dj;
+            const world::Chunk* n = grid.find_chunk_ij(ni, nj);
+            if (!n) continue;
+
+            const float sx = std::abs(static_cast<float>(di));
+            const float sy = std::abs(static_cast<float>(dj));
+            const float w  = 1.0f / (1.0f + sx * fh + sy * fv);
+            const float s  = (n->light.is_active ? n->light.current_strength : n->base_brightness);
+            accum_w += static_cast<double>(w);
+            accum_v += static_cast<double>(w) * static_cast<double>(std::clamp(s, 0.0f, 1.0f));
+        }
+    }
+
+    if (accum_w <= 1e-8) {
+        return std::clamp(center.light.current_strength, 0.0f, 1.0f);
+    }
+    const double avg = accum_v / accum_w;
+    return static_cast<float>(std::clamp(avg, 0.0, 1.0));
+}
+
 static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
+                                              const world::Grid& grid,
                                               const std::pair<float,float>& grad,
                                               world::Chunk& chunk) {
-    const float current = std::clamp(chunk.light.current_strength, 0.0f, 1.0f);
+    // Opacity is inverse of combined average strength of chunks in front of this one.
+    const float front_avg = compute_front_average_strength(settings, grid, chunk);
+    chunk.shadow.opacity  = std::clamp(1.0f - front_avg, 0.0f, 1.0f);
 
-    chunk.shadow.opacity = current;
-    chunk.shadow.scale   = settings.base_shadow_scale;
+    // Keep scale fixed from settings for now.
+    chunk.shadow.scale    = settings.base_shadow_scale;
 
+    // Keep previous offset/parallax behavior as-is.
     float gx = grad.first, gy = grad.second;
     float mag = std::sqrt(gx*gx + gy*gy);
     float nx = (mag > 1e-4f) ? (gx / mag) : 0.0f;
@@ -605,7 +644,7 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
         const float fx     = std::max(0.0f, settings.falloff_horizontal);
         const float fy     = std::max(0.0f, settings.falloff_vertical);
         const auto grad    = compute_brightness_gradient(*chunk, grid, radius, fx, fy);
-        compute_use_shadow_data_for_chunk(settings, grad, *chunk);
+        compute_use_shadow_data_for_chunk(settings, grid, grad, *chunk);
 
         chunk->light.needs_update = false;
     }
