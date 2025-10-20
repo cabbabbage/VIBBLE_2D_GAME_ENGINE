@@ -17,6 +17,7 @@
 #include "dev_mode/core/manifest_store.hpp"
 #include "utils/loading_status_notifier.hpp"
 #include "render/precomputed_light_map.hpp"
+#include "world/grid.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_mixer.h>
@@ -133,7 +134,9 @@ void MainApp::setup() {
                                                        asset_library_);
                 loading_status::notify("Spawning assets");
                 auto spawn_begin = std::chrono::steady_clock::now();
-                auto all_assets = loader_->createAssets();
+                world::Grid world_grid{};
+                loader_->createAssets(world_grid);
+                auto all_assets = loader_->take_spawned_assets();
                 const auto asset_count = all_assets.size();
                 const auto room_count = loader_->getRooms().size();
                 Asset* player_ptr = nullptr;
@@ -161,7 +164,8 @@ void MainApp::setup() {
                                           loader_->map_identifier(),
                                           loader_->map_manifest(),
                                           loader_->content_root(),
-                                          std::move(precomputed_light_map));
+                                          std::move(precomputed_light_map),
+                                          std::move(world_grid));
                 const double spawn_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - spawn_begin).count() / 1000.0;
                 std::ostringstream init_summary;
                 init_summary << "[Init] Assets initialized: " << asset_count

@@ -111,7 +111,8 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                const std::string& map_id,
                const nlohmann::json& map_manifest,
                std::string content_root,
-               std::unique_ptr<PrecomputedLightMap> precomputed_light_map)
+               std::unique_ptr<PrecomputedLightMap> precomputed_light_map,
+               world::Grid&& world_grid)
     : camera_(
           screen_width_,
           screen_height_,
@@ -127,6 +128,7 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
       ),
       screen_width(screen_width_),
       screen_height(screen_height_),
+      world_grid_(std::move(world_grid)),
       library_(library),
       map_id_(map_id),
       map_path_(std::move(content_root)),
@@ -158,8 +160,6 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     for (Asset* a : all) {
         if (!a) continue;
         a->set_assets(this);
-        // Register into world grid residency
-        world_grid_.register_asset(a);
     }
 
     update_filtered_active_assets();

@@ -4,12 +4,14 @@
 #include <numeric>
 #include <algorithm>
 #include <memory>
+#include <vector>
 #include <unordered_map>
 #include <unordered_set>
 #include <cmath>
 #include <stdexcept>
 #include <chrono>
 #include <limits>
+#include <cstdint>
 #include <SDL.h>
 #include "asset/Asset.hpp"
 #include "asset/asset_library.hpp"
@@ -20,6 +22,8 @@
 #include "utils/map_grid_settings.hpp"
 #include "map_generation/generate_rooms.hpp"
 #include "map_generation/map_layers_geometry.hpp"
+#include "world/chunk.hpp"
+#include "world/grid.hpp"
 #include <nlohmann/json.hpp>
 #include "utils/loading_status_notifier.hpp"
 using json = nlohmann::json;
@@ -27,9 +31,6 @@ using json = nlohmann::json;
 namespace {
         // Temporary guard to preserve the merging implementation without applying it.
         constexpr bool kEnableAssetMerging = false;
-        constexpr int  kPrecomputedCellsPerQuadrant = 2;
-        constexpr int  kPrecomputedGridResolution   = 32;
-
         Asset* findCenterAsset(const std::vector<Asset*>& group) {
                 if (group.empty()) return nullptr;
                 double avgX = std::accumulate(group.begin(), group.end(), 0.0,
@@ -48,114 +49,6 @@ namespace {
                         }
         }
                 return center;
-        }
-
-        std::vector<std::uint8_t> compute_quadrant_samples(SDL_Renderer* renderer,
-                                                            SDL_Texture* texture,
-                                                            int grid_resolution,
-                                                            float& out_average) {
-                std::vector<std::uint8_t> samples;
-                out_average = 0.0f;
-                if (!renderer || !texture || grid_resolution <= 0) {
-                        return samples;
-                }
-
-                int tex_w = 0;
-                int tex_h = 0;
-                if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-                        return samples;
-                }
-
-                const std::size_t pixel_count = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
-                std::vector<std::uint32_t> pixels(pixel_count);
-                if (pixels.empty()) {
-                        return samples;
-                }
-
-                SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-                SDL_SetRenderTarget(renderer, texture);
-                const int pitch = tex_w * static_cast<int>(sizeof(std::uint32_t));
-                if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, pixels.data(), pitch) != 0) {
-                        SDL_SetRenderTarget(renderer, prev_target);
-                        return samples;
-                }
-                SDL_SetRenderTarget(renderer, prev_target);
-
-                std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> format(
-                    SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
-                if (!format) {
-                        return samples;
-                }
-
-                samples.assign(static_cast<std::size_t>(grid_resolution) * static_cast<std::size_t>(grid_resolution), 0);
-                double accum = 0.0;
-                int    total = 0;
-
-                auto compute_bounds = [](int coord, int divisions, int extent) {
-                        const double start = static_cast<double>(coord) * static_cast<double>(extent) /
-                                             static_cast<double>(divisions);
-                        const double end   = static_cast<double>(coord + 1) * static_cast<double>(extent) /
-                                             static_cast<double>(divisions);
-                        int min_v = static_cast<int>(std::floor(start));
-                        int max_v = static_cast<int>(std::ceil(end));
-                        min_v = std::clamp(min_v, 0, extent - 1);
-                        max_v = std::clamp(std::max(min_v + 1, max_v), 1, extent);
-                        return std::pair<int, int>{min_v, max_v};
-                };
-
-                for (int gy = 0; gy < grid_resolution; ++gy) {
-                        const auto [top, bottom] = compute_bounds(gy, grid_resolution, tex_h);
-                        for (int gx = 0; gx < grid_resolution; ++gx) {
-                                const auto [left, right] = compute_bounds(gx, grid_resolution, tex_w);
-
-                                double cell_sum = 0.0;
-                                int    count    = 0;
-                                for (int py = top; py < bottom; ++py) {
-                                        const std::size_t row_offset = static_cast<std::size_t>(py) * static_cast<std::size_t>(tex_w);
-                                        for (int px = left; px < right; ++px) {
-                                                const std::uint32_t pixel = pixels[row_offset + static_cast<std::size_t>(px)];
-                                                Uint8 r = 0, g = 0, b = 0, a = 0;
-                                                SDL_GetRGBA(pixel, format.get(), &r, &g, &b, &a);
-                                                const double luminance = (0.2126 * static_cast<double>(r) +
-                                                                          0.7152 * static_cast<double>(g) +
-                                                                          0.0722 * static_cast<double>(b)) /
-                                                                         255.0;
-                                                cell_sum += luminance;
-                                                ++count;
-                                        }
-                                }
-
-                                if (count == 0) {
-                                        const int sample_x = std::clamp((left + right) / 2, 0, tex_w - 1);
-                                        const int sample_y = std::clamp((top + bottom) / 2, 0, tex_h - 1);
-                                        const std::uint32_t pixel = pixels[static_cast<std::size_t>(sample_y) *
-                                                                            static_cast<std::size_t>(tex_w) +
-                                                                            static_cast<std::size_t>(sample_x)];
-                                        Uint8 r = 0, g = 0, b = 0, a = 0;
-                                        SDL_GetRGBA(pixel, format.get(), &r, &g, &b, &a);
-                                        const double luminance = (0.2126 * static_cast<double>(r) +
-                                                                  0.7152 * static_cast<double>(g) +
-                                                                  0.0722 * static_cast<double>(b)) /
-                                                                 255.0;
-                                        cell_sum = luminance;
-                                        count    = 1;
-                                }
-
-                                const double average = cell_sum / static_cast<double>(std::max(1, count));
-                                const int stored = std::clamp(static_cast<int>(std::lround(average * 255.0)), 0, 255);
-                                samples[static_cast<std::size_t>(gy) * static_cast<std::size_t>(grid_resolution) +
-                                        static_cast<std::size_t>(gx)] = static_cast<std::uint8_t>(stored);
-                                accum += average;
-                                ++total;
-                        }
-                }
-
-                if (total > 0) {
-                        out_average = static_cast<float>(std::clamp(accum / static_cast<double>(total), 0.0, 1.0));
-                } else {
-                        out_average = 0.0f;
-                }
-                return samples;
         }
 }
 
@@ -232,7 +125,6 @@ manifest_store_(manifest_store)
     }
         loading_status::notify("Loading assets");
         finalizeAssets();
-        precompute_light_map();
 
         const auto overall_end = std::chrono::steady_clock::now();
         const double map_ms = std::chrono::duration_cast<std::chrono::milliseconds>(map_end - map_begin).count();
@@ -551,8 +443,22 @@ std::vector<std::unique_ptr<Asset>> AssetLoader::extract_all_assets() {
         return out;
 }
 
-std::vector<std::unique_ptr<Asset>> AssetLoader::createAssets() {
-        return extract_all_assets();
+void AssetLoader::createAssets(world::Grid& grid) {
+        grid.set_chunk_resolution(std::max(0, map_grid_settings_.resolution));
+        spawned_assets_ = extract_all_assets();
+        for (const auto& asset_up : spawned_assets_) {
+                Asset* asset = asset_up.get();
+                if (!asset) {
+                        continue;
+                }
+                grid.register_asset(asset);
+        }
+        instantiate_map_chunks(grid);
+        precompute_light_map(grid);
+}
+
+std::vector<std::unique_ptr<Asset>> AssetLoader::take_spawned_assets() {
+        return std::move(spawned_assets_);
 }
 
 std::vector<const Area*> AssetLoader::getAllRoomAndTrailAreas() const {
@@ -640,153 +546,256 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
         }
 }
 
-void AssetLoader::precompute_light_map() {
+void AssetLoader::precompute_light_map(world::Grid& grid) {
         precomputed_light_map_.reset();
+        for (world::Chunk* chunk : map_chunks_) {
+                if (!chunk) {
+                        continue;
+                }
+                bake_chunk_lighting(grid, *chunk);
+        }
+}
+
+namespace {
+int floor_div(int value, int step) {
+        if (step == 0) {
+                return 0;
+        }
+        const int quotient = value / step;
+        const int remainder = value % step;
+        if (remainder == 0) {
+                return quotient;
+        }
+        if ((remainder < 0) != (step < 0)) {
+                return quotient - 1;
+        }
+        return quotient;
+}
+} // namespace
+
+void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
+        map_chunks_.clear();
+        const int r_chunk = std::max(0, grid.chunk_resolution());
+        const int step    = 1 << r_chunk;
+        if (step <= 0) {
+                return;
+        }
+
+        SDL_Point origin = grid.origin();
+        int min_x = std::numeric_limits<int>::max();
+        int min_y = std::numeric_limits<int>::max();
+        int max_x = std::numeric_limits<int>::min();
+        int max_y = std::numeric_limits<int>::min();
+        bool has_assets = false;
+
+        for (const auto& asset_up : spawned_assets_) {
+                const Asset* asset = asset_up.get();
+                if (!asset) {
+                        continue;
+                }
+                has_assets = true;
+                min_x = std::min(min_x, asset->pos.x);
+                min_y = std::min(min_y, asset->pos.y);
+                max_x = std::max(max_x, asset->pos.x);
+                max_y = std::max(max_y, asset->pos.y);
+        }
+
+        const int fallback_min_x = static_cast<int>(std::floor(map_center_x_ - map_radius_));
+        const int fallback_min_y = static_cast<int>(std::floor(map_center_y_ - map_radius_));
+        const int fallback_max_x = static_cast<int>(std::ceil(map_center_x_ + map_radius_));
+        const int fallback_max_y = static_cast<int>(std::ceil(map_center_y_ + map_radius_));
+
+        if (!has_assets) {
+                min_x = fallback_min_x;
+                min_y = fallback_min_y;
+                max_x = fallback_max_x;
+                max_y = fallback_max_y;
+        } else {
+                min_x = std::min(min_x, fallback_min_x);
+                min_y = std::min(min_y, fallback_min_y);
+                max_x = std::max(max_x, fallback_max_x);
+                max_y = std::max(max_y, fallback_max_y);
+        }
+
+        min_x -= step;
+        min_y -= step;
+        max_x += step;
+        max_y += step;
+
+        const int i_min = floor_div(min_x - origin.x, step);
+        const int j_min = floor_div(min_y - origin.y, step);
+        const int i_max = floor_div(max_x - origin.x + step - 1, step);
+        const int j_max = floor_div(max_y - origin.y + step - 1, step);
+
+        for (int j = j_min; j <= j_max; ++j) {
+                for (int i = i_min; i <= i_max; ++i) {
+                        world::Chunk& chunk = grid.get_or_create_chunk_ij(i, j);
+                        chunk.base_brightness     = 0.0f;
+                        chunk.brightness_strength = 1.0f;
+                        chunk.opacity_strength    = 1.0f;
+                        chunk.scale_strength      = 1.0f;
+                        chunk.offset_x            = 0;
+                        chunk.offset_y            = 0;
+                        chunk.lighting_dirty      = true;
+                        chunk.has_dynamic_overlay = false;
+                        map_chunks_.push_back(&chunk);
+                }
+        }
+}
+
+void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
+        chunk.base_brightness     = 0.0f;
+        chunk.brightness_strength = 1.0f;
+        chunk.opacity_strength    = 1.0f;
+        chunk.scale_strength      = 1.0f;
+        chunk.offset_x            = 0;
+        chunk.offset_y            = 0;
+        chunk.has_dynamic_overlay = false;
+        chunk.lighting_dirty      = true;
+
+        if (chunk.static_light_map) {
+                SDL_DestroyTexture(chunk.static_light_map);
+                chunk.static_light_map = nullptr;
+        }
+
         if (!renderer_) {
                 return;
         }
-        const int spacing = std::max(1, map_grid_settings_.spacing());
-        const double diameter = std::max(0.0, map_radius_ * 2.0);
-        const int base_size = static_cast<int>(std::ceil(std::max(1.0, diameter)));
-        int cells_per_side = (base_size + spacing - 1) / spacing;
-        cells_per_side = std::max(1, cells_per_side);
-        if (cells_per_side % kPrecomputedCellsPerQuadrant != 0) {
-                cells_per_side += kPrecomputedCellsPerQuadrant - (cells_per_side % kPrecomputedCellsPerQuadrant);
-        }
-        const int padded_size = cells_per_side * spacing;
 
-        auto map = std::make_unique<PrecomputedLightMap>();
-        map->map_width          = padded_size;
-        map->map_height         = padded_size;
-        map->grid_spacing       = spacing;
-        map->cells_per_quadrant = kPrecomputedCellsPerQuadrant;
-        map->quadrant_cols      = cells_per_side / kPrecomputedCellsPerQuadrant;
-        map->quadrant_rows      = map->quadrant_cols;
-        map->grid_resolution    = kPrecomputedGridResolution;
-        map->padding_cells      = 0;
-
-        SDL_Texture* full_tex = SDL_CreateTexture(renderer_,
-                                                  SDL_PIXELFORMAT_RGBA8888,
-                                                  SDL_TEXTUREACCESS_TARGET,
-                                                  map->map_width,
-                                                  map->map_height);
-        if (!full_tex) {
-                std::cerr << "[AssetLoader] Failed to create full light map texture: " << SDL_GetError() << "\n";
+        const int width  = std::max(1, chunk.world_bounds.w);
+        const int height = std::max(1, chunk.world_bounds.h);
+        SDL_Texture* texture = SDL_CreateTexture(renderer_,
+                                                 SDL_PIXELFORMAT_RGBA8888,
+                                                 SDL_TEXTUREACCESS_TARGET,
+                                                 width,
+                                                 height);
+        if (!texture) {
                 return;
         }
-        SDL_SetTextureBlendMode(full_tex, SDL_BLENDMODE_ADD);
+        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_ADD);
 #if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetTextureScaleMode(full_tex, SDL_ScaleModeBest);
+        SDL_SetTextureScaleMode(texture, SDL_ScaleModeBest);
 #endif
 
-        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
-        SDL_SetRenderTarget(renderer_, full_tex);
+        SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
+        SDL_SetRenderTarget(renderer_, texture);
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
         SDL_RenderClear(renderer_);
 
-        for (Room* room : rooms_) {
-                if (!room) {
+        for (const auto& asset_up : spawned_assets_) {
+                const Asset* asset = asset_up.get();
+                if (!asset || !asset->info) {
                         continue;
                 }
-                for (const auto& asset_up : room->assets) {
-                        Asset* asset = asset_up.get();
-                        if (!asset || !asset->info) {
+                if (asset->info->light_sources.empty() || asset->info->moving_asset) {
+                        continue;
+                }
+                const float scale_factor = (asset->info && std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f)
+                                              ? asset->info->scale_factor
+                                              : 1.0f;
+                for (const auto& light : asset->info->light_sources) {
+                        SDL_Texture* tex = light.texture;
+                        if (!tex) {
                                 continue;
                         }
-                        if (asset->info->light_sources.empty() || asset->info->moving_asset) {
+                        int src_w = light.cached_w > 0 ? light.cached_w : 0;
+                        int src_h = light.cached_h > 0 ? light.cached_h : 0;
+                        if (src_w <= 0 || src_h <= 0) {
+                                SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+                        }
+                        if (src_w <= 0 || src_h <= 0) {
                                 continue;
                         }
-                        const float scale_factor = (asset->info && std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f)
-                                                      ? asset->info->scale_factor
-                                                      : 1.0f;
-                        for (const auto& light : asset->info->light_sources) {
-                                SDL_Texture* tex = light.texture;
-                                if (!tex) {
-                                        continue;
-                                }
-                                int src_w = light.cached_w > 0 ? light.cached_w : 0;
-                                int src_h = light.cached_h > 0 ? light.cached_h : 0;
-                                if (src_w <= 0 || src_h <= 0) {
-                                        SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
-                                }
-                                if (src_w <= 0 || src_h <= 0) {
-                                        continue;
-                                }
 
-                                const int draw_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_w) * scale_factor)));
-                                const int draw_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_h) * scale_factor)));
-                                SDL_Point world_center{asset->pos.x + light.offset_x, asset->pos.y + light.offset_y};
-                                SDL_Rect dst{world_center.x - draw_w / 2,
-                                             world_center.y - draw_h / 2,
-                                             draw_w,
-                                             draw_h};
+                        const int draw_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_w) * scale_factor)));
+                        const int draw_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_h) * scale_factor)));
+                        SDL_Point world_center{asset->pos.x + light.offset_x, asset->pos.y + light.offset_y};
+                        SDL_Rect world_dst{world_center.x - draw_w / 2,
+                                           world_center.y - draw_h / 2,
+                                           draw_w,
+                                           draw_h};
 
-                                Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
-                                SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
-                                SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
-                                SDL_GetTextureAlphaMod(tex, &save_a);
-                                SDL_GetTextureBlendMode(tex, &save_bm);
-
-                                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
-                                SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-
-                                SDL_SetTextureBlendMode(tex, save_bm);
-                                SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
-                                SDL_SetTextureAlphaMod(tex, save_a);
+                        SDL_Rect intersection{};
+                        if (!SDL_IntersectRect(&world_dst, &chunk.world_bounds, &intersection)) {
+                                continue;
                         }
+
+                        Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
+                        SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
+                        SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
+                        SDL_GetTextureAlphaMod(tex, &save_a);
+                        SDL_GetTextureBlendMode(tex, &save_bm);
+
+                        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
+                        SDL_Rect local_dst = world_dst;
+                        local_dst.x -= chunk.world_bounds.x;
+                        local_dst.y -= chunk.world_bounds.y;
+                        SDL_RenderCopy(renderer_, tex, nullptr, &local_dst);
+
+                        SDL_SetTextureBlendMode(tex, save_bm);
+                        SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
+                        SDL_SetTextureAlphaMod(tex, save_a);
                 }
         }
 
-        SDL_SetRenderTarget(renderer_, prev_target);
+        SDL_SetRenderTarget(renderer_, previous_target);
 
-        const int quadrant_size_px = spacing * kPrecomputedCellsPerQuadrant;
-        for (int row = 0; row < map->quadrant_rows; ++row) {
-            for (int col = 0; col < map->quadrant_cols; ++col) {
-                SDL_Rect world_rect{col * quadrant_size_px,
-                                            row * quadrant_size_px,
-                                            quadrant_size_px,
-                                            quadrant_size_px};
-                        SDL_Texture* quad_tex = SDL_CreateTexture(renderer_,
-                                                                  SDL_PIXELFORMAT_RGBA8888,
-                                                                  SDL_TEXTUREACCESS_TARGET,
-                                                                  world_rect.w,
-                                                                  world_rect.h);
-                        if (!quad_tex) {
-                                std::cerr << "[AssetLoader] Failed to create quadrant texture: " << SDL_GetError() << "\n";
-                                continue;
-                        }
-                        SDL_SetTextureBlendMode(quad_tex, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2,0,12)
-                        SDL_SetTextureScaleMode(quad_tex, SDL_ScaleModeBest);
-#endif
-                        SDL_Texture* prev = SDL_GetRenderTarget(renderer_);
-                        SDL_SetRenderTarget(renderer_, quad_tex);
-                        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-                        SDL_RenderClear(renderer_);
-                        SDL_RenderCopy(renderer_, full_tex, &world_rect, nullptr);
-                        SDL_SetRenderTarget(renderer_, prev);
+        chunk.base_brightness = compute_chunk_average_brightness(texture);
+        chunk.base_brightness = std::clamp(chunk.base_brightness, 0.0f, 1.0f);
 
-                        PrecomputedLightMapQuadrant quad;
-                        quad.world_rect = world_rect;
-                        float average   = 0.0f;
-                        quad.light_samples = compute_quadrant_samples(renderer_, quad_tex, map->grid_resolution, average);
-                        quad.base_brightness = average;
-                        if (quad.light_samples.empty()) {
-                                quad.light_samples.assign(static_cast<std::size_t>(map->grid_resolution) *
-                                                           static_cast<std::size_t>(map->grid_resolution),
-                                                           0);
-                        }
-                        quad.texture = quad_tex;
-                        map->quadrants.push_back(std::move(quad));
-                }
+        if (texture) {
+                SDL_DestroyTexture(texture);
+        }
+}
+
+float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const {
+        if (!renderer_ || !texture) {
+                return 0.0f;
         }
 
-        // Full map texture no longer needed once quadrant textures are built.
-        if (full_tex) {
-                SDL_DestroyTexture(full_tex);
-                full_tex = nullptr;
+        int tex_w = 0;
+        int tex_h = 0;
+        if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+                return 0.0f;
         }
 
-        precomputed_light_map_ = std::move(map);
+        const std::size_t pixel_count = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
+        std::vector<std::uint32_t> pixels(pixel_count);
+        if (pixels.empty()) {
+                return 0.0f;
+        }
+
+        SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
+        SDL_SetRenderTarget(renderer_, texture);
+        const int pitch = tex_w * static_cast<int>(sizeof(std::uint32_t));
+        if (SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_RGBA8888, pixels.data(), pitch) != 0) {
+                SDL_SetRenderTarget(renderer_, previous_target);
+                return 0.0f;
+        }
+        SDL_SetRenderTarget(renderer_, previous_target);
+
+        std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> format(
+            SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
+        if (!format) {
+                return 0.0f;
+        }
+
+        double accum = 0.0;
+        for (std::uint32_t pixel : pixels) {
+                Uint8 r = 0, g = 0, b = 0, a = 0;
+                SDL_GetRGBA(pixel, format.get(), &r, &g, &b, &a);
+                const double luminance = (0.2126 * static_cast<double>(r) +
+                                          0.7152 * static_cast<double>(g) +
+                                          0.0722 * static_cast<double>(b)) /
+                                         255.0;
+                accum += luminance;
+        }
+
+        if (pixel_count == 0) {
+                return 0.0f;
+        }
+
+        const double average = accum / static_cast<double>(pixel_count);
+        return static_cast<float>(std::clamp(average, 0.0, 1.0));
 }

@@ -50,7 +50,8 @@ public:
            const std::string& map_id,
            const nlohmann::json& map_manifest,
            std::string content_root = {},
-           std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr);
+           std::unique_ptr<PrecomputedLightMap> precomputed_light_map = nullptr,
+           world::Grid&& world_grid = world::Grid{});
     ~Assets();
 
     nlohmann::json save_current_room(std::string room_name);

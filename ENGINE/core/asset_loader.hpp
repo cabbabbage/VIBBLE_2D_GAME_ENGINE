@@ -21,6 +21,11 @@ namespace devmode::core {
 class ManifestStore;
 }
 
+namespace world {
+class Grid;
+struct Chunk;
+}
+
 class AssetLoader {
 
         public:
@@ -35,7 +40,8 @@ class AssetLoader {
     std::vector<std::vector<Asset*>> group_neighboring_assets( const std::vector<Asset*>& assets, int tile_width, int tile_height, const std::string& group_type);
     void link_by_child(const std::vector<std::vector<Asset*>>& groups);
 
-    std::vector<std::unique_ptr<Asset>> createAssets();
+    void createAssets(world::Grid& grid);
+    std::vector<std::unique_ptr<Asset>> take_spawned_assets();
     std::vector<const Area*> getAllRoomAndTrailAreas() const;
     AssetLibrary* getAssetLibrary() const { return asset_library_; }
     const std::vector<Room*>& getRooms() const { return rooms_; }
@@ -74,6 +80,11 @@ class AssetLoader {
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
     void removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip = nullptr);
     void mergeLockedBoundaryAssets(const std::vector<Asset*>& locked_assets);
-    void precompute_light_map();
+    void precompute_light_map(world::Grid& grid);
+    void instantiate_map_chunks(world::Grid& grid);
+    void bake_chunk_lighting(world::Grid& grid, world::Chunk& chunk);
+    float compute_chunk_average_brightness(SDL_Texture* texture) const;
+    std::vector<std::unique_ptr<Asset>> spawned_assets_{};
+    std::vector<world::Chunk*> map_chunks_{};
     std::unique_ptr<PrecomputedLightMap> precomputed_light_map_;
 };

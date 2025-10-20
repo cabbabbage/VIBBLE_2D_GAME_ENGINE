@@ -7,6 +7,7 @@
 #include "AssetsManager.hpp"
 #include "input.hpp"
 #include "render/precomputed_light_map.hpp"
+#include "world/grid.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -251,7 +252,9 @@ void MenuUI::doRestart() {
                                                          nullptr,
                                                          asset_library_);
                 }
-                auto all_assets = loader_->createAssets();
+                world::Grid world_grid{};
+                loader_->createAssets(world_grid);
+                auto all_assets = loader_->take_spawned_assets();
                 Asset* player_ptr = nullptr;
                 for (auto& a : all_assets) {
                     Asset* candidate = a.get();
@@ -277,7 +280,8 @@ void MenuUI::doRestart() {
                                           loader_->map_identifier(),
                                           loader_->map_manifest(),
                                           loader_->content_root(),
-                                          std::move(precomputed_light_map));
+                                          std::move(precomputed_light_map),
+                                          std::move(world_grid));
                 if (!input_) input_ = new Input();
                 game_assets_->set_input(input_);
                 if (!player_ptr) {
