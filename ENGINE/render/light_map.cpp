@@ -74,6 +74,197 @@ void LightMap::destroy_chunk_texture(world::Chunk& chunk) const {
     }
 }
 
+bool LightMap::begin_full_world_mask(SDL_Renderer* renderer) const {
+    if (!assets_ || !renderer) {
+        return false;
+    }
+    if (batch_active_) {
+        return batch_full_mask_ != nullptr;
+    }
+
+    // Compute union bounds in world space for all active chunks
+    const auto& chunks = active_chunks();
+    bool have_bounds = false;
+    int min_x = 0, min_y = 0, max_x = 0, max_y = 0;
+    for (const world::Chunk* c : chunks) {
+        if (!c) continue;
+        const SDL_Rect& wb = c->world_bounds;
+        if (!have_bounds) {
+            min_x = wb.x;
+            min_y = wb.y;
+            max_x = wb.x + wb.w;
+            max_y = wb.y + wb.h;
+            have_bounds = true;
+        } else {
+            min_x = std::min(min_x, wb.x);
+            min_y = std::min(min_y, wb.y);
+            max_x = std::max(max_x, wb.x + wb.w);
+            max_y = std::max(max_y, wb.y + wb.h);
+        }
+    }
+    if (!have_bounds) {
+        return false;
+    }
+
+    const int full_w = std::max(1, max_x - min_x);
+    const int full_h = std::max(1, max_y - min_y);
+    SDL_Texture* full = SDL_CreateTexture(renderer,
+                                         SDL_PIXELFORMAT_RGBA8888,
+                                         SDL_TEXTUREACCESS_TARGET,
+                                         full_w,
+                                         full_h);
+    if (!full) {
+        return false;
+    }
+    SDL_SetTextureBlendMode(full, SDL_BLENDMODE_BLEND);
+
+    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
+    if (SDL_SetRenderTarget(renderer, full) != 0) {
+        SDL_DestroyTexture(full);
+        SDL_SetRenderTarget(renderer, previous_target);
+        return false;
+    }
+
+    // Start fully black and fully opaque: darkness mask in world units
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+#if SDL_VERSION_ATLEAST(2, 0, 6)
+    const SDL_BlendMode erase_alpha_blend = SDL_ComposeCustomBlendMode(
+        SDL_BLENDFACTOR_ZERO,                // srcRGB factor -> ignored (0)
+        SDL_BLENDFACTOR_ONE,                 // dstRGB factor -> keep dest color
+        SDL_BLENDOPERATION_ADD,
+        SDL_BLENDFACTOR_ZERO,                // srcA factor   -> 0
+        SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, // dstA factor   -> dstA * (1 - srcA)
+        SDL_BLENDOPERATION_ADD);
+#else
+    const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD;
+#endif
+
+    // Stamp static light sources in world-space
+    const auto& static_lights = assets_->getActiveStaticLightAssets();
+    for (const Asset* asset : static_lights) {
+        if (!asset || !asset->info) continue;
+        if (asset->info->light_sources.empty()) continue;
+
+        float scale_factor = 1.0f;
+        if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+            scale_factor = asset->info->scale_factor;
+        }
+
+        for (const auto& light : asset->info->light_sources) {
+            SDL_Texture* tex = light.texture;
+            if (!tex) continue;
+
+            int src_w = light.cached_w > 0 ? light.cached_w : 0;
+            int src_h = light.cached_h > 0 ? light.cached_h : 0;
+            if (src_w <= 0 || src_h <= 0) {
+                SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+            }
+            if (src_w <= 0 || src_h <= 0) continue;
+
+            const int draw_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_w) * scale_factor)));
+            const int draw_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(src_h) * scale_factor)));
+
+            SDL_Point world_center{ asset->pos.x + light.offset_x, asset->pos.y + light.offset_y };
+            SDL_Rect  world_dst{ world_center.x - draw_w / 2,
+                                 world_center.y - draw_h / 2,
+                                 draw_w,
+                                 draw_h };
+
+            // Convert to local coordinates of the full texture
+            SDL_Rect local_dst = world_dst;
+            local_dst.x -= min_x;
+            local_dst.y -= min_y;
+
+            // Save and apply blend state
+            Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
+            SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
+            SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
+            SDL_GetTextureAlphaMod(tex, &save_a);
+            SDL_GetTextureBlendMode(tex, &save_bm);
+
+            SDL_SetTextureBlendMode(tex, erase_alpha_blend);
+            SDL_SetTextureColorMod(tex, 255, 255, 255);
+            SDL_SetTextureAlphaMod(tex, 255);
+            SDL_RenderCopy(renderer, tex, nullptr, &local_dst);
+
+            SDL_SetTextureBlendMode(tex, save_bm);
+            SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
+            SDL_SetTextureAlphaMod(tex, save_a);
+        }
+    }
+
+    SDL_SetRenderTarget(renderer, previous_target);
+    batch_full_mask_   = full;
+    batch_full_bounds_ = SDL_Rect{ min_x, min_y, full_w, full_h };
+    batch_active_      = true;
+    return true;
+}
+
+void LightMap::end_full_world_mask(SDL_Renderer* renderer) const {
+    (void)renderer;
+    if (!batch_active_) return;
+    if (batch_full_mask_) {
+        SDL_DestroyTexture(batch_full_mask_);
+        batch_full_mask_ = nullptr;
+    }
+    batch_full_bounds_ = SDL_Rect{0, 0, 0, 0};
+    batch_active_ = false;
+}
+
+bool LightMap::rebuild_chunk_from_batch(SDL_Renderer* renderer, world::Chunk& chunk) const {
+    if (!batch_active_ || !batch_full_mask_ || !renderer) {
+        return false;
+    }
+
+    // Create/replace chunk texture
+    destroy_chunk_texture(chunk);
+    const int width  = std::max(1, chunk.world_bounds.w);
+    const int height = std::max(1, chunk.world_bounds.h);
+    SDL_Texture* texture = SDL_CreateTexture(renderer,
+                                             SDL_PIXELFORMAT_RGBA8888,
+                                             SDL_TEXTUREACCESS_TARGET,
+                                             width,
+                                             height);
+    if (!texture) {
+        return false;
+    }
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+
+    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
+    if (SDL_SetRenderTarget(renderer, texture) != 0) {
+        SDL_DestroyTexture(texture);
+        SDL_SetRenderTarget(renderer, previous_target);
+        return false;
+    }
+
+    // Clear to fully opaque black
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    // Copy raw pixels from the full mask
+    SDL_BlendMode full_prev_bm = SDL_BLENDMODE_BLEND;
+    SDL_GetTextureBlendMode(batch_full_mask_, &full_prev_bm);
+    SDL_SetTextureBlendMode(batch_full_mask_, SDL_BLENDMODE_NONE);
+
+    SDL_Rect src{ chunk.world_bounds.x - batch_full_bounds_.x,
+                  chunk.world_bounds.y - batch_full_bounds_.y,
+                  chunk.world_bounds.w,
+                  chunk.world_bounds.h };
+    SDL_Rect dst{ 0, 0, width, height };
+    SDL_RenderCopy(renderer, batch_full_mask_, &src, &dst);
+
+    SDL_SetTextureBlendMode(batch_full_mask_, full_prev_bm);
+
+    SDL_SetRenderTarget(renderer, previous_target);
+    chunk.static_light_map = texture;
+    chunk.lighting_dirty   = false;
+    return true;
+}
+
 void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk) const {
     if (!renderer) {
         return;
@@ -81,6 +272,14 @@ void LightMap::ensure_chunk_rebaked(SDL_Renderer* renderer, world::Chunk& chunk)
 
     if (!chunk.lighting_dirty && chunk.static_light_map) {
         return;
+    }
+
+    // If batch mask is available, rebuild from it
+    if (batch_active_ && batch_full_mask_) {
+        if (rebuild_chunk_from_batch(renderer, chunk)) {
+            return;
+        }
+        // If batch failed for any reason, fall back to per-chunk stamping below
     }
 
     destroy_chunk_texture(chunk);
@@ -220,11 +419,29 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
     apply_precomputed_light_map(renderer);
 
     const auto& chunks = active_chunks();
+
+    // Decide if we should build a single world-space mask this frame.
+    bool any_dirty = false;
+    for (const world::Chunk* c : chunks) {
+        if (c && (c->lighting_dirty || !c->static_light_map)) {
+            any_dirty = true;
+            break;
+        }
+    }
+
+    if (any_dirty) {
+        begin_full_world_mask(renderer);
+    }
+
     for (world::Chunk* chunk : chunks) {
         if (!chunk) {
             continue;
         }
         ensure_chunk_rebaked(renderer, *chunk);
+    }
+
+    if (any_dirty) {
+        end_full_world_mask(renderer);
     }
 }
 

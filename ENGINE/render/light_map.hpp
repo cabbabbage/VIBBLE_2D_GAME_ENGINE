@@ -84,6 +84,11 @@ private:
     void destroy_chunk_texture(world::Chunk& chunk) const;
     void apply_precomputed_light_map(SDL_Renderer* renderer);
 
+    // Batch path: build a single world-space mask and crop into chunks.
+    bool begin_full_world_mask(SDL_Renderer* renderer) const;
+    void end_full_world_mask(SDL_Renderer* renderer) const;
+    bool rebuild_chunk_from_batch(SDL_Renderer* renderer, world::Chunk& chunk) const;
+
 private:
     Assets* assets_ = nullptr;
     int     screen_width_  = 0;
@@ -91,5 +96,10 @@ private:
 
     std::unique_ptr<PrecomputedLightMap> pending_precomputed_map_;
     mutable bool precomputed_applied_ = false;
+
+    // Scratch state for a single-update full-world light mask build.
+    mutable SDL_Texture* batch_full_mask_ = nullptr;
+    mutable SDL_Rect     batch_full_bounds_{0, 0, 0, 0};
+    mutable bool         batch_active_ = false;
 };
 

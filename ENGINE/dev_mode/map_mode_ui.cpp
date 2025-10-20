@@ -465,10 +465,7 @@ void MapModeUI::configure_footer_buttons() {
                                                     [](const HeaderButtonConfig& cfg) {
                                                         return cfg.id == kButtonIdShading;
                                                     });
-        const bool has_light_map_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
-                                                      [](const HeaderButtonConfig& cfg) {
-                                                          return cfg.id == kButtonIdLightMap;
-                                                      });
+        const bool has_light_map_button = false; // Light Map panel removed in dev mode
 
         if (!has_lights_button) {
             FullScreenCollapsible::HeaderButton lights_btn;
@@ -498,19 +495,7 @@ void MapModeUI::configure_footer_buttons() {
             buttons.push_back(std::move(shading_btn));
         }
 
-        if (!has_light_map_button) {
-            FullScreenCollapsible::HeaderButton light_map_btn;
-            light_map_btn.id = kButtonIdLightMap;
-            light_map_btn.label = "Light Map";
-            light_map_btn.on_toggle = [this](bool active) {
-                if (active) {
-                    this->open_light_map_panel();
-                } else {
-                    this->close_light_map_panel();
-                }
-            };
-            buttons.push_back(std::move(light_map_btn));
-        }
+        // Omit Light Map button from footer in dev mode
 
     } else if (header_mode_ == HeaderMode::Room) {
         append_custom(room_mode_buttons_, HeaderMode::Room);

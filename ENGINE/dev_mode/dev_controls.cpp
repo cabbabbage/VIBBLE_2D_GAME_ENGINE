@@ -1662,32 +1662,7 @@ void DevControls::configure_header_button_sets() {
         map_buttons.push_back(std::move(lights_btn));
     }
 
-    {
-        MapModeUI::HeaderButtonConfig light_map_btn;
-        light_map_btn.id = "light_map";
-        light_map_btn.label = "Light Map";
-        light_map_btn.active = map_mode_ui_ && map_mode_ui_->is_light_map_panel_visible();
-        light_map_btn.on_toggle = [this](bool active) {
-            if (room_editor_) {
-                room_editor_->close_room_config();
-            }
-            if (!map_mode_ui_) {
-                sync_header_button_states();
-                return;
-            }
-            const bool currently_open = map_mode_ui_->is_light_map_panel_visible();
-            if (active != currently_open) {
-                if (active && !currently_open && is_modal_blocking_panels()) {
-                    pulse_modal_header();
-                    sync_header_button_states();
-                    return;
-                }
-                map_mode_ui_->toggle_light_map_panel();
-            }
-            sync_header_button_states();
-        };
-        map_buttons.push_back(std::move(light_map_btn));
-    }
+    // Removed Light Map preview button in dev mode
 
     {
         MapModeUI::HeaderButtonConfig grid_btn;
@@ -1716,32 +1691,7 @@ void DevControls::configure_header_button_sets() {
         map_buttons.push_back(std::move(grid_btn));
     }
 
-    {
-        MapModeUI::HeaderButtonConfig layers_btn;
-        layers_btn.id = "map_layers";
-        layers_btn.label = "Map Layers";
-        layers_btn.active = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
-        layers_btn.on_toggle = [this](bool active) {
-            if (room_editor_) {
-                room_editor_->close_room_config();
-            }
-            if (!map_mode_ui_) {
-                sync_header_button_states();
-                return;
-            }
-            const bool currently_open = map_mode_ui_->is_layers_footer_visible();
-            if (active != currently_open) {
-                if (active && !currently_open && is_modal_blocking_panels()) {
-                    pulse_modal_header();
-                    sync_header_button_states();
-                    return;
-                }
-                map_mode_ui_->toggle_layers_panel();
-            }
-            sync_header_button_states();
-        };
-        map_buttons.push_back(std::move(layers_btn));
-    }
+    // Removed duplicate Map Layers button; use built-in "Layers" button
 
     {
         MapModeUI::HeaderButtonConfig map_assets_btn;

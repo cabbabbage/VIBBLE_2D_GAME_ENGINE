@@ -206,15 +206,13 @@ void MapShadowPanel::build_ui() {
                                                      last_settings_.virtual_light_map.search_radius);
     if (search_radius_) search_radius_->set_defer_commit_until_unfocus(false);
 
+    // Quadrant Size no longer exposed in UI, keep regenerate to force refresh if needed
     int init_quad_size = last_quadrant_size_px_;
     if (init_quad_size <= 0) {
         init_quad_size = assets_ ? assets_->virtual_light_map_quadrant_size() : LightMap::kDefaultQuadrantSizePx;
     }
     init_quad_size = std::clamp(init_quad_size, LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx);
     last_quadrant_size_px_ = init_quad_size;
-    quadrant_size_px_ = std::make_unique<DMSlider>(
-        "Quadrant Size (px)", LightMap::kMinQuadrantSizePx, LightMap::kMaxQuadrantSizePx, init_quad_size);
-    if (quadrant_size_px_) quadrant_size_px_->set_defer_commit_until_unfocus(false);
     regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::AccentButton(), 160, DMButton::height());
 }
 
@@ -229,6 +227,14 @@ void MapShadowPanel::rebuild_rows() {
     };
 
     Rows rows;
+    // Prioritize key virtual light map controls near the top
+    if (search_radius_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(search_radius_.get())) });
+    }
+    if (map_light_factor_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(map_light_factor_.get())) });
+    }
+
     if (opacity_strength_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(opacity_strength_.get())) });
     }
@@ -245,9 +251,6 @@ void MapShadowPanel::rebuild_rows() {
             this->apply_virtual_light_map_quadrant_size(this->last_quadrant_size_px_, true);
         })) });
     }
-    if (quadrant_size_px_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(quadrant_size_px_.get())) });
-    }
     if (horizontal_falloff_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(horizontal_falloff_.get())) });
     }
@@ -259,12 +262,6 @@ void MapShadowPanel::rebuild_rows() {
     }
     if (max_offset_y_) {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(max_offset_y_.get())) });
-    }
-    if (search_radius_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(search_radius_.get())) });
-    }
-    if (map_light_factor_) {
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(map_light_factor_.get())) });
     }
 
     set_rows(rows);
