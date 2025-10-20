@@ -19,6 +19,7 @@ class MapShadowPanel;
 class MapLightPreviewPanel;
 class MapLayersPanel;
 class MapLayersController;
+class MapLayersPreviewPanel;
 class MapGridPanel;
 class FullScreenHeaderBar;
 class DockableCollapsible;
@@ -141,6 +142,7 @@ private:
     std::unique_ptr<MapLightPanel> light_panel_;
     std::unique_ptr<MapShadowPanel> shadow_panel_;
     std::unique_ptr<MapLightPreviewPanel> preview_panel_;
+    std::unique_ptr<MapLayersPreviewPanel> layers_preview_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;

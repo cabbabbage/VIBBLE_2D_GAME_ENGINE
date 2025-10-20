@@ -39,6 +39,10 @@ public:
 
     void hide_main_container();
 
+    // Public selectors to drive the sliding details from outside
+    void show_room_list();
+    void select_room(const std::string& room_key);
+
     void set_embedded_mode(bool embedded);
     bool embedded_mode() const { return embedded_mode_; }
     void set_embedded_bounds(const SDL_Rect& bounds);

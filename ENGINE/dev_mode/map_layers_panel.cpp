@@ -204,9 +204,6 @@ private:
 
 MapLayersPanel::MapLayersPanel(int x, int y)
     : DockableCollapsible("Map Layers", true, x, y) {
-    owned_widgets_.push_back(std::make_unique<PreviewWidget>(this));
-    preview_widget_ = static_cast<PreviewWidget*>(owned_widgets_.back().get());
-
     owned_widgets_.push_back(std::make_unique<DetailsWidget>(this));
     details_widget_ = static_cast<DetailsWidget*>(owned_widgets_.back().get());
 
@@ -221,7 +218,8 @@ MapLayersPanel::~MapLayersPanel() = default;
 
 void MapLayersPanel::layout_rows() {
     Rows rows;
-    if (preview_widget_) {
+    // In embedded mode, omit the internal preview; a floating preview panel will be used instead.
+    if (!embedded_mode_ && preview_widget_) {
         rows.push_back(Row{preview_widget_});
     }
     if (details_widget_) {
@@ -398,6 +396,10 @@ void MapLayersPanel::hide_main_container() {
     notify_header_visibility();
 }
 
+void MapLayersPanel::show_room_list() { open_room_list(); }
+
+void MapLayersPanel::select_room(const std::string& room_key) { open_room_details(room_key); }
+
 void MapLayersPanel::set_embedded_mode(bool embedded) {
     if (embedded_mode_ == embedded) return;
     embedded_mode_ = embedded;
@@ -407,6 +409,8 @@ void MapLayersPanel::set_embedded_mode(bool embedded) {
     if (embedded_mode_) {
         set_visible(true);
     }
+    // Rebuild rows to omit the internal preview when embedded.
+    layout_rows();
     notify_header_visibility();
 }
 
@@ -1035,29 +1039,31 @@ void MapLayersPanel::clear_detail_ui() {
 
 void MapLayersPanel::build_room_list_widgets() {
     clear_detail_ui();
-    // Create basic action buttons: Add Layer, Create Room, Save, Reload
-    if (!add_layer_btn_) add_layer_btn_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 0, DMButton::height());
-    if (!create_room_btn_) create_room_btn_ = std::make_unique<DMButton>("Create Room", &DMStyles::CreateButton(), 0, DMButton::height());
-    if (!save_btn_) save_btn_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 0, DMButton::height());
-    if (!reload_btn_) reload_btn_ = std::make_unique<DMButton>("Reload", &DMStyles::ListButton(), 0, DMButton::height());
+    // In embedded footer mode, global action buttons live in the floating preview panel.
+    if (!embedded_mode_) {
+        if (!add_layer_btn_) add_layer_btn_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 0, DMButton::height());
+        if (!create_room_btn_) create_room_btn_ = std::make_unique<DMButton>("Create Room", &DMStyles::CreateButton(), 0, DMButton::height());
+        if (!save_btn_) save_btn_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 0, DMButton::height());
+        if (!reload_btn_) reload_btn_ = std::make_unique<DMButton>("Reload", &DMStyles::ListButton(), 0, DMButton::height());
 
-    details_widgets_.push_back(std::make_unique<ButtonWidget>(add_layer_btn_.get(), [this]() {
-        if (controller_) {
-            controller_->create_layer();
-        }
-    }));
-    details_widgets_.push_back(std::make_unique<ButtonWidget>(create_room_btn_.get(), [this]() {
-        this->create_new_room_entry();
-    }));
-    details_widgets_.push_back(std::make_unique<ButtonWidget>(save_btn_.get(), [this]() {
-        bool ok = false;
-        if (controller_) ok = controller_->save();
-        if (!ok && on_save_) ok = on_save_();
-        (void)ok;
-    }));
-    details_widgets_.push_back(std::make_unique<ButtonWidget>(reload_btn_.get(), [this]() {
-        if (controller_) controller_->reload();
-    }));
+        details_widgets_.push_back(std::make_unique<ButtonWidget>(add_layer_btn_.get(), [this]() {
+            if (controller_) {
+                controller_->create_layer();
+            }
+        }));
+        details_widgets_.push_back(std::make_unique<ButtonWidget>(create_room_btn_.get(), [this]() {
+            this->create_new_room_entry();
+        }));
+        details_widgets_.push_back(std::make_unique<ButtonWidget>(save_btn_.get(), [this]() {
+            bool ok = false;
+            if (controller_) ok = controller_->save();
+            if (!ok && on_save_) ok = on_save_();
+            (void)ok;
+        }));
+        details_widgets_.push_back(std::make_unique<ButtonWidget>(reload_btn_.get(), [this]() {
+            if (controller_) controller_->reload();
+        }));
+    }
 }
 
 void MapLayersPanel::build_layer_details_widgets() {
@@ -1128,19 +1134,21 @@ void MapLayersPanel::build_layer_details_widgets() {
         }
     }
 
-    // Save/Reload buttons at end
-    if (!save_btn_) save_btn_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 0, DMButton::height());
-    if (!reload_btn_) reload_btn_ = std::make_unique<DMButton>("Reload", &DMStyles::ListButton(), 0, DMButton::height());
-    details_widgets_.push_back(std::make_unique<ButtonWidget>(save_btn_.get(), [this]() {
-        apply_layer_rename_if_needed();
-        bool ok = false;
-        if (controller_) ok = controller_->save();
-        if (!ok && on_save_) ok = on_save_();
-        (void)ok;
-    }));
-    details_widgets_.push_back(std::make_unique<ButtonWidget>(reload_btn_.get(), [this]() {
-        if (controller_) controller_->reload();
-    }));
+    // Save/Reload buttons at end (skip in embedded mode; live in preview)
+    if (!embedded_mode_) {
+        if (!save_btn_) save_btn_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 0, DMButton::height());
+        if (!reload_btn_) reload_btn_ = std::make_unique<DMButton>("Reload", &DMStyles::ListButton(), 0, DMButton::height());
+        details_widgets_.push_back(std::make_unique<ButtonWidget>(save_btn_.get(), [this]() {
+            apply_layer_rename_if_needed();
+            bool ok = false;
+            if (controller_) ok = controller_->save();
+            if (!ok && on_save_) ok = on_save_();
+            (void)ok;
+        }));
+        details_widgets_.push_back(std::make_unique<ButtonWidget>(reload_btn_.get(), [this]() {
+            if (controller_) controller_->reload();
+        }));
+    }
 }
 
 void MapLayersPanel::apply_layer_rename_if_needed() {

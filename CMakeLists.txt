@@ -290,6 +290,7 @@ add_executable(manifest_store_tests
     ENGINE/dev_mode/dev_ui_settings.cpp
     ENGINE/dev_mode/manifest_spawn_group_utils.cpp
     ENGINE/dev_mode/search_assets.cpp
+    ENGINE/utils/map_grid_settings.cpp
     ENGINE/utils/input.cpp
     ENGINE/utils/area.cpp
     ENGINE/asset_info_methods/animation_loader.cpp
