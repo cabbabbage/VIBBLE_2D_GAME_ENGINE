@@ -1,7 +1,6 @@
 #include "asset_loader.hpp"
 #include "asset_loader_internal.hpp"
 #include <iostream>
-#include <numeric>
 #include <algorithm>
 #include <memory>
 #include <vector>
@@ -33,8 +32,6 @@
 using json = nlohmann::json;
 
 namespace {
-        // Temporary guard to preserve the merging implementation without applying it.
-        constexpr bool kEnableAssetMerging = false;
 
         constexpr std::int64_t kMaxStaticLightTextureBytes = 16LL * 1024LL * 1024LL; // 16 MiB ceiling
         constexpr std::int64_t kBytesPerPixel              = static_cast<std::int64_t>(sizeof(std::uint32_t));
@@ -67,25 +64,6 @@ namespace {
                 return static_cast<int>(value);
         }
 
-        Asset* findCenterAsset(const std::vector<Asset*>& group) {
-                if (group.empty()) return nullptr;
-                double avgX = std::accumulate(group.begin(), group.end(), 0.0,
-                [](double sum, Asset* a) { return sum + a->pos.x; }) / group.size();
-                double avgY = std::accumulate(group.begin(), group.end(), 0.0,
-                [](double sum, Asset* a) { return sum + a->pos.y; }) / group.size();
-                Asset* center = group.front();
-                double bestDistSq = std::numeric_limits<double>::infinity();
-                for (auto* a : group) {
-                        double dx = a->pos.x - avgX;
-                        double dy = a->pos.y - avgY;
-                        double distSq = dx * dx + dy * dy;
-                        if (distSq < bestDistSq) {
-                                        bestDistSq = distSq;
-                                        center = a;
-                        }
-        }
-                return center;
-        }
 }
 
 AssetLoader::~AssetLoader() = default;
@@ -185,87 +163,6 @@ manifest_store_(manifest_store)
         for (auto* asset : distant_boundary) {
                 asset->set_hidden(true);
         }
-	std::vector<Asset*> link_candidates;
-	for (Room* room : rooms_) {
-		for (auto& asset_up : room->assets) {
-            if (auto* asset = asset_up.get()) {
-                if (asset->is_hidden()) {
-                    continue;
-                }
-                if (asset->info && asset->info->type != asset_types::player && !asset->info->moving_asset) {
-                    link_candidates.push_back(asset);
-                }
-            }
-                }
-        }
-	auto neighbor_assets = group_neighboring_assets(link_candidates, 500, 500, "Child Linking");
-	link_by_child(neighbor_assets);
-}
-
-void AssetLoader::link_by_child(const std::vector<std::vector<Asset*>>& groups) {
-        if (!kEnableAssetMerging) {
-                return;
-        }
-        size_t total_linked = 0;
-	for (const auto& group : groups) {
-		if (group.empty()) continue;
-		Asset* center_asset = findCenterAsset(group);
-		if (!center_asset) continue;
-		for (auto* a : group) {
-			if (a != center_asset) {
-					center_asset->add_child(a);
-					total_linked++;
-			}
-		}
-                removeMergedAssets(group, center_asset);
-	}
-}
-
-void AssetLoader::removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip) {
-        if (!kEnableAssetMerging) {
-                return;
-        }
-        for (Asset* a : to_remove) {
-                if (a == skip) continue;
-                a->set_hidden(true);
-                a->set_merged_from_neighbors(true);
-        }
-}
-
-std::vector<std::vector<Asset*>> AssetLoader::group_neighboring_assets(
-                                                                           const std::vector<Asset*>& assets,
-                                                                           int tile_width,
-                                                                           int tile_height,
-                                                                           const std::string& group_type)
-{
-        std::unordered_map<std::uint64_t, std::vector<Asset*>> tile_map;
-        auto make_tile_key = [&](int tx, int ty) -> std::uint64_t {
-                // Pack tile coordinates into a single key using unsigned arithmetic to avoid UB.
-                const auto ux = static_cast<std::uint64_t>(static_cast<std::uint32_t>(tx));
-                const auto uy = static_cast<std::uint64_t>(static_cast<std::uint32_t>(ty));
-                return (ux << 32) | uy;
-        };
-	for (Asset* a : assets) {
-		if (!a) continue;
-		int tx = a->pos.x / tile_width;
-		int ty = a->pos.y / tile_height;
-		if (a->pos.x < 0 && a->pos.x % tile_width != 0) tx -= 1;
-		if (a->pos.y < 0 && a->pos.y % tile_height != 0) ty -= 1;
-		tile_map[make_tile_key(tx, ty)].push_back(a);
-	}
-	std::vector<std::vector<Asset*>> groups;
-	groups.reserve(tile_map.size());
-	for (auto& [key, group] : tile_map) {
-		groups.push_back(std::move(group));
-	}
-	size_t total_assets = 0;
-	size_t largest_group = 0;
-	for (const auto& g : groups) {
-		total_assets += g.size();
-		largest_group = std::max(largest_group, g.size());
-	}
-	double avg_group_size = groups.empty() ? 0.0 : (double)total_assets / groups.size();
-	return groups;
 }
 
 std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int remove_threshold) {
@@ -326,107 +223,7 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                         }
                 }
         }
-        if (kEnableAssetMerging && !locked_boundary_assets.empty()) {
-                mergeLockedBoundaryAssets(locked_boundary_assets);
-        }
         return distant_assets;
-}
-
-void AssetLoader::mergeLockedBoundaryAssets(const std::vector<Asset*>& locked_assets) {
-        if (!kEnableAssetMerging) {
-                return;
-        }
-        constexpr std::size_t group_size = 4;
-        std::vector<Asset*> eligible;
-        eligible.reserve(locked_assets.size());
-        for (Asset* asset : locked_assets) {
-                if (!asset) {
-                        continue;
-                }
-                if (asset->is_hidden()) {
-                        continue;
-                }
-                eligible.push_back(asset);
-        }
-        if (eligible.size() < group_size) {
-                return;
-        }
-
-        struct Candidate {
-                Asset* asset;
-                double angle;
-        };
-
-        std::vector<Candidate> ordered;
-        ordered.reserve(eligible.size());
-        const double center_x = static_cast<double>(map_center_x_);
-        const double center_y = static_cast<double>(map_center_y_);
-        for (Asset* asset : eligible) {
-                const double dx = static_cast<double>(asset->pos.x) - center_x;
-                const double dy = static_cast<double>(asset->pos.y) - center_y;
-                ordered.push_back({asset, std::atan2(dy, dx)});
-        }
-
-        std::sort(ordered.begin(), ordered.end(), [](const Candidate& lhs, const Candidate& rhs) {
-                return lhs.angle < rhs.angle;
-        });
-
-        auto distance_between = [](const Asset* lhs, const Asset* rhs) {
-                const double dx = static_cast<double>(lhs->pos.x) - static_cast<double>(rhs->pos.x);
-                const double dy = static_cast<double>(lhs->pos.y) - static_cast<double>(rhs->pos.y);
-                return std::sqrt(dx * dx + dy * dy);
-        };
-
-        std::vector<double> neighbor_distances;
-        neighbor_distances.reserve(ordered.size() > 1 ? ordered.size() - 1 : 0);
-        for (std::size_t i = 1; i < ordered.size(); ++i) {
-                neighbor_distances.push_back(distance_between(ordered[i - 1].asset, ordered[i].asset));
-        }
-
-        double spacing_threshold = 0.0;
-        if (!neighbor_distances.empty()) {
-                double sum = std::accumulate(neighbor_distances.begin(), neighbor_distances.end(), 0.0);
-                const double largest_gap = *std::max_element(neighbor_distances.begin(), neighbor_distances.end());
-                if (neighbor_distances.size() > 1) {
-                        sum -= largest_gap;
-                        spacing_threshold = (sum / static_cast<double>(neighbor_distances.size() - 1)) * 1.5;
-                } else {
-                        spacing_threshold = neighbor_distances.front() * 1.5;
-                }
-        }
-
-        if (spacing_threshold <= 0.0) {
-                spacing_threshold = std::numeric_limits<double>::infinity();
-        }
-
-        std::vector<Asset*> current_group;
-        current_group.reserve(group_size);
-        Asset* previous_asset = nullptr;
-        for (const Candidate& candidate : ordered) {
-                if (previous_asset) {
-                        const double gap = distance_between(previous_asset, candidate.asset);
-                        if (gap > spacing_threshold) {
-                                current_group.clear();
-                        }
-                }
-
-                current_group.push_back(candidate.asset);
-                if (current_group.size() == group_size) {
-                        Asset* center_asset = findCenterAsset(current_group);
-                        if (center_asset) {
-                                for (Asset* asset : current_group) {
-                                        if (asset == center_asset) {
-                                                continue;
-                                        }
-                                        center_asset->add_child(asset);
-                                }
-                                removeMergedAssets(current_group, center_asset);
-                        }
-                        current_group.clear();
-                }
-
-                previous_asset = candidate.asset;
-        }
 }
 
 void AssetLoader::loadRooms() {

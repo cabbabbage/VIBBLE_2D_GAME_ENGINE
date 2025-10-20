@@ -37,8 +37,6 @@ class AssetLoader {
                 AssetLibrary* shared_asset_library = nullptr);
     ~AssetLoader();
     std::vector<Asset*> collectDistantAssets(int lock_threshold, int remove_threshold);
-    std::vector<std::vector<Asset*>> group_neighboring_assets( const std::vector<Asset*>& assets, int tile_width, int tile_height, const std::string& group_type);
-    void link_by_child(const std::vector<std::vector<Asset*>>& groups);
 
     void createAssets(world::Grid& grid);
     std::vector<std::unique_ptr<Asset>> take_spawned_assets();
@@ -78,8 +76,6 @@ class AssetLoader {
     void loadRooms();
     void finalizeAssets();
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
-    void removeMergedAssets(const std::vector<Asset*>& to_remove, Asset* skip = nullptr);
-    void mergeLockedBoundaryAssets(const std::vector<Asset*>& locked_assets);
     void precompute_light_map(world::Grid& grid);
     void instantiate_map_chunks(world::Grid& grid);
     void bake_chunk_lighting(world::Grid& grid, world::Chunk& chunk);
