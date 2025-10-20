@@ -16002,8 +16002,7 @@
           "shadow_scale": 1.0,
           "size_scale_factor": 1.0,
           "vertical_falloff": 3.5
-        },
-        "virtual_light_map_quadrant_size": 256
+        }
       },
       "rooms_data": {
         "bar": {

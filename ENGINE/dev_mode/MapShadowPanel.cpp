@@ -72,7 +72,9 @@ float slider_value_strength(const std::unique_ptr<DMSlider>& slider, float fallb
     return static_cast<float>(slider->displayed_value()) / static_cast<float>(kStrengthSliderScale);
 }
 
-float slider_value_scaled(const std::unique_ptr<DMSlider>& slider, float fallback, int scale = kFloatSliderScale) {
+float shadow_slider_value_scaled(const std::unique_ptr<DMSlider>& slider,
+                                 float                         fallback,
+                                 int                           scale = kFloatSliderScale) {
     if (!slider) {
         return fallback;
     }
@@ -87,7 +89,9 @@ void set_slider_strength(const std::unique_ptr<DMSlider>& slider, float value) {
     slider->set_value(scaled);
 }
 
-void set_slider_scaled(const std::unique_ptr<DMSlider>& slider, float value, int scale = kFloatSliderScale) {
+void set_shadow_slider_scaled(const std::unique_ptr<DMSlider>& slider,
+                              float                          value,
+                              int                            scale = kFloatSliderScale) {
     if (!slider) {
         return;
     }
@@ -258,14 +262,14 @@ void MapShadowPanel::sync_json_from_ui() {
     last_settings_.virtual_light_map.shadow_scale = slider_value_strength(shadow_scale_,
                                                                           last_settings_.virtual_light_map.shadow_scale);
 
-    last_settings_.virtual_light_map.horizontal_falloff =
-        slider_value_scaled(horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff);
-    last_settings_.virtual_light_map.vertical_falloff =
-        slider_value_scaled(vertical_falloff_, last_settings_.virtual_light_map.vertical_falloff);
-    last_settings_.virtual_light_map.size_scale_factor =
-        slider_value_scaled(size_scale_factor_, last_settings_.virtual_light_map.size_scale_factor);
-    last_settings_.virtual_light_map.map_light_factor =
-        slider_value_scaled(map_light_factor_, last_settings_.virtual_light_map.map_light_factor, kMapLightFactorScale);
+    last_settings_.virtual_light_map.horizontal_falloff = shadow_slider_value_scaled(
+        horizontal_falloff_, last_settings_.virtual_light_map.horizontal_falloff);
+    last_settings_.virtual_light_map.vertical_falloff = shadow_slider_value_scaled(
+        vertical_falloff_, last_settings_.virtual_light_map.vertical_falloff);
+    last_settings_.virtual_light_map.size_scale_factor = shadow_slider_value_scaled(
+        size_scale_factor_, last_settings_.virtual_light_map.size_scale_factor);
+    last_settings_.virtual_light_map.map_light_factor = shadow_slider_value_scaled(
+        map_light_factor_, last_settings_.virtual_light_map.map_light_factor, kMapLightFactorScale);
     if (search_radius_) {
         last_settings_.virtual_light_map.search_radius = search_radius_->displayed_value();
     }
@@ -304,10 +308,10 @@ void MapShadowPanel::apply_settings_to_sliders(const render_pipeline::shading::R
     set_slider_strength(parallax_strength_, settings.parallax_strength);
     set_slider_strength(scale_strength_, settings.scale_strength);
     set_slider_strength(shadow_scale_, settings.virtual_light_map.shadow_scale);
-    set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff);
-    set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff);
-    set_slider_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor);
-    set_slider_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, kMapLightFactorScale);
+    set_shadow_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff);
+    set_shadow_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff);
+    set_shadow_slider_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor);
+    set_shadow_slider_scaled(map_light_factor_, settings.virtual_light_map.map_light_factor, kMapLightFactorScale);
     if (search_radius_) {
         search_radius_->set_value(settings.virtual_light_map.search_radius);
     }
