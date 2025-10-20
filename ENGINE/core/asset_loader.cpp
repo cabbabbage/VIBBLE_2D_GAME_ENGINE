@@ -63,6 +63,22 @@ namespace {
                 return static_cast<int>(value);
         }
 
+        // Small helper to stringify a rect in logs
+        inline std::string rect_str(const SDL_Rect& r) {
+                return std::string("{x=") + std::to_string(r.x) + ", y=" + std::to_string(r.y) +
+                       ", w=" + std::to_string(r.w) + ", h=" + std::to_string(r.h) + "}";
+        }
+
+        // Rate-limit noisy per-item logs (e.g., first N, then every Kth)
+        struct LogLimiter {
+                int first_n = 10;
+                int every_k = 100;
+                bool operator()(int i) const {
+                        if (i < first_n) return true;
+                        return (i % every_k) == 0;
+                }
+        };
+
 }
 
 AssetLoader::~AssetLoader() = default;
@@ -180,12 +196,16 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
 
         const double remove_distance = static_cast<double>(remove_threshold);
         const double lock_distance = static_cast<double>(lock_threshold);
+        int considered = 0, skipped_type = 0, kept_in_room = 0, kept_in_zone = 0, removed = 0, locked = 0;
+
         for (Room* room : rooms_) {
                 for (auto& asset_up : room->assets) {
                         Asset* asset = asset_up.get();
             if (!asset->info || asset->info->type != asset_types::boundary) {
+                    ++skipped_type;
                     continue;
             }
+                        ++considered;
                         SDL_Point asset_point{asset->pos.x, asset->pos.y};
 
                         Room* owning_room = room;
@@ -198,10 +218,12 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                         }
 
                         if (owning_room && owning_room->room_area && owning_room->room_area->contains_point(asset_point)) {
+                                ++kept_in_room;
                                 continue;
                         }
 
                         if (asset_loader_internal::point_inside_any_zone(asset_point, zoneCache)) {
+                                ++kept_in_zone;
                                 continue;
                         }
                         double minDistSq = asset_loader_internal::min_distance_sq_to_zones(asset_point, zoneCache, remove_threshold);
@@ -211,12 +233,22 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                         const bool should_remove = minDist >= remove_distance;
 
                         asset->static_frame = should_lock;
+                        if (should_lock) ++locked;
                         if (should_remove) {
                                 distant_assets.push_back(asset);
+                                ++removed;
                                 continue;
                         }
                 }
         }
+
+        vibble::log::debug(std::string("[AssetLoader] collectDistantAssets: considered=") + std::to_string(considered) +
+                           " removed=" + std::to_string(removed) +
+                           " locked=" + std::to_string(locked) +
+                           " kept_in_room=" + std::to_string(kept_in_room) +
+                           " kept_in_zone=" + std::to_string(kept_in_zone) +
+                           " skipped_non_boundary=" + std::to_string(skipped_type));
+
         return distant_assets;
 }
 
@@ -245,6 +277,7 @@ void AssetLoader::loadRooms() {
                 rooms_.push_back(up.get());
                 all_rooms_.push_back(std::move(up));
 	}
+        vibble::log::debug(std::string("[AssetLoader] loadRooms: rooms_=") + std::to_string(rooms_.size()));
 }
 
 void AssetLoader::finalizeAssets() {
@@ -338,19 +371,45 @@ std::vector<std::unique_ptr<Asset>> AssetLoader::extract_all_assets() {
 }
 
 void AssetLoader::createAssets(world::Grid& grid) {
+        const auto t0 = std::chrono::steady_clock::now();
+
         grid.set_chunk_resolution(std::max(0, map_grid_settings_.r_chunk));
+        vibble::log::debug(std::string("[AssetLoader] createAssets: requested r_chunk=") + std::to_string(map_grid_settings_.r_chunk));
+
         spawned_assets_ = extract_all_assets();
         vibble::log::info(std::string("[AssetLoader] Extracted ") + std::to_string(spawned_assets_.size()) + " visible assets from rooms");
+
+        int lit_count = 0;
+        int static_lights = 0;
         for (const auto& asset_up : spawned_assets_) {
                 Asset* asset = asset_up.get();
-                if (!asset) {
-                        continue;
-                }
+                if (!asset) continue;
                 grid.register_asset(asset);
+                if (asset->info && !asset->info->light_sources.empty()) {
+                        ++lit_count;
+                        if (!asset->info->moving_asset) ++static_lights;
+                }
         }
+        vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") + std::to_string(spawned_assets_.size()) +
+                           " with_lights=" + std::to_string(lit_count) +
+                           " static_light_assets=" + std::to_string(static_lights));
+
+        const auto t_chunks_begin = std::chrono::steady_clock::now();
         instantiate_map_chunks(grid);
+        const auto t_chunks_end = std::chrono::steady_clock::now();
+        vibble::log::info(std::string("[AssetLoader] instantiate_map_chunks finished; chunks=") + std::to_string(map_chunks_.size()) +
+                          " in " + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t_chunks_end - t_chunks_begin).count()) + "ms");
+
         vibble::log::info("[AssetLoader] Beginning full-map light map texture creation...");
+        const auto t_bake_begin = std::chrono::steady_clock::now();
         precompute_light_map(grid);
+        const auto t_bake_end = std::chrono::steady_clock::now();
+        vibble::log::info(std::string("[AssetLoader] precompute_light_map finished in ") +
+                          std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t_bake_end - t_bake_begin).count()) + "ms");
+
+        const auto t1 = std::chrono::steady_clock::now();
+        vibble::log::debug(std::string("[AssetLoader] createAssets total ") +
+                           std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) + "ms");
 }
 
 std::vector<std::unique_ptr<Asset>> AssetLoader::take_spawned_assets() {
@@ -439,6 +498,9 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
                         ++index;
                 }
         }
+
+        vibble::log::debug(std::string("[AssetLoader] load_map_json: map_radius_=") + std::to_string(map_radius_) +
+                           " layers=" + std::to_string(map_layers_.size()));
 }
 
 void AssetLoader::precompute_light_map(world::Grid& grid) {
@@ -448,17 +510,33 @@ void AssetLoader::precompute_light_map(world::Grid& grid) {
         if (!renderer_) {
                 vibble::log::warn("[AssetLoader] Renderer unavailable; skipping light map precomputation.");
         }
+
+        const auto t0 = std::chrono::steady_clock::now();
+        int baked = 0, skipped = 0;
         for (world::Chunk* chunk : map_chunks_) {
                 if (!chunk) {
                         vibble::log::warn("[AssetLoader] Encountered null chunk pointer during light map precomputation.");
+                        ++skipped;
                         continue;
                 }
+                const auto ts = std::chrono::steady_clock::now();
                 bake_chunk_lighting(grid, *chunk);
+                const auto te = std::chrono::steady_clock::now();
+                ++baked;
+                if ((baked <= 5) || (baked % 50 == 0)) {
+                        vibble::log::debug(std::string("[AssetLoader] bake_chunk_lighting (") + std::to_string(chunk->i) + "," + std::to_string(chunk->j) +
+                                           ") took " + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(te - ts).count()) + "ms");
+                }
         }
-        vibble::log::info("[AssetLoader] Completed light map precomputation for all chunks.");
+        const auto t1 = std::chrono::steady_clock::now();
+        vibble::log::info(std::string("[AssetLoader] Completed light map precomputation for all chunks. baked=") + std::to_string(baked) +
+                          " skipped=" + std::to_string(skipped) +
+                          " total_ms=" + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()));
 }
 
 void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
+        vibble::log::debug("[AssetLoader] instantiate_map_chunks: begin");
+
         map_chunks_.clear();
         const int requested_r_chunk = grid.chunk_resolution();
         const int r_chunk = std::clamp(requested_r_chunk, 0, vibble::grid::kMaxResolution);
@@ -489,6 +567,8 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
         SDL_Point origin = grid.origin();
         const std::int64_t origin_x64 = static_cast<std::int64_t>(origin.x);
         const std::int64_t origin_y64 = static_cast<std::int64_t>(origin.y);
+        vibble::log::debug(std::string("[AssetLoader] Grid origin: {x=") + std::to_string(origin.x) + ", y=" + std::to_string(origin.y) +
+                           "} step=" + std::to_string(step) + " (2^" + std::to_string(r_chunk) + ")");
 
         const auto chunk_key = [](int i, int j) {
                 const auto hi = static_cast<std::uint32_t>(i);
@@ -500,6 +580,7 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
         visited.reserve(spawned_assets_.size() * 4);
 
         int debug_chunk_count = 0;
+        LogLimiter limiter{10, 100};
 
         auto register_chunk = [&](int i, int j) {
                 const std::uint64_t key = chunk_key(i, j);
@@ -507,13 +588,9 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                         return;
                 }
                 world::Chunk& chunk = grid.get_or_create_chunk_ij(i, j);
-                if (debug_chunk_count < 10 || (debug_chunk_count % 100) == 0) {
+                if (limiter(debug_chunk_count)) {
                         vibble::log::debug(std::string("[AssetLoader] Prepared chunk (") + std::to_string(i) + ", " +
-                                           std::to_string(j) + ") bounds={x=" +
-                                           std::to_string(chunk.world_bounds.x) + ", y=" +
-                                           std::to_string(chunk.world_bounds.y) + ", w=" +
-                                           std::to_string(chunk.world_bounds.w) + ", h=" +
-                                           std::to_string(chunk.world_bounds.h) + "}");
+                                           std::to_string(j) + ") bounds=" + rect_str(chunk.world_bounds));
                 }
                 ++debug_chunk_count;
                 chunk.base_brightness     = 0.0f;
@@ -538,6 +615,7 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
         std::optional<Bounds> world_bounds;
         auto merge_bounds = [&](std::int64_t min_x, std::int64_t min_y, std::int64_t max_x, std::int64_t max_y) {
                 if (min_x > max_x || min_y > max_y) {
+                        vibble::log::warn("[AssetLoader] merge_bounds: invalid input skipped");
                         return;
                 }
                 if (!world_bounds) {
@@ -562,6 +640,7 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                                      static_cast<std::int64_t>(std::llround(extent["min_y"].get<double>())),
                                      static_cast<std::int64_t>(std::llround(extent["max_x"].get<double>())),
                                      static_cast<std::int64_t>(std::llround(extent["max_y"].get<double>())));
+                        vibble::log::debug("[AssetLoader] Using map_extent for initial world bounds.");
                 }
         }
 
@@ -594,6 +673,7 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 const std::int64_t center_y = static_cast<std::int64_t>(std::llround(map_center_y_));
                 if (radius > 0) {
                         merge_bounds(center_x - radius, center_y - radius, center_x + radius, center_y + radius);
+                        vibble::log::debug("[AssetLoader] Fallback world bounds from map_radius.");
                 }
         }
 
@@ -607,6 +687,10 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 const int j_min = clamp_to_int(floor_div64(min_y, step64));
                 const int i_max = clamp_to_int(floor_div64(max_x, step64));
                 const int j_max = clamp_to_int(floor_div64(max_y, step64));
+
+                vibble::log::debug(std::string("[AssetLoader] Bounds-driven chunk ij: i[") +
+                                   std::to_string(i_min) + "," + std::to_string(i_max) + "] j[" +
+                                   std::to_string(j_min) + "," + std::to_string(j_max) + "]");
 
                 for (int j = j_min; j <= j_max; ++j) {
                         for (int i = i_min; i <= i_max; ++i) {
@@ -631,6 +715,9 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
         const std::size_t chunk_count_after_bounds = map_chunks_.size();
         bool discovered_static_light = false;
 
+        int light_assets_seen = 0;
+        LogLimiter asset_limit{10, 100};
+
         for (const auto& asset_up : spawned_assets_) {
                 const Asset* asset = asset_up.get();
                 if (!asset || !asset->info) {
@@ -639,6 +726,8 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 if (asset->info->light_sources.empty() || asset->info->moving_asset) {
                         continue;
                 }
+
+                ++light_assets_seen;
 
                 for (const auto& light : asset->info->light_sources) {
                         SDL_Texture* tex = light.texture;
@@ -664,6 +753,12 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                                 asset->pos.y + light.offset_y - draw_h / 2,
                                 draw_w,
                                 draw_h};
+
+                        if (asset_limit(light_assets_seen - 1)) {
+                                vibble::log::debug(std::string("[AssetLoader] Static-light influence from asset @(") +
+                                                   std::to_string(asset->pos.x) + "," + std::to_string(asset->pos.y) +
+                                                   ") light_dst=" + rect_str(world_dst));
+                        }
 
                         const std::int64_t min_x = static_cast<std::int64_t>(world_dst.x) - step64 - origin_x64;
                         const std::int64_t min_y = static_cast<std::int64_t>(world_dst.y) - step64 - origin_y64;
@@ -691,6 +786,7 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
                 const std::int64_t center_y = static_cast<std::int64_t>(std::llround(map_center_y_));
                 const int i = clamp_to_int(floor_div64(center_x - origin_x64, step64));
                 const int j = clamp_to_int(floor_div64(center_y - origin_y64, step64));
+                vibble::log::debug("[AssetLoader] No static lights discovered; registering fallback center chunk.");
                 register_chunk(i, j);
         }
 
@@ -706,6 +802,8 @@ void AssetLoader::instantiate_map_chunks(world::Grid& grid) {
 }
 
 void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
+        const auto t0 = std::chrono::steady_clock::now();
+
         chunk.base_brightness     = 0.0f;
         chunk.brightness_strength = 1.0f;
         chunk.opacity_strength    = 1.0f;
@@ -729,10 +827,8 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
         }
 
         vibble::log::info(std::string("[AssetLoader] Baking static lighting for chunk (") +
-                          std::to_string(chunk.i) + ", " + std::to_string(chunk.j) + ") with bounds {x=" +
-                          std::to_string(chunk.world_bounds.x) + ", y=" + std::to_string(chunk.world_bounds.y) +
-                          ", w=" + std::to_string(chunk.world_bounds.w) + ", h=" +
-                          std::to_string(chunk.world_bounds.h) + "}.");
+                          std::to_string(chunk.i) + ", " + std::to_string(chunk.j) + ") with bounds " +
+                          rect_str(chunk.world_bounds) + ".");
 
         const std::int64_t width64  = std::max<std::int64_t>(1, static_cast<std::int64_t>(chunk.world_bounds.w));
         const std::int64_t height64 = std::max<std::int64_t>(1, static_cast<std::int64_t>(chunk.world_bounds.h));
@@ -812,6 +908,10 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
         const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD;
 #endif
 
+        int lights_considered = 0;
+        int lights_drawn = 0;
+        LogLimiter limiter{10, 100};
+
         for (const auto& asset_up : spawned_assets_) {
                 const Asset* asset = asset_up.get();
                 if (!asset || !asset->info) {
@@ -843,8 +943,14 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
                                            draw_w,
                                            draw_h};
 
+                        ++lights_considered;
+
                         SDL_Rect intersection{};
                         if (!SDL_IntersectRect(&world_dst, &chunk.world_bounds, &intersection)) {
+                                if (limiter(lights_considered - 1)) {
+                                        vibble::log::debug(std::string("[AssetLoader] Light skipped: not in chunk (") +
+                                                           std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ") light_dst=" + rect_str(world_dst));
+                                }
                                 continue;
                         }
 
@@ -860,7 +966,15 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
                         SDL_Rect local_dst = world_dst;
                         local_dst.x -= chunk.world_bounds.x;
                         local_dst.y -= chunk.world_bounds.y;
+
+                        if (limiter(lights_drawn)) {
+                                vibble::log::debug(std::string("[AssetLoader] Drawing light into chunk(") +
+                                                   std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
+                                                   ") local_dst=" + rect_str(local_dst));
+                        }
+
                         SDL_RenderCopy(renderer_, tex, nullptr, &local_dst);
+                        ++lights_drawn;
 
                         SDL_SetTextureBlendMode(tex, save_bm);
                         SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
@@ -874,6 +988,10 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
         chunk.lighting_dirty   = false;
         texture                = nullptr;
 
+        vibble::log::debug(std::string("[AssetLoader] bake_chunk_lighting(") + std::to_string(chunk.i) + "," + std::to_string(chunk.j) +
+                           "): considered_lights=" + std::to_string(lights_considered) +
+                           " drawn=" + std::to_string(lights_drawn));
+
         chunk.base_brightness = compute_chunk_average_brightness(chunk.static_light_map);
         chunk.base_brightness = std::clamp(chunk.base_brightness, 0.0f, 1.0f);
         chunk.light.min_static_avg_strength = std::min(1.0f, chunk.base_brightness);
@@ -881,20 +999,26 @@ void AssetLoader::bake_chunk_lighting(world::Grid&, world::Chunk& chunk) {
         chunk.light.needs_update            = true;
 
         vibble::log::info(std::string("[AssetLoader] Finished baking chunk (") + std::to_string(chunk.i) + ", " +
-                          std::to_string(chunk.j) + ") with average brightness " +
-                          std::to_string(chunk.base_brightness) + ".");
+                          std::to_string(chunk.j) + ") avg_brightness=" +
+                          std::to_string(chunk.base_brightness) + ". took " +
+                          std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count()) + "ms");
 }
 
 float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const {
         if (!renderer_ || !texture) {
+                vibble::log::debug("[AssetLoader] compute_chunk_average_brightness: early 0 (renderer/texture null)");
                 return 0.0f;
         }
 
         int tex_w = 0;
         int tex_h = 0;
         if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+                vibble::log::warn(std::string("[AssetLoader] compute_chunk_average_brightness: bad texture size (") +
+                                  std::to_string(tex_w) + "x" + std::to_string(tex_h) + "), returning 0");
                 return 0.0f;
         }
+
+        const auto t0 = std::chrono::steady_clock::now();
 
         const std::int64_t tex_w64 = static_cast<std::int64_t>(tex_w);
         const std::int64_t tex_h64 = static_cast<std::int64_t>(tex_h);
@@ -919,23 +1043,27 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
 
         const std::size_t pixel_count = static_cast<std::size_t>(pixel_count64);
         if (pixel_count == 0) {
+                vibble::log::debug("[AssetLoader] compute_chunk_average_brightness: pixel_count==0, return 0");
                 return 0.0f;
         }
 
         std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> format(
             SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
         if (!format) {
+                vibble::log::warn("[AssetLoader] compute_chunk_average_brightness: SDL_AllocFormat failed");
                 return 0.0f;
         }
 
         const std::size_t row_length = static_cast<std::size_t>(tex_w);
         std::vector<std::uint32_t> row(row_length);
         if (row.empty()) {
+                vibble::log::debug("[AssetLoader] compute_chunk_average_brightness: row buffer empty");
                 return 0.0f;
         }
 
         SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
         if (SDL_SetRenderTarget(renderer_, texture) != 0) {
+                vibble::log::warn(std::string("[AssetLoader] compute_chunk_average_brightness: failed SetRenderTarget: ") + SDL_GetError());
                 SDL_SetRenderTarget(renderer_, previous_target);
                 return 0.0f;
         }
@@ -944,9 +1072,12 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
         const double inv_255 = 1.0 / 255.0;
         double accum = 0.0;
 
+        // Read scanlines; log only the first/last few to avoid spam.
         for (int y = 0; y < tex_h; ++y) {
                 SDL_Rect row_rect{0, y, tex_w, 1};
                 if (SDL_RenderReadPixels(renderer_, &row_rect, SDL_PIXELFORMAT_RGBA8888, row.data(), pitch) != 0) {
+                        vibble::log::warn(std::string("[AssetLoader] compute_chunk_average_brightness: RenderReadPixels failed row=") +
+                                          std::to_string(y) + " err=" + SDL_GetError());
                         SDL_SetRenderTarget(renderer_, previous_target);
                         return 0.0f;
                 }
@@ -956,10 +1087,22 @@ float AssetLoader::compute_chunk_average_brightness(SDL_Texture* texture) const 
                         SDL_GetRGBA(row[x], format.get(), nullptr, nullptr, nullptr, &a);
                         accum += 1.0 - static_cast<double>(a) * inv_255;
                 }
+
+                if (y < 2 || y == tex_h - 1) {
+                        // Light touch log for first/last rows
+                        vibble::log::debug(std::string("[AssetLoader] brightness scan row ") + std::to_string(y) + "/" + std::to_string(tex_h-1));
+                }
         }
 
         SDL_SetRenderTarget(renderer_, previous_target);
 
         const double average = accum / static_cast<double>(pixel_count);
-        return static_cast<float>(std::clamp(average, 0.0, 1.0));
+        const float result = static_cast<float>(std::clamp(average, 0.0, 1.0));
+
+        const auto t1 = std::chrono::steady_clock::now();
+        vibble::log::debug(std::string("[AssetLoader] compute_chunk_average_brightness: ") +
+                           std::to_string(tex_w) + "x" + std::to_string(tex_h) +
+                           " avg=" + std::to_string(result) +
+                           " took=" + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) + "ms");
+        return result;
 }
