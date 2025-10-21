@@ -119,7 +119,7 @@ bool SceneRenderer::initialize_static_light_chunks() {
 
     const bool safe_mode = safe_loading_enabled();
     if (!renderer_ && !safe_mode) {
-        vibble::log::warn("[SceneRenderer] Renderer unavailable; static light textures will be generated lazily once a renderer is present.");
+        vibble::log::warn("[SceneRenderer] Renderer unavailable; static darkness masks will be generated lazily once a renderer is present.");
     }
 
     bool initialized_chunks = false;
@@ -127,17 +127,17 @@ bool SceneRenderer::initialize_static_light_chunks() {
         if (!chunk) {
             continue;
         }
-        if (chunk->static_light_map) {
-            SDL_DestroyTexture(chunk->static_light_map);
-            chunk->static_light_map = nullptr;
+        if (chunk->static_darkness_mask) {
+            SDL_DestroyTexture(chunk->static_darkness_mask);
+            chunk->static_darkness_mask = nullptr;
         }
 
         chunk->static_texture_set = safe_mode;
         chunk->lighting_dirty     = !safe_mode;
-        chunk->light.needs_update = true;
+        chunk->lighting.needs_update = true;
         chunk->base_brightness    = safe_mode ? 0.0f : 1.0f;
-        chunk->light.min_static_avg_strength = safe_mode ? 0.0f : 0.0f;
-        chunk->light.max_static_avg_strength = safe_mode ? 0.0f : 1.0f;
+        chunk->lighting.min_static_avg_strength = safe_mode ? 0.0f : 0.0f;
+        chunk->lighting.max_static_avg_strength = safe_mode ? 0.0f : 1.0f;
         chunk->brightness_strength = 1.0f;
         chunk->opacity_strength    = 1.0f;
         chunk->scale_strength      = 1.0f;
@@ -149,9 +149,9 @@ bool SceneRenderer::initialize_static_light_chunks() {
     }
 
     if (safe_mode) {
-        vibble::log::warn("[SceneRenderer] SAFE LOADING enabled; static light textures remain disabled until safe mode is cleared.");
+        vibble::log::warn("[SceneRenderer] SAFE LOADING enabled; static darkness masks remain disabled until safe mode is cleared.");
     } else {
-        vibble::log::info("[SceneRenderer] Static light chunks marked for lazy initialization.");
+        vibble::log::info("[SceneRenderer] Chunk darkness masks marked for lazy initialization.");
     }
 
     return initialized_chunks;

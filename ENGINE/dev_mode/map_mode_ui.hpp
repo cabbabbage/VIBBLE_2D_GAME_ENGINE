@@ -23,7 +23,7 @@ class MapLayersController;
 class RoomConfigurator;
 class SlidingWindowContainer;
 class MapGridPanel;
-class FullScreenHeaderBar;
+class DevFooterBar;
 class DockableCollapsible;
 struct DMButtonStyle;
 struct SDL_Renderer;
@@ -83,7 +83,7 @@ public:
 
     void set_map_mode_active(bool active);
 
-    FullScreenHeaderBar* get_footer_header() const;
+    DevFooterBar* get_footer_bar() const;
     void set_footer_always_visible(bool on);
     void set_headers_suppressed(bool suppressed);
     void set_sliding_headers_hidden(bool hidden);
@@ -103,7 +103,7 @@ public:
 
     bool is_point_inside(int x, int y) const;
     bool is_any_panel_visible() const;
-    bool is_layers_footer_visible() const;
+    bool is_layers_panel_visible() const;
 
 private:
     void ensure_panels();
@@ -112,14 +112,8 @@ private:
     void configure_footer_buttons();
     void sync_footer_button_states();
     void update_footer_visibility();
-    void set_layers_footer_expanded(bool expanded);
     enum class PanelType { None, Layers, Grid };
     void set_active_panel(PanelType panel);
-    void update_layers_footer(const Input& input);
-    bool handle_layers_footer_event(const SDL_Event& e);
-    void render_layers_footer(SDL_Renderer* renderer) const;
-    bool should_show_layers_footer() const;
-    SDL_Rect footer_content_rect() const;
     void refresh_header_suppression_state();
     void track_floating_panel(DockableCollapsible* panel);
     void rebuild_floating_stack();
@@ -152,7 +146,7 @@ private:
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;
-    std::unique_ptr<FullScreenHeaderBar> footer_header_;
+    std::unique_ptr<DevFooterBar> footer_bar_;
     bool footer_buttons_configured_ = false;
     bool map_mode_active_ = false;
     bool footer_always_visible_ = false;
@@ -161,8 +155,6 @@ private:
     std::vector<HeaderButtonConfig> area_mode_buttons_;
     HeaderMode header_mode_ = HeaderMode::Map;
     PanelType active_panel_ = PanelType::None;
-    bool layers_footer_requested_ = false;
-    bool layers_footer_visible_ = false;
     bool headers_suppressed_ = false;
     bool base_headers_suppressed_ = false;
     bool sliding_headers_hidden_external_ = false;

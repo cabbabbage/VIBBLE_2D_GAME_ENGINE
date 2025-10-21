@@ -40,7 +40,7 @@ SDLSubsystemGuard& ensure_sdl() {
 }
 }
 
-TEST_CASE("Layers footer stays open after toggling the panel back on") {
+TEST_CASE("Layers panel toggles visibility via footer button") {
     ensure_sdl();
 
     devmode::core::ManifestStore store;
@@ -57,13 +57,13 @@ TEST_CASE("Layers footer stays open after toggling the panel back on") {
 
     Input input;
     ui.update(input);
-    CHECK(ui.is_layers_footer_visible());
+    CHECK_FALSE(ui.is_layers_panel_visible());
 
     ui.toggle_layers_panel();
     ui.update(input);
-    CHECK_FALSE(ui.is_layers_footer_visible());
+    CHECK(ui.is_layers_panel_visible());
 
     ui.toggle_layers_panel();
     ui.update(input);
-    CHECK(ui.is_layers_footer_visible());
+    CHECK_FALSE(ui.is_layers_panel_visible());
 }

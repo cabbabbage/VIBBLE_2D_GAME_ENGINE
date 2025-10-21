@@ -27,7 +27,7 @@ class Occupancy;
 class Grid;
 }
 class DMButton;
-class FullScreenHeaderBar;
+class DevFooterBar;
 class DevControls;
 
 namespace devmode::core {
@@ -45,7 +45,7 @@ public:
     void set_screen_dimensions(int width, int height);
     void set_current_room(Room* room);
     void set_room_config_visible(bool visible);
-    void set_shared_fullscreen_panel(FullScreenHeaderBar* panel);
+    void set_shared_footer_bar(DevFooterBar* footer);
     void set_header_visibility_callback(std::function<void(bool)> cb);
     void set_manifest_store(devmode::core::ManifestStore* store);
 
@@ -201,7 +201,7 @@ private:
     std::unique_ptr<AreaOverlayEditor> area_editor_;
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
     SDL_Rect room_config_bounds_{0, 0, 0, 0};
-    FullScreenHeaderBar* shared_fullscreen_panel_ = nullptr;
+    DevFooterBar* shared_footer_bar_ = nullptr;
     bool room_config_dock_open_ = false;
     bool room_config_was_visible_ = false;
     ActiveModal active_modal_ = ActiveModal::None;

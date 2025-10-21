@@ -22,8 +22,9 @@ struct Chunk {
 
     std::vector<Asset*> assets;
 
-    SDL_Texture* static_light_map = nullptr;
-    bool         static_texture_set = false;
+    // Cached texture representing the accumulated static darkness mask for this chunk.
+    SDL_Texture* static_darkness_mask = nullptr;
+    bool         static_texture_set   = false;
     // Average transparency of the static darkness mask for this chunk (0..1).
     // Higher means brighter from static lights alone.
     float base_brightness = 1.0f;
@@ -35,20 +36,31 @@ struct Chunk {
     int offset_x = 0;
     int offset_y = 0;
 
-    struct LightData {
-        bool  is_active = false;
-        bool  needs_update = true;
-        bool  is_occupied_by_moving_source = false;
+    struct ChunkLightingState {
+        // Whether this chunk participates in lighting updates during the current frame.
+        bool is_active = false;
+        // Flags that the chunk's cached lighting values should be recomputed.
+        bool needs_update = true;
+        // True if a moving light currently overlaps this chunk, affecting runtime blending.
+        bool is_occupied_by_moving_source = false;
+        // Net light contribution applied to the chunk after static and dynamic blending [0,1].
         float current_strength = 0.0f;
+        // Lower bound of the static brightness samples observed for this chunk [0,1].
         float min_static_avg_strength = 0.0f;
+        // Upper bound of the static brightness samples observed for this chunk [0,1].
         float max_static_avg_strength = 1.0f;
-    } light;
+    } lighting;
 
-    struct UseShadowData {
+    struct ChunkShadowParameters {
+        // Scalar applied to the shadow mask relative to its authored size.
         float scale = 1.0f;
+        // Opacity multiplier applied to the darkness mask [0,1].
         float opacity = 1.0f;
+        // Horizontal offset of the shadow mask expressed as a percent of chunk width [-100,100].
         float offset_x_percent = 0.0f;
+        // Vertical offset of the shadow mask expressed as a percent of chunk height [-100,100].
         float offset_y_percent = 0.0f;
+        // Parallax offset intensity expressed as a percent [0,100].
         float parallax_intensity_percent = 0.0f;
     } shadow;
 
@@ -123,7 +135,7 @@ public:
     world::Chunk* ensure_chunk_from_world(SDL_Point world_px) const;
     world::Chunk* chunk_from_world(SDL_Point world_px) const;
 
-    std::optional<world::Chunk::UseShadowData> get_shadow_data(SDL_FPoint world_or_screen_pos) const;
+    std::optional<world::Chunk::ChunkShadowParameters> get_shadow_data(SDL_FPoint world_or_screen_pos) const;
     ShadowSettings shadow_settings() const { return ShadowSettings{}; }
 
     int chunk_count() const;

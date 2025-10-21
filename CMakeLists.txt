@@ -172,11 +172,11 @@ endif()
 enable_testing()
 
 add_executable(dev_mode_ui_tests
-    tests/dev_mode/full_screen_header_bar_tests.cpp
+    tests/dev_mode/dev_footer_bar_tests.cpp
     tests/dev_mode/tag_cache_tests.cpp
     tests/dev_mode/asset_info_stub.cpp
     ENGINE/dev_mode/dev_ui_settings.cpp
-    ENGINE/dev_mode/full_screen_header_bar.cpp
+    ENGINE/dev_mode/dev_footer_bar.cpp
     ENGINE/dev_mode/draw_utils.cpp
     ENGINE/dev_mode/font_cache.cpp
     ENGINE/dev_mode/widgets.cpp

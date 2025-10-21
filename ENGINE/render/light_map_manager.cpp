@@ -52,7 +52,7 @@ static float average_transparency_mgr(SDL_Renderer* renderer, SDL_Texture* textu
     return static_cast<float>(std::clamp(avg, 0.0, 1.0));
 }
 
-// Dummy calculators for UseShadowData. To be implemented precisely later.
+// Dummy calculators for ChunkShadowParameters. To be implemented precisely later.
 static float compute_shadow_opacity(float current_strength) {
     return std::clamp(current_strength, 0.0f, 1.0f);
 }
@@ -123,11 +123,11 @@ void LightMapManager::begin_frame() {
 
     for (world::Chunk* chunk : update_set) {
         if (!chunk) continue;
-        chunk->light.is_active = true;
+        chunk->lighting.is_active = true;
         if (screen_changed) {
-            chunk->light.needs_update = true;
+            chunk->lighting.needs_update = true;
         }
-        if (!chunk->light.needs_update) {
+        if (!chunk->lighting.needs_update) {
             // Another neighbor in this pass may have already updated it.
             continue;
         }
@@ -139,35 +139,35 @@ void LightMapManager::begin_frame() {
             const SDL_Point p{a->pos.x, a->pos.y};
             if (SDL_PointInRect(&p, &chunk->world_bounds)) { occupied = true; break; }
         }
-        const bool was_occupied = chunk->light.is_occupied_by_moving_source;
+        const bool was_occupied = chunk->lighting.is_occupied_by_moving_source;
         if (occupied != was_occupied) {
-            chunk->light.needs_update = true;
+            chunk->lighting.needs_update = true;
         }
-        chunk->light.is_occupied_by_moving_source = occupied;
+        chunk->lighting.is_occupied_by_moving_source = occupied;
 
-        if (chunk->light.is_occupied_by_moving_source) {
+        if (chunk->lighting.is_occupied_by_moving_source) {
             // Recompute brightness (background + static lights; no shadows). For now,
             // approximate using the static mask average transparency.
-            if (chunk->static_light_map) {
-                chunk->light.current_strength = average_transparency_mgr(renderer, chunk->static_light_map);
+            if (chunk->static_darkness_mask) {
+                chunk->lighting.current_strength = average_transparency_mgr(renderer, chunk->static_darkness_mask);
             } else {
-                chunk->light.current_strength = chunk->base_brightness;
+                chunk->lighting.current_strength = chunk->base_brightness;
             }
         } else {
-            chunk->light.current_strength =
-                (chunk->light.min_static_avg_strength +
-                 (chunk->light.max_static_avg_strength - chunk->light.min_static_avg_strength) * screen_light_opacity);
+            chunk->lighting.current_strength =
+                (chunk->lighting.min_static_avg_strength +
+                 (chunk->lighting.max_static_avg_strength - chunk->lighting.min_static_avg_strength) * screen_light_opacity);
         }
 
-        // Populate UseShadowData via dummy calculators.
-        chunk->shadow.opacity  = compute_shadow_opacity(chunk->light.current_strength);
-        chunk->shadow.scale    = compute_shadow_scale(chunk->light.current_strength);
-        auto [oxp, oyp]        = compute_shadow_offsets_percent(chunk->light.current_strength);
+        // Populate ChunkShadowParameters via dummy calculators.
+        chunk->shadow.opacity  = compute_shadow_opacity(chunk->lighting.current_strength);
+        chunk->shadow.scale    = compute_shadow_scale(chunk->lighting.current_strength);
+        auto [oxp, oyp]        = compute_shadow_offsets_percent(chunk->lighting.current_strength);
         chunk->shadow.offset_x_percent = oxp;
         chunk->shadow.offset_y_percent = oyp;
-        chunk->shadow.parallax_intensity_percent = compute_parallax_intensity_percent(chunk->light.current_strength);
+        chunk->shadow.parallax_intensity_percent = compute_parallax_intensity_percent(chunk->lighting.current_strength);
 
-        chunk->light.needs_update = false;
+        chunk->lighting.needs_update = false;
     }
 }
 
@@ -195,10 +195,10 @@ std::vector<LightMapManager::ChunkSnapshot> LightMapManager::all_snapshots() con
         snap.active              = true;
         snap.dirty               = chunk->lighting_dirty;
         snap.base_brightness     = chunk->base_brightness;
-        snap.combined_brightness = chunk->light.current_strength;
-        snap.static_min          = chunk->light.min_static_avg_strength;
-        snap.static_max          = chunk->light.max_static_avg_strength;
-        snap.static_average      = chunk->light.current_strength;
+        snap.combined_brightness = chunk->lighting.current_strength;
+        snap.static_min          = chunk->lighting.min_static_avg_strength;
+        snap.static_max          = chunk->lighting.max_static_avg_strength;
+        snap.static_average      = chunk->lighting.current_strength;
         snap.static_empty        = false;
         snap.shadow_opacity_min  = chunk->shadow.opacity;
         snap.shadow_opacity_max  = chunk->shadow.opacity;
@@ -236,10 +236,10 @@ std::optional<LightMapManager::ChunkSnapshot> LightMapManager::snapshot_for_chun
     snap.active              = true;
     snap.dirty               = chunk->lighting_dirty;
     snap.base_brightness     = chunk->base_brightness;
-    snap.combined_brightness = chunk->light.current_strength;
-    snap.static_min          = chunk->light.min_static_avg_strength;
-    snap.static_max          = chunk->light.max_static_avg_strength;
-    snap.static_average      = chunk->light.current_strength;
+    snap.combined_brightness = chunk->lighting.current_strength;
+    snap.static_min          = chunk->lighting.min_static_avg_strength;
+    snap.static_max          = chunk->lighting.max_static_avg_strength;
+    snap.static_average      = chunk->lighting.current_strength;
     snap.static_empty        = false;
     snap.shadow_opacity_min  = chunk->shadow.opacity;
     snap.shadow_opacity_max  = chunk->shadow.opacity;
@@ -252,14 +252,14 @@ std::optional<LightMapManager::ChunkSnapshot> LightMapManager::snapshot_for_chun
     return snap;
 }
 
-std::optional<LightMapManager::UseShadowData> LightMapManager::shadow_data_for_chunk(const world::Chunk* chunk) const {
+std::optional<LightMapManager::ShadowParameters> LightMapManager::shadow_data_for_chunk(const world::Chunk* chunk) const {
     if (!chunk) {
         return std::nullopt;
     }
     return chunk->shadow;
 }
 
-std::optional<LightMapManager::UseShadowData> LightMapManager::get_shadow_data_for_index(int index) const {
+std::optional<LightMapManager::ShadowParameters> LightMapManager::get_shadow_data_for_index(int index) const {
     const LightMap* map = light_map();
     if (!map) {
         return std::nullopt;
@@ -299,7 +299,7 @@ std::optional<int> LightMapManager::find_chunk_index(SDL_FPoint world_or_screen_
     return std::nullopt;
 }
 
-std::optional<LightMapManager::UseShadowData> LightMapManager::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
+std::optional<LightMapManager::ShadowParameters> LightMapManager::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
     if (auto index = find_chunk_index(world_or_screen_pos)) {
         return get_shadow_data_for_index(*index);
     }

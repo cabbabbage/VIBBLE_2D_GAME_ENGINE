@@ -12,7 +12,7 @@
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
-#include "dev_mode/full_screen_header_bar.hpp"
+#include "dev_mode/dev_footer_bar.hpp"
 #include "room_config/room_configurator.hpp"
 #include "dev_mode/FloatingDockableManager.hpp"
 #include "dev_mode/widgets.hpp"
@@ -227,8 +227,8 @@ void RoomEditor::set_room_config_visible(bool visible) {
     refresh_room_config_visibility();
 }
 
-void RoomEditor::set_shared_fullscreen_panel(FullScreenHeaderBar* panel) {
-    shared_fullscreen_panel_ = panel;
+void RoomEditor::set_shared_footer_bar(DevFooterBar* footer) {
+    shared_footer_bar_ = footer;
     configure_shared_panel();
     update_spawn_group_config_anchor();
 }
@@ -319,9 +319,6 @@ void RoomEditor::set_enabled(bool enabled) {
             refresh_room_config_visibility();
         }
         configure_shared_panel();
-        if (shared_fullscreen_panel_) {
-            shared_fullscreen_panel_->set_expanded(false);
-        }
     } else {
         apply_area_editor_camera_override(false);
         cam.set_manual_zoom_override(false);
@@ -1418,9 +1415,8 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
             return true;
         }
     }
-    if (shared_fullscreen_panel_ && shared_fullscreen_panel_->visible()) {
-        SDL_Point p{mx, my};
-        if (SDL_PointInRect(&p, &shared_fullscreen_panel_->header_rect())) {
+    if (shared_footer_bar_ && shared_footer_bar_->visible()) {
+        if (shared_footer_bar_->contains(mx, my)) {
             return true;
         }
     }
@@ -1602,11 +1598,12 @@ void RoomEditor::update_room_config_bounds() {
 }
 
 void RoomEditor::configure_shared_panel() {
-    if (!shared_fullscreen_panel_) {
+    if (!shared_footer_bar_) {
         return;
     }
-    shared_fullscreen_panel_->set_bounds(screen_w_, screen_h_);
+    shared_footer_bar_->set_bounds(screen_w_, screen_h_);
 }
+
 void RoomEditor::refresh_room_config_visibility() {
     ensure_room_configurator();
     if (!room_cfg_ui_) {

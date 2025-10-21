@@ -19,7 +19,7 @@ struct Chunk;
 
 class LightMapManager {
 public:
-    using UseShadowData = world::Chunk::UseShadowData;
+    using ShadowParameters = world::Chunk::ChunkShadowParameters;
 
     struct ChunkSnapshot {
         int      index               = -1;
@@ -39,7 +39,7 @@ public:
         float                 scale_strength      = 1.0f;
         int                   offset_x            = 0;
         int                   offset_y            = 0;
-        world::Chunk::UseShadowData shadow{};
+        world::Chunk::ChunkShadowParameters shadow{};
     };
 
     explicit LightMapManager(Assets* assets);
@@ -50,12 +50,12 @@ public:
     std::vector<ChunkSnapshot> all_snapshots() const;
     std::vector<std::string>      assets_sampling_chunk(int index) const;
     std::optional<ChunkSnapshot> snapshot_for_chunk(int index) const;
-    std::optional<UseShadowData>      get_shadow_data(SDL_FPoint world_or_screen_pos) const;
-    std::optional<UseShadowData>      get_shadow_data_for_index(int index) const;
+    std::optional<ShadowParameters>      get_shadow_data(SDL_FPoint world_or_screen_pos) const;
+    std::optional<ShadowParameters>      get_shadow_data_for_index(int index) const;
 
 private:
     std::optional<int> find_chunk_index(SDL_FPoint world_or_screen_pos) const;
-    std::optional<UseShadowData> shadow_data_for_chunk(const world::Chunk* chunk) const;
+    std::optional<ShadowParameters> shadow_data_for_chunk(const world::Chunk* chunk) const;
 
     Assets* assets_ = nullptr;
     float last_screen_light_opacity_ = -1.0f; // normalized [0,1]; forces update on first frame

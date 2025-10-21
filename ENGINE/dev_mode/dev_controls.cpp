@@ -9,7 +9,7 @@
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"
-#include "dev_mode/full_screen_header_bar.hpp"
+#include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 #include "dev_mode/area_mode/create_room_area_panel.hpp"
@@ -392,7 +392,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 this->set_mode(Mode::RoomEditor);
                 if (map_mode_ui_) {
                     map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-                    if (auto* footer = map_mode_ui_->get_footer_header()) {
+                    if (auto* footer = map_mode_ui_->get_footer_bar()) {
                         std::string label = std::string("Room: ") + (current_room_ ? current_room_->room_name : std::string{});
                         footer->set_title(label);
                     }
@@ -405,7 +405,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 this->set_mode(Mode::AreaMode);
                 if (map_mode_ui_) {
                     map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
-                    if (auto* footer = map_mode_ui_->get_footer_header()) {
+                    if (auto* footer = map_mode_ui_->get_footer_bar()) {
                         std::string label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
                         footer->set_title(label);
                     }
@@ -419,7 +419,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
         });
     }
     if (room_editor_ && map_mode_ui_) {
-        room_editor_->set_shared_fullscreen_panel(map_mode_ui_->get_footer_header());
+        room_editor_->set_shared_footer_bar(map_mode_ui_->get_footer_bar());
     }
     configure_header_button_sets();
     trail_suite_ = std::make_unique<TrailEditorSuite>();
@@ -428,7 +428,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     asset_filter_.initialize();
     asset_filter_.set_state_changed_callback([this]() { refresh_active_asset_filters(); });
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     asset_filter_.set_enabled(enabled_ && !layers_panel_open);
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
     asset_filter_.set_map_info(map_info_json_);
@@ -450,7 +450,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
             this->set_mode(Mode::RoomEditor);
             if (map_mode_ui_) {
                 map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-                if (auto* footer = map_mode_ui_->get_footer_header()) {
+                if (auto* footer = map_mode_ui_->get_footer_bar()) {
                     std::string label = std::string("Room: ") +
                                         (current_room_ ? current_room_->room_name : std::string{});
                     footer->set_title(label);
@@ -463,7 +463,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
             this->set_mode(Mode::AreaMode);
             if (map_mode_ui_) {
                 map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
-                if (auto* footer = map_mode_ui_->get_footer_header()) {
+                if (auto* footer = map_mode_ui_->get_footer_bar()) {
                     std::string label = std::string("Area Mode — Room: ") +
                                         (current_room_ ? current_room_->room_name : std::string{});
                     footer->set_title(label);
@@ -557,7 +557,7 @@ void DevControls::set_current_room(Room* room) {
     }
     asset_filter_.set_current_room(room);
     if (map_mode_ui_) {
-        if (auto* footer = map_mode_ui_->get_footer_header()) {
+        if (auto* footer = map_mode_ui_->get_footer_bar()) {
             std::string label;
             if (mode_ == Mode::AreaMode) label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
             else if (mode_ == Mode::RoomEditor) label = std::string("Room: ") + (current_room_ ? current_room_->room_name : std::string{});
@@ -674,7 +674,7 @@ void DevControls::set_enabled(bool enabled) {
         return;
     }
     enabled_ = enabled;
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     asset_filter_.set_enabled(enabled_ && !layers_panel_open);
 
     if (enabled_) {
@@ -693,7 +693,7 @@ void DevControls::set_enabled(bool enabled) {
         if (map_mode_ui_) {
             map_mode_ui_->set_map_mode_active(false);
             map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-            if (auto* panel = map_mode_ui_->get_footer_header()) {
+            if (auto* panel = map_mode_ui_->get_footer_bar()) {
                 panel->set_expanded(false);
             }
         }
@@ -714,7 +714,7 @@ void DevControls::set_enabled(bool enabled) {
         if (map_mode_ui_) {
             map_mode_ui_->set_map_mode_active(false);
             map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-            if (auto* panel = map_mode_ui_->get_footer_header()) {
+            if (auto* panel = map_mode_ui_->get_footer_bar()) {
                 panel->set_expanded(false);
             }
         }
@@ -792,7 +792,7 @@ void DevControls::update(const Input& input) {
     const bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
     const bool hide_headers = modal_hide || sliding_headers_hidden_;
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     asset_filter_.set_enabled(enabled_ && !layers_panel_open);
     apply_header_suppression();
     if (map_mode_ui_) {
@@ -815,10 +815,10 @@ void DevControls::update(const Input& input) {
         if (!hide_headers && asset_filter_.contains_point(pointer.x, pointer.y)) {
             room_editor_->clear_highlighted_assets();
         } else if (!hide_headers) {
-            FullScreenHeaderBar* footer = map_mode_ui_ ? map_mode_ui_->get_footer_header() : nullptr;
+            DevFooterBar* footer = map_mode_ui_ ? map_mode_ui_->get_footer_bar() : nullptr;
             if (footer && footer->visible()) {
-                const SDL_Rect& header = footer->header_rect();
-                if (header.w > 0 && header.h > 0 && SDL_PointInRect(&pointer, &header)) {
+                const SDL_Rect& bar_rect = footer->rect();
+                if (bar_rect.w > 0 && bar_rect.h > 0 && SDL_PointInRect(&pointer, &bar_rect)) {
                     room_editor_->clear_highlighted_assets();
                 }
             }
@@ -858,7 +858,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     const bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
     const bool hide_headers = modal_hide || sliding_headers_hidden_;
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     asset_filter_.set_enabled(enabled_ && !layers_panel_open);
     apply_header_suppression();
 
@@ -1184,7 +1184,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         });
                         if (asset_area_editor_->begin_for_room(current_room_, area_name, area_type, world)) {
                             if (map_mode_ui_) {
-                                if (auto* footer = map_mode_ui_->get_footer_header()) {
+                                if (auto* footer = map_mode_ui_->get_footer_bar()) {
                                     footer->set_title(std::string("Editing Room Area — ") + area_name);
                                 }
                             }
@@ -1214,7 +1214,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     if (asset_area_editor_) asset_area_editor_->attach_assets(assets_);
                     if (asset_area_editor_ && asset_area_editor_->begin(target_asset->info.get(), target_asset, area_name)) {
                         if (map_mode_ui_) {
-                            if (auto* footer = map_mode_ui_->get_footer_header()) {
+                            if (auto* footer = map_mode_ui_->get_footer_bar()) {
                                 std::string label = std::string("Editing ") + target_asset->info->name + std::string(" — Area: ") + area_name;
                                 footer->set_title(label);
                             }
@@ -1471,7 +1471,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->render(renderer);
     }
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_footer_visible();
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_;
     if (!hide_headers && !is_modal_blocking_panels() && !layers_panel_open) {
         asset_filter_.render(renderer);
@@ -1833,7 +1833,7 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "light_map", light_map_open);
     const bool grid_open = map_mode_ui_->is_grid_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_grid", grid_open);
-    const bool layers_open = map_mode_ui_->is_layers_footer_visible();
+    const bool layers_open = map_mode_ui_->is_layers_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_layers", layers_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
