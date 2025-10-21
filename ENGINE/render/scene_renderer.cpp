@@ -82,17 +82,17 @@ const LightMap* SceneRenderer::light_map() const {
     return const_cast<SceneRenderer*>(this)->light_map();
 }
 
-void SceneRenderer::initialize_static_light_chunks() {
+bool SceneRenderer::initialize_static_light_chunks() {
     if (!assets_) {
         vibble::log::debug("[SceneRenderer] Skipping static light initialization (assets unavailable).");
-        return;
+        return false;
     }
 
     world::Grid& grid = assets_->world_grid();
     std::vector<world::Chunk*> chunks = grid.all_chunks();
     if (chunks.empty()) {
         vibble::log::info("[SceneRenderer] No map chunks detected; static light initialization skipped.");
-        return;
+        return false;
     }
 
     const bool safe_mode = safe_loading_enabled();
@@ -100,6 +100,7 @@ void SceneRenderer::initialize_static_light_chunks() {
         vibble::log::warn("[SceneRenderer] Renderer unavailable; static light textures will be generated lazily once a renderer is present.");
     }
 
+    bool initialized_chunks = false;
     for (world::Chunk* chunk : chunks) {
         if (!chunk) {
             continue;
@@ -121,6 +122,8 @@ void SceneRenderer::initialize_static_light_chunks() {
         chunk->offset_x            = 0;
         chunk->offset_y            = 0;
         chunk->has_dynamic_overlay = false;
+
+        initialized_chunks = true;
     }
 
     if (safe_mode) {
@@ -128,6 +131,8 @@ void SceneRenderer::initialize_static_light_chunks() {
     } else {
         vibble::log::info("[SceneRenderer] Static light chunks marked for lazy initialization.");
     }
+
+    return initialized_chunks;
 }
 
 
