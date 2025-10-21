@@ -2172,17 +2172,15 @@
         "falloff_start": 0.4399999976158142
       },
       "size_settings": {
-        "scale_percentage": 83.0
+        "scale_percentage": 91.0
       },
       "tags": [
-        "rock",
-        "impassable",
         "boundary",
-        "SRC/assets/Big_Rock/default",
-        "SRC/assets/Big_Rock/group"
+        "impassable",
+        "rock"
       ],
       "update_radius": 1000,
-      "z_threshold": 0
+      "z_threshold": -6
     },
     "Big_Rock_Center": {
       "animations": {
