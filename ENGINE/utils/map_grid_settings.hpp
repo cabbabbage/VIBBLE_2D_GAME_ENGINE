@@ -7,9 +7,9 @@
 class Area;
 
 struct MapGridSettings {
-    int resolution = 7;
+    int resolution = 0;
     int jitter = 0;
-    int r_chunk = 9;
+    int r_chunk = 0;
 
     static MapGridSettings defaults();
     static MapGridSettings from_json(const nlohmann::json* obj);

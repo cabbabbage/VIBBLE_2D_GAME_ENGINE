@@ -15,7 +15,7 @@ constexpr int kMinJitter = 0;
 }
 
 MapGridSettings MapGridSettings::defaults() {
-    return MapGridSettings{7, 0, 9};
+    return MapGridSettings{0, 0, 0};
 }
 
 MapGridSettings MapGridSettings::from_json(const nlohmann::json* obj) {

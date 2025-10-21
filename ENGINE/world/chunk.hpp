@@ -16,7 +16,7 @@ namespace world {
 struct Chunk {
     int i = 0;
     int j = 0;
-    int r_chunk = 9;
+    int r_chunk = 0;
     SDL_Rect world_bounds{0, 0, 0, 0};
 
     std::vector<Asset*> assets;

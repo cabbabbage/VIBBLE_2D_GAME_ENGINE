@@ -46,7 +46,7 @@ public:
 private:
     bool shouldRegen(Asset* a);
     SDL_Rect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
-    void initialize_static_light_chunks();
+    bool initialize_static_light_chunks();
 
 private:
     struct AssetRenderCommand {

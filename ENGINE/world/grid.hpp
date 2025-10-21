@@ -13,7 +13,7 @@ namespace world {
 
 class Grid {
 public:
-    Grid(SDL_Point origin = SDL_Point{0,0}, int r_chunk = 9) : origin_(origin), r_chunk_(r_chunk) {}
+    Grid(SDL_Point origin = SDL_Point{0,0}, int r_chunk = 0) : origin_(origin), r_chunk_(r_chunk) {}
 
     void set_chunk_resolution(int r);
     int  chunk_resolution() const { return r_chunk_; }
@@ -41,7 +41,7 @@ private:
 
 private:
     SDL_Point origin_{0,0};
-    int r_chunk_ = 9;
+    int r_chunk_ = 0;
     ChunkManager chunks_{};
     std::unordered_map<Asset*, Chunk*> residency_{};
 };
