@@ -404,7 +404,7 @@ void AssetFilterBar::reset() {
 
 bool AssetFilterBar::default_type_enabled(const std::string& type) const {
     const std::string canonical = asset_types::canonicalize(type);
-    return canonical != asset_types::player && canonical != asset_types::texture;
+    return canonical != asset_types::player;
 }
 
 bool AssetFilterBar::passes(const Asset& asset) const {
