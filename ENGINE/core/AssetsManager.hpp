@@ -206,7 +206,6 @@ private:
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
     world::Grid world_grid_{};
-    std::unordered_map<Asset*, SDL_Point> last_grid_pos_;
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;

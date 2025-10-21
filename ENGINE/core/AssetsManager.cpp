@@ -641,19 +641,20 @@ void Assets::update(const Input& input)
     }
     // Sync asset residency; re-home moving assets
     for (Asset* asset : all) {
-        if (!asset) continue;
-        SDL_Point curr{asset->pos.x, asset->pos.y};
-        auto it = last_grid_pos_.find(asset);
-        if (it == last_grid_pos_.end()) {
-            // ensure registered
-            world_grid_.register_asset(asset);
-            last_grid_pos_[asset] = curr;
+        if (!asset) {
             continue;
         }
-        SDL_Point prev = it->second;
+        SDL_Point curr{asset->pos.x, asset->pos.y};
+        if (!asset->has_grid_residency_cache()) {
+            world_grid_.register_asset(asset);
+            asset->cache_grid_residency(curr);
+            continue;
+        }
+
+        const SDL_Point prev = asset->grid_residency_cache();
         if (prev.x != curr.x || prev.y != curr.y) {
             world_grid_.move_asset(asset, prev, curr);
-            it->second = curr;
+            asset->cache_grid_residency(curr);
         }
     }
 
@@ -1039,6 +1040,9 @@ void Assets::process_removals() {
         render_pipeline::shading::ClearShadowStateFor(asset);
         // Unregister from world grid residency
         world_grid_.unregister_asset(asset);
+        if (asset) {
+            asset->clear_grid_residency_cache();
+        }
         if (asset && asset->info && !asset->info->light_sources.empty()) {
             if (asset->info->moving_asset) {
                 notify_light_map_asset_moved(asset);
@@ -1270,15 +1274,21 @@ void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persi
 
     world_grid_.set_chunk_resolution(std::max(0, sanitized.r_chunk));
 
-    if (chunk_changed || last_grid_pos_.empty()) {
-        last_grid_pos_.clear();
+    if (chunk_changed) {
         for (Asset* asset : all) {
             if (!asset) {
                 continue;
             }
-            world_grid_.register_asset(asset);
-            last_grid_pos_[asset] = SDL_Point{asset->pos.x, asset->pos.y};
+            asset->clear_grid_residency_cache();
         }
+    }
+
+    for (Asset* asset : all) {
+        if (!asset || asset->has_grid_residency_cache()) {
+            continue;
+        }
+        world_grid_.register_asset(asset);
+        asset->cache_grid_residency(SDL_Point{asset->pos.x, asset->pos.y});
     }
 
     if (chunk_changed) {

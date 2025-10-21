@@ -98,6 +98,10 @@ class Asset {
     bool is_selected();
     void set_merged_from_neighbors(bool state);
     bool merged_from_neighbors() const;
+    void cache_grid_residency(SDL_Point point);
+    void clear_grid_residency_cache();
+    bool has_grid_residency_cache() const;
+    SDL_Point grid_residency_cache() const;
     RenderTextureCache& light_front_cache();
     RenderTextureCache& light_front_cache() const;
     RenderTextureCache& light_behind_cache();
@@ -154,6 +158,9 @@ class Asset {
     SDL_Point last_neighbor_origin_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
     bool neighbor_lists_initialized_ = false;
     void update_neighbor_lists(bool force_update);
+
+    SDL_Point cached_grid_residency_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
+    bool      has_cached_grid_residency_ = false;
 
     struct DownscaleCacheEntry {
         float        scale   = 1.0f;
