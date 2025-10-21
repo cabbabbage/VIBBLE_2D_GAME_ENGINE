@@ -472,10 +472,33 @@ void stamp_static_lights_onto_mask(SDL_Renderer* renderer,
             SDL_SetTextureColorMod(tex, 255, 255, 255);
             SDL_SetTextureAlphaMod(tex, 255);
 
-            SDL_Rect local_dst = world_dst;
-            local_dst.x -= chunk.world_bounds.x;
-            local_dst.y -= chunk.world_bounds.y;
-            SDL_RenderCopy(renderer, tex, nullptr, &local_dst);
+            const int tex_w = draw_w;
+            const int tex_h = draw_h;
+
+            SDL_Rect src_rect{};
+            src_rect.x = std::clamp(intersection.x - world_dst.x, 0, std::max(0, tex_w));
+            src_rect.y = std::clamp(intersection.y - world_dst.y, 0, std::max(0, tex_h));
+            src_rect.w = intersection.w;
+            src_rect.h = intersection.h;
+
+            if (src_rect.x >= tex_w || src_rect.y >= tex_h) {
+                continue;
+            }
+
+            src_rect.w = std::min(src_rect.w, tex_w - src_rect.x);
+            src_rect.h = std::min(src_rect.h, tex_h - src_rect.y);
+
+            SDL_Rect local_dst{};
+            local_dst.x = std::max(0, intersection.x - chunk.world_bounds.x);
+            local_dst.y = std::max(0, intersection.y - chunk.world_bounds.y);
+            local_dst.w = src_rect.w;
+            local_dst.h = src_rect.h;
+
+            if (src_rect.w <= 0 || src_rect.h <= 0 || local_dst.w <= 0 || local_dst.h <= 0) {
+                continue;
+            }
+
+            SDL_RenderCopy(renderer, tex, &src_rect, &local_dst);
 
             SDL_SetTextureBlendMode(tex, save_bm);
             SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
