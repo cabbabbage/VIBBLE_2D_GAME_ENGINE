@@ -70,9 +70,13 @@ private:
     void rebuild_room_spawn_ids();
     void rebuild_layout();
     void sync_state_from_ui();
+    void load_persisted_state();
+    void persist_state();
+    void persist_filters_expanded() const;
     void notify_state_changed();
     bool type_filter_enabled(const std::string& type) const;
     bool default_type_enabled(const std::string& type) const;
+    bool load_type_filter_value(const std::string& type, bool default_value) const;
     std::string format_type_label(const std::string& type) const;
     void collect_spawn_ids(const nlohmann::json& node, std::unordered_set<std::string>& out) const;
     void update_filter_toggle_label();

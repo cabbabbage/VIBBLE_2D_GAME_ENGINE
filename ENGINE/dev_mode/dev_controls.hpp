@@ -165,6 +165,7 @@ private:
     void set_mode_from_header(int header_mode);
     void set_mode(Mode new_mode);
     std::string generate_unique_room_area_name(const std::string& base) const;
+    void restore_filter_hidden_assets() const;
 
 private:
     int map_radius_or_default() const;
@@ -205,6 +206,7 @@ private:
     bool pointer_over_camera_panel_ = false;
     bool modal_headers_hidden_ = false;
     bool sliding_headers_hidden_ = false;
+    mutable std::unordered_map<Asset*, bool> filter_hidden_assets_;
     std::unique_ptr<TrailEditorSuite> trail_suite_;
     devmode::core::ManifestStore manifest_store_;
     AssetFilterBar asset_filter_;

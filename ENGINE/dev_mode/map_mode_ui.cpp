@@ -122,18 +122,20 @@ void MapModeUI::set_dev_sliding_headers_hidden(bool hidden) {
 }
 
 void MapModeUI::refresh_header_suppression_state() {
-    bool final_state = base_headers_suppressed_ || sliding_headers_hidden_external_ || dev_sliding_headers_hidden_;
-    if (headers_suppressed_ == final_state) {
-        return;
-    }
+    const bool final_state = base_headers_suppressed_ || dev_sliding_headers_hidden_;
+    const bool state_changed = (headers_suppressed_ != final_state);
     headers_suppressed_ = final_state;
-    ensure_panels();
-    if (headers_suppressed_) {
-        if (layers_panel_) {
-            layers_panel_->close();
+
+    if (state_changed) {
+        ensure_panels();
+        if (headers_suppressed_) {
+            if (layers_panel_) {
+                layers_panel_->close();
+            }
+            layers_footer_visible_ = false;
         }
-        layers_footer_visible_ = false;
     }
+
     update_footer_visibility();
 }
 

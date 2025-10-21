@@ -1,4 +1,20 @@
 {
+    "dev": {
+        "asset_filter": {
+            "current_room": true,
+            "filters_expanded": true,
+            "initialized": true,
+            "map_assets": true,
+            "types": {
+                "boundary": true,
+                "enemy": true,
+                "npc": false,
+                "object": true,
+                "player": true,
+                "texture": true
+            }
+        }
+    },
     "dev_ui": {
         "lighting": {
             "map_panel": {

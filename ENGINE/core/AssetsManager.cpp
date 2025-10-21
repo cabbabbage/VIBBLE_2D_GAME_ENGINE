@@ -745,6 +745,13 @@ void Assets::set_render_suppressed(bool suppressed) {
     suppress_render_ = suppressed;
 }
 
+const std::vector<Asset*>& Assets::getActive() const {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        return filtered_active_assets;
+    }
+    return active_assets;
+}
+
 const std::vector<Asset*>& Assets::getFilteredActiveAssets() const {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         return filtered_active_assets;

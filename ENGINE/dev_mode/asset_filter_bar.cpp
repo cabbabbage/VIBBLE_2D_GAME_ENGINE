@@ -2,6 +2,7 @@
 
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
+#include "dev_mode/dev_ui_settings.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
@@ -9,12 +10,25 @@
 
 #include <algorithm>
 #include <limits>
+#include <string>
 #include <unordered_set>
 #include <nlohmann/json.hpp>
 
 namespace {
 constexpr int kToggleButtonMinWidth = 36;
 constexpr int kPanelOutlineThickness = 1;
+
+constexpr const char* kSettingsInitializedKey = "dev.asset_filter.initialized";
+constexpr const char* kSettingsMapAssetsKey = "dev.asset_filter.map_assets";
+constexpr const char* kSettingsCurrentRoomKey = "dev.asset_filter.current_room";
+constexpr const char* kSettingsFiltersExpandedKey = "dev.asset_filter.filters_expanded";
+
+std::string make_type_setting_key(const std::string& type) {
+    std::string canonical = asset_types::canonicalize(type);
+    std::string key = "dev.asset_filter.types.";
+    key += canonical;
+    return key;
+}
 }
 
 AssetFilterBar::AssetFilterBar() = default;
@@ -22,8 +36,9 @@ AssetFilterBar::~AssetFilterBar() = default;
 
 void AssetFilterBar::initialize() {
     entries_.clear();
+    load_persisted_state();
 
-    const bool use_saved_state = has_saved_state_ || !state_.type_filters.empty();
+    const bool use_saved_state = has_saved_state_;
 
     FilterEntry map_entry;
     map_entry.id = "map_assets";
@@ -49,20 +64,18 @@ void AssetFilterBar::initialize() {
     std::unordered_set<std::string> known_types;
     known_types.reserve(all_types.size());
     for (const std::string& type : all_types) {
+        const std::string canonical = asset_types::canonicalize(type);
         FilterEntry entry;
-        entry.id = type;
+        entry.id = canonical;
         entry.kind = FilterKind::Type;
-        const bool default_enabled = default_type_enabled(type);
+        const bool default_enabled = default_type_enabled(canonical);
         bool checkbox_value = default_enabled;
         if (use_saved_state) {
-            auto it = state_.type_filters.find(type);
-            if (it != state_.type_filters.end()) {
-                checkbox_value = it->second;
-            }
+            checkbox_value = load_type_filter_value(canonical, checkbox_value);
         }
         entry.checkbox = std::make_unique<DMCheckbox>(format_type_label(type), checkbox_value);
-        state_.type_filters[type] = checkbox_value;
-        known_types.insert(type);
+        state_.type_filters[canonical] = checkbox_value;
+        known_types.insert(canonical);
         entries_.push_back(std::move(entry));
     }
 
@@ -76,7 +89,9 @@ void AssetFilterBar::initialize() {
         }
     }
 
-    filters_expanded_ = false;
+    if (!use_saved_state) {
+        filters_expanded_ = false;
+    }
     filter_toggle_button_ = std::make_unique<DMButton>("▲", &DMStyles::HeaderButton(), std::max(DMButton::height(), kToggleButtonMinWidth), DMButton::height());
     update_filter_toggle_label();
     sync_state_from_ui();
@@ -158,6 +173,7 @@ void AssetFilterBar::set_filters_expanded(bool expanded) {
     }
     filters_expanded_ = expanded;
     update_filter_toggle_label();
+    persist_filters_expanded();
     layout_dirty_ = true;
 }
 
@@ -473,7 +489,7 @@ void AssetFilterBar::sync_state_from_ui() {
             break;
         }
     }
-    has_saved_state_ = true;
+    persist_state();
 }
 
 void AssetFilterBar::notify_state_changed() {
@@ -674,6 +690,13 @@ bool AssetFilterBar::type_filter_enabled(const std::string& type) const {
     return it->second;
 }
 
+bool AssetFilterBar::load_type_filter_value(const std::string& type, bool default_value) const {
+    if (!has_saved_state_) {
+        return default_value;
+    }
+    return devmode::ui_settings::load_bool(make_type_setting_key(type), default_value);
+}
+
 std::string AssetFilterBar::format_type_label(const std::string& type) const {
     if (type.empty()) {
         return std::string{};
@@ -711,5 +734,33 @@ void AssetFilterBar::collect_spawn_ids(const nlohmann::json& node, std::unordere
             collect_spawn_ids(element, out);
         }
     }
+}
+
+void AssetFilterBar::load_persisted_state() {
+    state_.type_filters.clear();
+    has_saved_state_ = devmode::ui_settings::load_bool(kSettingsInitializedKey, false);
+    if (!has_saved_state_) {
+        state_.map_assets = true;
+        state_.current_room = true;
+        filters_expanded_ = false;
+        return;
+    }
+    state_.map_assets = devmode::ui_settings::load_bool(kSettingsMapAssetsKey, true);
+    state_.current_room = devmode::ui_settings::load_bool(kSettingsCurrentRoomKey, true);
+    filters_expanded_ = devmode::ui_settings::load_bool(kSettingsFiltersExpandedKey, false);
+}
+
+void AssetFilterBar::persist_state() {
+    devmode::ui_settings::save_bool(kSettingsInitializedKey, true);
+    devmode::ui_settings::save_bool(kSettingsMapAssetsKey, state_.map_assets);
+    devmode::ui_settings::save_bool(kSettingsCurrentRoomKey, state_.current_room);
+    for (const auto& kv : state_.type_filters) {
+        devmode::ui_settings::save_bool(make_type_setting_key(kv.first), kv.second);
+    }
+    has_saved_state_ = true;
+}
+
+void AssetFilterBar::persist_filters_expanded() const {
+    devmode::ui_settings::save_bool(kSettingsFiltersExpandedKey, filters_expanded_);
 }
 

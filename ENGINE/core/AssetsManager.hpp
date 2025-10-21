@@ -67,7 +67,7 @@ public:
     const std::vector<Asset*>& get_highlighted_assets() const;
     Asset* get_hovered_asset() const;
 
-    const std::vector<Asset*>& getActive() const { return active_assets; }
+    const std::vector<Asset*>& getActive() const;
     const std::vector<Asset*>& getFilteredActiveAssets() const;
     const std::vector<Asset*>& getActiveLightAssets() const { return active_light_assets_; }
     const std::vector<Asset*>& getActiveLitAssets() const { return active_light_assets_; }

@@ -474,7 +474,6 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
         }
         sync_header_button_states();
     });
-    asset_filter_.set_filters_expanded(false);
     const char* ctor_end = "[DevControls] ctor complete";
     dev_mode_trace(ctor_end);
     std::cout << ctor_end << "\n";
@@ -484,6 +483,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
 }
 
 DevControls::~DevControls() {
+    restore_filter_hidden_assets();
     manifest_store_.flush();
     AssetInfo::set_manifest_store_provider({});
 }
@@ -724,6 +724,7 @@ void DevControls::set_enabled(bool enabled) {
             room_editor_->set_enabled(false);
         }
         close_camera_panel();
+        restore_filter_hidden_assets();
         const char* msg_disable_done = "[DevControls] disable flow complete";
         dev_mode_trace(msg_disable_done);
         std::cout << msg_disable_done << "\n";
@@ -2241,6 +2242,15 @@ std::string DevControls::generate_unique_room_area_name(const std::string& base)
     return candidate;
 }
 
+void DevControls::restore_filter_hidden_assets() const {
+    for (auto& kv : filter_hidden_assets_) {
+        if (Asset* asset = kv.first) {
+            asset->set_hidden(kv.second);
+        }
+    }
+    filter_hidden_assets_.clear();
+}
+
 void DevControls::toggle_boundary_assets_modal() {
     if (!assets_) return;
     if (!boundary_assets_modal_) {
@@ -2494,10 +2504,56 @@ Room* DevControls::choose_room(Room* preferred) const {
 }
 
 void DevControls::filter_active_assets(std::vector<Asset*>& assets) const {
-    if (!enabled_) return;
+    if (!enabled_) {
+        restore_filter_hidden_assets();
+        return;
+    }
+
+    std::vector<Asset*> filtered_out;
+    filtered_out.reserve(assets.size());
     assets.erase(std::remove_if(assets.begin(), assets.end(),
-                                [this](Asset* asset) { return !passes_asset_filters(asset); }),
+                                [this, &filtered_out](Asset* asset) {
+                                    if (!asset) {
+                                        return true;
+                                    }
+                                    if (!passes_asset_filters(asset)) {
+                                        filtered_out.push_back(asset);
+                                        return true;
+                                    }
+                                    return false;
+                                }),
                  assets.end());
+
+    std::unordered_map<Asset*, bool> next_hidden;
+    next_hidden.reserve(filtered_out.size());
+
+    for (Asset* asset : filtered_out) {
+        if (!asset) {
+            continue;
+        }
+        bool original_hidden = asset->is_hidden();
+        auto it = filter_hidden_assets_.find(asset);
+        if (it != filter_hidden_assets_.end()) {
+            original_hidden = it->second;
+        }
+        asset->set_hidden(true);
+        asset->set_highlighted(false);
+        asset->set_selected(false);
+        next_hidden.emplace(asset, original_hidden);
+    }
+
+    for (auto& kv : filter_hidden_assets_) {
+        Asset* asset = kv.first;
+        if (!asset) {
+            continue;
+        }
+        if (next_hidden.find(asset) != next_hidden.end()) {
+            continue;
+        }
+        asset->set_hidden(kv.second);
+    }
+
+    filter_hidden_assets_ = std::move(next_hidden);
 }
 
 void DevControls::refresh_active_asset_filters() {
@@ -2524,6 +2580,7 @@ void DevControls::refresh_active_asset_filters() {
 
 void DevControls::reset_asset_filters() {
     asset_filter_.reset();
+    restore_filter_hidden_assets();
     refresh_active_asset_filters();
 }
 
