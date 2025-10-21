@@ -19,6 +19,7 @@
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
+#include "render/transparency_sampling.hpp"
 #include "render/global_light_source.hpp"
 #include "world/grid.hpp"
 
@@ -88,97 +89,46 @@ bool intersects(const SDL_Rect& a, const SDL_Rect& b) {
     return SDL_HasIntersection(&a, &b) == SDL_TRUE;
 }
 
-float average_transparency(SDL_Renderer* renderer, SDL_Texture* texture) {
-    if (!renderer || !texture) {
-        return 0.0f;
-    }
-
-    int tex_w = 0;
-    int tex_h = 0;
-    if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-        return 0.0f;
-    }
-
-    const std::size_t total_pixels =
-        static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
-    if (total_pixels == 0) {
-        return 0.0f;
-    }
-    if (tex_w != 0 && total_pixels / static_cast<std::size_t>(tex_w) != static_cast<std::size_t>(tex_h)) {
-        vibble::log::warn("[LightMap] average_transparency: texture dimensions overflow sample area");
-        return 0.0f;
-    }
-
-    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
-    if (SDL_SetRenderTarget(renderer, texture) != 0) {
-        vibble::log::warn(std::string("[LightMap] average_transparency: SDL_SetRenderTarget failed: ") + SDL_GetError());
-        return 0.0f;
-    }
-    struct RenderTargetReset {
-        SDL_Renderer* renderer = nullptr;
-        SDL_Texture*  previous = nullptr;
-        ~RenderTargetReset() {
-            if (renderer) {
-                SDL_SetRenderTarget(renderer, previous);
-            }
-        }
-    } reset{renderer, previous_target};
-
-    std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> fmt(
-        SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
-    if (!fmt) {
-        vibble::log::warn("[LightMap] average_transparency: SDL_AllocFormat failed");
-        return 0.0f;
-    }
-
-    constexpr int kMaxReadTileEdge = 256;
-    std::vector<std::uint32_t> tile_buffer;
-    tile_buffer.reserve(static_cast<std::size_t>(kMaxReadTileEdge) * static_cast<std::size_t>(kMaxReadTileEdge));
-
-    double accum_transparency = 0.0;
-    const double inv_255 = 1.0 / 255.0;
-
-    for (int y = 0; y < tex_h; y += kMaxReadTileEdge) {
-        const int tile_h = std::min(kMaxReadTileEdge, tex_h - y);
-        for (int x = 0; x < tex_w; x += kMaxReadTileEdge) {
-            const int tile_w = std::min(kMaxReadTileEdge, tex_w - x);
-            const std::size_t tile_pixels =
-                static_cast<std::size_t>(tile_w) * static_cast<std::size_t>(tile_h);
-
-            tile_buffer.resize(tile_pixels);
-
-            SDL_Rect rect{x, y, tile_w, tile_h};
-            const int pitch = tile_w * static_cast<int>(sizeof(std::uint32_t));
-            if (SDL_RenderReadPixels(renderer,
-                                     &rect,
-                                     SDL_PIXELFORMAT_RGBA8888,
-                                     tile_buffer.data(),
-                                     pitch) != 0) {
-                vibble::log::warn(std::string("[LightMap] average_transparency: SDL_RenderReadPixels failed: ") + SDL_GetError());
-                return 0.0f;
-            }
-
-            for (std::uint32_t pixel : tile_buffer) {
-                Uint8 alpha = 255;
-                SDL_GetRGBA(pixel, fmt.get(), nullptr, nullptr, nullptr, &alpha);
-                const double transparency = 1.0 - static_cast<double>(alpha) * inv_255;
-                accum_transparency += transparency;
-            }
-        }
-    }
-
-    const double average = accum_transparency / static_cast<double>(total_pixels);
-    return static_cast<float>(std::clamp(average, 0.0, 1.0));
+void log_transparency_failure(const char* context,
+                              const world::Chunk& chunk,
+                              const vibble::render::TransparencySampleResult& sample) {
+    const auto stats = vibble::render::transparency_readback_stats();
+    std::string message = std::string(context) +
+                          " transparency readback failed for chunk(" + std::to_string(chunk.i) +
+                          "," + std::to_string(chunk.j) + "): " +
+                          (sample.error_message.empty() ? std::string("unknown error") : sample.error_message) +
+                          " [attempts=" + std::to_string(stats.attempts) +
+                          ", successes=" + std::to_string(stats.successes) +
+                          ", failures=" + std::to_string(stats.failures) +
+                          ", consecutive_failures=" + std::to_string(stats.consecutive_failures) + "] (using cached lighting)";
+    vibble::log::warn(message);
 }
 
 void update_chunk_static_brightness_extrema(SDL_Renderer* renderer, world::Chunk& chunk) {
-    const float avg_static = average_transparency(renderer, chunk.static_darkness_mask);
-    chunk.base_brightness = std::clamp(avg_static, 0.0f, 1.0f);
-    const float case_a = 1.0f;
-    const float case_b = chunk.base_brightness;
-    chunk.lighting.min_static_avg_strength = std::min(case_a, case_b);
-    chunk.lighting.max_static_avg_strength = std::max(case_a, case_b);
-    chunk.lighting.needs_update = true;
+    if (!chunk.static_darkness_mask) {
+        chunk.static_brightness_retry_pending = true;
+        return;
+    }
+
+    const auto sample = vibble::render::sample_texture_transparency(renderer, chunk.static_darkness_mask);
+    if (!sample.success) {
+        log_transparency_failure("[LightMap] static", chunk, sample);
+        chunk.static_brightness_retry_pending = true;
+        return;
+    }
+
+    const float avg_static  = std::clamp(sample.average, 0.0f, 1.0f);
+    const float min_static  = std::clamp(sample.min, 0.0f, 1.0f);
+    const float max_static  = std::clamp(sample.max, 0.0f, 1.0f);
+    const float min_strength = std::min(1.0f, std::min(min_static, avg_static));
+    const float max_strength = std::max(1.0f, std::max(max_static, avg_static));
+
+    chunk.base_brightness                       = avg_static;
+    chunk.lighting.min_static_avg_strength      = min_strength;
+    chunk.lighting.max_static_avg_strength      = max_strength;
+    chunk.lighting.needs_update                 = true;
+    chunk.static_brightness_sample_valid        = true;
+    chunk.static_brightness_retry_pending       = false;
 }
 
 template <typename T>
@@ -535,6 +485,8 @@ void LightMap::destroy_chunk_texture(world::Chunk& chunk) const {
     chunk.static_texture_set = false;
     chunk.lighting_dirty     = true;
     chunk.lighting.needs_update = true;
+    chunk.static_brightness_sample_valid  = false;
+    chunk.static_brightness_retry_pending = true;
 }
 
 void LightMap::ensure_chunk_static_texture(SDL_Renderer* renderer, world::Chunk& chunk) const {
@@ -594,6 +546,9 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
             continue;
         }
         ensure_chunk_static_texture(renderer, *chunk);
+        if (chunk->static_darkness_mask && chunk->static_brightness_retry_pending) {
+            update_chunk_static_brightness_extrema(renderer, *chunk);
+        }
     }
 
     if (!assets_) {
@@ -690,9 +645,16 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
         if (!chunk->lighting.needs_update) continue;
 
         if (chunk->lighting.is_occupied_by_moving_source) {
-            const float static_avg = chunk->static_darkness_mask
-                                         ? average_transparency(renderer, chunk->static_darkness_mask)
-                                         : chunk->base_brightness;
+            float static_avg = chunk->base_brightness;
+            if (chunk->static_darkness_mask) {
+                const auto sample = vibble::render::sample_texture_transparency(renderer, chunk->static_darkness_mask);
+                if (sample.success) {
+                    static_avg = std::clamp(sample.average, 0.0f, 1.0f);
+                } else {
+                    log_transparency_failure("[LightMap] moving", *chunk, sample);
+                    chunk->static_brightness_retry_pending = true;
+                }
+            }
             chunk->lighting.current_strength = static_avg;
         } else {
             chunk->lighting.current_strength = lerp(chunk->lighting.min_static_avg_strength,

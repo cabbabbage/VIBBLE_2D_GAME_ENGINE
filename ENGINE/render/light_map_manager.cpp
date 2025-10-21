@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <utility>
+#include <string>
 #include <cstdint>
 #include <climits>
 
@@ -10,7 +11,8 @@
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
 #include "render/global_light_source.hpp"
-#include "world/chunk.hpp"
+#include "render/transparency_sampling.hpp"
+#include "utils/log.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
 
@@ -21,35 +23,34 @@ using render_pipeline::shading::ReactiveShadowSettings;
 
 // Note: LightMap owns runtime shadow data now; Manager remains for dev preview only.
 
-// Local helper: compute average transparency of a chunk mask.
-static float average_transparency_mgr(SDL_Renderer* renderer, SDL_Texture* texture) {
-    if (!renderer || !texture) return 0.0f;
-    int tex_w = 0, tex_h = 0;
-    if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-        return 0.0f;
+static void log_transparency_failure_mgr(const char* context,
+                                         const world::Chunk& chunk,
+                                         const vibble::render::TransparencySampleResult& sample) {
+    const auto stats = vibble::render::transparency_readback_stats();
+    std::string message = std::string(context) +
+                          " transparency readback failed for chunk(" + std::to_string(chunk.i) +
+                          "," + std::to_string(chunk.j) + "): " +
+                          (sample.error_message.empty() ? std::string("unknown error") : sample.error_message) +
+                          " [attempts=" + std::to_string(stats.attempts) +
+                          ", successes=" + std::to_string(stats.successes) +
+                          ", failures=" + std::to_string(stats.failures) +
+                          ", consecutive_failures=" + std::to_string(stats.consecutive_failures) + "] (using cached lighting)";
+    vibble::log::warn(message);
+}
+
+static float sample_chunk_transparency_mgr(SDL_Renderer* renderer, world::Chunk& chunk) {
+    if (!chunk.static_darkness_mask) {
+        chunk.static_brightness_retry_pending = true;
+        return chunk.base_brightness;
     }
-    const std::size_t count = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
-    std::vector<std::uint32_t> pixels(count);
-    if (pixels.empty()) return 0.0f;
-    SDL_Texture* prev = SDL_GetRenderTarget(renderer);
-    SDL_SetRenderTarget(renderer, texture);
-    const int pitch = tex_w * static_cast<int>(sizeof(std::uint32_t));
-    if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, pixels.data(), pitch) != 0) {
-        SDL_SetRenderTarget(renderer, prev);
-        return 0.0f;
+
+    const auto sample = vibble::render::sample_texture_transparency(renderer, chunk.static_darkness_mask);
+    if (!sample.success) {
+        log_transparency_failure_mgr("[LightMapPreview]", chunk, sample);
+        chunk.static_brightness_retry_pending = true;
+        return chunk.base_brightness;
     }
-    SDL_SetRenderTarget(renderer, prev);
-    std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> fmt(SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
-    if (!fmt) return 0.0f;
-    double accum = 0.0;
-    for (std::uint32_t p : pixels) {
-        Uint8 a = 255;
-        SDL_GetRGBA(p, fmt.get(), nullptr, nullptr, nullptr, &a);
-        accum += 1.0 - static_cast<double>(a) / 255.0;
-    }
-    if (count == 0) return 0.0f;
-    const double avg = accum / static_cast<double>(count);
-    return static_cast<float>(std::clamp(avg, 0.0, 1.0));
+    return std::clamp(sample.average, 0.0f, 1.0f);
 }
 
 // Dummy calculators for ChunkShadowParameters. To be implemented precisely later.
@@ -148,11 +149,7 @@ void LightMapManager::begin_frame() {
         if (chunk->lighting.is_occupied_by_moving_source) {
             // Recompute brightness (background + static lights; no shadows). For now,
             // approximate using the static mask average transparency.
-            if (chunk->static_darkness_mask) {
-                chunk->lighting.current_strength = average_transparency_mgr(renderer, chunk->static_darkness_mask);
-            } else {
-                chunk->lighting.current_strength = chunk->base_brightness;
-            }
+            chunk->lighting.current_strength = sample_chunk_transparency_mgr(renderer, *chunk);
         } else {
             chunk->lighting.current_strength =
                 (chunk->lighting.min_static_avg_strength +

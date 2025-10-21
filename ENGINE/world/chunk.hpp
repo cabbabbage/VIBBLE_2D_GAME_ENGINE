@@ -28,6 +28,8 @@ struct Chunk {
     // Average transparency of the static darkness mask for this chunk (0..1).
     // Higher means brighter from static lights alone.
     float base_brightness = 1.0f;
+    bool  static_brightness_sample_valid  = false;
+    bool  static_brightness_retry_pending = false;
 
     // Runtime overlay control used by the existing light-map pass.
     float brightness_strength = 1.0f;
