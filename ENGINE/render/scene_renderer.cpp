@@ -7,6 +7,7 @@
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
+#include "utils/log.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -26,6 +27,23 @@ static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
 namespace {
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
+
+constexpr const char* kEnableChunkLightingEnv = "VIBBLE_ENABLE_CHUNK_LIGHTING";
+
+bool env_truthy(const char* value) {
+    if (!value || !value[0]) {
+        return false;
+    }
+    const char c = value[0];
+    return c == '1' || c == 'y' || c == 'Y' || c == 't' || c == 'T';
+}
+
+bool chunk_lighting_suspended_flag() {
+    if (env_truthy(std::getenv(kEnableChunkLightingEnv))) {
+        return false;
+    }
+    return true;
+}
 
 bool safe_loading_enabled() {
     const char* value = std::getenv("VIBBLE_SAFE_LOADING");
@@ -58,10 +76,14 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   &reactive_shadow_settings_ })
 {
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
+    chunk_lighting_suspended_ = chunk_lighting_suspended_flag();
     light_map_ = std::make_unique<LightMap>(assets_,
                                             screen_width_,
                                             screen_height_);
-    if (light_map_) {
+    if (chunk_lighting_suspended_) {
+        vibble::log::info("[SceneRenderer] Chunk lighting suspended; skipping light-map initialization.");
+        render_pipeline_.lighting().light_map_sampler = nullptr;
+    } else if (light_map_) {
         initialize_static_light_chunks();
         light_map_->rebuild(renderer_);
         render_pipeline_.lighting().light_map_sampler = light_map_.get();
@@ -216,7 +238,7 @@ void SceneRenderer::render(){
 
     // Per-chunk shadow data is updated inside LightMap::update
 
-    if (light_map_){
+    if (light_map_ && !chunk_lighting_suspended_){
         // Keep the sampler available for the pipeline.
         render_pipeline_.lighting().light_map_sampler = light_map_.get();
         // Update chunk tile masks so moving lights affecting them are reflected this frame.
@@ -235,6 +257,9 @@ void SceneRenderer::render(){
 
     bool rendered_light_map = false;
     auto render_light_map = [&]() {
+        if (chunk_lighting_suspended_) {
+            return;
+        }
         if (!light_map_ || rendered_light_map) {
             return;
         }

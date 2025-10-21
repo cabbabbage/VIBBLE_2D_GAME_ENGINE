@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -33,6 +34,23 @@ Chunk::~Chunk() {
 } // namespace world
 
 namespace {
+constexpr const char* kEnableChunkLightingEnv = "VIBBLE_ENABLE_CHUNK_LIGHTING";
+
+bool env_truthy(const char* value) {
+    if (!value || !value[0]) {
+        return false;
+    }
+    const char c = value[0];
+    return c == '1' || c == 'y' || c == 'Y' || c == 't' || c == 'T';
+}
+
+bool chunk_lighting_suspended_flag() {
+    if (env_truthy(std::getenv(kEnableChunkLightingEnv))) {
+        return false;
+    }
+    return true;
+}
+
 Uint8 clamp_alpha(float value) {
     return static_cast<Uint8>(std::clamp(value, 0.0f, 1.0f) * 255.0f + 0.5f);
 }
@@ -252,6 +270,9 @@ void LightMap::ensure_chunk_static_texture(SDL_Renderer* renderer, world::Chunk&
         vibble::log::debug("[LightMap] ensure_chunk_static_texture: missing renderer");
         return;
     }
+    if (chunk_lighting_suspended_flag()) {
+        return;
+    }
     if (!chunk.lighting_dirty && chunk.static_texture_set) {
         return;
     }
@@ -393,6 +414,9 @@ void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
 }
 
 void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
+    if (chunk_lighting_suspended_flag()) {
+        return;
+    }
     const auto& chunks = active_chunks();
     for (world::Chunk* chunk : chunks) {
         if (!chunk) {

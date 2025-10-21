@@ -71,6 +71,7 @@ private:
     bool           low_quality_rendering_ = false;
     bool           light_map_only_mode_ = false;
     bool           chunk_debug_mode_ = false;
+    bool           chunk_lighting_suspended_ = false;
 
     std::unordered_set<Asset*> last_active_assets_;
     std::unordered_map<Asset*, const AnimationFrame*> last_rendered_frames_;
