@@ -72,6 +72,7 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
     json meta;
     bool cache_ok = false;
     constexpr std::size_t kLightVariantCount = 1;
+    constexpr std::size_t kLightStorageCount = render_pipeline::ScalingLogic::kDefaultVariantCount;
     constexpr int kLightVariantPercent = 100;
     if (CacheManager::load_metadata(meta_file, meta)) {
         try {
@@ -92,9 +93,9 @@ SDL_Texture* GenerateLight::generate(SDL_Renderer* renderer,
         }
     }
 
-    std::array<SDL_Texture*, kLightVariantCount> new_variants{};
-    std::array<int, kLightVariantCount> new_variant_w{};
-    std::array<int, kLightVariantCount> new_variant_h{};
+    std::array<SDL_Texture*, kLightStorageCount> new_variants{};
+    std::array<int, kLightStorageCount> new_variant_w{};
+    std::array<int, kLightStorageCount> new_variant_h{};
     int new_cached_w = 0;
     int new_cached_h = 0;
     SDL_Texture* new_base = nullptr;
