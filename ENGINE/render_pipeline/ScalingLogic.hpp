@@ -60,10 +60,89 @@ struct ScalingLogic {
         bool has_custom_steps() const { return !steps.empty(); }
     };
 
-    static constexpr std::size_t kDefaultVariantCount = 1;
+    static constexpr std::size_t kMaxVariantCount     = 3;
+    static constexpr std::size_t kDefaultVariantCount = kMaxVariantCount;
     static inline const ScaleSteps& DefaultScaleSteps() {
-        static const ScaleSteps kDefaultSteps = {0.50f};
+        static const ScaleSteps kDefaultSteps = {1.00f, 0.75f, 0.50f};
         return kDefaultSteps;
+    }
+
+    static inline void NormalizeVariantSteps(ScaleSteps& steps) {
+        ScaleSteps cleaned;
+        cleaned.reserve(steps.size());
+        for (float value : steps) {
+            if (!std::isfinite(value) || value <= 0.0f) {
+                continue;
+            }
+            cleaned.push_back(value);
+        }
+
+        if (cleaned.empty()) {
+            const auto& defaults = DefaultScaleSteps();
+            cleaned.assign(defaults.begin(), defaults.end());
+        }
+
+        std::sort(cleaned.begin(), cleaned.end(), std::greater<float>());
+        cleaned.erase(std::unique(cleaned.begin(), cleaned.end(), [](float a, float b) {
+            return std::fabs(a - b) <= 1e-4f;
+        }), cleaned.end());
+
+        if (cleaned.empty()) {
+            cleaned.push_back(1.0f);
+        }
+
+        if (std::fabs(cleaned.front() - 1.0f) > 1e-4f) {
+            cleaned.insert(cleaned.begin(), 1.0f);
+        }
+
+        ScaleSteps prioritized;
+        prioritized.reserve(kMaxVariantCount);
+        constexpr float kMinSpacing = 0.05f;
+        for (float value : cleaned) {
+            bool too_close = false;
+            for (float existing : prioritized) {
+                if (std::fabs(existing - value) < kMinSpacing) {
+                    too_close = true;
+                    break;
+                }
+            }
+            if (!too_close) {
+                prioritized.push_back(value);
+            }
+            if (prioritized.size() >= kMaxVariantCount) {
+                break;
+            }
+        }
+
+        if (prioritized.size() < kMaxVariantCount) {
+            const auto& defaults = DefaultScaleSteps();
+            for (float value : defaults) {
+                if (prioritized.size() >= kMaxVariantCount) {
+                    break;
+                }
+                bool exists = false;
+                for (float existing : prioritized) {
+                    if (std::fabs(existing - value) < kMinSpacing) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    prioritized.push_back(value);
+                }
+            }
+        }
+
+        if (prioritized.empty()) {
+            prioritized.push_back(1.0f);
+        }
+
+        std::sort(prioritized.begin(), prioritized.end(), std::greater<float>());
+        if (prioritized.size() > kMaxVariantCount) {
+            prioritized.resize(kMaxVariantCount);
+        }
+
+        steps.swap(prioritized);
     }
 
     static inline float ComputeScale(int base_w, int base_h, int target_w, int target_h) {
@@ -337,7 +416,6 @@ struct ScalingLogic {
         ensure_loaded(state);
 
         ScaleProfile profile;
-        const auto defaults = DefaultScaleSteps();
 
         if (!asset_key.empty() && state.data.contains("assets") && state.data["assets"].is_object()) {
             const auto& assets = state.data["assets"];
@@ -368,14 +446,14 @@ struct ScalingLogic {
                 entry = default_asset_entry();
             }
 
-            const std::size_t initial_variant_count = 3;
+            const auto& defaults = DefaultScaleSteps();
+            const std::size_t initial_variant_count = kMaxVariantCount;
             profile.steps.clear();
             for (std::size_t idx = 0; idx < initial_variant_count && idx < defaults.size(); ++idx) {
                 profile.steps.push_back(defaults[idx]);
             }
-            if (profile.steps.empty()) {
-                profile.steps.push_back(1.0f);
-            }
+
+            NormalizeVariantSteps(profile.steps);
 
             nlohmann::json recommended_json = nlohmann::json::array();
             for (float step : profile.steps) {
@@ -392,14 +470,7 @@ struct ScalingLogic {
             save_to_disk(state);
         }
 
-        if (profile.steps.empty()) {
-            profile.steps.assign(defaults.begin(), defaults.end());
-        } else {
-            std::sort(profile.steps.begin(), profile.steps.end(), std::greater<float>());
-            profile.steps.erase(std::unique(profile.steps.begin(), profile.steps.end(), [](float a, float b) {
-                return std::fabs(a - b) <= 1e-4f;
-            }), profile.steps.end());
-        }
+        NormalizeVariantSteps(profile.steps);
 
         return profile;
     }
@@ -615,6 +686,19 @@ private:
         if (histogram.empty()) {
             return result;
         }
+
+        constexpr int kMinPercentSpacing = 5;
+        auto add_percent = [&](int percent) {
+            percent = std::clamp(percent, 10, 200);
+            for (int existing : result) {
+                if (std::abs(existing - percent) < kMinPercentSpacing) {
+                    return false;
+                }
+            }
+            result.push_back(percent);
+            return true;
+        };
+
         bool has_usage = false;
         for (std::uint64_t value : histogram) {
             if (value > 0) {
@@ -622,16 +706,24 @@ private:
                 break;
             }
         }
+
         if (!has_usage) {
+            add_percent(100);
             const auto& defaults = DefaultScaleSteps();
-            result.reserve(defaults.size());
             for (float step : defaults) {
-                result.push_back(static_cast<int>(std::lround(step * 100.0f)));
+                add_percent(static_cast<int>(std::lround(step * 100.0f)));
+                if (result.size() >= kMaxVariantCount) {
+                    break;
+                }
+            }
+            std::sort(result.begin(), result.end(), std::greater<int>());
+            if (result.size() > kMaxVariantCount) {
+                result.resize(kMaxVariantCount);
             }
             return result;
         }
 
-        result.push_back(100);
+        add_percent(100);
         struct BucketInfo {
             int              index;
             std::uint64_t    count;
@@ -652,26 +744,27 @@ private:
             if (bucket.count == 0) {
                 break;
             }
-            const int percent = std::clamp(100 - bucket.index * 10, 10, 200);
-            if (std::find(result.begin(), result.end(), percent) == result.end()) {
-                result.push_back(percent);
-            }
-            if (result.size() >= kMaxRecommendedVariants) {
+            const int bucket_center = 100 - bucket.index * 10 - 5;
+            add_percent(bucket_center);
+            if (result.size() >= kMaxVariantCount) {
                 break;
             }
         }
 
-        if (result.size() == 1) {
+        if (result.size() < kMaxVariantCount) {
             const auto& defaults = DefaultScaleSteps();
-            for (std::size_t idx = 1; idx < defaults.size() && result.size() < kMaxRecommendedVariants; ++idx) {
-                const int percent = static_cast<int>(std::lround(defaults[idx] * 100.0f));
-                if (std::find(result.begin(), result.end(), percent) == result.end()) {
-                    result.push_back(percent);
+            for (float step : defaults) {
+                add_percent(static_cast<int>(std::lround(step * 100.0f)));
+                if (result.size() >= kMaxVariantCount) {
+                    break;
                 }
             }
         }
 
         std::sort(result.begin(), result.end(), std::greater<int>());
+        if (result.size() > kMaxVariantCount) {
+            result.resize(kMaxVariantCount);
+        }
         return result;
     }
 
@@ -746,7 +839,6 @@ private:
 
     static constexpr Uint32 kSamplingIntervalMs   = 15'000u;
     static constexpr int    kHistogramBucketCount = 10;
-    static constexpr std::size_t kMaxRecommendedVariants = 8;
 };
 
 inline SDL_Texture* CreateScaledTexture(SDL_Renderer* renderer,
