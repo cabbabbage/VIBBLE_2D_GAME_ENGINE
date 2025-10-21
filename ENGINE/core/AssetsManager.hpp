@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 #include "world/grid.hpp"
@@ -196,6 +197,8 @@ private:
     std::vector<Asset*> active_light_assets_;
     std::vector<Asset*> active_static_light_assets_;
     std::vector<Asset*> active_moving_light_assets_;
+    std::unordered_set<Asset*> active_moving_light_lookup_;
+    std::unordered_set<Asset*> scratch_moving_light_lookup_;
     std::vector<Room*> rooms_;
     Room* current_room_ = nullptr;
     int num_groups_ = 40;

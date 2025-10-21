@@ -984,20 +984,22 @@ void Assets::rebuild_active_assets_if_needed() {
     }
 
     if (moving_changed) {
-        std::unordered_set<Asset*> old_moving(active_moving_light_assets_.begin(), active_moving_light_assets_.end());
-        std::unordered_set<Asset*> new_moving(new_moving_lights.begin(), new_moving_lights.end());
-
+        scratch_moving_light_lookup_.clear();
         for (Asset* asset : new_moving_lights) {
-            if (old_moving.find(asset) == old_moving.end()) {
+            scratch_moving_light_lookup_.insert(asset);
+            if (active_moving_light_lookup_.find(asset) == active_moving_light_lookup_.end()) {
                 notify_light_map_asset_moved(asset);
             }
         }
 
         for (Asset* asset : active_moving_light_assets_) {
-            if (new_moving.find(asset) == new_moving.end()) {
+            if (scratch_moving_light_lookup_.find(asset) == scratch_moving_light_lookup_.end()) {
                 notify_light_map_asset_moved(asset);
             }
         }
+
+        active_moving_light_lookup_.swap(scratch_moving_light_lookup_);
+        scratch_moving_light_lookup_.clear();
     }
 
     active_assets                = std::move(new_active_assets);
@@ -1071,6 +1073,11 @@ void Assets::process_removals() {
     erase_ptrs(active_static_light_assets_);
     erase_ptrs(active_moving_light_assets_);
     erase_ptrs(filtered_active_assets);
+
+    for (Asset* asset : pending_removals) {
+        active_moving_light_lookup_.erase(asset);
+        scratch_moving_light_lookup_.erase(asset);
+    }
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();

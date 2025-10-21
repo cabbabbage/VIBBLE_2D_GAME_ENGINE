@@ -28,7 +28,8 @@ static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 namespace {
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
 
-constexpr const char* kEnableChunkLightingEnv = "VIBBLE_ENABLE_CHUNK_LIGHTING";
+constexpr const char* kEnableChunkLightingEnv  = "VIBBLE_ENABLE_CHUNK_LIGHTING";
+constexpr const char* kDisableChunkLightingEnv = "VIBBLE_DISABLE_CHUNK_LIGHTING";
 
 bool env_truthy(const char* value) {
     if (!value || !value[0]) {
@@ -38,11 +39,27 @@ bool env_truthy(const char* value) {
     return c == '1' || c == 'y' || c == 'Y' || c == 't' || c == 'T';
 }
 
-bool chunk_lighting_suspended_flag() {
-    if (env_truthy(std::getenv(kEnableChunkLightingEnv))) {
+bool env_falsey(const char* value) {
+    if (!value || !value[0]) {
         return false;
     }
-    return true;
+    const char c = value[0];
+    return c == '0' || c == 'n' || c == 'N' || c == 'f' || c == 'F';
+}
+
+bool chunk_lighting_suspended_flag() {
+    if (env_truthy(std::getenv(kDisableChunkLightingEnv))) {
+        return true;
+    }
+    if (const char* value = std::getenv(kEnableChunkLightingEnv)) {
+        if (env_falsey(value)) {
+            return true;
+        }
+        if (env_truthy(value)) {
+            return false;
+        }
+    }
+    return false;
 }
 
 bool safe_loading_enabled() {

@@ -694,7 +694,7 @@ void DevControls::set_enabled(bool enabled) {
             map_mode_ui_->set_map_mode_active(false);
             map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
             if (auto* panel = map_mode_ui_->get_footer_bar()) {
-                panel->set_expanded(false);
+                panel->set_visible(false);
             }
         }
         if (camera_was_visible && camera_panel_) {
@@ -715,7 +715,7 @@ void DevControls::set_enabled(bool enabled) {
             map_mode_ui_->set_map_mode_active(false);
             map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
             if (auto* panel = map_mode_ui_->get_footer_bar()) {
-                panel->set_expanded(false);
+                panel->set_visible(false);
             }
         }
         set_mode(Mode::RoomEditor);
