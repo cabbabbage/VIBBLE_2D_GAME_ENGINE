@@ -290,6 +290,198 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
 } // namespace
 
+namespace {
+
+// Restores the renderer target when leaving the current scope.
+class ChunkMaskRenderScope {
+public:
+    ChunkMaskRenderScope() = default;
+
+    ChunkMaskRenderScope(SDL_Renderer* renderer, SDL_Texture* texture, SDL_Texture* previous)
+        : renderer_(renderer), texture_(texture), previous_(previous) {}
+
+    ChunkMaskRenderScope(const ChunkMaskRenderScope&) = delete;
+    ChunkMaskRenderScope& operator=(const ChunkMaskRenderScope&) = delete;
+
+    ChunkMaskRenderScope(ChunkMaskRenderScope&& other) noexcept
+        : renderer_(other.renderer_), texture_(other.texture_), previous_(other.previous_), restored_(other.restored_) {
+        other.renderer_ = nullptr;
+        other.texture_  = nullptr;
+        other.previous_ = nullptr;
+        other.restored_ = true;
+    }
+
+    ChunkMaskRenderScope& operator=(ChunkMaskRenderScope&& other) noexcept {
+        if (this != &other) {
+            restore_target();
+            renderer_ = other.renderer_;
+            texture_  = other.texture_;
+            previous_ = other.previous_;
+            restored_ = other.restored_;
+            other.renderer_ = nullptr;
+            other.texture_  = nullptr;
+            other.previous_ = nullptr;
+            other.restored_ = true;
+        }
+        return *this;
+    }
+
+    ~ChunkMaskRenderScope() { restore_target(); }
+
+    [[nodiscard]] bool valid() const { return renderer_ && texture_; }
+
+    [[nodiscard]] SDL_Texture* texture() const { return texture_; }
+
+    void restore_target() {
+        if (!restored_ && renderer_) {
+            SDL_SetRenderTarget(renderer_, previous_);
+            restored_ = true;
+        }
+    }
+
+private:
+    SDL_Renderer* renderer_ = nullptr;
+    SDL_Texture*  texture_  = nullptr;
+    SDL_Texture*  previous_ = nullptr;
+    bool          restored_ = false;
+};
+
+// Creates the chunk mask texture, prepares the render target, and clears it.
+ChunkMaskRenderScope create_chunk_mask_texture(SDL_Renderer* renderer,
+                                               world::Chunk& chunk,
+                                               int width,
+                                               int height) {
+    SDL_Texture* texture = SDL_CreateTexture(renderer,
+                                             SDL_PIXELFORMAT_RGBA8888,
+                                             SDL_TEXTUREACCESS_TARGET,
+                                             width,
+                                             height);
+    if (!texture) {
+        vibble::log::warn(std::string("[LightMap] ensure_chunk_static_texture: SDL_CreateTexture failed: ") + SDL_GetError());
+        chunk.static_texture_set = false;
+        chunk.lighting_dirty     = true;
+        return {};
+    }
+
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+
+    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
+    if (SDL_SetRenderTarget(renderer, texture) != 0) {
+        SDL_DestroyTexture(texture);
+        SDL_SetRenderTarget(renderer, previous_target);
+        vibble::log::warn(std::string("[LightMap] ensure_chunk_static_texture: SDL_SetRenderTarget failed: ") + SDL_GetError());
+        chunk.static_texture_set = false;
+        chunk.lighting_dirty     = true;
+        return {};
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    return ChunkMaskRenderScope(renderer, texture, previous_target);
+}
+
+// Stamps static light textures into the prepared chunk mask.
+void stamp_static_lights_onto_mask(SDL_Renderer* renderer,
+                                   const Assets* assets,
+                                   const world::Chunk& chunk) {
+#if SDL_VERSION_ATLEAST(2, 0, 6)
+    const SDL_BlendMode erase_alpha_blend = SDL_ComposeCustomBlendMode(
+        SDL_BLENDFACTOR_ZERO,
+        SDL_BLENDFACTOR_ONE,
+        SDL_BLENDOPERATION_ADD,
+        SDL_BLENDFACTOR_ZERO,
+        SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+        SDL_BLENDOPERATION_ADD);
+#else
+    const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD;
+#endif
+
+    if (!assets) {
+        return;
+    }
+
+    const auto& static_lights = assets->getActiveStaticLightAssets();
+    vibble::log::debug(std::string("[LightMap] ensure_chunk_static_texture: stamping static lights (count=") +
+                       std::to_string(static_lights.size()) + ") for chunk(" + std::to_string(chunk.i) + "," +
+                       std::to_string(chunk.j) + ")");
+
+    for (const Asset* asset : static_lights) {
+        if (!asset || !asset->info) {
+            continue;
+        }
+        if (asset->info->light_sources.empty()) {
+            continue;
+        }
+
+        for (const auto& light : asset->info->light_sources) {
+            SDL_Texture* tex = light.texture;
+            if (!tex) {
+                continue;
+            }
+
+            int src_w = light.cached_w > 0 ? light.cached_w : 0;
+            int src_h = light.cached_h > 0 ? light.cached_h : 0;
+            if (src_w <= 0 || src_h <= 0) {
+                SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+            }
+            if (src_w <= 0 || src_h <= 0) {
+                continue;
+            }
+
+            const int draw_w = std::max(1, src_w);
+            const int draw_h = std::max(1, src_h);
+
+            SDL_Point world_center{ asset->pos.x + light.offset_x, asset->pos.y + light.offset_y };
+            SDL_Rect  world_dst{ world_center.x - draw_w / 2,
+                                 world_center.y - draw_h / 2,
+                                 draw_w,
+                                 draw_h };
+
+            SDL_Rect intersection{};
+            if (!SDL_IntersectRect(&world_dst, &chunk.world_bounds, &intersection)) {
+                continue;
+            }
+
+            Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
+            SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
+            SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
+            SDL_GetTextureAlphaMod(tex, &save_a);
+            SDL_GetTextureBlendMode(tex, &save_bm);
+
+            SDL_SetTextureBlendMode(tex, erase_alpha_blend);
+            SDL_SetTextureColorMod(tex, 255, 255, 255);
+            SDL_SetTextureAlphaMod(tex, 255);
+
+            SDL_Rect local_dst = world_dst;
+            local_dst.x -= chunk.world_bounds.x;
+            local_dst.y -= chunk.world_bounds.y;
+            SDL_RenderCopy(renderer, tex, nullptr, &local_dst);
+
+            SDL_SetTextureBlendMode(tex, save_bm);
+            SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
+            SDL_SetTextureAlphaMod(tex, save_a);
+        }
+    }
+}
+
+// Finalizes the chunk mask texture and updates cached lighting metadata.
+void finalize_chunk_mask_texture(SDL_Renderer* renderer,
+                                 world::Chunk& chunk,
+                                 ChunkMaskRenderScope& scope) {
+    scope.restore_target();
+
+    chunk.static_light_map   = scope.texture();
+    chunk.static_texture_set = true;
+    chunk.lighting_dirty     = false;
+    update_chunk_static_brightness_extrema(renderer, chunk);
+    vibble::log::debug(std::string("[LightMap] ensure_chunk_static_texture: COMPLETE chunk(") + std::to_string(chunk.i) +
+                       "," + std::to_string(chunk.j) + ") base_brightness=" + std::to_string(chunk.base_brightness));
+}
+
+} // namespace
+
 // LightMap implementation
 // ctor/dtor inlined in header
 
@@ -322,118 +514,14 @@ void LightMap::ensure_chunk_static_texture(SDL_Renderer* renderer, world::Chunk&
     vibble::log::debug(std::string("[LightMap] ensure_chunk_static_texture: CREATE size=") + std::to_string(width) + "x" +
                        std::to_string(height) + " for chunk(" + std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ")");
 
-    SDL_Texture* texture = SDL_CreateTexture(renderer,
-                                             SDL_PIXELFORMAT_RGBA8888,
-                                             SDL_TEXTUREACCESS_TARGET,
-                                             width,
-                                             height);
-    if (!texture) {
-        vibble::log::warn(std::string("[LightMap] ensure_chunk_static_texture: SDL_CreateTexture failed: ") + SDL_GetError());
-        chunk.static_texture_set = false;
-        chunk.lighting_dirty     = true;
+    ChunkMaskRenderScope mask_scope = create_chunk_mask_texture(renderer, chunk, width, height);
+    if (!mask_scope.valid()) {
         return;
     }
 
-    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    stamp_static_lights_onto_mask(renderer, assets_, chunk);
 
-    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
-    if (SDL_SetRenderTarget(renderer, texture) != 0) {
-        SDL_DestroyTexture(texture);
-        SDL_SetRenderTarget(renderer, previous_target);
-        vibble::log::warn(std::string("[LightMap] ensure_chunk_static_texture: SDL_SetRenderTarget failed: ") + SDL_GetError());
-        chunk.static_texture_set = false;
-        chunk.lighting_dirty     = true;
-        return;
-    }
-
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-
-#if SDL_VERSION_ATLEAST(2, 0, 6)
-    const SDL_BlendMode erase_alpha_blend = SDL_ComposeCustomBlendMode(
-        SDL_BLENDFACTOR_ZERO,
-        SDL_BLENDFACTOR_ONE,
-        SDL_BLENDOPERATION_ADD,
-        SDL_BLENDFACTOR_ZERO,
-        SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-        SDL_BLENDOPERATION_ADD);
-#else
-    const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD;
-#endif
-
-    if (assets_) {
-        const auto& static_lights = assets_->getActiveStaticLightAssets();
-        vibble::log::debug(std::string("[LightMap] ensure_chunk_static_texture: stamping static lights (count=") +
-                           std::to_string(static_lights.size()) + ") for chunk(" + std::to_string(chunk.i) + "," +
-                           std::to_string(chunk.j) + ")");
-        for (const Asset* asset : static_lights) {
-            if (!asset || !asset->info) {
-                continue;
-            }
-            if (asset->info->light_sources.empty()) {
-                continue;
-            }
-
-            for (const auto& light : asset->info->light_sources) {
-                SDL_Texture* tex = light.texture;
-                if (!tex) {
-                    continue;
-                }
-
-                int src_w = light.cached_w > 0 ? light.cached_w : 0;
-                int src_h = light.cached_h > 0 ? light.cached_h : 0;
-                if (src_w <= 0 || src_h <= 0) {
-                    SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
-                }
-                if (src_w <= 0 || src_h <= 0) {
-                    continue;
-                }
-
-                const int draw_w = std::max(1, src_w);
-                const int draw_h = std::max(1, src_h);
-
-                SDL_Point world_center{ asset->pos.x + light.offset_x, asset->pos.y + light.offset_y };
-                SDL_Rect  world_dst{ world_center.x - draw_w / 2,
-                                     world_center.y - draw_h / 2,
-                                     draw_w,
-                                     draw_h };
-
-                SDL_Rect intersection{};
-                if (!SDL_IntersectRect(&world_dst, &chunk.world_bounds, &intersection)) {
-                    continue;
-                }
-
-                Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
-                SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
-                SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
-                SDL_GetTextureAlphaMod(tex, &save_a);
-                SDL_GetTextureBlendMode(tex, &save_bm);
-
-                SDL_SetTextureBlendMode(tex, erase_alpha_blend);
-                SDL_SetTextureColorMod(tex, 255, 255, 255);
-                SDL_SetTextureAlphaMod(tex, 255);
-
-                SDL_Rect local_dst = world_dst;
-                local_dst.x -= chunk.world_bounds.x;
-                local_dst.y -= chunk.world_bounds.y;
-                SDL_RenderCopy(renderer, tex, nullptr, &local_dst);
-
-                SDL_SetTextureBlendMode(tex, save_bm);
-                SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
-                SDL_SetTextureAlphaMod(tex, save_a);
-            }
-        }
-    }
-
-    SDL_SetRenderTarget(renderer, previous_target);
-
-    chunk.static_light_map   = texture;
-    chunk.static_texture_set = true;
-    chunk.lighting_dirty     = false;
-    update_chunk_static_brightness_extrema(renderer, chunk);
-    vibble::log::debug(std::string("[LightMap] ensure_chunk_static_texture: COMPLETE chunk(") + std::to_string(chunk.i) +
-                       "," + std::to_string(chunk.j) + ") base_brightness=" + std::to_string(chunk.base_brightness));
+    finalize_chunk_mask_texture(renderer, chunk, mask_scope);
 }
 
 void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
