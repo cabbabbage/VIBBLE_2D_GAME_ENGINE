@@ -166,7 +166,7 @@ bool SceneRenderer::initialize_static_light_chunks() {
     }
 
     if (safe_mode) {
-        vibble::log::warn("[SceneRenderer] SAFE LOADING enabled; static darkness masks remain disabled until safe mode is cleared.");
+        vibble::log::debug("[SceneRenderer] SAFE LOADING enabled; static darkness masks remain disabled until safe mode is cleared.");
     } else {
         vibble::log::info("[SceneRenderer] Chunk darkness masks marked for lazy initialization.");
     }
