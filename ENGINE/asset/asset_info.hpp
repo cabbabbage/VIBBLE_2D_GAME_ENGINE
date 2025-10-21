@@ -15,10 +15,6 @@
 #include <vector>
 #include <unordered_set>
 
-#ifndef ASSET_INFO_ENABLE_INFO_JSON_COMPAT
-#define ASSET_INFO_ENABLE_INFO_JSON_COMPAT 1
-#endif
-
 namespace devmode::core {
 class ManifestStore;
 } // namespace devmode::core

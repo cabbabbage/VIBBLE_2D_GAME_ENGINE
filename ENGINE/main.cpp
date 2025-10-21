@@ -36,6 +36,7 @@
 #include <system_error>
 #include <utility>
 #include <stdexcept>
+#include <cmath>
 #include "utils/log.hpp"
 namespace fs = std::filesystem;
 
@@ -179,6 +180,9 @@ void MainApp::game_loop() {
         constexpr double TARGET_FRAME_SECONDS = 1.0 / TARGET_FPS;
         const double perf_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
         const double target_counts  = TARGET_FRAME_SECONDS * perf_frequency;
+        double idle_counts_accum = 0.0;
+        int idle_frame_counter   = 0;
+        constexpr int IDLE_REPORT_INTERVAL = 120;
         bool quit = false;
         SDL_Event e;
         vibble::log::info("[MainApp] Game loop started.");
@@ -197,13 +201,45 @@ void MainApp::game_loop() {
                 const double work_counts = static_cast<double>(frame_end - frame_begin);
                 if (work_counts < target_counts) {
                         double remaining_counts = target_counts - work_counts;
+                        idle_counts_accum += remaining_counts;
+                        ++idle_frame_counter;
                         double remaining_ms = (remaining_counts * 1000.0) / perf_frequency;
                         if (remaining_ms >= 1.0) {
                                 SDL_Delay(static_cast<Uint32>(remaining_ms));
                         }
-                        while (static_cast<double>(SDL_GetPerformanceCounter() - frame_begin) < target_counts) {
-                                SDL_Delay(0);
+                        while (true) {
+                                const Uint64 now = SDL_GetPerformanceCounter();
+                                const double elapsed_counts = static_cast<double>(now - frame_begin);
+                                if (elapsed_counts >= target_counts) {
+                                        break;
+                                }
+                                const double sub_remaining_counts = target_counts - elapsed_counts;
+                                const double sub_remaining_ms = (sub_remaining_counts * 1000.0) / perf_frequency;
+                                const int wait_timeout_ms = static_cast<int>(std::ceil(sub_remaining_ms));
+                                if (wait_timeout_ms <= 0) {
+                                        break;
+                                }
+                                SDL_Event wait_event;
+                                if (SDL_WaitEventTimeout(&wait_event, wait_timeout_ms)) {
+                                        if (wait_event.type == SDL_QUIT) {
+                                                quit = true;
+                                        }
+                                        if (input_) input_->handleEvent(wait_event);
+                                        if (game_assets_) game_assets_->handle_sdl_event(wait_event);
+                                } else {
+                                        SDL_PumpEvents();
+                                }
                         }
+                }
+                if (idle_frame_counter >= IDLE_REPORT_INTERVAL) {
+                        const double total_idle_ms = (idle_counts_accum * 1000.0) / perf_frequency;
+                        const double average_idle_ms = total_idle_ms / static_cast<double>(idle_frame_counter);
+                        vibble::log::debug("[MainApp] Idle pacing: total " +
+                                           std::to_string(total_idle_ms) + "ms over " +
+                                           std::to_string(idle_frame_counter) + " frame(s); avg " +
+                                           std::to_string(average_idle_ms) + "ms.");
+                        idle_counts_accum = 0.0;
+                        idle_frame_counter = 0;
                 }
         }
 }

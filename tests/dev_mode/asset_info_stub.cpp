@@ -1,8 +1,6 @@
 #include "asset/asset_info.hpp"
 
 #include <algorithm>
-#include <fstream>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -62,17 +60,9 @@ AssetInfo::AssetInfo(const std::string& asset_folder_name)
       is_light_source(false) {
     name = asset_folder_name;
     dir_path_ = "SRC/" + asset_folder_name;
-    info_json_path_ = dir_path_ + "/info.json";
+    info_json_path_.clear();
 
-    std::ifstream in(info_json_path_);
-    if (!in.is_open()) {
-        throw std::runtime_error("Failed to open asset info: " + info_json_path_);
-    }
-
-    nlohmann::json data;
-    in >> data;
-
-    populate_from_json(*this, data);
+    populate_from_json(*this, nlohmann::json::object());
 }
 
 AssetInfo::AssetInfo(const std::string& asset_folder_name, const nlohmann::json& metadata)

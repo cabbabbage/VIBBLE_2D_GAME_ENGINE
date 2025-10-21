@@ -1,240 +1,65 @@
 # VIBBLE - 2D Game Engine
 
-<p align="center">
-  <img src="MISC_CONTENT/promo2.png" alt="VIBBLE promo art" width="720" />
-</p>
-
-<p align="center">
-  <strong>VIBBLE</strong> is a lightweight, data-driven 2D engine built on SDL2 with a controller-based AI and a flexible animation system.
-</p>
-
-<p align="center">
-  <a href="https://cmake.org/" target="_blank"><img src="https://img.shields.io/badge/CMake-%3E%3D%203.16-informational?style=for-the-badge&logo=cmake" alt="CMake badge" /></a>
-  <a href="https://www.libsdl.org/" target="_blank"><img src="https://img.shields.io/badge/SDL2-powered-blue?style=for-the-badge&logo=SDL" alt="SDL2 badge" /></a>
-  <img src="https://img.shields.io/badge/Platform-Windows%2010%2B-8A2BE2?style=for-the-badge&logo=windows" alt="Windows badge" />
-</p>
+VIBBLE is an SDL2-based 2D engine with external data files for maps, assets, and animations. The engine keeps game content out of the executable so builds stay small and iteration does not require recompilation.
 
 ---
 
-## Why VIBBLE feels different
+## Game Loop and Loading Pipeline
 
-| Feature | What makes it shine |
-| --- | --- |
-| **Controller-first AI** | Tiny controller classes orchestrate complex behaviors by driving a shared `AnimationUpdate` brain. |
-| **Smart animation flow** | Trigger-based animations with per-frame motion, on-end mapping, and runtime-safe switching keep characters expressive. |
-| **Data-driven content** | Drop assets into `SRC/<AssetName>` and rooms into `MAPS/<MapName>`—no recompiles needed. |
-| **Atmospheric lighting** | Software lights and orbital sources layer mood directly into your scenes. |
-| **Active asset culling** | `ActiveAssetsManager` ensures only nearby, relevant assets consume update/render time. |
+### Content Flow
+1. Select a map from the manifest. `AssetLoader` reads the map descriptor, resolves the `content_root`, and loads room, trail, and asset definitions.
+2. `InitializeAssets` builds runtime `Asset` instances from shared `AssetInfo` definitions. Each instance owns its state, children, and animation cursor.
+3. `ActiveAssetsManager` tracks nearby assets, handles room transitions, and keeps the render list sorted by depth.
 
-> “Make a room, sprinkle props, link a controller, and watch the scene come alive.”
+### Main Loop Responsibilities
+* SDL events feed the `Input` system, which provides the same events to each active asset.
+* `Assets::update` advances controllers, animations, and collision state, then hands off to rendering.
+* `SceneRenderer` draws the active assets, applies animation movement, and uses lighting data from asset metadata.
+
+### Running the Engine
+```bash
+./run.bat
+```
+The script configures a RelWithDebInfo build, runs CMake, and launches the engine from the correct working directory. Manual CMake builds work as well.
+
+Project layout:
+- `ENGINE/`: runtime code for assets, controllers, rendering, UI, and developer tools.
+- `SRC/`: asset folders with `info.json`, sprites, areas, and lighting data.
+- `MAPS/`: map layouts and spawn definitions referenced by the manifest.
+- `loading/`: splash art and copy for the loading screen.
 
 ---
 
-## Project Flow & Data Model
+## Developer Mode
 
-This is the complete flow from content to pixels each frame, and how core data types relate to each other.
+### Enabling Dev Mode
+- Press **Ctrl+D** or select **Toggle Dev Mode** from the pause menu.
+- Dev Mode enables automatically if the active map does not define a player asset.
 
-### Loading, Spawning, and Data Culling
-- Load map: the app starts in a menu; you pick a folder under `MAPS/<MapName>`. `AssetLoader` reads `map_info.json`, builds rooms and trails, and loads asset types from `SRC/*/info.json` into shared definitions (`AssetInfo`).
-- Build assets: `InitializeAssets` turns `AssetInfo` into live `Asset` instances, assigns each an `AssetController` via `ControllerFactory`, and wires an `AnimationUpdate` for movement/animation control.
-- Spawning details:
-  - Rooms and trails are generated from map JSON (layered layout). Boundary assets are placed when configured.
-  - Static/background props may be clustered by proximity and linked as children (“child linking”). Moving assets are excluded from linking.
-- Culling: `ActiveAssetsManager` maintains a list of active assets around the player and sorts them by z-index; it also tracks a small set of “closest” assets for interaction.
+### Dev Mode Features
+- Rendering quality drops to improve responsiveness (`SDL_HINT_RENDER_SCALE_QUALITY = "0"`).
+- `DevControls` provides editors for rooms, maps, assets, lighting, and spawns. Panels respond to pointer and keyboard input and write through the manifest system.
+- Settings such as filters and UI layout persist in `dev_mode_settings.json`.
 
-### Shared Definitions vs. Runtime Instances
-- All runtime `Asset` instances with the same asset name share the same `std::shared_ptr<AssetInfo>` (definition). The definition is immutable at runtime and contains animations, areas, lights, and metadata.
-- Each `Asset` holds its own state (position, z, current animation/frame, controller, AnimationUpdate state, children, etc.).
-
-### Classes & Relationships
-- `AssetInfo` (definition, shared across instances of the same name)
-  - Identity: `name`, `type`, `start_animation`, `z_threshold`, `tags`, `flipable`, `scale_factor`.
-  - Animations: `std::map<std::string, Animation>` keyed by trigger/id.
-  - Geometry: `areas` (named polygons for collision/shading/passability).
-  - Children: authoring hints used by tools.
-  - Controller: `custom_controller_key` (binds to a C++ controller).
-  - Derived: `moving_asset` (true if any Animation indicates movement).
-
-- `Animation` (one entry inside `AssetInfo::animations`)
-  - Frame textures: `frames` (vector of `SDL_Texture*`).
-  - Movement paths: `movement_path(index)` exposes per-frame `AnimationFrame` sequences; path `0` is the default.
-  - Motion & playback: `total_dx/dy`, `movment`, `locked`, `loop`, `rnd_start`, `speed_factor`, `randomize`.
-  - Mapping: `on_end_mapping` (next animation id) / `on_end_animation`.
-  - Source/transform: `source`, `flipped_source`, `reverse_source`.
-
-  - `AnimationFrame` (one element per visible frame)
-    - `dx/dy` per-frame movement, `z_resort` (request resort), `rgb` tint, `frame_index`.
-  - Linked list pointers (`prev/next`) and flags (`is_first/is_last`).
-
-- `Asset` (runtime instance)
-  - `info` (shared_ptr<AssetInfo>), `controller_` (unique_ptr<AssetController>), `anim_` (unique_ptr<AnimationUpdate>).
-  - `current_animation` (string id) and `current_frame` (AnimationFrame*).
-  - `pos`, `z_index`, `alpha`, `children`, and defined areas.
-
-- `AnimationUpdate` (movement and animation driver)
-  - Controller-facing API: `set_idle`, `set_pursue`, `set_run`, `set_orbit`/`set_orbit_ccw`/`set_orbit_cw`, `set_patrol`, `set_serpentine`, `set_animation_now`, `set_animation_qued`, `set_mode_none`.
-  - Each update: picks the best animation toward the current target, advances frames, applies per-frame movement, respects `locked`/`loop`, and safely switches animations.
-
-### Runtime Ownership Tree
-```
-MainApp
-└─ Assets
-   ├─ ActiveAssetsManager
-   ├─ SceneRenderer
-   ├─ rooms: vector<Room*>
-   ├─ owned_assets: deque<unique_ptr<Asset>>
-   └─ all: vector<Asset*> (raw views of owned)
-
-Asset (runtime)
-├─ info: shared_ptr<AssetInfo>   ← shared per asset name
-├─ controller_: unique_ptr<AssetController>
-├─ anim_: unique_ptr<AnimationUpdate>
-├─ current_animation: string
- ├─ current_frame: AnimationFrame*
- ├─ children: vector<Asset*>
- └─ areas, z, pos, alpha, etc.
-
-AssetInfo (definition)
-├─ name, type, start_animation, z_threshold, tags, flipable, scale_factor
-├─ moving_asset: bool (derived)
-├─ animations: map<string, Animation>
-├─ areas: vector<NamedArea>
-├─ children: vector<ChildInfo>
-└─ custom_controller_key
-
-Animation
-├─ frames: vector<SDL_Texture*>
-├─ movement paths: vector<vector<AnimationFrame>>
-├─ number_of_frames, speed_factor, locked, loop, rnd_start
-├─ total_dx, total_dy, movment, on_end_mapping/on_end_animation
-└─ source, flipped_source, reverse_source, randomize
-
-AnimationFrame
-└─ dx, dy, z_resort, rgb, frame_index, prev/next, is_first/is_last
-```
+### Using the Toolkit
+1. Open the pause menu with **Esc** and enable Dev Mode (or use **Ctrl+D**).
+2. Interact with assets to open editors, adjust room geometry, or modify lighting.
+3. Save changes through the panels so updates reach the content files.
 
 ---
 
-## Quick Start
+## Custom Controllers
 
-**Requirements**
-- Windows + Visual Studio 2022 (CMake generator), CMake >= 3.16
-- SDL2, SDL2_image, SDL2_mixer, SDL2_ttf (via vcpkg toolchain or system installs)
-- Linux users: install the SDL2 development packages before configuring tests, e.g.
-  `sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev`
+### File Layout
+Store controller headers and source files under `ENGINE/custom_controllers/`.
 
-**Build & Run**
-- From the repo root:
-  - `./run.bat`  (configures, builds RelWithDebInfo, runs with correct working dir)
-  - Or manually:
-    - `cmake -S . -B build -G "Visual Studio 17 2022" -A x64`
-    - `cmake --build build --config RelWithDebInfo -j`
-    - `./ENGINE/engine.exe`
+### Registering a Controller
+1. Implement the controller class (derived from `AssetController`).
+2. Include the header and add a branch to `ControllerFactory::create_by_key` for the new type.
+3. Rebuild the project.
 
-**Important**
-- Always run from the repo root so relative paths resolve (`MAPS/`, `SRC/`, `MISC_CONTENT/`, `loading/`).
+### Linking Controllers to Content
+- Add `"custom_controller_key": "YourController"` to an asset `info.json` file or assign it through the Dev Mode editor. The value is copied into `AssetInfo` for use at spawn time.
+- The Dev Mode `CustomControllerService` can scaffold files, update factory includes, and adjust manifest metadata.
 
-## What's Inside
-
-- Data-driven content: assets under `SRC/<AssetName>`, maps under `MAPS/<MapName>`.
-- AnimationUpdate: one API to control both movement targeting and animation selection.
-- Controllers: tiny C++ classes that set AnimationUpdate modes based on proximity/logic.
-- ActiveAssetsManager: activates/sorts nearby assets for efficient updates.
-- SceneRenderer: z-layered sprite rendering, software lighting and shading.
-
-## Folder Structure
-
-- `ENGINE/` - core engine code (assets, controllers, rendering, UI)
-- `MAPS/`   - map folders with `map_info.json` and room/trail data
-- `SRC/`    - assets with `info.json`, frames, areas, and lights
-- `scripts/` and `PYTHON ASSET MANAGER/` - authoring tools and helpers
-
-## Runtime Architecture (Concise)
-
-Startup
-- `engine.exe` → main menu → select `MAPS/<MapName>`
-- `AssetLoader` loads map JSON, rooms/trails; `AssetLibrary::loadAllAnimations()` builds `AssetInfo` from `SRC/*/info.json`.
-- Each `AssetInfo` computes `moving_asset` and caches textures.
-
-Assets & Controllers
-- `InitializeAssets` creates live `Asset` objects and assigns controllers via `ControllerFactory`.
-- `ActiveAssetsManager` maintains, sorts, and exposes the active set.
-
-Per-frame
-- Input → `Assets::update()` → per-asset `controller_->update()` (sets a mode)
-- `AnimationUpdate::update()` advances frames, chooses animations, and applies movement.
-- `SceneRenderer` draws world, lights, overlays.
-
-Child Linking
-- Static props may be auto-clustered as children; moving assets (per `AssetInfo::moving_asset`) are excluded.
-
-## Controllers & Movement (AnimationUpdate)
-
-Controllers are tiny: they never advance frames; they only call AnimationUpdate.
-
-Mode setters
-- `set_idle(rest_ratio)` – convert a 0–100 rest ratio into loop counts internally before picking the next idle target; use `set_idle(rest_loop_min, rest_loop_max)` for explicit loop control.
-- `set_pursue(final_target, min_dist, max_dist)`
-- `set_run(threat, min_dist, max_dist)`
-- `set_orbit(center, min_radius, max_radius, keep_direction_ratio)`
-- `set_orbit_ccw(center, min_radius, max_radius)` / `set_orbit_cw(center, min_radius, max_radius)`
-- `set_patrol(waypoints, loop, hold_frames)`
-- `set_serpentine(final_target, sway, keep_side_ratio)`
-- `set_mode_none()` - no AI targeting; just advance and follow `on_end` mapping
-
-Animation overrides
-- `set_animation_now(anim_id)` - switch immediately; suspends the current mode until done
-- `set_animation_qued(anim_id)` - play next when the current animation finishes
-- `set_manual_animation(anim_id, loop = true)` - lock to an animation while driving movement manually
-- `clear_manual_animation()` - release manual animation control back to the planner
-
-Examples
-```cpp
-// Default idle (Frog-like)
-if (self_->anim_) self_->anim_->set_idle(1, 3);
-
-// Chaser with close CCW orbit at ~40px (Davey)
-bool near   = Range::is_in_range(self_, player, 40);
-bool inView = Range::is_in_range(self_, player, 1000);
-if (near)           self_->anim_->set_orbit_ccw(player, 40, 40);
-else if (inView)    self_->anim_->set_pursue(player, 20, 30);
-else                self_->anim_->set_idle(2, 4);
-
-// Bomber: explode near player; otherwise chase/idle
-if (Range::is_in_range(self_, player, 40)) {
-  self_->anim_->set_animation_now("explosion");
-  self_->anim_->set_mode_none();
-} else if (Range::is_in_range(self_, player, 1000)) {
-  self_->anim_->set_pursue(player, 20, 30);
-} else {
-  self_->anim_->set_idle(2, 4);
-}
-```
-
-Notes
-- Always guard `self_`, `self_->info`, and `self_->anim_`.
-- Let `AnimationUpdate::update()` advance frames and respect `locked/loop`.
-- `set_mode_none()` is useful after one-shot animations (e.g., explosion) to let `on_end` mapping resolve.
-
-## Content Authoring
-
-Assets (`SRC/<AssetName>/info.json`)
-- `animations`: sources, movement, loop/locked, `on_end` mapping
-- `areas`: collision/interaction/shading polygons
-- `areas` entries store canonical offsets from the bottom-center of the original canvas in `points`.
-  - Each polygon includes a `coordinate_space` object. Modern tooling writes a `render_space` variant that records the render-space `canvas_width`, `canvas_height`, per-area `pivot`, and `scale_at_save` so world alignment stays consistent across re-scaling.
-  - Tooling that writes asset areas must regenerate data; legacy arrays without this metadata are ignored on load.
-- `lighting`: static/orbital lights
-- `custom_controller_key`: binds to a controller in `ENGINE/custom_controllers`
-- `moving_asset` is computed automatically from animations
-
-Maps (`MAPS/<MapName>/map_info.json`)
-- Layered rooms/trails, radii, counts, and optional boundary geometry
-- Auto child-linking for static props; moving assets are excluded
-
-## Tools
-
-- `run.bat` - one-click build + run (VS 2022, correct working directory)
-- `scripts/custom_controller_manager.py` - scaffolds a Frog-style controller and registers it
-- `scripts/animation_ui.py` and friends - authoring helpers for animations/areas
-
+Custom controllers allow new behaviour without modifying unrelated engine systems.

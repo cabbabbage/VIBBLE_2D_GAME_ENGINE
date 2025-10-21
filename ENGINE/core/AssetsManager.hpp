@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 #include "world/grid.hpp"
@@ -196,6 +197,8 @@ private:
     std::vector<Asset*> active_light_assets_;
     std::vector<Asset*> active_static_light_assets_;
     std::vector<Asset*> active_moving_light_assets_;
+    std::unordered_set<Asset*> active_moving_light_lookup_;
+    std::unordered_set<Asset*> scratch_moving_light_lookup_;
     std::vector<Room*> rooms_;
     Room* current_room_ = nullptr;
     int num_groups_ = 40;
@@ -203,7 +206,6 @@ private:
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
     world::Grid world_grid_{};
-    std::unordered_map<Asset*, SDL_Point> last_grid_pos_;
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;
@@ -220,8 +222,17 @@ private:
     std::unique_ptr<LightMapManager> light_map_manager_;
 
     struct ScalingNotice {
+        using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;
+
+        ScalingNotice()
+            : texture(nullptr, SDL_DestroyTexture) {}
+
         std::string message;
         Uint32 expiry_ms = 0;
+        TexturePtr texture;
+        int texture_width = 0;
+        int texture_height = 0;
+        bool dirty = true;
     };
 
     std::optional<ScalingNotice> scaling_notice_;

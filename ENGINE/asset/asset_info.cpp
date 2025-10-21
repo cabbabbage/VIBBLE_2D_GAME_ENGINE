@@ -4,7 +4,6 @@
 #include "asset_info_methods/child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include <algorithm>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -16,10 +15,6 @@
 #include <utility>
 
 #include "dev_mode/core/manifest_store.hpp"
-
-#ifndef ASSET_INFO_ENABLE_INFO_JSON_COMPAT
-#define ASSET_INFO_ENABLE_INFO_JSON_COMPAT 0
-#endif
 
 namespace {
 
@@ -484,32 +479,7 @@ AssetInfo::ManifestStoreProvider& manifest_store_provider_slot() {
 } // namespace
 
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
-: is_shaded(false)
-, is_light_source(false) {
-        name = asset_folder_name;
-        dir_path_ = "SRC/" + asset_folder_name;
-#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
-        info_json_path_ = dir_path_ + "/info.json";
-
-        std::ifstream in(info_json_path_);
-        if (!in.is_open()) {
-                throw std::runtime_error("Failed to open asset info: " + info_json_path_);
-        }
-
-        nlohmann::json data;
-        in >> data;
-
-        initialize_from_json(data);
-
-        if (!info_json_.contains("asset_name") || !info_json_["asset_name"].is_string() || info_json_["asset_name"].get<std::string>().empty()) {
-                info_json_["asset_name"] = name;
-        }
-#else
-        info_json_path_.clear();
-        initialize_from_json(nlohmann::json::object());
-        info_json_["asset_name"] = name;
-#endif
-}
+    : AssetInfo(asset_folder_name, nlohmann::json::object()) {}
 
 AssetInfo::AssetInfo(const std::string& asset_folder_name, const nlohmann::json& metadata)
 : is_shaded(false)
@@ -1085,19 +1055,6 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
         asset_dir = asset_dir.lexically_normal();
     }
 
-#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
-    std::filesystem::path compat_base;
-    if (!info_json_path_.empty()) {
-        compat_base = std::filesystem::path(info_json_path_).parent_path();
-        if (!compat_base.empty()) {
-            compat_base = compat_base.lexically_normal();
-        }
-    }
-    if (compat_base.empty()) {
-        compat_base = asset_dir;
-    }
-#endif
-
     for (const auto& c : new_children) {
         nlohmann::json entry;
         entry["area_name"] = c.area_name;
@@ -1126,15 +1083,6 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
                     }
                     manifest_path = relative_form.generic_string();
                 }
-
-#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
-                if (!compat_base.empty()) {
-                    std::filesystem::path compat_rel = child_path.lexically_relative(compat_base);
-                    if (!compat_rel.empty() && compat_rel != ".") {
-                        manifest_path = compat_rel.generic_string();
-                    }
-                }
-#endif
 
                 if (!manifest_path.empty()) {
                     entry["json_path"] = manifest_path;
@@ -1405,39 +1353,19 @@ bool AssetInfo::reload_animations_from_disk() {
         return true;
     };
 
-    if (info_json_path_.empty()) {
-        auto& provider = manifest_store_provider_slot();
-        if (!provider) {
-            return false;
-        }
-        devmode::core::ManifestStore* store = provider();
-        if (!store) {
-            return false;
-        }
-        auto view = store->get_asset(name);
-        if (!view || !view.data) {
-            return false;
-        }
-        return apply_payload(*view.data);
-    }
-
-    std::ifstream in(info_json_path_);
-    if (!in.is_open()) {
+    auto& provider = manifest_store_provider_slot();
+    if (!provider) {
         return false;
     }
-
-    nlohmann::json data = nlohmann::json::object();
-    try {
-        in >> data;
-    } catch (...) {
+    devmode::core::ManifestStore* store = provider();
+    if (!store) {
         return false;
     }
-
-    if (!data.is_object()) {
+    auto view = store->get_asset(name);
+    if (!view || !view.data) {
         return false;
     }
-
-    return apply_payload(data);
+    return apply_payload(*view.data);
 }
 
 

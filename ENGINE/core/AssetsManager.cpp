@@ -47,14 +47,6 @@ void dev_mode_trace(const std::string& message) {
     }
 }
 
-struct SDLTextureDeleter {
-    void operator()(SDL_Texture* texture) const {
-        if (texture) {
-            SDL_DestroyTexture(texture);
-        }
-    }
-};
-
 struct SDLSurfaceDeleter {
     void operator()(SDL_Surface* surface) const {
         if (surface) {
@@ -550,10 +542,15 @@ void Assets::update(const Input& input)
             render_pipeline::ScalingLogic::FlushUsageData();
         }
         std::cout << "[Assets] Scaling usage tracking " << (enabled ? "enabled" : "disabled") << " (Ctrl+R).\n";
-        scaling_notice_ = ScalingNotice{
-            enabled ? std::string("Recording scale") : std::string("Stopped recording"),
-            SDL_GetTicks() + 2000u
-        };
+        if (!scaling_notice_) {
+            scaling_notice_.emplace();
+        }
+        scaling_notice_->message = enabled ? std::string("Recording scale") : std::string("Stopped recording");
+        scaling_notice_->expiry_ms = SDL_GetTicks() + 2000u;
+        scaling_notice_->texture.reset();
+        scaling_notice_->texture_width = 0;
+        scaling_notice_->texture_height = 0;
+        scaling_notice_->dirty = true;
     }
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
@@ -641,19 +638,20 @@ void Assets::update(const Input& input)
     }
     // Sync asset residency; re-home moving assets
     for (Asset* asset : all) {
-        if (!asset) continue;
-        SDL_Point curr{asset->pos.x, asset->pos.y};
-        auto it = last_grid_pos_.find(asset);
-        if (it == last_grid_pos_.end()) {
-            // ensure registered
-            world_grid_.register_asset(asset);
-            last_grid_pos_[asset] = curr;
+        if (!asset) {
             continue;
         }
-        SDL_Point prev = it->second;
+        SDL_Point curr{asset->pos.x, asset->pos.y};
+        if (!asset->has_grid_residency_cache()) {
+            world_grid_.register_asset(asset);
+            asset->cache_grid_residency(curr);
+            continue;
+        }
+
+        const SDL_Point prev = asset->grid_residency_cache();
         if (prev.x != curr.x || prev.y != curr.y) {
             world_grid_.move_asset(asset, prev, curr);
-            it->second = curr;
+            asset->cache_grid_residency(curr);
         }
     }
 
@@ -984,20 +982,22 @@ void Assets::rebuild_active_assets_if_needed() {
     }
 
     if (moving_changed) {
-        std::unordered_set<Asset*> old_moving(active_moving_light_assets_.begin(), active_moving_light_assets_.end());
-        std::unordered_set<Asset*> new_moving(new_moving_lights.begin(), new_moving_lights.end());
-
+        scratch_moving_light_lookup_.clear();
         for (Asset* asset : new_moving_lights) {
-            if (old_moving.find(asset) == old_moving.end()) {
+            scratch_moving_light_lookup_.insert(asset);
+            if (active_moving_light_lookup_.find(asset) == active_moving_light_lookup_.end()) {
                 notify_light_map_asset_moved(asset);
             }
         }
 
         for (Asset* asset : active_moving_light_assets_) {
-            if (new_moving.find(asset) == new_moving.end()) {
+            if (scratch_moving_light_lookup_.find(asset) == scratch_moving_light_lookup_.end()) {
                 notify_light_map_asset_moved(asset);
             }
         }
+
+        active_moving_light_lookup_.swap(scratch_moving_light_lookup_);
+        scratch_moving_light_lookup_.clear();
     }
 
     active_assets                = std::move(new_active_assets);
@@ -1037,6 +1037,9 @@ void Assets::process_removals() {
         render_pipeline::shading::ClearShadowStateFor(asset);
         // Unregister from world grid residency
         world_grid_.unregister_asset(asset);
+        if (asset) {
+            asset->clear_grid_residency_cache();
+        }
         if (asset && asset->info && !asset->info->light_sources.empty()) {
             if (asset->info->moving_asset) {
                 notify_light_map_asset_moved(asset);
@@ -1072,6 +1075,11 @@ void Assets::process_removals() {
     erase_ptrs(active_moving_light_assets_);
     erase_ptrs(filtered_active_assets);
 
+    for (Asset* asset : pending_removals) {
+        active_moving_light_lookup_.erase(asset);
+        scratch_moving_light_lookup_.erase(asset);
+    }
+
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
         dev_controls_->set_active_assets(filtered_active_assets);
@@ -1094,6 +1102,7 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     if (scaling_notice_) {
         const Uint32 now = SDL_GetTicks();
         if (now >= scaling_notice_->expiry_ms) {
+            scaling_notice_->texture.reset();
             scaling_notice_.reset();
         }
     }
@@ -1102,27 +1111,40 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         return;
     }
 
-    TTF_Font* font = scaling_notice_font();
-    if (!font) {
-        return;
+    ScalingNotice& notice = *scaling_notice_;
+
+    if (!notice.texture || notice.dirty) {
+        TTF_Font* font = scaling_notice_font();
+        if (!font) {
+            return;
+        }
+
+        SDL_Color color{255, 255, 255, 255};
+        std::unique_ptr<SDL_Surface, SDLSurfaceDeleter> surface(
+            TTF_RenderUTF8_Blended(font, notice.message.c_str(), color));
+        if (!surface) {
+            return;
+        }
+
+        SDL_Texture* rebuilt_texture = SDL_CreateTextureFromSurface(renderer, surface.get());
+        if (!rebuilt_texture) {
+            return;
+        }
+
+        notice.texture.reset(rebuilt_texture);
+        notice.texture_width = surface->w;
+        notice.texture_height = surface->h;
+        notice.dirty = false;
     }
 
-    SDL_Color color{255, 255, 255, 255};
-    std::unique_ptr<SDL_Surface, SDLSurfaceDeleter> surface(
-        TTF_RenderUTF8_Blended(font, scaling_notice_->message.c_str(), color));
-    if (!surface) {
-        return;
-    }
-
-    std::unique_ptr<SDL_Texture, SDLTextureDeleter> texture(
-        SDL_CreateTextureFromSurface(renderer, surface.get()));
+    SDL_Texture* texture = notice.texture.get();
     if (!texture) {
         return;
     }
 
     const int padding_x = 16;
     const int padding_y = 10;
-    SDL_Rect dest{0, 0, surface->w, surface->h};
+    SDL_Rect dest{0, 0, notice.texture_width, notice.texture_height};
     dest.x = (screen_width - dest.w) / 2;
     dest.x = std::clamp(dest.x, 0, std::max(0, screen_width - dest.w));
     dest.y = std::max(10, screen_height / 10);
@@ -1143,8 +1165,8 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 170);
     SDL_RenderFillRect(renderer, &background);
 
-    SDL_SetTextureBlendMode(texture.get(), SDL_BLENDMODE_BLEND);
-    SDL_RenderCopy(renderer, texture.get(), nullptr, &dest);
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    SDL_RenderCopy(renderer, texture, nullptr, &dest);
 }
 
 SDL_Renderer* Assets::renderer() const {
@@ -1263,15 +1285,21 @@ void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persi
 
     world_grid_.set_chunk_resolution(std::max(0, sanitized.r_chunk));
 
-    if (chunk_changed || last_grid_pos_.empty()) {
-        last_grid_pos_.clear();
+    if (chunk_changed) {
         for (Asset* asset : all) {
             if (!asset) {
                 continue;
             }
-            world_grid_.register_asset(asset);
-            last_grid_pos_[asset] = SDL_Point{asset->pos.x, asset->pos.y};
+            asset->clear_grid_residency_cache();
         }
+    }
+
+    for (Asset* asset : all) {
+        if (!asset || asset->has_grid_residency_cache()) {
+            continue;
+        }
+        world_grid_.register_asset(asset);
+        asset->cache_grid_residency(SDL_Point{asset->pos.x, asset->pos.y});
     }
 
     if (chunk_changed) {

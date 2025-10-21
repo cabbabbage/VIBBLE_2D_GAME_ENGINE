@@ -150,6 +150,8 @@ Asset::Asset(const Asset& o)
         clear_downscale_cache();
         clear_render_caches();
         last_scale_usage_ = o.last_scale_usage_;
+        cached_grid_residency_    = o.cached_grid_residency_;
+        has_cached_grid_residency_ = o.has_cached_grid_residency_;
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -196,6 +198,8 @@ Asset& Asset::operator=(const Asset& o) {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = o.last_scale_usage_;
+        cached_grid_residency_    = o.cached_grid_residency_;
+        has_cached_grid_residency_ = o.has_cached_grid_residency_;
         return *this;
 }
 
@@ -757,6 +761,24 @@ bool  Asset::is_highlighted(){ return highlighted; }
 
 void Asset::set_selected(bool state){ selected = state; }
 bool  Asset::is_selected(){ return selected; }
+
+void Asset::cache_grid_residency(SDL_Point point) {
+        cached_grid_residency_    = point;
+        has_cached_grid_residency_ = true;
+}
+
+void Asset::clear_grid_residency_cache() {
+        cached_grid_residency_    = SDL_Point{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
+        has_cached_grid_residency_ = false;
+}
+
+bool Asset::has_grid_residency_cache() const {
+        return has_cached_grid_residency_;
+}
+
+SDL_Point Asset::grid_residency_cache() const {
+        return cached_grid_residency_;
+}
 
 Asset::RenderTextureCache& Asset::light_front_cache() { return light_front_cache_; }
 Asset::RenderTextureCache& Asset::light_front_cache() const { return light_front_cache_; }
