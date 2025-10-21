@@ -23,6 +23,10 @@
 #include "render/global_light_source.hpp"
 #include "world/grid.hpp"
 
+namespace {
+void destroy_chunk_previews(world::Chunk& chunk);
+} // namespace
+
 namespace world {
 
 Chunk::~Chunk() {
