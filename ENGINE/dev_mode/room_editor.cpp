@@ -1188,10 +1188,16 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
         if (!asset) continue;
 
         SDL_Texture* tex = asset->get_final_texture();
+        if (!tex) {
+            tex = asset->get_current_frame();
+        }
+
         int fw = asset->cached_w;
         int fh = asset->cached_h;
         if ((fw == 0 || fh == 0) && tex) {
             SDL_QueryTexture(tex, nullptr, nullptr, &fw, &fh);
+            if (asset->cached_w == 0) asset->cached_w = fw;
+            if (asset->cached_h == 0) asset->cached_h = fh;
         }
         if (fw <= 0 || fh <= 0) continue;
 
