@@ -25,6 +25,8 @@ struct Chunk {
     // Cached texture representing the accumulated static darkness mask for this chunk.
     SDL_Texture* static_darkness_mask = nullptr;
     bool         static_texture_set   = false;
+    SDL_Texture* static_min_preview   = nullptr;
+    SDL_Texture* static_max_preview   = nullptr;
     // Average transparency of the static darkness mask for this chunk (0..1).
     // Higher means brighter from static lights alone.
     float base_brightness = 1.0f;
@@ -125,6 +127,7 @@ public:
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
     void render_visible_chunks_debug(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
+    void present_static_previews(SDL_Renderer* renderer) const;
 
     void mark_region_dirty(const SDL_Rect& screen_rect);
     void mark_asset_lights_dirty(const Asset* asset);

@@ -186,6 +186,13 @@ void MainApp::game_loop() {
         bool quit = false;
         SDL_Event e;
         vibble::log::info("[MainApp] Game loop started.");
+
+        if (game_assets_) {
+                if (LightMap* map = game_assets_->light_map()) {
+                        map->present_static_previews(renderer_);
+                }
+        }
+
         while (!quit) {
                 const Uint64 frame_begin = SDL_GetPerformanceCounter();
                 while (SDL_PollEvent(&e)) {
