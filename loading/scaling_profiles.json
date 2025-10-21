@@ -57,6 +57,25 @@
             ],
             "revision": 1
         },
+        "Big_Rock": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-21T18:44:04Z",
+            "recommended_percentages": [
+                50
+            ],
+            "revision": 1
+        },
         "Big_Rock_Center": {
             "histogram": [
                 0,

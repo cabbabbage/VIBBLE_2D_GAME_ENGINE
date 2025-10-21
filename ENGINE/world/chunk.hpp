@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -141,6 +142,7 @@ private:
     int     screen_height_ = 0;
 
     mutable float        last_screen_light_opacity_ = -1.0f;
+    mutable std::recursive_mutex mutex_;
 };
 
 

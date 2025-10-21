@@ -399,6 +399,7 @@ void LightMap::ensure_chunk_static_texture(SDL_Renderer* renderer, world::Chunk&
 }
 
 void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
+    std::scoped_lock lock(mutex_);
     if (!assets_) {
         return;
     }
@@ -414,6 +415,7 @@ void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
 }
 
 void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
+    std::scoped_lock lock(mutex_);
     if (chunk_lighting_suspended_flag()) {
         return;
     }
@@ -523,6 +525,7 @@ float LightMap::sample_brightness(int world_x,
                                   int world_y,
                                   float static_weight,
                                   float dynamic_weight) const {
+    std::scoped_lock lock(mutex_);
     (void)dynamic_weight;
     world::Chunk* chunk = ensure_chunk_from_world(SDL_Point{world_x, world_y});
     if (!chunk) {
@@ -538,6 +541,7 @@ float LightMap::sample_brightness_bilinear(float world_x,
                                            float world_y,
                                            float static_weight,
                                            float dynamic_weight) const {
+    std::scoped_lock lock(mutex_);
     return sample_brightness(static_cast<int>(std::lround(world_x)),
                              static_cast<int>(std::lround(world_y)),
                              static_weight,
@@ -551,6 +555,7 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& vie
 void LightMap::render_visible_chunks(SDL_Renderer* renderer,
                                         const SDL_Rect& view_rect,
                                         float alpha_multiplier) const {
+    std::scoped_lock lock(mutex_);
     if (!renderer || !assets_) {
         return;
     }
@@ -613,6 +618,7 @@ void LightMap::render_visible_chunks_debug(SDL_Renderer* renderer,
 }
 
 void LightMap::mark_region_dirty(const SDL_Rect& screen_rect) {
+    std::scoped_lock lock(mutex_);
     if (!assets_) {
         return;
     }
@@ -626,6 +632,7 @@ void LightMap::mark_region_dirty(const SDL_Rect& screen_rect) {
 }
 
 void LightMap::mark_asset_lights_dirty(const Asset* asset) {
+    std::scoped_lock lock(mutex_);
     if (!asset) {
         return;
     }
@@ -638,6 +645,7 @@ void LightMap::mark_asset_lights_dirty(const Asset* asset) {
 }
 
 void LightMap::mark_static_cache_dirty() {
+    std::scoped_lock lock(mutex_);
     if (!assets_) {
         return;
     }
@@ -658,6 +666,7 @@ const std::vector<world::Chunk*>& LightMap::active_chunks() const {
 }
 
 world::Chunk* LightMap::chunk_from_world(SDL_Point world_px) const {
+    std::scoped_lock lock(mutex_);
     if (!assets_) {
         return nullptr;
     }
@@ -665,6 +674,7 @@ world::Chunk* LightMap::chunk_from_world(SDL_Point world_px) const {
 }
 
 world::Chunk* LightMap::ensure_chunk_from_world(SDL_Point world_px) const {
+    std::scoped_lock lock(mutex_);
     if (!assets_) {
         return nullptr;
     }
@@ -672,10 +682,12 @@ world::Chunk* LightMap::ensure_chunk_from_world(SDL_Point world_px) const {
 }
 
 int LightMap::chunk_count() const {
+    std::scoped_lock lock(mutex_);
     return static_cast<int>(active_chunks().size());
 }
 
 int LightMap::chunk_columns() const {
+    std::scoped_lock lock(mutex_);
     const int count = chunk_count();
     if (count <= 0) {
         return 0;
@@ -685,6 +697,7 @@ int LightMap::chunk_columns() const {
 }
 
 int LightMap::chunk_rows() const {
+    std::scoped_lock lock(mutex_);
     const int count = chunk_count();
     if (count <= 0) {
         return 0;
@@ -694,6 +707,7 @@ int LightMap::chunk_rows() const {
 }
 
 const world::Chunk* LightMap::chunk_at(int index) const {
+    std::scoped_lock lock(mutex_);
     const auto& chunks = active_chunks();
     if (index < 0 || static_cast<std::size_t>(index) >= chunks.size()) {
         return nullptr;
@@ -702,6 +716,7 @@ const world::Chunk* LightMap::chunk_at(int index) const {
 }
 
 SDL_Rect LightMap::chunk_bounds(int index) const {
+    std::scoped_lock lock(mutex_);
     if (const world::Chunk* chunk = chunk_at(index)) {
         return chunk->world_bounds;
     }
@@ -709,6 +724,7 @@ SDL_Rect LightMap::chunk_bounds(int index) const {
 }
 
 std::optional<world::Chunk::UseShadowData> LightMap::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
+    std::scoped_lock lock(mutex_);
     world::Chunk* chunk = nullptr;
     if (assets_) {
         chunk = chunk_from_world(SDL_Point{static_cast<int>(std::lround(world_or_screen_pos.x)),
