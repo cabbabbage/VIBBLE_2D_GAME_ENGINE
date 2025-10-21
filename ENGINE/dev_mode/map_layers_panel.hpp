@@ -42,6 +42,9 @@ public:
     // Public selectors to drive the sliding details from outside
     void show_room_list();
     void select_room(const std::string& room_key);
+    void hide_details_panel();
+
+    void set_on_configure_room(std::function<void(const std::string&)> cb);
 
     void set_embedded_mode(bool embedded);
     bool embedded_mode() const { return embedded_mode_; }
@@ -90,6 +93,10 @@ private:
     };
 
     void layout_rows();
+    void layout_embedded_ui();
+    bool handle_embedded_event(const SDL_Event& e);
+    void render_embedded(SDL_Renderer* renderer) const;
+    bool handle_preview_event(const SDL_Event& e);
 
     void rebuild_visuals();
     void refresh_room_list();
@@ -142,6 +149,11 @@ private:
 
     SDL_Rect work_area_{0, 0, 0, 0};
     SDL_Rect embedded_bounds_{0, 0, 0, 0};
+    SDL_Rect embedded_panel_rect_{0, 0, 0, 0};
+    SDL_Rect embedded_header_rect_{0, 0, 0, 0};
+    SDL_Rect embedded_title_rect_{0, 0, 0, 0};
+    SDL_Rect embedded_buttons_rect_{0, 0, 0, 0};
+    SDL_Rect embedded_preview_rect_{0, 0, 0, 0};
     SDL_Rect preview_rect_{0, 0, 0, 0};
     SDL_Rect details_rect_{0, 0, 0, 0};
     SDL_Point preview_center_{0, 0};
@@ -202,4 +214,6 @@ private:
     void clear_detail_ui();
     void apply_layer_rename_if_needed();
     void create_new_room_entry();
+
+    std::function<void(const std::string&)> configure_room_callback_{};
 };

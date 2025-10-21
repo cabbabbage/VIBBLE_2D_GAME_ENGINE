@@ -74,45 +74,83 @@ float average_transparency(SDL_Renderer* renderer, SDL_Texture* texture) {
     if (!renderer || !texture) {
         return 0.0f;
     }
+
     int tex_w = 0;
     int tex_h = 0;
     if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
         return 0.0f;
     }
 
-    const std::size_t pixel_count = static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
-    std::vector<std::uint32_t> pixels(pixel_count);
-    if (pixels.empty()) {
+    const std::size_t total_pixels =
+        static_cast<std::size_t>(tex_w) * static_cast<std::size_t>(tex_h);
+    if (total_pixels == 0) {
+        return 0.0f;
+    }
+    if (tex_w != 0 && total_pixels / static_cast<std::size_t>(tex_w) != static_cast<std::size_t>(tex_h)) {
+        vibble::log::warn("[LightMap] average_transparency: texture dimensions overflow sample area");
         return 0.0f;
     }
 
-    SDL_Texture* prev = SDL_GetRenderTarget(renderer);
-    SDL_SetRenderTarget(renderer, texture);
-    const int pitch = tex_w * static_cast<int>(sizeof(std::uint32_t));
-    if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, pixels.data(), pitch) != 0) {
-        SDL_SetRenderTarget(renderer, prev);
+    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
+    if (SDL_SetRenderTarget(renderer, texture) != 0) {
+        vibble::log::warn(std::string("[LightMap] average_transparency: SDL_SetRenderTarget failed: ") + SDL_GetError());
         return 0.0f;
     }
-    SDL_SetRenderTarget(renderer, prev);
+    struct RenderTargetReset {
+        SDL_Renderer* renderer = nullptr;
+        SDL_Texture*  previous = nullptr;
+        ~RenderTargetReset() {
+            if (renderer) {
+                SDL_SetRenderTarget(renderer, previous);
+            }
+        }
+    } reset{renderer, previous_target};
 
     std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> fmt(
         SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
     if (!fmt) {
+        vibble::log::warn("[LightMap] average_transparency: SDL_AllocFormat failed");
         return 0.0f;
     }
 
-    double accum = 0.0;
-    for (std::uint32_t p : pixels) {
-        Uint8 a = 255;
-        SDL_GetRGBA(p, fmt.get(), nullptr, nullptr, nullptr, &a);
-        const double transparency = 1.0 - static_cast<double>(a) / 255.0;
-        accum += transparency;
+    constexpr int kMaxReadTileEdge = 256;
+    std::vector<std::uint32_t> tile_buffer;
+    tile_buffer.reserve(static_cast<std::size_t>(kMaxReadTileEdge) * static_cast<std::size_t>(kMaxReadTileEdge));
+
+    double accum_transparency = 0.0;
+    const double inv_255 = 1.0 / 255.0;
+
+    for (int y = 0; y < tex_h; y += kMaxReadTileEdge) {
+        const int tile_h = std::min(kMaxReadTileEdge, tex_h - y);
+        for (int x = 0; x < tex_w; x += kMaxReadTileEdge) {
+            const int tile_w = std::min(kMaxReadTileEdge, tex_w - x);
+            const std::size_t tile_pixels =
+                static_cast<std::size_t>(tile_w) * static_cast<std::size_t>(tile_h);
+
+            tile_buffer.resize(tile_pixels);
+
+            SDL_Rect rect{x, y, tile_w, tile_h};
+            const int pitch = tile_w * static_cast<int>(sizeof(std::uint32_t));
+            if (SDL_RenderReadPixels(renderer,
+                                     &rect,
+                                     SDL_PIXELFORMAT_RGBA8888,
+                                     tile_buffer.data(),
+                                     pitch) != 0) {
+                vibble::log::warn(std::string("[LightMap] average_transparency: SDL_RenderReadPixels failed: ") + SDL_GetError());
+                return 0.0f;
+            }
+
+            for (std::uint32_t pixel : tile_buffer) {
+                Uint8 alpha = 255;
+                SDL_GetRGBA(pixel, fmt.get(), nullptr, nullptr, nullptr, &alpha);
+                const double transparency = 1.0 - static_cast<double>(alpha) * inv_255;
+                accum_transparency += transparency;
+            }
+        }
     }
-    if (pixel_count == 0) {
-        return 0.0f;
-    }
-    const double avg = accum / static_cast<double>(pixel_count);
-    return static_cast<float>(std::clamp(avg, 0.0, 1.0));
+
+    const double average = accum_transparency / static_cast<double>(total_pixels);
+    return static_cast<float>(std::clamp(average, 0.0, 1.0));
 }
 
 void update_chunk_static_brightness_extrema(SDL_Renderer* renderer, world::Chunk& chunk) {

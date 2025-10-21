@@ -19,7 +19,8 @@ class MapShadowPanel;
 class MapLightPreviewPanel;
 class MapLayersPanel;
 class MapLayersController;
-class MapLayersPreviewPanel;
+class RoomConfigurator;
+class SlidingWindowContainer;
 class MapGridPanel;
 class FullScreenHeaderBar;
 class DockableCollapsible;
@@ -129,6 +130,10 @@ private:
     HeaderButtonConfig* find_button(HeaderMode mode, const std::string& id);
     bool ensure_panel_unlocked(DockableCollapsible* panel, const char* panel_name) const;
     void ensure_light_and_shading_positions();
+    void ensure_room_configurator();
+    void open_room_configuration(const std::string& room_key);
+    void close_room_configuration();
+    SDL_Rect room_config_bounds() const;
 
 private:
     Assets* assets_ = nullptr;
@@ -142,7 +147,6 @@ private:
     std::unique_ptr<MapLightPanel> light_panel_;
     std::unique_ptr<MapShadowPanel> shadow_panel_;
     std::unique_ptr<MapLightPreviewPanel> preview_panel_;
-    std::unique_ptr<MapLayersPreviewPanel> layers_preview_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;
@@ -172,5 +176,8 @@ private:
     bool last_lights_visible_ = false;
     bool last_shading_visible_ = false;
     bool last_preview_visible_ = false;
+    std::unique_ptr<RoomConfigurator> room_configurator_;
+    std::unique_ptr<SlidingWindowContainer> room_config_container_;
+    std::string active_room_config_key_;
 };
 

@@ -13,6 +13,7 @@
 
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
+#include "font_cache.hpp"
 #include "map_layers_controller.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 #include "utils/input.hpp"
@@ -85,6 +86,19 @@ void fill_circle(SDL_Renderer* renderer, int cx, int cy, int radius, SDL_Color c
         int dx = static_cast<int>(std::sqrt(static_cast<double>(radius * radius - y * y)));
         SDL_RenderDrawLine(renderer, cx - dx, cy + y, cx + dx, cy + y);
     }
+}
+
+SDL_Point event_point_from_event(const SDL_Event& e) {
+    if (e.type == SDL_MOUSEMOTION) {
+        return SDL_Point{e.motion.x, e.motion.y};
+    }
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        return SDL_Point{e.button.x, e.button.y};
+    }
+    int mx = 0;
+    int my = 0;
+    SDL_GetMouseState(&mx, &my);
+    return SDL_Point{mx, my};
 }
 
 }  // namespace
@@ -204,6 +218,8 @@ private:
 
 MapLayersPanel::MapLayersPanel(int x, int y)
     : DockableCollapsible("Map Layers", true, x, y) {
+    owned_widgets_.push_back(std::make_unique<PreviewWidget>(this));
+    preview_widget_ = static_cast<PreviewWidget*>(owned_widgets_.back().get());
     owned_widgets_.push_back(std::make_unique<DetailsWidget>(this));
     details_widget_ = static_cast<DetailsWidget*>(owned_widgets_.back().get());
 
@@ -226,6 +242,217 @@ void MapLayersPanel::layout_rows() {
         rows.push_back(Row{details_widget_});
     }
     set_rows(rows);
+}
+
+void MapLayersPanel::layout_embedded_ui() {
+    embedded_panel_rect_ = embedded_bounds_;
+    const int padding = DMSpacing::panel_padding();
+    const int header_gap = DMSpacing::small_gap();
+    const int button_gap = DMSpacing::item_gap();
+    const int header_height = DMButton::height() + header_gap * 2;
+
+    embedded_header_rect_ = SDL_Rect{embedded_panel_rect_.x + padding,
+                                     embedded_panel_rect_.y + padding,
+                                     std::max(0, embedded_panel_rect_.w - padding * 2),
+                                     header_height};
+
+    embedded_title_rect_ = embedded_header_rect_;
+    embedded_title_rect_.h = DMButton::height();
+    embedded_title_rect_.y += header_gap;
+
+    const int button_bar_y = embedded_title_rect_.y;
+    embedded_buttons_rect_ = SDL_Rect{embedded_title_rect_.x, button_bar_y,
+                                      embedded_title_rect_.w, DMButton::height()};
+
+    int button_x = embedded_buttons_rect_.x;
+    auto layout_button = [&](DMButton* button) {
+        if (!button) {
+            return;
+        }
+        int width = button->preferred_width();
+        if (width <= 0) {
+            width = 160;
+        }
+        SDL_Rect rect{button_x, embedded_buttons_rect_.y, width, DMButton::height()};
+        button->set_rect(rect);
+        button_x += width + button_gap;
+    };
+
+    layout_button(add_layer_btn_.get());
+    layout_button(create_room_btn_.get());
+    layout_button(save_btn_.get());
+    layout_button(reload_btn_.get());
+
+    int preview_top = embedded_header_rect_.y + embedded_header_rect_.h + padding;
+    int preview_height = std::max(0, embedded_panel_rect_.y + embedded_panel_rect_.h - preview_top - padding);
+    SDL_Rect new_preview_rect{embedded_panel_rect_.x + padding,
+                              preview_top,
+                              std::max(0, embedded_panel_rect_.w - padding * 2),
+                              preview_height};
+    const bool preview_changed = (new_preview_rect.x != embedded_preview_rect_.x ||
+                                  new_preview_rect.y != embedded_preview_rect_.y ||
+                                  new_preview_rect.w != embedded_preview_rect_.w ||
+                                  new_preview_rect.h != embedded_preview_rect_.h);
+    embedded_preview_rect_ = new_preview_rect;
+    preview_rect_ = embedded_preview_rect_;
+    preview_center_ = SDL_Point{preview_rect_.x + preview_rect_.w / 2,
+                                preview_rect_.y + preview_rect_.h / 2};
+    if (preview_changed) {
+        preview_dirty_ = true;
+    }
+
+    details_rect_ = embedded_panel_rect_;
+    apply_details_bounds();
+}
+
+bool MapLayersPanel::handle_embedded_event(const SDL_Event& e) {
+    bool used = false;
+
+    if (details_container_ && details_container_->is_visible()) {
+        if (details_container_->handle_event(e)) {
+            used = true;
+        }
+    }
+
+    auto handle_button = [&](DMButton* button, auto&& action) {
+        if (!button) {
+            return;
+        }
+        if (button->handle_event(e)) {
+            action();
+            used = true;
+        }
+    };
+
+    handle_button(add_layer_btn_.get(), [this]() {
+        if (controller_) {
+            controller_->create_layer();
+            rebuild_visuals();
+            update_details_container();
+        }
+    });
+    handle_button(create_room_btn_.get(), [this]() { this->create_new_room_entry(); });
+    handle_button(save_btn_.get(), [this]() {
+        apply_layer_rename_if_needed();
+        bool ok = false;
+        if (controller_) ok = controller_->save();
+        if (!ok && on_save_) ok = on_save_();
+        (void)ok;
+    });
+    handle_button(reload_btn_.get(), [this]() {
+        if (controller_) controller_->reload();
+        rebuild_visuals();
+        update_details_container();
+    });
+
+    if (handle_preview_event(e)) {
+        used = true;
+    }
+
+    if (!used) {
+        const bool pointer_event = (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+        const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
+        SDL_Point p = event_point_from_event(e);
+        if ((pointer_event || wheel_event) && SDL_PointInRect(&p, &embedded_panel_rect_) == SDL_TRUE) {
+            used = true;
+        }
+    }
+
+    return used;
+}
+
+void MapLayersPanel::render_embedded(SDL_Renderer* renderer) const {
+    if (!renderer) {
+        return;
+    }
+
+    SDL_Rect panel = embedded_panel_rect_;
+    if (panel.w <= 0 || panel.h <= 0) {
+        panel = embedded_bounds_;
+    }
+
+    if (panel.w <= 0 || panel.h <= 0) {
+        return;
+    }
+
+    dm_draw::DrawBeveledRect(renderer,
+                              panel,
+                              DMStyles::CornerRadius(),
+                              DMStyles::BevelDepth(),
+                              DMStyles::PanelBG(),
+                              DMStyles::HighlightColor(),
+                              DMStyles::ShadowColor(),
+                              true,
+                              DMStyles::HighlightIntensity(),
+                              DMStyles::ShadowIntensity());
+
+    if (embedded_header_rect_.w > 0 && embedded_header_rect_.h > 0) {
+        dm_draw::DrawBeveledRect(renderer,
+                                  embedded_header_rect_,
+                                  DMStyles::CornerRadius(),
+                                  DMStyles::BevelDepth(),
+                                  DMStyles::PanelHeader(),
+                                  DMStyles::HighlightColor(),
+                                  DMStyles::ShadowColor(),
+                                  false,
+                                  DMStyles::HighlightIntensity(),
+                                  DMStyles::ShadowIntensity());
+
+        SDL_Rect title = embedded_title_rect_;
+        if (title.w > 0 && title.h > 0) {
+            DrawLabelText(renderer, "Map Layers", title, DMStyles::Label());
+        }
+    }
+
+    if (add_layer_btn_) add_layer_btn_->render(renderer);
+    if (create_room_btn_) create_room_btn_->render(renderer);
+    if (save_btn_) save_btn_->render(renderer);
+    if (reload_btn_) reload_btn_->render(renderer);
+
+    if (embedded_preview_rect_.w > 0 && embedded_preview_rect_.h > 0) {
+        dm_draw::DrawBeveledRect(renderer,
+                                  embedded_preview_rect_,
+                                  DMStyles::CornerRadius(),
+                                  DMStyles::BevelDepth(),
+                                  DMStyles::PanelBG(),
+                                  DMStyles::HighlightColor(),
+                                  DMStyles::ShadowColor(),
+                                  false,
+                                  DMStyles::HighlightIntensity(),
+                                  DMStyles::ShadowIntensity());
+    }
+
+    render_preview(renderer);
+    render_details(renderer);
+}
+
+bool MapLayersPanel::handle_preview_event(const SDL_Event& e) {
+    const bool pointer_event = (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP);
+    if (!pointer_event) {
+        return false;
+    }
+
+    SDL_Point p = event_point_from_event(e);
+    if (SDL_PointInRect(&p, &preview_rect_) != SDL_TRUE) {
+        if (e.type == SDL_MOUSEMOTION) {
+            clear_hover_state();
+        }
+        return false;
+    }
+
+    const int layer_hit = hit_test_layer(p.x, p.y);
+    const std::string room_hit = hit_test_room(p.x, p.y);
+    if (e.type == SDL_MOUSEMOTION) {
+        update_hover_state(layer_hit, room_hit);
+        return (layer_hit >= 0 || !room_hit.empty());
+    }
+
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        handle_preview_click(layer_hit, room_hit);
+        return true;
+    }
+
+    return false;
 }
 
 void MapLayersPanel::ensure_details_container() {
@@ -398,6 +625,15 @@ void MapLayersPanel::hide_main_container() {
 
 void MapLayersPanel::show_room_list() { open_room_list(); }
 
+void MapLayersPanel::hide_details_panel() {
+    details_mode_ = DetailsMode::None;
+    update_details_container();
+}
+
+void MapLayersPanel::set_on_configure_room(std::function<void(const std::string&)> cb) {
+    configure_room_callback_ = std::move(cb);
+}
+
 void MapLayersPanel::select_room(const std::string& room_key) { open_room_details(room_key); }
 
 void MapLayersPanel::set_embedded_mode(bool embedded) {
@@ -412,6 +648,9 @@ void MapLayersPanel::set_embedded_mode(bool embedded) {
     // Rebuild rows to omit the internal preview when embedded.
     layout_rows();
     notify_header_visibility();
+    if (embedded_mode_) {
+        layout_embedded_ui();
+    }
 }
 
 void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
@@ -420,11 +659,33 @@ void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
         set_rect(bounds);
     }
     apply_details_bounds();
+    if (embedded_mode_) {
+        layout_embedded_ui();
+    }
 }
 
 void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
     screen_w_ = screen_w;
     screen_h_ = screen_h;
+
+    if (embedded_mode_) {
+        if (!is_visible()) {
+            return;
+        }
+        layout_embedded_ui();
+        if (preview_dirty_) {
+            rebuild_visuals();
+        }
+        ensure_details_container();
+        apply_details_bounds();
+        if (details_container_) {
+            details_container_->set_header_visibility_controller(header_visibility_callback_);
+        }
+        if (details_container_ && details_container_->is_visible()) {
+            details_container_->update(input, screen_w, screen_h);
+        }
+        return;
+    }
 
     DockableCollapsible::update(input, screen_w, screen_h);
 
@@ -446,14 +707,29 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
 bool MapLayersPanel::handle_event(const SDL_Event& e) {
     if (!is_visible()) return false;
+    if (embedded_mode_) {
+        return handle_embedded_event(e);
+    }
     return DockableCollapsible::handle_event(e);
 }
 
 void MapLayersPanel::render(SDL_Renderer* renderer) const {
+    if (embedded_mode_) {
+        render_embedded(renderer);
+        return;
+    }
     DockableCollapsible::render(renderer);
 }
 
 bool MapLayersPanel::is_point_inside(int x, int y) const {
+    if (embedded_mode_) {
+        SDL_Rect rect = embedded_panel_rect_;
+        if (rect.w <= 0 || rect.h <= 0) {
+            rect = embedded_bounds_;
+        }
+        SDL_Point p{x, y};
+        return SDL_PointInRect(&p, &rect) == SDL_TRUE;
+    }
     return DockableCollapsible::is_point_inside(x, y);
 }
 
@@ -749,6 +1025,9 @@ void MapLayersPanel::clear_hover_state() {
 void MapLayersPanel::handle_preview_click(int layer_index, const std::string& room_key) {
     if (!room_key.empty()) {
         open_room_details(room_key);
+        if (configure_room_callback_) {
+            configure_room_callback_(room_key);
+        }
         return;
     }
     if (layer_index >= 0) {
@@ -996,6 +1275,9 @@ bool MapLayersPanel::handle_details_event(const SDL_Event& e) {
             bool used = entry.button->handle_event(e);
             if (used && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 open_room_details(entry.key);
+                if (configure_room_callback_) {
+                    configure_room_callback_(entry.key);
+                }
             }
             used_any = used_any || used;
         }
@@ -1039,13 +1321,12 @@ void MapLayersPanel::clear_detail_ui() {
 
 void MapLayersPanel::build_room_list_widgets() {
     clear_detail_ui();
-    // In embedded footer mode, global action buttons live in the floating preview panel.
-    if (!embedded_mode_) {
-        if (!add_layer_btn_) add_layer_btn_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 0, DMButton::height());
-        if (!create_room_btn_) create_room_btn_ = std::make_unique<DMButton>("Create Room", &DMStyles::CreateButton(), 0, DMButton::height());
-        if (!save_btn_) save_btn_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 0, DMButton::height());
-        if (!reload_btn_) reload_btn_ = std::make_unique<DMButton>("Reload", &DMStyles::ListButton(), 0, DMButton::height());
+    if (!add_layer_btn_) add_layer_btn_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 0, DMButton::height());
+    if (!create_room_btn_) create_room_btn_ = std::make_unique<DMButton>("Create Room", &DMStyles::CreateButton(), 0, DMButton::height());
+    if (!save_btn_) save_btn_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 0, DMButton::height());
+    if (!reload_btn_) reload_btn_ = std::make_unique<DMButton>("Reload", &DMStyles::ListButton(), 0, DMButton::height());
 
+    if (!embedded_mode_) {
         details_widgets_.push_back(std::make_unique<ButtonWidget>(add_layer_btn_.get(), [this]() {
             if (controller_) {
                 controller_->create_layer();
