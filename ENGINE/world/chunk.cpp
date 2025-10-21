@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include "utils/log.hpp"
@@ -579,10 +580,22 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
         min_j = std::min(min_j, c->j); max_j = std::max(max_j, c->j);
     }
 
-    std::vector<world::Chunk*> update_set;
-    update_set.reserve(chunks.size());
-    auto add_unique = [&](world::Chunk* c){ if (c && std::find(update_set.begin(), update_set.end(), c) == update_set.end()) update_set.push_back(c); };
-    for (world::Chunk* c : chunks) add_unique(c);
+    std::unordered_set<world::Chunk*> dedupe_set;
+    dedupe_set.reserve(chunks.size() * 2);
+    std::vector<world::Chunk*> border_candidates;
+    border_candidates.reserve(chunks.size());
+
+    auto add_candidate = [&](world::Chunk* c) {
+        if (!c) {
+            return;
+        }
+        // Track chunk membership in O(1) so we avoid repeated linear scans when
+        // constructing the final update list.
+        dedupe_set.insert(c);
+    };
+    for (world::Chunk* c : chunks) {
+        add_candidate(c);
+    }
 
     const world::Grid& grid = assets_->world_grid();
     for (world::Chunk* c : chunks) {
@@ -593,9 +606,25 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
             for (int di = -1; di <= 1; ++di) {
                 if (di == 0 && dj == 0) continue;
                 if (world::Chunk* n = grid.find_chunk_ij(c->i + di, c->j + dj)) {
-                    add_unique(n);
+                    border_candidates.push_back(n);
+                    add_candidate(n);
                 }
             }
+        }
+    }
+
+    std::vector<world::Chunk*> update_set;
+    update_set.reserve(dedupe_set.size());
+    // Revisit the deterministic input sequences so the final processing order
+    // matches the previous behaviour while still benefiting from O(1) deduping.
+    for (world::Chunk* c : chunks) {
+        if (dedupe_set.erase(c) > 0) {
+            update_set.push_back(c);
+        }
+    }
+    for (world::Chunk* c : border_candidates) {
+        if (dedupe_set.erase(c) > 0) {
+            update_set.push_back(c);
         }
     }
 
