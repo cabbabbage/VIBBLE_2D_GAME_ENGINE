@@ -2,15 +2,15 @@
     "dev": {
         "asset_filter": {
             "current_room": true,
-            "filters_expanded": true,
+            "filters_expanded": false,
             "initialized": true,
-            "map_assets": true,
+            "map_assets": false,
             "types": {
                 "boundary": true,
                 "enemy": true,
                 "npc": false,
-                "object": true,
-                "player": true,
+                "object": false,
+                "player": false,
                 "texture": true
             }
         }
