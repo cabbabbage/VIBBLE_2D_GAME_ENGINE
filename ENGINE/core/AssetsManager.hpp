@@ -222,8 +222,17 @@ private:
     std::unique_ptr<LightMapManager> light_map_manager_;
 
     struct ScalingNotice {
+        using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;
+
+        ScalingNotice()
+            : texture(nullptr, SDL_DestroyTexture) {}
+
         std::string message;
         Uint32 expiry_ms = 0;
+        TexturePtr texture;
+        int texture_width = 0;
+        int texture_height = 0;
+        bool dirty = true;
     };
 
     std::optional<ScalingNotice> scaling_notice_;

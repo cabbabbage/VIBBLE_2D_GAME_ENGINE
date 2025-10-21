@@ -50,11 +50,7 @@ void AssetLibrary::load_all_from_SRC() {
                         if (has_metadata) {
                                 info = AssetInfo::from_manifest_entry(name, metadata);
                         } else {
-#if ASSET_INFO_ENABLE_INFO_JSON_COMPAT
-                                info = std::make_shared<AssetInfo>(name);
-#else
                                 info = AssetInfo::from_manifest_entry(name, nlohmann::json::object());
-#endif
                         }
                         info_by_name_[name] = info;
                         ++loaded;

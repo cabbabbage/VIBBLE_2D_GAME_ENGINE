@@ -47,14 +47,6 @@ void dev_mode_trace(const std::string& message) {
     }
 }
 
-struct SDLTextureDeleter {
-    void operator()(SDL_Texture* texture) const {
-        if (texture) {
-            SDL_DestroyTexture(texture);
-        }
-    }
-};
-
 struct SDLSurfaceDeleter {
     void operator()(SDL_Surface* surface) const {
         if (surface) {
@@ -550,10 +542,15 @@ void Assets::update(const Input& input)
             render_pipeline::ScalingLogic::FlushUsageData();
         }
         std::cout << "[Assets] Scaling usage tracking " << (enabled ? "enabled" : "disabled") << " (Ctrl+R).\n";
-        scaling_notice_ = ScalingNotice{
-            enabled ? std::string("Recording scale") : std::string("Stopped recording"),
-            SDL_GetTicks() + 2000u
-        };
+        if (!scaling_notice_) {
+            scaling_notice_.emplace();
+        }
+        scaling_notice_->message = enabled ? std::string("Recording scale") : std::string("Stopped recording");
+        scaling_notice_->expiry_ms = SDL_GetTicks() + 2000u;
+        scaling_notice_->texture.reset();
+        scaling_notice_->texture_width = 0;
+        scaling_notice_->texture_height = 0;
+        scaling_notice_->dirty = true;
     }
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
@@ -1105,6 +1102,7 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     if (scaling_notice_) {
         const Uint32 now = SDL_GetTicks();
         if (now >= scaling_notice_->expiry_ms) {
+            scaling_notice_->texture.reset();
             scaling_notice_.reset();
         }
     }
@@ -1113,27 +1111,40 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         return;
     }
 
-    TTF_Font* font = scaling_notice_font();
-    if (!font) {
-        return;
+    ScalingNotice& notice = *scaling_notice_;
+
+    if (!notice.texture || notice.dirty) {
+        TTF_Font* font = scaling_notice_font();
+        if (!font) {
+            return;
+        }
+
+        SDL_Color color{255, 255, 255, 255};
+        std::unique_ptr<SDL_Surface, SDLSurfaceDeleter> surface(
+            TTF_RenderUTF8_Blended(font, notice.message.c_str(), color));
+        if (!surface) {
+            return;
+        }
+
+        SDL_Texture* rebuilt_texture = SDL_CreateTextureFromSurface(renderer, surface.get());
+        if (!rebuilt_texture) {
+            return;
+        }
+
+        notice.texture.reset(rebuilt_texture);
+        notice.texture_width = surface->w;
+        notice.texture_height = surface->h;
+        notice.dirty = false;
     }
 
-    SDL_Color color{255, 255, 255, 255};
-    std::unique_ptr<SDL_Surface, SDLSurfaceDeleter> surface(
-        TTF_RenderUTF8_Blended(font, scaling_notice_->message.c_str(), color));
-    if (!surface) {
-        return;
-    }
-
-    std::unique_ptr<SDL_Texture, SDLTextureDeleter> texture(
-        SDL_CreateTextureFromSurface(renderer, surface.get()));
+    SDL_Texture* texture = notice.texture.get();
     if (!texture) {
         return;
     }
 
     const int padding_x = 16;
     const int padding_y = 10;
-    SDL_Rect dest{0, 0, surface->w, surface->h};
+    SDL_Rect dest{0, 0, notice.texture_width, notice.texture_height};
     dest.x = (screen_width - dest.w) / 2;
     dest.x = std::clamp(dest.x, 0, std::max(0, screen_width - dest.w));
     dest.y = std::max(10, screen_height / 10);
@@ -1154,8 +1165,8 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 170);
     SDL_RenderFillRect(renderer, &background);
 
-    SDL_SetTextureBlendMode(texture.get(), SDL_BLENDMODE_BLEND);
-    SDL_RenderCopy(renderer, texture.get(), nullptr, &dest);
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    SDL_RenderCopy(renderer, texture, nullptr, &dest);
 }
 
 SDL_Renderer* Assets::renderer() const {
