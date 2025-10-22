@@ -18,6 +18,7 @@
 #include <cctype>
 #include <random>
 #include <system_error>
+#include <cstdint>
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -321,9 +322,79 @@ void apply_lens_flare(std::vector<unsigned char>& pixels,
     }
 }
 
+void apply_hash_black_white(std::vector<unsigned char>& pixels, int width, int height) {
+    if (width <= 0 || height <= 0 || pixels.empty()) {
+        return;
+    }
+
+    const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+    for (size_t i = 0; i < total_pixels; ++i) {
+        const int x = static_cast<int>(i % static_cast<size_t>(width));
+        const int y = static_cast<int>(i / static_cast<size_t>(width));
+        const size_t idx = i * 4;
+
+        const float r = static_cast<float>(pixels[idx]) / 255.0f;
+        const float g = static_cast<float>(pixels[idx + 1]) / 255.0f;
+        const float b = static_cast<float>(pixels[idx + 2]) / 255.0f;
+        const float luma = 0.299f * r + 0.587f * g + 0.114f * b;
+
+        const uint32_t hash = static_cast<uint32_t>(x) * 73856093u
+                            ^ static_cast<uint32_t>(y) * 19349663u;
+        const float threshold = static_cast<float>(hash & 0x3FFu) / 1023.0f;
+        const unsigned char bw = luma > threshold ? 255 : 0;
+
+        pixels[idx] = bw;
+        pixels[idx + 1] = bw;
+        pixels[idx + 2] = bw;
+    }
+}
+
+void apply_slight_blur(std::vector<unsigned char>& pixels, int width, int height) {
+    if (width <= 0 || height <= 0 || pixels.empty()) {
+        return;
+    }
+
+    const std::array<int, 9> kernel = {1, 2, 1,
+                                       2, 4, 2,
+                                       1, 2, 1};
+    constexpr int kernel_sum = 16;
+
+    std::vector<unsigned char> original = pixels;
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            int accum_r = 0;
+            int accum_g = 0;
+            int accum_b = 0;
+            int k = 0;
+
+            for (int ky = -1; ky <= 1; ++ky) {
+                const int ny = std::clamp(y + ky, 0, height - 1);
+                for (int kx = -1; kx <= 1; ++kx) {
+                    const int nx = std::clamp(x + kx, 0, width - 1);
+                    const size_t nidx = (static_cast<size_t>(ny) * static_cast<size_t>(width) + static_cast<size_t>(nx)) * 4;
+                    const int weight = kernel[k++];
+                    accum_r += static_cast<int>(original[nidx]) * weight;
+                    accum_g += static_cast<int>(original[nidx + 1]) * weight;
+                    accum_b += static_cast<int>(original[nidx + 2]) * weight;
+                }
+            }
+
+            const size_t idx = (static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)) * 4;
+            pixels[idx] = static_cast<unsigned char>(accum_r / kernel_sum);
+            pixels[idx + 1] = static_cast<unsigned char>(accum_g / kernel_sum);
+            pixels[idx + 2] = static_cast<unsigned char>(accum_b / kernel_sum);
+            // Preserve alpha channel from original to avoid halo artifacts.
+            pixels[idx + 3] = original[idx + 3];
+        }
+    }
+}
+
 void apply_sky_map_post_fx(std::vector<unsigned char>& pixels, int width, int height) {
     apply_heavy_contrast(pixels, width, height, kSkyContrastFactor);
     apply_lens_flare(pixels, width, height, kSkyLensFlare);
+    apply_hash_black_white(pixels, width, height);
+    apply_slight_blur(pixels, width, height);
 }
 
 } // namespace

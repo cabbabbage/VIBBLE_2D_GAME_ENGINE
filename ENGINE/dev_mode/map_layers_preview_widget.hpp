@@ -1,0 +1,102 @@
+#pragma once
+
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include <SDL.h>
+#include <nlohmann/json_fwd.hpp>
+
+#include "widgets.hpp"
+
+class MapLayersController;
+
+class MapLayersPreviewWidget : public Widget {
+public:
+    using SelectLayerCallback = std::function<void(int)>;
+    using SelectRoomCallback = std::function<void(const std::string&)>;
+    using ShowRoomListCallback = std::function<void()>;
+
+    MapLayersPreviewWidget();
+    ~MapLayersPreviewWidget() override;
+
+    void set_map_info(nlohmann::json* map_info);
+    void set_controller(std::shared_ptr<MapLayersController> controller);
+
+    void set_on_select_layer(SelectLayerCallback cb);
+    void set_on_select_room(SelectRoomCallback cb);
+    void set_on_show_room_list(ShowRoomListCallback cb);
+
+    void set_rect(const SDL_Rect& r) override;
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int w) const override;
+    bool handle_event(const SDL_Event& e) override;
+    void render(SDL_Renderer* renderer) const override;
+    bool wants_full_row() const override { return true; }
+
+    void mark_dirty();
+    void create_new_room_entry();
+
+private:
+    struct RoomVisual {
+        std::string key;
+        std::string display_name;
+        int layer_index = -1;
+        double radius = 0.0;
+        double angle = 0.0;
+        double extent = 0.0;
+        SDL_FPoint position{0.0f, 0.0f};
+    };
+
+    struct LayerVisual {
+        int index = -1;
+        std::string name;
+        double radius = 0.0;
+        SDL_Color color{255, 255, 255, 255};
+        std::vector<RoomVisual> rooms;
+    };
+
+    void rebuild_visuals();
+    void ensure_latest_visuals() const;
+    void recalculate_preview_scale();
+    double compute_preview_scale() const;
+    SDL_Color layer_color(int index) const;
+    std::string display_name_for_room(const std::string& key) const;
+    const nlohmann::json& layers_array() const;
+    const nlohmann::json* rooms_data() const;
+
+    void update_hover_state(int layer_index, const std::string& room_key);
+    void clear_hover_state();
+    void handle_preview_click(int layer_index, const std::string& room_key);
+    int hit_test_layer(int x, int y) const;
+    std::string hit_test_room(int x, int y) const;
+
+    void ensure_listener();
+    void remove_listener();
+
+    void render_preview(SDL_Renderer* renderer) const;
+
+private:
+    nlohmann::json* map_info_ = nullptr;
+    std::shared_ptr<MapLayersController> controller_;
+    std::size_t controller_listener_id_ = 0;
+
+    SDL_Rect rect_{0, 0, 0, 0};
+    SDL_Point preview_center_{0, 0};
+    SDL_Rect preview_rect_{0, 0, 0, 0};
+
+    mutable bool dirty_ = true;
+
+    std::vector<LayerVisual> layer_visuals_;
+    double max_visual_radius_ = 1.0;
+    mutable double preview_scale_ = 1.0;
+
+    int hovered_layer_index_ = -1;
+    std::string hovered_room_key_;
+
+    SelectLayerCallback on_select_layer_{};
+    SelectRoomCallback on_select_room_{};
+    ShowRoomListCallback on_show_room_list_{};
+};
+

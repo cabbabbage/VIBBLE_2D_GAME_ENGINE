@@ -8,6 +8,7 @@
 #include "dm_styles.hpp"
 #include "font_cache.hpp"
 #include "map_layers_controller.hpp"
+#include "map_layers_preview_widget.hpp"
 #include "utils/input.hpp"
 
 namespace {
@@ -178,12 +179,29 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     owned_widgets_.push_back(std::make_unique<LayersListWidget>(this));
     list_widget_ = static_cast<LayersListWidget*>(owned_widgets_.back().get());
 
+    auto preview_widget_storage = std::make_unique<MapLayersPreviewWidget>();
+    preview_widget_storage->set_on_select_layer([this](int index) {
+        this->select_layer(index);
+    });
+    preview_widget_storage->set_on_select_room([this](const std::string& room_key) {
+        this->select_room(room_key);
+    });
+    preview_widget_storage->set_on_show_room_list([this]() {
+        this->show_room_list();
+    });
+    owned_widgets_.push_back(std::move(preview_widget_storage));
+    preview_widget_ = static_cast<MapLayersPreviewWidget*>(owned_widgets_.back().get());
+    preview_widget_->set_map_info(map_info_);
+    preview_widget_->set_controller(controller_);
+    preview_widget_->mark_dirty();
+
     owned_widgets_.push_back(std::make_unique<TextBoxWidget>(layer_name_box_raw_, true));
     Widget* name_widget = owned_widgets_.back().get();
 
     Rows rows;
     rows.push_back(Row{add_widget, delete_widget, save_widget, reload_widget});
     rows.push_back(Row{list_widget_});
+    rows.push_back(Row{preview_widget_});
     rows.push_back(Row{name_widget});
     set_rows(rows);
 
@@ -198,6 +216,10 @@ MapLayersPanel::~MapLayersPanel() {
 void MapLayersPanel::set_map_info(nlohmann::json* map_info, const std::string& map_path) {
     map_info_ = map_info;
     map_path_ = map_path;
+    if (preview_widget_) {
+        preview_widget_->set_map_info(map_info_);
+        preview_widget_->mark_dirty();
+    }
     mark_dirty();
 }
 
@@ -212,6 +234,10 @@ void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> control
     remove_listener();
     controller_ = std::move(controller);
     ensure_listener();
+    if (preview_widget_) {
+        preview_widget_->set_controller(controller_);
+        preview_widget_->mark_dirty();
+    }
     mark_dirty();
 }
 
@@ -377,8 +403,11 @@ void MapLayersPanel::select_layer(int index) {
     notify_side_panel(SidePanel::LayerControls);
 }
 
-void MapLayersPanel::mark_dirty(bool) {
+void MapLayersPanel::mark_dirty(bool trigger_preview) {
     data_dirty_ = true;
+    if (trigger_preview && preview_widget_) {
+        preview_widget_->mark_dirty();
+    }
 }
 
 void MapLayersPanel::mark_clean() {
@@ -427,6 +456,9 @@ void MapLayersPanel::rebuild_layers() {
     }
 
     update_layer_row_geometry();
+    if (preview_widget_) {
+        preview_widget_->mark_dirty();
+    }
 }
 
 void MapLayersPanel::update_layer_row_geometry() {

@@ -17,6 +17,7 @@
 class Input;
 struct SDL_Renderer;
 class MapLayersController;
+class MapLayersPreviewWidget;
 
 class MapLayersPanel : public DockableCollapsible {
 public:
@@ -115,6 +116,7 @@ private:
 
     std::vector<std::unique_ptr<Widget>> owned_widgets_;
     LayersListWidget* list_widget_ = nullptr;
+    MapLayersPreviewWidget* preview_widget_ = nullptr;
     DMTextBox* layer_name_box_raw_ = nullptr;
 
     std::vector<LayerRow> layer_rows_;
