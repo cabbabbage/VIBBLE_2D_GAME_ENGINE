@@ -2,6 +2,7 @@
 
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -13,25 +14,49 @@
 
 namespace fs = std::filesystem;
 
-MainMenu::MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h, const nlohmann::json& maps)
-: renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h), maps_json_(&maps)
+MainMenu::MainMenu(SDL_Renderer* renderer,
+                   int screen_w,
+                   int screen_h,
+                   const nlohmann::json& maps,
+                   std::optional<fs::path> sky_background)
+: renderer_(renderer),
+  screen_w_(screen_w),
+  screen_h_(screen_h),
+  maps_json_(&maps),
+  sky_background_path_(sky_background ? fs::absolute(*sky_background) : fs::path{})
 {
         if (TTF_WasInit() == 0 && TTF_Init() < 0) {
                 std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
         }
         animation_start_ticks_ = SDL_GetTicks64();
-	try {
-		manifest_root_ = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
-	} catch (const std::exception& ex) {
-		std::cerr << "[MainMenu] Failed to determine project root: " << ex.what() << "\n";
-		manifest_root_ = fs::current_path();
-	}
-	const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
-	if (fs::exists(bg_folder) && fs::is_directory(bg_folder)) {
-		const fs::path first = firstImageIn(bg_folder);
-		if (!first.empty()) background_tex_ = loadTexture(first);
-	}
-	buildButtons();
+        try {
+                manifest_root_ = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
+        } catch (const std::exception& ex) {
+                std::cerr << "[MainMenu] Failed to determine project root: " << ex.what() << "\n";
+                manifest_root_ = fs::current_path();
+        }
+        if (!sky_background_path_.empty()) {
+                try {
+                        if (fs::exists(sky_background_path_)) {
+                                background_tex_ = loadTexture(sky_background_path_);
+                                if (!background_tex_) {
+                                        std::cerr << "[MainMenu] Failed to load sky background texture: "
+                                                  << sky_background_path_ << "\n";
+                                }
+                        }
+                } catch (const std::exception& ex) {
+                        std::cerr << "[MainMenu] Error accessing sky background at '"
+                                  << sky_background_path_ << "': " << ex.what() << "\n";
+                }
+        }
+        if (!background_tex_) {
+                const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
+                if (fs::exists(bg_folder) && fs::is_directory(bg_folder)) {
+                        const fs::path first = firstImageIn(bg_folder);
+                        if (!first.empty()) background_tex_ = loadTexture(first);
+                }
+        }
+        buildButtons();
 }
 
 MainMenu::~MainMenu() {
@@ -111,14 +136,27 @@ void MainMenu::render() {
 
 void MainMenu::showLoadingScreen() {
 	SDL_SetRenderTarget(renderer_, nullptr);
-	SDL_Texture* bg = background_tex_;
-	bool temp_bg = false;
-	if (!bg) {
-		const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
-		const fs::path first = firstImageIn(bg_folder);
-		if (!first.empty()) {
-			bg = loadTexture(first);
-			temp_bg = (bg != nullptr);
+        SDL_Texture* bg = background_tex_;
+        bool temp_bg = false;
+        if (!bg) {
+                if (!sky_background_path_.empty()) {
+                        try {
+                                if (fs::exists(sky_background_path_)) {
+                                        bg = loadTexture(sky_background_path_);
+                                        temp_bg = (bg != nullptr);
+                                }
+                        } catch (const std::exception& ex) {
+                                std::cerr << "[MainMenu] Error loading cached sky background for loading screen: "
+                                          << ex.what() << "\n";
+                        }
+                }
+        }
+        if (!bg) {
+                const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
+                const fs::path first = firstImageIn(bg_folder);
+                if (!first.empty()) {
+                        bg = loadTexture(first);
+                        temp_bg = (bg != nullptr);
 		}
 	}
 	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
@@ -348,10 +386,34 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         const double elapsed_seconds = static_cast<double>(now - animation_start_ticks_) / 1000.0;
         const double angle = std::fmod(elapsed_seconds * degrees_per_second, 360.0);
 
-        SDL_Rect dst = coverDst(tex);
+        SDL_Rect base = coverDst(tex);
+        const double base_w = static_cast<double>(base.w);
+        const double base_h = static_cast<double>(base.h);
+        const double deg_to_rad = 3.14159265358979323846 / 180.0;
+        double required_scale = 1.0;
+
+        for (int deg = 0; deg <= 90; ++deg) {
+                const double rad = deg * deg_to_rad;
+                const double width = base_w * std::abs(std::cos(rad)) + base_h * std::abs(std::sin(rad));
+                const double height = base_w * std::abs(std::sin(rad)) + base_h * std::abs(std::cos(rad));
+                if (width > 0.0) {
+                        required_scale = std::max(required_scale, static_cast<double>(screen_w_) / width);
+                }
+                if (height > 0.0) {
+                        required_scale = std::max(required_scale, static_cast<double>(screen_h_) / height);
+                }
+        }
+        required_scale *= 1.05; // Add a small safety margin.
+
+        SDL_Rect dst{};
+        dst.w = static_cast<int>(std::ceil(base_w * required_scale));
+        dst.h = static_cast<int>(std::ceil(base_h * required_scale));
+        dst.x = (screen_w_ - dst.w) / 2;
+        dst.y = (screen_h_ - dst.h) / 2;
+
         SDL_Point center{};
-        center.x = -dst.w;
-        center.y = static_cast<int>(std::lround(dst.h * 1.5));
+        center.x = dst.w / 2;
+        center.y = dst.h / 2;
         SDL_RenderCopyEx(renderer_, tex, nullptr, &dst, angle, &center, SDL_FLIP_NONE);
 }
 

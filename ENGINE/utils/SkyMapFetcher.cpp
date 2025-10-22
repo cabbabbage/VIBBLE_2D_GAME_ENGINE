@@ -1,12 +1,17 @@
 // SkyMapFetcher.cpp
 #include "SkyMapFetcher.hpp"
 
+#include <chrono>
 #include <ctime>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <regex>
 #include <vector>
 #include <stdexcept>
 #include <iostream>
+#include <sstream>
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -230,5 +235,105 @@ SkyMapResult SkyMapFetcher::fetch_and_save_png(const std::string& output_png_pat
     res.saved_png_path = output_png_path;
     res.ok = true;
     res.message = "OK";
+    return res;
+}
+
+SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& output_png_path,
+                                                 const std::filesystem::path& metadata_path,
+                                                 std::chrono::seconds max_age,
+                                                 int pixels,
+                                                 double fov_deg,
+                                                 const std::string& survey) {
+    namespace fs = std::filesystem;
+
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t now_utc = std::chrono::system_clock::to_time_t(now);
+
+    // Attempt to reuse cached image if metadata indicates it is recent enough.
+    if (fs::exists(output_png_path) && fs::exists(metadata_path)) {
+        try {
+            std::ifstream meta_in(metadata_path);
+            if (meta_in) {
+                json meta_json;
+                meta_in >> meta_json;
+                const std::time_t created_utc = static_cast<std::time_t>(meta_json.value("created_utc", static_cast<long long>(0)));
+                if (created_utc > 0) {
+                    const auto age = now_utc - created_utc;
+                    if (age >= 0 && std::chrono::seconds(age) <= max_age) {
+                        SkyMapResult res;
+                        res.ok = true;
+                        res.reused_cached = true;
+                        res.message = "Reused cached sky map";
+                        res.latitude_deg = meta_json.value("latitude_deg", 0.0);
+                        res.longitude_deg = meta_json.value("longitude_deg", 0.0);
+                        res.ra_deg = meta_json.value("ra_deg", 0.0);
+                        res.dec_deg = meta_json.value("dec_deg", 0.0);
+                        res.fetched_jpeg_url = meta_json.value("fetched_jpeg_url", std::string());
+                        res.saved_png_path = fs::absolute(output_png_path).u8string();
+                        res.created_at_utc = created_utc;
+                        return res;
+                    }
+                }
+            }
+        } catch (const std::exception&) {
+            // Fall back to fetching a new image if metadata cannot be read.
+        }
+    }
+
+    fs::path output_abs = fs::absolute(output_png_path);
+    try {
+        fs::path output_parent = output_abs.parent_path();
+        if (!output_parent.empty()) {
+            fs::create_directories(output_parent);
+        }
+    } catch (const std::exception&) {
+        // Ignore directory creation failures and let the fetch call report errors.
+    }
+
+    SkyMapResult res = fetch_and_save_png(output_abs.u8string(), pixels, fov_deg, survey);
+    if (!res.ok) {
+        return res;
+    }
+
+    res.reused_cached = false;
+    res.created_at_utc = now_utc;
+    res.saved_png_path = output_abs.u8string();
+
+    json meta_json;
+    meta_json["created_utc"] = static_cast<long long>(now_utc);
+
+    std::tm utc_tm{};
+#if defined(_WIN32)
+    gmtime_s(&utc_tm, &now_utc);
+#else
+    gmtime_r(&now_utc, &utc_tm);
+#endif
+    std::ostringstream iso8601;
+    iso8601 << std::put_time(&utc_tm, "%Y-%m-%dT%H:%M:%SZ");
+    meta_json["created_iso8601"] = iso8601.str();
+
+    meta_json["latitude_deg"] = res.latitude_deg;
+    meta_json["longitude_deg"] = res.longitude_deg;
+    meta_json["ra_deg"] = res.ra_deg;
+    meta_json["dec_deg"] = res.dec_deg;
+    meta_json["png_path"] = output_abs.u8string();
+    meta_json["fetched_jpeg_url"] = res.fetched_jpeg_url;
+    meta_json["survey"] = survey;
+    meta_json["pixels"] = pixels;
+    meta_json["fov_deg"] = fov_deg;
+
+    try {
+        fs::path meta_parent = metadata_path.parent_path();
+        if (!meta_parent.empty()) {
+            fs::create_directories(meta_parent);
+        }
+        std::ofstream meta_out(metadata_path, std::ios::trunc);
+        if (meta_out) {
+            meta_out << meta_json.dump(2);
+        }
+    } catch (const std::exception&) {
+        // Ignore metadata persistence errors; fetching succeeded.
+    }
+
     return res;
 }

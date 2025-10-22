@@ -1,13 +1,18 @@
 #pragma once
+#include <chrono>
+#include <ctime>
+#include <filesystem>
 #include <string>
 
 struct SkyMapResult {
     bool ok = false;
     std::string message;
+    bool reused_cached = false;
     double latitude_deg = 0.0;
     double longitude_deg = 0.0;
     double ra_deg = 0.0;   // center RA used
     double dec_deg = 0.0;  // center Dec used
+    std::time_t created_at_utc = 0;
     std::string saved_png_path;
     std::string fetched_jpeg_url;
 };
@@ -23,6 +28,13 @@ public:
                                     int pixels = 3000,
                                     double fov_deg = 8.0,
                                     const std::string& survey = "DSS2 Red");
+
+    SkyMapResult fetch_or_load_cached(const std::filesystem::path& output_png_path,
+                                      const std::filesystem::path& metadata_path,
+                                      std::chrono::seconds max_age = std::chrono::seconds{3600},
+                                      int pixels = 3000,
+                                      double fov_deg = 8.0,
+                                      const std::string& survey = "DSS2 Red");
 
     // Utility if you want to supply your own location and time.
     // utc_seconds_since_epoch is time_t in UTC. If 0, uses now.
