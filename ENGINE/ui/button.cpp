@@ -57,7 +57,9 @@ inline SDL_Rect adjusted_rect_for_state(const SDL_Rect& rect, bool hovered, bool
 
 inline SDL_Rect clamp_rect(SDL_Renderer* renderer, SDL_Rect rect) {
     SDL_Rect viewport;
-    if (SDL_RenderGetViewport(renderer, &viewport) != 0) {
+    if (renderer) {
+        SDL_RenderGetViewport(renderer, &viewport);
+    } else {
         viewport = SDL_Rect{0, 0, rect.x + rect.w + kGlassBleed * 2, rect.y + rect.h + kGlassBleed * 2};
     }
     int x1 = std::max(rect.x, viewport.x);

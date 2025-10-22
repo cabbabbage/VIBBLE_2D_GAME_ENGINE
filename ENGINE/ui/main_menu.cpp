@@ -402,31 +402,70 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         SDL_Rect base = coverDst(tex);
         const double base_w = static_cast<double>(base.w);
         const double base_h = static_cast<double>(base.h);
-        const double deg_to_rad = 3.14159265358979323846 / 180.0;
-        double required_scale = 1.0;
+        const double pivot_x = -400.0;
+        const double pivot_y = static_cast<double>(screen_h_) + 400.0;
 
-        for (int deg = 0; deg <= 90; ++deg) {
-                const double rad = deg * deg_to_rad;
-                const double width = base_w * std::abs(std::cos(rad)) + base_h * std::abs(std::sin(rad));
-                const double height = base_w * std::abs(std::sin(rad)) + base_h * std::abs(std::cos(rad));
-                if (width > 0.0) {
-                        required_scale = std::max(required_scale, static_cast<double>(screen_w_) / width);
+        const int steps = 360;
+        static bool trig_initialized = false;
+        static double cos_table[steps];
+        static double sin_table[steps];
+        if (!trig_initialized) {
+                const double two_pi = 6.28318530717958647692;
+                for (int i = 0; i < steps; ++i) {
+                        const double rad = (static_cast<double>(i) / static_cast<double>(steps)) * two_pi;
+                        cos_table[i] = std::cos(rad);
+                        sin_table[i] = std::sin(rad);
                 }
-                if (height > 0.0) {
-                        required_scale = std::max(required_scale, static_cast<double>(screen_h_) / height);
-                }
+                trig_initialized = true;
         }
-        required_scale *= 1.05; // Add a small safety margin.
+
+        double required_scale = 1.0;
+        for (int i = 0; i < steps; ++i) {
+                const double cos_theta = cos_table[i];
+                const double sin_theta = sin_table[i];
+
+                const double val_x_a = 0.0;
+                const double val_x_b = cos_theta * base_w;
+                const double val_x_c = sin_theta * base_h;
+                const double val_x_d = cos_theta * base_w + sin_theta * base_h;
+                const double max_val_x = std::max({val_x_a, val_x_b, val_x_c, val_x_d});
+
+                const double val_y_a = 0.0;
+                const double val_y_b = sin_theta * base_w;
+                const double val_y_c = -cos_theta * base_h;
+                const double val_y_d = sin_theta * base_w - cos_theta * base_h;
+                const double min_val_y = std::min({val_y_a, val_y_b, val_y_c, val_y_d});
+                const double max_val_y = std::max({val_y_a, val_y_b, val_y_c, val_y_d});
+
+                double needed_scale = 1.0;
+                if (max_val_x > 1e-6) {
+                        const double candidate = (static_cast<double>(screen_w_) - pivot_x) / max_val_x;
+                        if (candidate > needed_scale) needed_scale = candidate;
+                }
+                if (min_val_y < -1e-6) {
+                        const double candidate = (-pivot_y) / min_val_y;
+                        if (candidate > needed_scale) needed_scale = candidate;
+                }
+                if (max_val_y > 1e-6) {
+                        const double candidate = (static_cast<double>(screen_h_) - pivot_y) / max_val_y;
+                        if (candidate > needed_scale) needed_scale = candidate;
+                }
+
+                if (needed_scale > required_scale) required_scale = needed_scale;
+        }
+
+        required_scale = std::max(required_scale, 1.0);
+        required_scale *= 1.02; // Add a small safety margin.
 
         SDL_Rect dst{};
         dst.w = static_cast<int>(std::ceil(base_w * required_scale));
         dst.h = static_cast<int>(std::ceil(base_h * required_scale));
-        dst.x = (screen_w_ - dst.w) / 2;
-        dst.y = (screen_h_ - dst.h) / 2;
+        dst.x = static_cast<int>(std::floor(pivot_x));
+        dst.y = static_cast<int>(std::floor(pivot_y) - dst.h);
 
         SDL_Point center{};
-        center.x = dst.w / 2;
-        center.y = dst.h / 2;
+        center.x = 0;
+        center.y = dst.h;
         SDL_RenderCopyEx(renderer_, tex, nullptr, &dst, angle, &center, SDL_FLIP_NONE);
 }
 

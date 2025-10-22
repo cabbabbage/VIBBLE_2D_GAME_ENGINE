@@ -1396,42 +1396,57 @@ bool MapLayersPanel::handle_details_event(const SDL_Event& e) {
         return false;
     }
 
-    bool used_any = false;
     // Always route to details widgets first (buttons, sliders, dropdowns)
-    for (auto& w : details_widgets_) {
-        if (!w) continue;
-        bool used = w->handle_event(e);
-        used_any = used_any || used;
-        // If a slider was used and the event is a mouse release, commit changes
-        if (used && details_mode_ == DetailsMode::LayerDetails) {
-            if (e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL || e.type == SDL_KEYUP) {
-                // Apply slider counts to controller
-                if (controller_ && selected_layer_index_ >= 0) {
-                    for (const auto& row : candidate_rows_) {
-                        if (row.count_slider) {
-                            controller_->set_candidate_instance_count(selected_layer_index_, row.candidate_index, row.count_slider->displayed_value());
-                        }
+    for (size_t i = 0; i < details_widgets_.size(); ++i) {
+        Widget* widget = details_widgets_[i].get();
+        if (!widget) {
+            continue;
+        }
+        if (!widget->handle_event(e)) {
+            continue;
+        }
+
+        if (details_mode_ == DetailsMode::LayerDetails &&
+            (e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL || e.type == SDL_KEYUP)) {
+            if (controller_ && selected_layer_index_ >= 0) {
+                for (const auto& row : candidate_rows_) {
+                    if (row.count_slider) {
+                        controller_->set_candidate_instance_count(selected_layer_index_,
+                                                                  row.candidate_index,
+                                                                  row.count_slider->displayed_value());
                     }
                 }
             }
         }
+
+        // The widget consumed the event; avoid iterating further because callbacks may
+        // have mutated the widget list (e.g. rebuilding the details UI).
+        return true;
     }
 
     if (details_mode_ == DetailsMode::RoomList) {
         for (auto& entry : room_buttons_) {
-            if (!entry.button) continue;
-            bool used = entry.button->handle_event(e);
-            if (used && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            if (!entry.button) {
+                continue;
+            }
+            if (!entry.button->handle_event(e)) {
+                continue;
+            }
+
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 open_room_details(entry.key);
                 if (configure_room_callback_) {
                     configure_room_callback_(entry.key);
                 }
             }
-            used_any = used_any || used;
+
+            // Event handled by one of the room buttons; stop to avoid iterating over a
+            // potentially modified list.
+            return true;
         }
     }
 
-    return used_any;
+    return false;
 }
 
 SDL_Color MapLayersPanel::layer_color(int index) const {
