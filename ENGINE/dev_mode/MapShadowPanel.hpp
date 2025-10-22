@@ -76,12 +76,7 @@ private:
     std::unique_ptr<DMSlider> size_scale_factor_{};
     std::unique_ptr<DMSlider> search_radius_{};
 
-    std::unique_ptr<DMSlider> opacity_strength_{};
-    std::unique_ptr<DMSlider> parallax_strength_{};
-    std::unique_ptr<DMSlider> scale_strength_{};
-
     std::unique_ptr<DMSlider> static_weight_{};
-    std::unique_ptr<DMSlider> dynamic_weight_{};
 
     std::unique_ptr<DMSlider> lut_index_slider_{};
     std::unique_ptr<DMSlider> lut_brightness_{};

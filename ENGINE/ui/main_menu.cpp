@@ -342,24 +342,16 @@ std::string MainMenu::pickRandomLine(const fs::path& csv_path) const {
 void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         if (!tex) return;
 
-        const double zoom_factor = 3.0;
-        const double rpm = 0.5;
+        const double rpm = 0.5 / 3.0;
         const double degrees_per_second = rpm * 360.0 / 60.0;
         const Uint64 now = SDL_GetTicks64();
         const double elapsed_seconds = static_cast<double>(now - animation_start_ticks_) / 1000.0;
         const double angle = std::fmod(elapsed_seconds * degrees_per_second, 360.0);
 
-        SDL_Rect base = coverDst(tex);
-        const int scaled_w = static_cast<int>(std::lround(base.w * zoom_factor));
-        const int scaled_h = static_cast<int>(std::lround(base.h * zoom_factor));
-
-        SDL_Rect dst{};
-        dst.w = scaled_w;
-        dst.h = scaled_h;
-        dst.x = static_cast<int>(std::lround(-scaled_w / 2.0));
-        dst.y = static_cast<int>(std::lround(screen_h_ - (scaled_h / 2.0)));
-
-        SDL_Point center{ scaled_w / 2, scaled_h / 2 };
+        SDL_Rect dst = coverDst(tex);
+        SDL_Point center{};
+        center.x = -dst.w;
+        center.y = static_cast<int>(std::lround(dst.h * 1.5));
         SDL_RenderCopyEx(renderer_, tex, nullptr, &dst, angle, &center, SDL_FLIP_NONE);
 }
 

@@ -224,17 +224,8 @@ void MapShadowPanel::build_ui() {
     search_radius_ = std::make_unique<DMSlider>("Search Radius", 0, 128, search_radius_value);
     search_radius_->set_defer_commit_until_unfocus(false);
 
-    opacity_strength_ = make_scaled_slider("Opacity Strength", 0.0f, 10.0f,
-                                           current_settings_.opacity_strength, 100, 2);
-    parallax_strength_ = make_scaled_slider("Parallax Strength", 0.0f, 10.0f,
-                                            current_settings_.parallax_strength, 100, 2);
-    scale_strength_ = make_scaled_slider("Scale Strength", 0.0f, 10.0f,
-                                         current_settings_.scale_strength, 100, 2);
-
     static_weight_ = make_scaled_slider("Static Weight", 0.0f, 10.0f,
                                         current_settings_.sampling_weights.static_weight, 100, 2);
-    dynamic_weight_ = make_scaled_slider("Dynamic Weight", 0.0f, 10.0f,
-                                         current_settings_.sampling_weights.dynamic_weight, 100, 2);
 
     const int entry_count = static_cast<int>(current_settings_.response_lut.entries.size());
     const int max_index   = entry_count > 0 ? entry_count - 1 : 0;
@@ -276,12 +267,7 @@ void MapShadowPanel::build_ui() {
     add_slider_row(size_scale_factor_);
     add_slider_row(search_radius_);
 
-    add_slider_row(opacity_strength_);
-    add_slider_row(parallax_strength_);
-    add_slider_row(scale_strength_);
-
     add_slider_row(static_weight_);
-    add_slider_row(dynamic_weight_);
 
     add_slider_row(lut_index_slider_);
     add_slider_row(lut_brightness_);
@@ -308,12 +294,7 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
     if (size_scale_factor_) size_scale_factor_->set_value(static_cast<int>(std::round(settings.virtual_light_map.size_scale_factor * 100.0f)));
     if (search_radius_) search_radius_->set_value(std::clamp(settings.virtual_light_map.search_radius, 0, 128));
 
-    if (opacity_strength_) opacity_strength_->set_value(static_cast<int>(std::round(settings.opacity_strength * 100.0f)));
-    if (parallax_strength_) parallax_strength_->set_value(static_cast<int>(std::round(settings.parallax_strength * 100.0f)));
-    if (scale_strength_) scale_strength_->set_value(static_cast<int>(std::round(settings.scale_strength * 100.0f)));
-
     if (static_weight_) static_weight_->set_value(static_cast<int>(std::round(settings.sampling_weights.static_weight * 100.0f)));
-    if (dynamic_weight_) dynamic_weight_->set_value(static_cast<int>(std::round(settings.sampling_weights.dynamic_weight * 100.0f)));
 
     if (lut_index_slider_) {
         const int entry_count = static_cast<int>(settings.response_lut.entries.size());
@@ -347,12 +328,7 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
         settings.virtual_light_map.search_radius = std::clamp(search_radius_->displayed_value(), 0, 128);
     }
 
-    settings.opacity_strength  = read_scaled_slider(opacity_strength_, 100, settings.opacity_strength);
-    settings.parallax_strength = read_scaled_slider(parallax_strength_, 100, settings.parallax_strength);
-    settings.scale_strength    = read_scaled_slider(scale_strength_, 100, settings.scale_strength);
-
     settings.sampling_weights.static_weight  = read_scaled_slider(static_weight_, 100, settings.sampling_weights.static_weight);
-    settings.sampling_weights.dynamic_weight = read_scaled_slider(dynamic_weight_, 100, settings.sampling_weights.dynamic_weight);
 
     if (!settings.response_lut.entries.empty()) {
         const int safe_index = clamp_entry_index(lut_index_slider_ ? lut_index_slider_->displayed_value() : selected_entry_index_, settings);
