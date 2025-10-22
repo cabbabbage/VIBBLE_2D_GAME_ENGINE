@@ -312,7 +312,7 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
 
 static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
                                               const world::Grid& grid,
-                                              const std::pair<float,float>& grad,
+                                              const std::pair<float, float>& grad,
                                               int map_dir_sign_x,
                                               float map_light_opacity_norm,
                                               world::Chunk& chunk) {
@@ -362,6 +362,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
     chunk.shadow.parallax_intensity_percent = std::clamp(settings.parallax_percent, 0.0f, 100.0f);
 }
+
+} // namespace
 
 // LightMap implementation
 // ctor/dtor inlined in header
