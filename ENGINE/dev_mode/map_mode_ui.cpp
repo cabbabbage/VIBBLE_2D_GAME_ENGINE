@@ -9,6 +9,7 @@
 #include "dev_footer_bar.hpp"
 #include "map_layers_controller.hpp"
 #include "map_layers_panel.hpp"
+#include "map_rooms_display.hpp"
 #include "room_config/room_configurator.hpp"
 #include "SlidingWindowContainer.hpp"
 #include "core/AssetsManager.hpp"
@@ -103,7 +104,7 @@ void MapModeUI::set_map_mode_active(bool active) {
     sync_footer_button_states();
     set_active_panel(PanelType::None);
     if (!active) {
-        close_room_configuration();
+        close_room_configuration(false);
     }
 }
 
@@ -153,7 +154,7 @@ void MapModeUI::refresh_header_suppression_state() {
             if (layers_panel_) {
                 layers_panel_->close();
             }
-            close_room_configuration();
+            close_room_configuration(false);
         }
     }
 
@@ -420,12 +421,12 @@ void MapModeUI::ensure_panels() {
                     break;
                 case MapLayersPanel::SidePanel::None:
                 default:
-                    this->show_sliding_panel(SlidingPanel::RoomConfig);
+                    this->show_sliding_panel(SlidingPanel::RoomsList);
                     break;
             }
         });
         layers_panel_->set_on_close([this]() {
-            this->close_room_configuration();
+            this->close_room_configuration(false);
             active_panel_ = PanelType::None;
             sync_footer_button_states();
         });
@@ -451,6 +452,18 @@ void MapModeUI::ensure_panels() {
         rooms_list_container_->set_header_visibility_controller([this](bool visible) {
             this->set_sliding_headers_hidden(visible);
         });
+        rooms_list_container_->set_close_button_enabled(false);
+    }
+    if (!rooms_display_) {
+        rooms_display_ = std::make_unique<MapRoomsDisplay>();
+        rooms_display_->set_header_text("Rooms");
+        rooms_display_->set_on_select_room([this](const std::string& key) {
+            this->open_room_configuration(key);
+        });
+    }
+    if (rooms_display_) {
+        rooms_display_->attach_container(rooms_list_container_.get());
+        rooms_display_->set_map_info(map_info_);
     }
     if (!layer_controls_container_) {
         layer_controls_container_ = std::make_unique<SlidingWindowContainer>();
@@ -668,14 +681,14 @@ void MapModeUI::set_active_panel(PanelType panel) {
             bring_panel_to_front(layers_panel_.get());
             layers_panel_->hide_details_panel();
         }
-        show_sliding_panel(SlidingPanel::RoomConfig);
+        show_sliding_panel(SlidingPanel::RoomsList);
         new_active = PanelType::Layers;
     } else {
         if (layers_panel_) {
             layers_panel_->hide_details_panel();
         }
         show_sliding_panel(SlidingPanel::None);
-        close_room_configuration();
+        close_room_configuration(false);
     }
 
     active_panel_ = new_active;
@@ -726,6 +739,9 @@ void MapModeUI::sync_panel_map_info() {
         }
         layers_panel_->set_map_info(map_info_, map_path_);
         layers_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
+    }
+    if (rooms_display_) {
+        rooms_display_->set_map_info(map_info_);
     }
 }
 
@@ -1105,7 +1121,7 @@ void MapModeUI::close_all_panels() {
     shading_panel_centered_ = false;
     preview_panel_centered_ = false;
     set_active_panel(PanelType::None);
-    close_room_configuration();
+    close_room_configuration(false);
 }
 
 bool MapModeUI::is_light_panel_visible() const {
@@ -1229,19 +1245,15 @@ SDL_Rect MapModeUI::room_config_bounds() const {
     return SDL_Rect{panel_x, 0, std::max(0, panel_w), std::max(0, screen_h_)};
 }
 
-void MapModeUI::show_sliding_panel(SlidingPanel panel, bool preserve_layers_panel) {
-    const bool preserve_layers = preserve_layers_panel && panel == SlidingPanel::RoomConfig;
-
-    if (!preserve_layers) {
-        if (room_config_container_) {
-            room_config_container_->set_visible(false);
-        }
-        if (rooms_list_container_) {
-            rooms_list_container_->set_visible(false);
-        }
-        if (layer_controls_container_) {
-            layer_controls_container_->set_visible(false);
-        }
+void MapModeUI::show_sliding_panel(SlidingPanel panel, bool) {
+    if (room_config_container_) {
+        room_config_container_->set_visible(false);
+    }
+    if (rooms_list_container_) {
+        rooms_list_container_->set_visible(false);
+    }
+    if (layer_controls_container_) {
+        layer_controls_container_->set_visible(false);
     }
 
     switch (panel) {
@@ -1249,9 +1261,7 @@ void MapModeUI::show_sliding_panel(SlidingPanel panel, bool preserve_layers_pane
             if (room_config_container_) {
                 room_config_container_->open();
             }
-            if (!preserve_layers) {
-                active_sliding_panel_ = SlidingPanel::RoomConfig;
-            }
+            active_sliding_panel_ = SlidingPanel::RoomConfig;
             break;
         case SlidingPanel::RoomsList:
             if (rooms_list_container_) {
@@ -1281,10 +1291,10 @@ void MapModeUI::ensure_room_configurator() {
             });
             room_configurator_->set_on_close([this]() {
                 active_room_config_key_.clear();
-                if (layers_panel_) {
-                    layers_panel_->hide_details_panel();
+                if (rooms_display_) {
+                    rooms_display_->refresh();
                 }
-                this->show_sliding_panel(SlidingPanel::RoomConfig);
+                this->show_sliding_panel(SlidingPanel::RoomsList);
             });
         }
     }
@@ -1349,15 +1359,19 @@ void MapModeUI::open_room_configuration(const std::string& room_key) {
         room_config_container_->set_panel_bounds_override(room_config_bounds());
     }
     room_configurator_->open(room_entry, on_change, on_entry_change, {});
-    show_sliding_panel(SlidingPanel::RoomConfig, true);
+    show_sliding_panel(SlidingPanel::RoomConfig);
 }
 
-void MapModeUI::close_room_configuration() {
+void MapModeUI::close_room_configuration(bool show_rooms_list) {
     if (room_configurator_) {
         room_configurator_->close();
     }
     active_room_config_key_.clear();
-    show_sliding_panel(SlidingPanel::None);
+    if (show_rooms_list) {
+        show_sliding_panel(SlidingPanel::RoomsList);
+    } else {
+        show_sliding_panel(SlidingPanel::None);
+    }
 }
 
 void MapModeUI::set_light_save_callback(LightSaveCallback cb) {

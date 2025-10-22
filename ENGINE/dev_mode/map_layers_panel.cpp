@@ -280,11 +280,10 @@ void MapLayersPanel::select_room(const std::string& room_key) {
     if (on_configure_room_) {
         on_configure_room_(room_key);
     }
-    notify_side_panel(SidePanel::LayerControls);
 }
 
 void MapLayersPanel::hide_details_panel() {
-    notify_side_panel(SidePanel::None);
+    notify_side_panel(SidePanel::RoomsList);
 }
 
 void MapLayersPanel::set_on_configure_room(std::function<void(const std::string&)> cb) {

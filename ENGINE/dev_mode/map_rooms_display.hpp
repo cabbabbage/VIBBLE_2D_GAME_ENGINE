@@ -1,0 +1,60 @@
+#pragma once
+
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include <SDL.h>
+
+#include <nlohmann/json_fwd.hpp>
+
+class SlidingWindowContainer;
+class Input;
+struct SDL_Renderer;
+
+// Displays the rooms present in the current map inside a sliding container.
+// Provides simple selection handling that notifies when a room is chosen.
+class MapRoomsDisplay {
+public:
+    using SelectRoomCallback = std::function<void(const std::string&)>;
+
+    MapRoomsDisplay();
+    ~MapRoomsDisplay();
+
+    void attach_container(SlidingWindowContainer* container);
+    void detach_container();
+
+    void set_map_info(nlohmann::json* map_info);
+    void set_on_select_room(SelectRoomCallback cb);
+    void set_header_text(const std::string& text);
+    void refresh();
+
+private:
+    struct RoomRow {
+        std::string key;
+        std::string name;
+        SDL_Rect rect{0, 0, 0, 0};
+    };
+
+    void configure_container(SlidingWindowContainer& container);
+    void clear_container_callbacks(SlidingWindowContainer& container);
+
+    int layout_content(const SlidingWindowContainer::LayoutContext& ctx);
+    void render(SDL_Renderer* renderer) const;
+    bool handle_event(const SDL_Event& e);
+    void update(const Input& input, int screen_w, int screen_h);
+
+    void rebuild_rows();
+    void set_hovered_room(const std::string& key);
+    void clear_hover();
+
+private:
+    SlidingWindowContainer* container_ = nullptr;
+    nlohmann::json* map_info_ = nullptr;
+    std::vector<RoomRow> rooms_;
+    std::string hovered_room_;
+    SelectRoomCallback on_select_room_{};
+    std::string header_text_ = "Rooms";
+};
+

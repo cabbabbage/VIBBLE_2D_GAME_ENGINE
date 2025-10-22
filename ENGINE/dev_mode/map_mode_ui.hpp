@@ -27,6 +27,7 @@ class DevFooterBar;
 class DockableCollapsible;
 struct DMButtonStyle;
 struct SDL_Renderer;
+class MapRoomsDisplay;
 
 class MapModeUI {
 public:
@@ -130,7 +131,7 @@ private:
     void ensure_light_and_shading_positions();
     void ensure_room_configurator();
     void open_room_configuration(const std::string& room_key);
-    void close_room_configuration();
+    void close_room_configuration(bool show_rooms_list = false);
     SDL_Rect room_config_bounds() const;
     void show_sliding_panel(SlidingPanel panel, bool preserve_layers_panel = false);
 
@@ -151,6 +152,7 @@ private:
     std::unique_ptr<SlidingWindowContainer> room_config_container_;
     std::unique_ptr<SlidingWindowContainer> rooms_list_container_;
     std::unique_ptr<SlidingWindowContainer> layer_controls_container_;
+    std::unique_ptr<MapRoomsDisplay> rooms_display_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;
     std::unique_ptr<DevFooterBar> footer_bar_;
