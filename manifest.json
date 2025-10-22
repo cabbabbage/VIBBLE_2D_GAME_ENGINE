@@ -13876,7 +13876,7 @@
             255
           ],
           "max_opacity": 154,
-          "min_opacity": 68
+          "min_opacity": 0
         },
         "update_interval": 1
       },
