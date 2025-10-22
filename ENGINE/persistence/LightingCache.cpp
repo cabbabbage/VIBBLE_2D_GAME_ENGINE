@@ -182,6 +182,8 @@ bool LightingCache::loadChunk(SDL_Renderer* renderer, world::Chunk& chunk) {
 
     chunk.static_light_mask                  = texture;
     chunk.lighting_preloaded                 = true;
+    chunk.static_clean                       = true;
+    chunk.lighting_dirty                     = false;
     chunk.lighting.min_static_avg_strength   = entry.value("min_strength", chunk.lighting.min_static_avg_strength);
     chunk.lighting.max_static_avg_strength   = entry.value("max_strength", chunk.lighting.max_static_avg_strength);
     if (chunk.lighting.max_static_avg_strength < chunk.lighting.min_static_avg_strength) {

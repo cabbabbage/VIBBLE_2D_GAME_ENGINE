@@ -151,10 +151,6 @@ public:
     SDL_Rect chunk_bounds(int index) const;
 
 private:
-    void ensure_chunk_static_texture(SDL_Renderer* renderer, world::Chunk& chunk) const;
-    void destroy_chunk_texture(world::Chunk& chunk) const;
-
-private:
     Assets* assets_ = nullptr;
     int     screen_width_  = 0;
     int     screen_height_ = 0;

@@ -5,15 +5,19 @@
 namespace lighting {
 
 bool PreloopGating::verifyReady(const world::Chunk& chunk) const {
-    return chunk.static_light_mask != nullptr && chunk.lighting_preloaded && !chunk.needs_retry;
+    return chunk.static_light_mask != nullptr &&
+           chunk.lighting_preloaded &&
+           chunk.static_clean &&
+           !chunk.needs_retry;
 }
 
 bool PreloopGating::tryRetry(world::Chunk& chunk) const {
     if (!chunk.needs_retry) {
         return false;
     }
-    chunk.needs_retry = false;
+    chunk.needs_retry        = false;
     chunk.lighting_preloaded = false;
+    chunk.static_clean       = false;
     return true;
 }
 

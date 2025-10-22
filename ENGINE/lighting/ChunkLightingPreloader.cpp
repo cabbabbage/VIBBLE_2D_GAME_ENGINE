@@ -104,6 +104,8 @@ bool ChunkLightingPreloader::processChunk(world::Chunk& chunk,
     }
 
     chunk.lighting_preloaded = true;
+    chunk.static_clean       = true;
+    chunk.lighting_dirty     = false;
     chunk.needs_retry        = false;
 
     if (cache_) {
