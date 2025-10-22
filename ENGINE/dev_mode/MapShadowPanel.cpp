@@ -15,7 +15,7 @@
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "utils/input.hpp"
 
-namespace {
+namespace map_shadow_panel_detail {
 
 constexpr int kPrecisionScale = 100;
 
@@ -90,7 +90,9 @@ void set_slider_int(const std::unique_ptr<DMSlider>& slider, int value) {
     slider->set_value(value);
 }
 
-}  // namespace
+}  // namespace map_shadow_panel_detail
+
+namespace mspd = map_shadow_panel_detail;
 
 MapShadowPanel::MapShadowPanel(Assets* assets, int x, int y)
     : DockableCollapsible("Shading", true, x, y), assets_(assets) {
@@ -102,24 +104,24 @@ MapShadowPanel::MapShadowPanel(Assets* assets, int x, int y)
 MapShadowPanel::~MapShadowPanel() = default;
 
 void MapShadowPanel::set_slider_defaults() {
-    horizontal_falloff_   = make_scaled_slider("Horizontal Falloff", 0.0f, 10.0f, 1.0f, kPrecisionScale);
-    vertical_falloff_     = make_scaled_slider("Vertical Falloff", 0.0f, 10.0f, 1.0f, kPrecisionScale);
-    max_offset_x_         = make_scaled_slider("Max Offset X", 0.0f, 500.0f, 0.0f, 10, 1);
-    max_offset_y_         = make_scaled_slider("Max Offset Y", 0.0f, 500.0f, 0.0f, 10, 1);
-    shadow_scale_         = make_scaled_slider("Shadow Scale", 0.0f, 10.0f, 1.0f, kPrecisionScale);
-    size_scale_factor_    = make_scaled_slider("Size Scale Factor", 0.0f, 10.0f, 1.0f, kPrecisionScale);
-    search_radius_        = make_integer_slider("Search Radius", 0, 64, 2);
-    opacity_strength_     = make_scaled_slider("Opacity Strength", 0.0f, 10.0f, 1.0f, kPrecisionScale);
-    parallax_strength_    = make_scaled_slider("Parallax Strength", 0.0f, 10.0f, 1.0f, kPrecisionScale);
-    scale_strength_       = make_scaled_slider("Scale Strength", 0.0f, 10.0f, 1.0f, kPrecisionScale);
-    static_weight_        = make_scaled_slider("Static Sample Weight", 0.0f, 10.0f, 0.8f, kPrecisionScale);
-    dynamic_weight_       = make_scaled_slider("Dynamic Sample Weight", 0.0f, 10.0f, 1.0f, kPrecisionScale);
+    horizontal_falloff_   = mspd::make_scaled_slider("Horizontal Falloff", 0.0f, 10.0f, 1.0f, mspd::kPrecisionScale);
+    vertical_falloff_     = mspd::make_scaled_slider("Vertical Falloff", 0.0f, 10.0f, 1.0f, mspd::kPrecisionScale);
+    max_offset_x_         = mspd::make_scaled_slider("Max Offset X", 0.0f, 500.0f, 0.0f, 10, 1);
+    max_offset_y_         = mspd::make_scaled_slider("Max Offset Y", 0.0f, 500.0f, 0.0f, 10, 1);
+    shadow_scale_         = mspd::make_scaled_slider("Shadow Scale", 0.0f, 10.0f, 1.0f, mspd::kPrecisionScale);
+    size_scale_factor_    = mspd::make_scaled_slider("Size Scale Factor", 0.0f, 10.0f, 1.0f, mspd::kPrecisionScale);
+    search_radius_        = mspd::make_integer_slider("Search Radius", 0, 64, 2);
+    opacity_strength_     = mspd::make_scaled_slider("Opacity Strength", 0.0f, 10.0f, 1.0f, mspd::kPrecisionScale);
+    parallax_strength_    = mspd::make_scaled_slider("Parallax Strength", 0.0f, 10.0f, 1.0f, mspd::kPrecisionScale);
+    scale_strength_       = mspd::make_scaled_slider("Scale Strength", 0.0f, 10.0f, 1.0f, mspd::kPrecisionScale);
+    static_weight_        = mspd::make_scaled_slider("Static Sample Weight", 0.0f, 10.0f, 0.8f, mspd::kPrecisionScale);
+    dynamic_weight_       = mspd::make_scaled_slider("Dynamic Sample Weight", 0.0f, 10.0f, 1.0f, mspd::kPrecisionScale);
 
-    mask_expansion_ratio_  = make_scaled_slider("Mask Expansion Ratio", 0.0f, 4.0f, 0.8f, kPrecisionScale);
-    mask_blur_scale_       = make_scaled_slider("Mask Blur Scale", 0.0f, 8.0f, 1.0f, kPrecisionScale);
-    mask_falloff_start_    = make_scaled_slider("Mask Falloff Start", 0.0f, 0.99f, 0.0f, kPrecisionScale);
-    mask_falloff_exponent_ = make_scaled_slider("Mask Falloff Exponent", 0.01f, 20.0f, 1.05f, kPrecisionScale);
-    mask_alpha_multiplier_ = make_scaled_slider("Mask Alpha Multiplier", 0.0f, 4.0f, 1.0f, kPrecisionScale);
+    mask_expansion_ratio_  = mspd::make_scaled_slider("Mask Expansion Ratio", 0.0f, 4.0f, 0.8f, mspd::kPrecisionScale);
+    mask_blur_scale_       = mspd::make_scaled_slider("Mask Blur Scale", 0.0f, 8.0f, 1.0f, mspd::kPrecisionScale);
+    mask_falloff_start_    = mspd::make_scaled_slider("Mask Falloff Start", 0.0f, 0.99f, 0.0f, mspd::kPrecisionScale);
+    mask_falloff_exponent_ = mspd::make_scaled_slider("Mask Falloff Exponent", 0.01f, 20.0f, 1.05f, mspd::kPrecisionScale);
+    mask_alpha_multiplier_ = mspd::make_scaled_slider("Mask Alpha Multiplier", 0.0f, 4.0f, 1.0f, mspd::kPrecisionScale);
 }
 
 void MapShadowPanel::build_ui() {
@@ -201,6 +203,7 @@ bool MapShadowPanel::is_visible() const {
 
 void MapShadowPanel::update(const Input& input, int screen_w, int screen_h) {
     DockableCollapsible::update(input, screen_w, screen_h);
+    sync_shared_reactive_settings();
 }
 
 bool MapShadowPanel::handle_event(const SDL_Event& e) {
@@ -230,6 +233,22 @@ bool MapShadowPanel::is_point_inside(int x, int y) const {
 
 void MapShadowPanel::render_content(SDL_Renderer* renderer) const {
     DockableCollapsible::render_content(renderer);
+}
+
+void MapShadowPanel::sync_shared_reactive_settings() {
+    if (!reactive_settings_shared_) {
+        return;
+    }
+
+    auto sanitized = render_pipeline::shading::sanitize_reactive_shadow_settings(*reactive_settings_shared_);
+    if (sanitized == last_applied_settings_) {
+        return;
+    }
+
+    last_applied_settings_ = sanitized;
+    set_reactive_sliders(last_applied_settings_);
+    write_reactive_settings_to_json(last_applied_settings_);
+    apply_immediate_settings(true);
 }
 
 void MapShadowPanel::sync_ui_from_json() {
@@ -283,11 +302,11 @@ bool MapShadowPanel::sync_json_from_ui() {
     mask                    = SanitizeShadowMaskSettings(mask);
 
     auto mask_differs = [&]() {
-        return !nearly_equal(mask.expansion_ratio, last_shadow_mask_settings_.expansion_ratio) ||
-               !nearly_equal(mask.blur_scale, last_shadow_mask_settings_.blur_scale) ||
-               !nearly_equal(mask.falloff_start, last_shadow_mask_settings_.falloff_start) ||
-               !nearly_equal(mask.falloff_exponent, last_shadow_mask_settings_.falloff_exponent) ||
-               !nearly_equal(mask.alpha_multiplier, last_shadow_mask_settings_.alpha_multiplier);
+        return !mspd::nearly_equal(mask.expansion_ratio, last_shadow_mask_settings_.expansion_ratio) ||
+               !mspd::nearly_equal(mask.blur_scale, last_shadow_mask_settings_.blur_scale) ||
+               !mspd::nearly_equal(mask.falloff_start, last_shadow_mask_settings_.falloff_start) ||
+               !mspd::nearly_equal(mask.falloff_exponent, last_shadow_mask_settings_.falloff_exponent) ||
+               !mspd::nearly_equal(mask.alpha_multiplier, last_shadow_mask_settings_.alpha_multiplier);
     };
 
     if (mask_differs()) {
@@ -303,57 +322,57 @@ bool MapShadowPanel::sync_json_from_ui() {
 render_pipeline::shading::ReactiveShadowSettings MapShadowPanel::current_settings_from_ui() const {
     auto settings = last_applied_settings_;
     settings.virtual_light_map.horizontal_falloff =
-        slider_value_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, kPrecisionScale);
+        mspd::slider_value_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, mspd::kPrecisionScale);
     settings.virtual_light_map.vertical_falloff =
-        slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, kPrecisionScale);
-    settings.virtual_light_map.max_offset_x = slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 10);
-    settings.virtual_light_map.max_offset_y = slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 10);
+        mspd::slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, mspd::kPrecisionScale);
+    settings.virtual_light_map.max_offset_x = mspd::slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 10);
+    settings.virtual_light_map.max_offset_y = mspd::slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 10);
     settings.virtual_light_map.shadow_scale =
-        slider_value_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, kPrecisionScale);
+        mspd::slider_value_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, mspd::kPrecisionScale);
     settings.virtual_light_map.size_scale_factor =
-        slider_value_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, kPrecisionScale);
-    settings.virtual_light_map.search_radius = slider_value_int(search_radius_, settings.virtual_light_map.search_radius);
-    settings.opacity_strength = slider_value_scaled(opacity_strength_, settings.opacity_strength, kPrecisionScale);
-    settings.parallax_strength = slider_value_scaled(parallax_strength_, settings.parallax_strength, kPrecisionScale);
-    settings.scale_strength    = slider_value_scaled(scale_strength_, settings.scale_strength, kPrecisionScale);
+        mspd::slider_value_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, mspd::kPrecisionScale);
+    settings.virtual_light_map.search_radius = mspd::slider_value_int(search_radius_, settings.virtual_light_map.search_radius);
+    settings.opacity_strength = mspd::slider_value_scaled(opacity_strength_, settings.opacity_strength, mspd::kPrecisionScale);
+    settings.parallax_strength = mspd::slider_value_scaled(parallax_strength_, settings.parallax_strength, mspd::kPrecisionScale);
+    settings.scale_strength    = mspd::slider_value_scaled(scale_strength_, settings.scale_strength, mspd::kPrecisionScale);
     settings.sampling_weights.static_weight =
-        slider_value_scaled(static_weight_, settings.sampling_weights.static_weight, kPrecisionScale);
+        mspd::slider_value_scaled(static_weight_, settings.sampling_weights.static_weight, mspd::kPrecisionScale);
     settings.sampling_weights.dynamic_weight =
-        slider_value_scaled(dynamic_weight_, settings.sampling_weights.dynamic_weight, kPrecisionScale);
+        mspd::slider_value_scaled(dynamic_weight_, settings.sampling_weights.dynamic_weight, mspd::kPrecisionScale);
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
 ShadowMaskSettings MapShadowPanel::current_shadow_mask_from_ui() const {
     ShadowMaskSettings settings = last_shadow_mask_settings_;
-    settings.expansion_ratio    = slider_value_scaled(mask_expansion_ratio_, settings.expansion_ratio, kPrecisionScale);
-    settings.blur_scale         = slider_value_scaled(mask_blur_scale_, settings.blur_scale, kPrecisionScale);
-    settings.falloff_start      = slider_value_scaled(mask_falloff_start_, settings.falloff_start, kPrecisionScale);
-    settings.falloff_exponent   = slider_value_scaled(mask_falloff_exponent_, settings.falloff_exponent, kPrecisionScale);
-    settings.alpha_multiplier   = slider_value_scaled(mask_alpha_multiplier_, settings.alpha_multiplier, kPrecisionScale);
+    settings.expansion_ratio    = mspd::slider_value_scaled(mask_expansion_ratio_, settings.expansion_ratio, mspd::kPrecisionScale);
+    settings.blur_scale         = mspd::slider_value_scaled(mask_blur_scale_, settings.blur_scale, mspd::kPrecisionScale);
+    settings.falloff_start      = mspd::slider_value_scaled(mask_falloff_start_, settings.falloff_start, mspd::kPrecisionScale);
+    settings.falloff_exponent   = mspd::slider_value_scaled(mask_falloff_exponent_, settings.falloff_exponent, mspd::kPrecisionScale);
+    settings.alpha_multiplier   = mspd::slider_value_scaled(mask_alpha_multiplier_, settings.alpha_multiplier, mspd::kPrecisionScale);
     return settings;
 }
 
 void MapShadowPanel::set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings) {
-    set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, kPrecisionScale);
-    set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, kPrecisionScale);
-    set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 10);
-    set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 10);
-    set_slider_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, kPrecisionScale);
-    set_slider_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, kPrecisionScale);
-    set_slider_int(search_radius_, settings.virtual_light_map.search_radius);
-    set_slider_scaled(opacity_strength_, settings.opacity_strength, kPrecisionScale);
-    set_slider_scaled(parallax_strength_, settings.parallax_strength, kPrecisionScale);
-    set_slider_scaled(scale_strength_, settings.scale_strength, kPrecisionScale);
-    set_slider_scaled(static_weight_, settings.sampling_weights.static_weight, kPrecisionScale);
-    set_slider_scaled(dynamic_weight_, settings.sampling_weights.dynamic_weight, kPrecisionScale);
+    mspd::set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 10);
+    mspd::set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 10);
+    mspd::set_slider_scaled(shadow_scale_, settings.virtual_light_map.shadow_scale, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(size_scale_factor_, settings.virtual_light_map.size_scale_factor, mspd::kPrecisionScale);
+    mspd::set_slider_int(search_radius_, settings.virtual_light_map.search_radius);
+    mspd::set_slider_scaled(opacity_strength_, settings.opacity_strength, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(parallax_strength_, settings.parallax_strength, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(scale_strength_, settings.scale_strength, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(static_weight_, settings.sampling_weights.static_weight, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(dynamic_weight_, settings.sampling_weights.dynamic_weight, mspd::kPrecisionScale);
 }
 
 void MapShadowPanel::set_shadow_mask_sliders(const ShadowMaskSettings& settings) {
-    set_slider_scaled(mask_expansion_ratio_, settings.expansion_ratio, kPrecisionScale);
-    set_slider_scaled(mask_blur_scale_, settings.blur_scale, kPrecisionScale);
-    set_slider_scaled(mask_falloff_start_, settings.falloff_start, kPrecisionScale);
-    set_slider_scaled(mask_falloff_exponent_, settings.falloff_exponent, kPrecisionScale);
-    set_slider_scaled(mask_alpha_multiplier_, settings.alpha_multiplier, kPrecisionScale);
+    mspd::set_slider_scaled(mask_expansion_ratio_, settings.expansion_ratio, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(mask_blur_scale_, settings.blur_scale, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(mask_falloff_start_, settings.falloff_start, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(mask_falloff_exponent_, settings.falloff_exponent, mspd::kPrecisionScale);
+    mspd::set_slider_scaled(mask_alpha_multiplier_, settings.alpha_multiplier, mspd::kPrecisionScale);
 }
 
 void MapShadowPanel::write_reactive_settings_to_json(

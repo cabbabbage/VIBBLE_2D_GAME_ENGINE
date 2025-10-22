@@ -572,7 +572,7 @@ float LightMap::sample_brightness_bilinear(float world_x,
                              dynamic_weight);
 }
 
-void LightMap::present_static_previews(SDL_Renderer* renderer) const {
+void LightMap::present_static_previews(SDL_Renderer* renderer, bool present) const {
     std::scoped_lock lock(mutex_);
     if (!renderer || !assets_) {
         return;
@@ -634,7 +634,9 @@ void LightMap::present_static_previews(SDL_Renderer* renderer) const {
         column_y += chunk_h + kPadding;
     }
 
-    SDL_RenderPresent(renderer);
+    if (present) {
+        SDL_RenderPresent(renderer);
+    }
 }
 
 void LightMap::render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {

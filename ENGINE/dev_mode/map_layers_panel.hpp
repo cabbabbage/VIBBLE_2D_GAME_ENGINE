@@ -50,6 +50,11 @@ public:
     bool embedded_mode() const { return embedded_mode_; }
     void set_embedded_bounds(const SDL_Rect& bounds);
 
+    int layout_embedded_content(const SlidingWindowContainer::LayoutContext& ctx, int screen_height);
+    void update_embedded(const Input& input, int screen_w, int screen_h);
+    bool handle_embedded_event(const SDL_Event& e);
+    void render_embedded_content(SDL_Renderer* renderer) const;
+
     void update(const Input& input, int screen_w, int screen_h) override;
     bool handle_event(const SDL_Event& e) override;
     void render(SDL_Renderer* renderer) const override;
@@ -94,8 +99,8 @@ private:
 
     void layout_rows();
     void layout_embedded_ui();
-    bool handle_embedded_event(const SDL_Event& e);
-    void render_embedded(SDL_Renderer* renderer) const;
+    bool handle_embedded_event_internal(const SDL_Event& e);
+    void render_embedded_internal(SDL_Renderer* renderer) const;
     bool handle_preview_event(const SDL_Event& e);
 
     void rebuild_visuals();

@@ -323,6 +323,11 @@ void SceneRenderer::render(){
         if (!light_map_ || rendered_light_map) {
             return;
         }
+        if (light_map_only_mode_) {
+            light_map_->present_static_previews(renderer_, /*present=*/false);
+            rendered_light_map = true;
+            return;
+        }
         // Compute a global alpha multiplier from the map light's current opacity window
         // (same logic as shading stages). Higher map-light opacity values correspond to
         // darker scenes, so the overlay should become more prominent as the opacity rises.

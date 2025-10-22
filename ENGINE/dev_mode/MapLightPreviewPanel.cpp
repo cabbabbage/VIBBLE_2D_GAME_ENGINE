@@ -26,7 +26,7 @@
 #include "util/grid.hpp"
 #include "world/chunk.hpp"
 
-namespace {
+namespace map_light_preview_panel_detail {
 constexpr std::string_view kReactiveSettingsKey = "dev_ui.lighting.map_panel.reactive";
 
 int clamp_int(int value, int lo, int hi) {
@@ -137,7 +137,9 @@ bool stage_requires_blend(PreviewStage stage) {
     return false;
 }
 
-}  // namespace
+}  // namespace map_light_preview_panel_detail
+
+namespace mlppd = map_light_preview_panel_detail;
 
 class MapLightPreviewPanel::PreviewWidget : public Widget {
 public:
@@ -232,6 +234,7 @@ void MapLightPreviewPanel::set_reactive_settings(render_pipeline::shading::React
 
 void MapLightPreviewPanel::update(const Input& input, int screen_w, int screen_h) {
     DockableCollapsible::update(input, screen_w, screen_h);
+    sync_shared_reactive_settings();
     if (!is_visible()) {
         return;
     }
@@ -1257,12 +1260,33 @@ void MapLightPreviewPanel::apply_immediate_settings() {
     force_shading_refresh_if_needed(settings_changed);
 }
 
+void MapLightPreviewPanel::sync_shared_reactive_settings() {
+    if (!reactive_settings_shared_) {
+        return;
+    }
+
+    auto sanitized = render_pipeline::shading::sanitize_reactive_shadow_settings(*reactive_settings_shared_);
+    if (sanitized == last_applied_settings_) {
+        return;
+    }
+
+    last_applied_settings_    = sanitized;
+    forced_settings_snapshot_ = sanitized;
+    set_reactive_sliders(last_applied_settings_);
+    write_reactive_settings_to_json(last_applied_settings_);
+    persist_reactive_settings_to_dev_settings(last_applied_settings_);
+}
+
 render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::current_settings_from_ui() const {
     render_pipeline::shading::ReactiveShadowSettings settings = last_applied_settings_;
-    settings.virtual_light_map.horizontal_falloff = slider_value_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
-    settings.virtual_light_map.vertical_falloff = slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
-    settings.virtual_light_map.max_offset_x = slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
-    settings.virtual_light_map.max_offset_y = slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
+    settings.virtual_light_map.horizontal_falloff =
+        mlppd::slider_value_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
+    settings.virtual_light_map.vertical_falloff =
+        mlppd::slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
+    settings.virtual_light_map.max_offset_x =
+        mlppd::slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
+    settings.virtual_light_map.max_offset_y =
+        mlppd::slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
     if (search_radius_) {
         settings.virtual_light_map.search_radius = search_radius_->displayed_value();
     }
@@ -1270,10 +1294,10 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::current_s
 }
 
 void MapLightPreviewPanel::set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings) {
-    set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
-    set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
-    set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
-    set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
+    mlppd::set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
+    mlppd::set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
+    mlppd::set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
+    mlppd::set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
     if (search_radius_) {
         search_radius_->set_value(settings.virtual_light_map.search_radius);
     }

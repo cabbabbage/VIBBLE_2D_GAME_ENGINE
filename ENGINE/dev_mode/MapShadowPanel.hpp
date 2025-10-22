@@ -44,6 +44,7 @@ private:
     void set_slider_defaults();
     void sync_ui_from_json();
     bool sync_json_from_ui();
+    void sync_shared_reactive_settings();
     void apply_immediate_settings(bool force_refresh = false);
     render_pipeline::shading::ReactiveShadowSettings current_settings_from_ui() const;
     ShadowMaskSettings current_shadow_mask_from_ui() const;

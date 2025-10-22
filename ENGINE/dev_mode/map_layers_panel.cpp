@@ -305,7 +305,7 @@ void MapLayersPanel::layout_embedded_ui() {
     apply_details_bounds();
 }
 
-bool MapLayersPanel::handle_embedded_event(const SDL_Event& e) {
+bool MapLayersPanel::handle_embedded_event_internal(const SDL_Event& e) {
     bool used = false;
 
     if (details_container_ && details_container_->is_visible()) {
@@ -361,7 +361,7 @@ bool MapLayersPanel::handle_embedded_event(const SDL_Event& e) {
     return used;
 }
 
-void MapLayersPanel::render_embedded(SDL_Renderer* renderer) const {
+void MapLayersPanel::render_embedded_internal(SDL_Renderer* renderer) const {
     if (!renderer) {
         return;
     }
@@ -664,6 +664,30 @@ void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
     }
 }
 
+int MapLayersPanel::layout_embedded_content(const SlidingWindowContainer::LayoutContext& ctx, int screen_height) {
+    if (!embedded_mode_) {
+        return ctx.content_top;
+    }
+
+    const int content_height = std::max(0, screen_height - ctx.content_top);
+    SDL_Rect bounds{ctx.content_x, ctx.content_top - ctx.scroll_value, ctx.content_width, content_height};
+    set_embedded_bounds(bounds);
+    layout_embedded_ui();
+    return ctx.content_top + content_height;
+}
+
+void MapLayersPanel::update_embedded(const Input& input, int screen_w, int screen_h) {
+    update(input, screen_w, screen_h);
+}
+
+bool MapLayersPanel::handle_embedded_event(const SDL_Event& e) {
+    return handle_embedded_event_internal(e);
+}
+
+void MapLayersPanel::render_embedded_content(SDL_Renderer* renderer) const {
+    render_embedded_internal(renderer);
+}
+
 void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
     screen_w_ = screen_w;
     screen_h_ = screen_h;
@@ -708,14 +732,14 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 bool MapLayersPanel::handle_event(const SDL_Event& e) {
     if (!is_visible()) return false;
     if (embedded_mode_) {
-        return handle_embedded_event(e);
+        return handle_embedded_event_internal(e);
     }
     return DockableCollapsible::handle_event(e);
 }
 
 void MapLayersPanel::render(SDL_Renderer* renderer) const {
     if (embedded_mode_) {
-        render_embedded(renderer);
+        render_embedded_internal(renderer);
         return;
     }
     DockableCollapsible::render(renderer);
