@@ -15,8 +15,8 @@ struct GlassButtonStyle {
     float refraction_strength = 0.055f; // try 0.04–0.09
 
     // "Rough" hammered glass controls
-    float rough_scale   = 0.022f; // noise frequency (larger = more bumps)
-    float rough_ampl_px = 5.20f;  // micro facet offset amplitude (px)
+    float rough_scale   = 0.035f; // noise frequency (larger = more bumps)
+    float rough_ampl_px = 3.50f;  // micro facet offset amplitude (px)
 
     // Diffusion sampling (number of taps & radius for the multi-sample blur-in-place)
     int   diffusion_taps    = 9;   // 6, 9, or 12 are fine
@@ -26,13 +26,28 @@ struct GlassButtonStyle {
     float chroma_strength   = 0.70f;
 
     // Distortion mix with original background (no tint/fill involved)
-    float mix_normal   = 0.38f;   // idle
-    float mix_hover    = 0.58f;   // hover (more distortion)
-    float mix_pressed  = 0.32f;   // pressed (flatter)
+    float mix_normal   = 0.50f;   // idle
+    float mix_hover    = 0.70f;   // hover (more distortion)
+    float mix_pressed  = 0.35f;   // pressed (flatter)
 
     // Fresnel-style rim (increases distortion mix near the edge; does NOT draw a border)
     float fresnel_power     = 2.20f;
     float fresnel_intensity = 0.60f; // amount of extra mix near rim
+
+    // Overlay micro texture (converted from brightness to alpha)
+    bool  overlay_enabled                = true;
+    float overlay_opacity                = 0.65f;
+    float overlay_bright_to_alpha_gamma  = 1.0f;
+
+    // Highlight ray burst
+    float ray_threshold   = 0.55f;  // luminance threshold [0..1]
+    float ray_intensity   = 1.10f;  // scalar for additive rays
+    float ray_length      = 0.45f;  // normalized length relative to button size
+    int   ray_steps       = 8;      // number of streak samples
+
+    // Horizontal motion blur over rays+base result
+    int   motion_blur_radius = 8;   // px radius for blur window (6-12 recommended)
+    float motion_blur_mix    = 0.68f; // blend factor for blurred contribution
 
     // Optional blur buffer (only for luminance-driven flares if you decide to add later)
     int   blur_px         = 0;
@@ -87,6 +102,9 @@ public:
 
     // Default preset for hammered/pebbled glass.
     static const GlassButtonStyle& default_glass_style();
+
+    // Refresh the cached hammered-glass overlay texture selection.
+    static void refresh_glass_overlay();
 
     // Enable the hammered-glass pipeline for this button (use for Main/Pause menus).
     void enable_glass_style(bool enabled);

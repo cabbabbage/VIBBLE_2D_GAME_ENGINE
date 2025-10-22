@@ -424,6 +424,11 @@ void MapModeUI::ensure_panels() {
                     break;
             }
         });
+        layers_panel_->set_on_close([this]() {
+            this->close_room_configuration();
+            active_panel_ = PanelType::None;
+            sync_footer_button_states();
+        });
     }
     if (layers_panel_) {
         layers_panel_->set_embedded_mode(true);
@@ -667,7 +672,6 @@ void MapModeUI::set_active_panel(PanelType panel) {
         new_active = PanelType::Layers;
     } else {
         if (layers_panel_) {
-            layers_panel_->close();
             layers_panel_->hide_details_panel();
         }
         show_sliding_panel(SlidingPanel::None);

@@ -113,9 +113,10 @@ void MenuUI::game_loop() {
 }
 
 void MenuUI::toggleMenu() {
-	menu_active_ = !menu_active_;
-	std::cout << "[MenuUI] ESC -> menu_active=" << (menu_active_ ? "true" : "false") << "\n";
-	if (game_assets_) game_assets_->set_render_suppressed(menu_active_);
+        menu_active_ = !menu_active_;
+        std::cout << "[MenuUI] ESC -> menu_active=" << (menu_active_ ? "true" : "false") << "\n";
+        if (menu_active_) Button::refresh_glass_overlay();
+        if (game_assets_) game_assets_->set_render_suppressed(menu_active_);
 }
 
 void MenuUI::handle_event(const SDL_Event& e) {
@@ -148,9 +149,10 @@ MenuUI::MenuAction MenuUI::consumeAction() {
 }
 
 void MenuUI::rebuildButtons() {
-	buttons_.clear();
-	const int btn_w = Button::width();
-	const int btn_h = Button::height();
+        buttons_.clear();
+        Button::refresh_glass_overlay();
+        const int btn_w = Button::width();
+        const int btn_h = Button::height();
         const int gap   = 16;
         int start_y = 150;
         const int x = (screen_w_ - btn_w) / 2;

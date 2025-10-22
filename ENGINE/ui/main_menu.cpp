@@ -70,6 +70,7 @@ MainMenu::~MainMenu() {
 void MainMenu::buildButtons() {
         buttons_.clear();
         map_lookup_.clear();
+        Button::refresh_glass_overlay();
         const int btn_w = Button::width();
         const int btn_h = Button::height();
         const int gap   = 18;

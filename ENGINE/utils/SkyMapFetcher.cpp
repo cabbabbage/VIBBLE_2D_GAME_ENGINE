@@ -157,10 +157,13 @@ void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
     }
 }
 
-void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, int height) {
-    const std::filesystem::path overlay_dir{"SRC/misc_content/overlay_options"};
+bool overlay_random_texture_from_directory(std::vector<unsigned char>& base_pixels,
+                                           int width,
+                                           int height,
+                                           const std::filesystem::path& overlay_dir,
+                                           std::mt19937& rng) {
     if (!std::filesystem::exists(overlay_dir) || !std::filesystem::is_directory(overlay_dir)) {
-        return;
+        return false;
     }
 
     std::vector<std::filesystem::path> png_files;
@@ -177,11 +180,30 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
         }
     }
 
-    if (dir_ec) {
-        return;
+    if (dir_ec || png_files.empty()) {
+        return false;
     }
 
-    if (png_files.empty()) {
+    std::uniform_int_distribution<size_t> dist(0, png_files.size() - 1);
+    const auto& selected_path = png_files[dist(rng)];
+
+    ImageData overlay_image;
+    if (!load_png_rgba(selected_path, overlay_image)) {
+        return false;
+    }
+
+    std::vector<unsigned char> scaled_overlay;
+    resample_image_bilinear(overlay_image, width, height, scaled_overlay);
+    if (scaled_overlay.empty()) {
+        return false;
+    }
+
+    blend_overlay_texture(base_pixels, scaled_overlay, width, height);
+    return true;
+}
+
+void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, int height) {
+    if (width <= 0 || height <= 0 || base_pixels.empty()) {
         return;
     }
 
@@ -193,21 +215,12 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
         const auto now = std::chrono::steady_clock::now().time_since_epoch();
         rng.seed(static_cast<unsigned int>(now.count()));
     }
-    std::uniform_int_distribution<size_t> dist(0, png_files.size() - 1);
-    const auto& selected_path = png_files[dist(rng)];
 
-    ImageData overlay_image;
-    if (!load_png_rgba(selected_path, overlay_image)) {
-        return;
-    }
+    const std::filesystem::path esoteric_dir{"SRC/misc_content/overlay_options_esoteric"};
+    const std::filesystem::path americana_dir{"SRC/misc_content/overlay_options_americana"};
 
-    std::vector<unsigned char> scaled_overlay;
-    resample_image_bilinear(overlay_image, width, height, scaled_overlay);
-    if (scaled_overlay.empty()) {
-        return;
-    }
-
-    blend_overlay_texture(base_pixels, scaled_overlay, width, height);
+    overlay_random_texture_from_directory(base_pixels, width, height, esoteric_dir, rng);
+    overlay_random_texture_from_directory(base_pixels, width, height, americana_dir, rng);
 }
 
 void apply_heavy_contrast(std::vector<unsigned char>& pixels, int width, int height, float factor) {

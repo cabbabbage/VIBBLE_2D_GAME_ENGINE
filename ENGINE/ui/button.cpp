@@ -5,23 +5,68 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <memory>
+#include <random>
 #include <vector>
+#include <limits>
+
+#include <SDL_image.h>
+
+#include "core/manifest/manifest_loader.hpp"
 
 namespace {
 
+namespace fs = std::filesystem;
+
 constexpr int   kCaptureBleed  = 16;   // margin so refraction lookups are in-bounds
 constexpr float kEdgeFeatherPx = 2.0f; // AA feather for rounded mask
+
+struct Float3 {
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+};
+
+struct Float4 {
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+    float a = 0.0f;
+};
+
+inline Float3 make_float3(float r, float g, float b) {
+    return Float3{ r, g, b };
+}
+
+inline Float3 clamp01(const Float3& c) {
+    return Float3{
+        std::clamp(c.r, 0.0f, 1.0f),
+        std::clamp(c.g, 0.0f, 1.0f),
+        std::clamp(c.b, 0.0f, 1.0f)
+    };
+}
+
+inline Float3 add(const Float3& a, const Float3& b) {
+    return Float3{ a.r + b.r, a.g + b.g, a.b + b.b };
+}
+
+inline Float3 mul(const Float3& a, float s) {
+    return Float3{ a.r * s, a.g * s, a.b * s };
+}
+
+inline Float3 lerp(const Float3& a, const Float3& b, float t) {
+    return Float3{
+        a.r + (b.r - a.r) * t,
+        a.g + (b.g - a.g) * t,
+        a.b + (b.b - a.b) * t
+    };
+}
 
 struct SurfaceDeleter { void operator()(SDL_Surface* s) const { if (s) SDL_FreeSurface(s); } };
 using SurfacePtr = std::unique_ptr<SDL_Surface, SurfaceDeleter>;
 
 inline Uint8 clamp8(int v) { return static_cast<Uint8>(std::clamp(v, 0, 255)); }
-
-inline Uint8 lerp8(Uint8 from, Uint8 to, float t) {
-    t = std::clamp(t, 0.0f, 1.0f);
-    return clamp8(static_cast<int>(std::round(static_cast<float>(from) + (static_cast<float>(to) - static_cast<float>(from)) * t)));
-}
 
 inline SDL_Color unpack(Uint32 px) {
     SDL_Color c;
@@ -43,6 +88,222 @@ inline Uint32 pack(SDL_PixelFormat* fmt, const SDL_Color& c) {
 }
 inline float luminance(const SDL_Color& c) {
     return (0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) / 255.0f;
+}
+
+inline float luminance(const Float3& c) {
+    return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+}
+
+struct OverlayImage {
+    int w = 0;
+    int h = 0;
+    std::vector<Float4> pixels;
+};
+
+struct OverlayScaled {
+    size_t overlay_index = std::numeric_limits<size_t>::max();
+    int    w = 0;
+    int    h = 0;
+    float  opacity = 0.0f;
+    float  gamma   = 0.0f;
+    uint64_t generation = 0;
+    std::vector<Float4> pixels;
+};
+
+struct GlassResources {
+    bool loaded = false;
+    std::vector<OverlayImage> overlays;
+    size_t current_index = 0;
+    uint64_t generation = 0;
+};
+
+GlassResources& glass_resources() {
+    static GlassResources res;
+    return res;
+}
+
+OverlayImage load_overlay_image(const fs::path& path) {
+    OverlayImage img;
+    if (path.empty()) return img;
+
+    SurfacePtr surface(IMG_Load(path.u8string().c_str()));
+    if (!surface) {
+        SDL_Log("GlassButton: failed to load overlay '%s': %s", path.u8string().c_str(), IMG_GetError());
+        return img;
+    }
+
+    SurfacePtr converted(SDL_ConvertSurfaceFormat(surface.get(), SDL_PIXELFORMAT_RGBA32, 0));
+    if (!converted) {
+        SDL_Log("GlassButton: failed to convert overlay '%s' to RGBA32: %s", path.u8string().c_str(), SDL_GetError());
+        return img;
+    }
+
+    if (SDL_LockSurface(converted.get()) != 0) {
+        SDL_Log("GlassButton: failed to lock overlay '%s': %s", path.u8string().c_str(), SDL_GetError());
+        return img;
+    }
+
+    img.w = converted->w;
+    img.h = converted->h;
+    img.pixels.resize(static_cast<size_t>(img.w) * static_cast<size_t>(img.h));
+
+    Uint32* px = static_cast<Uint32*>(converted->pixels);
+    const int pitch = converted->pitch / 4;
+    for (int y = 0; y < img.h; ++y) {
+        for (int x = 0; x < img.w; ++x) {
+            SDL_Color c = unpack(px[y * pitch + x]);
+            Float4 sample;
+            sample.r = static_cast<float>(c.r) / 255.0f;
+            sample.g = static_cast<float>(c.g) / 255.0f;
+            sample.b = static_cast<float>(c.b) / 255.0f;
+            sample.a = static_cast<float>(c.a) / 255.0f;
+            img.pixels[static_cast<size_t>(y) * img.w + static_cast<size_t>(x)] = sample;
+        }
+    }
+
+    SDL_UnlockSurface(converted.get());
+    return img;
+}
+
+void ensure_overlays_loaded() {
+    auto& res = glass_resources();
+    if (res.loaded) return;
+    res.loaded = true;
+
+    fs::path base;
+    try {
+        base = fs::absolute(fs::path(manifest::manifest_path())).parent_path();
+    } catch (const std::exception&) {
+        base = fs::current_path();
+    }
+
+    std::vector<fs::path> search_dirs;
+    search_dirs.push_back((base / "SRC" / "misc_content" / "glass_texture").lexically_normal());
+    search_dirs.push_back((fs::current_path() / "SRC" / "misc_content" / "glass_texture").lexically_normal());
+
+    std::vector<fs::path> unique_dirs;
+    for (const auto& dir : search_dirs) {
+        if (dir.empty()) continue;
+        if (std::find(unique_dirs.begin(), unique_dirs.end(), dir) == unique_dirs.end()) {
+            unique_dirs.push_back(dir);
+        }
+    }
+
+    std::vector<fs::path> files;
+    for (const auto& dir : unique_dirs) {
+        if (!fs::exists(dir) || !fs::is_directory(dir)) continue;
+        for (const auto& entry : fs::directory_iterator(dir)) {
+            if (!entry.is_regular_file()) continue;
+            std::string ext = entry.path().extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
+            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
+                files.push_back(entry.path());
+            }
+        }
+    }
+
+    std::sort(files.begin(), files.end());
+    files.erase(std::unique(files.begin(), files.end()), files.end());
+
+    for (const auto& file : files) {
+        OverlayImage img = load_overlay_image(file);
+        if (img.w > 0 && img.h > 0) {
+            res.overlays.push_back(std::move(img));
+        }
+    }
+
+    if (!res.overlays.empty() && res.generation == 0) {
+        res.current_index = std::min(res.current_index, res.overlays.size() - 1);
+        res.generation = 1;
+    }
+}
+
+Float4 sample_overlay(const OverlayImage& img, float fx, float fy) {
+    if (img.w <= 0 || img.h <= 0 || img.pixels.empty()) return Float4{};
+    fx = std::clamp(fx, 0.0f, static_cast<float>(img.w - 1));
+    fy = std::clamp(fy, 0.0f, static_cast<float>(img.h - 1));
+
+    int x0 = static_cast<int>(std::floor(fx));
+    int y0 = static_cast<int>(std::floor(fy));
+    int x1 = std::min(x0 + 1, img.w - 1);
+    int y1 = std::min(y0 + 1, img.h - 1);
+
+    float tx = fx - static_cast<float>(x0);
+    float ty = fy - static_cast<float>(y0);
+
+    const Float4& c00 = img.pixels[static_cast<size_t>(y0) * img.w + static_cast<size_t>(x0)];
+    const Float4& c10 = img.pixels[static_cast<size_t>(y0) * img.w + static_cast<size_t>(x1)];
+    const Float4& c01 = img.pixels[static_cast<size_t>(y1) * img.w + static_cast<size_t>(x0)];
+    const Float4& c11 = img.pixels[static_cast<size_t>(y1) * img.w + static_cast<size_t>(x1)];
+
+    auto lerp4 = [](const Float4& a, const Float4& b, float t) {
+        return Float4{
+            a.r + (b.r - a.r) * t,
+            a.g + (b.g - a.g) * t,
+            a.b + (b.b - a.b) * t,
+            a.a + (b.a - a.a) * t
+        };
+    };
+
+    Float4 cx0 = lerp4(c00, c10, tx);
+    Float4 cx1 = lerp4(c01, c11, tx);
+    return lerp4(cx0, cx1, ty);
+}
+
+OverlayScaled& overlay_cache() {
+    static OverlayScaled cache;
+    return cache;
+}
+
+const std::vector<Float4>& scaled_overlay_pixels(const GlassButtonStyle& style, int w, int h) {
+    auto& res = glass_resources();
+    ensure_overlays_loaded();
+    if (!style.overlay_enabled || res.overlays.empty()) {
+        OverlayScaled& cache = overlay_cache();
+        cache.overlay_index = std::numeric_limits<size_t>::max();
+        cache.w = w;
+        cache.h = h;
+        cache.generation = 0;
+        cache.pixels.clear();
+        return cache.pixels;
+    }
+
+    const size_t index = std::min(res.current_index, res.overlays.size() - 1);
+    OverlayScaled& cache = overlay_cache();
+    if (cache.overlay_index != index || cache.w != w || cache.h != h ||
+        cache.opacity != style.overlay_opacity || cache.gamma != style.overlay_bright_to_alpha_gamma ||
+        cache.generation != res.generation) {
+        cache.overlay_index = index;
+        cache.w = w;
+        cache.h = h;
+        cache.opacity = style.overlay_opacity;
+        cache.gamma = style.overlay_bright_to_alpha_gamma;
+        cache.generation = res.generation;
+        cache.pixels.resize(static_cast<size_t>(w) * static_cast<size_t>(h));
+
+        const OverlayImage& src = res.overlays[index];
+        const float sx = (src.w > 1) ? (static_cast<float>(src.w - 1)) : 1.0f;
+        const float sy = (src.h > 1) ? (static_cast<float>(src.h - 1)) : 1.0f;
+
+        for (int y = 0; y < h; ++y) {
+            float v = (h > 1) ? static_cast<float>(y) / static_cast<float>(h - 1) : 0.0f;
+            for (int x = 0; x < w; ++x) {
+                float u = (w > 1) ? static_cast<float>(x) / static_cast<float>(w - 1) : 0.0f;
+                Float4 sample = sample_overlay(src, u * sx, v * sy);
+                float L = std::clamp(luminance(Float3{ sample.r, sample.g, sample.b }), 0.0f, 1.0f);
+                float alpha = (1.0f - std::pow(L, style.overlay_bright_to_alpha_gamma)) * style.overlay_opacity;
+                alpha = std::clamp(alpha * sample.a, 0.0f, 1.0f);
+                cache.pixels[static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x)] = Float4{
+                    sample.r,
+                    sample.g,
+                    sample.b,
+                    alpha
+                };
+            }
+        }
+    }
+
+    return cache.pixels;
 }
 
 inline SDL_Rect adjusted_for_state(SDL_Rect r, bool hovered, bool pressed) {
@@ -242,6 +503,20 @@ const GlassButtonStyle& Button::default_glass_style() {
     return kDefault;
 }
 
+void Button::refresh_glass_overlay() {
+    ensure_overlays_loaded();
+    auto& res = glass_resources();
+    if (res.overlays.empty()) {
+        res.generation = 0;
+        return;
+    }
+    std::mt19937 rng{ std::random_device{}() };
+    std::uniform_int_distribution<size_t> dist(0, res.overlays.size() - 1);
+    res.current_index = dist(rng);
+    ++res.generation;
+    if (res.generation == 0) ++res.generation; // avoid zero so cache notices change
+}
+
 void Button::enable_glass_style(bool enabled) { glass_enabled_ = enabled; }
 void Button::set_glass_style(const GlassButtonStyle& style) { glass_style_ = style; }
 
@@ -249,190 +524,235 @@ void Button::set_glass_style(const GlassButtonStyle& style) { glass_style_ = sty
 void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     SDL_Rect r = adjusted_for_state(rect, hovered_, pressed_);
 
-    // 1) Capture the already-rendered background behind the button.
-    SDL_Rect cap{ r.x - kCaptureBleed, r.y - kCaptureBleed, r.w + kCaptureBleed*2, r.h + kCaptureBleed*2 };
+    SDL_Rect cap{ r.x - kCaptureBleed, r.y - kCaptureBleed, r.w + kCaptureBleed * 2, r.h + kCaptureBleed * 2 };
     cap = clamp_to_view(renderer, cap);
 
     SurfacePtr bg = capture(renderer, cap);
-    if (!bg) return; // nothing to distort
+    if (!bg) return;
 
-    // 2) Allocate a composite surface for the button area.
     SurfacePtr comp(SDL_CreateRGBSurfaceWithFormat(0, r.w, r.h, 32, SDL_PIXELFORMAT_RGBA32));
     if (!comp) return;
 
-    SDL_LockSurface(comp.get());
+    if (SDL_LockSurface(comp.get()) != 0) return;
     Uint32* dst = static_cast<Uint32*>(comp->pixels);
     SDL_PixelFormat* fmt = comp->format;
     const int dpitch = comp->pitch / 4;
 
-    SDL_LockSurface(bg.get());
+    if (SDL_LockSurface(bg.get()) != 0) {
+        SDL_UnlockSurface(comp.get());
+        return;
+    }
     Uint32* src = static_cast<Uint32*>(bg->pixels);
     const int spitch = bg->pitch / 4;
 
-    // Geometry
-    const int  w = r.w, h = r.h;
-    const int  ox = r.x - cap.x;
-    const int  oy = r.y - cap.y;
+    const int w = r.w;
+    const int h = r.h;
+    const int ox = r.x - cap.x;
+    const int oy = r.y - cap.y;
     const float cx = (w - 1) * 0.5f;
     const float cy = (h - 1) * 0.5f;
-    const float inv_cx = (cx > 0) ? 1.0f / cx : 0.0f;
-    const float inv_cy = (cy > 0) ? 1.0f / cy : 0.0f;
+    const float inv_cx = (cx > 0.0f) ? 1.0f / cx : 0.0f;
+    const float inv_cy = (cy > 0.0f) ? 1.0f / cy : 0.0f;
 
-    // State gains
-    const float ref_base = glass_style_.refraction_strength
-                         * (hovered_ ? 1.18f : 1.0f)
-                         * (pressed_ ? 0.90f : 1.0f);
+    const float ref_base = glass_style_.refraction_strength * (hovered_ ? 1.18f : 1.0f) * (pressed_ ? 0.90f : 1.0f);
     const float chroma   = glass_style_.chroma_strength * (pressed_ ? 0.85f : 1.0f);
-
     const float mix_state = pressed_ ? glass_style_.mix_pressed
-                           : (hovered_ ? glass_style_.mix_hover : glass_style_.mix_normal);
+                                     : (hovered_ ? glass_style_.mix_hover : glass_style_.mix_normal);
+    const float brightness_boost = pressed_ ? 0.94f : (hovered_ ? 1.05f : 1.0f);
+    float blur_mix = glass_style_.motion_blur_mix * (hovered_ ? 1.10f : (pressed_ ? 0.85f : 1.0f));
+    blur_mix = std::clamp(blur_mix, 0.0f, 0.9f);
+    const int blur_radius = std::max(1, glass_style_.motion_blur_radius);
+    const float ray_threshold = std::clamp(glass_style_.ray_threshold, 0.0f, 0.99f);
+    float ray_intensity = glass_style_.ray_intensity * (hovered_ ? 1.15f : (pressed_ ? 0.85f : 1.0f));
+    ray_intensity = std::max(0.0f, ray_intensity);
+    const int ray_steps = std::max(1, glass_style_.ray_steps);
+    const float ray_length = std::max(0.0f, glass_style_.ray_length) * static_cast<float>(std::min(w, h));
+    const float rough_scale = glass_style_.rough_scale * 120.0f;
+    const float rough_px = glass_style_.rough_ampl_px * (hovered_ ? 1.08f : (pressed_ ? 0.82f : 1.0f));
+    const float diff_radius = glass_style_.diffusion_radius * (hovered_ ? 1.10f : (pressed_ ? 0.90f : 1.0f));
 
-    // Diffusion sampling kernel (ring)
+    const size_t stride = static_cast<size_t>(w);
+    const size_t total = stride * static_cast<size_t>(h);
+    std::vector<Float3> processed(total);
+    std::vector<Float3> rays(total);
+    std::vector<Float3> blurred(total);
+
+    const std::vector<Float4>& overlay_pixels = scaled_overlay_pixels(glass_style_, w, h);
+    const bool have_overlay = !overlay_pixels.empty();
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            const size_t idx = static_cast<size_t>(y) * stride + static_cast<size_t>(x);
+            SDL_Color base = unpack(src[(oy + y) * spitch + (ox + x)]);
+            Float3 col = make_float3(base.r / 255.0f, base.g / 255.0f, base.b / 255.0f);
+            if (have_overlay) {
+                const Float4& ov = overlay_pixels[idx];
+                float oa = std::clamp(ov.a, 0.0f, 1.0f);
+                if (oa > 0.0f) {
+                    Float3 ov_col = make_float3(ov.r, ov.g, ov.b);
+                    col = add(mul(col, 1.0f - oa), mul(ov_col, oa));
+                }
+            }
+            processed[idx] = clamp01(col);
+        }
+    }
+
+    if (ray_intensity > 0.0f && ray_length > 0.0f) {
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                const size_t idx = static_cast<size_t>(y) * stride + static_cast<size_t>(x);
+                float lum = luminance(processed[idx]);
+                float energy = std::max(0.0f, (lum - ray_threshold) / std::max(1e-3f, 1.0f - ray_threshold));
+                if (energy <= 0.0f) continue;
+                energy = std::min(energy, 1.0f) * ray_intensity;
+
+                float dirx = static_cast<float>(x) - cx;
+                float diry = static_cast<float>(y) - cy;
+                float len = std::sqrt(dirx * dirx + diry * diry);
+                if (len > 1e-4f) { dirx /= len; diry /= len; }
+                else { dirx = 0.0f; diry = 0.0f; }
+
+                const Float3 base_col = processed[idx];
+                for (int step = 1; step <= ray_steps; ++step) {
+                    float t = static_cast<float>(step) / static_cast<float>(ray_steps);
+                    float reach = ray_length * t;
+                    float px = static_cast<float>(x) + dirx * reach;
+                    float py = static_cast<float>(y) + diry * reach;
+                    int ix = std::clamp(static_cast<int>(std::round(px)), 0, w - 1);
+                    int iy = std::clamp(static_cast<int>(std::round(py)), 0, h - 1);
+                    float falloff = energy * (1.0f - t) / static_cast<float>(ray_steps);
+                    Float3& dest = rays[static_cast<size_t>(iy) * stride + static_cast<size_t>(ix)];
+                    dest.r += base_col.r * falloff;
+                    dest.g += base_col.g * falloff;
+                    dest.b += base_col.b * falloff;
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < total; ++i) {
+        processed[i] = clamp01(add(processed[i], rays[i]));
+    }
+
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            Float3 acc{0.0f, 0.0f, 0.0f};
+            int count = 0;
+            for (int dx = -blur_radius; dx <= blur_radius; ++dx) {
+                int ix = std::clamp(x + dx, 0, w - 1);
+                acc = add(acc, processed[static_cast<size_t>(y) * stride + static_cast<size_t>(ix)]);
+                ++count;
+            }
+            blurred[static_cast<size_t>(y) * stride + static_cast<size_t>(x)] = mul(acc, 1.0f / static_cast<float>(count));
+        }
+    }
+
+    for (size_t i = 0; i < total; ++i) {
+        processed[i] = clamp01(lerp(processed[i], blurred[i], blur_mix));
+    }
+
+    if (std::abs(brightness_boost - 1.0f) > 1e-3f) {
+        for (size_t i = 0; i < total; ++i) {
+            processed[i] = clamp01(mul(processed[i], brightness_boost));
+        }
+    }
+
     const int taps = std::max(3, glass_style_.diffusion_taps);
     std::vector<std::array<float,2>> kernel;
     kernel.reserve(taps);
-    for (int i=0; i<taps; ++i) {
+    for (int i = 0; i < taps; ++i) {
         float t = (static_cast<float>(i) + 0.5f) / static_cast<float>(taps);
-        float ang = t * 6.2831853f; // 2*pi
+        float ang = t * 6.2831853f;
         kernel.push_back({ std::cos(ang), std::sin(ang) });
     }
 
-    double Lacc = 0.0; int Lcount = 0;
+    auto sample_processed = [&](float fx, float fy) -> Float3 {
+        if (processed.empty()) return Float3{};
+        fx = std::clamp(fx, 0.0f, static_cast<float>(w - 1));
+        fy = std::clamp(fy, 0.0f, static_cast<float>(h - 1));
+        int x0 = static_cast<int>(std::floor(fx));
+        int y0 = static_cast<int>(std::floor(fy));
+        int x1 = std::min(x0 + 1, w - 1);
+        int y1 = std::min(y0 + 1, h - 1);
+        float tx = fx - static_cast<float>(x0);
+        float ty = fy - static_cast<float>(y0);
+        const Float3& c00 = processed[static_cast<size_t>(y0) * stride + static_cast<size_t>(x0)];
+        const Float3& c10 = processed[static_cast<size_t>(y0) * stride + static_cast<size_t>(x1)];
+        const Float3& c01 = processed[static_cast<size_t>(y1) * stride + static_cast<size_t>(x0)];
+        const Float3& c11 = processed[static_cast<size_t>(y1) * stride + static_cast<size_t>(x1)];
+        Float3 cx0 = lerp(c00, c10, tx);
+        Float3 cx1 = lerp(c01, c11, tx);
+        return clamp01(lerp(cx0, cx1, ty));
+    };
 
-    // 3) Pixel loop
+    double Lacc = 0.0;
+    int Lcount = 0;
+
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             float cov = rr_coverage_px(x, y, w, h, glass_style_.radius);
-            if (cov <= 0.001f) { dst[y*dpitch + x] = 0; continue; }
+            if (cov <= 0.001f) {
+                dst[y * dpitch + x] = 0;
+                continue;
+            }
 
-            // Normalized center-relative coords
             const float ndx = (x - cx) * inv_cx;
             const float ndy = (y - cy) * inv_cy;
-            const float r1  = std::sqrt(std::min(1.0f, ndx*ndx + ndy*ndy));
-
-            // Convex lens warp (strongest near center)
-            const float lens = std::max(0.0f, 1.0f - r1*r1);
-            const float warp = ref_base * std::min(w, h) * 0.95f * lens;
-
-            // Base refracted UV
+            const float r1 = std::sqrt(std::min(1.0f, ndx * ndx + ndy * ndy));
+            const float lens = std::max(0.0f, 1.0f - r1 * r1);
+            const float warp = ref_base * static_cast<float>(std::min(w, h)) * 0.95f * lens;
             const float wx = ndx * warp + ndy * 0.06f * warp;
             const float wy = ndy * warp - ndx * 0.06f * warp;
 
-            // Position in capture space for "original" sample
             int sx_o = ox + x;
             int sy_o = oy + y;
             clamp_sample(sx_o, sy_o, cap.w, cap.h);
 
-            // Procedural hammered normals: FBM gradient
-            const float ns = glass_style_.rough_scale * 100.0f; // scale to pleasant range
-            auto g = fbm_grad((r.x + x) * ns, (r.y + y) * ns);   // stable in screen space
-            const float rough_px = glass_style_.rough_ampl_px * (hovered_ ? 1.1f : (pressed_ ? 0.85f : 1.0f));
-
-            // Chromatic offsets (radial direction)
+            auto g = fbm_grad((r.x + x) * rough_scale, (r.y + y) * rough_scale);
             const float ax = ndx * chroma;
             const float ay = ndy * chroma;
 
-            // Multi-tap diffusion around the refracted UV + hammered offset
-            const float rad = glass_style_.diffusion_radius * (hovered_ ? 1.15f : (pressed_ ? 0.9f : 1.0f));
+            Float3 accum{0.0f, 0.0f, 0.0f};
+            float weight = 0.0f;
 
-            // Accumulate
-            int acc_r=0, acc_g=0, acc_b=0;
-
-            // include center sample with hammered offset (weight 2)
-            {
-                int sx = static_cast<int>(std::round(ox + x + wx + g[0] * rough_px));
-                int sy = static_cast<int>(std::round(oy + y + wy + g[1] * rough_px));
-                clamp_sample(sx, sy, cap.w, cap.h);
-                SDL_Color c = unpack(src[sy * spitch + sx]);
-                acc_r += c.r * 2; acc_g += c.g * 2; acc_b += c.b * 2;
-            }
+            Float3 center = sample_processed(static_cast<float>(x) + wx + g[0] * rough_px,
+                                             static_cast<float>(y) + wy + g[1] * rough_px);
+            accum = add(accum, mul(center, 2.0f));
+            weight += 2.0f;
 
             for (const auto& v : kernel) {
-                // jitter orientation by the hammered normal (feels like facets)
                 float jx = v[0] + g[0] * 0.5f;
                 float jy = v[1] + g[1] * 0.5f;
-                float m = rad;
-
-                // Refracted UV with diffusion + hammered offset
-                int sx = static_cast<int>(std::round(ox + x + wx + g[0]*rough_px + jx * m));
-                int sy = static_cast<int>(std::round(oy + y + wy + g[1]*rough_px + jy * m));
-                clamp_sample(sx, sy, cap.w, cap.h);
-
-                // Chromatic micro-aberration per tap
-                int sxr = static_cast<int>(std::round(sx + ax));
-                int syr = static_cast<int>(std::round(sy + ay));
-                int sxb = static_cast<int>(std::round(sx - ax));
-                int syb = static_cast<int>(std::round(sy - ay));
-                clamp_sample(sxr, syr, cap.w, cap.h);
-                clamp_sample(sxb, syb, cap.w, cap.h);
-
-                SDL_Color cg = unpack(src[sy * spitch + sx]);
-                SDL_Color cr = unpack(src[syr * spitch + sxr]);
-                SDL_Color cb = unpack(src[syb * spitch + sxb]);
-
-                // blend R/B channels to give prismatic feel
-                acc_r += (cg.r + cr.r) / 2;
-                acc_g += cg.g;
-                acc_b += (cg.b + cb.b) / 2;
+                float sample_x = static_cast<float>(x) + wx + g[0] * rough_px + jx * diff_radius;
+                float sample_y = static_cast<float>(y) + wy + g[1] * rough_px + jy * diff_radius;
+                Float3 cg = sample_processed(sample_x, sample_y);
+                Float3 cr = sample_processed(sample_x + ax, sample_y + ay);
+                Float3 cb = sample_processed(sample_x - ax, sample_y - ay);
+                Float3 prism;
+                prism.r = (cg.r + cr.r) * 0.5f;
+                prism.g = cg.g;
+                prism.b = (cg.b + cb.b) * 0.5f;
+                accum = add(accum, prism);
+                weight += 1.0f;
             }
 
-            const int weight = 2 + static_cast<int>(kernel.size());
-            SDL_Color refr{};
-            refr.r = clamp8(acc_r / weight);
-            refr.g = clamp8(acc_g / weight);
-            refr.b = clamp8(acc_b / weight);
-
-            // "Original" undistorted background
+            Float3 refr = (weight > 0.0f) ? mul(accum, 1.0f / weight) : center;
             SDL_Color orig = unpack(src[sy_o * spitch + sx_o]);
+            Float3 origF = make_float3(orig.r / 255.0f, orig.g / 255.0f, orig.b / 255.0f);
 
-            // Fresnel-like rim increases the distortion mix near edges (no outline drawn)
-            const float fres = std::pow(std::clamp(r1, 0.0f, 1.0f), glass_style_.fresnel_power)
-                             * glass_style_.fresnel_intensity;
-
+            const float fres = std::pow(std::clamp(r1, 0.0f, 1.0f), glass_style_.fresnel_power) * glass_style_.fresnel_intensity;
             float mix_w = std::clamp(mix_state + fres, 0.0f, 1.0f);
 
-            // Final color = lerp(original, refracted-diffused, mix)
+            Float3 final_col = lerp(origF, refr, mix_w);
+            final_col = clamp01(mul(final_col, brightness_boost));
+
             SDL_Color out{};
-            out.r = clamp8(static_cast<int>(orig.r * (1.0f - mix_w) + refr.r * mix_w));
-            out.g = clamp8(static_cast<int>(orig.g * (1.0f - mix_w) + refr.g * mix_w));
-            out.b = clamp8(static_cast<int>(orig.b * (1.0f - mix_w) + refr.b * mix_w));
+            out.r = clamp8(static_cast<int>(std::round(final_col.r * 255.0f)));
+            out.g = clamp8(static_cast<int>(std::round(final_col.g * 255.0f)));
+            out.b = clamp8(static_cast<int>(std::round(final_col.b * 255.0f)));
+            out.a = clamp8(static_cast<int>(std::round(cov * 255.0f)));
 
-            // Specular-style glare sweeps from upper-left to lower-right to sell glass sheen.
-            const float highlight_axis = std::clamp(1.0f - std::abs(ndx * 0.75f + ndy * 1.35f - 0.10f), 0.0f, 1.0f);
-            float highlight_curve = std::pow(highlight_axis, 3.2f);
-
-            float hotspot = 1.0f - std::min(1.0f, (std::pow(ndx + 0.2f, 2.0f) * 3.6f + std::pow(ndy - 0.45f, 2.0f) * 8.0f));
-            hotspot = std::pow(std::max(0.0f, hotspot), 2.2f);
-
-            const float base_glare = pressed_ ? 0.08f : (hovered_ ? 0.18f : 0.12f);
-            float glare_mix = base_glare + highlight_curve * (hovered_ ? 0.42f : 0.32f) + hotspot * 0.55f;
-            glare_mix = std::clamp(glare_mix, 0.0f, 0.85f);
-
-            float glow_mix = std::clamp(highlight_curve * 0.5f + hotspot * 0.7f, 0.0f, 1.0f);
-            glow_mix *= pressed_ ? 0.20f : (hovered_ ? 0.45f : 0.35f);
-
-            const SDL_Color hi_col   = glass_style_.highlight_color;
-            const SDL_Color glow_col = glass_style_.highlight_glow_color;
-
-            out.r = lerp8(out.r, hi_col.r, glare_mix);
-            out.g = lerp8(out.g, hi_col.g, glare_mix);
-            out.b = lerp8(out.b, hi_col.b, glare_mix);
-
-            if (glow_mix > 0.0f) {
-                out.r = lerp8(out.r, glow_col.r, glow_mix);
-                out.g = lerp8(out.g, glow_col.g, glow_mix);
-                out.b = lerp8(out.b, glow_col.b, glow_mix);
-            }
-
-            const float lift = pressed_ ? 0.04f : (hovered_ ? 0.10f : 0.07f);
-            out.r = lerp8(out.r, 255, lift);
-            out.g = lerp8(out.g, 255, lift);
-            out.b = lerp8(out.b, 255, lift);
-
-            const float transparency = pressed_ ? 0.70f : (hovered_ ? 0.74f : 0.68f);
-            out.a = clamp8(static_cast<int>(std::round(cov * 255.0f * transparency)));
-
-            Lacc += luminance(out);
+            Lacc += luminance(final_col);
             ++Lcount;
 
             dst[y * dpitch + x] = pack(fmt, out);
@@ -442,8 +762,12 @@ void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     SDL_UnlockSurface(bg.get());
     SDL_UnlockSurface(comp.get());
 
-    if (Lcount > 0) { glass_luminance_ = static_cast<float>(Lacc / Lcount); glass_has_luminance_ = true; }
-    else            { glass_has_luminance_ = false; }
+    if (Lcount > 0) {
+        glass_luminance_ = static_cast<float>(Lacc / static_cast<double>(Lcount));
+        glass_has_luminance_ = true;
+    } else {
+        glass_has_luminance_ = false;
+    }
 
     SDL_Texture* tex = to_texture(renderer, comp.get());
     if (!tex) return;
