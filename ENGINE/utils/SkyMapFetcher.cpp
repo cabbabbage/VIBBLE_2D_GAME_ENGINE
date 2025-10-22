@@ -49,7 +49,7 @@ inline int clamp_int(int value, int min_value, int max_value) {
 // pick a conservative default (0.0 means no additional smoothing).
 // Provide fallback defaults for contrast and hash strength as well so code
 // that compares cached metadata against these constants compiles correctly.
-static constexpr double kSkyContrastFactor = 1.0;
+static constexpr double kSkyContrastFactor = 2.0;
 static constexpr double kSkyHashStrength = 0.0;
 static constexpr double kSkyLineSmoothStrength = 0.0;
 
@@ -139,10 +139,9 @@ void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
         const float b = static_cast<float>(overlay_pixels[idx + 2]) / 255.0f;
         const float a = static_cast<float>(overlay_pixels[idx + 3]) / 255.0f;
 
-        const float luminance = clamp01(0.2126f * r + 0.7152f * g + 0.0722f * b);
-        // Reduce how strongly the inverted overlay suppresses the base sky map so the
-        // underlying light texture remains clearly visible.
-        constexpr float overlay_strength = 0.45f;
+        const float luminance = 1.0f - clamp01(0.2126f * r + 0.7152f * g + 0.0722f * b);
+        // Fully invert the overlay luminance so bright overlay pixels produce full opacity.
+        constexpr float overlay_strength = 0.50f;
         float overlay_alpha = clamp01(a * luminance * overlay_strength);
 
         if (overlay_alpha <= 0.0f) {
@@ -260,23 +259,36 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
     blend_overlay_texture(base_pixels, merged, width, height);
 }
 
+// Push the sky texture to an extreme black/white mask so any downstream blur
+// works from high-contrast input. Every pixel becomes either fully black or
+// fully white based on its luminance.
 void apply_harsh_contrast(std::vector<unsigned char>& pixels, int width, int height) {
     if (width <= 0 || height <= 0 || pixels.empty()) {
         return;
     }
 
-    constexpr float contrast_factor = 1.5f;
-    constexpr float brightness_offset = 0.04f;
+    constexpr float contrast_factor = 2.2f;
+    constexpr float brightness_offset = 0.05f;
     constexpr float midpoint = 0.5f;
+    constexpr float binary_threshold = 0.5f;
 
     const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
     for (size_t i = 0; i < total_pixels; ++i) {
         const size_t idx = i * 4;
+
+        const float r = static_cast<float>(pixels[idx + 0]) / 255.0f;
+        const float g = static_cast<float>(pixels[idx + 1]) / 255.0f;
+        const float b = static_cast<float>(pixels[idx + 2]) / 255.0f;
+
+        float luminance = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+        luminance = (luminance - midpoint) * contrast_factor + midpoint;
+        luminance = clamp01(luminance + brightness_offset);
+
+        const float binary_value = (luminance >= binary_threshold) ? 1.0f : 0.0f;
+        const unsigned char channel_value = static_cast<unsigned char>(binary_value * 255.0f);
+
         for (int channel = 0; channel < 3; ++channel) {
-            float value = static_cast<float>(pixels[idx + channel]) / 255.0f;
-            value = (value - midpoint) * contrast_factor + midpoint;
-            value = clamp01(value + brightness_offset);
-            pixels[idx + channel] = static_cast<unsigned char>(std::round(value * 255.0f));
+            pixels[idx + channel] = channel_value;
         }
     }
 }
