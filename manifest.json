@@ -13996,30 +13996,6 @@
               "radius": 349,
               "resolution": 2,
               "spawn_id": "spn-dbc1671870c3"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Big_Rock"
-                }
-              ],
-              "display_name": "Big_Rock",
-              "dx": -143,
-              "dy": -503,
-              "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 1959,
-              "origional_width": 2034,
-              "position": "Exact",
-              "priority": 2,
-              "resolution": 5,
-              "spawn_id": "spn-4e301c5e26b7"
             }
           ],
           "tags": {

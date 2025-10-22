@@ -134,16 +134,7 @@ void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
     for (size_t i = 0; i < total_pixels; ++i) {
         const size_t idx = i * 4;
 
-        const float r = static_cast<float>(overlay_pixels[idx + 0]) / 255.0f;
-        const float g = static_cast<float>(overlay_pixels[idx + 1]) / 255.0f;
-        const float b = static_cast<float>(overlay_pixels[idx + 2]) / 255.0f;
-        const float a = static_cast<float>(overlay_pixels[idx + 3]) / 255.0f;
-
-        const float luminance = 1.0f - clamp01(0.2126f * r + 0.7152f * g + 0.0722f * b);
-        // Fully invert the overlay luminance so bright overlay pixels produce full opacity.
-        constexpr float overlay_strength = 0.50f;
-        float overlay_alpha = clamp01(a * luminance * overlay_strength);
-
+        const float overlay_alpha = clamp01(static_cast<float>(overlay_pixels[idx + 3]) / 255.0f);
         if (overlay_alpha <= 0.0f) {
             continue;
         }
@@ -151,8 +142,23 @@ void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
         for (int channel = 0; channel < 3; ++channel) {
             const float overlay_c = static_cast<float>(overlay_pixels[idx + channel]) / 255.0f;
             const float base_c = static_cast<float>(base_pixels[idx + channel]) / 255.0f;
-            const float blended = clamp01(base_c * (1.0f - overlay_alpha) + overlay_c * overlay_alpha);
+            const float equal_merge = clamp01((base_c + overlay_c) * 0.5f);
+            const float blended = clamp01(base_c * (1.0f - overlay_alpha) + equal_merge * overlay_alpha);
             base_pixels[idx + channel] = static_cast<unsigned char>(std::round(blended * 255.0f));
+        }
+    }
+}
+
+void apply_full_contrast_rgb(std::vector<unsigned char>& pixels) {
+    if (pixels.empty()) {
+        return;
+    }
+
+    const size_t total_pixels = pixels.size() / 4;
+    for (size_t i = 0; i < total_pixels; ++i) {
+        const size_t idx = i * 4;
+        for (int channel = 0; channel < 3; ++channel) {
+            pixels[idx + channel] = (pixels[idx + channel] >= 128) ? 255 : 0;
         }
     }
 }
@@ -247,6 +253,8 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
     } else {
         merged = std::move(overlay_americana);
     }
+
+    apply_full_contrast_rgb(merged);
 
     const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
     for (size_t i = 0; i < total_pixels; ++i) {
