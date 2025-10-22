@@ -13878,7 +13878,7 @@
           "max_opacity": 154,
           "min_opacity": 68
         },
-        "update_interval": 10
+        "update_interval": 1
       },
       "map_name": "FORREST",
       "reactive_shadows": {
