@@ -24,7 +24,8 @@ public:
     ~MapShadowPanel() override;
 
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
-    void set_reactive_settings(ReactiveShadowSettings* settings);
+    void set_reactive_settings(std::function<ReactiveShadowSettings*()> accessor);
+    void clear_reactive_settings();
 
     void open();
     void close();
@@ -60,7 +61,7 @@ private:
     SaveCallback on_save_{};
     ReactiveShadowSettings current_settings_{};
     ReactiveShadowSettings last_applied_settings_{};
-    ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
+    std::function<ReactiveShadowSettings*()> reactive_settings_accessor_{};
     bool applying_ui_ = false;
     bool pending_save_ = false;
     bool initialized_ = false;

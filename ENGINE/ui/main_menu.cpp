@@ -76,14 +76,8 @@ void MainMenu::buildButtons() {
         int y = (screen_h_ / 2) - 140;
         const int x = (screen_w_ - btn_w) / 2;
         auto configure_button = [](Button& button) {
-                const bool is_non_dev_mode = true;
-                const bool is_main_menu_screen = true;
-                if (is_non_dev_mode && is_main_menu_screen) {
-                        button.set_glass_style(Button::default_glass_style());
-                        button.enable_glass_style(true);
-                } else {
-                        button.enable_glass_style(false);
-                }
+                button.set_glass_style(Button::default_glass_style());
+                button.enable_glass_style(true);
         };
         if (maps_json_ && maps_json_->is_object()) {
                 for (auto it = maps_json_->cbegin(); it != maps_json_->cend(); ++it) {

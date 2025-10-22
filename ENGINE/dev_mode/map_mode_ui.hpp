@@ -64,6 +64,8 @@ public:
     void open_shading_panel();
     void close_shading_panel();
     void toggle_shading_panel();
+    void refresh_reactive_shadow_settings();
+    void clear_reactive_shadow_settings();
     void open_grid_panel();
     void close_grid_panel();
     void toggle_grid_panel();

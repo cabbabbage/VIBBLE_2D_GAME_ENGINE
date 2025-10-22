@@ -93,11 +93,14 @@ void MapShadowPanel::set_map_info(nlohmann::json* map_info, SaveCallback on_save
     initialized_ = true;
 }
 
-void MapShadowPanel::set_reactive_settings(ReactiveShadowSettings* settings) {
-    reactive_settings_shared_ = settings;
+void MapShadowPanel::set_reactive_settings(std::function<ReactiveShadowSettings*()> accessor) {
+    reactive_settings_accessor_ = std::move(accessor);
+
+    ReactiveShadowSettings* settings = reactive_settings_accessor_ ? reactive_settings_accessor_() : nullptr;
     if (!settings) {
         return;
     }
+
     if (!initialized_) {
         current_settings_      = render_pipeline::shading::sanitize_reactive_shadow_settings(*settings);
         last_applied_settings_ = current_settings_;
@@ -106,6 +109,10 @@ void MapShadowPanel::set_reactive_settings(ReactiveShadowSettings* settings) {
     } else {
         apply_settings(current_settings_, false);
     }
+}
+
+void MapShadowPanel::clear_reactive_settings() {
+    reactive_settings_accessor_ = {};
 }
 
 void MapShadowPanel::open() {
@@ -357,8 +364,10 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::load_settings() const {
         }
     }
 
-    if (reactive_settings_shared_) {
-        return sanitize_reactive_shadow_settings(*reactive_settings_shared_);
+    if (reactive_settings_accessor_) {
+        if (ReactiveShadowSettings* shared = reactive_settings_accessor_()) {
+            return sanitize_reactive_shadow_settings(*shared);
+        }
     }
 
     return fallback;
@@ -367,9 +376,12 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::load_settings() const {
 void MapShadowPanel::apply_settings(const ReactiveShadowSettings& settings, bool persist) {
     last_applied_settings_ = settings;
 
-    if (reactive_settings_shared_) {
-        *reactive_settings_shared_ = settings;
+    ReactiveShadowSettings* shared = reactive_settings_accessor_ ? reactive_settings_accessor_() : nullptr;
+    if (!shared) {
+        return;
     }
+
+    *shared = settings;
 
     if (map_info_) {
         if (nlohmann::json* json = ensure_reactive_shadow_json()) {

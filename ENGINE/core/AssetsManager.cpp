@@ -146,6 +146,7 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                               screen_height_,
                               map_info_json_,
                               map_id_);
+    notify_reactive_shadow_settings_available();
     apply_map_light_config();
     apply_map_grid_settings(map_grid_settings_, false);
     for (Asset* a : all) {
@@ -403,7 +404,9 @@ bool Assets::on_map_light_changed() {
 }
 
 Assets::~Assets() {
+    notify_reactive_shadow_settings_about_to_change();
     delete scene;
+    scene = nullptr;
     delete finder_;
     delete dev_controls_;
 }
@@ -500,6 +503,8 @@ void Assets::ensure_dev_controls() {
     dev_mode_trace("[Assets] Dev Controls -> set_map_context");
     dev_controls_->set_map_context(&map_info_json_, map_path_);
     dev_mode_trace("[Assets] Dev Controls wiring complete");
+
+    dev_controls_->refresh_reactive_shadow_settings();
 }
 
 void Assets::set_input(Input* m) {
@@ -911,6 +916,18 @@ void Assets::notify_light_map_asset_moved(const Asset* asset) {
 void Assets::notify_light_map_static_assets_changed() {
     if (LightMap* map = light_map()) {
         map->mark_static_cache_dirty();
+    }
+}
+
+void Assets::notify_reactive_shadow_settings_about_to_change() {
+    if (dev_controls_) {
+        dev_controls_->clear_reactive_shadow_settings();
+    }
+}
+
+void Assets::notify_reactive_shadow_settings_available() {
+    if (dev_controls_) {
+        dev_controls_->refresh_reactive_shadow_settings();
     }
 }
 

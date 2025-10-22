@@ -374,7 +374,9 @@ void MapModeUI::ensure_panels() {
         track_floating_panel(shadow_panel_.get());
     }
     if (shadow_panel_) {
-        shadow_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+        shadow_panel_->set_reactive_settings([this]() -> MapShadowPanel::ReactiveShadowSettings* {
+            return assets_ ? assets_->reactive_shadow_settings() : nullptr;
+        });
     }
     if (!preview_panel_) {
         preview_panel_ = std::make_unique<MapLightPreviewPanel>(assets_, kDefaultPanelX + 520, kDefaultPanelY);
@@ -688,7 +690,9 @@ void MapModeUI::sync_panel_map_info() {
         light_panel_->set_map_info(map_info_, callback);
     }
     if (shadow_panel_) {
-        shadow_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+        shadow_panel_->set_reactive_settings([this]() -> MapShadowPanel::ReactiveShadowSettings* {
+            return assets_ ? assets_->reactive_shadow_settings() : nullptr;
+        });
         LightSaveCallback callback = light_save_callback_;
         if (!callback) {
             callback = [this]() { return save_map_info_to_disk(); };
@@ -1006,6 +1010,34 @@ void MapModeUI::toggle_shading_panel() {
         return;
     }
     open_shading_panel();
+}
+
+void MapModeUI::refresh_reactive_shadow_settings() {
+    ensure_panels();
+    if (light_panel_) {
+        light_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+    }
+    if (shadow_panel_) {
+        shadow_panel_->set_reactive_settings([this]() -> MapShadowPanel::ReactiveShadowSettings* {
+            return assets_ ? assets_->reactive_shadow_settings() : nullptr;
+        });
+    }
+    if (preview_panel_) {
+        preview_panel_->set_assets(assets_);
+        preview_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+    }
+}
+
+void MapModeUI::clear_reactive_shadow_settings() {
+    if (light_panel_) {
+        light_panel_->set_reactive_settings(nullptr);
+    }
+    if (shadow_panel_) {
+        shadow_panel_->clear_reactive_settings();
+    }
+    if (preview_panel_) {
+        preview_panel_->set_reactive_settings(nullptr);
+    }
 }
 
 void MapModeUI::open_grid_panel() {

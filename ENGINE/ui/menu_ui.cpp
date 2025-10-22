@@ -156,14 +156,8 @@ void MenuUI::rebuildButtons() {
         const int x = (screen_w_ - btn_w) / 2;
         auto addButton = [&](const std::string& label, MenuAction action, bool is_exit=false) {
                 Button b = is_exit ? Button::get_exit_button(label) : Button::get_main_button(label);
-                const bool is_non_dev_mode = !dev_mode_;
-                const bool is_pause_menu_screen = true;
-                if (is_non_dev_mode && is_pause_menu_screen) {
-                        b.set_glass_style(Button::default_glass_style());
-                        b.enable_glass_style(true);
-                } else {
-                        b.enable_glass_style(false);
-                }
+                b.set_glass_style(Button::default_glass_style());
+                b.enable_glass_style(true);
                 b.set_rect(SDL_Rect{ x, start_y, btn_w, btn_h });
                 start_y += btn_h + gap;
                 buttons_.push_back(MenuButton{ std::move(b), action });
