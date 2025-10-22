@@ -417,5 +417,3 @@ void MapShadowPanel::apply_immediate_settings(bool force_refresh) {
         }
     }
 }
-
-*** End of File
