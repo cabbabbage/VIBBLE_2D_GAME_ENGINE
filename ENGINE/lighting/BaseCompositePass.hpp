@@ -2,13 +2,14 @@
 
 #include <SDL.h>
 
+#include "lighting/PreloadInputs.hpp"
+
 #include <string>
+#include <vector>
 
 class PreviewViewport;
 
 namespace lighting {
-
-class PreloadInputs;
 
 class BaseCompositePass {
 public:
