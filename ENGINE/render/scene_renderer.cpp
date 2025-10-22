@@ -221,6 +221,7 @@ bool SceneRenderer::initialize_static_light_chunks() {
 void SceneRenderer::set_low_quality_rendering(bool enabled){
     if (low_quality_rendering_==enabled) return;
     low_quality_rendering_=enabled;
+    render_pipeline_.set_low_quality_mode(enabled);
 }
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data){

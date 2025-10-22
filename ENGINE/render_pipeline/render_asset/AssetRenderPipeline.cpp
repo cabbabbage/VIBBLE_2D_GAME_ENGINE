@@ -145,9 +145,9 @@ AssetRenderPipeline::AssetRenderPipeline(SDL_Renderer* renderer, const SceneLigh
     using render_pipeline::shading::RenderCastShadow;
     using render_pipeline::shading::RenderShadowMask;
 
-    stages_.push_back(StageEntry{ std::make_unique<RenderAsset>(), SDL_BLENDMODE_BLEND, false });
-    stages_.push_back(StageEntry{ std::make_unique<RenderCastShadow>(), SDL_BLENDMODE_BLEND, false });
-    stages_.push_back(StageEntry{ std::make_unique<RenderShadowMask>(), SDL_BLENDMODE_BLEND, true });
+    stages_.push_back(StageEntry{ std::make_unique<RenderAsset>(), SDL_BLENDMODE_BLEND, false, false });
+    stages_.push_back(StageEntry{ std::make_unique<RenderCastShadow>(), SDL_BLENDMODE_BLEND, false, true });
+    stages_.push_back(StageEntry{ std::make_unique<RenderShadowMask>(), SDL_BLENDMODE_BLEND, true, true });
 }
 
 SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
@@ -175,7 +175,8 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
     SDL_Texture* previous_final       = asset.get_final_texture();
     SDL_Texture* previous_final_copy  = nullptr;
     const float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f);
-    if (previous_final && clamped_blur_strength > 0.0f) {
+    const bool   apply_motion_blur     = previous_final && clamped_blur_strength > 0.0f && !low_quality_mode_;
+    if (apply_motion_blur) {
         int    prev_w      = 0;
         int    prev_h      = 0;
         Uint32 prev_format = SDL_PIXELFORMAT_UNKNOWN;
@@ -234,7 +235,7 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
     context.width        = width;
     context.height       = height;
     context.reusable_final = asset.get_final_texture();
-    context.reactive_shadow_settings_override = lighting_.reactive_shadow_settings;
+    context.reactive_shadow_settings_override = low_quality_mode_ ? nullptr : lighting_.reactive_shadow_settings;
     if (renderer_) {
         SDL_GetRendererOutputSize(renderer_, &context.screen_width_px, &context.screen_height_px);
     }
@@ -262,6 +263,9 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
     for (std::size_t i = 1; i < stages_.size(); ++i) {
         StageEntry& entry = stages_[i];
         if (!entry.stage || !entry.stage->supports(asset)) {
+            continue;
+        }
+        if (low_quality_mode_ && entry.skip_in_low_quality) {
             continue;
         }
         context.final_texture = final_texture;
@@ -313,6 +317,10 @@ SDL_Texture* AssetRenderPipeline::texture_for_scale(Asset* asset,
                                                     int target_w,
                                                     int target_h) {
     return render_asset_.texture_for_scale(asset, base_tex, base_w, base_h, target_w, target_h);
+}
+
+void AssetRenderPipeline::set_low_quality_mode(bool enable) {
+    low_quality_mode_ = enable;
 }
 
 SceneLighting& AssetRenderPipeline::lighting() {

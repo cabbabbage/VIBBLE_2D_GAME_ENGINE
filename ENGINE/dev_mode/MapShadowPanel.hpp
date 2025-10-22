@@ -47,7 +47,7 @@ private:
     void build_ui();
     void rebuild_ui();
     void sync_ui_from_settings(const ReactiveShadowSettings& settings);
-    ReactiveShadowSettings settings_from_ui() const;
+    ReactiveShadowSettings settings_from_ui();
     ReactiveShadowSettings load_settings() const;
     void apply_settings(const ReactiveShadowSettings& settings, bool persist);
     void select_entry(int index);

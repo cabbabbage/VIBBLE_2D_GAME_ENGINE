@@ -13718,7 +13718,7 @@
         "parallax_strength": 28.0,
         "realism_enabled": true,
         "render_distance": 1340.0,
-        "render_quality_percent": 75,
+        "render_quality_percent": 10,
         "tripod_distance_y": -495.0
       },
       "content_root": "MAPS/FORREST",
@@ -13888,7 +13888,7 @@
           }
         ],
         "virtual_light_map": {
-          "horizontal_falloff": 1.6200000047683716,
+          "horizontal_falloff": 2.4700000286102295,
           "max_offset_x": 100.0,
           "max_offset_y": 100.0,
           "search_radius": 2,

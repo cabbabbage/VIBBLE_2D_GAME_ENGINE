@@ -348,7 +348,7 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
     applying_ui_ = false;
 }
 
-MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() const {
+MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
     ReactiveShadowSettings settings = current_settings_;
 
     settings.virtual_light_map.horizontal_falloff = read_scaled_slider(horizontal_falloff_, 100, settings.virtual_light_map.horizontal_falloff);
@@ -509,4 +509,3 @@ float MapShadowPanel::read_scaled_slider(const std::unique_ptr<DMSlider>& slider
     return static_cast<float>(value) / static_cast<float>(scale);
 }
 
-*** End of File

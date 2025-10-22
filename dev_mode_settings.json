@@ -20,7 +20,7 @@
             "map_panel": {
                 "reactive": {
                     "virtual_light_map": {
-                        "horizontal_falloff": 1.6200000047683716,
+                        "horizontal_falloff": 2.4700000286102295,
                         "max_offset_x": 100.0,
                         "max_offset_y": 100.0,
                         "search_radius": 2.0,
@@ -29,7 +29,7 @@
                         "vertical_falloff": 3.5
                     }
                 },
-                "update_map_light": false
+                "update_map_light": true
             }
         },
         "lock": {
