@@ -19,6 +19,7 @@
 #include <random>
 #include <system_error>
 #include <cstdint>
+#include <utility>
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -37,41 +38,9 @@ using json = nlohmann::json;
 
 namespace {
 
-struct LensFlareSettings {
-    float center_ratio_x;
-    float center_ratio_y;
-    float glow_radius_ratio;
-    float glow_strength;
-    int ring_count;
-    float ring_spacing_ratio;
-    float ring_sharpness;
-    float ring_strength;
-    std::array<float, 4> streak_angles_deg;
-    float streak_length_ratio;
-    float streak_sharpness;
-    float streak_strength;
-    std::array<float, 3> warm_tint;
-    float highlight_cap;
-    float lighten_factor;
-    float tint_factor;
-};
-
-constexpr float kSkyContrastFactor = 2.6f;
-
-constexpr float kPi = 3.14159265358979323846f;
-
-const LensFlareSettings kSkyLensFlare{
-    0.78f, 0.28f,       // center ratios (unchanged)
-    0.08f, 0.25f,        // glow radius ratio, glow strength (tiny, very dim)
-    2,                   // ring count (minimal)
-    0.35f, 0.05f, 0.12f, // ring spacing ratio, sharpness, strength (barely visible)
-    {0.0f, 35.0f, 80.0f, 125.0f}, // streak angles (kept same)
-    0.4f, 0.01f, 0.08f,  // streak length ratio, sharpness, strength (very faint)
-    {0.92f, 0.9f, 0.88f}, // near-neutral tint (barely warm)
-    0.6f, 0.1f, 0.1f      // highlight cap, lighten factor, tint factor (almost off)
-};
-
-
+constexpr float kSkyContrastFactor = 1.9f;
+constexpr float kSkyHashStrength = 0.35f;
+constexpr float kSkyLineSmoothStrength = 0.45f;
 
 inline float clamp01(float value) {
     return std::clamp(value, 0.0f, 1.0f);
@@ -79,6 +48,10 @@ inline float clamp01(float value) {
 
 inline int clamp_int(int value, int min_value, int max_value) {
     return std::min(std::max(value, min_value), max_value);
+}
+
+inline float lerp(float a, float b, float t) {
+    return a + (b - a) * t;
 }
 
 struct ImageData {
@@ -254,79 +227,12 @@ void apply_heavy_contrast(std::vector<unsigned char>& pixels, int width, int hei
     }
 }
 
-void apply_lens_flare(std::vector<unsigned char>& pixels,
-                      int width,
-                      int height,
-                      const LensFlareSettings& settings) {
+void apply_hash_black_white(std::vector<unsigned char>& pixels, int width, int height, float blend_strength) {
     if (width <= 0 || height <= 0 || pixels.empty()) {
         return;
     }
 
-    const float cx = settings.center_ratio_x * static_cast<float>(std::max(1, width - 1));
-    const float cy = settings.center_ratio_y * static_cast<float>(std::max(1, height - 1));
-    const float max_dim = static_cast<float>(std::max(width, height));
-    const float glow_radius = std::max(1.0f, settings.glow_radius_ratio * max_dim);
-    const float ring_spacing = std::max(1.0f, settings.ring_spacing_ratio * glow_radius);
-    const float ring_width = std::max(1.0f, settings.ring_sharpness * ring_spacing);
-    const float streak_length_norm = std::max(1e-3f, settings.streak_length_ratio);
-    const float streak_sharpness_norm = std::max(1e-3f, settings.streak_sharpness);
-
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const size_t idx = static_cast<size_t>(y) * static_cast<size_t>(width) * 4 + static_cast<size_t>(x) * 4;
-            const float dx = static_cast<float>(x) - cx;
-            const float dy = static_cast<float>(y) - cy;
-            const float dist = std::sqrt(dx * dx + dy * dy);
-
-            const float glow = std::exp(-(dist * dist) / (2.0f * glow_radius * glow_radius)) * settings.glow_strength;
-
-            float ring_sum = 0.0f;
-            for (int r = 1; r <= settings.ring_count; ++r) {
-                const float target = ring_spacing * static_cast<float>(r);
-                const float delta = std::abs(dist - target);
-                ring_sum += std::exp(-(delta * delta) / (2.0f * ring_width * ring_width))
-                            * (static_cast<float>(settings.ring_count - r + 1) / static_cast<float>(settings.ring_count));
-            }
-            ring_sum *= settings.ring_strength;
-
-            float streak_sum = 0.0f;
-            for (float angle_deg : settings.streak_angles_deg) {
-                const float radians = angle_deg * kPi / 180.0f;
-                const float ux = std::cos(radians);
-                const float uy = std::sin(radians);
-                const float along = (dx * ux + dy * uy) / (max_dim * streak_length_norm);
-                const float across = (dx * uy - dy * ux) / (max_dim * streak_sharpness_norm);
-                const float streak = std::exp(-across * across) * std::exp(-std::abs(along));
-                streak_sum += streak;
-            }
-            streak_sum *= settings.streak_strength;
-
-            const float highlight = std::min(settings.highlight_cap, glow + ring_sum + streak_sum);
-            if (highlight <= 0.0f) {
-                continue;
-            }
-
-            for (int channel = 0; channel < 3; ++channel) {
-                float base = static_cast<float>(pixels[idx + channel]) / 255.0f;
-                base *= 1.0f + highlight * settings.lighten_factor;
-                base += settings.warm_tint[channel] * highlight * settings.tint_factor;
-                base = clamp01(base);
-                pixels[idx + channel] = static_cast<unsigned char>(std::round(base * 255.0f));
-            }
-
-            if (pixels[idx + 3] < 255) {
-                const float alpha_boost = clamp01(static_cast<float>(pixels[idx + 3]) / 255.0f + highlight * 0.1f);
-                pixels[idx + 3] = static_cast<unsigned char>(std::round(alpha_boost * 255.0f));
-            }
-        }
-    }
-}
-
-void apply_hash_black_white(std::vector<unsigned char>& pixels, int width, int height) {
-    if (width <= 0 || height <= 0 || pixels.empty()) {
-        return;
-    }
-
+    const float blend = clamp01(blend_strength);
     const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
     for (size_t i = 0; i < total_pixels; ++i) {
         const int x = static_cast<int>(i % static_cast<size_t>(width));
@@ -341,60 +247,68 @@ void apply_hash_black_white(std::vector<unsigned char>& pixels, int width, int h
         const uint32_t hash = static_cast<uint32_t>(x) * 73856093u
                             ^ static_cast<uint32_t>(y) * 19349663u;
         const float threshold = static_cast<float>(hash & 0x3FFu) / 1023.0f;
-        const unsigned char bw = luma > threshold ? 255 : 0;
+        const float bw = luma > threshold ? 1.0f : 0.0f;
+        const float mixed = clamp01(lerp(luma, bw, blend));
+        const unsigned char bw_byte = static_cast<unsigned char>(std::round(mixed * 255.0f));
 
-        pixels[idx] = bw;
-        pixels[idx + 1] = bw;
-        pixels[idx + 2] = bw;
+        pixels[idx] = bw_byte;
+        pixels[idx + 1] = bw_byte;
+        pixels[idx + 2] = bw_byte;
     }
 }
 
-void apply_slight_blur(std::vector<unsigned char>& pixels, int width, int height) {
+void apply_line_smoothing(std::vector<unsigned char>& pixels, int width, int height, float smoothing_strength) {
     if (width <= 0 || height <= 0 || pixels.empty()) {
         return;
     }
 
-    const std::array<int, 9> kernel = {1, 2, 1,
-                                       2, 4, 2,
-                                       1, 2, 1};
-    constexpr int kernel_sum = 16;
+    const float strength = clamp01(smoothing_strength);
+    if (strength <= 0.0f) {
+        return;
+    }
+
+    const std::array<std::pair<int, int>, 4> offsets = {
+        std::pair<int, int>{1, 0},
+        std::pair<int, int>{-1, 0},
+        std::pair<int, int>{0, 1},
+        std::pair<int, int>{0, -1}
+    };
 
     std::vector<unsigned char> original = pixels;
-
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
-            int accum_r = 0;
-            int accum_g = 0;
-            int accum_b = 0;
-            int k = 0;
+            const size_t idx = (static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)) * 4;
+            const float base = static_cast<float>(original[idx]);
 
-            for (int ky = -1; ky <= 1; ++ky) {
-                const int ny = std::clamp(y + ky, 0, height - 1);
-                for (int kx = -1; kx <= 1; ++kx) {
-                    const int nx = std::clamp(x + kx, 0, width - 1);
-                    const size_t nidx = (static_cast<size_t>(ny) * static_cast<size_t>(width) + static_cast<size_t>(nx)) * 4;
-                    const int weight = kernel[k++];
-                    accum_r += static_cast<int>(original[nidx]) * weight;
-                    accum_g += static_cast<int>(original[nidx + 1]) * weight;
-                    accum_b += static_cast<int>(original[nidx + 2]) * weight;
+            float accum = base;
+            float weight = 1.0f;
+
+            for (const auto& [ox, oy] : offsets) {
+                const int nx = clamp_int(x + ox, 0, width - 1);
+                const int ny = clamp_int(y + oy, 0, height - 1);
+                const size_t nidx = (static_cast<size_t>(ny) * static_cast<size_t>(width) + static_cast<size_t>(nx)) * 4;
+                const float neighbor = static_cast<float>(original[nidx]);
+                if (std::abs(neighbor - base) <= 80.0f) {
+                    accum += neighbor;
+                    weight += 1.0f;
                 }
             }
 
-            const size_t idx = (static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)) * 4;
-            pixels[idx] = static_cast<unsigned char>(accum_r / kernel_sum);
-            pixels[idx + 1] = static_cast<unsigned char>(accum_g / kernel_sum);
-            pixels[idx + 2] = static_cast<unsigned char>(accum_b / kernel_sum);
-            // Preserve alpha channel from original to avoid halo artifacts.
-            pixels[idx + 3] = original[idx + 3];
+            const float averaged = accum / weight;
+            const float smoothed = clamp01(lerp(base, averaged, strength) / 255.0f) * 255.0f;
+            const unsigned char final_value = static_cast<unsigned char>(std::round(smoothed));
+
+            pixels[idx] = final_value;
+            pixels[idx + 1] = final_value;
+            pixels[idx + 2] = final_value;
         }
     }
 }
 
 void apply_sky_map_post_fx(std::vector<unsigned char>& pixels, int width, int height) {
     apply_heavy_contrast(pixels, width, height, kSkyContrastFactor);
-    apply_lens_flare(pixels, width, height, kSkyLensFlare);
-    apply_hash_black_white(pixels, width, height);
-    apply_slight_blur(pixels, width, height);
+    apply_hash_black_white(pixels, width, height, kSkyHashStrength);
+    apply_line_smoothing(pixels, width, height, kSkyLineSmoothStrength);
 }
 
 } // namespace
@@ -699,11 +613,15 @@ SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& ou
                     if (age >= 0 && std::chrono::seconds(age) <= max_age) {
                         bool allow_reuse = true;
                         const double cached_contrast = meta_json.value("contrast_factor", 0.0);
-                        if (cached_contrast + 1e-3 < static_cast<double>(kSkyContrastFactor)) {
+                        if (std::abs(cached_contrast - static_cast<double>(kSkyContrastFactor)) > 1e-3) {
                             allow_reuse = false;
                         }
-                        auto flare_it = meta_json.find("lens_flare");
-                        if (flare_it == meta_json.end() || !flare_it->is_object()) {
+                        const double cached_hash = meta_json.value("hash_strength", -1.0);
+                        if (std::abs(cached_hash - static_cast<double>(kSkyHashStrength)) > 1e-3) {
+                            allow_reuse = false;
+                        }
+                        const double cached_smoothing = meta_json.value("line_smoothing_strength", -1.0);
+                        if (std::abs(cached_smoothing - static_cast<double>(kSkyLineSmoothStrength)) > 1e-3) {
                             allow_reuse = false;
                         }
                         if (allow_reuse) {
@@ -712,12 +630,12 @@ SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& ou
                             res.reused_cached = true;
                             res.message = "Reused cached sky map";
                             res.latitude_deg = meta_json.value("latitude_deg", 0.0);
-                        res.longitude_deg = meta_json.value("longitude_deg", 0.0);
-                        res.ra_deg = meta_json.value("ra_deg", 0.0);
-                        res.dec_deg = meta_json.value("dec_deg", 0.0);
-                        res.fetched_jpeg_url = meta_json.value("fetched_jpeg_url", std::string());
-                        res.saved_png_path = fs::absolute(output_png_path).u8string();
-                        res.created_at_utc = created_utc;
+                            res.longitude_deg = meta_json.value("longitude_deg", 0.0);
+                            res.ra_deg = meta_json.value("ra_deg", 0.0);
+                            res.dec_deg = meta_json.value("dec_deg", 0.0);
+                            res.fetched_jpeg_url = meta_json.value("fetched_jpeg_url", std::string());
+                            res.saved_png_path = fs::absolute(output_png_path).u8string();
+                            res.created_at_utc = created_utc;
                             return res;
                         }
                     }
@@ -771,24 +689,8 @@ SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& ou
     meta_json["fov_deg"] = fov_deg;
     meta_json["post_processed_iso8601"] = iso8601.str();
     meta_json["contrast_factor"] = kSkyContrastFactor;
-
-    json lens_json = json::object();
-    lens_json["center_ratio"] = {kSkyLensFlare.center_ratio_x, kSkyLensFlare.center_ratio_y};
-    lens_json["glow_radius_ratio"] = kSkyLensFlare.glow_radius_ratio;
-    lens_json["glow_strength"] = kSkyLensFlare.glow_strength;
-    lens_json["rings"] = kSkyLensFlare.ring_count;
-    lens_json["ring_spacing_ratio"] = kSkyLensFlare.ring_spacing_ratio;
-    lens_json["ring_sharpness"] = kSkyLensFlare.ring_sharpness;
-    lens_json["ring_strength"] = kSkyLensFlare.ring_strength;
-    lens_json["streak_angles_deg"] = kSkyLensFlare.streak_angles_deg;
-    lens_json["streak_length_ratio"] = kSkyLensFlare.streak_length_ratio;
-    lens_json["streak_sharpness"] = kSkyLensFlare.streak_sharpness;
-    lens_json["streak_strength"] = kSkyLensFlare.streak_strength;
-    lens_json["warm_tint"] = kSkyLensFlare.warm_tint;
-    lens_json["highlight_cap"] = kSkyLensFlare.highlight_cap;
-    lens_json["lighten_factor"] = kSkyLensFlare.lighten_factor;
-    lens_json["tint_factor"] = kSkyLensFlare.tint_factor;
-    meta_json["lens_flare"] = lens_json;
+    meta_json["hash_strength"] = kSkyHashStrength;
+    meta_json["line_smoothing_strength"] = kSkyLineSmoothStrength;
 
     try {
         fs::path meta_parent = metadata_path.parent_path();
