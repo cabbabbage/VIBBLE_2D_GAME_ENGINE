@@ -9,5 +9,36 @@
   "pixels": 3000,
   "png_path": "C:\\Users\\calmi\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\TEMP\\sky_cache\\sky_map.png",
   "ra_deg": 75.8404492725931,
-  "survey": "DSS2 Red"
+  "survey": "DSS2 Red",
+  "post_processed_iso8601": "2025-10-22T10:18:59Z",
+  "contrast_factor": 2.6,
+  "lens_flare": {
+    "center_ratio": [
+      0.78,
+      0.28
+    ],
+    "glow_radius_ratio": 0.34,
+    "glow_strength": 3.6,
+    "rings": 4,
+    "ring_spacing_ratio": 0.48,
+    "ring_sharpness": 0.18,
+    "ring_strength": 1.5,
+    "streak_angles_deg": [
+      0,
+      35,
+      80,
+      125
+    ],
+    "streak_length_ratio": 1.15,
+    "streak_sharpness": 0.032,
+    "streak_strength": 1.45,
+    "warm_tint": [
+      1.0,
+      0.82,
+      0.55
+    ],
+    "highlight_cap": 4.5,
+    "lighten_factor": 0.55,
+    "tint_factor": 0.65
+  }
 }
