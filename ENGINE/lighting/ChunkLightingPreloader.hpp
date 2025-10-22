@@ -6,7 +6,6 @@
 
 #include "lighting/BaseCompositePass.hpp"
 #include "lighting/MinMaxPass.hpp"
-#include "lighting/PreloopGating.hpp"
 #include "lighting/StaticLightMask.hpp"
 
 class Assets;
@@ -48,7 +47,6 @@ private:
     StaticLightMask   mask_pass_;
     BaseCompositePass base_pass_;
     MinMaxPass        minmax_pass_;
-    PreloopGating     gating_;
 };
 
 } // namespace lighting

@@ -4,7 +4,7 @@
 #include "asset/asset_types.hpp"
 #include "world/chunk.hpp"
 #include "lighting/ChunkLightingPreloader.hpp"
-#include "lighting/PreloopGating.hpp"
+#include "lighting/chunk_lighting_state_utils.hpp"
 #include "persistence/LightingCache.hpp"
 #include "render/camera.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
@@ -150,7 +150,6 @@ bool SceneRenderer::initialize_static_light_chunks() {
 
     lighting::LightingCache cache(cache_root);
     lighting::ChunkLightingPreloader preloader(renderer_, assets_, safe_mode ? nullptr : &cache);
-    lighting::PreloopGating          gating;
 
     bool initialized_chunks = false;
     std::vector<world::Chunk*> pending;
@@ -204,7 +203,7 @@ bool SceneRenderer::initialize_static_light_chunks() {
     for (int attempt = 0; attempt < kMaxPreloadPasses && !pending.empty(); ++attempt) {
         preloader.preloadChunks(pending);
         pending.erase(std::remove_if(pending.begin(), pending.end(), [&](world::Chunk* chunk) {
-                            return chunk == nullptr || gating.verifyReady(*chunk);
+                            return chunk == nullptr || lighting::chunk_ready_for_static_preload(*chunk);
                         }),
                         pending.end());
     }

@@ -4,6 +4,7 @@
 #include "core/AssetsManager.hpp"
 #include "dev_mode/PreviewViewport.hpp"
 #include "lighting/PreloadInputs.hpp"
+#include "lighting/chunk_lighting_state_utils.hpp"
 #include "persistence/LightingCache.hpp"
 #include "utils/loading_status_notifier.hpp"
 #include "utils/log.hpp"
@@ -138,13 +139,13 @@ void ChunkLightingPreloader::preloadChunks(const std::vector<world::Chunk*>& chu
         if (!chunk) {
             continue;
         }
-        if (gating_.verifyReady(*chunk)) {
+        if (chunk_ready_for_static_preload(*chunk)) {
             continue;
         }
         std::string status = "Lighting chunk " + std::to_string(index) + "/" + std::to_string(total);
         loading_status::notify(status);
         if (!processChunk(*chunk, mask_preview, base_preview, minmax_preview)) {
-            gating_.tryRetry(*chunk);
+            reset_chunk_retry_flags(*chunk);
         }
     }
 }
