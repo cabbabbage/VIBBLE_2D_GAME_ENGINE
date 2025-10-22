@@ -70,23 +70,7 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 }
         }
         info.scale_variants = profile.steps;
-        if (info.scale_variants.empty()) {
-                const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
-                info.scale_variants.assign(defaults.begin(), defaults.end());
-                std::cout << "[AnimationLoader] " << info.name
-                          << " falling back to default scaling steps: "
-                          << format_steps(info.scale_variants) << "\n";
-        }
-        if (info.scale_variants.empty()) {
-                info.scale_variants.push_back(1.0f);
-        }
-        std::sort(info.scale_variants.begin(), info.scale_variants.end(), std::greater<float>());
-        info.scale_variants.erase(std::unique(info.scale_variants.begin(), info.scale_variants.end(), [](float a, float b) {
-                return std::fabs(a - b) <= 1e-4f;
-        }), info.scale_variants.end());
-        if (std::fabs(info.scale_variants.front() - 1.0f) > 1e-4f) {
-                info.scale_variants.insert(info.scale_variants.begin(), 1.0f);
-        }
+        render_pipeline::ScalingLogic::NormalizeVariantSteps(info.scale_variants);
         std::cout << "[AnimationLoader] " << info.name
                   << " normalized asset scaling steps: " << format_steps(info.scale_variants)
                   << " (profile revision " << profile.revision << ")\n";

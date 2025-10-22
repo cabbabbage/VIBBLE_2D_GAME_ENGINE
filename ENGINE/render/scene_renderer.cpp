@@ -3,6 +3,9 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
 #include "world/chunk.hpp"
+#include "lighting/ChunkLightingPreloader.hpp"
+#include "lighting/chunk_lighting_state_utils.hpp"
+#include "persistence/LightingCache.hpp"
 #include "render/camera.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
@@ -21,6 +24,7 @@
 #include <utility>
 #include <vector>
 #include <cstdlib>
+#include <filesystem>
 
 static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
@@ -136,39 +140,78 @@ bool SceneRenderer::initialize_static_light_chunks() {
 
     const bool safe_mode = safe_loading_enabled();
     if (!renderer_ && !safe_mode) {
-        vibble::log::warn("[SceneRenderer] Renderer unavailable; static darkness masks will be generated lazily once a renderer is present.");
+        vibble::log::warn("[SceneRenderer] Renderer unavailable; static light masks will be generated lazily once a renderer is present.");
     }
 
+    std::filesystem::path cache_root{"loading/chunk_lighting"};
+    if (assets_) {
+        cache_root /= assets_->map_id();
+    }
+
+    lighting::LightingCache cache(cache_root);
+    lighting::ChunkLightingPreloader preloader(renderer_, assets_, safe_mode ? nullptr : &cache);
+
     bool initialized_chunks = false;
+    std::vector<world::Chunk*> pending;
+    pending.reserve(chunks.size());
+
     for (world::Chunk* chunk : chunks) {
         if (!chunk) {
             continue;
         }
-        if (chunk->static_darkness_mask) {
-            SDL_DestroyTexture(chunk->static_darkness_mask);
-            chunk->static_darkness_mask = nullptr;
+
+        chunk->releaseLightingArtifacts();
+        chunk->lighting.needs_update = true;
+        chunk->brightness_strength   = 1.0f;
+        chunk->opacity_strength      = 1.0f;
+        chunk->scale_strength        = 1.0f;
+        chunk->offset_x              = 0;
+        chunk->offset_y              = 0;
+        chunk->has_dynamic_overlay   = false;
+
+        bool loaded_from_cache = false;
+        if (!safe_mode && renderer_) {
+            loaded_from_cache = cache.loadChunk(renderer_, *chunk);
+            if (loaded_from_cache) {
+                chunk->static_clean       = true;
+                chunk->lighting_preloaded = true;
+                chunk->lighting_dirty     = false;
+                chunk->needs_retry        = false;
+                chunk->lighting.needs_update = true;
+            }
         }
 
-        chunk->static_texture_set = safe_mode;
-        chunk->lighting_dirty     = !safe_mode;
-        chunk->lighting.needs_update = true;
-        chunk->base_brightness    = safe_mode ? 0.0f : 1.0f;
-        chunk->lighting.min_static_avg_strength = safe_mode ? 0.0f : 0.0f;
-        chunk->lighting.max_static_avg_strength = safe_mode ? 0.0f : 1.0f;
-        chunk->brightness_strength = 1.0f;
-        chunk->opacity_strength    = 1.0f;
-        chunk->scale_strength      = 1.0f;
-        chunk->offset_x            = 0;
-        chunk->offset_y            = 0;
-        chunk->has_dynamic_overlay = false;
+        if (!loaded_from_cache) {
+            chunk->lighting_dirty     = true;
+            chunk->static_clean       = false;
+            chunk->lighting_preloaded = false;
+            chunk->needs_retry        = true;
+            pending.push_back(chunk);
+        }
 
         initialized_chunks = true;
     }
 
-    if (safe_mode) {
-        vibble::log::debug("[SceneRenderer] SAFE LOADING enabled; static darkness masks remain disabled until safe mode is cleared.");
+    if (safe_mode || !renderer_) {
+        if (safe_mode) {
+            vibble::log::debug("[SceneRenderer] SAFE LOADING enabled; static light masks remain disabled until safe mode is cleared.");
+        }
+        return initialized_chunks;
+    }
+
+    constexpr int kMaxPreloadPasses = 3;
+    for (int attempt = 0; attempt < kMaxPreloadPasses && !pending.empty(); ++attempt) {
+        preloader.preloadChunks(pending);
+        pending.erase(std::remove_if(pending.begin(), pending.end(), [&](world::Chunk* chunk) {
+                            return chunk == nullptr || lighting::chunk_ready_for_static_preload(*chunk);
+                        }),
+                        pending.end());
+    }
+
+    if (!pending.empty()) {
+        vibble::log::warn("[SceneRenderer] Some chunks failed static lighting preload; runtime fallback will retry dynamically.");
     } else {
-        vibble::log::info("[SceneRenderer] Chunk darkness masks marked for lazy initialization.");
+        vibble::log::info("[SceneRenderer] Static lighting masks preloaded successfully.");
     }
 
     return initialized_chunks;
@@ -280,9 +323,14 @@ void SceneRenderer::render(){
         if (!light_map_ || rendered_light_map) {
             return;
         }
+        if (light_map_only_mode_) {
+            light_map_->present_static_previews(renderer_, /*present=*/false);
+            rendered_light_map = true;
+            return;
+        }
         // Compute a global alpha multiplier from the map light's current opacity window
-        // (same logic as shading stages). Darker overlays should result from a higher
-        // map-light opacity, so invert the normalized value before applying it.
+        // (same logic as shading stages). Higher map-light opacity values correspond to
+        // darker scenes, so the overlay should become more prominent as the opacity rises.
         float alpha_mult = 1.0f;
         if (!chunk_debug_mode_) {
             const int min_opacity = main_light_source_.min_opacity();
@@ -290,7 +338,7 @@ void SceneRenderer::render(){
             const int cur_a       = std::clamp(static_cast<int>(main_light_source_.get_current_color().a), min_opacity, max_opacity);
             const int range       = std::max(1, max_opacity - min_opacity);
             const float normalized = std::clamp(static_cast<float>(cur_a - min_opacity) / static_cast<float>(range), 0.0f, 1.0f);
-            alpha_mult            = std::clamp(1.0f - normalized, 0.0f, 1.0f);
+            alpha_mult            = std::clamp(normalized, 0.0f, 1.0f);
         }
 
         SDL_Rect screen_view{0,0,screen_width_,screen_height_};

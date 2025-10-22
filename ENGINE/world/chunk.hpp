@@ -22,14 +22,11 @@ struct Chunk {
 
     std::vector<Asset*> assets;
 
-    // Cached texture representing the accumulated static darkness mask for this chunk.
-    SDL_Texture* static_darkness_mask = nullptr;
-    bool         static_texture_set   = false;
-    // Average transparency of the static darkness mask for this chunk (0..1).
-    // Higher means brighter from static lights alone.
-    float base_brightness = 1.0f;
-    bool  static_brightness_sample_valid  = false;
-    bool  static_brightness_retry_pending = false;
+    // Cached texture representing the accumulated static light mask for this chunk.
+    SDL_Texture* static_light_mask = nullptr;
+    bool  lighting_preloaded = false;
+    bool  static_clean       = false;
+    bool  needs_retry        = false;
 
     // Runtime overlay control used by the existing light-map pass.
     float brightness_strength = 1.0f;
@@ -73,6 +70,8 @@ struct Chunk {
     Chunk(int in_i, int in_j, int r, SDL_Rect bounds) : i(in_i), j(in_j), r_chunk(r), world_bounds(bounds) {}
     ~Chunk();
 
+    void releaseLightingArtifacts();
+
     Chunk(const Chunk&) = delete;
     Chunk& operator=(const Chunk&) = delete;
     Chunk(Chunk&&) noexcept = default;
@@ -80,6 +79,10 @@ struct Chunk {
 };
 
 } // namespace world
+
+namespace world {
+float static_brightness_for_opacity(const Chunk& chunk, float screen_opacity);
+}
 
 // Unified LightMap implementation co-located with Chunk.
 class LightMap {
@@ -125,6 +128,7 @@ public:
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
     void render_visible_chunks_debug(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
+    void present_static_previews(SDL_Renderer* renderer, bool present = true) const;
 
     void mark_region_dirty(const SDL_Rect& screen_rect);
     void mark_asset_lights_dirty(const Asset* asset);
@@ -145,10 +149,6 @@ public:
     int chunk_rows() const;
     const world::Chunk* chunk_at(int index) const;
     SDL_Rect chunk_bounds(int index) const;
-
-private:
-    void ensure_chunk_static_texture(SDL_Renderer* renderer, world::Chunk& chunk) const;
-    void destroy_chunk_texture(world::Chunk& chunk) const;
 
 private:
     Assets* assets_ = nullptr;

@@ -38,18 +38,25 @@ static void log_transparency_failure_mgr(const char* context,
     vibble::log::warn(message);
 }
 
-static float sample_chunk_transparency_mgr(SDL_Renderer* renderer, world::Chunk& chunk) {
-    if (!chunk.static_darkness_mask) {
-        chunk.static_brightness_retry_pending = true;
-        return chunk.base_brightness;
+static float sample_chunk_transparency_mgr(SDL_Renderer* renderer,
+                                           world::Chunk& chunk,
+                                           float screen_light_opacity) {
+    const float fallback = world::static_brightness_for_opacity(chunk, screen_light_opacity);
+    if (!chunk.static_light_mask) {
+        chunk.needs_retry   = true;
+        chunk.static_clean  = false;
+        return fallback;
     }
 
-    const auto sample = vibble::render::sample_texture_transparency(renderer, chunk.static_darkness_mask);
+    const auto sample = vibble::render::sample_texture_transparency(renderer, chunk.static_light_mask);
     if (!sample.success) {
         log_transparency_failure_mgr("[LightMapPreview]", chunk, sample);
-        chunk.static_brightness_retry_pending = true;
-        return chunk.base_brightness;
+        chunk.needs_retry  = true;
+        chunk.static_clean = false;
+        return fallback;
     }
+    chunk.needs_retry  = false;
+    chunk.static_clean = true;
     return std::clamp(sample.average, 0.0f, 1.0f);
 }
 
@@ -149,11 +156,11 @@ void LightMapManager::begin_frame() {
         if (chunk->lighting.is_occupied_by_moving_source) {
             // Recompute brightness (background + static lights; no shadows). For now,
             // approximate using the static mask average transparency.
-            chunk->lighting.current_strength = sample_chunk_transparency_mgr(renderer, *chunk);
+            chunk->lighting.current_strength =
+                sample_chunk_transparency_mgr(renderer, *chunk, screen_light_opacity);
         } else {
             chunk->lighting.current_strength =
-                (chunk->lighting.min_static_avg_strength +
-                 (chunk->lighting.max_static_avg_strength - chunk->lighting.min_static_avg_strength) * screen_light_opacity);
+                world::static_brightness_for_opacity(*chunk, screen_light_opacity);
         }
 
         // Populate ChunkShadowParameters via dummy calculators.
@@ -191,7 +198,6 @@ std::vector<LightMapManager::ChunkSnapshot> LightMapManager::all_snapshots() con
         snap.world_rect          = chunk->world_bounds;
         snap.active              = true;
         snap.dirty               = chunk->lighting_dirty;
-        snap.base_brightness     = chunk->base_brightness;
         snap.combined_brightness = chunk->lighting.current_strength;
         snap.static_min          = chunk->lighting.min_static_avg_strength;
         snap.static_max          = chunk->lighting.max_static_avg_strength;
@@ -232,7 +238,6 @@ std::optional<LightMapManager::ChunkSnapshot> LightMapManager::snapshot_for_chun
     snap.world_rect          = chunk->world_bounds;
     snap.active              = true;
     snap.dirty               = chunk->lighting_dirty;
-    snap.base_brightness     = chunk->base_brightness;
     snap.combined_brightness = chunk->lighting.current_strength;
     snap.static_min          = chunk->lighting.min_static_avg_strength;
     snap.static_max          = chunk->lighting.max_static_avg_strength;

@@ -13821,6 +13821,128 @@
               "required_children": []
             }
           ]
+        },
+        {
+          "level": 1,
+          "max_rooms": 4,
+          "min_rooms": 3,
+          "name": "forest_groves",
+          "rooms": [
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "forest_glade",
+              "required_children": []
+            },
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "mossy_clearing",
+              "required_children": []
+            },
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "mushroom_ring",
+              "required_children": []
+            },
+            {
+              "max_instances": 1,
+              "min_instances": 1,
+              "name": "dense_brambles",
+              "required_children": []
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "max_rooms": 4,
+          "min_rooms": 3,
+          "name": "haunted_rest",
+          "rooms": [
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "forgotten_graves",
+              "required_children": []
+            },
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "skull_hollow",
+              "required_children": []
+            },
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "bone_crossroads",
+              "required_children": []
+            },
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "mourning_trees",
+              "required_children": []
+            }
+          ]
+        },
+        {
+          "level": 3,
+          "max_rooms": 4,
+          "min_rooms": 2,
+          "name": "traveler_camp",
+          "rooms": [
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "campfire_circle",
+              "required_children": []
+            },
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "tavern_cache",
+              "required_children": []
+            },
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "supply_drop",
+              "required_children": []
+            },
+            {
+              "max_instances": 1,
+              "min_instances": 1,
+              "name": "abandoned_cart",
+              "required_children": []
+            }
+          ]
+        },
+        {
+          "level": 4,
+          "max_rooms": 3,
+          "min_rooms": 2,
+          "name": "mystic_way",
+          "rooms": [
+            {
+              "max_instances": 1,
+              "min_instances": 1,
+              "name": "mystic_fountain",
+              "required_children": []
+            },
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "sigil_grove",
+              "required_children": []
+            },
+            {
+              "max_instances": 2,
+              "min_instances": 1,
+              "name": "lantern_path",
+              "required_children": []
+            }
+          ]
         }
       ],
       "map_light_data": {
@@ -13876,9 +13998,9 @@
             255
           ],
           "max_opacity": 154,
-          "min_opacity": 68
+          "min_opacity": 0
         },
-        "update_interval": 10
+        "update_interval": 1
       },
       "map_name": "FORREST",
       "reactive_shadows": {
@@ -14040,6 +14162,956 @@
               "man-made",
               "passable"
             ]
+          }
+        },
+        "forest_glade": {
+          "curvyness": 3,
+          "edge_smoothness": 28,
+          "geometry": "Circle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2400,
+          "max_width": 2400,
+          "min_height": 1800,
+          "min_width": 1800,
+          "name": "forest_glade",
+          "radius": 900,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 55,
+                  "name": "Tree_Dark"
+                },
+                {
+                  "chance": 45,
+                  "name": "Tree_Darker"
+                }
+              ],
+              "display_name": "Forest Trees",
+              "enforce_spacing": true,
+              "max_number": 6,
+              "min_number": 4,
+              "perimeter_radius": 860,
+              "position": "Perimeter",
+              "priority": 0,
+              "radius": 900,
+              "spawn_id": "spn-forest-glade-trees"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "Grass_FPS_2"
+                },
+                {
+                  "chance": 35,
+                  "name": "Grass_1_FPS_2"
+                },
+                {
+                  "chance": 25,
+                  "name": "Bush_FPS_2"
+                }
+              ],
+              "display_name": "Ground Cover",
+              "enforce_spacing": false,
+              "max_number": 12,
+              "min_number": 6,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-forest-glade-ground"
+            }
+          ],
+          "tags": {
+            "include": [
+              "forest",
+              "nature",
+              "clearing"
+            ],
+            "exclude": []
+          }
+        },
+        "mossy_clearing": {
+          "curvyness": 2,
+          "edge_smoothness": 24,
+          "geometry": "Circle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2200,
+          "max_width": 2200,
+          "min_height": 1600,
+          "min_width": 1600,
+          "name": "mossy_clearing",
+          "radius": 820,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Mushroom_1"
+                },
+                {
+                  "chance": 40,
+                  "name": "Mushroom_2"
+                }
+              ],
+              "display_name": "Mushroom Cluster",
+              "enforce_spacing": false,
+              "max_number": 10,
+              "min_number": 5,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-mossy-clearing-mushrooms"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "Grass_1_FPS_2"
+                },
+                {
+                  "chance": 50,
+                  "name": "Grass_FPS_2"
+                }
+              ],
+              "display_name": "Soft Grass",
+              "enforce_spacing": false,
+              "max_number": 14,
+              "min_number": 8,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-mossy-clearing-grass"
+            }
+          ],
+          "tags": {
+            "include": [
+              "forest",
+              "mushroom"
+            ],
+            "exclude": []
+          }
+        },
+        "mushroom_ring": {
+          "curvyness": 4,
+          "edge_smoothness": 20,
+          "geometry": "Circle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2000,
+          "max_width": 2000,
+          "min_height": 1500,
+          "min_width": 1500,
+          "name": "mushroom_ring",
+          "radius": 760,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 45,
+                  "name": "Mushroom_3"
+                },
+                {
+                  "chance": 35,
+                  "name": "Mushroom_2"
+                },
+                {
+                  "chance": 20,
+                  "name": "Mushroom_1"
+                }
+              ],
+              "display_name": "Ring Mushrooms",
+              "enforce_spacing": true,
+              "max_number": 9,
+              "min_number": 6,
+              "perimeter_radius": 720,
+              "position": "Perimeter",
+              "priority": 0,
+              "radius": 760,
+              "spawn_id": "spn-mushroom-ring-circle"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 70,
+                  "name": "Grass_FPS_2"
+                },
+                {
+                  "chance": 30,
+                  "name": "Bush_FPS_2"
+                }
+              ],
+              "display_name": "Ring Foliage",
+              "enforce_spacing": false,
+              "max_number": 8,
+              "min_number": 4,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-mushroom-ring-foliage"
+            }
+          ],
+          "tags": {
+            "include": [
+              "forest",
+              "mushroom",
+              "circle"
+            ],
+            "exclude": []
+          }
+        },
+        "dense_brambles": {
+          "curvyness": 5,
+          "edge_smoothness": 32,
+          "geometry": "Square",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2500,
+          "max_width": 2500,
+          "min_height": 1800,
+          "min_width": 1800,
+          "name": "dense_brambles",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "Bush_FPS_2"
+                },
+                {
+                  "chance": 50,
+                  "name": "Bush_1_FPS_2"
+                }
+              ],
+              "display_name": "Bramble Walls",
+              "enforce_spacing": true,
+              "max_number": 10,
+              "min_number": 6,
+              "position": "Perimeter",
+              "priority": 0,
+              "spawn_id": "spn-dense-brambles-wall"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Small_Rock"
+                },
+                {
+                  "chance": 40,
+                  "name": "Rock"
+                }
+              ],
+              "display_name": "Forest Stones",
+              "enforce_spacing": false,
+              "max_number": 5,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-dense-brambles-stones"
+            }
+          ],
+          "tags": {
+            "include": [
+              "forest",
+              "obstacle"
+            ],
+            "exclude": []
+          }
+        },
+        "forgotten_graves": {
+          "curvyness": 1,
+          "edge_smoothness": 18,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2600,
+          "max_width": 2600,
+          "min_height": 2000,
+          "min_width": 2000,
+          "name": "forgotten_graves",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Grave_1"
+                },
+                {
+                  "chance": 40,
+                  "name": "Grave_2"
+                }
+              ],
+              "display_name": "Old Graves",
+              "enforce_spacing": true,
+              "max_number": 8,
+              "min_number": 4,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-forgotten-graves-stones"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "Lantern"
+                },
+                {
+                  "chance": 50,
+                  "name": "vigil"
+                }
+              ],
+              "display_name": "Grave Lights",
+              "enforce_spacing": false,
+              "max_number": 3,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-forgotten-graves-lights"
+            }
+          ],
+          "tags": {
+            "include": [
+              "graveyard",
+              "spooky"
+            ],
+            "exclude": []
+          }
+        },
+        "skull_hollow": {
+          "curvyness": 2,
+          "edge_smoothness": 14,
+          "geometry": "Circle",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2100,
+          "max_width": 2100,
+          "min_height": 1700,
+          "min_width": 1700,
+          "name": "skull_hollow",
+          "radius": 780,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 45,
+                  "name": "Skull_1"
+                },
+                {
+                  "chance": 35,
+                  "name": "Skull_Pile"
+                },
+                {
+                  "chance": 20,
+                  "name": "Skull_Pile_1"
+                }
+              ],
+              "display_name": "Skull Scatter",
+              "enforce_spacing": false,
+              "max_number": 7,
+              "min_number": 3,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-skull-hollow-skulls"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "Bone_Pile"
+                },
+                {
+                  "chance": 50,
+                  "name": "Bone"
+                }
+              ],
+              "display_name": "Bone Piles",
+              "enforce_spacing": false,
+              "max_number": 4,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-skull-hollow-bones"
+            }
+          ],
+          "tags": {
+            "include": [
+              "graveyard",
+              "bones"
+            ],
+            "exclude": []
+          }
+        },
+        "bone_crossroads": {
+          "curvyness": 3,
+          "edge_smoothness": 16,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2300,
+          "max_width": 2300,
+          "min_height": 1700,
+          "min_width": 1700,
+          "name": "bone_crossroads",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 40,
+                  "name": "Bone"
+                },
+                {
+                  "chance": 30,
+                  "name": "Bone_1"
+                },
+                {
+                  "chance": 30,
+                  "name": "Bone_Pile"
+                }
+              ],
+              "display_name": "Bone Markers",
+              "enforce_spacing": true,
+              "max_number": 6,
+              "min_number": 3,
+              "position": "Perimeter",
+              "priority": 0,
+              "spawn_id": "spn-bone-crossroads-markers"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 70,
+                  "name": "Grave_1"
+                },
+                {
+                  "chance": 30,
+                  "name": "Grave_2"
+                }
+              ],
+              "display_name": "Crossroads Graves",
+              "enforce_spacing": false,
+              "max_number": 4,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-bone-crossroads-graves"
+            }
+          ],
+          "tags": {
+            "include": [
+              "graveyard",
+              "bones"
+            ],
+            "exclude": []
+          }
+        },
+        "mourning_trees": {
+          "curvyness": 2,
+          "edge_smoothness": 22,
+          "geometry": "Circle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2400,
+          "max_width": 2400,
+          "min_height": 1800,
+          "min_width": 1800,
+          "name": "mourning_trees",
+          "radius": 880,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "Tree_Dark"
+                },
+                {
+                  "chance": 50,
+                  "name": "Tree_Darker"
+                }
+              ],
+              "display_name": "Dark Trees",
+              "enforce_spacing": true,
+              "max_number": 5,
+              "min_number": 3,
+              "perimeter_radius": 840,
+              "position": "Perimeter",
+              "priority": 0,
+              "radius": 880,
+              "spawn_id": "spn-mourning-trees-ring"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Lantern"
+                },
+                {
+                  "chance": 40,
+                  "name": "vigil"
+                }
+              ],
+              "display_name": "Memorial Lights",
+              "enforce_spacing": false,
+              "max_number": 4,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-mourning-trees-lights"
+            }
+          ],
+          "tags": {
+            "include": [
+              "graveyard",
+              "memorial"
+            ],
+            "exclude": []
+          }
+        },
+        "campfire_circle": {
+          "curvyness": 2,
+          "edge_smoothness": 18,
+          "geometry": "Circle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 1800,
+          "max_width": 1800,
+          "min_height": 1400,
+          "min_width": 1400,
+          "name": "campfire_circle",
+          "radius": 700,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "candle"
+                },
+                {
+                  "chance": 30,
+                  "name": "candle_3"
+                },
+                {
+                  "chance": 20,
+                  "name": "vigil"
+                }
+              ],
+              "display_name": "Campfire Lights",
+              "enforce_spacing": false,
+              "max_number": 6,
+              "min_number": 3,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-campfire-circle-lights"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Bench"
+                },
+                {
+                  "chance": 40,
+                  "name": "Stump"
+                }
+              ],
+              "display_name": "Camp Seating",
+              "enforce_spacing": true,
+              "max_number": 4,
+              "min_number": 2,
+              "perimeter_radius": 660,
+              "position": "Perimeter",
+              "priority": 1,
+              "radius": 700,
+              "spawn_id": "spn-campfire-circle-seating"
+            }
+          ],
+          "tags": {
+            "include": [
+              "camp",
+              "gathering"
+            ],
+            "exclude": []
+          }
+        },
+        "tavern_cache": {
+          "curvyness": 3,
+          "edge_smoothness": 16,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2000,
+          "max_width": 2000,
+          "min_height": 1500,
+          "min_width": 1500,
+          "name": "tavern_cache",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 40,
+                  "name": "Barrel"
+                },
+                {
+                  "chance": 30,
+                  "name": "Booze_1"
+                },
+                {
+                  "chance": 30,
+                  "name": "Booze_2"
+                }
+              ],
+              "display_name": "Stored Supplies",
+              "enforce_spacing": false,
+              "max_number": 7,
+              "min_number": 3,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-tavern-cache-supplies"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Bench"
+                },
+                {
+                  "chance": 40,
+                  "name": "table"
+                }
+              ],
+              "display_name": "Makeshift Furniture",
+              "enforce_spacing": false,
+              "max_number": 4,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-tavern-cache-furniture"
+            }
+          ],
+          "tags": {
+            "include": [
+              "camp",
+              "supplies"
+            ],
+            "exclude": []
+          }
+        },
+        "supply_drop": {
+          "curvyness": 1,
+          "edge_smoothness": 12,
+          "geometry": "Square",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 1900,
+          "max_width": 1900,
+          "min_height": 1400,
+          "min_width": 1400,
+          "name": "supply_drop",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "Chest"
+                },
+                {
+                  "chance": 30,
+                  "name": "Box"
+                },
+                {
+                  "chance": 20,
+                  "name": "Key"
+                }
+              ],
+              "display_name": "Drop Crates",
+              "enforce_spacing": false,
+              "max_number": 5,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 0,
+              "spawn_id": "spn-supply-drop-crates"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Bench"
+                },
+                {
+                  "chance": 40,
+                  "name": "Stump"
+                }
+              ],
+              "display_name": "Rest Spots",
+              "enforce_spacing": false,
+              "max_number": 3,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-supply-drop-rest"
+            }
+          ],
+          "tags": {
+            "include": [
+              "camp",
+              "supplies"
+            ],
+            "exclude": []
+          }
+        },
+        "abandoned_cart": {
+          "curvyness": 4,
+          "edge_smoothness": 20,
+          "geometry": "Rectangle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2200,
+          "max_width": 2600,
+          "min_height": 1600,
+          "min_width": 2000,
+          "name": "abandoned_cart",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 70,
+                  "name": "car"
+                },
+                {
+                  "chance": 30,
+                  "name": "Barrel"
+                }
+              ],
+              "display_name": "Broken Cart",
+              "enforce_spacing": false,
+              "max_number": 2,
+              "min_number": 1,
+              "position": "Exact",
+              "priority": 0,
+              "spawn_id": "spn-abandoned-cart-cart"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Box"
+                },
+                {
+                  "chance": 40,
+                  "name": "Chest"
+                }
+              ],
+              "display_name": "Spilled Goods",
+              "enforce_spacing": false,
+              "max_number": 4,
+              "min_number": 2,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-abandoned-cart-goods"
+            }
+          ],
+          "tags": {
+            "include": [
+              "camp",
+              "trade"
+            ],
+            "exclude": []
+          }
+        },
+        "mystic_fountain": {
+          "curvyness": 2,
+          "edge_smoothness": 20,
+          "geometry": "Circle",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2100,
+          "max_width": 2100,
+          "min_height": 1700,
+          "min_width": 1700,
+          "name": "mystic_fountain",
+          "radius": 780,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Fountain"
+                },
+                {
+                  "chance": 40,
+                  "name": "Lantern"
+                }
+              ],
+              "display_name": "Fountain Center",
+              "enforce_spacing": false,
+              "max_number": 3,
+              "min_number": 1,
+              "position": "Exact",
+              "priority": 0,
+              "spawn_id": "spn-mystic-fountain-center"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "flower_4"
+                },
+                {
+                  "chance": 50,
+                  "name": "flower_5"
+                }
+              ],
+              "display_name": "Mystic Blossoms",
+              "enforce_spacing": false,
+              "max_number": 8,
+              "min_number": 4,
+              "perimeter_radius": 740,
+              "position": "Perimeter",
+              "priority": 1,
+              "radius": 780,
+              "spawn_id": "spn-mystic-fountain-flowers"
+            }
+          ],
+          "tags": {
+            "include": [
+              "mystic",
+              "water"
+            ],
+            "exclude": []
+          }
+        },
+        "sigil_grove": {
+          "curvyness": 3,
+          "edge_smoothness": 18,
+          "geometry": "Circle",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2000,
+          "max_width": 2000,
+          "min_height": 1500,
+          "min_width": 1500,
+          "name": "sigil_grove",
+          "radius": 760,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 70,
+                  "name": "Sigil_Of_Fortune"
+                },
+                {
+                  "chance": 30,
+                  "name": "Lantern"
+                }
+              ],
+              "display_name": "Central Sigil",
+              "enforce_spacing": false,
+              "max_number": 3,
+              "min_number": 1,
+              "position": "Exact",
+              "priority": 0,
+              "spawn_id": "spn-sigil-grove-center"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "candle"
+                },
+                {
+                  "chance": 40,
+                  "name": "candle_3"
+                }
+              ],
+              "display_name": "Sigil Candles",
+              "enforce_spacing": true,
+              "max_number": 8,
+              "min_number": 4,
+              "perimeter_radius": 720,
+              "position": "Perimeter",
+              "priority": 1,
+              "radius": 760,
+              "spawn_id": "spn-sigil-grove-candles"
+            }
+          ],
+          "tags": {
+            "include": [
+              "mystic",
+              "ritual"
+            ],
+            "exclude": []
+          }
+        },
+        "lantern_path": {
+          "curvyness": 2,
+          "edge_smoothness": 26,
+          "geometry": "Rectangle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 2400,
+          "max_width": 2800,
+          "min_height": 1600,
+          "min_width": 2000,
+          "name": "lantern_path",
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 60,
+                  "name": "Lantern"
+                },
+                {
+                  "chance": 40,
+                  "name": "candle"
+                }
+              ],
+              "display_name": "Path Lanterns",
+              "enforce_spacing": true,
+              "max_number": 10,
+              "min_number": 5,
+              "position": "Perimeter",
+              "priority": 0,
+              "spawn_id": "spn-lantern-path-lights"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 50,
+                  "name": "Grass_FPS_2"
+                },
+                {
+                  "chance": 50,
+                  "name": "Grass_1_FPS_2"
+                }
+              ],
+              "display_name": "Path Grass",
+              "enforce_spacing": false,
+              "max_number": 12,
+              "min_number": 6,
+              "position": "Random",
+              "priority": 1,
+              "spawn_id": "spn-lantern-path-grass"
+            }
+          ],
+          "tags": {
+            "include": [
+              "mystic",
+              "light"
+            ],
+            "exclude": []
           }
         }
       },

@@ -286,29 +286,8 @@ void Animation::load(const std::string& trigger,
                   << ", prefer_cached=" << (prefer_cached ? "true" : "false")
                   << ", scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false")
                   << "\n";
-        auto normalize_steps = [](std::vector<float>& steps) {
-                if (steps.empty()) {
-                        steps.push_back(1.0f);
-                        return;
-                }
-                std::sort(steps.begin(), steps.end(), std::greater<float>());
-                steps.erase(std::unique(steps.begin(), steps.end(), [](float a, float b) {
-                        return std::fabs(a - b) <= 1e-4f;
-                }), steps.end());
-                if (steps.empty()) {
-                        steps.push_back(1.0f);
-                        return;
-                }
-                if (std::fabs(steps.front() - 1.0f) > 1e-4f) {
-                        steps.insert(steps.begin(), 1.0f);
-                }
-        };
         variant_steps_ = info.scale_variants;
-        if (variant_steps_.empty()) {
-                const auto& defaults = render_pipeline::ScalingLogic::DefaultScaleSteps();
-                variant_steps_.assign(defaults.begin(), defaults.end());
-        }
-        normalize_steps(variant_steps_);
+        render_pipeline::ScalingLogic::NormalizeVariantSteps(variant_steps_);
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                   << " normalized profile steps: " << format_steps(variant_steps_)
                   << "\n";
@@ -595,7 +574,7 @@ void Animation::load(const std::string& trigger,
                                                                 adopted_steps.push_back(scale);
                                                         }
                                                         variant_steps_ = std::move(adopted_steps);
-                                                        normalize_steps(variant_steps_);
+                                                        render_pipeline::ScalingLogic::NormalizeVariantSteps(variant_steps_);
                                                         if (variant_steps_.empty()) {
                                                                 meta_ok = false;
                                                         } else {

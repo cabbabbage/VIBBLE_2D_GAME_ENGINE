@@ -26,11 +26,65 @@
 namespace world {
 
 Chunk::~Chunk() {
-    if (static_darkness_mask) {
-        SDL_DestroyTexture(static_darkness_mask);
-        static_darkness_mask = nullptr;
+    releaseLightingArtifacts();
+}
+
+void Chunk::releaseLightingArtifacts() {
+    if (static_light_mask) {
+        SDL_DestroyTexture(static_light_mask);
+        static_light_mask = nullptr;
     }
-    static_texture_set = false;
+    lighting_preloaded = false;
+    static_clean       = false;
+    needs_retry        = true;
+    lighting_dirty     = true;
+    lighting.needs_update = true;
+    lighting.current_strength = 0.0f;
+    lighting.min_static_avg_strength = 0.0f;
+    lighting.max_static_avg_strength = 1.0f;
+}
+
+float static_brightness_for_opacity(const Chunk& chunk, float screen_opacity) {
+    const float t = std::clamp(screen_opacity, 0.0f, 1.0f);
+
+    float min_strength = chunk.lighting.min_static_avg_strength;
+    float max_strength = chunk.lighting.max_static_avg_strength;
+
+    const bool min_ready = std::isfinite(min_strength);
+    const bool max_ready = std::isfinite(max_strength);
+
+    auto log_fallback = [&](const char* reason) {
+        vibble::log::debug(std::string{"[Lighting] static brightness fallback for chunk("} +
+                           std::to_string(chunk.i) + "," + std::to_string(chunk.j) + "): " + reason);
+    };
+
+    if (!min_ready && !max_ready) {
+        log_fallback("missing min and max values");
+        Chunk& mutable_chunk = const_cast<Chunk&>(chunk);
+        mutable_chunk.lighting.needs_update = true;
+        mutable_chunk.needs_retry          = true;
+        mutable_chunk.static_clean         = false;
+        return 0.0f;
+    }
+
+    if (!min_ready) {
+        log_fallback("missing min value");
+        return std::clamp(max_strength, 0.0f, 1.0f);
+    }
+
+    if (!max_ready) {
+        log_fallback("missing max value");
+        return std::clamp(min_strength, 0.0f, 1.0f);
+    }
+
+    min_strength = std::clamp(min_strength, 0.0f, 1.0f);
+    max_strength = std::clamp(max_strength, 0.0f, 1.0f);
+    if (max_strength < min_strength) {
+        std::swap(min_strength, max_strength);
+    }
+
+    const float brightness = min_strength + (max_strength - min_strength) * t;
+    return std::clamp(brightness, 0.0f, 1.0f);
 }
 
 } // namespace world
@@ -74,6 +128,81 @@ Uint8 clamp_alpha(float value) {
     return static_cast<Uint8>(std::clamp(value, 0.0f, 1.0f) * 255.0f + 0.5f);
 }
 
+template <typename Callback>
+void for_each_static_light_draw(SDL_Renderer* renderer,
+                                const Assets* assets,
+                                const world::Chunk& chunk,
+                                Callback&& callback) {
+    if (!renderer || !assets) {
+        return;
+    }
+
+    const auto& static_lights = assets->getActiveStaticLightAssets();
+    for (const Asset* asset : static_lights) {
+        if (!asset || !asset->info) {
+            continue;
+        }
+        if (asset->info->light_sources.empty()) {
+            continue;
+        }
+
+        for (const auto& light : asset->info->light_sources) {
+            SDL_Texture* tex = light.texture;
+            if (!tex) {
+                continue;
+            }
+
+            int src_w = light.cached_w > 0 ? light.cached_w : 0;
+            int src_h = light.cached_h > 0 ? light.cached_h : 0;
+            if (src_w <= 0 || src_h <= 0) {
+                SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
+            }
+            if (src_w <= 0 || src_h <= 0) {
+                continue;
+            }
+
+            const int draw_w = std::max(1, src_w);
+            const int draw_h = std::max(1, src_h);
+
+            SDL_Point world_center{asset->pos.x + light.offset_x, asset->pos.y + light.offset_y};
+            SDL_Rect  world_dst{world_center.x - draw_w / 2,
+                                world_center.y - draw_h / 2,
+                                draw_w,
+                                draw_h};
+
+            SDL_Rect intersection{};
+            if (!SDL_IntersectRect(&world_dst, &chunk.world_bounds, &intersection)) {
+                continue;
+            }
+
+            SDL_Rect src_rect{};
+            src_rect.x = std::clamp(intersection.x - world_dst.x, 0, std::max(0, draw_w));
+            src_rect.y = std::clamp(intersection.y - world_dst.y, 0, std::max(0, draw_h));
+            src_rect.w = intersection.w;
+            src_rect.h = intersection.h;
+
+            if (src_rect.x >= draw_w || src_rect.y >= draw_h) {
+                continue;
+            }
+
+            src_rect.w = std::min(src_rect.w, draw_w - src_rect.x);
+            src_rect.h = std::min(src_rect.h, draw_h - src_rect.y);
+
+            SDL_Rect local_dst{};
+            local_dst.x = std::max(0, intersection.x - chunk.world_bounds.x);
+            local_dst.y = std::max(0, intersection.y - chunk.world_bounds.y);
+            local_dst.w = src_rect.w;
+            local_dst.h = src_rect.h;
+
+            if (src_rect.w <= 0 || src_rect.h <= 0 || local_dst.w <= 0 || local_dst.h <= 0) {
+                continue;
+            }
+
+            callback(tex, src_rect, local_dst);
+        }
+    }
+}
+
 SDL_Rect world_rect_from_screen(const camera& cam, const SDL_Rect& screen_rect) {
     SDL_Point top_left     = cam.screen_to_map({screen_rect.x, screen_rect.y});
     SDL_Point bottom_right = cam.screen_to_map({screen_rect.x + screen_rect.w, screen_rect.y + screen_rect.h});
@@ -104,33 +233,6 @@ void log_transparency_failure(const char* context,
     vibble::log::warn(message);
 }
 
-void update_chunk_static_brightness_extrema(SDL_Renderer* renderer, world::Chunk& chunk) {
-    if (!chunk.static_darkness_mask) {
-        chunk.static_brightness_retry_pending = true;
-        return;
-    }
-
-    const auto sample = vibble::render::sample_texture_transparency(renderer, chunk.static_darkness_mask);
-    if (!sample.success) {
-        log_transparency_failure("[LightMap] static", chunk, sample);
-        chunk.static_brightness_retry_pending = true;
-        return;
-    }
-
-    const float avg_static  = std::clamp(sample.average, 0.0f, 1.0f);
-    const float min_static  = std::clamp(sample.min, 0.0f, 1.0f);
-    const float max_static  = std::clamp(sample.max, 0.0f, 1.0f);
-    const float min_strength = std::min(1.0f, std::min(min_static, avg_static));
-    const float max_strength = std::max(1.0f, std::max(max_static, avg_static));
-
-    chunk.base_brightness                       = avg_static;
-    chunk.lighting.min_static_avg_strength      = min_strength;
-    chunk.lighting.max_static_avg_strength      = max_strength;
-    chunk.lighting.needs_update                 = true;
-    chunk.static_brightness_sample_valid        = true;
-    chunk.static_brightness_retry_pending       = false;
-}
-
 template <typename T>
 T lerp(T a, T b, float t) {
     return static_cast<T>(a + (b - a) * t);
@@ -140,9 +242,10 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
                                                     const world::Grid& grid,
                                                     int radius,
                                                     float falloff_x,
-                                                    float falloff_y) {
+                                                    float falloff_y,
+                                                    float screen_light_opacity) {
     if (radius <= 0) return {0.0f, 0.0f};
-    const float cb = std::clamp(center.base_brightness, 0.0f, 1.0f);
+    const float cb = world::static_brightness_for_opacity(center, screen_light_opacity);
     float gx = 0.0f, gy = 0.0f;
     for (int dj = -radius; dj <= radius; ++dj) {
         for (int di = -radius; di <= radius; ++di) {
@@ -150,7 +253,7 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
             const int ni = center.i + di;
             const int nj = center.j + dj;
             const world::Chunk* n = grid.find_chunk_ij(ni, nj);
-            const float nb = n ? std::clamp(n->base_brightness, 0.0f, 1.0f) : 0.0f;
+            const float nb = n ? world::static_brightness_for_opacity(*n, screen_light_opacity) : 0.0f;
             const float db = nb - cb;
             const float dx = static_cast<float>(di);
             const float dy = static_cast<float>(dj);
@@ -169,7 +272,8 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
 // Compute weighted averages of light strength in-front (negative j) and behind (positive j).
 static std::pair<float, float> compute_directional_average_strengths(const LightMap::ShadowSettings& settings,
                                                                      const world::Grid& grid,
-                                                                     const world::Chunk& center) {
+                                                                     const world::Chunk& center,
+                                                                     float screen_light_opacity) {
     const int   R  = std::max(0, settings.search_radius_cells);
     const float fh = std::max(0.0f, settings.falloff_horizontal);
     const float fv = std::max(0.0f, settings.falloff_vertical);
@@ -188,7 +292,9 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
                 const float sx = std::abs(static_cast<float>(di));
                 const float sy = std::abs(static_cast<float>(dj));
                 const float w  = 1.0f / (1.0f + sx * fh + sy * fv);
-                const float s  = (n->lighting.is_active ? n->lighting.current_strength : n->base_brightness);
+                const float s  = (n->lighting.is_active
+                                      ? n->lighting.current_strength
+                                      : world::static_brightness_for_opacity(*n, screen_light_opacity));
                 accum_w += static_cast<double>(w);
                 accum_v += static_cast<double>(w) * static_cast<double>(std::clamp(s, 0.0f, 1.0f));
             }
@@ -206,12 +312,13 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
 
 static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
                                               const world::Grid& grid,
-                                              const std::pair<float,float>& grad,
+                                              const std::pair<float, float>& grad,
                                               int map_dir_sign_x,
                                               float map_light_opacity_norm,
                                               world::Chunk& chunk) {
     // Opacity: inverse of front average strength.
-    const auto [front_avg, behind_avg] = compute_directional_average_strengths(settings, grid, chunk);
+    const auto [front_avg, behind_avg] =
+        compute_directional_average_strengths(settings, grid, chunk, map_light_opacity_norm);
     chunk.shadow.opacity  = std::clamp(1.0f - front_avg, 0.0f, 1.0f);
 
     // Scale: grow with front dominance, shrink with behind dominance (nonlinear towards min).
@@ -258,266 +365,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
 } // namespace
 
-namespace {
-
-// Restores the renderer target when leaving the current scope.
-class ChunkMaskRenderScope {
-public:
-    ChunkMaskRenderScope() = default;
-
-    ChunkMaskRenderScope(SDL_Renderer* renderer, SDL_Texture* texture, SDL_Texture* previous)
-        : renderer_(renderer), texture_(texture), previous_(previous) {}
-
-    ChunkMaskRenderScope(const ChunkMaskRenderScope&) = delete;
-    ChunkMaskRenderScope& operator=(const ChunkMaskRenderScope&) = delete;
-
-    ChunkMaskRenderScope(ChunkMaskRenderScope&& other) noexcept
-        : renderer_(other.renderer_), texture_(other.texture_), previous_(other.previous_), restored_(other.restored_) {
-        other.renderer_ = nullptr;
-        other.texture_  = nullptr;
-        other.previous_ = nullptr;
-        other.restored_ = true;
-    }
-
-    ChunkMaskRenderScope& operator=(ChunkMaskRenderScope&& other) noexcept {
-        if (this != &other) {
-            restore_target();
-            renderer_ = other.renderer_;
-            texture_  = other.texture_;
-            previous_ = other.previous_;
-            restored_ = other.restored_;
-            other.renderer_ = nullptr;
-            other.texture_  = nullptr;
-            other.previous_ = nullptr;
-            other.restored_ = true;
-        }
-        return *this;
-    }
-
-    ~ChunkMaskRenderScope() { restore_target(); }
-
-    [[nodiscard]] bool valid() const { return renderer_ && texture_; }
-
-    [[nodiscard]] SDL_Texture* texture() const { return texture_; }
-
-    void restore_target() {
-        if (!restored_ && renderer_) {
-            SDL_SetRenderTarget(renderer_, previous_);
-            restored_ = true;
-        }
-    }
-
-private:
-    SDL_Renderer* renderer_ = nullptr;
-    SDL_Texture*  texture_  = nullptr;
-    SDL_Texture*  previous_ = nullptr;
-    bool          restored_ = false;
-};
-
-// Creates the chunk mask texture, prepares the render target, and clears it.
-ChunkMaskRenderScope create_chunk_mask_texture(SDL_Renderer* renderer,
-                                               world::Chunk& chunk,
-                                               int width,
-                                               int height) {
-    SDL_Texture* texture = SDL_CreateTexture(renderer,
-                                             SDL_PIXELFORMAT_RGBA8888,
-                                             SDL_TEXTUREACCESS_TARGET,
-                                             width,
-                                             height);
-    if (!texture) {
-        vibble::log::warn(std::string("[LightMap] ensure_chunk_static_texture: SDL_CreateTexture failed: ") + SDL_GetError());
-        chunk.static_texture_set = false;
-        chunk.lighting_dirty     = true;
-        return {};
-    }
-
-    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-
-    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
-    if (SDL_SetRenderTarget(renderer, texture) != 0) {
-        SDL_DestroyTexture(texture);
-        SDL_SetRenderTarget(renderer, previous_target);
-        vibble::log::warn(std::string("[LightMap] ensure_chunk_static_texture: SDL_SetRenderTarget failed: ") + SDL_GetError());
-        chunk.static_texture_set = false;
-        chunk.lighting_dirty     = true;
-        return {};
-    }
-
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-
-    return ChunkMaskRenderScope(renderer, texture, previous_target);
-}
-
-// Stamps static light textures into the prepared chunk mask.
-void stamp_static_lights_onto_mask(SDL_Renderer* renderer,
-                                   const Assets* assets,
-                                   const world::Chunk& chunk) {
-#if SDL_VERSION_ATLEAST(2, 0, 6)
-    const SDL_BlendMode erase_alpha_blend = SDL_ComposeCustomBlendMode(
-        SDL_BLENDFACTOR_ZERO,
-        SDL_BLENDFACTOR_ONE,
-        SDL_BLENDOPERATION_ADD,
-        SDL_BLENDFACTOR_ZERO,
-        SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-        SDL_BLENDOPERATION_ADD);
-#else
-    const SDL_BlendMode erase_alpha_blend = SDL_BLENDMODE_ADD;
-#endif
-
-    if (!assets) {
-        return;
-    }
-
-    const auto& static_lights = assets->getActiveStaticLightAssets();
-    vibble::log::debug(std::string("[LightMap] ensure_chunk_static_texture: stamping static lights into darkness mask (count=") +
-                       std::to_string(static_lights.size()) + ") for chunk(" + std::to_string(chunk.i) + "," +
-                       std::to_string(chunk.j) + ")");
-
-    for (const Asset* asset : static_lights) {
-        if (!asset || !asset->info) {
-            continue;
-        }
-        if (asset->info->light_sources.empty()) {
-            continue;
-        }
-
-        for (const auto& light : asset->info->light_sources) {
-            SDL_Texture* tex = light.texture;
-            if (!tex) {
-                continue;
-            }
-
-            int src_w = light.cached_w > 0 ? light.cached_w : 0;
-            int src_h = light.cached_h > 0 ? light.cached_h : 0;
-            if (src_w <= 0 || src_h <= 0) {
-                SDL_QueryTexture(tex, nullptr, nullptr, &src_w, &src_h);
-            }
-            if (src_w <= 0 || src_h <= 0) {
-                continue;
-            }
-
-            const int draw_w = std::max(1, src_w);
-            const int draw_h = std::max(1, src_h);
-
-            SDL_Point world_center{ asset->pos.x + light.offset_x, asset->pos.y + light.offset_y };
-            SDL_Rect  world_dst{ world_center.x - draw_w / 2,
-                                 world_center.y - draw_h / 2,
-                                 draw_w,
-                                 draw_h };
-
-            SDL_Rect intersection{};
-            if (!SDL_IntersectRect(&world_dst, &chunk.world_bounds, &intersection)) {
-                continue;
-            }
-
-            Uint8 save_r = 255, save_g = 255, save_b = 255, save_a = 255;
-            SDL_BlendMode save_bm = SDL_BLENDMODE_BLEND;
-            SDL_GetTextureColorMod(tex, &save_r, &save_g, &save_b);
-            SDL_GetTextureAlphaMod(tex, &save_a);
-            SDL_GetTextureBlendMode(tex, &save_bm);
-
-            SDL_SetTextureBlendMode(tex, erase_alpha_blend);
-            SDL_SetTextureColorMod(tex, 255, 255, 255);
-            SDL_SetTextureAlphaMod(tex, 255);
-
-            const int tex_w = draw_w;
-            const int tex_h = draw_h;
-
-            SDL_Rect src_rect{};
-            src_rect.x = std::clamp(intersection.x - world_dst.x, 0, std::max(0, tex_w));
-            src_rect.y = std::clamp(intersection.y - world_dst.y, 0, std::max(0, tex_h));
-            src_rect.w = intersection.w;
-            src_rect.h = intersection.h;
-
-            if (src_rect.x >= tex_w || src_rect.y >= tex_h) {
-                continue;
-            }
-
-            src_rect.w = std::min(src_rect.w, tex_w - src_rect.x);
-            src_rect.h = std::min(src_rect.h, tex_h - src_rect.y);
-
-            SDL_Rect local_dst{};
-            local_dst.x = std::max(0, intersection.x - chunk.world_bounds.x);
-            local_dst.y = std::max(0, intersection.y - chunk.world_bounds.y);
-            local_dst.w = src_rect.w;
-            local_dst.h = src_rect.h;
-
-            if (src_rect.w <= 0 || src_rect.h <= 0 || local_dst.w <= 0 || local_dst.h <= 0) {
-                continue;
-            }
-
-            SDL_RenderCopy(renderer, tex, &src_rect, &local_dst);
-
-            SDL_SetTextureBlendMode(tex, save_bm);
-            SDL_SetTextureColorMod(tex, save_r, save_g, save_b);
-            SDL_SetTextureAlphaMod(tex, save_a);
-        }
-    }
-}
-
-// Finalizes the chunk mask texture and updates cached lighting metadata.
-void finalize_chunk_mask_texture(SDL_Renderer* renderer,
-                                 world::Chunk& chunk,
-                                 ChunkMaskRenderScope& scope) {
-    scope.restore_target();
-
-    chunk.static_darkness_mask = scope.texture();
-    chunk.static_texture_set = true;
-    chunk.lighting_dirty     = false;
-    update_chunk_static_brightness_extrema(renderer, chunk);
-    vibble::log::debug(std::string("[LightMap] ensure_chunk_static_texture: COMPLETE darkness mask for chunk(") +
-                       std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ") base_brightness=" +
-                       std::to_string(chunk.base_brightness));
-}
-
-} // namespace
-
 // LightMap implementation
 // ctor/dtor inlined in header
-
-void LightMap::destroy_chunk_texture(world::Chunk& chunk) const {
-    if (chunk.static_darkness_mask) {
-        SDL_DestroyTexture(chunk.static_darkness_mask);
-        chunk.static_darkness_mask = nullptr;
-    }
-    chunk.static_texture_set = false;
-    chunk.lighting_dirty     = true;
-    chunk.lighting.needs_update = true;
-    chunk.static_brightness_sample_valid  = false;
-    chunk.static_brightness_retry_pending = true;
-}
-
-void LightMap::ensure_chunk_static_texture(SDL_Renderer* renderer, world::Chunk& chunk) const {
-    if (!renderer) {
-        vibble::log::debug("[LightMap] ensure_chunk_static_texture: missing renderer");
-        return;
-    }
-    if (chunk_lighting_suspended_flag()) {
-        return;
-    }
-    if (!chunk.lighting_dirty && chunk.static_texture_set) {
-        return;
-    }
-
-    destroy_chunk_texture(chunk);
-
-    const int width  = std::max(1, chunk.world_bounds.w);
-    const int height = std::max(1, chunk.world_bounds.h);
-    vibble::log::debug(std::string("[LightMap] ensure_chunk_static_texture: CREATE darkness mask size=") +
-                       std::to_string(width) + "x" + std::to_string(height) + " for chunk(" +
-                       std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ")");
-
-    ChunkMaskRenderScope mask_scope = create_chunk_mask_texture(renderer, chunk, width, height);
-    if (!mask_scope.valid()) {
-        return;
-    }
-
-    stamp_static_lights_onto_mask(renderer, assets_, chunk);
-
-    finalize_chunk_mask_texture(renderer, chunk, mask_scope);
-}
 
 void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
     std::scoped_lock lock(mutex_);
@@ -529,9 +378,13 @@ void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
         if (!chunk) {
             continue;
         }
-        chunk->lighting_dirty     = true;
-        chunk->static_texture_set = false;
         chunk->lighting.needs_update = true;
+        if (!chunk->static_light_mask) {
+            chunk->lighting_dirty     = true;
+            chunk->lighting_preloaded = false;
+            chunk->static_clean       = false;
+            chunk->needs_retry        = true;
+        }
     }
 }
 
@@ -545,9 +398,19 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
         if (!chunk) {
             continue;
         }
-        ensure_chunk_static_texture(renderer, *chunk);
-        if (chunk->static_darkness_mask && chunk->static_brightness_retry_pending) {
-            update_chunk_static_brightness_extrema(renderer, *chunk);
+        if (!chunk->static_light_mask) {
+            chunk->lighting_preloaded = false;
+            chunk->static_clean       = false;
+            chunk->lighting_dirty     = true;
+            chunk->needs_retry        = true;
+            continue;
+        }
+        if (!chunk->static_clean) {
+            chunk->lighting.needs_update = true;
+        }
+        if (!chunk->lighting_preloaded && chunk->static_clean) {
+            chunk->lighting_preloaded = true;
+            chunk->needs_retry        = false;
         }
     }
 
@@ -645,28 +508,29 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
         if (!chunk->lighting.needs_update) continue;
 
         if (chunk->lighting.is_occupied_by_moving_source) {
-            float static_avg = chunk->base_brightness;
-            if (chunk->static_darkness_mask) {
-                const auto sample = vibble::render::sample_texture_transparency(renderer, chunk->static_darkness_mask);
+            float static_avg = world::static_brightness_for_opacity(*chunk, screen_light_opacity);
+            if (chunk->static_light_mask) {
+                const auto sample = vibble::render::sample_texture_transparency(renderer, chunk->static_light_mask);
                 if (sample.success) {
                     static_avg = std::clamp(sample.average, 0.0f, 1.0f);
                 } else {
                     log_transparency_failure("[LightMap] moving", *chunk, sample);
-                    chunk->static_brightness_retry_pending = true;
+                    chunk->needs_retry = true;
                 }
+            } else {
+                chunk->needs_retry = true;
             }
             chunk->lighting.current_strength = static_avg;
         } else {
-            chunk->lighting.current_strength = lerp(chunk->lighting.min_static_avg_strength,
-                                                 chunk->lighting.max_static_avg_strength,
-                                                 screen_light_opacity);
+            chunk->lighting.current_strength =
+                world::static_brightness_for_opacity(*chunk, screen_light_opacity);
         }
 
         const ShadowSettings settings{};
         const int   radius = std::max(0, settings.search_radius_cells);
         const float fx     = std::max(0.0f, settings.falloff_horizontal);
         const float fy     = std::max(0.0f, settings.falloff_vertical);
-        const auto grad    = compute_brightness_gradient(*chunk, grid, radius, fx, fy);
+        const auto grad    = compute_brightness_gradient(*chunk, grid, radius, fx, fy, screen_light_opacity);
         int map_dir_sign_x = 0;
         if (const Global_Light_Source* gl = assets_->map_light_source()) {
             const SDL_Point ref = gl->get_direction_reference();
@@ -692,8 +556,9 @@ float LightMap::sample_brightness(int world_x,
                           std::to_string(world_x) + ", " + std::to_string(world_y) + ")");
         return 1.0f;
     }
-    const float weight = std::clamp(static_weight, 0.0f, 1.0f);
-    return std::clamp(chunk->base_brightness * weight, 0.0f, 1.0f);
+    const float weight           = std::clamp(static_weight, 0.0f, 1.0f);
+    const float static_component = world::static_brightness_for_opacity(*chunk, last_screen_light_opacity_);
+    return std::clamp(static_component * weight, 0.0f, 1.0f);
 }
 
 float LightMap::sample_brightness_bilinear(float world_x,
@@ -705,6 +570,73 @@ float LightMap::sample_brightness_bilinear(float world_x,
                              static_cast<int>(std::lround(world_y)),
                              static_weight,
                              dynamic_weight);
+}
+
+void LightMap::present_static_previews(SDL_Renderer* renderer, bool present) const {
+    std::scoped_lock lock(mutex_);
+    if (!renderer || !assets_) {
+        return;
+    }
+
+    world::Grid& grid = assets_->world_grid();
+    std::vector<world::Chunk*> chunks = grid.all_chunks();
+    if (chunks.empty()) {
+        return;
+    }
+
+    SDL_SetRenderTarget(renderer, nullptr);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    constexpr int kColumns = 1;
+    constexpr int kPadding = 8;
+    int column_x   = kPadding;
+    int column_y   = kPadding;
+    int column_max = 0;
+
+    for (world::Chunk* chunk : chunks) {
+        if (!chunk) {
+            continue;
+        }
+        SDL_Texture* previews[kColumns] = {
+            chunk->static_light_mask,
+        };
+        if (!previews[0]) {
+            continue;
+        }
+
+        const int chunk_w = std::max(1, chunk->world_bounds.w);
+        const int chunk_h = std::max(1, chunk->world_bounds.h);
+        const int required_width = kColumns * chunk_w + (kColumns - 1) * kPadding;
+
+        if (column_y + chunk_h > screen_height_) {
+            column_y   = kPadding;
+            column_x  += column_max + kPadding;
+            column_max = 0;
+        }
+
+        if (column_x + required_width > screen_width_) {
+            break;
+        }
+
+        column_max = std::max(column_max, required_width);
+
+        for (int i = 0; i < kColumns; ++i) {
+            SDL_Texture* tex = previews[i];
+            if (!tex) {
+                continue;
+            }
+            SDL_Rect dst{column_x + i * (chunk_w + kPadding), column_y, chunk_w, chunk_h};
+            SDL_RenderCopy(renderer, tex, nullptr, &dst);
+        }
+
+        column_y += chunk_h + kPadding;
+    }
+
+    if (present) {
+        SDL_RenderPresent(renderer);
+    }
 }
 
 void LightMap::render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {
@@ -723,7 +655,7 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
     SDL_Rect world_view = world_rect_from_screen(cam, view_rect);
 
     for (world::Chunk* chunk : active_chunks()) {
-        if (!chunk || !chunk->static_darkness_mask) {
+        if (!chunk || !chunk->static_light_mask) {
             continue;
         }
         if (!intersects(chunk->world_bounds, world_view)) {
@@ -765,8 +697,8 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
             dst.y += offset_screen.y - origin_screen.y;
         }
 
-        SDL_SetTextureAlphaMod(chunk->static_darkness_mask, chunk_alpha);
-        SDL_RenderCopy(renderer, chunk->static_darkness_mask, nullptr, &dst);
+        SDL_SetTextureAlphaMod(chunk->static_light_mask, chunk_alpha);
+        SDL_RenderCopy(renderer, chunk->static_light_mask, nullptr, &dst);
     }
 }
 
@@ -811,7 +743,9 @@ void LightMap::mark_static_cache_dirty() {
     for (world::Chunk* chunk : active_chunks()) {
         if (chunk) {
             chunk->lighting_dirty     = true;
-            chunk->static_texture_set = false;
+            chunk->lighting_preloaded = false;
+            chunk->static_clean       = false;
+            chunk->needs_retry        = true;
         }
     }
 }

@@ -58,12 +58,18 @@ TEST_CASE("Layers panel toggles visibility via footer button") {
     Input input;
     ui.update(input);
     CHECK_FALSE(ui.is_layers_panel_visible());
+    CHECK_FALSE(ui.is_layers_details_container_visible());
+    CHECK_FALSE(ui.is_layers_preview_container_visible());
 
     ui.toggle_layers_panel();
     ui.update(input);
     CHECK(ui.is_layers_panel_visible());
+    CHECK(ui.is_layers_details_container_visible());
+    CHECK(ui.is_layers_preview_container_visible());
 
     ui.toggle_layers_panel();
     ui.update(input);
     CHECK_FALSE(ui.is_layers_panel_visible());
+    CHECK_FALSE(ui.is_layers_details_container_visible());
+    CHECK_FALSE(ui.is_layers_preview_container_visible());
 }
