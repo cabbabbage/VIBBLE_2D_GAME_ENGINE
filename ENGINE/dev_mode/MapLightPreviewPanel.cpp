@@ -141,6 +141,16 @@ bool stage_requires_blend(PreviewStage stage) {
 
 namespace mlppd = map_light_preview_panel_detail;
 
+using map_light_preview_panel_detail::PreviewStage;
+using map_light_preview_panel_detail::clamp_int;
+using map_light_preview_panel_detail::format_float;
+using map_light_preview_panel_detail::kPreviewStageCount;
+using map_light_preview_panel_detail::kPreviewStageLabels;
+using map_light_preview_panel_detail::normalize_stage;
+using map_light_preview_panel_detail::preview_event_point;
+using map_light_preview_panel_detail::stage_requires_blend;
+using map_light_preview_panel_detail::texture_for_stage;
+using map_light_preview_panel_detail::make_setting_key;
 class MapLightPreviewPanel::PreviewWidget : public Widget {
 public:
     explicit PreviewWidget(MapLightPreviewPanel* owner) : owner_(owner) {}
