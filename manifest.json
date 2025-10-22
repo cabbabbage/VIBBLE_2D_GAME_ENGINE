@@ -2180,7 +2180,7 @@
         "rock"
       ],
       "update_radius": 1000,
-      "z_threshold": -6
+      "z_threshold": 2
     },
     "Big_Rock_Center": {
       "animations": {
@@ -13718,7 +13718,7 @@
         "parallax_strength": 28.0,
         "realism_enabled": true,
         "render_distance": 1340.0,
-        "render_quality_percent": 10,
+        "render_quality_percent": 75,
         "tripod_distance_y": -495.0
       },
       "content_root": "MAPS/FORREST",
