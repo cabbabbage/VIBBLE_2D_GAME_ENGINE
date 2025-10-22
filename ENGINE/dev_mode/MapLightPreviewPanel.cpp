@@ -100,6 +100,56 @@ SDL_Point preview_event_point(const SDL_Event& e) {
     return SDL_Point{0, 0};
 }
 
+enum class PreviewStage : int {
+    Mask = 0,
+    Base = 1,
+    Min  = 2,
+    Max  = 3,
+};
+
+constexpr int kPreviewStageCount = static_cast<int>(PreviewStage::Max) + 1;
+
+constexpr std::array<const char*, kPreviewStageCount> kPreviewStageLabels{
+    "Mask",
+    "Base",
+    "Min",
+    "Max",
+};
+
+PreviewStage normalize_stage(int stage_index) {
+    if (kPreviewStageCount <= 0) {
+        return PreviewStage::Mask;
+    }
+    int normalized = stage_index % kPreviewStageCount;
+    if (normalized < 0) {
+        normalized += kPreviewStageCount;
+    }
+    return static_cast<PreviewStage>(normalized);
+}
+
+SDL_Texture* texture_for_stage(const world::Chunk* chunk, PreviewStage stage) {
+    if (!chunk) {
+        return nullptr;
+    }
+    switch (stage) {
+        case PreviewStage::Mask:
+            return chunk->static_darkness_mask;
+        case PreviewStage::Base:
+            // Base preview falls back to the brightest static preview when a dedicated
+            // base texture has not yet been produced by the lighting pipeline.
+            return chunk->static_max_preview ? chunk->static_max_preview : chunk->static_min_preview;
+        case PreviewStage::Min:
+            return chunk->static_min_preview;
+        case PreviewStage::Max:
+            return chunk->static_max_preview;
+    }
+    return nullptr;
+}
+
+bool stage_requires_blend(PreviewStage stage) {
+    return stage != PreviewStage::Mask;
+}
+
 }  // namespace
 
 class MapLightPreviewPanel::PreviewWidget : public Widget {
@@ -353,6 +403,12 @@ bool MapLightPreviewPanel::handle_preview_event(const SDL_Event& e) {
         return true;
     }
 
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+        selected_chunk_ = chunk_index;
+        cycle_preview_stage(1);
+        return true;
+    }
+
     if (e.type == SDL_MOUSEMOTION) {
         selected_chunk_ = chunk_index;
     }
@@ -402,6 +458,23 @@ int MapLightPreviewPanel::preview_height_for_width(int width) const {
     return grid_height_px;
 }
 
+void MapLightPreviewPanel::cycle_preview_stage(int delta) {
+    if (delta == 0) {
+        return;
+    }
+    if (kPreviewStageCount <= 0) {
+        preview_stage_index_ = 0;
+        return;
+    }
+    preview_stage_index_ += delta;
+    if (preview_stage_index_ >= kPreviewStageCount) {
+        preview_stage_index_ %= kPreviewStageCount;
+    }
+    while (preview_stage_index_ < 0) {
+        preview_stage_index_ += kPreviewStageCount;
+    }
+}
+
 int MapLightPreviewPanel::estimated_detail_line_count() const {
     int count = 0;
 
@@ -417,6 +490,7 @@ int MapLightPreviewPanel::estimated_detail_line_count() const {
 
     if (detail_chunk >= 0) {
         count += 1;  // Tile header
+        count += 1;  // Stage line
 
         // Assume full snapshot metrics when available.
         count += 7;
@@ -544,6 +618,116 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     std::unique_ptr<TTF_Font, decltype(&TTF_CloseFont)> tile_font(
         TTF_OpenFont(label_style.font_path.c_str(), std::max(8, label_style.font_size - 4)), &TTF_CloseFont);
     SDL_Color text_color = label_style.color;
+
+    const int detail_available_height = detail_below
+                                            ? std::max(0, preview_widget_bounds_.h - grid_height_px - detail_gap)
+                                            : grid_height_px;
+
+    PreviewStage stage = normalize_stage(preview_stage_index_);
+    std::string stage_label_text{kPreviewStageLabels[static_cast<int>(stage)]};
+
+    const int detail_chunk =
+        (selected_chunk_ >= 0 && selected_chunk_ < total_chunks) ? selected_chunk_ : -1;
+    const world::Chunk* detail_chunk_ptr = (detail_chunk >= 0) ? map->chunk_at(detail_chunk) : nullptr;
+
+    SDL_Texture* stage_texture = texture_for_stage(detail_chunk_ptr, stage);
+    bool         stage_available = (stage_texture != nullptr);
+
+    std::string stage_header_text = std::string("Stage: ") + stage_label_text;
+    if (!stage_available) {
+        stage_header_text.append(" (no preview)");
+    }
+
+    preview_viewport_.setRenderer(renderer);
+    preview_viewport_.setLabel(stage_label_text);
+    preview_viewport_.setTarget(stage_texture);
+    preview_viewport_.setPresentBlendMode(SDL_BLENDMODE_BLEND);
+    preview_viewport_.enablePresentBlend(stage_requires_blend(stage));
+
+    const int stage_padding = DMSpacing::small_gap();
+    const int available_stage_width = std::max(0, detail_width - stage_padding * 2);
+    const int available_stage_height = std::max(0, detail_available_height - stage_padding * 2);
+    const int stage_label_height = (detail_font) ? TTF_FontHeight(detail_font.get()) : 0;
+    const int texture_w = stage_texture ? preview_viewport_.width() : 0;
+    const int texture_h = stage_texture ? preview_viewport_.height() : 0;
+
+    int stage_texture_width  = 0;
+    int stage_texture_height = 0;
+    if (stage_texture && texture_w > 0 && texture_h > 0 && available_stage_width > 0 && available_stage_height > stage_label_height) {
+        int available_for_texture = available_stage_height - stage_label_height;
+        if (stage_label_height > 0) {
+            available_for_texture = std::max(0, available_for_texture - stage_padding);
+        }
+        if (available_for_texture > 0) {
+            const double aspect = static_cast<double>(texture_h) / static_cast<double>(texture_w);
+            stage_texture_width = available_stage_width;
+            stage_texture_height = static_cast<int>(std::lround(static_cast<double>(stage_texture_width) * aspect));
+            if (stage_texture_height > available_for_texture) {
+                stage_texture_height = available_for_texture;
+                stage_texture_width = static_cast<int>(std::lround(static_cast<double>(stage_texture_height) / aspect));
+            }
+            if (stage_texture_width > available_stage_width) {
+                stage_texture_width = available_stage_width;
+            }
+            if (stage_texture_height <= 0 || stage_texture_width <= 0) {
+                stage_texture_width  = 0;
+                stage_texture_height = 0;
+            }
+        }
+    }
+
+    int stage_block_height = 0;
+    if (detail_chunk_ptr && (stage_label_height > 0 || stage_texture_height > 0)) {
+        stage_block_height = stage_padding * 2 + stage_label_height;
+        if (stage_texture_width > 0 && stage_texture_height > 0) {
+            stage_block_height += stage_padding + stage_texture_height;
+        }
+        stage_block_height = std::min(stage_block_height, detail_available_height);
+    }
+
+    if (stage_block_height > 0 && stage_texture_width > 0 && stage_texture_height > 0) {
+        int block_inner_height = stage_block_height - stage_padding * 2 - stage_label_height;
+        if (stage_label_height > 0) {
+            block_inner_height = std::max(0, block_inner_height - stage_padding);
+        }
+        int adjusted_height = std::min(stage_texture_height, std::max(0, block_inner_height));
+        if (adjusted_height <= 0) {
+            stage_texture_width  = 0;
+            stage_texture_height = 0;
+        } else if (adjusted_height != stage_texture_height && texture_w > 0 && texture_h > 0) {
+            const double aspect = static_cast<double>(texture_h) / static_cast<double>(texture_w);
+            stage_texture_width = std::min(available_stage_width,
+                                           static_cast<int>(std::lround(static_cast<double>(adjusted_height) /
+                                                                        aspect)));
+            stage_texture_height = adjusted_height;
+        } else {
+            stage_texture_height = adjusted_height;
+        }
+    }
+
+    if (stage_block_height == 0) {
+        stage_texture_width  = 0;
+        stage_texture_height = 0;
+    }
+
+    SDL_Rect stage_panel_rect{detail_rect.x, detail_rect.y, detail_width, stage_block_height};
+    SDL_Rect stage_label_rect{detail_rect.x + stage_padding,
+                              detail_rect.y + stage_padding,
+                              std::max(0, detail_width - stage_padding * 2),
+                              stage_label_height};
+    if (stage_label_rect.h > std::max(0, stage_panel_rect.h - stage_padding * 2)) {
+        stage_label_rect.h = std::max(0, stage_panel_rect.h - stage_padding * 2);
+    }
+
+    SDL_Rect stage_texture_rect{detail_rect.x + stage_padding,
+                                stage_label_rect.y + stage_label_rect.h + (stage_label_rect.h > 0 ? stage_padding : 0),
+                                stage_texture_width,
+                                stage_texture_height};
+    if (stage_texture_rect.w > 0) {
+        int centered_x = detail_rect.x + stage_padding +
+                         std::max(0, (available_stage_width - stage_texture_rect.w) / 2);
+        stage_texture_rect.x = centered_x;
+    }
 
     auto fallback_cell_rect = [&](int gx, int gy) -> SDL_Rect {
         const int left   = preview_grid_rect_.x + static_cast<int>(
@@ -807,8 +991,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, outline_color.r, outline_color.g, outline_color.b, outline_color.a);
     SDL_RenderDrawRect(renderer, &preview_grid_rect_);
 
-    const int detail_chunk =
-        (selected_chunk_ >= 0 && selected_chunk_ < total_chunks) ? selected_chunk_ : -1;
     if (detail_chunk >= 0 &&
         static_cast<std::size_t>(detail_chunk) < chunk_preview_rects_.size()) {
         const SDL_Rect& selected_rect =
@@ -826,6 +1008,13 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         const int gy = detail_chunk / grid_w;
         detail_lines.push_back("Tile [" + std::to_string(gx) + ", " + std::to_string(gy) + "] #" +
                                std::to_string(detail_chunk));
+
+        std::string stage_line = std::string("Preview Stage: ") + stage_label_text;
+        if (!stage_available) {
+            stage_line.append(" (no preview)");
+        }
+        stage_line.append(" | Right-click to cycle");
+        detail_lines.push_back(std::move(stage_line));
 
         if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
             detail_lines.push_back(std::string("Active: ") + (snap->active ? "yes" : "no") +
@@ -879,43 +1068,89 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         detail_text.append(detail_lines[i]);
     }
 
+    const SDL_Color panel_bg{20, 20, 20, 180};
+
+    const int text_gap = (!detail_text.empty() && stage_block_height > 0) ? DMSpacing::item_gap() : 0;
+    SDL_Rect detail_text_rect{detail_rect.x,
+                              detail_rect.y + stage_block_height + text_gap,
+                              detail_width,
+                              std::max(0, detail_available_height - stage_block_height - text_gap)};
+
+    if (stage_block_height > 0) {
+        SDL_SetRenderDrawColor(renderer, panel_bg.r, panel_bg.g, panel_bg.b, panel_bg.a);
+        SDL_RenderFillRect(renderer, &stage_panel_rect);
+        SDL_SetRenderDrawColor(renderer, outline_color.r, outline_color.g, outline_color.b, outline_color.a);
+        SDL_RenderDrawRect(renderer, &stage_panel_rect);
+
+        if (!stage_header_text.empty() && detail_font && stage_label_rect.h > 0) {
+            SDL_Surface* label_surface =
+                TTF_RenderUTF8_Blended(detail_font.get(), stage_header_text.c_str(), text_color);
+            if (label_surface) {
+                SDL_Texture* label_texture = SDL_CreateTextureFromSurface(renderer, label_surface);
+                if (label_texture) {
+                    SDL_Rect label_dst{stage_label_rect.x,
+                                       stage_label_rect.y,
+                                       label_surface->w,
+                                       label_surface->h};
+                    label_dst.w = std::min(label_dst.w, stage_label_rect.w);
+                    label_dst.h = std::min(label_dst.h, stage_label_rect.h);
+                    SDL_RenderCopy(renderer, label_texture, nullptr, &label_dst);
+                    SDL_DestroyTexture(label_texture);
+                }
+                SDL_FreeSurface(label_surface);
+            }
+        }
+
+        if (stage_texture && stage_texture_rect.w > 0 && stage_texture_rect.h > 0) {
+            preview_viewport_.present(stage_texture_rect);
+            SDL_SetRenderDrawColor(renderer, outline_color.r, outline_color.g, outline_color.b, outline_color.a);
+            SDL_RenderDrawRect(renderer, &stage_texture_rect);
+        }
+    }
+
     int detail_text_height = 0;
-    if (!detail_text.empty() && detail_width > 0 && detail_font) {
+    int detail_text_drawn  = 0;
+    if (!detail_text.empty() && detail_width > 0 && detail_font && detail_text_rect.h > 0) {
         SDL_Surface* surface =
             TTF_RenderUTF8_Blended_Wrapped(detail_font.get(), detail_text.c_str(), text_color,
                                            std::max(10, detail_width));
         if (surface) {
+            detail_text_height = surface->h;
             SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
             if (texture) {
-                SDL_Rect dst{detail_rect.x, detail_rect.y, surface->w, surface->h};
-                if (!detail_below) {
-                    dst.w = std::min(dst.w, detail_rect.w);
-                    dst.h = std::min(dst.h, detail_rect.h);
-                }
-                SDL_Color panel_bg{20, 20, 20, 180};
-                SDL_Rect bg_rect = detail_rect;
-                bg_rect.w = detail_width;
-                bg_rect.h = surface->h;
+                SDL_Rect dst{detail_text_rect.x, detail_text_rect.y, surface->w, surface->h};
+                dst.w = std::min(dst.w, detail_text_rect.w);
+                dst.h = std::min(dst.h, detail_text_rect.h);
+                SDL_Rect bg_rect = detail_text_rect;
+                bg_rect.h = dst.h;
                 SDL_SetRenderDrawColor(renderer, panel_bg.r, panel_bg.g, panel_bg.b, panel_bg.a);
                 SDL_RenderFillRect(renderer, &bg_rect);
-
                 SDL_RenderCopy(renderer, texture, nullptr, &dst);
                 SDL_DestroyTexture(texture);
+                detail_text_drawn = dst.h;
             }
-            detail_text_height = surface->h;
             SDL_FreeSurface(surface);
         }
+    }
+
+    int detail_drawn_height = stage_block_height;
+    if (detail_text_drawn > 0) {
+        detail_drawn_height += text_gap + detail_text_drawn;
     }
 
     // Clamp final heights to the widget bounds to avoid drawing over controls
     const int max_preview_h = std::max(0, preview_widget_bounds_.h);
     if (detail_below) {
-        const int remaining = std::max(0, max_preview_h - grid_height_px - detail_gap);
-        detail_rect.h = std::min(detail_text_height, remaining);
+        const int remaining = detail_available_height;
+        detail_rect.h = std::min(detail_drawn_height, remaining);
         preview_rect_.h = std::min(max_preview_h, grid_height_px + detail_gap + detail_rect.h);
     } else {
         detail_rect.h = grid_height_px;
-        preview_rect_.h = std::min(max_preview_h, std::max(grid_height_px, detail_text_height));
+        int detail_panel_height = detail_drawn_height;
+        if (detail_panel_height == 0 && detail_text_height > 0) {
+            detail_panel_height = std::min(detail_text_height, detail_text_rect.h);
+        }
+        preview_rect_.h = std::min(max_preview_h, std::max(grid_height_px, detail_panel_height));
     }
 
     // Restore previous clip rectangle

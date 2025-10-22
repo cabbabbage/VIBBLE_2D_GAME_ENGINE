@@ -14,6 +14,7 @@
 #include "world/chunk.hpp"
 #include "render/light_map_manager.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
+#include "dev_mode/PreviewViewport.hpp"
 
 class Assets;
 class Input;
@@ -55,6 +56,7 @@ private:
     int                           chunk_index_from_point(int x, int y) const;
     void                          render_preview(SDL_Renderer* renderer) const;
     bool                          handle_preview_event(const SDL_Event& e);
+    void                          cycle_preview_stage(int delta);
     int                           preview_height_for_width(int width) const;
     int                           estimated_detail_line_count() const;
     static int                    count_lines(std::string_view text);
@@ -103,6 +105,9 @@ private:
     render_pipeline::shading::ReactiveShadowSettings forced_settings_snapshot_ =
         render_pipeline::shading::sanitize_reactive_shadow_settings({});
     int last_chunk_resolution_ = 0;
+
+    mutable PreviewViewport preview_viewport_{};
+    int                    preview_stage_index_ = 0;
 };
 
 
