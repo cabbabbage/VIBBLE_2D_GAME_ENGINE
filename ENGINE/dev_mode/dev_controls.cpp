@@ -686,7 +686,7 @@ void DevControls::set_enabled(bool enabled) {
         set_mode(Mode::RoomEditor);
         Room* target = choose_room(current_room_ ? current_room_ : detected_room_);
         dev_selected_room_ = target;
-        if (room_editor_) room_editor_->set_enabled(true);
+        if (room_editor_) room_editor_->set_enabled(true, true);
         if (map_editor_) map_editor_->set_enabled(false);
         if (camera_panel_) camera_panel_->set_assets(assets_);
         set_current_room(target);
@@ -696,6 +696,13 @@ void DevControls::set_enabled(bool enabled) {
             if (auto* panel = map_mode_ui_->get_footer_bar()) {
                 panel->set_visible(false);
             }
+        }
+        if (room_editor_ && target && target->room_area) {
+            room_editor_->focus_camera_on_room_center(false);
+        } else if (assets_ && target && target->room_area) {
+            camera& cam = assets_->getView();
+            cam.set_manual_zoom_override(true);
+            cam.set_focus_override(target->room_area->get_center());
         }
         if (camera_was_visible && camera_panel_) {
             camera_panel_->open();
@@ -2419,7 +2426,7 @@ void DevControls::enter_map_editor_mode() {
     map_editor_->set_rooms(rooms_);
     map_editor_->set_screen_dimensions(screen_w_, screen_h_);
     map_editor_->set_enabled(true);
-    if (room_editor_) room_editor_->set_enabled(false);
+    if (room_editor_) room_editor_->set_enabled(false, true);
     if (map_mode_ui_) {
         map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Map);
         map_mode_ui_->set_map_mode_active(true);
@@ -2441,7 +2448,7 @@ void DevControls::exit_map_editor_mode(bool focus_player, bool restore_previous_
     }
     set_mode(Mode::RoomEditor);
     if (room_editor_ && enabled_) {
-        room_editor_->set_enabled(true);
+        room_editor_->set_enabled(true, true);
         room_editor_->set_current_room(current_room_);
     }
     if (camera_was_visible && camera_panel_) {

@@ -50,9 +50,6 @@ private:
     ReactiveShadowSettings settings_from_ui();
     ReactiveShadowSettings load_settings() const;
     void apply_settings(const ReactiveShadowSettings& settings, bool persist);
-    void select_entry(int index);
-    void add_entry();
-    void remove_entry();
     void request_save();
     nlohmann::json* ensure_reactive_shadow_json();
     static int find_entry_index(const std::vector<LutEntry>& entries, const LutEntry& target);
@@ -92,6 +89,4 @@ private:
     std::unique_ptr<DMSlider> lut_offset_{};
     std::unique_ptr<DMSlider> lut_scale_{};
 
-    std::unique_ptr<DMButton> add_entry_button_{};
-    std::unique_ptr<DMButton> remove_entry_button_{};
 };

@@ -301,17 +301,19 @@ void RoomEditor::set_current_room(Room* room) {
     room_editor_trace("[RoomEditor] set_current_room complete");
 }
 
-void RoomEditor::set_enabled(bool enabled) {
+void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {
     enabled_ = enabled;
     if (!assets_) return;
     if (!enabled_) {
         active_modal_ = ActiveModal::None;
     }
 
-    camera& cam = assets_->getView();
+    camera* cam = assets_ ? &assets_->getView() : nullptr;
     if (enabled_) {
         apply_area_editor_camera_override(false);
-        cam.set_manual_zoom_override(false);
+        if (cam && !preserve_camera_state) {
+            cam->set_manual_zoom_override(false);
+        }
         close_asset_info_editor();
         ensure_room_configurator();
         if (room_cfg_ui_) {
@@ -321,8 +323,10 @@ void RoomEditor::set_enabled(bool enabled) {
         configure_shared_panel();
     } else {
         apply_area_editor_camera_override(false);
-        cam.set_manual_zoom_override(false);
-        cam.clear_focus_override();
+        if (cam && !preserve_camera_state) {
+            cam->set_manual_zoom_override(false);
+            cam->clear_focus_override();
+        }
         if (library_ui_) library_ui_->close();
         if (info_ui_) info_ui_->close();
         clear_active_spawn_group_target();

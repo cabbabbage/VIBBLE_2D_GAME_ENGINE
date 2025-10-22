@@ -289,20 +289,6 @@ void MapShadowPanel::build_ui() {
     add_slider_row(lut_offset_);
     add_slider_row(lut_scale_);
 
-    if (!add_entry_button_) {
-        add_entry_button_ = std::make_unique<DMButton>("Add Entry", &DMStyles::AccentButton(), 140, DMButton::height());
-    }
-    if (!remove_entry_button_) {
-        remove_entry_button_ = std::make_unique<DMButton>("Remove Entry", &DMStyles::DeleteButton(), 160, DMButton::height());
-    }
-
-    auto add_widget = std::make_unique<ButtonWidget>(add_entry_button_.get(), [this]() { this->add_entry(); });
-    auto remove_widget = std::make_unique<ButtonWidget>(remove_entry_button_.get(), [this]() { this->remove_entry(); });
-
-    rows.push_back({add_widget.get(), remove_widget.get()});
-    widget_wrappers_.push_back(std::move(add_widget));
-    widget_wrappers_.push_back(std::move(remove_widget));
-
     set_rows(rows);
 }
 
@@ -417,46 +403,6 @@ void MapShadowPanel::apply_settings(const ReactiveShadowSettings& settings, bool
             }
         }
     }
-}
-
-void MapShadowPanel::select_entry(int index) {
-    selected_entry_index_ = clamp_entry_index(index, current_settings_);
-    sync_ui_from_settings(current_settings_);
-}
-
-void MapShadowPanel::add_entry() {
-    ReactiveShadowSettings settings = current_settings_;
-    LutEntry new_entry{};
-    if (!settings.response_lut.entries.empty()) {
-        const auto& last = settings.response_lut.entries.back();
-        new_entry         = last;
-        new_entry.brightness = std::min(1.0f, last.brightness + 0.05f);
-    } else {
-        new_entry = LutEntry{0.0f, 1.0f, 0.0f, 1.0f};
-    }
-    settings.response_lut.entries.push_back(new_entry);
-
-    const float target_brightness = new_entry.brightness;
-    ReactiveShadowSettings sanitized = render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
-    current_settings_ = sanitized;
-    const int index = find_entry_index(sanitized.response_lut.entries, new_entry);
-    selected_entry_index_ = index >= 0 ? index : clamp_entry_index(static_cast<int>(sanitized.response_lut.entries.size()) - 1, sanitized);
-    rebuild_ui();
-    apply_settings(current_settings_, true);
-}
-
-void MapShadowPanel::remove_entry() {
-    ReactiveShadowSettings settings = current_settings_;
-    if (settings.response_lut.entries.size() <= 1) {
-        return;
-    }
-    const int safe_index = clamp_entry_index(selected_entry_index_, settings);
-    settings.response_lut.entries.erase(settings.response_lut.entries.begin() + safe_index);
-    ReactiveShadowSettings sanitized = render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
-    current_settings_ = sanitized;
-    selected_entry_index_ = clamp_entry_index(safe_index, sanitized);
-    rebuild_ui();
-    apply_settings(current_settings_, true);
 }
 
 void MapShadowPanel::request_save() {
