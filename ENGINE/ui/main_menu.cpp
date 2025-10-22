@@ -3,6 +3,7 @@
 #include <SDL_image.h>
 #include <SDL_ttf.h>
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -393,64 +394,40 @@ std::string MainMenu::pickRandomLine(const fs::path& csv_path) const {
 void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         if (!tex) return;
 
+        int tex_w = 0;
+        int tex_h = 0;
+        SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h);
+        if (tex_w <= 0 || tex_h <= 0) return;
+
         const double rpm = 0.5 / 3.0;
         const double degrees_per_second = rpm * 360.0 / 60.0;
         const Uint64 now = SDL_GetTicks64();
         const double elapsed_seconds = static_cast<double>(now - animation_start_ticks_) / 1000.0;
         const double angle = std::fmod(elapsed_seconds * degrees_per_second, 360.0);
 
-        SDL_Rect base = coverDst(tex);
-        const double base_w = static_cast<double>(base.w);
-        const double base_h = static_cast<double>(base.h);
-        const double pivot_x = -400.0;
-        const double pivot_y = static_cast<double>(screen_h_) + 400.0;
+        const double pivot_x = -0.08 * static_cast<double>(screen_w_);
+        const double pivot_y = static_cast<double>(screen_h_) * 1.08;
 
-        const int steps = 360;
-        static bool trig_initialized = false;
-        static double cos_table[steps];
-        static double sin_table[steps];
-        if (!trig_initialized) {
-                const double two_pi = 6.28318530717958647692;
-                for (int i = 0; i < steps; ++i) {
-                        const double rad = (static_cast<double>(i) / static_cast<double>(steps)) * two_pi;
-                        cos_table[i] = std::cos(rad);
-                        sin_table[i] = std::sin(rad);
+        const double base_scale_x = static_cast<double>(screen_w_) / static_cast<double>(tex_w);
+        const double base_scale_y = static_cast<double>(screen_h_) / static_cast<double>(tex_h);
+        double required_scale = std::max(base_scale_x, base_scale_y);
+
+        const double half_w = static_cast<double>(tex_w) * 0.5;
+        const double half_h = static_cast<double>(tex_h) * 0.5;
+        const double texture_radius = std::sqrt(half_w * half_w + half_h * half_h);
+        if (texture_radius > 1e-6) {
+                const std::array<SDL_FPoint, 4> corners {{{0.0f, 0.0f},
+                                                         {static_cast<float>(screen_w_), 0.0f},
+                                                         {0.0f, static_cast<float>(screen_h_)},
+                                                         {static_cast<float>(screen_w_), static_cast<float>(screen_h_)}}};
+                double max_corner_distance = 0.0;
+                for (const auto& c : corners) {
+                        const double dx = static_cast<double>(c.x) - pivot_x;
+                        const double dy = static_cast<double>(c.y) - pivot_y;
+                        const double dist = std::sqrt(dx * dx + dy * dy);
+                        if (dist > max_corner_distance) max_corner_distance = dist;
                 }
-                trig_initialized = true;
-        }
-
-        double required_scale = 1.0;
-        for (int i = 0; i < steps; ++i) {
-                const double cos_theta = cos_table[i];
-                const double sin_theta = sin_table[i];
-
-                const double val_x_a = 0.0;
-                const double val_x_b = cos_theta * base_w;
-                const double val_x_c = sin_theta * base_h;
-                const double val_x_d = cos_theta * base_w + sin_theta * base_h;
-                const double max_val_x = std::max({val_x_a, val_x_b, val_x_c, val_x_d});
-
-                const double val_y_a = 0.0;
-                const double val_y_b = sin_theta * base_w;
-                const double val_y_c = -cos_theta * base_h;
-                const double val_y_d = sin_theta * base_w - cos_theta * base_h;
-                const double min_val_y = std::min({val_y_a, val_y_b, val_y_c, val_y_d});
-                const double max_val_y = std::max({val_y_a, val_y_b, val_y_c, val_y_d});
-
-                double needed_scale = 1.0;
-                if (max_val_x > 1e-6) {
-                        const double candidate = (static_cast<double>(screen_w_) - pivot_x) / max_val_x;
-                        if (candidate > needed_scale) needed_scale = candidate;
-                }
-                if (min_val_y < -1e-6) {
-                        const double candidate = (-pivot_y) / min_val_y;
-                        if (candidate > needed_scale) needed_scale = candidate;
-                }
-                if (max_val_y > 1e-6) {
-                        const double candidate = (static_cast<double>(screen_h_) - pivot_y) / max_val_y;
-                        if (candidate > needed_scale) needed_scale = candidate;
-                }
-
+                const double needed_scale = max_corner_distance / texture_radius;
                 if (needed_scale > required_scale) required_scale = needed_scale;
         }
 
@@ -458,14 +435,14 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         required_scale *= 1.02; // Add a small safety margin.
 
         SDL_Rect dst{};
-        dst.w = static_cast<int>(std::ceil(base_w * required_scale));
-        dst.h = static_cast<int>(std::ceil(base_h * required_scale));
-        dst.x = static_cast<int>(std::floor(pivot_x));
-        dst.y = static_cast<int>(std::floor(pivot_y) - dst.h);
+        dst.w = static_cast<int>(std::ceil(static_cast<double>(tex_w) * required_scale));
+        dst.h = static_cast<int>(std::ceil(static_cast<double>(tex_h) * required_scale));
+        dst.x = static_cast<int>(std::round(pivot_x - static_cast<double>(dst.w) * 0.5));
+        dst.y = static_cast<int>(std::round(pivot_y - static_cast<double>(dst.h) * 0.5));
 
         SDL_Point center{};
-        center.x = 0;
-        center.y = dst.h;
+        center.x = dst.w / 2;
+        center.y = dst.h / 2;
         SDL_RenderCopyEx(renderer_, tex, nullptr, &dst, angle, &center, SDL_FLIP_NONE);
 }
 
