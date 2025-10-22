@@ -149,19 +149,82 @@ void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
     }
 }
 
-void apply_full_contrast_rgb(std::vector<unsigned char>& pixels) {
-    if (pixels.empty()) {
-        return;
-    }
+// Boosts faint linework: shows more pixels, lowers the effective threshold.
+void normalize_overlay_linework(std::vector<unsigned char>& pixels) {
+    if (pixels.empty()) return;
 
+    // RGBA -> 4 bytes per pixel
     const size_t total_pixels = pixels.size() / 4;
+
+    float min_dark = 1.0f;
+    float max_dark = 0.0f;
+    bool has_contributing_pixels = false;
+
+    // Pass 1: gather min/max "darkness" over nonzero-alpha pixels
     for (size_t i = 0; i < total_pixels; ++i) {
         const size_t idx = i * 4;
-        for (int channel = 0; channel < 3; ++channel) {
-            pixels[idx + channel] = (pixels[idx + channel] >= 128) ? 255 : 0;
+        const float a = static_cast<float>(pixels[idx + 3]) / 255.0f;
+        if (a <= 0.0f) continue;
+
+        const float r = static_cast<float>(pixels[idx + 0]) / 255.0f;
+        const float g = static_cast<float>(pixels[idx + 1]) / 255.0f;
+        const float b = static_cast<float>(pixels[idx + 2]) / 255.0f;
+
+        const float lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+        const float dark = clamp01(1.0f - lum);
+
+        min_dark = std::min(min_dark, dark);
+        max_dark = std::max(max_dark, dark);
+        has_contributing_pixels = true;
+    }
+
+    if (!has_contributing_pixels) return;
+
+    float range = max_dark - min_dark;
+    // If the range is tiny, widen it a bit so we still reveal faint pixels.
+    if (range <= 1e-4f) range = 1e-4f;
+
+    const float inv_range = 1.0f / range;
+
+    // Softer gamma & a small darkness boost mean more pixels survive.
+    constexpr float kHighlightGamma = 0.65f;  // was 0.85f
+    constexpr float kDarknessBoost  = 0.12f;  // lowers threshold (treats lighter areas as "darker")
+
+    // Pass 2: normalize luminance with bias so faint features become visible
+    for (size_t i = 0; i < total_pixels; ++i) {
+        const size_t idx = i * 4;
+        const float a = static_cast<float>(pixels[idx + 3]) / 255.0f;
+        if (a <= 0.0f) continue;
+
+        float r = static_cast<float>(pixels[idx + 0]) / 255.0f;
+        float g = static_cast<float>(pixels[idx + 1]) / 255.0f;
+        float b = static_cast<float>(pixels[idx + 2]) / 255.0f;
+
+        const float lum   = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+        const float dark  = clamp01(1.0f - lum);
+
+        // Normalize darkness to [0,1], then boost so more pixels cross the visibility threshold.
+        float norm_dark = clamp01((dark - min_dark) * inv_range + kDarknessBoost);
+        norm_dark = clamp01(static_cast<float>(std::pow(norm_dark, kHighlightGamma)));
+
+        const float norm_lum = clamp01(1.0f - norm_dark);
+
+        if (lum > 1e-4f) {
+            const float scale = norm_lum / lum;
+            r = clamp01(r * scale);
+            g = clamp01(g * scale);
+            b = clamp01(b * scale);
+        } else {
+            r = g = b = norm_lum;
         }
+
+        pixels[idx + 0] = static_cast<unsigned char>(std::round(r * 255.0f));
+        pixels[idx + 1] = static_cast<unsigned char>(std::round(g * 255.0f));
+        pixels[idx + 2] = static_cast<unsigned char>(std::round(b * 255.0f));
+        // alpha unchanged
     }
 }
+
 
 bool load_random_overlay_from_directory(std::vector<unsigned char>& out_pixels,
                                         int width,
@@ -232,6 +295,13 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
     const bool has_esoteric = load_random_overlay_from_directory(overlay_esoteric, width, height, esoteric_dir, rng);
     const bool has_americana = load_random_overlay_from_directory(overlay_americana, width, height, americana_dir, rng);
 
+    if (has_esoteric) {
+        normalize_overlay_linework(overlay_esoteric);
+    }
+    if (has_americana) {
+        normalize_overlay_linework(overlay_americana);
+    }
+
     if (!has_esoteric && !has_americana) {
         return;
     }
@@ -254,7 +324,7 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
         merged = std::move(overlay_americana);
     }
 
-    apply_full_contrast_rgb(merged);
+    normalize_overlay_linework(merged);
 
     const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
     for (size_t i = 0; i < total_pixels; ++i) {

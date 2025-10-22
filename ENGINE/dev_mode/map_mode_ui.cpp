@@ -8,6 +8,7 @@
 #include "DockableCollapsible.hpp"
 #include "dev_footer_bar.hpp"
 #include "map_layers_controller.hpp"
+#include "map_layer_controls_display.hpp"
 #include "map_layers_panel.hpp"
 #include "map_rooms_display.hpp"
 #include "room_config/room_configurator.hpp"
@@ -472,10 +473,25 @@ void MapModeUI::ensure_panels() {
         layer_controls_container_->set_header_visibility_controller([this](bool visible) {
             this->set_sliding_headers_hidden(visible);
         });
+        layer_controls_container_->set_close_button_enabled(false);
+        layer_controls_container_->set_blocks_editor_interactions(true);
+    }
+    if (!layer_controls_display_) {
+        layer_controls_display_ = std::make_unique<MapLayerControlsDisplay>();
+    }
+    if (layer_controls_display_) {
+        layer_controls_display_->attach_container(layer_controls_container_.get());
+        layer_controls_display_->set_controller(layers_controller_);
+        layer_controls_display_->set_selected_layer(layers_panel_ ? layers_panel_->selected_layer() : -1);
     }
     if (layers_panel_) {
         layers_panel_->set_rooms_list_container(rooms_list_container_.get());
         layers_panel_->set_layer_controls_container(layer_controls_container_.get());
+        layers_panel_->set_on_layer_selected([this](int index) {
+            if (layer_controls_display_) {
+                layer_controls_display_->set_selected_layer(index);
+            }
+        });
     }
 
     ensure_room_configurator();
@@ -742,6 +758,11 @@ void MapModeUI::sync_panel_map_info() {
     }
     if (rooms_display_) {
         rooms_display_->set_map_info(map_info_);
+    }
+    if (layer_controls_display_) {
+        layer_controls_display_->set_controller(layers_controller_);
+        layer_controls_display_->set_selected_layer(layers_panel_ ? layers_panel_->selected_layer() : -1);
+        layer_controls_display_->refresh();
     }
 }
 

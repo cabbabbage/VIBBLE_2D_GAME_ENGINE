@@ -45,6 +45,7 @@ public:
     void hide_details_panel();
 
     void set_on_configure_room(std::function<void(const std::string&)> cb);
+    void set_on_layer_selected(std::function<void(int)> cb);
 
     enum class SidePanel { None, RoomsList, LayerControls };
     void set_side_panel_callback(std::function<void(SidePanel)> cb);
@@ -101,6 +102,7 @@ private:
     std::function<void(bool)> header_visibility_callback_{};
     std::function<void(const std::string&)> on_configure_room_{};
     std::function<void(SidePanel)> side_panel_callback_{};
+    std::function<void(int)> on_layer_selected_{};
 
     SlidingWindowContainer* rooms_list_container_ = nullptr;
     SlidingWindowContainer* layer_controls_container_ = nullptr;

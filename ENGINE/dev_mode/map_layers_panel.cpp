@@ -290,6 +290,10 @@ void MapLayersPanel::set_on_configure_room(std::function<void(const std::string&
     on_configure_room_ = std::move(cb);
 }
 
+void MapLayersPanel::set_on_layer_selected(std::function<void(int)> cb) {
+    on_layer_selected_ = std::move(cb);
+}
+
 void MapLayersPanel::set_side_panel_callback(std::function<void(SidePanel)> cb) {
     side_panel_callback_ = std::move(cb);
 }
@@ -360,6 +364,9 @@ void MapLayersPanel::select_layer(int index) {
                 layer_name_box_raw_->set_value("");
             }
         }
+        if (on_layer_selected_) {
+            on_layer_selected_(-1);
+        }
         return;
     }
 
@@ -398,6 +405,9 @@ void MapLayersPanel::select_layer(int index) {
     current_layer_name_ = name;
     if (layer_name_box_raw_) {
         layer_name_box_raw_->set_value(name);
+    }
+    if (on_layer_selected_) {
+        on_layer_selected_(selected_layer_index_);
     }
     notify_side_panel(SidePanel::LayerControls);
 }

@@ -45,6 +45,7 @@ public:
 
     bool add_candidate(int layer_index, const std::string& room_name);
     bool remove_candidate(int layer_index, int candidate_index);
+    bool set_candidate_instance_range(int layer_index, int candidate_index, int min_instances, int max_instances);
     bool set_candidate_instance_count(int layer_index, int candidate_index, int max_instances);
     bool add_candidate_child(int layer_index, int candidate_index, const std::string& child_room);
     bool remove_candidate_child(int layer_index, int candidate_index, const std::string& child_room);

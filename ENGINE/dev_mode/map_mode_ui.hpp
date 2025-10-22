@@ -19,6 +19,7 @@ class MapShadowPanel;
 class MapLightPreviewPanel;
 class MapLayersPreviewPanel;
 class MapLayersPanel;
+class MapLayerControlsDisplay;
 class MapLayersController;
 class RoomConfigurator;
 class SlidingWindowContainer;
@@ -152,6 +153,7 @@ private:
     std::unique_ptr<SlidingWindowContainer> room_config_container_;
     std::unique_ptr<SlidingWindowContainer> rooms_list_container_;
     std::unique_ptr<SlidingWindowContainer> layer_controls_container_;
+    std::unique_ptr<MapLayerControlsDisplay> layer_controls_display_;
     std::unique_ptr<MapRoomsDisplay> rooms_display_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;

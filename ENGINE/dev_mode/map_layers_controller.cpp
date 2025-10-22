@@ -236,6 +236,35 @@ bool MapLayersController::remove_candidate(int layer_index, int candidate_index)
     return true;
 }
 
+bool MapLayersController::set_candidate_instance_range(int layer_index,
+                                                       int candidate_index,
+                                                       int min_instances,
+                                                       int max_instances) {
+    if (!validate_layer_index(layer_index)) return false;
+    auto* layer_json = layer(layer_index);
+    if (!layer_json) return false;
+    auto& rooms = (*layer_json)["rooms"];
+    if (!rooms.is_array() || candidate_index < 0 || candidate_index >= static_cast<int>(rooms.size())) return false;
+    auto& candidate = rooms[candidate_index];
+    int clamped_min = clamp_candidate_min(min_instances);
+    int clamped_max = clamp_candidate_max(clamped_min, max_instances);
+    bool changed = false;
+    if (candidate.value("min_instances", -1) != clamped_min) {
+        candidate["min_instances"] = clamped_min;
+        changed = true;
+    }
+    if (candidate.value("max_instances", -1) != clamped_max) {
+        candidate["max_instances"] = clamped_max;
+        changed = true;
+    }
+    clamp_layer_counts(*layer_json);
+    if (changed) {
+        dirty_ = true;
+        notify();
+    }
+    return changed;
+}
+
 bool MapLayersController::set_candidate_instance_count(int layer_index, int candidate_index, int max_instances) {
     if (!validate_layer_index(layer_index)) return false;
     auto* layer_json = layer(layer_index);
@@ -244,12 +273,7 @@ bool MapLayersController::set_candidate_instance_count(int layer_index, int cand
     if (!rooms.is_array() || candidate_index < 0 || candidate_index >= static_cast<int>(rooms.size())) return false;
     auto& candidate = rooms[candidate_index];
     int current_min = clamp_candidate_min(candidate.value("min_instances", 0));
-    candidate["min_instances"] = current_min;
-    candidate["max_instances"] = clamp_candidate_max(current_min, max_instances);
-    clamp_layer_counts(*layer_json);
-    dirty_ = true;
-    notify();
-    return true;
+    return set_candidate_instance_range(layer_index, candidate_index, current_min, max_instances);
 }
 
 bool MapLayersController::add_candidate_child(int layer_index, int candidate_index, const std::string& child_room) {
