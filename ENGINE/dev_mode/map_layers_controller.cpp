@@ -33,13 +33,25 @@ void MapLayersController::set_manifest_store(devmode::core::ManifestStore* store
     map_id_ = std::move(map_id);
 }
 
-void MapLayersController::add_listener(Listener cb) {
-    if (!cb) return;
-    listeners_.push_back(std::move(cb));
+MapLayersController::ListenerId MapLayersController::add_listener(Listener cb) {
+    if (!cb) return 0;
+    const ListenerId id = next_listener_id_++;
+    listeners_.push_back(ListenerEntry{id, std::move(cb)});
+    return id;
+}
+
+void MapLayersController::remove_listener(ListenerId id) {
+    if (id == 0) {
+        return;
+    }
+    auto it = std::remove_if(listeners_.begin(), listeners_.end(),
+                             [id](const ListenerEntry& entry) { return entry.id == id; });
+    listeners_.erase(it, listeners_.end());
 }
 
 void MapLayersController::clear_listeners() {
     listeners_.clear();
+    next_listener_id_ = 1;
 }
 
 bool MapLayersController::save() {
@@ -409,8 +421,14 @@ bool MapLayersController::validate_candidate_index(const json& layer, int candid
 }
 
 void MapLayersController::notify() {
-    for (auto& cb : listeners_) {
-        if (cb) cb();
+    auto it = listeners_.begin();
+    while (it != listeners_.end()) {
+        if (!it->callback) {
+            it = listeners_.erase(it);
+            continue;
+        }
+        it->callback();
+        ++it;
     }
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <vector>
@@ -13,13 +14,15 @@ class ManifestStore;
 class MapLayersController {
 public:
     using Listener = std::function<void()>;
+    using ListenerId = std::size_t;
 
     MapLayersController() = default;
 
     void bind(nlohmann::json* map_info, std::string map_path);
     void set_manifest_store(devmode::core::ManifestStore* store, std::string map_id);
 
-    void add_listener(Listener cb);
+    ListenerId add_listener(Listener cb);
+    void remove_listener(ListenerId id);
     void clear_listeners();
 
     bool save();
@@ -55,10 +58,16 @@ private:
     void clamp_layer_counts(nlohmann::json& layer) const;
 
 private:
+    struct ListenerEntry {
+        ListenerId id = 0;
+        Listener callback;
+    };
+
     nlohmann::json* map_info_ = nullptr;
     std::string map_id_;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     bool dirty_ = false;
-    std::vector<Listener> listeners_;
+    ListenerId next_listener_id_ = 1;
+    std::vector<ListenerEntry> listeners_;
 };
 

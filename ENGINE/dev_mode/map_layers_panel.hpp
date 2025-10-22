@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 
 #include <memory>
@@ -150,6 +151,7 @@ private:
     SaveCallback on_save_{};
 
     std::shared_ptr<MapLayersController> controller_;
+    std::size_t controller_listener_id_ = 0;
 
     PreviewWidget* preview_widget_ = nullptr;
     DetailsWidget* details_widget_ = nullptr;

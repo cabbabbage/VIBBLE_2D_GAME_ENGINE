@@ -140,7 +140,12 @@ MapLayersPreviewPanel::MapLayersPreviewPanel(int x, int y)
     set_expanded(true);
 }
 
-MapLayersPreviewPanel::~MapLayersPreviewPanel() = default;
+MapLayersPreviewPanel::~MapLayersPreviewPanel() {
+    if (controller_ && controller_listener_id_ != 0) {
+        controller_->remove_listener(controller_listener_id_);
+        controller_listener_id_ = 0;
+    }
+}
 
 void MapLayersPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
@@ -149,9 +154,14 @@ void MapLayersPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback 
 }
 
 void MapLayersPreviewPanel::set_controller(std::shared_ptr<MapLayersController> controller) {
+    if (controller_ && controller_listener_id_ != 0) {
+        controller_->remove_listener(controller_listener_id_);
+        controller_listener_id_ = 0;
+    }
+
     controller_ = std::move(controller);
     if (controller_) {
-        controller_->add_listener([this]() { this->rebuild_visuals(); });
+        controller_listener_id_ = controller_->add_listener([this]() { this->rebuild_visuals(); });
     }
     rebuild_visuals();
 }

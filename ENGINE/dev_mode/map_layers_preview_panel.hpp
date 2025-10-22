@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -84,6 +85,7 @@ private:
     nlohmann::json* map_info_ = nullptr;
     SaveCallback on_save_{};
     std::shared_ptr<MapLayersController> controller_;
+    std::size_t controller_listener_id_ = 0;
 
     std::vector<std::unique_ptr<class Widget>> owned_widgets_;
     PreviewWidget* preview_widget_ = nullptr;
