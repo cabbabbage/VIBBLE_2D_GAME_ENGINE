@@ -1,44 +1,44 @@
 {
-  "created_iso8601": "2025-10-22T09:59:01Z",
-  "created_utc": 1761127141,
+  "contrast_factor": 2.5999999046325684,
+  "created_iso8601": "2025-10-22T11:16:19Z",
+  "created_utc": 1761131779,
   "dec_deg": 39.8693,
-  "fetched_jpeg_url": "https://skyview.gsfc.nasa.gov/tempspace/fits/skv595902353815.jpg",
+  "fetched_jpeg_url": "https://skyview.gsfc.nasa.gov/tempspace/fits/skv600544794675.jpg",
   "fov_deg": 8.0,
   "latitude_deg": 39.8693,
+  "lens_flare": {
+    "center_ratio": [
+      0.7799999713897705,
+      0.2800000011920929
+    ],
+    "glow_radius_ratio": 0.07999999821186066,
+    "glow_strength": 0.25,
+    "highlight_cap": 0.6000000238418579,
+    "lighten_factor": 0.10000000149011612,
+    "ring_sharpness": 0.05000000074505806,
+    "ring_spacing_ratio": 0.3499999940395355,
+    "ring_strength": 0.11999999731779099,
+    "rings": 2,
+    "streak_angles_deg": [
+      0.0,
+      35.0,
+      80.0,
+      125.0
+    ],
+    "streak_length_ratio": 0.4000000059604645,
+    "streak_sharpness": 0.009999999776482582,
+    "streak_strength": 0.07999999821186066,
+    "tint_factor": 0.10000000149011612,
+    "warm_tint": [
+      0.9200000166893005,
+      0.8999999761581421,
+      0.8799999952316284
+    ]
+  },
   "longitude_deg": -105.0036,
   "pixels": 3000,
   "png_path": "C:\\Users\\calmi\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\TEMP\\sky_cache\\sky_map.png",
-  "ra_deg": 75.8404492725931,
-  "survey": "DSS2 Red",
-  "post_processed_iso8601": "2025-10-22T10:18:59Z",
-  "contrast_factor": 2.6,
-  "lens_flare": {
-    "center_ratio": [
-      0.78,
-      0.28
-    ],
-    "glow_radius_ratio": 0.34,
-    "glow_strength": 3.6,
-    "rings": 4,
-    "ring_spacing_ratio": 0.48,
-    "ring_sharpness": 0.18,
-    "ring_strength": 1.5,
-    "streak_angles_deg": [
-      0,
-      35,
-      80,
-      125
-    ],
-    "streak_length_ratio": 1.15,
-    "streak_sharpness": 0.032,
-    "streak_strength": 1.45,
-    "warm_tint": [
-      1.0,
-      0.82,
-      0.55
-    ],
-    "highlight_cap": 4.5,
-    "lighten_factor": 0.55,
-    "tint_factor": 0.65
-  }
+  "post_processed_iso8601": "2025-10-22T11:16:19Z",
+  "ra_deg": 95.21835949312299,
+  "survey": "DSS2 Red"
 }

@@ -14,7 +14,10 @@
 #include <stdexcept>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <cctype>
+#include <random>
+#include <system_error>
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -22,7 +25,6 @@
 // stb_image and stb_image_write (public domain / MIT-like).
 // Embedded here so you do not need extra libs for PNG output.
 #define STB_IMAGE_IMPLEMENTATION
-#define STBI_ONLY_JPEG
 #include <stdint.h>
 extern "C" {
 #include "stb_image.h"
@@ -58,18 +60,180 @@ constexpr float kSkyContrastFactor = 2.6f;
 constexpr float kPi = 3.14159265358979323846f;
 
 const LensFlareSettings kSkyLensFlare{
-    0.78f, 0.28f,      // center ratios
-    0.34f, 3.6f,       // glow radius ratio, glow strength
-    4,                 // ring count
-    0.48f, 0.18f, 1.5f, // ring spacing ratio, sharpness, strength
-    {0.0f, 35.0f, 80.0f, 125.0f}, // streak angles (degrees)
-    1.15f, 0.032f, 1.45f,        // streak length ratio, sharpness, strength
-    {1.0f, 0.82f, 0.55f},        // warm tint (RGB)
-    4.5f, 0.55f, 0.65f           // highlight cap, lighten factor, tint factor
+    0.78f, 0.28f,       // center ratios (unchanged)
+    0.08f, 0.25f,        // glow radius ratio, glow strength (tiny, very dim)
+    2,                   // ring count (minimal)
+    0.35f, 0.05f, 0.12f, // ring spacing ratio, sharpness, strength (barely visible)
+    {0.0f, 35.0f, 80.0f, 125.0f}, // streak angles (kept same)
+    0.4f, 0.01f, 0.08f,  // streak length ratio, sharpness, strength (very faint)
+    {0.92f, 0.9f, 0.88f}, // near-neutral tint (barely warm)
+    0.6f, 0.1f, 0.1f      // highlight cap, lighten factor, tint factor (almost off)
 };
+
+
 
 inline float clamp01(float value) {
     return std::clamp(value, 0.0f, 1.0f);
+}
+
+inline int clamp_int(int value, int min_value, int max_value) {
+    return std::min(std::max(value, min_value), max_value);
+}
+
+struct ImageData {
+    int width  = 0;
+    int height = 0;
+    std::vector<unsigned char> pixels;
+};
+
+bool load_png_rgba(const std::filesystem::path& path, ImageData& out_image) {
+    int w = 0;
+    int h = 0;
+    int comp = 0;
+    const std::string path_str = path.string();
+    stbi_uc* data = stbi_load(path_str.c_str(), &w, &h, &comp, 4);
+    if (!data) {
+        return false;
+    }
+
+    const size_t total = static_cast<size_t>(w) * static_cast<size_t>(h) * 4;
+    out_image.width  = w;
+    out_image.height = h;
+    out_image.pixels.assign(data, data + total);
+    stbi_image_free(data);
+    return true;
+}
+
+void resample_image_bilinear(const ImageData& src, int dst_width, int dst_height, std::vector<unsigned char>& out_pixels) {
+    if (dst_width <= 0 || dst_height <= 0 || src.width <= 0 || src.height <= 0 || src.pixels.empty()) {
+        out_pixels.clear();
+        return;
+    }
+
+    out_pixels.resize(static_cast<size_t>(dst_width) * static_cast<size_t>(dst_height) * 4);
+    const float scale_x = static_cast<float>(src.width) / static_cast<float>(dst_width);
+    const float scale_y = static_cast<float>(src.height) / static_cast<float>(dst_height);
+
+    for (int y = 0; y < dst_height; ++y) {
+        const float src_y = (static_cast<float>(y) + 0.5f) * scale_y - 0.5f;
+        const int y0 = clamp_int(static_cast<int>(std::floor(src_y)), 0, src.height - 1);
+        const int y1 = clamp_int(y0 + 1, 0, src.height - 1);
+        const float fy = clamp01(src_y - static_cast<float>(y0));
+
+        for (int x = 0; x < dst_width; ++x) {
+            const float src_x = (static_cast<float>(x) + 0.5f) * scale_x - 0.5f;
+            const int x0 = clamp_int(static_cast<int>(std::floor(src_x)), 0, src.width - 1);
+            const int x1 = clamp_int(x0 + 1, 0, src.width - 1);
+            const float fx = clamp01(src_x - static_cast<float>(x0));
+
+            const size_t idx_dst = static_cast<size_t>(y) * static_cast<size_t>(dst_width) * 4 + static_cast<size_t>(x) * 4;
+
+            for (int channel = 0; channel < 4; ++channel) {
+                const size_t idx00 = (static_cast<size_t>(y0) * static_cast<size_t>(src.width) + static_cast<size_t>(x0)) * 4 + static_cast<size_t>(channel);
+                const size_t idx10 = (static_cast<size_t>(y0) * static_cast<size_t>(src.width) + static_cast<size_t>(x1)) * 4 + static_cast<size_t>(channel);
+                const size_t idx01 = (static_cast<size_t>(y1) * static_cast<size_t>(src.width) + static_cast<size_t>(x0)) * 4 + static_cast<size_t>(channel);
+                const size_t idx11 = (static_cast<size_t>(y1) * static_cast<size_t>(src.width) + static_cast<size_t>(x1)) * 4 + static_cast<size_t>(channel);
+
+                const float c00 = static_cast<float>(src.pixels[idx00]);
+                const float c10 = static_cast<float>(src.pixels[idx10]);
+                const float c01 = static_cast<float>(src.pixels[idx01]);
+                const float c11 = static_cast<float>(src.pixels[idx11]);
+
+                const float c0 = c00 + (c10 - c00) * fx;
+                const float c1 = c01 + (c11 - c01) * fx;
+                const float c = c0 + (c1 - c0) * fy;
+
+                out_pixels[idx_dst + channel] = static_cast<unsigned char>(std::round(clamp01(c / 255.0f) * 255.0f));
+            }
+        }
+    }
+}
+
+void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
+                           const std::vector<unsigned char>& overlay_pixels,
+                           int width,
+                           int height) {
+    if (width <= 0 || height <= 0 || base_pixels.empty() || overlay_pixels.empty()) {
+        return;
+    }
+
+    const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+    for (size_t i = 0; i < total_pixels; ++i) {
+        const size_t idx = i * 4;
+
+        const float r = static_cast<float>(overlay_pixels[idx + 0]) / 255.0f;
+        const float g = static_cast<float>(overlay_pixels[idx + 1]) / 255.0f;
+        const float b = static_cast<float>(overlay_pixels[idx + 2]) / 255.0f;
+        const float a = static_cast<float>(overlay_pixels[idx + 3]) / 255.0f;
+
+        const float luminance = clamp01(0.2126f * r + 0.7152f * g + 0.0722f * b);
+        float overlay_alpha = a * (1.0f - luminance);
+        overlay_alpha = clamp01(overlay_alpha);
+
+        if (overlay_alpha <= 0.0f) {
+            continue;
+        }
+
+        for (int channel = 0; channel < 3; ++channel) {
+            const float overlay_c = static_cast<float>(overlay_pixels[idx + channel]) / 255.0f;
+            const float base_c = static_cast<float>(base_pixels[idx + channel]) / 255.0f;
+            const float blended = clamp01(base_c * (1.0f - overlay_alpha) + overlay_c * overlay_alpha);
+            base_pixels[idx + channel] = static_cast<unsigned char>(std::round(blended * 255.0f));
+        }
+    }
+}
+
+void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, int height) {
+    const std::filesystem::path overlay_dir{"SRC/misc_content/overlay_options"};
+    if (!std::filesystem::exists(overlay_dir) || !std::filesystem::is_directory(overlay_dir)) {
+        return;
+    }
+
+    std::vector<std::filesystem::path> png_files;
+    std::error_code dir_ec;
+    const std::filesystem::directory_iterator end_iter;
+    for (std::filesystem::directory_iterator it(overlay_dir, dir_ec); !dir_ec && it != end_iter; ++it) {
+        const auto& entry = *it;
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        const auto& path = entry.path();
+        if (path.extension() == ".png" || path.extension() == ".PNG") {
+            png_files.push_back(path);
+        }
+    }
+
+    if (dir_ec) {
+        return;
+    }
+
+    if (png_files.empty()) {
+        return;
+    }
+
+    std::mt19937 rng;
+    try {
+        std::random_device rd;
+        rng.seed(rd());
+    } catch (...) {
+        const auto now = std::chrono::steady_clock::now().time_since_epoch();
+        rng.seed(static_cast<unsigned int>(now.count()));
+    }
+    std::uniform_int_distribution<size_t> dist(0, png_files.size() - 1);
+    const auto& selected_path = png_files[dist(rng)];
+
+    ImageData overlay_image;
+    if (!load_png_rgba(selected_path, overlay_image)) {
+        return;
+    }
+
+    std::vector<unsigned char> scaled_overlay;
+    resample_image_bilinear(overlay_image, width, height, scaled_overlay);
+    if (scaled_overlay.empty()) {
+        return;
+    }
+
+    blend_overlay_texture(base_pixels, scaled_overlay, width, height);
 }
 
 void apply_heavy_contrast(std::vector<unsigned char>& pixels, int width, int height, float factor) {
@@ -363,6 +527,7 @@ bool SkyMapFetcher::jpeg_memory_to_png_file(const std::string& jpg_bytes,
     std::vector<unsigned char> pixels(rgba, rgba + total_bytes);
     stbi_image_free(rgba);
 
+    overlay_random_texture(pixels, w, h);
     apply_sky_map_post_fx(pixels, w, h);
 
     const int stride_in_bytes = w * 4;

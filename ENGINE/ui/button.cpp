@@ -10,12 +10,10 @@
 
 namespace {
 
-constexpr int   kCaptureBleed   = 14;     // extra margin around the button for warp lookups
-constexpr float kEdgeFeatherPx  = 2.0f;   // AA feather width for mask edges
+constexpr int   kCaptureBleed  = 16;   // margin so refraction lookups are in-bounds
+constexpr float kEdgeFeatherPx = 2.0f; // AA feather for rounded mask
 
-struct SurfaceDeleter {
-    void operator()(SDL_Surface* s) const { if (s) SDL_FreeSurface(s); }
-};
+struct SurfaceDeleter { void operator()(SDL_Surface* s) const { if (s) SDL_FreeSurface(s); } };
 using SurfacePtr = std::unique_ptr<SDL_Surface, SurfaceDeleter>;
 
 inline Uint8 clamp8(int v) { return static_cast<Uint8>(std::clamp(v, 0, 255)); }
@@ -38,7 +36,6 @@ inline SDL_Color unpack(Uint32 px) {
 inline Uint32 pack(SDL_PixelFormat* fmt, const SDL_Color& c) {
     return SDL_MapRGBA(fmt, c.r, c.g, c.b, c.a);
 }
-
 inline float luminance(const SDL_Color& c) {
     return (0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) / 255.0f;
 }
@@ -63,85 +60,65 @@ SurfacePtr capture(SDL_Renderer* renderer, const SDL_Rect& rect) {
     if (rect.w <= 0 || rect.h <= 0) return {};
     SurfacePtr s(SDL_CreateRGBSurfaceWithFormat(0, rect.w, rect.h, 32, SDL_PIXELFORMAT_RGBA32));
     if (!s) return {};
-    if (SDL_RenderReadPixels(renderer, &rect, s->format->format, s->pixels, s->pitch) != 0) return {};
+    if (SDL_RenderReadPixels(renderer, &rect, s->format->format, s->pixels, s->pitch) != 0) {
+        SDL_Log("GlassButton: SDL_RenderReadPixels failed: %s", SDL_GetError());
+        return {};
+    }
     return s;
 }
-SurfacePtr clone(SDL_Surface* src) {
-    if (!src) return {};
-    SurfacePtr dst(SDL_CreateRGBSurfaceWithFormat(0, src->w, src->h, 32, src->format->format));
-    if (!dst) return {};
-    SDL_LockSurface(src);
-    SDL_LockSurface(dst.get());
-    for (int y = 0; y < src->h; ++y)
-        std::memcpy(static_cast<uint8_t*>(dst->pixels) + y * dst->pitch,
-                    static_cast<uint8_t*>(src->pixels) + y * src->pitch,
-                    std::min(dst->pitch, src->pitch));
-    SDL_UnlockSurface(dst.get());
-    SDL_UnlockSurface(src);
-    return dst;
+
+// -------------------- Procedural value-noise FBM --------------------
+static inline uint32_t wang_hash(uint32_t x) {
+    x ^= 61u; x ^= x >> 16; x *= 9u; x ^= x >> 4; x *= 0x27d4eb2du; x ^= x >> 15;
+    return x;
+}
+static inline float rand01(int xi, int yi) {
+    return (wang_hash(static_cast<uint32_t>(xi) * 73856093u ^ static_cast<uint32_t>(yi) * 19349663u) & 0xFFFFFF) / float(0xFFFFFF);
+}
+static inline float smooth(float t) { return t * t * (3.0f - 2.0f * t); }
+
+static float value_noise(float x, float y) {
+    int xi = static_cast<int>(std::floor(x));
+    int yi = static_cast<int>(std::floor(y));
+    float xf = x - static_cast<float>(xi);
+    float yf = y - static_cast<float>(yi);
+    float u = smooth(xf), v = smooth(yf);
+
+    float v00 = rand01(xi,   yi);
+    float v10 = rand01(xi+1, yi);
+    float v01 = rand01(xi,   yi+1);
+    float v11 = rand01(xi+1, yi+1);
+
+    float a = v00 + (v10 - v00) * u;
+    float b = v01 + (v11 - v01) * u;
+    return a + (b - a) * v;
 }
 
-void box_blur(SDL_Surface* s, int radius) {
-    if (!s || radius <= 0) return;
-    SDL_LockSurface(s);
-    const int w = s->w, h = s->h, pitch = s->pitch / 4;
-    Uint32* px = static_cast<Uint32*>(s->pixels);
-    std::vector<Uint32> temp(w * h);
-
-    const int win = radius * 2 + 1;
-
-    // H
-    for (int y = 0; y < h; ++y) {
-        int sr=0, sg=0, sb=0, sa=0;
-        for (int x = -radius; x <= radius; ++x) {
-            int sx = std::clamp(x, 0, w - 1);
-            SDL_Color c = unpack(px[y * pitch + sx]);
-            sr += c.r; sg += c.g; sb += c.b; sa += c.a;
-        }
-        for (int x = 0; x < w; ++x) {
-            SDL_Color o;
-            o.r = clamp8(sr / win); o.g = clamp8(sg / win);
-            o.b = clamp8(sb / win); o.a = clamp8(sa / win);
-            temp[y * w + x] = pack(s->format, o);
-
-            int rx = std::clamp(x - radius, 0, w - 1);
-            int ax = std::clamp(x + radius + 1, 0, w - 1);
-            SDL_Color rem = unpack(px[y * pitch + rx]);
-            SDL_Color add = unpack(px[y * pitch + ax]);
-            sr += add.r - rem.r; sg += add.g - rem.g; sb += add.b - rem.b; sa += add.a - rem.a;
-        }
+static float fbm(float x, float y, int octaves=4, float lacunarity=2.0f, float gain=0.5f) {
+    float amp = 0.5f;
+    float freq = 1.0f;
+    float sum = 0.0f;
+    for (int i=0; i<octaves; ++i) {
+        sum += amp * value_noise(x * freq, y * freq);
+        freq *= lacunarity;
+        amp *= gain;
     }
-
-    // V
-    for (int x = 0; x < w; ++x) {
-        int sr=0, sg=0, sb=0, sa=0;
-        for (int y = -radius; y <= radius; ++y) {
-            int sy = std::clamp(y, 0, h - 1);
-            SDL_Color c = unpack(temp[sy * w + x]);
-            sr += c.r; sg += c.g; sb += c.b; sa += c.a;
-        }
-        for (int y = 0; y < h; ++y) {
-            SDL_Color o;
-            o.r = clamp8(sr / win); o.g = clamp8(sg / win);
-            o.b = clamp8(sb / win); o.a = clamp8(sa / win);
-            px[y * pitch + x] = pack(s->format, o);
-
-            int ry = std::clamp(y - radius, 0, h - 1);
-            int ay = std::clamp(y + radius + 1, 0, h - 1);
-            SDL_Color rem = unpack(temp[ry * w + x]);
-            SDL_Color add = unpack(temp[ay * w + x]);
-            sr += add.r - rem.r; sg += add.g - rem.g; sb += add.b - rem.b; sa += add.a - rem.a;
-        }
-    }
-    SDL_UnlockSurface(s);
-}
-inline void apply_kawase(SDL_Surface* s, int blur_px) {
-    if (!s || blur_px <= 0) return;
-    box_blur(s, std::max(1, blur_px / 3));
-    box_blur(s, std::max(1, blur_px / 2));
+    return sum;
 }
 
-// Rounded-rect coverage with 2x2 SSAA and soft feather to avoid hard borders.
+// Gradient of FBM (central difference)
+static std::array<float,2> fbm_grad(float x, float y, float eps=0.8f) {
+    float nx1 = fbm(x + eps, y);
+    float nx0 = fbm(x - eps, y);
+    float ny1 = fbm(x, y + eps);
+    float ny0 = fbm(x, y - eps);
+    float gx = nx1 - nx0;
+    float gy = ny1 - ny0;
+    float len = std::max(1e-6f, std::sqrt(gx*gx + gy*gy));
+    return { gx/len, gy/len };
+}
+
+// Rounded-rect coverage with 2x2 SSAA and subtle feathering (no visible border)
 inline float rr_coverage_px(int x, int y, int w, int h, int radius) {
     if (radius <= 0) return 1.0f;
     const float cx[2] = { x + 0.25f, x + 0.75f };
@@ -161,9 +138,7 @@ inline float rr_coverage_px(int x, int y, int w, int h, int radius) {
 
     int count = 0;
     for (float yy : cy) for (float xx : cx) if (inside(xx, yy)) ++count;
-
     float base = static_cast<float>(count) * 0.25f;
-    // slight outward feather
     return std::clamp(base * (1.0f + (kEdgeFeatherPx * 0.02f)), 0.0f, 1.0f);
 }
 
@@ -174,62 +149,15 @@ SDL_Texture* to_texture(SDL_Renderer* r, SDL_Surface* s) {
     return t;
 }
 
-inline Uint8 add_gain(Uint8 ch, Uint8 target, float gain) {
-    int v = static_cast<int>(std::round(ch + (target - ch) * std::clamp(gain, 0.0f, 2.0f)));
-    return clamp8(v);
+// Clamp coordinates into the capture rect
+inline void clamp_sample(int& sx, int& sy, int w, int h) {
+    if (sx < 0) sx = 0; else if (sx >= w) sx = w - 1;
+    if (sy < 0) sy = 0; else if (sy >= h) sy = h - 1;
 }
 
 } // namespace
 
-bool Button::glass_blur_enabled_ = true;
-
-// --------- text helper (kept from your prior API style) ----------
-static void blit_text_center(SDL_Renderer* r,
-                             const LabelStyle& style,
-                             const std::string& s,
-                             const SDL_Rect& rect,
-                             bool shadow,
-                             SDL_Color override_col)
-{
-    if (s.empty()) return;
-    TTF_Font* f = style.open_font();
-    if (!f) return;
-
-    int tw=0, th=0;
-    TTF_SizeText(f, s.c_str(), &tw, &th);
-    const int x = rect.x + (rect.w - tw)/2;
-    const int y = rect.y + (rect.h - th)/2;
-    const SDL_Color text_col = override_col.a ? override_col : style.color;
-
-    SDL_Surface* surf_text = TTF_RenderText_Blended(f, s.c_str(), text_col);
-    SDL_Surface* surf_shadow = nullptr;
-    if (shadow) {
-        SDL_Color coal = Styles::Coal();
-        surf_shadow = TTF_RenderText_Blended(f, s.c_str(), coal);
-    }
-    if (surf_text) {
-        SDL_Texture* tex_text = SDL_CreateTextureFromSurface(r, surf_text);
-        if (surf_shadow) {
-            SDL_Texture* tex_shadow = SDL_CreateTextureFromSurface(r, surf_shadow);
-            if (tex_shadow) {
-                SDL_Rect dsts { x+2, y+2, surf_shadow->w, surf_shadow->h };
-                SDL_SetTextureAlphaMod(tex_shadow, 120);
-                SDL_RenderCopy(r, tex_shadow, nullptr, &dsts);
-                SDL_DestroyTexture(tex_shadow);
-            }
-        }
-        if (tex_text) {
-            SDL_Rect dst { x, y, surf_text->w, surf_text->h };
-            SDL_RenderCopy(r, tex_text, nullptr, &dst);
-            SDL_DestroyTexture(tex_text);
-        }
-    }
-    if (surf_shadow) SDL_FreeSurface(surf_shadow);
-    if (surf_text) SDL_FreeSurface(surf_text);
-    TTF_CloseFont(f);
-}
-
-// --------- basic API plumbing ----------
+// ----------------------------- Public API -----------------------------
 Button Button::get_main_button(const std::string& text) {
     return Button(text, &Styles::MainDecoButton(), width(), height());
 }
@@ -272,57 +200,58 @@ void Button::render(SDL_Renderer* renderer) const {
         draw_glass_text(renderer, rect_);
         return;
     }
-    // Non-glass fallback (dev UI or legacy) — not used for Main/Pause glass look.
+    // Fallback decoration (not used for your main/pause menus)
     draw_deco(renderer, rect_, hovered_);
     const SDL_Color chosen = hovered_ ? style_->text_hover : style_->text_normal;
-    blit_text_center(renderer, style_->label, label_, rect_, true, chosen);
+    // basic text render via style (kept for compatibility)
+    TTF_Font* f = style_->label.open_font();
+    if (f) {
+        int tw=0, th=0; TTF_SizeText(f, label_.c_str(), &tw, &th);
+        SDL_Surface* s = TTF_RenderText_Blended(f, label_.c_str(), chosen);
+        if (s) {
+            SDL_Texture* t = SDL_CreateTextureFromSurface(renderer, s);
+            SDL_Rect dst{ rect_.x + (rect_.w - tw)/2, rect_.y + (rect_.h - th)/2, tw, th };
+            SDL_RenderCopy(renderer, t, nullptr, &dst);
+            SDL_DestroyTexture(t);
+            SDL_FreeSurface(s);
+        }
+        TTF_CloseFont(f);
+    }
 }
 
 bool Button::is_hovered() const { return hovered_; }
 bool Button::is_pressed() const { return pressed_; }
-int Button::width()  { return 520; }
-int Button::height() { return 64; }
+int  Button::width()  { return 520; }
+int  Button::height() { return 64; }
 
 void Button::draw_deco(SDL_Renderer* r, const SDL_Rect& b, bool hovered) const {
-    // Minimal fallback implementation to keep API intact.
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(r, 20, 20, 20, hovered ? 140 : 110);
+    SDL_SetRenderDrawColor(r, 20,20,20, hovered ? 120 : 96);
     SDL_RenderFillRect(r, &b);
-    SDL_SetRenderDrawColor(r, 255, 255, 255, 40);
+    SDL_SetRenderDrawColor(r, 255,255,255, 36);
     SDL_RenderDrawRect(r, &b);
 }
 
-void Button::set_glass_blur_enabled(bool enabled) { glass_blur_enabled_ = enabled; }
-
 const GlassButtonStyle& Button::default_glass_style() {
-    static const GlassButtonStyle kDefault{}; // fields use constexpr defaults in header
+    static const GlassButtonStyle kDefault{};
     return kDefault;
 }
 
 void Button::enable_glass_style(bool enabled) { glass_enabled_ = enabled; }
 void Button::set_glass_style(const GlassButtonStyle& style) { glass_style_ = style; }
 
-// ---------------- THE GLASS RENDER ----------------
-// Replaces the button bounds with a refracted copy of the background.
-// No outlines, no color fills. Bounds read via distortion, fresnel rim, and
-// luminance-driven highlights (all clipped to the rounded mask).
+// ----------------------------- Hammered Glass -----------------------------
 void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     SDL_Rect r = adjusted_for_state(rect, hovered_, pressed_);
 
-    // Capture a padded region of what's already rendered behind the button.
-    SDL_Rect cap{ r.x - kCaptureBleed, r.y - kCaptureBleed,
-                  r.w + kCaptureBleed*2, r.h + kCaptureBleed*2 };
+    // 1) Capture the already-rendered background behind the button.
+    SDL_Rect cap{ r.x - kCaptureBleed, r.y - kCaptureBleed, r.w + kCaptureBleed*2, r.h + kCaptureBleed*2 };
     cap = clamp_to_view(renderer, cap);
 
-    SurfacePtr bg_sharp = capture(renderer, cap);
-    SurfacePtr bg_blur  = bg_sharp ? clone(bg_sharp.get()) : SurfacePtr{};
-    if (glass_blur_enabled_ && bg_blur) {
-        const int blur_px = pressed_ ? glass_style_.blur_px_pressed
-                        : (hovered_ ? glass_style_.blur_px_hover : glass_style_.blur_px);
-        apply_kawase(bg_blur.get(), blur_px);
-    }
+    SurfacePtr bg = capture(renderer, cap);
+    if (!bg) return; // nothing to distort
 
-    // Composite target covering only the button rect.
+    // 2) Allocate a composite surface for the button area.
     SurfacePtr comp(SDL_CreateRGBSurfaceWithFormat(0, r.w, r.h, 32, SDL_PIXELFORMAT_RGBA32));
     if (!comp) return;
 
@@ -331,11 +260,11 @@ void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     SDL_PixelFormat* fmt = comp->format;
     const int dpitch = comp->pitch / 4;
 
-    Uint32* sharp = bg_sharp ? static_cast<Uint32*>(bg_sharp->pixels) : nullptr;
-    Uint32* blur  = bg_blur  ? static_cast<Uint32*>(bg_blur->pixels)  : nullptr;
-    const int spitch = bg_sharp ? bg_sharp->pitch / 4 : 0;
+    SDL_LockSurface(bg.get());
+    Uint32* src = static_cast<Uint32*>(bg->pixels);
+    const int spitch = bg->pitch / 4;
 
-    // Lens geometry
+    // Geometry
     const int  w = r.w, h = r.h;
     const int  ox = r.x - cap.x;
     const int  oy = r.y - cap.y;
@@ -344,169 +273,163 @@ void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     const float inv_cx = (cx > 0) ? 1.0f / cx : 0.0f;
     const float inv_cy = (cy > 0) ? 1.0f / cy : 0.0f;
 
+    // State gains
     const float ref_base = glass_style_.refraction_strength
-                         * (hovered_ ? 1.25f : 1.0f)
-                         * (pressed_ ? 0.88f : 1.0f);
+                         * (hovered_ ? 1.18f : 1.0f)
+                         * (pressed_ ? 0.90f : 1.0f);
+    const float chroma   = glass_style_.chroma_strength * (pressed_ ? 0.85f : 1.0f);
 
-    const float chroma   = glass_style_.chroma_strength * (pressed_ ? 0.8f : 1.0f);
-    const float flare_k  = glass_style_.flare_gain * (hovered_ ? 1.12f : 1.0f) * (pressed_ ? 0.92f : 1.0f);
+    const float mix_state = pressed_ ? glass_style_.mix_pressed
+                           : (hovered_ ? glass_style_.mix_hover : glass_style_.mix_normal);
 
-    auto sample_sharp = [&](int sx, int sy) -> SDL_Color {
-        if (!sharp) return SDL_Color{255,255,255,255};
-        sx = std::clamp(sx, 0, cap.w - 1);
-        sy = std::clamp(sy, 0, cap.h - 1);
-        return unpack(sharp[sy * spitch + sx]);
-    };
-    auto sample_luma_blur = [&](int sx, int sy) -> float {
-        if (!blur) return 0.0f;
-        sx = std::clamp(sx, 0, cap.w - 1);
-        sy = std::clamp(sy, 0, cap.h - 1);
-        return luminance(unpack(blur[sy * spitch + sx]));
-    };
+    // Diffusion sampling kernel (ring)
+    const int taps = std::max(3, glass_style_.diffusion_taps);
+    std::vector<std::array<float,2>> kernel;
+    kernel.reserve(taps);
+    for (int i=0; i<taps; ++i) {
+        float t = (static_cast<float>(i) + 0.5f) / static_cast<float>(taps);
+        float ang = t * 6.2831853f; // 2*pi
+        kernel.push_back({ std::cos(ang), std::sin(ang) });
+    }
 
-    // Flare sampling patterns (short and fast)
-    static const std::array<SDL_Point, 8> kCross {
-        SDL_Point{-12,0},{-6,0},{-2,0},{2,0},{6,0},{12,0},{0,-12},{0,12}
-    };
-    static const std::array<SDL_Point, 6> kDiag {
-        SDL_Point{-8,-8},{-4,-4},{-2,-2},{8,8},{4,4},{2,2}
-    };
+    double Lacc = 0.0; int Lcount = 0;
 
-    double l_acc = 0.0; int l_n = 0;
-
+    // 3) Pixel loop
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
-            // Rounded-rect AA coverage controls alpha (no border drawing).
             float cov = rr_coverage_px(x, y, w, h, glass_style_.radius);
             if (cov <= 0.001f) { dst[y*dpitch + x] = 0; continue; }
 
-            // Normalized coords around center (-1..1)
+            // Normalized center-relative coords
             const float ndx = (x - cx) * inv_cx;
             const float ndy = (y - cy) * inv_cy;
-            const float r2  = ndx*ndx + ndy*ndy;
-            const float r1  = std::sqrt(std::min(1.0f, r2));
+            const float r1  = std::sqrt(std::min(1.0f, ndx*ndx + ndy*ndy));
 
-            // Convex lens profile: stronger near center, taper to edge.
+            // Convex lens warp (strongest near center)
             const float lens = std::max(0.0f, 1.0f - r1*r1);
             const float warp = ref_base * std::min(w, h) * 0.95f * lens;
 
-            // Small tangential swirl for "thick" look.
-            const float wx = ndx * warp + ndy * 0.10f * warp;
-            const float wy = ndy * warp - ndx * 0.10f * warp;
+            // Base refracted UV
+            const float wx = ndx * warp + ndy * 0.06f * warp;
+            const float wy = ndy * warp - ndx * 0.06f * warp;
 
-            // Chromatic aberration offsets along radial dir.
+            // Position in capture space for "original" sample
+            int sx_o = ox + x;
+            int sy_o = oy + y;
+            clamp_sample(sx_o, sy_o, cap.w, cap.h);
+
+            // Procedural hammered normals: FBM gradient
+            const float ns = glass_style_.rough_scale * 100.0f; // scale to pleasant range
+            auto g = fbm_grad((r.x + x) * ns, (r.y + y) * ns);   // stable in screen space
+            const float rough_px = glass_style_.rough_ampl_px * (hovered_ ? 1.1f : (pressed_ ? 0.85f : 1.0f));
+
+            // Chromatic offsets (radial direction)
             const float ax = ndx * chroma;
             const float ay = ndy * chroma;
 
-            const int sx_g = static_cast<int>(std::round(ox + x + wx));
-            const int sy_g = static_cast<int>(std::round(oy + y + wy));
-            const int sx_r = static_cast<int>(std::round(ox + x + wx + ax));
-            const int sy_r = static_cast<int>(std::round(oy + y + wy + ay));
-            const int sx_b = static_cast<int>(std::round(ox + x + wx - ax));
-            const int sy_b = static_cast<int>(std::round(oy + y + wy - ay));
+            // Multi-tap diffusion around the refracted UV + hammered offset
+            const float rad = glass_style_.diffusion_radius * (hovered_ ? 1.15f : (pressed_ ? 0.9f : 1.0f));
 
-            // Base refracted color from SHARP capture
-            SDL_Color cg = sample_sharp(sx_g, sy_g);
-            SDL_Color cr = sample_sharp(sx_r, sy_r);
-            SDL_Color cb = sample_sharp(sx_b, sy_b);
+            // Accumulate
+            int acc_r=0, acc_g=0, acc_b=0;
 
-            SDL_Color col{};
-            col.r = clamp8((cg.r + cr.r) / 2);
-            col.g = cg.g;
-            col.b = clamp8((cg.b + cb.b) / 2);
-
-            // Fresnel rim (edge brightening) — derived from radial distance; no explicit border
-            // Fresnel ~ r^power; stronger near the edge.
-            float fresnel = std::pow(std::clamp(r1, 0.0f, 1.0f), glass_style_.fresnel_power)
-                          * glass_style_.fresnel_intensity
-                          * (hovered_ ? 1.20f : 1.0f)
-                          * (pressed_ ? 0.90f : 1.0f);
-
-            if (fresnel > 0.0f) {
-                col.r = add_gain(col.r, 255, fresnel);
-                col.g = add_gain(col.g, 255, fresnel);
-                col.b = add_gain(col.b, 255, fresnel);
+            // include center sample with hammered offset (weight 2)
+            {
+                int sx = static_cast<int>(std::round(ox + x + wx + g[0] * rough_px));
+                int sy = static_cast<int>(std::round(oy + y + wy + g[1] * rough_px));
+                clamp_sample(sx, sy, cap.w, cap.h);
+                SDL_Color c = unpack(src[sy * spitch + sx]);
+                acc_r += c.r * 2; acc_g += c.g * 2; acc_b += c.b * 2;
             }
 
-            // Luminance-driven flares from BLUR buffer (drive highlights only)
-            float l0 = sample_luma_blur(sx_g, sy_g);
-            float lc = 0.0f, ld = 0.0f;
-            for (auto p : kCross) lc += sample_luma_blur(sx_g + p.x, sy_g + p.y);
-            for (auto p : kDiag)  ld += sample_luma_blur(sx_g + p.x, sy_g + p.y);
-            lc /= static_cast<float>(kCross.size());
-            ld /= static_cast<float>(kDiag.size());
+            for (const auto& v : kernel) {
+                // jitter orientation by the hammered normal (feels like facets)
+                float jx = v[0] + g[0] * 0.5f;
+                float jy = v[1] + g[1] * 0.5f;
+                float m = rad;
 
-            float hi = std::pow(std::max(0.0f, (l0 - 0.35f) / 0.65f), 2.2f) * glass_style_.highlight_intensity * (1.05f + lens * 0.5f);
-            float gl = std::pow(std::max(0.0f, (l0 - 0.55f) / 0.45f), 2.6f) * glass_style_.glow_intensity     * (0.95f + lens * 0.6f);
-            float dr = std::pow(std::max(lc, ld), 1.5f) * flare_k;
+                // Refracted UV with diffusion + hammered offset
+                int sx = static_cast<int>(std::round(ox + x + wx + g[0]*rough_px + jx * m));
+                int sy = static_cast<int>(std::round(oy + y + wy + g[1]*rough_px + jy * m));
+                clamp_sample(sx, sy, cap.w, cap.h);
 
-            if (hi > 0.0f) {
-                col.r = add_gain(col.r, 255, hi);
-                col.g = add_gain(col.g, 255, hi);
-                col.b = add_gain(col.b, 255, hi);
-            }
-            if (gl > 0.0f) {
-                col.r = add_gain(col.r, 255, gl * 0.8f);
-                col.g = add_gain(col.g, 255, gl * 0.8f);
-                col.b = add_gain(col.b, 255, gl * 1.05f);
-            }
-            if (dr > 0.0f) {
-                // a bit more blue bias on directional flares to feel prismatic
-                col.r = add_gain(col.r, 235, dr * 0.70f);
-                col.g = add_gain(col.g, 235, dr * 0.70f);
-                col.b = add_gain(col.b, 255, dr * 0.95f);
-            }
+                // Chromatic micro-aberration per tap
+                int sxr = static_cast<int>(std::round(sx + ax));
+                int syr = static_cast<int>(std::round(sy + ay));
+                int sxb = static_cast<int>(std::round(sx - ax));
+                int syb = static_cast<int>(std::round(sy - ay));
+                clamp_sample(sxr, syr, cap.w, cap.h);
+                clamp_sample(sxb, syb, cap.w, cap.h);
 
-            // Hover/Pressed toning
-            if (hovered_ && !pressed_) {
-                col.r = clamp8(col.r + 10);
-                col.g = clamp8(col.g + 10);
-                col.b = clamp8(col.b + 12);
-            } else if (pressed_) {
-                col.r = clamp8(static_cast<int>(col.r * 0.95f));
-                col.g = clamp8(static_cast<int>(col.g * 0.95f));
-                col.b = clamp8(static_cast<int>(col.b * 0.95f));
+                SDL_Color cg = unpack(src[sy * spitch + sx]);
+                SDL_Color cr = unpack(src[syr * spitch + sxr]);
+                SDL_Color cb = unpack(src[syb * spitch + sxb]);
+
+                // blend R/B channels to give prismatic feel
+                acc_r += (cg.r + cr.r) / 2;
+                acc_g += cg.g;
+                acc_b += (cg.b + cb.b) / 2;
             }
 
-            // Opaque inside the mask area (we're replacing the region with refracted background).
-            col.a = clamp8(static_cast<int>(cov * 255.0f));
-            dst[y * dpitch + x] = pack(fmt, col);
+            const int weight = 2 + static_cast<int>(kernel.size());
+            SDL_Color refr{};
+            refr.r = clamp8(acc_r / weight);
+            refr.g = clamp8(acc_g / weight);
+            refr.b = clamp8(acc_b / weight);
 
-            l_acc += luminance(col);
-            ++l_n;
+            // "Original" undistorted background
+            SDL_Color orig = unpack(src[sy_o * spitch + sx_o]);
+
+            // Fresnel-like rim increases the distortion mix near edges (no outline drawn)
+            const float fres = std::pow(std::clamp(r1, 0.0f, 1.0f), glass_style_.fresnel_power)
+                             * glass_style_.fresnel_intensity;
+
+            float mix_w = std::clamp(mix_state + fres, 0.0f, 1.0f);
+
+            // Final color = lerp(original, refracted-diffused, mix)
+            SDL_Color out{};
+            out.r = clamp8(static_cast<int>(orig.r * (1.0f - mix_w) + refr.r * mix_w));
+            out.g = clamp8(static_cast<int>(orig.g * (1.0f - mix_w) + refr.g * mix_w));
+            out.b = clamp8(static_cast<int>(orig.b * (1.0f - mix_w) + refr.b * mix_w));
+            out.a = clamp8(static_cast<int>(cov * 255.0f)); // opaque inside mask (we're replacing the region)
+
+            Lacc += luminance(out);
+            ++Lcount;
+
+            dst[y * dpitch + x] = pack(fmt, out);
         }
     }
+
+    SDL_UnlockSurface(bg.get());
     SDL_UnlockSurface(comp.get());
 
-    if (l_n > 0) { glass_luminance_ = static_cast<float>(l_acc / l_n); glass_has_luminance_ = true; }
-    else         { glass_has_luminance_ = false; }
+    if (Lcount > 0) { glass_luminance_ = static_cast<float>(Lacc / Lcount); glass_has_luminance_ = true; }
+    else            { glass_has_luminance_ = false; }
 
     SDL_Texture* tex = to_texture(renderer, comp.get());
     if (!tex) return;
-
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_RenderCopy(renderer, tex, nullptr, &r);
     SDL_DestroyTexture(tex);
 }
 
+// ----------------------------- Text -----------------------------
 void Button::draw_glass_text(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     if (label_.empty()) return;
     TTF_Font* font = style_->label.open_font();
     if (!font) return;
 
-    SDL_Rect r = adjusted_for_state(rect, hovered_, pressed_);
+    SDL_Rect rr = adjusted_for_state(rect, hovered_, pressed_);
     int tw=0, th=0;
     TTF_SizeText(font, label_.c_str(), &tw, &th);
-    const int x = r.x + (r.w - tw)/2;
-    const int y = r.y + (r.h - th)/2;
+    const int x = rr.x + (rr.w - tw)/2;
+    const int y = rr.y + (rr.h - th)/2;
 
-    SDL_Color text  = glass_style_.text_color;
-    SDL_Color stroke= glass_style_.text_stroke;
+    SDL_Color text = glass_style_.text_color;
+    SDL_Color stroke = glass_style_.text_stroke;
 
     if (hovered_ && !pressed_) {
-        text.r = clamp8(text.r + 8);
-        text.g = clamp8(text.g + 8);
-        text.b = clamp8(text.b + 8);
+        text.r = clamp8(text.r + 8); text.g = clamp8(text.g + 8); text.b = clamp8(text.b + 8);
     } else if (pressed_) {
         text.r = clamp8(static_cast<int>(text.r * 0.95f));
         text.g = clamp8(static_cast<int>(text.g * 0.95f));
