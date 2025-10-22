@@ -104,8 +104,6 @@ public:
     bool is_point_inside(int x, int y) const;
     bool is_any_panel_visible() const;
     bool is_layers_panel_visible() const;
-    bool is_layers_details_container_visible() const;
-    bool is_layers_preview_container_visible() const;
 
 private:
     void ensure_panels();
@@ -147,8 +145,6 @@ private:
     std::unique_ptr<MapLayersPreviewPanel> layers_preview_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
-    std::unique_ptr<SlidingWindowContainer> layers_preview_container_;
-    std::unique_ptr<SlidingWindowContainer> layers_container_;
     std::unique_ptr<MapGridPanel> grid_panel_;
     std::unique_ptr<DevFooterBar> footer_bar_;
     bool footer_buttons_configured_ = false;

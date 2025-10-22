@@ -128,7 +128,7 @@ public:
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
     void render_visible_chunks_debug(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
-    void present_static_previews(SDL_Renderer* renderer, bool present = true) const;
+    void present_static_previews(SDL_Renderer* renderer) const;
 
     void mark_region_dirty(const SDL_Rect& screen_rect);
     void mark_asset_lights_dirty(const Asset* asset);

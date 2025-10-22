@@ -65,7 +65,6 @@ private:
     void                          sync_ui_from_json();
     void                          sync_json_from_ui();
     void                          apply_immediate_settings();
-    void                          sync_shared_reactive_settings();
     render_pipeline::shading::ReactiveShadowSettings current_settings_from_ui() const;
     void                          set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings);
     render_pipeline::shading::ReactiveShadowSettings load_reactive_settings_from_dev_settings();
