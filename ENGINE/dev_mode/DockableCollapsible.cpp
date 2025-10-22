@@ -619,8 +619,14 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
             return false;
         }
 
-        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            return true;
+        switch (e.type) {
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+                return true;
+            case SDL_MOUSEMOTION:
+                return true;
+            default:
+                break;
         }
     }
 
