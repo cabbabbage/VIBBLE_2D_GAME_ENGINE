@@ -131,9 +131,13 @@ void MapModeUI::refresh_header_suppression_state() {
     const bool state_changed = (headers_suppressed_ != final_state);
     headers_suppressed_ = final_state;
 
+    const bool suppression_from_sliding_only = sliding_headers_hidden_external_ &&
+                                               !base_headers_suppressed_ &&
+                                               !dev_sliding_headers_hidden_;
+
     if (state_changed) {
         ensure_panels();
-        if (headers_suppressed_) {
+        if (headers_suppressed_ && !suppression_from_sliding_only) {
             if (layers_panel_) {
                 layers_panel_->close();
             }
