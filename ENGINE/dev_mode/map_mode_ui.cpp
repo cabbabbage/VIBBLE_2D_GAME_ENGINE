@@ -1229,41 +1229,41 @@ SDL_Rect MapModeUI::room_config_bounds() const {
     return SDL_Rect{panel_x, 0, std::max(0, panel_w), std::max(0, screen_h_)};
 }
 
-void MapModeUI::show_sliding_panel(SlidingPanel panel) {
-    if (active_sliding_panel_ == panel) {
-        if (panel == SlidingPanel::RoomConfig && room_config_container_) {
-            room_config_container_->set_visible(true);
+void MapModeUI::show_sliding_panel(SlidingPanel panel, bool preserve_layers_panel) {
+    const bool preserve_layers = preserve_layers_panel && panel == SlidingPanel::RoomConfig;
+
+    if (!preserve_layers) {
+        if (room_config_container_) {
+            room_config_container_->set_visible(false);
         }
-        return;
+        if (rooms_list_container_) {
+            rooms_list_container_->set_visible(false);
+        }
+        if (layer_controls_container_) {
+            layer_controls_container_->set_visible(false);
+        }
     }
-
-    if (room_config_container_) {
-        room_config_container_->set_visible(false);
-    }
-    if (rooms_list_container_) {
-        rooms_list_container_->set_visible(false);
-    }
-    if (layer_controls_container_) {
-        layer_controls_container_->set_visible(false);
-    }
-
-    active_sliding_panel_ = panel;
 
     switch (panel) {
         case SlidingPanel::RoomConfig:
             if (room_config_container_) {
                 room_config_container_->open();
             }
+            if (!preserve_layers) {
+                active_sliding_panel_ = SlidingPanel::RoomConfig;
+            }
             break;
         case SlidingPanel::RoomsList:
             if (rooms_list_container_) {
                 rooms_list_container_->open();
             }
+            active_sliding_panel_ = SlidingPanel::RoomsList;
             break;
         case SlidingPanel::LayerControls:
             if (layer_controls_container_) {
                 layer_controls_container_->open();
             }
+            active_sliding_panel_ = SlidingPanel::LayerControls;
             break;
         case SlidingPanel::None:
         default:
@@ -1349,7 +1349,7 @@ void MapModeUI::open_room_configuration(const std::string& room_key) {
         room_config_container_->set_panel_bounds_override(room_config_bounds());
     }
     room_configurator_->open(room_entry, on_change, on_entry_change, {});
-    show_sliding_panel(SlidingPanel::RoomConfig);
+    show_sliding_panel(SlidingPanel::RoomConfig, true);
 }
 
 void MapModeUI::close_room_configuration() {

@@ -132,7 +132,7 @@ private:
     void open_room_configuration(const std::string& room_key);
     void close_room_configuration();
     SDL_Rect room_config_bounds() const;
-    void show_sliding_panel(SlidingPanel panel);
+    void show_sliding_panel(SlidingPanel panel, bool preserve_layers_panel = false);
 
 private:
     Assets* assets_ = nullptr;

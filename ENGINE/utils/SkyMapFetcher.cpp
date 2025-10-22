@@ -1,7 +1,6 @@
 // SkyMapFetcher.cpp
 #include "SkyMapFetcher.hpp"
 
-#include <array>
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -38,20 +37,12 @@ using json = nlohmann::json;
 
 namespace {
 
-constexpr float kSkyContrastFactor = 1.9f;
-constexpr float kSkyHashStrength = 0.35f;
-constexpr float kSkyLineSmoothStrength = 0.45f;
-
 inline float clamp01(float value) {
     return std::clamp(value, 0.0f, 1.0f);
 }
 
 inline int clamp_int(int value, int min_value, int max_value) {
     return std::min(std::max(value, min_value), max_value);
-}
-
-inline float lerp(float a, float b, float t) {
-    return a + (b - a) * t;
 }
 
 struct ImageData {
@@ -141,8 +132,7 @@ void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
         const float a = static_cast<float>(overlay_pixels[idx + 3]) / 255.0f;
 
         const float luminance = clamp01(0.2126f * r + 0.7152f * g + 0.0722f * b);
-        float overlay_alpha = a * (1.0f - luminance);
-        overlay_alpha = clamp01(overlay_alpha);
+        float overlay_alpha = clamp01(a * luminance);
 
         if (overlay_alpha <= 0.0f) {
             continue;
@@ -157,11 +147,12 @@ void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
     }
 }
 
-bool overlay_random_texture_from_directory(std::vector<unsigned char>& base_pixels,
-                                           int width,
-                                           int height,
-                                           const std::filesystem::path& overlay_dir,
-                                           std::mt19937& rng) {
+bool load_random_overlay_from_directory(std::vector<unsigned char>& out_pixels,
+                                        int width,
+                                        int height,
+                                        const std::filesystem::path& overlay_dir,
+                                        std::mt19937& rng) {
+    out_pixels.clear();
     if (!std::filesystem::exists(overlay_dir) || !std::filesystem::is_directory(overlay_dir)) {
         return false;
     }
@@ -198,7 +189,7 @@ bool overlay_random_texture_from_directory(std::vector<unsigned char>& base_pixe
         return false;
     }
 
-    blend_overlay_texture(base_pixels, scaled_overlay, width, height);
+    out_pixels = std::move(scaled_overlay);
     return true;
 }
 
@@ -219,109 +210,82 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
     const std::filesystem::path esoteric_dir{"SRC/misc_content/overlay_options_esoteric"};
     const std::filesystem::path americana_dir{"SRC/misc_content/overlay_options_americana"};
 
-    overlay_random_texture_from_directory(base_pixels, width, height, esoteric_dir, rng);
-    overlay_random_texture_from_directory(base_pixels, width, height, americana_dir, rng);
-}
+    std::vector<unsigned char> overlay_esoteric;
+    std::vector<unsigned char> overlay_americana;
 
-void apply_heavy_contrast(std::vector<unsigned char>& pixels, int width, int height, float factor) {
-    if (width <= 0 || height <= 0 || pixels.empty()) {
+    const bool has_esoteric = load_random_overlay_from_directory(overlay_esoteric, width, height, esoteric_dir, rng);
+    const bool has_americana = load_random_overlay_from_directory(overlay_americana, width, height, americana_dir, rng);
+
+    if (!has_esoteric && !has_americana) {
         return;
+    }
+
+    std::vector<unsigned char> merged(static_cast<size_t>(width) * static_cast<size_t>(height) * 4, 0u);
+
+    if (has_esoteric && has_americana) {
+        const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+        for (size_t i = 0; i < total_pixels; ++i) {
+            const size_t idx = i * 4;
+            for (int channel = 0; channel < 4; ++channel) {
+                const int value = static_cast<int>(overlay_esoteric[idx + channel]) +
+                                  static_cast<int>(overlay_americana[idx + channel]);
+                merged[idx + channel] = static_cast<unsigned char>(value / 2);
+            }
+        }
+    } else if (has_esoteric) {
+        merged = std::move(overlay_esoteric);
+    } else {
+        merged = std::move(overlay_americana);
     }
 
     const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
     for (size_t i = 0; i < total_pixels; ++i) {
         const size_t idx = i * 4;
         for (int channel = 0; channel < 3; ++channel) {
-            float c = static_cast<float>(pixels[idx + channel]) / 255.0f;
-            c = (c - 0.5f) * factor + 0.5f;
-            c = clamp01(c);
-            pixels[idx + channel] = static_cast<unsigned char>(std::round(c * 255.0f));
+            merged[idx + channel] = static_cast<unsigned char>(255 - merged[idx + channel]);
         }
     }
+
+    blend_overlay_texture(base_pixels, merged, width, height);
 }
 
-void apply_hash_black_white(std::vector<unsigned char>& pixels, int width, int height, float blend_strength) {
+void apply_soft_blur(std::vector<unsigned char>& pixels, int width, int height) {
     if (width <= 0 || height <= 0 || pixels.empty()) {
         return;
     }
 
-    const float blend = clamp01(blend_strength);
-    const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
-    for (size_t i = 0; i < total_pixels; ++i) {
-        const int x = static_cast<int>(i % static_cast<size_t>(width));
-        const int y = static_cast<int>(i / static_cast<size_t>(width));
-        const size_t idx = i * 4;
-
-        const float r = static_cast<float>(pixels[idx]) / 255.0f;
-        const float g = static_cast<float>(pixels[idx + 1]) / 255.0f;
-        const float b = static_cast<float>(pixels[idx + 2]) / 255.0f;
-        const float luma = 0.299f * r + 0.587f * g + 0.114f * b;
-
-        const uint32_t hash = static_cast<uint32_t>(x) * 73856093u
-                            ^ static_cast<uint32_t>(y) * 19349663u;
-        const float threshold = static_cast<float>(hash & 0x3FFu) / 1023.0f;
-        const float bw = luma > threshold ? 1.0f : 0.0f;
-        const float mixed = clamp01(lerp(luma, bw, blend));
-        const unsigned char bw_byte = static_cast<unsigned char>(std::round(mixed * 255.0f));
-
-        pixels[idx] = bw_byte;
-        pixels[idx + 1] = bw_byte;
-        pixels[idx + 2] = bw_byte;
-    }
-}
-
-void apply_line_smoothing(std::vector<unsigned char>& pixels, int width, int height, float smoothing_strength) {
-    if (width <= 0 || height <= 0 || pixels.empty()) {
-        return;
-    }
-
-    const float strength = clamp01(smoothing_strength);
-    if (strength <= 0.0f) {
-        return;
-    }
-
-    const std::array<std::pair<int, int>, 4> offsets = {
-        std::pair<int, int>{1, 0},
-        std::pair<int, int>{-1, 0},
-        std::pair<int, int>{0, 1},
-        std::pair<int, int>{0, -1}
+    const int kernel[3][3] = {
+        {1, 2, 1},
+        {2, 4, 2},
+        {1, 2, 1}
     };
+    constexpr int kernel_sum = 16;
 
     std::vector<unsigned char> original = pixels;
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             const size_t idx = (static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)) * 4;
-            const float base = static_cast<float>(original[idx]);
-
-            float accum = base;
-            float weight = 1.0f;
-
-            for (const auto& [ox, oy] : offsets) {
-                const int nx = clamp_int(x + ox, 0, width - 1);
-                const int ny = clamp_int(y + oy, 0, height - 1);
-                const size_t nidx = (static_cast<size_t>(ny) * static_cast<size_t>(width) + static_cast<size_t>(nx)) * 4;
-                const float neighbor = static_cast<float>(original[nidx]);
-                if (std::abs(neighbor - base) <= 80.0f) {
-                    accum += neighbor;
-                    weight += 1.0f;
+            for (int channel = 0; channel < 3; ++channel) {
+                int accum = 0;
+                for (int ky = 0; ky < 3; ++ky) {
+                    for (int kx = 0; kx < 3; ++kx) {
+                        const int sample_x = clamp_int(x + kx - 1, 0, width - 1);
+                        const int sample_y = clamp_int(y + ky - 1, 0, height - 1);
+                        const size_t sample_idx = (static_cast<size_t>(sample_y) * static_cast<size_t>(width) +
+                                                   static_cast<size_t>(sample_x)) * 4 + static_cast<size_t>(channel);
+                        accum += static_cast<int>(original[sample_idx]) * kernel[ky][kx];
+                    }
                 }
+                const int blurred = accum / kernel_sum;
+                pixels[idx + channel] = static_cast<unsigned char>(clamp_int(blurred, 0, 255));
             }
-
-            const float averaged = accum / weight;
-            const float smoothed = clamp01(lerp(base, averaged, strength) / 255.0f) * 255.0f;
-            const unsigned char final_value = static_cast<unsigned char>(std::round(smoothed));
-
-            pixels[idx] = final_value;
-            pixels[idx + 1] = final_value;
-            pixels[idx + 2] = final_value;
+            pixels[idx + 3] = original[idx + 3];
         }
     }
 }
 
 void apply_sky_map_post_fx(std::vector<unsigned char>& pixels, int width, int height) {
-    apply_heavy_contrast(pixels, width, height, kSkyContrastFactor);
-    apply_hash_black_white(pixels, width, height, kSkyHashStrength);
-    apply_line_smoothing(pixels, width, height, kSkyLineSmoothStrength);
+    apply_soft_blur(pixels, width, height);
 }
 
 } // namespace
