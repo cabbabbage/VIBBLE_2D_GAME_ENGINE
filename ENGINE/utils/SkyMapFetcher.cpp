@@ -45,13 +45,14 @@ inline int clamp_int(int value, int min_value, int max_value) {
     return std::min(std::max(value, min_value), max_value);
 }
 
-// Fallback/default for line smoothing strength if not defined in the header;
-// pick a conservative default (0.0 means no additional smoothing).
-// Provide fallback defaults for contrast and hash strength as well so code
-// that compares cached metadata against these constants compiles correctly.
-static constexpr double kSkyContrastFactor = 2.0;
-static constexpr double kSkyHashStrength = 0.0;
-static constexpr double kSkyLineSmoothStrength = 0.0;
+// No “contrast push” — keep these metadata constants at 0 so caches are reusable
+// without any aggressive post-processing.
+static constexpr double kSkyContrastFactor      = 0.0;
+static constexpr double kSkyHashStrength        = 0.0;
+static constexpr double kSkyLineSmoothStrength  = 0.0;
+
+// Very subtle overlay strength so the base NASA image remains the hero.
+static constexpr float  kOverlayStrength        = 0.12f;
 
 struct ImageData {
     int width  = 0;
@@ -122,6 +123,7 @@ void resample_image_bilinear(const ImageData& src, int dst_width, int dst_height
     }
 }
 
+// Gentle alpha blend for overlays (no inversion, no normalization).
 void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
                            const std::vector<unsigned char>& overlay_pixels,
                            int width,
@@ -134,97 +136,26 @@ void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
     for (size_t i = 0; i < total_pixels; ++i) {
         const size_t idx = i * 4;
 
-        const float overlay_alpha = clamp01(static_cast<float>(overlay_pixels[idx + 3]) / 255.0f);
-        if (overlay_alpha <= 0.0f) {
-            continue;
-        }
+        const float overlay_alpha_src = clamp01(static_cast<float>(overlay_pixels[idx + 3]) / 255.0f);
+        const float overlay_alpha     = clamp01(overlay_alpha_src * kOverlayStrength);
+        if (overlay_alpha <= 0.0f) continue;
 
         for (int channel = 0; channel < 3; ++channel) {
             const float overlay_c = static_cast<float>(overlay_pixels[idx + channel]) / 255.0f;
-            const float base_c = static_cast<float>(base_pixels[idx + channel]) / 255.0f;
-            const float equal_merge = clamp01((base_c + overlay_c) * 0.5f);
-            const float blended = clamp01(base_c * (1.0f - overlay_alpha) + equal_merge * overlay_alpha);
+            const float base_c    = static_cast<float>(base_pixels[idx + channel]) / 255.0f;
+            // Simple lerp toward overlay at low strength
+            const float blended = clamp01(base_c * (1.0f - overlay_alpha) + overlay_c * overlay_alpha);
             base_pixels[idx + channel] = static_cast<unsigned char>(std::round(blended * 255.0f));
         }
+        // keep base alpha as-is
     }
 }
 
-// Boosts faint linework: shows more pixels, lowers the effective threshold.
-void normalize_overlay_linework(std::vector<unsigned char>& pixels) {
-    if (pixels.empty()) return;
-
-    // RGBA -> 4 bytes per pixel
-    const size_t total_pixels = pixels.size() / 4;
-
-    float min_dark = 1.0f;
-    float max_dark = 0.0f;
-    bool has_contributing_pixels = false;
-
-    // Pass 1: gather min/max "darkness" over nonzero-alpha pixels
-    for (size_t i = 0; i < total_pixels; ++i) {
-        const size_t idx = i * 4;
-        const float a = static_cast<float>(pixels[idx + 3]) / 255.0f;
-        if (a <= 0.0f) continue;
-
-        const float r = static_cast<float>(pixels[idx + 0]) / 255.0f;
-        const float g = static_cast<float>(pixels[idx + 1]) / 255.0f;
-        const float b = static_cast<float>(pixels[idx + 2]) / 255.0f;
-
-        const float lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-        const float dark = clamp01(1.0f - lum);
-
-        min_dark = std::min(min_dark, dark);
-        max_dark = std::max(max_dark, dark);
-        has_contributing_pixels = true;
-    }
-
-    if (!has_contributing_pixels) return;
-
-    float range = max_dark - min_dark;
-    // If the range is tiny, widen it a bit so we still reveal faint pixels.
-    if (range <= 1e-4f) range = 1e-4f;
-
-    const float inv_range = 1.0f / range;
-
-    // Softer gamma & a small darkness boost mean more pixels survive.
-    constexpr float kHighlightGamma = 0.65f;  // was 0.85f
-    constexpr float kDarknessBoost  = 0.12f;  // lowers threshold (treats lighter areas as "darker")
-
-    // Pass 2: normalize luminance with bias so faint features become visible
-    for (size_t i = 0; i < total_pixels; ++i) {
-        const size_t idx = i * 4;
-        const float a = static_cast<float>(pixels[idx + 3]) / 255.0f;
-        if (a <= 0.0f) continue;
-
-        float r = static_cast<float>(pixels[idx + 0]) / 255.0f;
-        float g = static_cast<float>(pixels[idx + 1]) / 255.0f;
-        float b = static_cast<float>(pixels[idx + 2]) / 255.0f;
-
-        const float lum   = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-        const float dark  = clamp01(1.0f - lum);
-
-        // Normalize darkness to [0,1], then boost so more pixels cross the visibility threshold.
-        float norm_dark = clamp01((dark - min_dark) * inv_range + kDarknessBoost);
-        norm_dark = clamp01(static_cast<float>(std::pow(norm_dark, kHighlightGamma)));
-
-        const float norm_lum = clamp01(1.0f - norm_dark);
-
-        if (lum > 1e-4f) {
-            const float scale = norm_lum / lum;
-            r = clamp01(r * scale);
-            g = clamp01(g * scale);
-            b = clamp01(b * scale);
-        } else {
-            r = g = b = norm_lum;
-        }
-
-        pixels[idx + 0] = static_cast<unsigned char>(std::round(r * 255.0f));
-        pixels[idx + 1] = static_cast<unsigned char>(std::round(g * 255.0f));
-        pixels[idx + 2] = static_cast<unsigned char>(std::round(b * 255.0f));
-        // alpha unchanged
-    }
+// NOTE: Old “normalize_overlay_linework” and “apply_harsh_contrast” removed from use.
+// Keeping a small no-op for future hooks if needed.
+void apply_sky_map_post_fx(std::vector<unsigned char>& /*pixels*/, int /*width*/, int /*height*/) {
+    // Intentionally empty: preserve original NASA image tonality.
 }
-
 
 bool load_random_overlay_from_directory(std::vector<unsigned char>& out_pixels,
                                         int width,
@@ -292,15 +223,8 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
     std::vector<unsigned char> overlay_esoteric;
     std::vector<unsigned char> overlay_americana;
 
-    const bool has_esoteric = load_random_overlay_from_directory(overlay_esoteric, width, height, esoteric_dir, rng);
+    const bool has_esoteric  = load_random_overlay_from_directory(overlay_esoteric, width, height, esoteric_dir, rng);
     const bool has_americana = load_random_overlay_from_directory(overlay_americana, width, height, americana_dir, rng);
-
-    if (has_esoteric) {
-        normalize_overlay_linework(overlay_esoteric);
-    }
-    if (has_americana) {
-        normalize_overlay_linework(overlay_americana);
-    }
 
     if (!has_esoteric && !has_americana) {
         return;
@@ -324,55 +248,8 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
         merged = std::move(overlay_americana);
     }
 
-    normalize_overlay_linework(merged);
-
-    const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
-    for (size_t i = 0; i < total_pixels; ++i) {
-        const size_t idx = i * 4;
-        for (int channel = 0; channel < 3; ++channel) {
-            merged[idx + channel] = static_cast<unsigned char>(255 - merged[idx + channel]);
-        }
-    }
-
+    // No normalization or inversion — keep overlays exactly as provided, then blend gently.
     blend_overlay_texture(base_pixels, merged, width, height);
-}
-
-// Push the sky texture to an extreme black/white mask so any downstream blur
-// works from high-contrast input. Every pixel becomes either fully black or
-// fully white based on its luminance.
-void apply_harsh_contrast(std::vector<unsigned char>& pixels, int width, int height) {
-    if (width <= 0 || height <= 0 || pixels.empty()) {
-        return;
-    }
-
-    constexpr float contrast_factor = 2.2f;
-    constexpr float brightness_offset = 0.05f;
-    constexpr float midpoint = 0.5f;
-    constexpr float binary_threshold = 0.5f;
-
-    const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
-    for (size_t i = 0; i < total_pixels; ++i) {
-        const size_t idx = i * 4;
-
-        const float r = static_cast<float>(pixels[idx + 0]) / 255.0f;
-        const float g = static_cast<float>(pixels[idx + 1]) / 255.0f;
-        const float b = static_cast<float>(pixels[idx + 2]) / 255.0f;
-
-        float luminance = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-        luminance = (luminance - midpoint) * contrast_factor + midpoint;
-        luminance = clamp01(luminance + brightness_offset);
-
-        const float binary_value = (luminance >= binary_threshold) ? 1.0f : 0.0f;
-        const unsigned char channel_value = static_cast<unsigned char>(binary_value * 255.0f);
-
-        for (int channel = 0; channel < 3; ++channel) {
-            pixels[idx + channel] = channel_value;
-        }
-    }
-}
-
-void apply_sky_map_post_fx(std::vector<unsigned char>& pixels, int width, int height) {
-    apply_harsh_contrast(pixels, width, height);
 }
 
 } // namespace
@@ -576,7 +453,10 @@ bool SkyMapFetcher::jpeg_memory_to_png_file(const std::string& jpg_bytes,
     std::vector<unsigned char> pixels(rgba, rgba + total_bytes);
     stbi_image_free(rgba);
 
+    // Optional, very subtle texture overlay; does nothing if no assets exist.
     overlay_random_texture(pixels, w, h);
+
+    // No post contrast/normalization — keep NASA image tonality intact.
     apply_sky_map_post_fx(pixels, w, h);
 
     const int stride_in_bytes = w * 4;
@@ -752,9 +632,11 @@ SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& ou
     meta_json["pixels"] = pixels;
     meta_json["fov_deg"] = fov_deg;
     meta_json["post_processed_iso8601"] = iso8601.str();
-    meta_json["contrast_factor"] = kSkyContrastFactor;
-    meta_json["hash_strength"] = kSkyHashStrength;
-    meta_json["line_smoothing_strength"] = kSkyLineSmoothStrength;
+
+    // Store current (neutral) tuning so cache compares cleanly later.
+    meta_json["contrast_factor"] = kSkyContrastFactor;        // 0.0
+    meta_json["hash_strength"] = kSkyHashStrength;            // 0.0
+    meta_json["line_smoothing_strength"] = kSkyLineSmoothStrength; // 0.0
 
     try {
         fs::path meta_parent = metadata_path.parent_path();

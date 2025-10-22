@@ -13,7 +13,7 @@ class DMButton;
 class DMRangeSlider;
 class Input;
 class MapLayersController;
-struct SDL_Event;
+union SDL_Event;
 struct SDL_Renderer;
 
 class RoomSelectorPopup;
