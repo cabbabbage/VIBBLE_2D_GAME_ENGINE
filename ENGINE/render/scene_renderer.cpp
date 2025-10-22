@@ -150,7 +150,6 @@ bool SceneRenderer::initialize_static_light_chunks() {
         chunk->lighting.needs_update = true;
         chunk->static_clean          = false;
         chunk->needs_retry           = !safe_mode;
-        chunk->base_brightness    = safe_mode ? 0.0f : 1.0f;
         chunk->lighting.min_static_avg_strength = safe_mode ? 0.0f : 0.0f;
         chunk->lighting.max_static_avg_strength = safe_mode ? 0.0f : 1.0f;
         chunk->brightness_strength = 1.0f;

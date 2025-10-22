@@ -24,9 +24,6 @@ struct Chunk {
 
     // Cached texture representing the accumulated static light mask for this chunk.
     SDL_Texture* static_light_mask = nullptr;
-    // Average transparency of the static light mask for this chunk (0..1).
-    // Higher means brighter from static lights alone.
-    float base_brightness = 1.0f;
     bool  lighting_preloaded = false;
     bool  static_clean       = false;
     bool  needs_retry        = false;
@@ -82,6 +79,10 @@ struct Chunk {
 };
 
 } // namespace world
+
+namespace world {
+float static_brightness_for_opacity(const Chunk& chunk, float screen_opacity);
+}
 
 // Unified LightMap implementation co-located with Chunk.
 class LightMap {

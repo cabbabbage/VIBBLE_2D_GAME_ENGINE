@@ -88,7 +88,6 @@ bool MinMaxPass::evaluate(PreloadInputs& inputs,
     MeasureResult max_result = readRgba(renderer_, refreshed_base);
     if (max_result.success()) {
         chunk.lighting.max_static_avg_strength = computeAverageLuminance(max_result);
-        chunk.base_brightness                  = chunk.lighting.max_static_avg_strength;
     } else if (max_result.status == MeasureResult::Status::AllocationFailed ||
                max_result.status == MeasureResult::Status::ReadbackFailed) {
         chunk.needs_retry = true;

@@ -39,6 +39,49 @@ void Chunk::releaseLightingArtifacts() {
     needs_retry        = true;
 }
 
+float static_brightness_for_opacity(const Chunk& chunk, float screen_opacity) {
+    const float t = std::clamp(screen_opacity, 0.0f, 1.0f);
+
+    float min_strength = chunk.lighting.min_static_avg_strength;
+    float max_strength = chunk.lighting.max_static_avg_strength;
+
+    const bool min_ready = std::isfinite(min_strength);
+    const bool max_ready = std::isfinite(max_strength);
+
+    auto log_fallback = [&](const char* reason) {
+        vibble::log::debug(std::string{"[Lighting] static brightness fallback for chunk("} +
+                           std::to_string(chunk.i) + "," + std::to_string(chunk.j) + "): " + reason);
+    };
+
+    if (!min_ready && !max_ready) {
+        log_fallback("missing min and max values");
+        Chunk& mutable_chunk = const_cast<Chunk&>(chunk);
+        mutable_chunk.lighting.needs_update = true;
+        mutable_chunk.needs_retry          = true;
+        mutable_chunk.static_clean         = false;
+        return 0.0f;
+    }
+
+    if (!min_ready) {
+        log_fallback("missing min value");
+        return std::clamp(max_strength, 0.0f, 1.0f);
+    }
+
+    if (!max_ready) {
+        log_fallback("missing max value");
+        return std::clamp(min_strength, 0.0f, 1.0f);
+    }
+
+    min_strength = std::clamp(min_strength, 0.0f, 1.0f);
+    max_strength = std::clamp(max_strength, 0.0f, 1.0f);
+    if (max_strength < min_strength) {
+        std::swap(min_strength, max_strength);
+    }
+
+    const float brightness = min_strength + (max_strength - min_strength) * t;
+    return std::clamp(brightness, 0.0f, 1.0f);
+}
+
 } // namespace world
 
 namespace {
@@ -486,7 +529,6 @@ void update_chunk_static_brightness_extrema(SDL_Renderer* renderer, const Assets
     min_strength = std::clamp(min_strength, 0.0f, 1.0f);
     max_strength = std::clamp(std::max(min_strength, max_strength), 0.0f, 1.0f);
 
-    chunk.base_brightness                  = min_strength;
     chunk.lighting.min_static_avg_strength = min_strength;
     chunk.lighting.max_static_avg_strength = max_strength;
     chunk.lighting.needs_update            = true;
@@ -503,9 +545,10 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
                                                     const world::Grid& grid,
                                                     int radius,
                                                     float falloff_x,
-                                                    float falloff_y) {
+                                                    float falloff_y,
+                                                    float screen_light_opacity) {
     if (radius <= 0) return {0.0f, 0.0f};
-    const float cb = std::clamp(center.base_brightness, 0.0f, 1.0f);
+    const float cb = world::static_brightness_for_opacity(center, screen_light_opacity);
     float gx = 0.0f, gy = 0.0f;
     for (int dj = -radius; dj <= radius; ++dj) {
         for (int di = -radius; di <= radius; ++di) {
@@ -513,7 +556,7 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
             const int ni = center.i + di;
             const int nj = center.j + dj;
             const world::Chunk* n = grid.find_chunk_ij(ni, nj);
-            const float nb = n ? std::clamp(n->base_brightness, 0.0f, 1.0f) : 0.0f;
+            const float nb = n ? world::static_brightness_for_opacity(*n, screen_light_opacity) : 0.0f;
             const float db = nb - cb;
             const float dx = static_cast<float>(di);
             const float dy = static_cast<float>(dj);
@@ -532,7 +575,8 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
 // Compute weighted averages of light strength in-front (negative j) and behind (positive j).
 static std::pair<float, float> compute_directional_average_strengths(const LightMap::ShadowSettings& settings,
                                                                      const world::Grid& grid,
-                                                                     const world::Chunk& center) {
+                                                                     const world::Chunk& center,
+                                                                     float screen_light_opacity) {
     const int   R  = std::max(0, settings.search_radius_cells);
     const float fh = std::max(0.0f, settings.falloff_horizontal);
     const float fv = std::max(0.0f, settings.falloff_vertical);
@@ -551,7 +595,9 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
                 const float sx = std::abs(static_cast<float>(di));
                 const float sy = std::abs(static_cast<float>(dj));
                 const float w  = 1.0f / (1.0f + sx * fh + sy * fv);
-                const float s  = (n->lighting.is_active ? n->lighting.current_strength : n->base_brightness);
+                const float s  = (n->lighting.is_active
+                                      ? n->lighting.current_strength
+                                      : world::static_brightness_for_opacity(*n, screen_light_opacity));
                 accum_w += static_cast<double>(w);
                 accum_v += static_cast<double>(w) * static_cast<double>(std::clamp(s, 0.0f, 1.0f));
             }
@@ -574,7 +620,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
                                               float map_light_opacity_norm,
                                               world::Chunk& chunk) {
     // Opacity: inverse of front average strength.
-    const auto [front_avg, behind_avg] = compute_directional_average_strengths(settings, grid, chunk);
+    const auto [front_avg, behind_avg] =
+        compute_directional_average_strengths(settings, grid, chunk, map_light_opacity_norm);
     chunk.shadow.opacity  = std::clamp(1.0f - front_avg, 0.0f, 1.0f);
 
     // Scale: grow with front dominance, shrink with behind dominance (nonlinear towards min).
@@ -770,8 +817,9 @@ void finalize_chunk_mask_texture(SDL_Renderer* renderer,
     chunk.lighting_dirty     = false;
     update_chunk_static_brightness_extrema(renderer, assets, chunk);
     vibble::log::debug(std::string("[LightMap] ensure_chunk_static_texture: COMPLETE light mask for chunk(") +
-                       std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ") base_brightness=" +
-                       std::to_string(chunk.base_brightness));
+                       std::to_string(chunk.i) + "," + std::to_string(chunk.j) + ") static range=" +
+                       std::to_string(chunk.lighting.min_static_avg_strength) + "-" +
+                       std::to_string(chunk.lighting.max_static_avg_strength));
 }
 
 } // namespace
@@ -945,7 +993,7 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
         if (!chunk->lighting.needs_update) continue;
 
         if (chunk->lighting.is_occupied_by_moving_source) {
-            float static_avg = chunk->base_brightness;
+            float static_avg = world::static_brightness_for_opacity(*chunk, screen_light_opacity);
             if (chunk->static_light_mask) {
                 const auto sample = vibble::render::sample_texture_transparency(renderer, chunk->static_light_mask);
                 if (sample.success) {
@@ -954,19 +1002,20 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
                     log_transparency_failure("[LightMap] moving", *chunk, sample);
                     chunk->needs_retry = true;
                 }
+            } else {
+                chunk->needs_retry = true;
             }
             chunk->lighting.current_strength = static_avg;
         } else {
-            chunk->lighting.current_strength = lerp(chunk->lighting.min_static_avg_strength,
-                                                 chunk->lighting.max_static_avg_strength,
-                                                 screen_light_opacity);
+            chunk->lighting.current_strength =
+                world::static_brightness_for_opacity(*chunk, screen_light_opacity);
         }
 
         const ShadowSettings settings{};
         const int   radius = std::max(0, settings.search_radius_cells);
         const float fx     = std::max(0.0f, settings.falloff_horizontal);
         const float fy     = std::max(0.0f, settings.falloff_vertical);
-        const auto grad    = compute_brightness_gradient(*chunk, grid, radius, fx, fy);
+        const auto grad    = compute_brightness_gradient(*chunk, grid, radius, fx, fy, screen_light_opacity);
         int map_dir_sign_x = 0;
         if (const Global_Light_Source* gl = assets_->map_light_source()) {
             const SDL_Point ref = gl->get_direction_reference();
@@ -992,8 +1041,9 @@ float LightMap::sample_brightness(int world_x,
                           std::to_string(world_x) + ", " + std::to_string(world_y) + ")");
         return 1.0f;
     }
-    const float weight = std::clamp(static_weight, 0.0f, 1.0f);
-    return std::clamp(chunk->base_brightness * weight, 0.0f, 1.0f);
+    const float weight           = std::clamp(static_weight, 0.0f, 1.0f);
+    const float static_component = world::static_brightness_for_opacity(*chunk, last_screen_light_opacity_);
+    return std::clamp(static_component * weight, 0.0f, 1.0f);
 }
 
 float LightMap::sample_brightness_bilinear(float world_x,

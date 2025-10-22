@@ -10,7 +10,6 @@ struct PrecomputedLightMapChunk {
     SDL_Rect                        world_rect{0, 0, 0, 0};
     SDL_Texture*                    texture = nullptr;
     std::vector<std::uint8_t>       light_samples{};
-    float                           base_brightness = 0.0f;
 };
 
 struct PrecomputedLightMap {

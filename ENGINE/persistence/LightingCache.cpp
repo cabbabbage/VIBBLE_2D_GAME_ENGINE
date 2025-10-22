@@ -4,6 +4,7 @@
 #include "utils/log.hpp"
 #include "world/chunk.hpp"
 
+#include <algorithm>
 #include <exception>
 #include <fstream>
 #include <string>
@@ -116,7 +117,6 @@ bool LightingCache::saveChunk(SDL_Renderer* renderer,
     entry["mask"]       = mask_path.filename().string();
     entry["min_strength"] = chunk.lighting.min_static_avg_strength;
     entry["max_strength"] = chunk.lighting.max_static_avg_strength;
-    entry["base_brightness"] = chunk.base_brightness;
 
     manifest_[chunkKey(chunk)] = std::move(entry);
     return persistManifest();
@@ -184,7 +184,11 @@ bool LightingCache::loadChunk(SDL_Renderer* renderer, world::Chunk& chunk) {
     chunk.lighting_preloaded                 = true;
     chunk.lighting.min_static_avg_strength   = entry.value("min_strength", chunk.lighting.min_static_avg_strength);
     chunk.lighting.max_static_avg_strength   = entry.value("max_strength", chunk.lighting.max_static_avg_strength);
-    chunk.base_brightness                    = entry.value("base_brightness", chunk.base_brightness);
+    if (chunk.lighting.max_static_avg_strength < chunk.lighting.min_static_avg_strength) {
+        std::swap(chunk.lighting.max_static_avg_strength, chunk.lighting.min_static_avg_strength);
+    }
+    chunk.lighting.min_static_avg_strength = std::clamp(chunk.lighting.min_static_avg_strength, 0.0f, 1.0f);
+    chunk.lighting.max_static_avg_strength = std::clamp(chunk.lighting.max_static_avg_strength, 0.0f, 1.0f);
     chunk.needs_retry                        = false;
 
     return true;

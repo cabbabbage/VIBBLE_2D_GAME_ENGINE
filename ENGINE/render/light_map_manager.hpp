@@ -26,7 +26,6 @@ public:
         SDL_Rect world_rect{0, 0, 0, 0};
         bool     active              = false;
         bool     dirty               = false;
-        float    base_brightness     = 0.0f;
         float    combined_brightness = 0.0f;
         float    static_min          = 0.0f;
         float    static_max          = 0.0f;
@@ -47,6 +46,7 @@ public:
     void begin_frame();
 
     const LightMap* light_map() const;
+    float current_screen_light_opacity() const { return last_screen_light_opacity_; }
     std::vector<ChunkSnapshot> all_snapshots() const;
     std::vector<std::string>      assets_sampling_chunk(int index) const;
     std::optional<ChunkSnapshot> snapshot_for_chunk(int index) const;
