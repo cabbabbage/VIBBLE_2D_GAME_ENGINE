@@ -15,8 +15,8 @@ struct GlassButtonStyle {
     float refraction_strength = 0.055f; // try 0.04–0.09
 
     // "Rough" hammered glass controls
-    float rough_scale   = 0.035f; // noise frequency (larger = more bumps)
-    float rough_ampl_px = 3.50f;  // micro facet offset amplitude (px)
+    float rough_scale   = 0.022f; // noise frequency (larger = more bumps)
+    float rough_ampl_px = 5.20f;  // micro facet offset amplitude (px)
 
     // Diffusion sampling (number of taps & radius for the multi-sample blur-in-place)
     int   diffusion_taps    = 9;   // 6, 9, or 12 are fine
@@ -26,9 +26,9 @@ struct GlassButtonStyle {
     float chroma_strength   = 0.70f;
 
     // Distortion mix with original background (no tint/fill involved)
-    float mix_normal   = 0.50f;   // idle
-    float mix_hover    = 0.70f;   // hover (more distortion)
-    float mix_pressed  = 0.35f;   // pressed (flatter)
+    float mix_normal   = 0.38f;   // idle
+    float mix_hover    = 0.58f;   // hover (more distortion)
+    float mix_pressed  = 0.32f;   // pressed (flatter)
 
     // Fresnel-style rim (increases distortion mix near the edge; does NOT draw a border)
     float fresnel_power     = 2.20f;
@@ -40,8 +40,8 @@ struct GlassButtonStyle {
     int   blur_px_pressed = 0;
 
     // Text
-    SDL_Color text_color  = SDL_Color{245,245,245,255}; // muted white
-    SDL_Color text_stroke = SDL_Color{0,0,0,128};       // soft shadow/stroke
+    SDL_Color text_color  = SDL_Color{252,252,252,255}; // brighter white
+    SDL_Color text_stroke = SDL_Color{0,0,0,110};       // softer shadow/stroke
 
     // Legacy / compatibility fields (ignored by the glass pass; retained so code compiles)
     SDL_Color border_light{0,0,0,0};
@@ -54,7 +54,7 @@ struct GlassButtonStyle {
     float     noise_opacity = 0.0f;
     float     smudge_opacity = 0.0f;
     SDL_Color highlight_color{255,255,255,255};
-    SDL_Color highlight_glow_color{255,255,255,200};
+    SDL_Color highlight_glow_color{255,255,255,235};
     SDL_Color focus_ring_inner{0,0,0,0};
     SDL_Color focus_ring_outer{0,0,0,0};
     SDL_Color disabled_text{200,200,200,200};

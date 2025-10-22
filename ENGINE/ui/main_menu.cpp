@@ -399,8 +399,8 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         const double elapsed_seconds = static_cast<double>(now - animation_start_ticks_) / 1000.0;
         const double angle = std::fmod(elapsed_seconds * degrees_per_second, 360.0);
 
-        const double pivot_x = -0.08 * static_cast<double>(screen_w_);
-        const double pivot_y = static_cast<double>(screen_h_) * 1.08;
+        const double center_x = static_cast<double>(screen_w_) * 0.5;
+        const double center_y = static_cast<double>(screen_h_) * 0.5;
 
         const double base_scale_x = static_cast<double>(screen_w_) / static_cast<double>(tex_w);
         const double base_scale_y = static_cast<double>(screen_h_) / static_cast<double>(tex_h);
@@ -410,32 +410,20 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         const double half_h = static_cast<double>(tex_h) * 0.5;
         const double texture_radius = std::sqrt(half_w * half_w + half_h * half_h);
         if (texture_radius > 1e-6) {
-                const std::array<SDL_FPoint, 4> corners {{{0.0f, 0.0f},
-                                                         {static_cast<float>(screen_w_), 0.0f},
-                                                         {0.0f, static_cast<float>(screen_h_)},
-                                                         {static_cast<float>(screen_w_), static_cast<float>(screen_h_)}}};
-                double max_corner_distance = 0.0;
-                for (const auto& c : corners) {
-                        const double dx = static_cast<double>(c.x) - pivot_x;
-                        const double dy = static_cast<double>(c.y) - pivot_y;
-                        const double dist = std::sqrt(dx * dx + dy * dy);
-                        if (dist > max_corner_distance) max_corner_distance = dist;
-                }
-                const double needed_scale = max_corner_distance / texture_radius;
+                const double screen_radius = std::sqrt(center_x * center_x + center_y * center_y);
+                const double needed_scale = screen_radius / texture_radius;
                 if (needed_scale > required_scale) required_scale = needed_scale;
         }
 
         required_scale = std::max(required_scale, 1.0);
-        // Inflate the scale so the rotating background never exposes empty corners.
-        // A modest 2% margin proved insufficient on some aspect ratios, so lean in harder.
-        // The extra zoom is intentionally generous to hide gaps while keeping the scene readable.
-        required_scale *= 2;
+        // Provide a modest safety margin so corner rotation never exposes empty pixels.
+        required_scale *= 1.18;
 
         SDL_Rect dst{};
         dst.w = static_cast<int>(std::ceil(static_cast<double>(tex_w) * required_scale));
         dst.h = static_cast<int>(std::ceil(static_cast<double>(tex_h) * required_scale));
-        dst.x = static_cast<int>(std::round(pivot_x - static_cast<double>(dst.w) * 0.5));
-        dst.y = static_cast<int>(std::round(pivot_y - static_cast<double>(dst.h) * 0.5));
+        dst.x = static_cast<int>(std::round(center_x - static_cast<double>(dst.w) * 0.5));
+        dst.y = static_cast<int>(std::round(center_y - static_cast<double>(dst.h) * 0.5));
 
         SDL_Point center{};
         center.x = dst.w / 2;

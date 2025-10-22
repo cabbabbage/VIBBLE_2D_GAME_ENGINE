@@ -18,6 +18,11 @@ using SurfacePtr = std::unique_ptr<SDL_Surface, SurfaceDeleter>;
 
 inline Uint8 clamp8(int v) { return static_cast<Uint8>(std::clamp(v, 0, 255)); }
 
+inline Uint8 lerp8(Uint8 from, Uint8 to, float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return clamp8(static_cast<int>(std::round(static_cast<float>(from) + (static_cast<float>(to) - static_cast<float>(from)) * t)));
+}
+
 inline SDL_Color unpack(Uint32 px) {
     SDL_Color c;
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
@@ -391,7 +396,41 @@ void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
             out.r = clamp8(static_cast<int>(orig.r * (1.0f - mix_w) + refr.r * mix_w));
             out.g = clamp8(static_cast<int>(orig.g * (1.0f - mix_w) + refr.g * mix_w));
             out.b = clamp8(static_cast<int>(orig.b * (1.0f - mix_w) + refr.b * mix_w));
-            out.a = clamp8(static_cast<int>(cov * 255.0f)); // opaque inside mask (we're replacing the region)
+
+            // Specular-style glare sweeps from upper-left to lower-right to sell glass sheen.
+            const float highlight_axis = std::clamp(1.0f - std::abs(ndx * 0.75f + ndy * 1.35f - 0.10f), 0.0f, 1.0f);
+            float highlight_curve = std::pow(highlight_axis, 3.2f);
+
+            float hotspot = 1.0f - std::min(1.0f, (std::pow(ndx + 0.2f, 2.0f) * 3.6f + std::pow(ndy - 0.45f, 2.0f) * 8.0f));
+            hotspot = std::pow(std::max(0.0f, hotspot), 2.2f);
+
+            const float base_glare = pressed_ ? 0.08f : (hovered_ ? 0.18f : 0.12f);
+            float glare_mix = base_glare + highlight_curve * (hovered_ ? 0.42f : 0.32f) + hotspot * 0.55f;
+            glare_mix = std::clamp(glare_mix, 0.0f, 0.85f);
+
+            float glow_mix = std::clamp(highlight_curve * 0.5f + hotspot * 0.7f, 0.0f, 1.0f);
+            glow_mix *= pressed_ ? 0.20f : (hovered_ ? 0.45f : 0.35f);
+
+            const SDL_Color hi_col   = glass_style_.highlight_color;
+            const SDL_Color glow_col = glass_style_.highlight_glow_color;
+
+            out.r = lerp8(out.r, hi_col.r, glare_mix);
+            out.g = lerp8(out.g, hi_col.g, glare_mix);
+            out.b = lerp8(out.b, hi_col.b, glare_mix);
+
+            if (glow_mix > 0.0f) {
+                out.r = lerp8(out.r, glow_col.r, glow_mix);
+                out.g = lerp8(out.g, glow_col.g, glow_mix);
+                out.b = lerp8(out.b, glow_col.b, glow_mix);
+            }
+
+            const float lift = pressed_ ? 0.04f : (hovered_ ? 0.10f : 0.07f);
+            out.r = lerp8(out.r, 255, lift);
+            out.g = lerp8(out.g, 255, lift);
+            out.b = lerp8(out.b, 255, lift);
+
+            const float transparency = pressed_ ? 0.70f : (hovered_ ? 0.74f : 0.68f);
+            out.a = clamp8(static_cast<int>(std::round(cov * 255.0f * transparency)));
 
             Lacc += luminance(out);
             ++Lcount;
