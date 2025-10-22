@@ -13939,7 +13939,7 @@
             }
           ],
           "curvyness": 1,
-          "edge_smoothness": 28,
+          "edge_smoothness": 27,
           "geometry": "Circle",
           "inherits_map_assets": true,
           "is_boss": false,
