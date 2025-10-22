@@ -71,8 +71,6 @@ void MapModeUI::set_screen_dimensions(int w, int h) {
     if (preview_panel_) preview_panel_->set_work_area(bounds);
     if (layers_preview_panel_) layers_preview_panel_->set_work_area(bounds);
     if (layers_panel_) layers_panel_->set_work_area(bounds);
-    if (layers_preview_container_) layers_preview_container_->request_layout();
-    if (layers_container_) layers_container_->request_layout();
     if (room_configurator_) {
         room_configurator_->set_work_area(bounds);
         room_configurator_->set_bounds(room_config_bounds());
@@ -129,9 +127,7 @@ void MapModeUI::set_dev_sliding_headers_hidden(bool hidden) {
 }
 
 void MapModeUI::refresh_header_suppression_state() {
-    const bool final_state = base_headers_suppressed_ ||
-                             sliding_headers_hidden_external_ ||
-                             dev_sliding_headers_hidden_;
+    const bool final_state = base_headers_suppressed_ || dev_sliding_headers_hidden_;
     const bool state_changed = (headers_suppressed_ != final_state);
     headers_suppressed_ = final_state;
 
@@ -140,15 +136,6 @@ void MapModeUI::refresh_header_suppression_state() {
         if (headers_suppressed_) {
             if (layers_panel_) {
                 layers_panel_->close();
-            }
-            if (layers_preview_panel_) {
-                layers_preview_panel_->close();
-            }
-            if (layers_preview_container_) {
-                layers_preview_container_->close();
-            }
-            if (layers_container_) {
-                layers_container_->close();
             }
             close_room_configuration();
         }
@@ -270,19 +257,7 @@ bool MapModeUI::pointer_inside_floating_panel(int x, int y) const {
             continue;
         }
         if (auto* layers_preview = dynamic_cast<MapLayersPreviewPanel*>(panel)) {
-            if (layers_preview->embedded_mode()) {
-                continue;
-            }
             if (layers_preview->is_visible() && layers_preview->is_point_inside(p.x, p.y)) {
-                return true;
-            }
-            continue;
-        }
-        if (auto* layers = dynamic_cast<MapLayersPanel*>(panel)) {
-            if (layers->embedded_mode()) {
-                continue;
-            }
-            if (layers->is_visible() && layers->is_point_inside(p.x, p.y)) {
                 return true;
             }
             continue;
@@ -310,14 +285,6 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
         MapShadowPanel* shadows = dynamic_cast<MapShadowPanel*>(panel);
         MapLightPreviewPanel* preview = dynamic_cast<MapLightPreviewPanel*>(panel);
         MapLayersPreviewPanel* layers_preview = dynamic_cast<MapLayersPreviewPanel*>(panel);
-        MapLayersPanel* layers_panel = dynamic_cast<MapLayersPanel*>(panel);
-
-        if (layers_panel && layers_panel->embedded_mode()) {
-            continue;
-        }
-        if (layers_preview && layers_preview->embedded_mode()) {
-            continue;
-        }
 
         auto handle_and_check = [&](auto* concrete) -> bool {
             if (!concrete || !concrete->is_visible()) return false;
@@ -361,7 +328,6 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
                             (shadows && shadows->is_visible() && shadows->is_point_inside(p.x, p.y)) ||
                             (preview && preview->is_visible() && preview->is_point_inside(p.x, p.y)) ||
                             (layers_preview && layers_preview->is_visible() && layers_preview->is_point_inside(p.x, p.y)) ||
-                            (layers_panel && layers_panel->is_visible() && layers_panel->is_point_inside(p.x, p.y)) ||
                             (!lights && !shadows && !preview && !layers_preview && panel->is_visible() && panel->is_point_inside(p.x, p.y));
 
         if ((pointer_event || wheel_event) && inside) {
@@ -422,6 +388,7 @@ void MapModeUI::ensure_panels() {
     }
     if (!layers_panel_) {
         layers_panel_ = std::make_unique<MapLayersPanel>(kDefaultPanelX + 64, kDefaultPanelY + 64);
+        layers_panel_->set_embedded_mode(false);
         layers_panel_->set_header_visibility_callback([this](bool visible) {
             this->set_sliding_headers_hidden(visible);
         });
@@ -432,6 +399,7 @@ void MapModeUI::ensure_panels() {
         track_floating_panel(layers_panel_.get());
     }
     if (layers_panel_) {
+        layers_panel_->set_embedded_mode(false);
         if (layers_controller_) {
             layers_panel_->set_controller(layers_controller_);
         }
@@ -465,78 +433,6 @@ void MapModeUI::ensure_panels() {
     }
     if (layers_preview_panel_ && map_info_) {
         layers_preview_panel_->set_map_info(map_info_, [this]() { return save_map_info_to_disk(); });
-    }
-    if (layers_panel_) {
-        layers_panel_->set_embedded_mode(true);
-    }
-    if (layers_preview_panel_) {
-        layers_preview_panel_->set_embedded_mode(true);
-    }
-
-    if (!layers_preview_container_) {
-        layers_preview_container_ = std::make_unique<SlidingWindowContainer>();
-        layers_preview_container_->set_header_text("Layers Preview");
-        layers_preview_container_->set_header_visible(true);
-        layers_preview_container_->set_scrollbar_visible(false);
-        layers_preview_container_->set_header_visibility_controller([this](bool visible) {
-            this->set_sliding_headers_hidden(visible);
-        });
-        layers_preview_container_->set_blocks_editor_interactions(true);
-        layers_preview_container_->set_on_close([this]() { this->set_active_panel(PanelType::None); });
-    }
-    if (layers_preview_container_) {
-        layers_preview_container_->set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
-            if (!layers_preview_panel_) {
-                return ctx.content_top;
-            }
-            return layers_preview_panel_->layout_embedded_content(ctx, screen_h_);
-        });
-        layers_preview_container_->set_render_function([this](SDL_Renderer* renderer) {
-            if (layers_preview_panel_) {
-                layers_preview_panel_->render_embedded_content(renderer);
-            }
-        });
-        layers_preview_container_->set_event_function([this](const SDL_Event& e) {
-            return layers_preview_panel_ && layers_preview_panel_->handle_embedded_event(e);
-        });
-        layers_preview_container_->set_update_function([this](const Input& input, int screen_w, int screen_h) {
-            if (layers_preview_panel_) {
-                layers_preview_panel_->update_embedded(input, screen_w, screen_h);
-            }
-        });
-    }
-
-    if (!layers_container_) {
-        layers_container_ = std::make_unique<SlidingWindowContainer>();
-        layers_container_->set_header_text("Layers");
-        layers_container_->set_header_visible(true);
-        layers_container_->set_scrollbar_visible(true);
-        layers_container_->set_header_visibility_controller([this](bool visible) {
-            this->set_sliding_headers_hidden(visible);
-        });
-        layers_container_->set_blocks_editor_interactions(true);
-        layers_container_->set_on_close([this]() { this->set_active_panel(PanelType::None); });
-    }
-    if (layers_container_) {
-        layers_container_->set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
-            if (!layers_panel_) {
-                return ctx.content_top;
-            }
-            return layers_panel_->layout_embedded_content(ctx, screen_h_);
-        });
-        layers_container_->set_render_function([this](SDL_Renderer* renderer) {
-            if (layers_panel_) {
-                layers_panel_->render_embedded_content(renderer);
-            }
-        });
-        layers_container_->set_event_function([this](const SDL_Event& e) {
-            return layers_panel_ && layers_panel_->handle_embedded_event(e);
-        });
-        layers_container_->set_update_function([this](const Input& input, int screen_w, int screen_h) {
-            if (layers_panel_) {
-                layers_panel_->update_embedded(input, screen_w, screen_h);
-            }
-        });
     }
     if (!footer_bar_) {
         footer_bar_ = std::make_unique<DevFooterBar>("");
@@ -653,7 +549,7 @@ void MapModeUI::sync_footer_button_states() {
         const bool lights_visible = light_panel_ && light_panel_->is_visible();
         const bool shading_visible = (shadow_panel_ && shadow_panel_->is_visible());
         const bool light_map_visible = preview_panel_ && preview_panel_->is_visible();
-        const bool layers_visible = is_layers_panel_visible();
+        const bool layers_visible = layers_panel_ && layers_panel_->is_visible();
         footer_bar_->set_button_active_state(kButtonIdLights, lights_visible);
         footer_bar_->set_button_active_state(kButtonIdShading, shading_visible);
         footer_bar_->set_button_active_state(kButtonIdLightMap, light_map_visible);
@@ -706,31 +602,12 @@ void MapModeUI::set_active_panel(PanelType panel) {
     if (panel == PanelType::Layers) {
         if (layers_panel_) {
             layers_panel_->open();
-        }
-        if (layers_preview_panel_) {
-            layers_preview_panel_->open();
-        }
-        if (layers_preview_container_) {
-            layers_preview_container_->open();
-            layers_preview_container_->request_layout();
-        }
-        if (layers_container_) {
-            layers_container_->open();
-            layers_container_->request_layout();
+            bring_panel_to_front(layers_panel_.get());
         }
         new_active = PanelType::Layers;
     } else {
         if (layers_panel_) {
             layers_panel_->close();
-        }
-        if (layers_preview_panel_) {
-            layers_preview_panel_->close();
-        }
-        if (layers_preview_container_) {
-            layers_preview_container_->close();
-        }
-        if (layers_container_) {
-            layers_container_->close();
         }
         close_room_configuration();
     }
@@ -791,11 +668,6 @@ void MapModeUI::update(const Input& input) {
     }
     for (DockableCollapsible* panel : floating_panels_) {
         if (!panel) continue;
-        if (auto* layers = dynamic_cast<MapLayersPanel*>(panel)) {
-            if (layers->embedded_mode()) {
-                continue;
-            }
-        }
         if (auto* lights = dynamic_cast<MapLightPanel*>(panel)) {
             if (lights->is_visible()) {
                 lights->update(input, screen_w_, screen_h_);
@@ -809,9 +681,6 @@ void MapModeUI::update(const Input& input) {
             continue;
         }
         if (auto* layers_preview = dynamic_cast<MapLayersPreviewPanel*>(panel)) {
-            if (layers_preview->embedded_mode()) {
-                continue;
-            }
             if (layers_preview->is_visible()) {
                 layers_preview->update(input, screen_w_, screen_h_);
             }
@@ -828,15 +697,8 @@ void MapModeUI::update(const Input& input) {
         }
     }
 
-    if (layers_preview_container_) {
-        layers_preview_container_->update(input, screen_w_, screen_h_);
-    }
-    if (layers_container_) {
-        layers_container_->update(input, screen_w_, screen_h_);
-    }
-
     PanelType visible = PanelType::None;
-    if (is_layers_panel_visible()) {
+    if (layers_panel_ && layers_panel_->is_visible()) {
         visible = PanelType::Layers;
     } else if (grid_panel_ && grid_panel_->is_visible()) {
         visible = PanelType::Grid;
@@ -873,13 +735,6 @@ bool MapModeUI::handle_event(const SDL_Event& e) {
         return true;
     }
 
-    if (layers_preview_container_ && layers_preview_container_->handle_event(e)) {
-        return true;
-    }
-    if (layers_container_ && layers_container_->handle_event(e)) {
-        return true;
-    }
-
     bool footer_used = false;
     const bool allow_footer = !headers_suppressed_;
     if (allow_footer && footer_bar_ && footer_bar_->visible()) {
@@ -895,11 +750,6 @@ bool MapModeUI::handle_event(const SDL_Event& e) {
 void MapModeUI::render(SDL_Renderer* renderer) const {
     for (DockableCollapsible* panel : floating_panels_) {
         if (!panel) continue;
-        if (auto* layers = dynamic_cast<MapLayersPanel*>(panel)) {
-            if (layers->embedded_mode()) {
-                continue;
-            }
-        }
         if (auto* lights = dynamic_cast<MapLightPanel*>(panel)) {
             if (lights->is_visible()) {
                 lights->render(renderer);
@@ -913,9 +763,6 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
             continue;
         }
         if (auto* layers_preview = dynamic_cast<MapLayersPreviewPanel*>(panel)) {
-            if (layers_preview->embedded_mode()) {
-                continue;
-            }
             if (layers_preview->is_visible()) {
                 layers_preview->render(renderer);
             }
@@ -930,12 +777,6 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
         if (panel->is_visible()) {
             panel->render(renderer);
         }
-    }
-    if (layers_preview_container_) {
-        layers_preview_container_->render(renderer, screen_w_, screen_h_);
-    }
-    if (layers_container_) {
-        layers_container_->render(renderer, screen_w_, screen_h_);
     }
     if (footer_bar_ && footer_bar_->visible()) {
         footer_bar_->render(renderer);
@@ -1109,7 +950,7 @@ void MapModeUI::toggle_layers_panel() {
         sync_footer_button_states();
         return;
     }
-    if (is_layers_panel_visible()) {
+    if (active_panel_ == PanelType::Layers) {
         set_active_panel(PanelType::None);
     } else {
         set_active_panel(PanelType::Layers);
@@ -1128,15 +969,6 @@ void MapModeUI::close_all_panels() {
     }
     if (layers_preview_panel_) {
         layers_preview_panel_->close();
-    }
-    if (layers_preview_container_) {
-        layers_preview_container_->close();
-    }
-    if (layers_container_) {
-        layers_container_->close();
-    }
-    if (layers_panel_) {
-        layers_panel_->close();
     }
     shading_panel_centered_ = false;
     preview_panel_centered_ = false;
@@ -1409,15 +1241,6 @@ bool MapModeUI::is_point_inside(int x, int y) const {
     if (layers_panel_ && layers_panel_->is_visible() && layers_panel_->is_point_inside(x, y)) {
         return true;
     }
-    if (layers_preview_panel_ && layers_preview_panel_->is_visible() && layers_preview_panel_->is_point_inside(x, y)) {
-        return true;
-    }
-    if (layers_preview_container_ && layers_preview_container_->is_point_inside(x, y)) {
-        return true;
-    }
-    if (layers_container_ && layers_container_->is_point_inside(x, y)) {
-        return true;
-    }
     if (room_configurator_ && room_configurator_->visible() && room_configurator_->is_point_inside(x, y)) {
         return true;
     }
@@ -1436,17 +1259,7 @@ bool MapModeUI::is_any_panel_visible() const {
             continue;
         }
         if (auto* layers_preview = dynamic_cast<MapLayersPreviewPanel*>(panel)) {
-            if (layers_preview->embedded_mode()) {
-                continue;
-            }
             if (layers_preview->is_visible()) return true;
-            continue;
-        }
-        if (auto* layers = dynamic_cast<MapLayersPanel*>(panel)) {
-            if (layers->embedded_mode()) {
-                continue;
-            }
-            if (layers->is_visible()) return true;
             continue;
         }
         if (auto* shadows = dynamic_cast<MapShadowPanel*>(panel)) {
@@ -1455,37 +1268,14 @@ bool MapModeUI::is_any_panel_visible() const {
         }
         if (panel->is_visible()) return true;
     }
-    if (layers_preview_container_ && layers_preview_container_->is_visible()) {
-        return true;
-    }
-    if (layers_container_ && layers_container_->is_visible()) {
-        return true;
-    }
     if (room_configurator_ && room_configurator_->visible()) {
         return true;
     }
-    if (layers_panel_ && layers_panel_->is_visible()) {
-        return true;
-    }
-    if (layers_preview_panel_ && layers_preview_panel_->is_visible()) {
-        return true;
-    }
-    return false;
+    return layers_panel_ && layers_panel_->is_visible();
 }
 
 bool MapModeUI::is_layers_panel_visible() const {
-    return (layers_panel_ && layers_panel_->is_visible()) ||
-           (layers_preview_panel_ && layers_preview_panel_->is_visible()) ||
-           (layers_container_ && layers_container_->is_visible()) ||
-           (layers_preview_container_ && layers_preview_container_->is_visible());
-}
-
-bool MapModeUI::is_layers_details_container_visible() const {
-    return layers_container_ && layers_container_->is_visible();
-}
-
-bool MapModeUI::is_layers_preview_container_visible() const {
-    return layers_preview_container_ && layers_preview_container_->is_visible();
+    return layers_panel_ && layers_panel_->is_visible();
 }
 
 bool MapModeUI::save_map_info_to_disk() const {

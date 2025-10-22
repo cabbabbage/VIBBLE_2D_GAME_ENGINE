@@ -195,133 +195,22 @@ void MapLayersPreviewPanel::build_rows() {
     set_rows(rows);
 }
 
-void MapLayersPreviewPanel::set_embedded_mode(bool embedded) {
-    if (embedded_mode_ == embedded) {
-        return;
-    }
-    embedded_mode_ = embedded;
-    set_floatable(!embedded_mode_);
-    set_show_header(!embedded_mode_);
-    set_close_button_enabled(!embedded_mode_);
-    if (embedded_mode_) {
-        set_visible(true);
-        set_expanded(true);
-        set_rect(embedded_bounds_);
-        preview_rect_ = embedded_bounds_;
-        preview_center_ = SDL_Point{embedded_bounds_.x + embedded_bounds_.w / 2,
-                                    embedded_bounds_.y + embedded_bounds_.h / 2};
-        recalculate_preview_scale();
-    }
-}
-
-void MapLayersPreviewPanel::set_embedded_bounds(const SDL_Rect& bounds) {
-    embedded_bounds_ = bounds;
-    if (!embedded_mode_) {
-        return;
-    }
-    set_rect(bounds);
-    preview_rect_ = bounds;
-    preview_center_ = SDL_Point{bounds.x + bounds.w / 2, bounds.y + bounds.h / 2};
-    recalculate_preview_scale();
-}
-
-int MapLayersPreviewPanel::layout_embedded_content(const SlidingWindowContainer::LayoutContext& ctx,
-                                                   int screen_height) {
-    if (!embedded_mode_) {
-        return ctx.content_top;
-    }
-    const int content_height = std::max(0, screen_height - ctx.content_top);
-    SDL_Rect bounds{ctx.content_x, ctx.content_top - ctx.scroll_value, ctx.content_width, content_height};
-    set_embedded_bounds(bounds);
-    return ctx.content_top + content_height;
-}
-
-void MapLayersPreviewPanel::update_embedded(const Input& input, int screen_w, int screen_h) {
-    (void)input;
-    update(input, screen_w, screen_h);
-}
-
-bool MapLayersPreviewPanel::handle_embedded_event(const SDL_Event& e) {
-    if (!embedded_mode_ || !is_visible()) {
-        return false;
-    }
-    const bool pointer_event = (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP);
-    if (!pointer_event) {
-        return false;
-    }
-    SDL_Point p{0, 0};
-    if (e.type == SDL_MOUSEMOTION) {
-        p.x = e.motion.x;
-        p.y = e.motion.y;
-    } else {
-        p.x = e.button.x;
-        p.y = e.button.y;
-    }
-    if (SDL_PointInRect(&p, &preview_rect_) != SDL_TRUE) {
-        if (e.type == SDL_MOUSEMOTION) {
-            clear_hover_state();
-        }
-        return false;
-    }
-    const int layer_hit = hit_test_layer(p.x, p.y);
-    const std::string room_hit = hit_test_room(p.x, p.y);
-    if (e.type == SDL_MOUSEMOTION) {
-        update_hover_state(layer_hit, room_hit);
-        return (layer_hit >= 0 || !room_hit.empty());
-    }
-    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        handle_preview_click(layer_hit, room_hit);
-        return true;
-    }
-    return false;
-}
-
-void MapLayersPreviewPanel::render_embedded_content(SDL_Renderer* renderer) const {
-    if (!embedded_mode_ || !is_visible()) {
-        return;
-    }
-    render_content(renderer);
-}
-
 void MapLayersPreviewPanel::update(const Input& input, int screen_w, int screen_h) {
     screen_w_ = screen_w;
     screen_h_ = screen_h;
-    if (embedded_mode_) {
-        if (!is_visible()) {
-            return;
-        }
-        if (embedded_bounds_.w > 0 && embedded_bounds_.h > 0) {
-            preview_rect_ = embedded_bounds_;
-            preview_center_ = SDL_Point{embedded_bounds_.x + embedded_bounds_.w / 2,
-                                        embedded_bounds_.y + embedded_bounds_.h / 2};
-            recalculate_preview_scale();
-        }
-        return;
-    }
     DockableCollapsible::update(input, screen_w, screen_h);
 }
 
 bool MapLayersPreviewPanel::handle_event(const SDL_Event& e) {
     if (!is_visible()) return false;
-    if (embedded_mode_) {
-        return handle_embedded_event(e);
-    }
     return DockableCollapsible::handle_event(e);
 }
 
 void MapLayersPreviewPanel::render(SDL_Renderer* renderer) const {
-    if (embedded_mode_) {
-        render_embedded_content(renderer);
-        return;
-    }
     DockableCollapsible::render(renderer);
 }
 
 bool MapLayersPreviewPanel::is_point_inside(int x, int y) const {
-    if (embedded_mode_) {
-        SDL_Point p{x, y};
-        return SDL_PointInRect(&p, &embedded_bounds_) == SDL_TRUE;
-    }
     return DockableCollapsible::is_point_inside(x, y);
 }
 

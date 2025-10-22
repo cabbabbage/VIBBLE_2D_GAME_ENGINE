@@ -9,7 +9,6 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "DockableCollapsible.hpp"
-#include "SlidingWindowContainer.hpp"
 
 class Input;
 class MapLayersController;
@@ -36,14 +35,6 @@ public:
     void render(SDL_Renderer* renderer) const override;
 
     bool is_point_inside(int x, int y) const override;
-
-    void set_embedded_mode(bool embedded);
-    bool embedded_mode() const { return embedded_mode_; }
-    void set_embedded_bounds(const SDL_Rect& bounds);
-    int layout_embedded_content(const SlidingWindowContainer::LayoutContext& ctx, int screen_height);
-    void update_embedded(const Input& input, int screen_w, int screen_h);
-    bool handle_embedded_event(const SDL_Event& e);
-    void render_embedded_content(SDL_Renderer* renderer) const;
 
 protected:
     void render_content(SDL_Renderer* renderer) const override;
@@ -114,9 +105,6 @@ private:
 
     int hovered_layer_index_ = -1;
     std::string hovered_room_key_;
-
-    bool embedded_mode_ = false;
-    SDL_Rect embedded_bounds_{0, 0, 0, 0};
 
     // Callbacks into details panel
     std::function<void(int)> on_select_layer_{};
