@@ -10,6 +10,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -18,6 +19,8 @@
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
+#include "dev_mode/dm_styles.hpp"
+#include "dev_mode/font_cache.hpp"
 #include "render/camera.hpp"
 #include "render/transparency_sampling.hpp"
 #include "render/global_light_source.hpp"
@@ -701,9 +704,130 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
 }
 
 void LightMap::render_visible_chunks_debug(SDL_Renderer* renderer,
-                                              const SDL_Rect& view_rect,
-                                              float alpha_multiplier) const {
-    render_visible_chunks(renderer, view_rect, alpha_multiplier);
+                                          const SDL_Rect& view_rect,
+                                          float alpha_multiplier) const {
+    std::scoped_lock lock(mutex_);
+    if (!renderer || !assets_) {
+        return;
+    }
+
+    const camera& cam = assets_->getView();
+    SDL_Rect      world_view = world_rect_from_screen(cam, view_rect);
+
+    struct DebugChunkRender {
+        world::Chunk* chunk = nullptr;
+        SDL_Rect      render_rect{0, 0, 0, 0};
+        SDL_Rect      world_rect_on_screen{0, 0, 0, 0};
+        Uint8         alpha = 255;
+    };
+
+    std::vector<DebugChunkRender> debug_chunks;
+    debug_chunks.reserve(active_chunks().size());
+
+    for (world::Chunk* chunk : active_chunks()) {
+        if (!chunk || !chunk->static_light_mask) {
+            continue;
+        }
+        if (!intersects(chunk->world_bounds, world_view)) {
+            continue;
+        }
+
+        SDL_Point top_left = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
+        SDL_Point bottom_right =
+            cam.map_to_screen({chunk->world_bounds.x + chunk->world_bounds.w,
+                               chunk->world_bounds.y + chunk->world_bounds.h});
+
+        SDL_Rect world_rect_screen{};
+        world_rect_screen.x = std::min(top_left.x, bottom_right.x);
+        world_rect_screen.y = std::min(top_left.y, bottom_right.y);
+        world_rect_screen.w = std::abs(bottom_right.x - top_left.x);
+        world_rect_screen.h = std::abs(bottom_right.y - top_left.y);
+        if (world_rect_screen.w <= 0 || world_rect_screen.h <= 0) {
+            continue;
+        }
+
+        SDL_Rect dst = world_rect_screen;
+
+        const float chunk_alpha_multiplier = std::clamp(chunk->opacity_strength, 0.0f, 1.0f);
+        const Uint8 chunk_alpha = clamp_alpha(alpha_multiplier * chunk_alpha_multiplier);
+
+        const float scale_strength = std::max(0.0f, chunk->scale_strength);
+        if (std::abs(scale_strength - 1.0f) > 1e-4f) {
+            const float center_x = static_cast<float>(dst.x) + static_cast<float>(dst.w) / 2.0f;
+            const float center_y = static_cast<float>(dst.y) + static_cast<float>(dst.h) / 2.0f;
+            const float scaled_w = static_cast<float>(dst.w) * scale_strength;
+            const float scaled_h = static_cast<float>(dst.h) * scale_strength;
+            dst.w = std::max(1, static_cast<int>(std::lround(scaled_w)));
+            dst.h = std::max(1, static_cast<int>(std::lround(scaled_h)));
+            dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(dst.w) / 2.0f));
+            dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(dst.h) / 2.0f));
+        }
+
+        if (chunk->offset_x != 0 || chunk->offset_y != 0) {
+            SDL_Point origin_screen = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
+            SDL_Point offset_screen = cam.map_to_screen({chunk->world_bounds.x + chunk->offset_x,
+                                                         chunk->world_bounds.y + chunk->offset_y});
+            dst.x += offset_screen.x - origin_screen.x;
+            dst.y += offset_screen.y - origin_screen.y;
+        }
+
+        debug_chunks.push_back(DebugChunkRender{chunk, dst, world_rect_screen, chunk_alpha});
+    }
+
+    for (const DebugChunkRender& entry : debug_chunks) {
+        SDL_SetTextureAlphaMod(entry.chunk->static_light_mask, entry.alpha);
+        SDL_RenderCopy(renderer, entry.chunk->static_light_mask, nullptr, &entry.render_rect);
+    }
+
+    SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
+    if (SDL_GetRenderDrawBlendMode(renderer, &previous_mode) != 0) {
+        previous_mode = SDL_BLENDMODE_BLEND;
+    }
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    const DMLabelStyle& label_style = DMStyles::Label();
+
+    for (const DebugChunkRender& entry : debug_chunks) {
+        const SDL_Rect& rect = entry.world_rect_on_screen;
+        SDL_SetRenderDrawColor(renderer, 0, 200, 255, 200);
+        SDL_RenderDrawRect(renderer, &rect);
+
+        const int mid_world_x = entry.chunk->world_bounds.x + entry.chunk->world_bounds.w / 2;
+        const int mid_world_y = entry.chunk->world_bounds.y + entry.chunk->world_bounds.h / 2;
+
+        SDL_Point mid_top = cam.map_to_screen({mid_world_x, entry.chunk->world_bounds.y});
+        SDL_Point mid_bottom =
+            cam.map_to_screen({mid_world_x, entry.chunk->world_bounds.y + entry.chunk->world_bounds.h});
+        SDL_Point mid_left = cam.map_to_screen({entry.chunk->world_bounds.x, mid_world_y});
+        SDL_Point mid_right =
+            cam.map_to_screen({entry.chunk->world_bounds.x + entry.chunk->world_bounds.w, mid_world_y});
+
+        SDL_RenderDrawLine(renderer, mid_left.x, mid_left.y, mid_right.x, mid_right.y);
+        SDL_RenderDrawLine(renderer, mid_top.x, mid_top.y, mid_bottom.x, mid_bottom.y);
+
+        std::ostringstream label_stream;
+        label_stream << "Chunk (" << entry.chunk->i << ", " << entry.chunk->j << ") "
+                     << "World: [" << entry.chunk->world_bounds.x << ", " << entry.chunk->world_bounds.y << "] "
+                     << "Size: " << entry.chunk->world_bounds.w << "x" << entry.chunk->world_bounds.h;
+        const std::string label_text = label_stream.str();
+
+        SDL_Point text_size = DMFontCache::instance().measure_text(label_style, label_text);
+        const int padding_x = 6;
+        const int padding_y = 4;
+        SDL_Rect label_bg{rect.x + 4,
+                          rect.y + 4,
+                          text_size.x + padding_x * 2,
+                          text_size.y + padding_y * 2};
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
+        SDL_RenderFillRect(renderer, &label_bg);
+
+        const int text_x = label_bg.x + padding_x;
+        const int text_y = label_bg.y + padding_y;
+        DMFontCache::instance().draw_text(renderer, label_style, label_text, text_x, text_y, nullptr);
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer, previous_mode);
 }
 
 void LightMap::mark_region_dirty(const SDL_Rect& screen_rect) {

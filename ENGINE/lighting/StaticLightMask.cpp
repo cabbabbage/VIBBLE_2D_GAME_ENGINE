@@ -83,7 +83,19 @@ SDL_Texture* StaticLightMask::buildMask(const world::Chunk& chunk,
 
         SDL_SetTextureColorMod(draw.texture, 255, 255, 255);
         SDL_SetTextureAlphaMod(draw.texture, 255);
-        SDL_SetTextureBlendMode(draw.texture, inputs.runtimeLightBlendMode());
+        SDL_BlendMode desired_blend = draw.blend;
+        // Static light textures are authored assuming additive blending. When we
+        // stamp them into the off-screen mask texture we need to force an
+        // additive blend, otherwise the runtime multiplicative blend (used when
+        // drawing onto the main scene) will effectively zero-out the pixels and
+        // produce an empty mask. That prevents the quadrants from ever
+        // appearing when the screen light is dimmed. Override the blend only
+        // for that specific runtime configuration so other draw inputs retain
+        // their requested mode.
+        if (desired_blend == inputs.runtimeLightBlendMode()) {
+            desired_blend = SDL_BLENDMODE_ADD;
+        }
+        SDL_SetTextureBlendMode(draw.texture, desired_blend);
 
         if (SDL_RenderCopy(renderer_, draw.texture, &draw.src, &draw.dst) != 0) {
             vibble::log::warn(std::string{"[Lighting] Failed to stamp static light: "} + SDL_GetError());

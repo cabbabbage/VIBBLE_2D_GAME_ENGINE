@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <vector>
@@ -13,13 +14,15 @@ class ManifestStore;
 class MapLayersController {
 public:
     using Listener = std::function<void()>;
+    using ListenerId = std::size_t;
 
     MapLayersController() = default;
 
     void bind(nlohmann::json* map_info, std::string map_path);
     void set_manifest_store(devmode::core::ManifestStore* store, std::string map_id);
 
-    void add_listener(Listener cb);
+    ListenerId add_listener(Listener cb);
+    void remove_listener(ListenerId id);
     void clear_listeners();
 
     bool save();
@@ -42,6 +45,7 @@ public:
 
     bool add_candidate(int layer_index, const std::string& room_name);
     bool remove_candidate(int layer_index, int candidate_index);
+    bool set_candidate_instance_range(int layer_index, int candidate_index, int min_instances, int max_instances);
     bool set_candidate_instance_count(int layer_index, int candidate_index, int max_instances);
     bool add_candidate_child(int layer_index, int candidate_index, const std::string& child_room);
     bool remove_candidate_child(int layer_index, int candidate_index, const std::string& child_room);
@@ -55,10 +59,16 @@ private:
     void clamp_layer_counts(nlohmann::json& layer) const;
 
 private:
+    struct ListenerEntry {
+        ListenerId id = 0;
+        Listener callback;
+    };
+
     nlohmann::json* map_info_ = nullptr;
     std::string map_id_;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     bool dirty_ = false;
-    std::vector<Listener> listeners_;
+    ListenerId next_listener_id_ = 1;
+    std::vector<ListenerEntry> listeners_;
 };
 

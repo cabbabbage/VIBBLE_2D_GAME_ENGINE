@@ -179,6 +179,8 @@ private:
     int  effective_render_quality_percent() const;
     void notify_light_map_asset_moved(const Asset* asset);
     void notify_light_map_static_assets_changed();
+    void notify_reactive_shadow_settings_about_to_change();
+    void notify_reactive_shadow_settings_available();
 
     friend class SceneRenderer;
     friend class Asset;

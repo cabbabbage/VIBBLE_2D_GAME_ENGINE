@@ -4,6 +4,8 @@
 #include <memory>
 #include <string>
 
+struct Mix_Chunk;
+
 namespace animation_editor {
 
 class AudioImporter {
@@ -20,7 +22,7 @@ class AudioImporter {
 
   private:
     std::filesystem::path asset_root_;
-    mutable std::shared_ptr<struct Mix_Chunk> preview_chunk_;
+    mutable std::shared_ptr<::Mix_Chunk> preview_chunk_;
     mutable int preview_channel_ = -1;
 };
 

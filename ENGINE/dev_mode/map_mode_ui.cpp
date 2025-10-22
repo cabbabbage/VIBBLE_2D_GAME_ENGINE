@@ -8,7 +8,9 @@
 #include "DockableCollapsible.hpp"
 #include "dev_footer_bar.hpp"
 #include "map_layers_controller.hpp"
+#include "map_layer_controls_display.hpp"
 #include "map_layers_panel.hpp"
+#include "map_rooms_display.hpp"
 #include "room_config/room_configurator.hpp"
 #include "SlidingWindowContainer.hpp"
 #include "core/AssetsManager.hpp"
@@ -70,13 +72,25 @@ void MapModeUI::set_screen_dimensions(int w, int h) {
     if (shadow_panel_) shadow_panel_->set_work_area(bounds);
     if (preview_panel_) preview_panel_->set_work_area(bounds);
     if (layers_preview_panel_) layers_preview_panel_->set_work_area(bounds);
-    if (layers_panel_) layers_panel_->set_work_area(bounds);
+    if (layers_panel_) {
+        layers_panel_->set_work_area(bounds);
+        SDL_Rect right_bounds = room_config_bounds();
+        SDL_Rect left_bounds{0, 0, std::max(0, right_bounds.x), screen_h_};
+        layers_panel_->set_embedded_bounds(left_bounds);
+    }
     if (room_configurator_) {
         room_configurator_->set_work_area(bounds);
         room_configurator_->set_bounds(room_config_bounds());
     }
+    SDL_Rect right_bounds = room_config_bounds();
     if (room_config_container_) {
-        room_config_container_->set_panel_bounds_override(room_config_bounds());
+        room_config_container_->set_panel_bounds_override(right_bounds);
+    }
+    if (rooms_list_container_) {
+        rooms_list_container_->set_panel_bounds_override(right_bounds);
+    }
+    if (layer_controls_container_) {
+        layer_controls_container_->set_panel_bounds_override(right_bounds);
     }
     update_footer_visibility();
 }
@@ -91,7 +105,7 @@ void MapModeUI::set_map_mode_active(bool active) {
     sync_footer_button_states();
     set_active_panel(PanelType::None);
     if (!active) {
-        close_room_configuration();
+        close_room_configuration(false);
     }
 }
 
@@ -127,17 +141,21 @@ void MapModeUI::set_dev_sliding_headers_hidden(bool hidden) {
 }
 
 void MapModeUI::refresh_header_suppression_state() {
-    const bool final_state = base_headers_suppressed_ || dev_sliding_headers_hidden_;
+    const bool final_state = base_headers_suppressed_ || sliding_headers_hidden_external_ || dev_sliding_headers_hidden_;
     const bool state_changed = (headers_suppressed_ != final_state);
     headers_suppressed_ = final_state;
 
+    const bool suppression_from_sliding_only = sliding_headers_hidden_external_ &&
+                                               !base_headers_suppressed_ &&
+                                               !dev_sliding_headers_hidden_;
+
     if (state_changed) {
         ensure_panels();
-        if (headers_suppressed_) {
+        if (headers_suppressed_ && !suppression_from_sliding_only) {
             if (layers_panel_) {
                 layers_panel_->close();
             }
-            close_room_configuration();
+            close_room_configuration(false);
         }
     }
 
@@ -358,7 +376,9 @@ void MapModeUI::ensure_panels() {
         track_floating_panel(shadow_panel_.get());
     }
     if (shadow_panel_) {
-        shadow_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+        shadow_panel_->set_reactive_settings([this]() -> MapShadowPanel::ReactiveShadowSettings* {
+            return assets_ ? assets_->reactive_shadow_settings() : nullptr;
+        });
     }
     if (!preview_panel_) {
         preview_panel_ = std::make_unique<MapLightPreviewPanel>(assets_, kDefaultPanelX + 520, kDefaultPanelY);
@@ -387,23 +407,94 @@ void MapModeUI::ensure_panels() {
         layers_controller_->set_manifest_store(manifest_store_, map_id_);
     }
     if (!layers_panel_) {
-        layers_panel_ = std::make_unique<MapLayersPanel>(kDefaultPanelX + 64, kDefaultPanelY + 64);
-        layers_panel_->set_embedded_mode(false);
-        layers_panel_->set_header_visibility_callback([this](bool visible) {
-            this->set_sliding_headers_hidden(visible);
-        });
+        layers_panel_ = std::make_unique<MapLayersPanel>();
+        layers_panel_->set_embedded_mode(true);
         layers_panel_->set_on_configure_room([this](const std::string& key) {
             this->open_room_configuration(key);
         });
-        layers_panel_->close();
-        track_floating_panel(layers_panel_.get());
+        layers_panel_->set_side_panel_callback([this](MapLayersPanel::SidePanel panel) {
+            switch (panel) {
+                case MapLayersPanel::SidePanel::RoomsList:
+                    this->show_sliding_panel(SlidingPanel::RoomsList);
+                    break;
+                case MapLayersPanel::SidePanel::LayerControls:
+                    this->show_sliding_panel(SlidingPanel::LayerControls);
+                    break;
+                case MapLayersPanel::SidePanel::None:
+                default:
+                    this->show_sliding_panel(SlidingPanel::RoomsList);
+                    break;
+            }
+        });
+        layers_panel_->set_on_close([this]() {
+            this->close_room_configuration(false);
+            active_panel_ = PanelType::None;
+            sync_footer_button_states();
+        });
     }
     if (layers_panel_) {
-        layers_panel_->set_embedded_mode(false);
+        layers_panel_->set_embedded_mode(true);
+        layers_panel_->set_header_visibility_callback([this](bool visible) {
+            this->set_sliding_headers_hidden(visible);
+        });
         if (layers_controller_) {
             layers_panel_->set_controller(layers_controller_);
         }
     }
+    if (layers_panel_) {
+        floating_panels_.erase(std::remove(floating_panels_.begin(), floating_panels_.end(), layers_panel_.get()),
+                               floating_panels_.end());
+    }
+
+    if (!rooms_list_container_) {
+        rooms_list_container_ = std::make_unique<SlidingWindowContainer>();
+        rooms_list_container_->set_header_visible(true);
+        rooms_list_container_->set_scrollbar_visible(true);
+        rooms_list_container_->set_header_visibility_controller([this](bool visible) {
+            this->set_sliding_headers_hidden(visible);
+        });
+        rooms_list_container_->set_close_button_enabled(false);
+    }
+    if (!rooms_display_) {
+        rooms_display_ = std::make_unique<MapRoomsDisplay>();
+        rooms_display_->set_header_text("Rooms");
+        rooms_display_->set_on_select_room([this](const std::string& key) {
+            this->open_room_configuration(key);
+        });
+    }
+    if (rooms_display_) {
+        rooms_display_->attach_container(rooms_list_container_.get());
+        rooms_display_->set_map_info(map_info_);
+    }
+    if (!layer_controls_container_) {
+        layer_controls_container_ = std::make_unique<SlidingWindowContainer>();
+        layer_controls_container_->set_header_visible(true);
+        layer_controls_container_->set_scrollbar_visible(true);
+        layer_controls_container_->set_header_visibility_controller([this](bool visible) {
+            this->set_sliding_headers_hidden(visible);
+        });
+        layer_controls_container_->set_close_button_enabled(false);
+        layer_controls_container_->set_blocks_editor_interactions(true);
+    }
+    if (!layer_controls_display_) {
+        layer_controls_display_ = std::make_unique<MapLayerControlsDisplay>();
+    }
+    if (layer_controls_display_) {
+        layer_controls_display_->attach_container(layer_controls_container_.get());
+        layer_controls_display_->set_controller(layers_controller_);
+        layer_controls_display_->set_selected_layer(layers_panel_ ? layers_panel_->selected_layer() : -1);
+    }
+    if (layers_panel_) {
+        layers_panel_->set_rooms_list_container(rooms_list_container_.get());
+        layers_panel_->set_layer_controls_container(layer_controls_container_.get());
+        layers_panel_->set_on_layer_selected([this](int index) {
+            if (layer_controls_display_) {
+                layer_controls_display_->set_selected_layer(index);
+            }
+        });
+    }
+
+    ensure_room_configurator();
     // Floating preview panel for layers
     if (!layers_preview_panel_) {
         layers_preview_panel_ = std::make_unique<MapLayersPreviewPanel>(kDefaultPanelX + 352, kDefaultPanelY + 48);
@@ -601,15 +692,19 @@ void MapModeUI::set_active_panel(PanelType panel) {
 
     if (panel == PanelType::Layers) {
         if (layers_panel_) {
+            ensure_room_configurator();
             layers_panel_->open();
             bring_panel_to_front(layers_panel_.get());
+            layers_panel_->hide_details_panel();
         }
+        show_sliding_panel(SlidingPanel::RoomsList);
         new_active = PanelType::Layers;
     } else {
         if (layers_panel_) {
-            layers_panel_->close();
+            layers_panel_->hide_details_panel();
         }
-        close_room_configuration();
+        show_sliding_panel(SlidingPanel::None);
+        close_room_configuration(false);
     }
 
     active_panel_ = new_active;
@@ -628,7 +723,9 @@ void MapModeUI::sync_panel_map_info() {
         light_panel_->set_map_info(map_info_, callback);
     }
     if (shadow_panel_) {
-        shadow_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+        shadow_panel_->set_reactive_settings([this]() -> MapShadowPanel::ReactiveShadowSettings* {
+            return assets_ ? assets_->reactive_shadow_settings() : nullptr;
+        });
         LightSaveCallback callback = light_save_callback_;
         if (!callback) {
             callback = [this]() { return save_map_info_to_disk(); };
@@ -659,12 +756,23 @@ void MapModeUI::sync_panel_map_info() {
         layers_panel_->set_map_info(map_info_, map_path_);
         layers_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
     }
+    if (rooms_display_) {
+        rooms_display_->set_map_info(map_info_);
+    }
+    if (layer_controls_display_) {
+        layer_controls_display_->set_controller(layers_controller_);
+        layer_controls_display_->set_selected_layer(layers_panel_ ? layers_panel_->selected_layer() : -1);
+        layer_controls_display_->refresh();
+    }
 }
 
 void MapModeUI::update(const Input& input) {
     ensure_panels();
     if (footer_bar_ && footer_bar_->visible()) {
         footer_bar_->update(input);
+    }
+    if (layers_panel_ && layers_panel_->is_visible()) {
+        layers_panel_->update(input, screen_w_, screen_h_);
     }
     for (DockableCollapsible* panel : floating_panels_) {
         if (!panel) continue;
@@ -723,10 +831,31 @@ void MapModeUI::update(const Input& input) {
     if (room_configurator_ && room_configurator_->visible()) {
         room_configurator_->update(input, screen_w_, screen_h_);
     }
+    if (room_config_container_ && room_config_container_->is_visible()) {
+        room_config_container_->update(input, screen_w_, screen_h_);
+    }
+    if (rooms_list_container_ && rooms_list_container_->is_visible()) {
+        rooms_list_container_->update(input, screen_w_, screen_h_);
+    }
+    if (layer_controls_container_ && layer_controls_container_->is_visible()) {
+        layer_controls_container_->update(input, screen_w_, screen_h_);
+    }
 }
 
 bool MapModeUI::handle_event(const SDL_Event& e) {
     ensure_panels();
+    if (room_config_container_ && room_config_container_->is_visible() && room_config_container_->handle_event(e)) {
+        return true;
+    }
+    if (rooms_list_container_ && rooms_list_container_->is_visible() && rooms_list_container_->handle_event(e)) {
+        return true;
+    }
+    if (layer_controls_container_ && layer_controls_container_->is_visible() && layer_controls_container_->handle_event(e)) {
+        return true;
+    }
+    if (layers_panel_ && layers_panel_->is_visible() && layers_panel_->handle_event(e)) {
+        return true;
+    }
     bool floating_used = false;
     if (handle_floating_panel_event(e, floating_used)) {
         return true;
@@ -748,6 +877,9 @@ bool MapModeUI::handle_event(const SDL_Event& e) {
 }
 
 void MapModeUI::render(SDL_Renderer* renderer) const {
+    if (layers_panel_ && layers_panel_->is_visible()) {
+        layers_panel_->render(renderer);
+    }
     for (DockableCollapsible* panel : floating_panels_) {
         if (!panel) continue;
         if (auto* lights = dynamic_cast<MapLightPanel*>(panel)) {
@@ -777,6 +909,15 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
         if (panel->is_visible()) {
             panel->render(renderer);
         }
+    }
+    if (room_config_container_ && room_config_container_->is_visible()) {
+        room_config_container_->render(renderer, screen_w_, screen_h_);
+    }
+    if (rooms_list_container_ && rooms_list_container_->is_visible()) {
+        rooms_list_container_->render(renderer, screen_w_, screen_h_);
+    }
+    if (layer_controls_container_ && layer_controls_container_->is_visible()) {
+        layer_controls_container_->render(renderer, screen_w_, screen_h_);
     }
     if (footer_bar_ && footer_bar_->visible()) {
         footer_bar_->render(renderer);
@@ -912,6 +1053,34 @@ void MapModeUI::toggle_shading_panel() {
     open_shading_panel();
 }
 
+void MapModeUI::refresh_reactive_shadow_settings() {
+    ensure_panels();
+    if (light_panel_) {
+        light_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+    }
+    if (shadow_panel_) {
+        shadow_panel_->set_reactive_settings([this]() -> MapShadowPanel::ReactiveShadowSettings* {
+            return assets_ ? assets_->reactive_shadow_settings() : nullptr;
+        });
+    }
+    if (preview_panel_) {
+        preview_panel_->set_assets(assets_);
+        preview_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+    }
+}
+
+void MapModeUI::clear_reactive_shadow_settings() {
+    if (light_panel_) {
+        light_panel_->set_reactive_settings(nullptr);
+    }
+    if (shadow_panel_) {
+        shadow_panel_->clear_reactive_settings();
+    }
+    if (preview_panel_) {
+        preview_panel_->set_reactive_settings(nullptr);
+    }
+}
+
 void MapModeUI::open_grid_panel() {
     ensure_panels();
     if (!ensure_panel_unlocked(grid_panel_.get(), "Grid")) {
@@ -973,7 +1142,7 @@ void MapModeUI::close_all_panels() {
     shading_panel_centered_ = false;
     preview_panel_centered_ = false;
     set_active_panel(PanelType::None);
-    close_room_configuration();
+    close_room_configuration(false);
 }
 
 bool MapModeUI::is_light_panel_visible() const {
@@ -1097,6 +1266,43 @@ SDL_Rect MapModeUI::room_config_bounds() const {
     return SDL_Rect{panel_x, 0, std::max(0, panel_w), std::max(0, screen_h_)};
 }
 
+void MapModeUI::show_sliding_panel(SlidingPanel panel, bool) {
+    if (room_config_container_) {
+        room_config_container_->set_visible(false);
+    }
+    if (rooms_list_container_) {
+        rooms_list_container_->set_visible(false);
+    }
+    if (layer_controls_container_) {
+        layer_controls_container_->set_visible(false);
+    }
+
+    switch (panel) {
+        case SlidingPanel::RoomConfig:
+            if (room_config_container_) {
+                room_config_container_->open();
+            }
+            active_sliding_panel_ = SlidingPanel::RoomConfig;
+            break;
+        case SlidingPanel::RoomsList:
+            if (rooms_list_container_) {
+                rooms_list_container_->open();
+            }
+            active_sliding_panel_ = SlidingPanel::RoomsList;
+            break;
+        case SlidingPanel::LayerControls:
+            if (layer_controls_container_) {
+                layer_controls_container_->open();
+            }
+            active_sliding_panel_ = SlidingPanel::LayerControls;
+            break;
+        case SlidingPanel::None:
+        default:
+            active_sliding_panel_ = SlidingPanel::None;
+            break;
+    }
+}
+
 void MapModeUI::ensure_room_configurator() {
     if (!room_configurator_) {
         room_configurator_ = std::make_unique<RoomConfigurator>();
@@ -1106,9 +1312,10 @@ void MapModeUI::ensure_room_configurator() {
             });
             room_configurator_->set_on_close([this]() {
                 active_room_config_key_.clear();
-                if (layers_panel_) {
-                    layers_panel_->show_room_list();
+                if (rooms_display_) {
+                    rooms_display_->refresh();
                 }
+                this->show_sliding_panel(SlidingPanel::RoomsList);
             });
         }
     }
@@ -1121,6 +1328,9 @@ void MapModeUI::ensure_room_configurator() {
                 this->set_sliding_headers_hidden(visible);
             });
         }
+    }
+    if (room_config_container_) {
+        room_config_container_->set_close_button_enabled(false);
     }
     if (room_configurator_ && room_config_container_) {
         room_configurator_->attach_container(room_config_container_.get());
@@ -1170,15 +1380,18 @@ void MapModeUI::open_room_configuration(const std::string& room_key) {
         room_config_container_->set_panel_bounds_override(room_config_bounds());
     }
     room_configurator_->open(room_entry, on_change, on_entry_change, {});
+    show_sliding_panel(SlidingPanel::RoomConfig);
 }
 
-void MapModeUI::close_room_configuration() {
-    if (room_configurator_ && room_configurator_->visible()) {
+void MapModeUI::close_room_configuration(bool show_rooms_list) {
+    if (room_configurator_) {
         room_configurator_->close();
     }
     active_room_config_key_.clear();
-    if (layers_panel_) {
-        layers_panel_->show_room_list();
+    if (show_rooms_list) {
+        show_sliding_panel(SlidingPanel::RoomsList);
+    } else {
+        show_sliding_panel(SlidingPanel::None);
     }
 }
 
@@ -1241,7 +1454,13 @@ bool MapModeUI::is_point_inside(int x, int y) const {
     if (layers_panel_ && layers_panel_->is_visible() && layers_panel_->is_point_inside(x, y)) {
         return true;
     }
-    if (room_configurator_ && room_configurator_->visible() && room_configurator_->is_point_inside(x, y)) {
+    if (room_config_container_ && room_config_container_->is_visible() && room_config_container_->is_point_inside(x, y)) {
+        return true;
+    }
+    if (rooms_list_container_ && rooms_list_container_->is_visible() && rooms_list_container_->is_point_inside(x, y)) {
+        return true;
+    }
+    if (layer_controls_container_ && layer_controls_container_->is_visible() && layer_controls_container_->is_point_inside(x, y)) {
         return true;
     }
     return false;
@@ -1268,9 +1487,9 @@ bool MapModeUI::is_any_panel_visible() const {
         }
         if (panel->is_visible()) return true;
     }
-    if (room_configurator_ && room_configurator_->visible()) {
-        return true;
-    }
+    if (room_config_container_ && room_config_container_->is_visible()) return true;
+    if (rooms_list_container_ && rooms_list_container_->is_visible()) return true;
+    if (layer_controls_container_ && layer_controls_container_->is_visible()) return true;
     return layers_panel_ && layers_panel_->is_visible();
 }
 

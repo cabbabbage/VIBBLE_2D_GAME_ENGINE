@@ -2,14 +2,14 @@
     "dev": {
         "asset_filter": {
             "current_room": true,
-            "filters_expanded": true,
+            "filters_expanded": false,
             "initialized": true,
-            "map_assets": false,
+            "map_assets": true,
             "types": {
                 "boundary": true,
                 "enemy": true,
                 "npc": false,
-                "object": false,
+                "object": true,
                 "player": false,
                 "texture": true
             }
@@ -20,7 +20,7 @@
             "map_panel": {
                 "reactive": {
                     "virtual_light_map": {
-                        "horizontal_falloff": 1.6200000047683716,
+                        "horizontal_falloff": 2.4700000286102295,
                         "max_offset_x": 100.0,
                         "max_offset_y": 100.0,
                         "search_radius": 2.0,

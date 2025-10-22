@@ -21,7 +21,11 @@ class MainMenu {
         nlohmann::json data;
     };
 
-    MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h, const nlohmann::json& maps);
+    MainMenu(SDL_Renderer* renderer,
+             int screen_w,
+             int screen_h,
+             const nlohmann::json& maps,
+             std::optional<std::filesystem::path> sky_background = std::nullopt);
     ~MainMenu();
     void buildButtons();
     std::optional<Selection> handle_event(const SDL_Event& e);
@@ -39,8 +43,9 @@ class MainMenu {
     void blitTextCentered(SDL_Renderer* r, const LabelStyle& style, const std::string& s, const SDL_Rect& rect, bool shadow, SDL_Color override_col) const;
     std::string pickRandomLine(const std::filesystem::path& csv_path) const;
     void drawVignette(Uint8 alpha) const;
+    void renderAnimatedBackground(SDL_Texture* tex) const;
 
-	private:
+        private:
     SDL_Renderer* renderer_ = nullptr;
     int screen_w_ = 0;
     int screen_h_ = 0;
@@ -51,10 +56,12 @@ class MainMenu {
     };
 
     SDL_Texture* background_tex_ = nullptr;
+    std::filesystem::path sky_background_path_;
     std::vector<MenuEntry> buttons_;
     const nlohmann::json* maps_json_ = nullptr;
     std::unordered_map<std::string, const nlohmann::json*> map_lookup_;
     std::filesystem::path manifest_root_;
+    Uint64 animation_start_ticks_ = 0;
 
     std::filesystem::path resolve_manifest_path(const std::string& forward_path) const;
 };

@@ -15,6 +15,7 @@
 #include "core/manifest/manifest_loader.hpp"
 #include "audio/audio_engine.hpp"
 #include "dev_mode/core/manifest_store.hpp"
+#include "utils/SkyMapFetcher.hpp"
 #include "utils/loading_status_notifier.hpp"
 #include "world/grid.hpp"
 #include <SDL.h>
@@ -39,6 +40,36 @@
 #include <cmath>
 #include "utils/log.hpp"
 namespace fs = std::filesystem;
+
+namespace {
+
+std::optional<fs::path> prepare_sky_background() {
+    try {
+        const fs::path manifest_root = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
+        const fs::path sky_dir = manifest_root / "TEMP" / "sky_cache";
+        const fs::path png_path = sky_dir / "sky_map.png";
+        const fs::path metadata_path = sky_dir / "sky_map_meta.json";
+
+        SkyMapFetcher fetcher;
+        SkyMapResult result = fetcher.fetch_or_load_cached(png_path, metadata_path, std::chrono::seconds{3600});
+        if (result.ok && !result.saved_png_path.empty()) {
+            std::string message = std::string("[Main] Using sky background: ") + result.saved_png_path;
+            if (result.reused_cached) {
+                message += " (cached)";
+            }
+            vibble::log::info(message);
+            return fs::path(result.saved_png_path);
+        }
+
+        vibble::log::warn(std::string("[Main] Sky map unavailable: ") + result.message);
+    } catch (const std::exception& ex) {
+        vibble::log::warn(std::string("[Main] Sky map error: ") + ex.what());
+    }
+
+    return std::nullopt;
+}
+
+} // namespace
 
 #if defined(_WIN32)
 extern "C" {
@@ -427,6 +458,8 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         return;
     }
 
+    std::optional<fs::path> preloaded_sky_background = prepare_sky_background();
+
     std::shared_ptr<AssetLibrary> shared_asset_library = std::make_shared<AssetLibrary>(false);
     vibble::log::info("[Main] Preparing asset metadata cache...");
     shared_asset_library->load_all_from_SRC();
@@ -436,7 +469,15 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
     vibble::log::info("[Main] Cached asset resources loaded.");
 
     while (true) {
-        MainMenu menu(renderer, screen_w, screen_h, manifest_data.maps);
+        std::optional<fs::path> sky_background;
+        if (preloaded_sky_background.has_value()) {
+            sky_background = preloaded_sky_background;
+            preloaded_sky_background.reset();
+        } else {
+            sky_background = prepare_sky_background();
+        }
+
+        MainMenu menu(renderer, screen_w, screen_h, manifest_data.maps, sky_background);
         vibble::log::info("[Main] Main menu displayed.");
         std::optional<MapDescriptor> chosen_map;
         bool quit_requested = false;

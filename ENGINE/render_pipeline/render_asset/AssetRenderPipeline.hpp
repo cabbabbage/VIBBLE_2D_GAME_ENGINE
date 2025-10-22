@@ -69,7 +69,15 @@ public:
 
     SDL_Texture* run(Asset& asset);
     SDL_Texture* regenerateFinalTexture(Asset* asset);
-    SDL_Texture* texture_for_scale(Asset* asset, SDL_Texture* base_tex, int base_w, int base_h, int target_w, int target_h);
+    SDL_Texture* texture_for_scale(Asset* asset,
+                                   SDL_Texture* base_tex,
+                                   int          base_w,
+                                   int          base_h,
+                                   int          target_w,
+                                   int          target_h);
+
+    void set_low_quality_mode(bool enable);
+    bool low_quality_mode() const { return low_quality_mode_; }
 
     SceneLighting&       lighting();
     const SceneLighting& lighting() const;
@@ -83,7 +91,9 @@ private:
         std::unique_ptr<IRenderStage> stage;
         SDL_BlendMode                 blend = SDL_BLENDMODE_BLEND;
         bool                          stage_manages_texture = false;
+        bool                          skip_in_low_quality   = false;
     };
     std::vector<StageEntry> stages_;
+    bool                    low_quality_mode_ = false;
 };
 

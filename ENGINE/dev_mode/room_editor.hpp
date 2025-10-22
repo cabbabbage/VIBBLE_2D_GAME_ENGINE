@@ -49,7 +49,7 @@ public:
     void set_header_visibility_callback(std::function<void(bool)> cb);
     void set_manifest_store(devmode::core::ManifestStore* store);
 
-    void set_enabled(bool enabled);
+    void set_enabled(bool enabled, bool preserve_camera_state = false);
     bool is_enabled() const { return enabled_; }
 
     void update(const Input& input);

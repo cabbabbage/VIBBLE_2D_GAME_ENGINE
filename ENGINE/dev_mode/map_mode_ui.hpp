@@ -19,6 +19,7 @@ class MapShadowPanel;
 class MapLightPreviewPanel;
 class MapLayersPreviewPanel;
 class MapLayersPanel;
+class MapLayerControlsDisplay;
 class MapLayersController;
 class RoomConfigurator;
 class SlidingWindowContainer;
@@ -27,6 +28,7 @@ class DevFooterBar;
 class DockableCollapsible;
 struct DMButtonStyle;
 struct SDL_Renderer;
+class MapRoomsDisplay;
 
 class MapModeUI {
 public:
@@ -64,6 +66,8 @@ public:
     void open_shading_panel();
     void close_shading_panel();
     void toggle_shading_panel();
+    void refresh_reactive_shadow_settings();
+    void clear_reactive_shadow_settings();
     void open_grid_panel();
     void close_grid_panel();
     void toggle_grid_panel();
@@ -113,6 +117,7 @@ private:
     void sync_footer_button_states();
     void update_footer_visibility();
     enum class PanelType { None, Layers, Grid };
+    enum class SlidingPanel { None, RoomConfig, RoomsList, LayerControls };
     void set_active_panel(PanelType panel);
     void refresh_header_suppression_state();
     void track_floating_panel(DockableCollapsible* panel);
@@ -127,8 +132,9 @@ private:
     void ensure_light_and_shading_positions();
     void ensure_room_configurator();
     void open_room_configuration(const std::string& room_key);
-    void close_room_configuration();
+    void close_room_configuration(bool show_rooms_list = false);
     SDL_Rect room_config_bounds() const;
+    void show_sliding_panel(SlidingPanel panel, bool preserve_layers_panel = false);
 
 private:
     Assets* assets_ = nullptr;
@@ -144,6 +150,11 @@ private:
     std::unique_ptr<MapLightPreviewPanel> preview_panel_;
     std::unique_ptr<MapLayersPreviewPanel> layers_preview_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
+    std::unique_ptr<SlidingWindowContainer> room_config_container_;
+    std::unique_ptr<SlidingWindowContainer> rooms_list_container_;
+    std::unique_ptr<SlidingWindowContainer> layer_controls_container_;
+    std::unique_ptr<MapLayerControlsDisplay> layer_controls_display_;
+    std::unique_ptr<MapRoomsDisplay> rooms_display_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;
     std::unique_ptr<DevFooterBar> footer_bar_;
@@ -171,7 +182,7 @@ private:
     bool last_shading_visible_ = false;
     bool last_preview_visible_ = false;
     std::unique_ptr<RoomConfigurator> room_configurator_;
-    std::unique_ptr<SlidingWindowContainer> room_config_container_;
     std::string active_room_config_key_;
+    SlidingPanel active_sliding_panel_ = SlidingPanel::None;
 };
 

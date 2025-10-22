@@ -7,6 +7,10 @@ project(VIBBLEEngine)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(WIN32)
+    add_compile_definitions(NOMINMAX)
+endif()
+
 # Default to Release if not set (for single-config generators)
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -93,6 +97,7 @@ find_package(SDL2 CONFIG REQUIRED)
 find_package(SDL2_image CONFIG REQUIRED)
 find_package(SDL2_mixer CONFIG REQUIRED)
 find_package(SDL2_ttf CONFIG REQUIRED)
+find_package(CURL REQUIRED)
 
 # Try glad via package config first (vcpkg provides this)
 find_package(glad CONFIG QUIET)
@@ -166,6 +171,7 @@ target_link_libraries(engine
         SDL2_image::SDL2_image
         SDL2_mixer::SDL2_mixer
         SDL2_ttf::SDL2_ttf
+        CURL::libcurl
         ${GLAD_TARGET}
         OpenGL::GL
 )

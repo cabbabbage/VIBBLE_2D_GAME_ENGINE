@@ -2,34 +2,63 @@
 
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <algorithm>
+#include <array>
+#include <utility>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
 #include <sstream>
+#include <cmath>
 
 #include "core/manifest/manifest_loader.hpp"
 
 namespace fs = std::filesystem;
 
-MainMenu::MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h, const nlohmann::json& maps)
-: renderer_(renderer), screen_w_(screen_w), screen_h_(screen_h), maps_json_(&maps)
+MainMenu::MainMenu(SDL_Renderer* renderer,
+                   int screen_w,
+                   int screen_h,
+                   const nlohmann::json& maps,
+                   std::optional<fs::path> sky_background)
+: renderer_(renderer),
+  screen_w_(screen_w),
+  screen_h_(screen_h),
+  maps_json_(&maps),
+  sky_background_path_(sky_background ? fs::absolute(*sky_background) : fs::path{})
 {
         if (TTF_WasInit() == 0 && TTF_Init() < 0) {
                 std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
         }
-	try {
-		manifest_root_ = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
-	} catch (const std::exception& ex) {
-		std::cerr << "[MainMenu] Failed to determine project root: " << ex.what() << "\n";
-		manifest_root_ = fs::current_path();
-	}
-	const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
-	if (fs::exists(bg_folder) && fs::is_directory(bg_folder)) {
-		const fs::path first = firstImageIn(bg_folder);
-		if (!first.empty()) background_tex_ = loadTexture(first);
-	}
-	buildButtons();
+        animation_start_ticks_ = SDL_GetTicks64();
+        try {
+                manifest_root_ = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
+        } catch (const std::exception& ex) {
+                std::cerr << "[MainMenu] Failed to determine project root: " << ex.what() << "\n";
+                manifest_root_ = fs::current_path();
+        }
+        if (!sky_background_path_.empty()) {
+                try {
+                        if (fs::exists(sky_background_path_)) {
+                                background_tex_ = loadTexture(sky_background_path_);
+                                if (!background_tex_) {
+                                        std::cerr << "[MainMenu] Failed to load sky background texture: "
+                                                  << sky_background_path_ << "\n";
+                                }
+                        }
+                } catch (const std::exception& ex) {
+                        std::cerr << "[MainMenu] Error accessing sky background at '"
+                                  << sky_background_path_ << "': " << ex.what() << "\n";
+                }
+        }
+        if (!background_tex_) {
+                const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
+                if (fs::exists(bg_folder) && fs::is_directory(bg_folder)) {
+                        const fs::path first = firstImageIn(bg_folder);
+                        if (!first.empty()) background_tex_ = loadTexture(first);
+                }
+        }
+        buildButtons();
 }
 
 MainMenu::~MainMenu() {
@@ -42,11 +71,16 @@ MainMenu::~MainMenu() {
 void MainMenu::buildButtons() {
         buttons_.clear();
         map_lookup_.clear();
+        Button::refresh_glass_overlay();
         const int btn_w = Button::width();
         const int btn_h = Button::height();
         const int gap   = 18;
         int y = (screen_h_ / 2) - 140;
         const int x = (screen_w_ - btn_w) / 2;
+        auto configure_button = [](Button& button) {
+                button.set_glass_style(Button::default_glass_style());
+                button.enable_glass_style(true);
+        };
         if (maps_json_ && maps_json_->is_object()) {
                 for (auto it = maps_json_->cbegin(); it != maps_json_->cend(); ++it) {
                         if (!it.value().is_object()) continue;
@@ -58,6 +92,7 @@ void MainMenu::buildButtons() {
                                 label = name_it->get<std::string>();
                         }
                         Button b = Button::get_main_button(label);
+                        configure_button(b);
                         b.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
                         buttons_.push_back(MenuEntry{ std::move(b), map_id, true });
                         y += btn_h + gap;
@@ -65,10 +100,12 @@ void MainMenu::buildButtons() {
         }
 
         Button create = Button::get_main_button("Create New Map");
+        configure_button(create);
         create.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
         buttons_.push_back(MenuEntry{ std::move(create), "CREATE_NEW_MAP", false });
         y += btn_h + gap;
         Button quit = Button::get_exit_button("QUIT GAME");
+        configure_button(quit);
         quit.set_rect(SDL_Rect{ x, y + 12, btn_w, btn_h });
         buttons_.push_back(MenuEntry{ std::move(quit), "QUIT", false });
 }
@@ -91,14 +128,13 @@ std::optional<MainMenu::Selection> MainMenu::handle_event(const SDL_Event& e) {
 }
 
 void MainMenu::render() {
-	if (background_tex_) {
-		SDL_Rect dst = coverDst(background_tex_);
-		SDL_RenderCopy(renderer_, background_tex_, nullptr, &dst);
-	} else {
-		SDL_Color night = Styles::Night();
-		SDL_SetRenderDrawColor(renderer_, night.r, night.g, night.b, night.a);
-		SDL_RenderClear(renderer_);
-	}
+        if (background_tex_) {
+                renderAnimatedBackground(background_tex_);
+        } else {
+                SDL_Color night = Styles::Night();
+                SDL_SetRenderDrawColor(renderer_, night.r, night.g, night.b, night.a);
+                SDL_RenderClear(renderer_);
+        }
 	drawVignette(120);
 	const std::string title = "DEPARTED AFFAIRS & CO.";
 	SDL_Rect trect{ 0, 60, screen_w_, 80 };
@@ -110,22 +146,34 @@ void MainMenu::render() {
 
 void MainMenu::showLoadingScreen() {
 	SDL_SetRenderTarget(renderer_, nullptr);
-	SDL_Texture* bg = background_tex_;
-	bool temp_bg = false;
-	if (!bg) {
-		const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
-		const fs::path first = firstImageIn(bg_folder);
-		if (!first.empty()) {
-			bg = loadTexture(first);
-			temp_bg = (bg != nullptr);
+        SDL_Texture* bg = background_tex_;
+        bool temp_bg = false;
+        if (!bg) {
+                if (!sky_background_path_.empty()) {
+                        try {
+                                if (fs::exists(sky_background_path_)) {
+                                        bg = loadTexture(sky_background_path_);
+                                        temp_bg = (bg != nullptr);
+                                }
+                        } catch (const std::exception& ex) {
+                                std::cerr << "[MainMenu] Error loading cached sky background for loading screen: "
+                                          << ex.what() << "\n";
+                        }
+                }
+        }
+        if (!bg) {
+                const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
+                const fs::path first = firstImageIn(bg_folder);
+                if (!first.empty()) {
+                        bg = loadTexture(first);
+                        temp_bg = (bg != nullptr);
 		}
 	}
 	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
 	SDL_RenderClear(renderer_);
-	if (bg) {
-		SDL_Rect bgdst = coverDst(bg);
-		SDL_RenderCopy(renderer_, bg, nullptr, &bgdst);
-	}
+        if (bg) {
+                renderAnimatedBackground(bg);
+        }
 	drawVignette(110);
 	std::vector<fs::path> folders;
 	const fs::path loading_root = resolve_manifest_path("SRC/loading_screen_content");
@@ -322,10 +370,10 @@ void MainMenu::blitTextCentered(SDL_Renderer* r,
 }
 
 std::string MainMenu::pickRandomLine(const fs::path& csv_path) const {
-	std::ifstream in(csv_path);
-	if (!in.is_open()) return {};
-	std::vector<std::string> lines;
-	std::string line;
+        std::ifstream in(csv_path);
+        if (!in.is_open()) return {};
+        std::vector<std::string> lines;
+        std::string line;
 	while (std::getline(in, line)) {
 		if (!line.empty() && line.size()>=3 &&
 		(unsigned char)line[0]==0xEF && (unsigned char)line[1]==0xBB && (unsigned char)line[2]==0xBF) {
@@ -335,13 +383,71 @@ std::string MainMenu::pickRandomLine(const fs::path& csv_path) const {
 		if (!line.empty()) lines.push_back(line);
 	}
 	if (lines.empty()) return {};
-	std::mt19937 rng{std::random_device{}()};
-	return lines[ std::uniform_int_distribution<size_t>(0, lines.size()-1)(rng) ];
+        std::mt19937 rng{std::random_device{}()};
+        return lines[ std::uniform_int_distribution<size_t>(0, lines.size()-1)(rng) ];
+}
+
+void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
+        if (!tex) return;
+
+        int tex_w = 0;
+        int tex_h = 0;
+        SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h);
+        if (tex_w <= 0 || tex_h <= 0) return;
+
+        const double rpm = 0.5 / 5.0;
+        const double degrees_per_second = rpm * 360.0 / 60.0;
+        const Uint64 now = SDL_GetTicks64();
+        const double elapsed_seconds = static_cast<double>(now - animation_start_ticks_) / 1000.0;
+        const double angle = std::fmod(elapsed_seconds * degrees_per_second, 360.0);
+
+        const double pivot_x = static_cast<double>(screen_w_) * -0.10;
+        const double pivot_y = static_cast<double>(screen_h_) * 1.10;
+
+        const double base_scale_x = static_cast<double>(screen_w_) / static_cast<double>(tex_w);
+        const double base_scale_y = static_cast<double>(screen_h_) / static_cast<double>(tex_h);
+        double required_scale = std::max(base_scale_x, base_scale_y);
+
+        const double half_w = static_cast<double>(tex_w) * 0.5;
+        const double half_h = static_cast<double>(tex_h) * 0.5;
+        const double texture_radius = std::sqrt(half_w * half_w + half_h * half_h);
+        if (texture_radius > 1e-6) {
+                const std::array<std::pair<double, double>, 4> corners{{
+                        {0.0, 0.0},
+                        {static_cast<double>(screen_w_), 0.0},
+                        {0.0, static_cast<double>(screen_h_)},
+                        {static_cast<double>(screen_w_), static_cast<double>(screen_h_)}
+                }};
+                double max_corner_distance = 0.0;
+                for (const auto& corner : corners) {
+                        const double dx = pivot_x - corner.first;
+                        const double dy = pivot_y - corner.second;
+                        const double dist = std::hypot(dx, dy);
+                        if (dist > max_corner_distance) max_corner_distance = dist;
+                }
+                const double needed_scale = max_corner_distance / texture_radius;
+                if (needed_scale > required_scale) required_scale = needed_scale;
+        }
+
+        required_scale = std::max(required_scale, 1.0);
+        // Provide a modest safety margin so corner rotation never exposes empty pixels.
+        required_scale *= 1.18;
+
+        SDL_Rect dst{};
+        dst.w = static_cast<int>(std::ceil(static_cast<double>(tex_w) * required_scale));
+        dst.h = static_cast<int>(std::ceil(static_cast<double>(tex_h) * required_scale));
+        dst.x = static_cast<int>(std::round(pivot_x - static_cast<double>(dst.w) * 0.5));
+        dst.y = static_cast<int>(std::round(pivot_y - static_cast<double>(dst.h) * 0.5));
+
+        SDL_Point center{};
+        center.x = dst.w / 2;
+        center.y = dst.h / 2;
+        SDL_RenderCopyEx(renderer_, tex, nullptr, &dst, angle, &center, SDL_FLIP_NONE);
 }
 
 void MainMenu::drawVignette(Uint8 alpha) const {
-	SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, alpha);
-	SDL_Rect v{0,0,screen_w_,screen_h_};
-	SDL_RenderFillRect(renderer_, &v);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, alpha);
+        SDL_Rect v{0,0,screen_w_,screen_h_};
+        SDL_RenderFillRect(renderer_, &v);
 }

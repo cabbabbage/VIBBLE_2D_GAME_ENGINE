@@ -113,9 +113,10 @@ void MenuUI::game_loop() {
 }
 
 void MenuUI::toggleMenu() {
-	menu_active_ = !menu_active_;
-	std::cout << "[MenuUI] ESC -> menu_active=" << (menu_active_ ? "true" : "false") << "\n";
-	if (game_assets_) game_assets_->set_render_suppressed(menu_active_);
+        menu_active_ = !menu_active_;
+        std::cout << "[MenuUI] ESC -> menu_active=" << (menu_active_ ? "true" : "false") << "\n";
+        if (menu_active_) Button::refresh_glass_overlay();
+        if (game_assets_) game_assets_->set_render_suppressed(menu_active_);
 }
 
 void MenuUI::handle_event(const SDL_Event& e) {
@@ -148,17 +149,20 @@ MenuUI::MenuAction MenuUI::consumeAction() {
 }
 
 void MenuUI::rebuildButtons() {
-	buttons_.clear();
-	const int btn_w = Button::width();
-	const int btn_h = Button::height();
-	const int gap   = 16;
-	int start_y = 150;
-	const int x = (screen_w_ - btn_w) / 2;
-	auto addButton = [&](const std::string& label, MenuAction action, bool is_exit=false) {
-		Button b = is_exit ? Button::get_exit_button(label) : Button::get_main_button(label);
-		b.set_rect(SDL_Rect{ x, start_y, btn_w, btn_h });
-		start_y += btn_h + gap;
-		buttons_.push_back(MenuButton{ std::move(b), action });
+        buttons_.clear();
+        Button::refresh_glass_overlay();
+        const int btn_w = Button::width();
+        const int btn_h = Button::height();
+        const int gap   = 16;
+        int start_y = 150;
+        const int x = (screen_w_ - btn_w) / 2;
+        auto addButton = [&](const std::string& label, MenuAction action, bool is_exit=false) {
+                Button b = is_exit ? Button::get_exit_button(label) : Button::get_main_button(label);
+                b.set_glass_style(Button::default_glass_style());
+                b.enable_glass_style(true);
+                b.set_rect(SDL_Rect{ x, start_y, btn_w, btn_h });
+                start_y += btn_h + gap;
+                buttons_.push_back(MenuButton{ std::move(b), action });
 };
         addButton("End Run",            MenuAction::EXIT, true);
         addButton("Restart Run",        MenuAction::RESTART);
@@ -302,6 +306,7 @@ void MenuUI::doToggleDevMode() {
         dev_mode_ = !dev_mode_;
         if (game_assets_) game_assets_->set_dev_mode(dev_mode_);
         std::cout << "[MenuUI] Dev Mode = " << (dev_mode_ ? "ON" : "OFF") << "\n";
+        rebuildButtons();
 
         if (menu_active_) {
                 menu_active_ = false;

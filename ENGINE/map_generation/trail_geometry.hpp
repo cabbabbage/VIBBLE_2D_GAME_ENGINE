@@ -1,5 +1,7 @@
 #pragma once
 
+#include "room.hpp"
+
 #include <vector>
 #include <string>
 #include <memory>
@@ -12,7 +14,6 @@ namespace devmode::core {
 class ManifestStore;
 }
 
-class Room;
 class Area;
 class AssetLibrary;
 

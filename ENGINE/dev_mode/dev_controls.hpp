@@ -127,6 +127,9 @@ public:
     void notify_spawn_group_config_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
 
+    void refresh_reactive_shadow_settings();
+    void clear_reactive_shadow_settings();
+
     const std::vector<Asset*>& get_selected_assets() const;
     const std::vector<Asset*>& get_highlighted_assets() const;
     Asset* get_hovered_asset() const;
