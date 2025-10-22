@@ -45,6 +45,14 @@ inline int clamp_int(int value, int min_value, int max_value) {
     return std::min(std::max(value, min_value), max_value);
 }
 
+// Fallback/default for line smoothing strength if not defined in the header;
+// pick a conservative default (0.0 means no additional smoothing).
+// Provide fallback defaults for contrast and hash strength as well so code
+// that compares cached metadata against these constants compiles correctly.
+static constexpr double kSkyContrastFactor = 1.0;
+static constexpr double kSkyHashStrength = 0.0;
+static constexpr double kSkyLineSmoothStrength = 0.0;
+
 struct ImageData {
     int width  = 0;
     int height = 0;
