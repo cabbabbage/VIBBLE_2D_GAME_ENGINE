@@ -151,14 +151,22 @@ void MenuUI::rebuildButtons() {
 	buttons_.clear();
 	const int btn_w = Button::width();
 	const int btn_h = Button::height();
-	const int gap   = 16;
-	int start_y = 150;
-	const int x = (screen_w_ - btn_w) / 2;
-	auto addButton = [&](const std::string& label, MenuAction action, bool is_exit=false) {
-		Button b = is_exit ? Button::get_exit_button(label) : Button::get_main_button(label);
-		b.set_rect(SDL_Rect{ x, start_y, btn_w, btn_h });
-		start_y += btn_h + gap;
-		buttons_.push_back(MenuButton{ std::move(b), action });
+        const int gap   = 16;
+        int start_y = 150;
+        const int x = (screen_w_ - btn_w) / 2;
+        auto addButton = [&](const std::string& label, MenuAction action, bool is_exit=false) {
+                Button b = is_exit ? Button::get_exit_button(label) : Button::get_main_button(label);
+                const bool is_non_dev_mode = !dev_mode_;
+                const bool is_pause_menu_screen = true;
+                if (is_non_dev_mode && is_pause_menu_screen) {
+                        b.set_glass_style(Button::default_glass_style());
+                        b.enable_glass_style(true);
+                } else {
+                        b.enable_glass_style(false);
+                }
+                b.set_rect(SDL_Rect{ x, start_y, btn_w, btn_h });
+                start_y += btn_h + gap;
+                buttons_.push_back(MenuButton{ std::move(b), action });
 };
         addButton("End Run",            MenuAction::EXIT, true);
         addButton("Restart Run",        MenuAction::RESTART);
@@ -302,6 +310,7 @@ void MenuUI::doToggleDevMode() {
         dev_mode_ = !dev_mode_;
         if (game_assets_) game_assets_->set_dev_mode(dev_mode_);
         std::cout << "[MenuUI] Dev Mode = " << (dev_mode_ ? "ON" : "OFF") << "\n";
+        rebuildButtons();
 
         if (menu_active_) {
                 menu_active_ = false;

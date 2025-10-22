@@ -458,6 +458,8 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         return;
     }
 
+    std::optional<fs::path> preloaded_sky_background = prepare_sky_background();
+
     std::shared_ptr<AssetLibrary> shared_asset_library = std::make_shared<AssetLibrary>(false);
     vibble::log::info("[Main] Preparing asset metadata cache...");
     shared_asset_library->load_all_from_SRC();
@@ -467,7 +469,14 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
     vibble::log::info("[Main] Cached asset resources loaded.");
 
     while (true) {
-        std::optional<fs::path> sky_background = prepare_sky_background();
+        std::optional<fs::path> sky_background;
+        if (preloaded_sky_background.has_value()) {
+            sky_background = preloaded_sky_background;
+            preloaded_sky_background.reset();
+        } else {
+            sky_background = prepare_sky_background();
+        }
+
         MainMenu menu(renderer, screen_w, screen_h, manifest_data.maps, sky_background);
         vibble::log::info("[Main] Main menu displayed.");
         std::optional<MapDescriptor> chosen_map;

@@ -74,6 +74,16 @@ void MainMenu::buildButtons() {
         const int gap   = 18;
         int y = (screen_h_ / 2) - 140;
         const int x = (screen_w_ - btn_w) / 2;
+        auto configure_button = [](Button& button) {
+                const bool is_non_dev_mode = true;
+                const bool is_main_menu_screen = true;
+                if (is_non_dev_mode && is_main_menu_screen) {
+                        button.set_glass_style(Button::default_glass_style());
+                        button.enable_glass_style(true);
+                } else {
+                        button.enable_glass_style(false);
+                }
+        };
         if (maps_json_ && maps_json_->is_object()) {
                 for (auto it = maps_json_->cbegin(); it != maps_json_->cend(); ++it) {
                         if (!it.value().is_object()) continue;
@@ -85,6 +95,7 @@ void MainMenu::buildButtons() {
                                 label = name_it->get<std::string>();
                         }
                         Button b = Button::get_main_button(label);
+                        configure_button(b);
                         b.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
                         buttons_.push_back(MenuEntry{ std::move(b), map_id, true });
                         y += btn_h + gap;
@@ -92,10 +103,12 @@ void MainMenu::buildButtons() {
         }
 
         Button create = Button::get_main_button("Create New Map");
+        configure_button(create);
         create.set_rect(SDL_Rect{ x, y, btn_w, btn_h });
         buttons_.push_back(MenuEntry{ std::move(create), "CREATE_NEW_MAP", false });
         y += btn_h + gap;
         Button quit = Button::get_exit_button("QUIT GAME");
+        configure_button(quit);
         quit.set_rect(SDL_Rect{ x, y + 12, btn_w, btn_h });
         buttons_.push_back(MenuEntry{ std::move(quit), "QUIT", false });
 }

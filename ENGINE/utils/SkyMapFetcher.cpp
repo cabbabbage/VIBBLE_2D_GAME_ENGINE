@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <sstream>
+#include <cctype>
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -139,6 +140,60 @@ std::string SkyMapFetcher::build_skyview_url(double ra_deg, double dec_deg,
     return std::string(buf);
 }
 
+namespace {
+
+std::string trim_left(const std::string& value) {
+    std::size_t pos = 0;
+    while (pos < value.size() && std::isspace(static_cast<unsigned char>(value[pos]))) {
+        ++pos;
+    }
+    return value.substr(pos);
+}
+
+std::string resolve_skyview_href(const std::string& href_value) {
+    const std::string host_root = "https://skyview.gsfc.nasa.gov";
+    std::string href = trim_left(href_value);
+    if (href.rfind("http://", 0) == 0 || href.rfind("https://", 0) == 0) {
+        return href;
+    }
+    if (href.rfind("//", 0) == 0) {
+        return "https:" + href;
+    }
+
+    if (!href.empty() && href[0] == '/') {
+        // Absolute path on host.
+        return host_root + href;
+    }
+
+    // Resolve against https://skyview.gsfc.nasa.gov/current/cgi/
+    const std::vector<std::string> base_segments = {"current", "cgi"};
+    std::vector<std::string> resolved_segments = base_segments;
+
+    std::stringstream ss(href);
+    std::string segment;
+    while (std::getline(ss, segment, '/')) {
+        if (segment.empty() || segment == ".") {
+            continue;
+        }
+        if (segment == "..") {
+            if (!resolved_segments.empty()) {
+                resolved_segments.pop_back();
+            }
+            continue;
+        }
+        resolved_segments.push_back(segment);
+    }
+
+    std::string resolved = host_root;
+    for (const auto& part : resolved_segments) {
+        resolved.push_back('/');
+        resolved += part;
+    }
+    return resolved;
+}
+
+} // namespace
+
 bool SkyMapFetcher::extract_quicklook_jpeg_url(const std::string& html, std::string& jpg_url) {
     // Look for a tempspace JPEG link.
     // Example: https://skyview.gsfc.nasa.gov/tempspace/fits/skvXXXXXXXXXXX.jpg
@@ -148,13 +203,14 @@ bool SkyMapFetcher::extract_quicklook_jpeg_url(const std::string& html, std::str
         jpg_url = m.str(0);
         return true;
     }
-    // Fallback: quick look jpeg link text
-    std::regex re2(R"(href=['\"]([^'\"]+\.jpg)['\"])");
-    if (std::regex_search(html, m, re2)) {
-        jpg_url = m.str(1);
-        if (jpg_url.rfind("http", 0) != 0) {
-            // relative path
-            jpg_url = "https://skyview.gsfc.nasa.gov" + jpg_url;
+    // Fallback: quick look jpeg link text, allowing optional quotes and relative paths.
+    std::regex re2(R"(href\s*=\s*['\"]?([^'\">\s]+\.jpg))", std::regex::icase);
+    if (std::regex_search(html, m, re2) && m.size() >= 2) {
+        std::string candidate = m.str(1);
+        if (candidate.rfind("http", 0) != 0 && candidate.rfind("//", 0) != 0) {
+            jpg_url = resolve_skyview_href(candidate);
+        } else {
+            jpg_url = resolve_skyview_href(candidate);
         }
         return true;
     }
