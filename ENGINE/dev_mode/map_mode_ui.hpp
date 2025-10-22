@@ -113,6 +113,7 @@ private:
     void sync_footer_button_states();
     void update_footer_visibility();
     enum class PanelType { None, Layers, Grid };
+    enum class SlidingPanel { None, RoomConfig, RoomsList, LayerControls };
     void set_active_panel(PanelType panel);
     void refresh_header_suppression_state();
     void track_floating_panel(DockableCollapsible* panel);
@@ -129,6 +130,7 @@ private:
     void open_room_configuration(const std::string& room_key);
     void close_room_configuration();
     SDL_Rect room_config_bounds() const;
+    void show_sliding_panel(SlidingPanel panel);
 
 private:
     Assets* assets_ = nullptr;
@@ -172,6 +174,9 @@ private:
     bool last_preview_visible_ = false;
     std::unique_ptr<RoomConfigurator> room_configurator_;
     std::unique_ptr<SlidingWindowContainer> room_config_container_;
+    std::unique_ptr<SlidingWindowContainer> rooms_list_container_;
+    std::unique_ptr<SlidingWindowContainer> layer_controls_container_;
     std::string active_room_config_key_;
+    SlidingPanel active_sliding_panel_ = SlidingPanel::None;
 };
 

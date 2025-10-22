@@ -45,6 +45,10 @@ public:
     void hide_details_panel();
 
     void set_on_configure_room(std::function<void(const std::string&)> cb);
+    enum class SidePanel { None, RoomsList, LayerControls };
+    void set_side_panel_callback(std::function<void(SidePanel)> cb);
+    void set_rooms_list_container(SlidingWindowContainer* container);
+    void set_layer_controls_container(SlidingWindowContainer* container);
 
     void set_embedded_mode(bool embedded);
     bool embedded_mode() const { return embedded_mode_; }
@@ -108,6 +112,12 @@ private:
     void ensure_details_container();
     void update_details_container();
     void apply_details_bounds();
+    void configure_details_container(SlidingWindowContainer& container);
+    void clear_details_container(SlidingWindowContainer& container);
+    SlidingWindowContainer* select_details_container() const;
+    bool using_external_side_panels() const;
+    bool is_external_container(const SlidingWindowContainer* container) const;
+    void notify_side_panel(SidePanel panel) const;
 
     void open_room_list();
     void open_layer_details(int layer_index);
@@ -145,7 +155,11 @@ private:
     DetailsWidget* details_widget_ = nullptr;
     std::vector<std::unique_ptr<Widget>> owned_widgets_;
 
-    std::unique_ptr<SlidingWindowContainer> details_container_;
+    std::unique_ptr<SlidingWindowContainer> owned_details_container_;
+    SlidingWindowContainer* room_list_container_override_ = nullptr;
+    SlidingWindowContainer* layer_controls_container_override_ = nullptr;
+    SlidingWindowContainer* active_details_container_ = nullptr;
+    std::vector<SlidingWindowContainer*> configured_detail_containers_;
 
     SDL_Rect work_area_{0, 0, 0, 0};
     SDL_Rect embedded_bounds_{0, 0, 0, 0};
@@ -184,6 +198,7 @@ private:
     int screen_h_ = 0;
 
     std::function<void(bool)> header_visibility_callback_{};
+    std::function<void(SidePanel)> side_panel_callback_{};
 
     // --- Extended editing UI state ---
     // Action buttons shown in details area

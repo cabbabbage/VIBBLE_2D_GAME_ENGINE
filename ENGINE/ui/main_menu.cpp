@@ -7,6 +7,7 @@
 #include <iostream>
 #include <random>
 #include <sstream>
+#include <cmath>
 
 #include "core/manifest/manifest_loader.hpp"
 
@@ -18,6 +19,7 @@ MainMenu::MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h, const nlo
         if (TTF_WasInit() == 0 && TTF_Init() < 0) {
                 std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
         }
+        animation_start_ticks_ = SDL_GetTicks64();
 	try {
 		manifest_root_ = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
 	} catch (const std::exception& ex) {
@@ -91,14 +93,13 @@ std::optional<MainMenu::Selection> MainMenu::handle_event(const SDL_Event& e) {
 }
 
 void MainMenu::render() {
-	if (background_tex_) {
-		SDL_Rect dst = coverDst(background_tex_);
-		SDL_RenderCopy(renderer_, background_tex_, nullptr, &dst);
-	} else {
-		SDL_Color night = Styles::Night();
-		SDL_SetRenderDrawColor(renderer_, night.r, night.g, night.b, night.a);
-		SDL_RenderClear(renderer_);
-	}
+        if (background_tex_) {
+                renderAnimatedBackground(background_tex_);
+        } else {
+                SDL_Color night = Styles::Night();
+                SDL_SetRenderDrawColor(renderer_, night.r, night.g, night.b, night.a);
+                SDL_RenderClear(renderer_);
+        }
 	drawVignette(120);
 	const std::string title = "DEPARTED AFFAIRS & CO.";
 	SDL_Rect trect{ 0, 60, screen_w_, 80 };
@@ -122,10 +123,9 @@ void MainMenu::showLoadingScreen() {
 	}
 	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
 	SDL_RenderClear(renderer_);
-	if (bg) {
-		SDL_Rect bgdst = coverDst(bg);
-		SDL_RenderCopy(renderer_, bg, nullptr, &bgdst);
-	}
+        if (bg) {
+                renderAnimatedBackground(bg);
+        }
 	drawVignette(110);
 	std::vector<fs::path> folders;
 	const fs::path loading_root = resolve_manifest_path("SRC/loading_screen_content");
@@ -322,10 +322,10 @@ void MainMenu::blitTextCentered(SDL_Renderer* r,
 }
 
 std::string MainMenu::pickRandomLine(const fs::path& csv_path) const {
-	std::ifstream in(csv_path);
-	if (!in.is_open()) return {};
-	std::vector<std::string> lines;
-	std::string line;
+        std::ifstream in(csv_path);
+        if (!in.is_open()) return {};
+        std::vector<std::string> lines;
+        std::string line;
 	while (std::getline(in, line)) {
 		if (!line.empty() && line.size()>=3 &&
 		(unsigned char)line[0]==0xEF && (unsigned char)line[1]==0xBB && (unsigned char)line[2]==0xBF) {
@@ -335,13 +335,37 @@ std::string MainMenu::pickRandomLine(const fs::path& csv_path) const {
 		if (!line.empty()) lines.push_back(line);
 	}
 	if (lines.empty()) return {};
-	std::mt19937 rng{std::random_device{}()};
-	return lines[ std::uniform_int_distribution<size_t>(0, lines.size()-1)(rng) ];
+        std::mt19937 rng{std::random_device{}()};
+        return lines[ std::uniform_int_distribution<size_t>(0, lines.size()-1)(rng) ];
+}
+
+void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
+        if (!tex) return;
+
+        const double zoom_factor = 3.0;
+        const double rpm = 0.5;
+        const double degrees_per_second = rpm * 360.0 / 60.0;
+        const Uint64 now = SDL_GetTicks64();
+        const double elapsed_seconds = static_cast<double>(now - animation_start_ticks_) / 1000.0;
+        const double angle = std::fmod(elapsed_seconds * degrees_per_second, 360.0);
+
+        SDL_Rect base = coverDst(tex);
+        const int scaled_w = static_cast<int>(std::lround(base.w * zoom_factor));
+        const int scaled_h = static_cast<int>(std::lround(base.h * zoom_factor));
+
+        SDL_Rect dst{};
+        dst.w = scaled_w;
+        dst.h = scaled_h;
+        dst.x = static_cast<int>(std::lround(-scaled_w / 2.0));
+        dst.y = static_cast<int>(std::lround(screen_h_ - (scaled_h / 2.0)));
+
+        SDL_Point center{ scaled_w / 2, scaled_h / 2 };
+        SDL_RenderCopyEx(renderer_, tex, nullptr, &dst, angle, &center, SDL_FLIP_NONE);
 }
 
 void MainMenu::drawVignette(Uint8 alpha) const {
-	SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-	SDL_SetRenderDrawColor(renderer_, 0, 0, 0, alpha);
-	SDL_Rect v{0,0,screen_w_,screen_h_};
-	SDL_RenderFillRect(renderer_, &v);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, alpha);
+        SDL_Rect v{0,0,screen_w_,screen_h_};
+        SDL_RenderFillRect(renderer_, &v);
 }

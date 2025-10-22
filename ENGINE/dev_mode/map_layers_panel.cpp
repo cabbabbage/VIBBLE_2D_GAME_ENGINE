@@ -199,14 +199,15 @@ public:
     int height_for_width(int) const override { return 300; }
 
     bool handle_event(const SDL_Event& e) override {
-        if (!owner_ || !owner_->details_container_) return false;
-        return owner_->details_container_->handle_event(e);
+        if (!owner_) return false;
+        SlidingWindowContainer* container = owner_->active_details_container_;
+        if (!container) return false;
+        return container->handle_event(e);
     }
 
     void render(SDL_Renderer* renderer) const override {
-        if (owner_) {
-            owner_->render_details(renderer);
-        }
+        if (!owner_) return;
+        owner_->render_details(renderer);
     }
 
     bool wants_full_row() const override { return true; }
@@ -230,7 +231,14 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     set_expanded(true);
 }
 
-MapLayersPanel::~MapLayersPanel() = default;
+MapLayersPanel::~MapLayersPanel() {
+    for (auto* container : configured_detail_containers_) {
+        if (!container) {
+            continue;
+        }
+        clear_details_container(*container);
+    }
+}
 
 void MapLayersPanel::layout_rows() {
     Rows rows;
@@ -301,15 +309,20 @@ void MapLayersPanel::layout_embedded_ui() {
         preview_dirty_ = true;
     }
 
-    details_rect_ = embedded_panel_rect_;
+    if (using_external_side_panels()) {
+        details_rect_ = SDL_Rect{0, 0, 0, 0};
+    } else {
+        details_rect_ = embedded_panel_rect_;
+    }
     apply_details_bounds();
 }
 
 bool MapLayersPanel::handle_embedded_event(const SDL_Event& e) {
     bool used = false;
 
-    if (details_container_ && details_container_->is_visible()) {
-        if (details_container_->handle_event(e)) {
+    SlidingWindowContainer* container = active_details_container_;
+    if (container && !is_external_container(container) && container->is_visible()) {
+        if (container->handle_event(e)) {
             used = true;
         }
     }
@@ -456,15 +469,44 @@ bool MapLayersPanel::handle_preview_event(const SDL_Event& e) {
 }
 
 void MapLayersPanel::ensure_details_container() {
-    if (details_container_) {
+    SlidingWindowContainer* desired = nullptr;
+    if (embedded_mode_) {
+        if (details_mode_ == DetailsMode::RoomList && room_list_container_override_) {
+            desired = room_list_container_override_;
+        } else if ((details_mode_ == DetailsMode::LayerDetails || details_mode_ == DetailsMode::RoomDetails) &&
+                   layer_controls_container_override_) {
+            desired = layer_controls_container_override_;
+        }
+    }
+
+    if (!desired) {
+        if (!owned_details_container_) {
+            owned_details_container_ = std::make_unique<SlidingWindowContainer>();
+            owned_details_container_->set_header_text("Details");
+        }
+        desired = owned_details_container_.get();
+    }
+
+    if (!desired) {
+        active_details_container_ = nullptr;
         return;
     }
 
-    details_container_ = std::make_unique<SlidingWindowContainer>();
-    details_container_->set_header_text("Details");
-    details_container_->set_header_visible(true);
-    details_container_->set_scrollbar_visible(true);
-    details_container_->set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
+    configure_details_container(*desired);
+    active_details_container_ = desired;
+}
+
+void MapLayersPanel::configure_details_container(SlidingWindowContainer& container) {
+    auto already_configured = std::find(configured_detail_containers_.begin(),
+                                        configured_detail_containers_.end(),
+                                        &container);
+    if (already_configured == configured_detail_containers_.end()) {
+        configured_detail_containers_.push_back(&container);
+    }
+
+    container.set_header_visible(true);
+    container.set_scrollbar_visible(true);
+    container.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
         const int padding = DMSpacing::panel_padding();
         const int gap = DMSpacing::item_gap();
         const int small_gap = DMSpacing::small_gap();
@@ -524,7 +566,7 @@ void MapLayersPanel::ensure_details_container() {
         return cursor + ctx.gap;
     });
 
-    details_container_->set_render_function([this](SDL_Renderer* renderer) {
+    container.set_render_function([this](SDL_Renderer* renderer) {
         if (!renderer) return;
         if (details_mode_ == DetailsMode::RoomList) {
             // Render any control widgets
@@ -550,13 +592,26 @@ void MapLayersPanel::ensure_details_container() {
         }
     });
 
-    details_container_->set_event_function([this](const SDL_Event& e) {
+    container.set_event_function([this](const SDL_Event& e) {
         return this->handle_details_event(e);
     });
 
-    details_container_->set_on_close([this]() {
+    container.set_on_close([this]() {
         details_mode_ = DetailsMode::None;
+        update_details_container();
     });
+
+    if (header_visibility_callback_) {
+        container.set_header_visibility_controller(header_visibility_callback_);
+    }
+}
+
+void MapLayersPanel::clear_details_container(SlidingWindowContainer& container) {
+    container.set_layout_function({});
+    container.set_render_function({});
+    container.set_event_function({});
+    container.set_on_close({});
+    container.set_header_visibility_controller({});
 }
 
 void MapLayersPanel::set_map_info(nlohmann::json* map_info, const std::string& map_path) {
@@ -589,6 +644,11 @@ void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> control
 
 void MapLayersPanel::set_header_visibility_callback(std::function<void(bool)> cb) {
     header_visibility_callback_ = std::move(cb);
+    for (auto* container : configured_detail_containers_) {
+        if (container) {
+            container->set_header_visibility_controller(header_visibility_callback_);
+        }
+    }
     notify_header_visibility();
 }
 
@@ -614,9 +674,7 @@ bool MapLayersPanel::is_visible() const {
     return DockableCollapsible::is_visible();
 }
 
-bool MapLayersPanel::room_config_visible() const {
-    return details_mode_ == DetailsMode::RoomDetails;
-}
+bool MapLayersPanel::room_config_visible() const { return false; }
 
 void MapLayersPanel::hide_main_container() {
     set_visible(false);
@@ -632,6 +690,52 @@ void MapLayersPanel::hide_details_panel() {
 
 void MapLayersPanel::set_on_configure_room(std::function<void(const std::string&)> cb) {
     configure_room_callback_ = std::move(cb);
+}
+
+void MapLayersPanel::set_side_panel_callback(std::function<void(SidePanel)> cb) {
+    side_panel_callback_ = std::move(cb);
+}
+
+void MapLayersPanel::set_rooms_list_container(SlidingWindowContainer* container) {
+    if (room_list_container_override_ == container) {
+        return;
+    }
+    if (room_list_container_override_ && room_list_container_override_ != owned_details_container_.get()) {
+        clear_details_container(*room_list_container_override_);
+        auto it = std::find(configured_detail_containers_.begin(),
+                            configured_detail_containers_.end(),
+                            room_list_container_override_);
+        if (it != configured_detail_containers_.end()) {
+            configured_detail_containers_.erase(it);
+        }
+    }
+    room_list_container_override_ = container;
+    if (room_list_container_override_) {
+        configure_details_container(*room_list_container_override_);
+    }
+    ensure_details_container();
+    update_details_container();
+}
+
+void MapLayersPanel::set_layer_controls_container(SlidingWindowContainer* container) {
+    if (layer_controls_container_override_ == container) {
+        return;
+    }
+    if (layer_controls_container_override_ && layer_controls_container_override_ != owned_details_container_.get()) {
+        clear_details_container(*layer_controls_container_override_);
+        auto it = std::find(configured_detail_containers_.begin(),
+                            configured_detail_containers_.end(),
+                            layer_controls_container_override_);
+        if (it != configured_detail_containers_.end()) {
+            configured_detail_containers_.erase(it);
+        }
+    }
+    layer_controls_container_override_ = container;
+    if (layer_controls_container_override_) {
+        configure_details_container(*layer_controls_container_override_);
+    }
+    ensure_details_container();
+    update_details_container();
 }
 
 void MapLayersPanel::select_room(const std::string& room_key) { open_room_details(room_key); }
@@ -678,11 +782,15 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
         }
         ensure_details_container();
         apply_details_bounds();
-        if (details_container_) {
-            details_container_->set_header_visibility_controller(header_visibility_callback_);
+        for (auto* container : configured_detail_containers_) {
+            if (!container) continue;
+            if (header_visibility_callback_) {
+                container->set_header_visibility_controller(header_visibility_callback_);
+            }
         }
-        if (details_container_ && details_container_->is_visible()) {
-            details_container_->update(input, screen_w, screen_h);
+        SlidingWindowContainer* container = active_details_container_;
+        if (container && !is_external_container(container) && container->is_visible()) {
+            container->update(input, screen_w, screen_h);
         }
         return;
     }
@@ -699,9 +807,9 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
 
     ensure_details_container();
     apply_details_bounds();
-
-    if (details_container_ && details_container_->is_visible()) {
-        details_container_->update(input, screen_w, screen_h);
+    SlidingWindowContainer* container = active_details_container_;
+    if (container && !is_external_container(container) && container->is_visible()) {
+        container->update(input, screen_w, screen_h);
     }
 }
 
@@ -929,10 +1037,14 @@ void MapLayersPanel::update_details_container() {
     // Always reset per-mode widgets so layout can rebuild fresh
     clear_detail_ui();
 
+    SlidingWindowContainer* container = active_details_container_;
+    SidePanel side_panel = SidePanel::None;
+
     switch (details_mode_) {
         case DetailsMode::RoomList:
             refresh_room_list();
-            details_container_->set_header_text("Rooms");
+            if (container) container->set_header_text("Rooms");
+            side_panel = SidePanel::RoomsList;
             break;
         case DetailsMode::LayerDetails:
             refresh_layer_details();
@@ -941,42 +1053,66 @@ void MapLayersPanel::update_details_container() {
                     return v.index == selected_layer_index_;
                 });
                 if (it != layer_visuals_.end()) {
-                    details_container_->set_header_text(it->name);
+                    if (container) container->set_header_text(it->name);
                 } else {
-                    details_container_->set_header_text("Layer");
+                    if (container) container->set_header_text("Layer");
                 }
             } else {
-                details_container_->set_header_text("Layer");
+                if (container) container->set_header_text("Layer");
             }
+            side_panel = SidePanel::LayerControls;
             break;
         case DetailsMode::RoomDetails:
             refresh_room_details();
             if (!selected_room_key_.empty()) {
                 std::string label = display_name_for_room(selected_room_key_);
                 if (label.empty()) label = selected_room_key_;
-                details_container_->set_header_text(label);
+                if (container) container->set_header_text(label);
             } else {
-                details_container_->set_header_text("Room");
+                if (container) container->set_header_text("Room");
             }
+            side_panel = SidePanel::LayerControls;
             break;
         case DetailsMode::None:
-            details_container_->set_header_text("Details");
+            if (container) container->set_header_text("Details");
             break;
     }
 
     const bool visible = details_mode_ != DetailsMode::None;
-    details_container_->set_visible(visible);
-    if (visible) {
-        details_container_->request_layout();
+    if (container) {
+        if (!is_external_container(container)) {
+            container->set_visible(visible);
+            if (visible) {
+                container->request_layout();
+            }
+        } else if (visible) {
+            container->request_layout();
+        }
     }
+
+    notify_side_panel(side_panel);
 }
 
 void MapLayersPanel::apply_details_bounds() {
-    if (!details_container_) return;
+    if (!owned_details_container_) return;
     if (details_rect_.w > 0 && details_rect_.h > 0) {
-        details_container_->set_panel_bounds_override(details_rect_);
+        owned_details_container_->set_panel_bounds_override(details_rect_);
     } else {
-        details_container_->clear_panel_bounds_override();
+        owned_details_container_->clear_panel_bounds_override();
+    }
+}
+
+bool MapLayersPanel::using_external_side_panels() const {
+    return embedded_mode_ && (room_list_container_override_ != nullptr || layer_controls_container_override_ != nullptr);
+}
+
+bool MapLayersPanel::is_external_container(const SlidingWindowContainer* container) const {
+    return container && (container == room_list_container_override_ || container == layer_controls_container_override_);
+}
+
+void MapLayersPanel::notify_side_panel(SidePanel panel) const {
+    if (side_panel_callback_) {
+        side_panel_callback_(panel);
     }
 }
 
@@ -996,11 +1132,15 @@ void MapLayersPanel::open_layer_details(int layer_index) {
 void MapLayersPanel::open_room_details(const std::string& room_key) {
     selected_room_key_ = room_key;
     if (!room_key.empty()) {
-        details_mode_ = DetailsMode::RoomDetails;
+        details_mode_ = DetailsMode::None;
+        update_details_container();
+        if (configure_room_callback_) {
+            configure_room_callback_(room_key);
+        }
     } else {
         details_mode_ = DetailsMode::RoomList;
+        update_details_container();
     }
-    update_details_container();
 }
 
 void MapLayersPanel::update_hover_state(int layer_index, const std::string& room_key) {
@@ -1025,9 +1165,6 @@ void MapLayersPanel::clear_hover_state() {
 void MapLayersPanel::handle_preview_click(int layer_index, const std::string& room_key) {
     if (!room_key.empty()) {
         open_room_details(room_key);
-        if (configure_room_callback_) {
-            configure_room_callback_(room_key);
-        }
         return;
     }
     if (layer_index >= 0) {
@@ -1231,7 +1368,8 @@ void MapLayersPanel::render_preview(SDL_Renderer* renderer) const {
 }
 
 void MapLayersPanel::render_details(SDL_Renderer* renderer) const {
-    if (!details_container_ || !details_container_->is_visible()) {
+    SlidingWindowContainer* container = active_details_container_;
+    if (!container || is_external_container(container) || !container->is_visible()) {
         return;
     }
     int sw = screen_w_ > 0 ? screen_w_ : (details_rect_.x + details_rect_.w);
@@ -1240,11 +1378,12 @@ void MapLayersPanel::render_details(SDL_Renderer* renderer) const {
     if (sh <= 0) sh = details_rect_.h;
     if (sw <= 0) sw = 1;
     if (sh <= 0) sh = 1;
-    details_container_->render(renderer, sw, sh);
+    container->render(renderer, sw, sh);
 }
 
 bool MapLayersPanel::handle_details_event(const SDL_Event& e) {
-    if (!details_container_ || !details_container_->is_visible()) {
+    SlidingWindowContainer* container = active_details_container_;
+    if (!container || !container->is_visible()) {
         return false;
     }
 

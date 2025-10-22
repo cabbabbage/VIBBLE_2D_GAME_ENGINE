@@ -42,6 +42,17 @@ void SlidingWindowContainer::set_header_visible(bool visible) {
     layout_dirty_ = true;
 }
 
+void SlidingWindowContainer::set_close_button_enabled(bool enabled) {
+    if (close_button_enabled_ == enabled) {
+        return;
+    }
+    close_button_enabled_ = enabled;
+    if (!close_button_enabled_) {
+        close_button_.reset();
+    }
+    layout_dirty_ = true;
+}
+
 void SlidingWindowContainer::set_scrollbar_visible(bool visible) {
     if (scrollbar_visible_ == visible) {
         return;
@@ -201,7 +212,7 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
         if (event_function_(e)) return true;
     }
 
-    if (header_visible_ && close_button_) {
+    if (header_visible_ && close_button_enabled_ && close_button_) {
         bool handled = close_button_->handle_event(e);
         if (handled) {
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
@@ -395,7 +406,7 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
             SDL_RenderFillRect(renderer, &header_region);
         }
 
-        if (close_button_) {
+        if (close_button_enabled_ && close_button_) {
             close_button_->render(renderer);
         }
         std::string label = header_text_provider_ ? header_text_provider_() : header_text_;
@@ -531,10 +542,10 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
 
     const int label_height = header_visible_ ? DMButton::height() : 0;
     const int label_gap = header_visible_ ? DMSpacing::item_gap() : 0;
-    const int close_button_w = header_visible_ ? label_height : 0;
-    const int close_button_gap = header_visible_ ? DMSpacing::item_gap() : 0;
+    const int close_button_w = (header_visible_ && close_button_enabled_) ? label_height : 0;
+    const int close_button_gap = (header_visible_ && close_button_enabled_) ? DMSpacing::item_gap() : 0;
 
-    if (header_visible_) {
+    if (header_visible_ && close_button_enabled_) {
         close_button_rect_ = SDL_Rect{content_x, content_top, close_button_w, label_height};
         int label_x = close_button_rect_.x + close_button_rect_.w + close_button_gap;
         int label_w = std::max(0, (content_x + base_content_w) - label_x);
@@ -550,6 +561,9 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
         name_label_rect_ = SDL_Rect{0, 0, 0, 0};
         if (close_button_) {
             close_button_->set_rect(close_button_rect_);
+        }
+        if (!close_button_enabled_) {
+            close_button_.reset();
         }
     }
 

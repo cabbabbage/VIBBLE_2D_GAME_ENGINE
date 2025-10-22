@@ -34,6 +34,7 @@ public:
     void set_header_text_provider(HeaderTextProvider provider);
     void set_on_close(std::function<void()> cb);
     void set_header_visible(bool visible);
+    void set_close_button_enabled(bool enabled);
     void set_scrollbar_visible(bool visible);
 
     void request_layout();
@@ -85,6 +86,7 @@ private:
 
     bool visible_ = false;
     bool header_visible_ = true;
+    bool close_button_enabled_ = true;
     bool blocks_editor_interactions_ = false;
     bool editor_interactions_blocked_ = false;
 
