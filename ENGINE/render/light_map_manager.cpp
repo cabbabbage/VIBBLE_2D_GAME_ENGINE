@@ -39,17 +39,21 @@ static void log_transparency_failure_mgr(const char* context,
 }
 
 static float sample_chunk_transparency_mgr(SDL_Renderer* renderer, world::Chunk& chunk) {
-    if (!chunk.static_darkness_mask) {
-        chunk.static_brightness_retry_pending = true;
+    if (!chunk.static_light_mask) {
+        chunk.needs_retry   = true;
+        chunk.static_clean  = false;
         return chunk.base_brightness;
     }
 
-    const auto sample = vibble::render::sample_texture_transparency(renderer, chunk.static_darkness_mask);
+    const auto sample = vibble::render::sample_texture_transparency(renderer, chunk.static_light_mask);
     if (!sample.success) {
         log_transparency_failure_mgr("[LightMapPreview]", chunk, sample);
-        chunk.static_brightness_retry_pending = true;
+        chunk.needs_retry  = true;
+        chunk.static_clean = false;
         return chunk.base_brightness;
     }
+    chunk.needs_retry  = false;
+    chunk.static_clean = true;
     return std::clamp(sample.average, 0.0f, 1.0f);
 }
 

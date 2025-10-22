@@ -102,18 +102,12 @@ SDL_Point preview_event_point(const SDL_Event& e) {
 
 enum class PreviewStage : int {
     Mask = 0,
-    Base = 1,
-    Min  = 2,
-    Max  = 3,
 };
 
-constexpr int kPreviewStageCount = static_cast<int>(PreviewStage::Max) + 1;
+constexpr int kPreviewStageCount = 1;
 
 constexpr std::array<const char*, kPreviewStageCount> kPreviewStageLabels{
     "Mask",
-    "Base",
-    "Min",
-    "Max",
 };
 
 PreviewStage normalize_stage(int stage_index) {
@@ -133,21 +127,14 @@ SDL_Texture* texture_for_stage(const world::Chunk* chunk, PreviewStage stage) {
     }
     switch (stage) {
         case PreviewStage::Mask:
-            return chunk->static_darkness_mask;
-        case PreviewStage::Base:
-            // Base preview falls back to the brightest static preview when a dedicated
-            // base texture has not yet been produced by the lighting pipeline.
-            return chunk->static_max_preview ? chunk->static_max_preview : chunk->static_min_preview;
-        case PreviewStage::Min:
-            return chunk->static_min_preview;
-        case PreviewStage::Max:
-            return chunk->static_max_preview;
+            return chunk->static_light_mask;
     }
     return nullptr;
 }
 
 bool stage_requires_blend(PreviewStage stage) {
-    return stage != PreviewStage::Mask;
+    (void)stage;
+    return false;
 }
 
 }  // namespace
