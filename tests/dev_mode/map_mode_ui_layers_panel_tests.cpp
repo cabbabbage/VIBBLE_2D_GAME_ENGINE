@@ -2,6 +2,7 @@
 #include "doctest/doctest.h"
 
 #include "dev_mode/map_mode_ui.hpp"
+#include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "utils/input.hpp"
 
@@ -66,4 +67,35 @@ TEST_CASE("Layers panel toggles visibility via footer button") {
     ui.toggle_layers_panel();
     ui.update(input);
     CHECK_FALSE(ui.is_layers_panel_visible());
+}
+
+TEST_CASE("Sliding header requests hide footer while visible") {
+    ensure_sdl();
+
+    devmode::core::ManifestStore store;
+    MapModeUI ui(nullptr);
+    ui.set_manifest_store(&store);
+
+    nlohmann::json map_info = nlohmann::json::object();
+    map_info["rooms_data"] = nlohmann::json::object();
+
+    ui.set_map_context(&map_info, "test_map");
+    ui.set_screen_dimensions(1280, 720);
+    ui.set_footer_always_visible(true);
+    ui.set_map_mode_active(true);
+
+    Input input;
+    ui.update(input);
+
+    DevFooterBar* footer = ui.get_footer_bar();
+    REQUIRE(footer != nullptr);
+    CHECK(footer->visible());
+
+    ui.set_sliding_headers_hidden(true);
+    ui.update(input);
+    CHECK_FALSE(footer->visible());
+
+    ui.set_sliding_headers_hidden(false);
+    ui.update(input);
+    CHECK(footer->visible());
 }

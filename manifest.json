@@ -12692,22 +12692,6 @@
           "radius": 0,
           "x_radius": 0,
           "y_radius": 0
-        },
-        {
-          "behind": false,
-          "falloff": 0,
-          "flare": 0,
-          "flicker": 20,
-          "has_light_source": true,
-          "light_color": [
-            255,
-            255,
-            255
-          ],
-          "light_intensity": 255,
-          "offset_x": -18,
-          "offset_y": 0,
-          "radius": 464
         }
       ],
       "max_child_depth": 2,
@@ -13988,6 +13972,7 @@
               "origional_width": 1805,
               "position": "Exact",
               "priority": 0,
+              "resolution": 5,
               "spawn_id": "spn-a2c03bfe7161"
             },
             {
@@ -13999,7 +13984,7 @@
               ],
               "display_name": "Axe",
               "dx": -78,
-              "dy": -1302,
+              "dy": -1303,
               "enforce_spacing": false,
               "max_number": 20,
               "min_number": 12,
@@ -14008,7 +13993,8 @@
               "perimeter_radius": 377,
               "position": "Perimeter",
               "priority": 1,
-              "radius": 342,
+              "radius": 349,
+              "resolution": 2,
               "spawn_id": "spn-dbc1671870c3"
             },
             {
@@ -14032,6 +14018,7 @@
               "origional_width": 2034,
               "position": "Exact",
               "priority": 2,
+              "resolution": 5,
               "spawn_id": "spn-4e301c5e26b7"
             }
           ],

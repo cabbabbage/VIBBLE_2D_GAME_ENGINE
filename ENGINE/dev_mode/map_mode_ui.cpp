@@ -127,7 +127,7 @@ void MapModeUI::set_dev_sliding_headers_hidden(bool hidden) {
 }
 
 void MapModeUI::refresh_header_suppression_state() {
-    const bool final_state = base_headers_suppressed_ || dev_sliding_headers_hidden_;
+    const bool final_state = base_headers_suppressed_ || sliding_headers_hidden_external_ || dev_sliding_headers_hidden_;
     const bool state_changed = (headers_suppressed_ != final_state);
     headers_suppressed_ = final_state;
 

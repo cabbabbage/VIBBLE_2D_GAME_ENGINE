@@ -83,7 +83,7 @@ SDL_Texture* StaticLightMask::buildMask(const world::Chunk& chunk,
 
         SDL_SetTextureColorMod(draw.texture, 255, 255, 255);
         SDL_SetTextureAlphaMod(draw.texture, 255);
-        SDL_SetTextureBlendMode(draw.texture, inputs.runtimeLightBlendMode());
+        SDL_SetTextureBlendMode(draw.texture, draw.blend);
 
         if (SDL_RenderCopy(renderer_, draw.texture, &draw.src, &draw.dst) != 0) {
             vibble::log::warn(std::string{"[Lighting] Failed to stamp static light: "} + SDL_GetError());

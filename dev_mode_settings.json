@@ -4,12 +4,12 @@
             "current_room": true,
             "filters_expanded": true,
             "initialized": true,
-            "map_assets": false,
+            "map_assets": true,
             "types": {
                 "boundary": true,
                 "enemy": true,
                 "npc": false,
-                "object": false,
+                "object": true,
                 "player": false,
                 "texture": true
             }
@@ -29,7 +29,7 @@
                         "vertical_falloff": 3.5
                     }
                 },
-                "update_map_light": true
+                "update_map_light": false
             }
         },
         "lock": {
