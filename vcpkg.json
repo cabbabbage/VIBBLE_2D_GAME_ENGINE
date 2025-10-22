@@ -9,6 +9,7 @@
     "sdl2-mixer",
     "sdl2-ttf",
     "glad",
-    "opengl"
+    "opengl",
+    "curl"
   ]
 }
