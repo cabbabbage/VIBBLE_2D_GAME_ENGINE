@@ -324,8 +324,8 @@ void SceneRenderer::render(){
             return;
         }
         // Compute a global alpha multiplier from the map light's current opacity window
-        // (same logic as shading stages). Darker overlays should result from a higher
-        // map-light opacity, so invert the normalized value before applying it.
+        // (same logic as shading stages). Higher map-light opacity values correspond to
+        // darker scenes, so the overlay should become more prominent as the opacity rises.
         float alpha_mult = 1.0f;
         if (!chunk_debug_mode_) {
             const int min_opacity = main_light_source_.min_opacity();
@@ -333,7 +333,7 @@ void SceneRenderer::render(){
             const int cur_a       = std::clamp(static_cast<int>(main_light_source_.get_current_color().a), min_opacity, max_opacity);
             const int range       = std::max(1, max_opacity - min_opacity);
             const float normalized = std::clamp(static_cast<float>(cur_a - min_opacity) / static_cast<float>(range), 0.0f, 1.0f);
-            alpha_mult            = std::clamp(1.0f - normalized, 0.0f, 1.0f);
+            alpha_mult            = std::clamp(normalized, 0.0f, 1.0f);
         }
 
         SDL_Rect screen_view{0,0,screen_width_,screen_height_};
