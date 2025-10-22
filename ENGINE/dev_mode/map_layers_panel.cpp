@@ -205,8 +205,6 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     rows.push_back(Row{name_widget});
     set_rows(rows);
 
-    set_close_button_enabled(true);
-
     set_expanded(true);
     set_visible(false);
 }
@@ -311,6 +309,7 @@ void MapLayersPanel::set_embedded_mode(bool embedded) {
     }
     embedded_mode_ = embedded;
     set_floatable(!embedded_mode_);
+    set_close_button_enabled(!embedded_mode_);
     if (embedded_mode_ && embedded_bounds_.w > 0 && embedded_bounds_.h > 0) {
         set_rect(embedded_bounds_);
     }
