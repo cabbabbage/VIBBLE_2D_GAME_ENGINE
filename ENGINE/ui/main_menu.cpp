@@ -4,6 +4,7 @@
 #include <SDL_ttf.h>
 #include <algorithm>
 #include <array>
+#include <utility>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -394,14 +395,14 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h);
         if (tex_w <= 0 || tex_h <= 0) return;
 
-        const double rpm = 0.5 / 3.0;
+        const double rpm = 0.5 / 5.0;
         const double degrees_per_second = rpm * 360.0 / 60.0;
         const Uint64 now = SDL_GetTicks64();
         const double elapsed_seconds = static_cast<double>(now - animation_start_ticks_) / 1000.0;
         const double angle = std::fmod(elapsed_seconds * degrees_per_second, 360.0);
 
-        const double center_x = static_cast<double>(screen_w_) * 0.5;
-        const double center_y = static_cast<double>(screen_h_) * 0.5;
+        const double pivot_x = static_cast<double>(screen_w_) * -0.10;
+        const double pivot_y = static_cast<double>(screen_h_) * 1.10;
 
         const double base_scale_x = static_cast<double>(screen_w_) / static_cast<double>(tex_w);
         const double base_scale_y = static_cast<double>(screen_h_) / static_cast<double>(tex_h);
@@ -411,8 +412,20 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         const double half_h = static_cast<double>(tex_h) * 0.5;
         const double texture_radius = std::sqrt(half_w * half_w + half_h * half_h);
         if (texture_radius > 1e-6) {
-                const double screen_radius = std::sqrt(center_x * center_x + center_y * center_y);
-                const double needed_scale = screen_radius / texture_radius;
+                const std::array<std::pair<double, double>, 4> corners{{
+                        {0.0, 0.0},
+                        {static_cast<double>(screen_w_), 0.0},
+                        {0.0, static_cast<double>(screen_h_)},
+                        {static_cast<double>(screen_w_), static_cast<double>(screen_h_)}
+                }};
+                double max_corner_distance = 0.0;
+                for (const auto& corner : corners) {
+                        const double dx = pivot_x - corner.first;
+                        const double dy = pivot_y - corner.second;
+                        const double dist = std::hypot(dx, dy);
+                        if (dist > max_corner_distance) max_corner_distance = dist;
+                }
+                const double needed_scale = max_corner_distance / texture_radius;
                 if (needed_scale > required_scale) required_scale = needed_scale;
         }
 
@@ -423,8 +436,8 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         SDL_Rect dst{};
         dst.w = static_cast<int>(std::ceil(static_cast<double>(tex_w) * required_scale));
         dst.h = static_cast<int>(std::ceil(static_cast<double>(tex_h) * required_scale));
-        dst.x = static_cast<int>(std::round(center_x - static_cast<double>(dst.w) * 0.5));
-        dst.y = static_cast<int>(std::round(center_y - static_cast<double>(dst.h) * 0.5));
+        dst.x = static_cast<int>(std::round(pivot_x - static_cast<double>(dst.w) * 0.5));
+        dst.y = static_cast<int>(std::round(pivot_y - static_cast<double>(dst.h) * 0.5));
 
         SDL_Point center{};
         center.x = dst.w / 2;
