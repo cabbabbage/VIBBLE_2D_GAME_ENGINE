@@ -146,6 +146,9 @@ private:
     std::unique_ptr<MapLightPreviewPanel> preview_panel_;
     std::unique_ptr<MapLayersPreviewPanel> layers_preview_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
+    std::unique_ptr<SlidingWindowContainer> room_config_container_;
+    std::unique_ptr<SlidingWindowContainer> rooms_list_container_;
+    std::unique_ptr<SlidingWindowContainer> layer_controls_container_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
     std::unique_ptr<MapGridPanel> grid_panel_;
     std::unique_ptr<DevFooterBar> footer_bar_;
@@ -173,9 +176,6 @@ private:
     bool last_shading_visible_ = false;
     bool last_preview_visible_ = false;
     std::unique_ptr<RoomConfigurator> room_configurator_;
-    std::unique_ptr<SlidingWindowContainer> room_config_container_;
-    std::unique_ptr<SlidingWindowContainer> rooms_list_container_;
-    std::unique_ptr<SlidingWindowContainer> layer_controls_container_;
     std::string active_room_config_key_;
     SlidingPanel active_sliding_panel_ = SlidingPanel::None;
 };

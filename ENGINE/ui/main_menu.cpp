@@ -432,7 +432,10 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         }
 
         required_scale = std::max(required_scale, 1.0);
-        required_scale *= 1.02; // Add a small safety margin.
+        // Inflate the scale so the rotating background never exposes empty corners.
+        // A modest 2% margin proved insufficient on some aspect ratios, so lean in harder.
+        // The extra zoom is intentionally generous to hide gaps while keeping the scene readable.
+        required_scale *= 2;
 
         SDL_Rect dst{};
         dst.w = static_cast<int>(std::ceil(static_cast<double>(tex_w) * required_scale));
