@@ -88,6 +88,49 @@ private:
     SDL_Color color_{255, 120, 120, 255};
 };
 
+class MapLightPanel::OrbitKeyWidget : public Widget {
+public:
+    explicit OrbitKeyWidget(MapLightPanel& owner);
+
+    void set_rect(const SDL_Rect& r) override;
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int w) const override;
+    bool handle_event(const SDL_Event& e) override;
+    void render(SDL_Renderer* r) const override;
+    bool wants_full_row() const override { return true; }
+
+    bool handle_overlay_event(const SDL_Event& e);
+    void render_overlay(SDL_Renderer* r) const;
+
+    void on_pairs_changed();
+    void on_focus_changed();
+
+private:
+    struct PairEntry {
+        std::unique_ptr<DMColorRangeWidget> widget;
+        SDL_Rect rect{0, 0, 0, 0};
+    };
+
+    MapLightPanel& owner_;
+    SDL_Rect rect_{0, 0, 0, 0};
+    SDL_Rect circle_rect_{0, 0, 0, 0};
+    SDL_Rect list_rect_{0, 0, 0, 0};
+    std::vector<PairEntry> pair_entries_;
+    bool scroll_capture_active_ = false;
+
+    void update_internal_layout();
+    void rebuild_pair_entries();
+    void layout_color_widgets();
+    void ensure_scroll_capture();
+    void release_scroll_capture();
+    int pair_index_at_point(int x, int y) const;
+    int line_hit_test(int x, int y) const;
+    double point_angle(int x, int y) const;
+    double line_distance_to_point(double angle_deg, int x, int y) const;
+    void draw_orbit_circle(SDL_Renderer* r) const;
+    void draw_orbit_line(SDL_Renderer* r, double angle_deg, const SDL_Color& color, bool focused) const;
+};
+
 MapLightPanel::OrbitKeyWidget::OrbitKeyWidget(MapLightPanel& owner)
     : owner_(owner) {
     update_internal_layout();
@@ -483,49 +526,6 @@ void MapLightPanel::OrbitKeyWidget::draw_orbit_line(SDL_Renderer* r, double angl
         SDL_RenderDrawLine(r, cx - 1, cy, ex - 1, ey);
     }
 }
-
-class MapLightPanel::OrbitKeyWidget : public Widget {
-public:
-    explicit OrbitKeyWidget(MapLightPanel& owner);
-
-    void set_rect(const SDL_Rect& r) override;
-    const SDL_Rect& rect() const override { return rect_; }
-    int height_for_width(int w) const override;
-    bool handle_event(const SDL_Event& e) override;
-    void render(SDL_Renderer* r) const override;
-    bool wants_full_row() const override { return true; }
-
-    bool handle_overlay_event(const SDL_Event& e);
-    void render_overlay(SDL_Renderer* r) const;
-
-    void on_pairs_changed();
-    void on_focus_changed();
-
-private:
-    struct PairEntry {
-        std::unique_ptr<DMColorRangeWidget> widget;
-        SDL_Rect rect{0, 0, 0, 0};
-    };
-
-    MapLightPanel& owner_;
-    SDL_Rect rect_{0, 0, 0, 0};
-    SDL_Rect circle_rect_{0, 0, 0, 0};
-    SDL_Rect list_rect_{0, 0, 0, 0};
-    std::vector<PairEntry> pair_entries_;
-    bool scroll_capture_active_ = false;
-
-    void update_internal_layout();
-    void rebuild_pair_entries();
-    void layout_color_widgets();
-    void ensure_scroll_capture();
-    void release_scroll_capture();
-    int pair_index_at_point(int x, int y) const;
-    int line_hit_test(int x, int y) const;
-    double point_angle(int x, int y) const;
-    double line_distance_to_point(double angle_deg, int x, int y) const;
-    void draw_orbit_circle(SDL_Renderer* r) const;
-    void draw_orbit_line(SDL_Renderer* r, double angle_deg, const SDL_Color& color, bool focused) const;
-};
 
 int MapLightPanel::clamp_int(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
