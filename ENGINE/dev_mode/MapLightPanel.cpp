@@ -1409,7 +1409,7 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
     if (focused_pair_index_ >= 0 && focused_pair_index_ < static_cast<int>(orbit_key_pairs_.size())) {
         fill_color = utils::color::resolve_ranged_color(orbit_key_pairs_[focused_pair_index_].color);
     } else if (!orbit_key_pairs_.empty()) {
-        fill_color = utils::color::resolve_ranged_color(orbit_key_pairs_.front().color, fill_color);
+        fill_color = utils::color::resolve_ranged_color(orbit_key_pairs_.front().color);
     }
 
     SDL_Rect swatch = body_viewport_;
