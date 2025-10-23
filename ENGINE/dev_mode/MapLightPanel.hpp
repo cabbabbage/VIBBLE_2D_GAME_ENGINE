@@ -52,7 +52,6 @@ private:
     void update_save_status(bool success) const;
 
     void build_ui();
-    void apply_changes();
     void rebuild_rows();
     void update_section_header_labels();
     void sync_ui_from_json();
@@ -91,6 +90,7 @@ private:
     void set_focused_pair_by_id(int id);
     void handle_pair_color_changed(int index, const utils::color::RangedColor& color);
     int find_pair_containing_angle(double angle_degrees) const;
+    utils::color::RangedColor default_pair_color();
 
     static int clamp_int(int v, int lo, int hi);
     static float clamp_float(float v, float lo, float hi);
@@ -103,20 +103,13 @@ private:
     nlohmann::json editing_light_{};
 
     std::unique_ptr<DMCheckbox> update_map_light_checkbox_;
-    std::unique_ptr<DMButton> update_btn_;
     std::unique_ptr<DMButton> orbit_section_btn_;
     std::unique_ptr<DMButton> texture_section_btn_;
     bool orbit_section_collapsed_ = false;
     bool texture_section_collapsed_ = false;
-    std::unique_ptr<DMSlider> radius_;
-    std::unique_ptr<DMSlider> intensity_;
     std::unique_ptr<DMSlider> orbit_x_;
     std::unique_ptr<DMSlider> orbit_y_;
     std::unique_ptr<DMSlider> update_interval_;
-    std::unique_ptr<DMSlider> mult_x100_;
-    std::unique_ptr<DMSlider> falloff_;
-
-    class DMColorRangeWidget* base_color_widget_ = nullptr;
 
     class OrbitKeyWidget;
     struct OrbitKeyPair {

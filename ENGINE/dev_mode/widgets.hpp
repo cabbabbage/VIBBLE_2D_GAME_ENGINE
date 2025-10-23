@@ -248,6 +248,9 @@ public:
 
     static void render_active_options(SDL_Renderer* r);
 private:
+    struct OptionEntry;
+
+    bool build_option_entries(std::vector<OptionEntry>& entries) const;
     int clamp_index(int idx) const;
     bool commit_pending_selection();
     void begin_focus();
@@ -266,6 +269,7 @@ private:
     bool focused_ = false;
     int pending_index_ = 0;
     bool has_pending_index_ = false;
+    int hovered_option_index_ = -1;
     static DMDropdown* active_;
 };
 

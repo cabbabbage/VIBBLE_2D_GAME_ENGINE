@@ -13808,39 +13808,157 @@
         }
       ],
       "map_light_data": {
-        "base_color": [
-          255,
-          246,
-          248,
-          247
-        ],
+        "base_color": {
+          "a": {
+            "max": 247,
+            "min": 247
+          },
+          "b": {
+            "max": 248,
+            "min": 248
+          },
+          "g": {
+            "max": 246,
+            "min": 246
+          },
+          "r": {
+            "max": 255,
+            "min": 255
+          }
+        },
         "fall_off": 7,
         "intensity": 180,
         "keys": [
           [
-            0.0,
-            [
-              255,
-              255,
-              255,
-              255
-            ]
+            71.99583839408662,
+            {
+              "a": {
+                "max": 255,
+                "min": 255
+              },
+              "b": {
+                "max": 255,
+                "min": 255
+              },
+              "g": {
+                "max": 255,
+                "min": 255
+              },
+              "r": {
+                "max": 255,
+                "min": 255
+              }
+            }
           ],
           [
-            180.0,
-            [
-              255,
-              237,
-              218,
-              34
-            ]
+            108.00416160591338,
+            {
+              "a": {
+                "max": 255,
+                "min": 255
+              },
+              "b": {
+                "max": 255,
+                "min": 255
+              },
+              "g": {
+                "max": 255,
+                "min": 255
+              },
+              "r": {
+                "max": 255,
+                "min": 255
+              }
+            }
+          ],
+          [
+            183.0,
+            {
+              "a": {
+                "max": 255,
+                "min": 255
+              },
+              "b": {
+                "max": 255,
+                "min": 255
+              },
+              "g": {
+                "max": 80,
+                "min": 80
+              },
+              "r": {
+                "max": 55,
+                "min": 55
+              }
+            }
+          ],
+          [
+            257.0362269401454,
+            {
+              "a": {
+                "max": 255,
+                "min": 255
+              },
+              "b": {
+                "max": 0,
+                "min": 0
+              },
+              "g": {
+                "max": 255,
+                "min": 255
+              },
+              "r": {
+                "max": 255,
+                "min": 255
+              }
+            }
+          ],
+          [
+            282.9637730598546,
+            {
+              "a": {
+                "max": 255,
+                "min": 255
+              },
+              "b": {
+                "max": 0,
+                "min": 0
+              },
+              "g": {
+                "max": 255,
+                "min": 255
+              },
+              "r": {
+                "max": 255,
+                "min": 255
+              }
+            }
+          ],
+          [
+            357.0,
+            {
+              "a": {
+                "max": 255,
+                "min": 255
+              },
+              "b": {
+                "max": 255,
+                "min": 255
+              },
+              "g": {
+                "max": 80,
+                "min": 80
+              },
+              "r": {
+                "max": 55,
+                "min": 55
+              }
+            }
           ]
         ],
-        "max_opacity": 154,
-        "min_opacity": 0,
         "mult": 0.32,
-        "orbit_radius": 1000,
-        "orbit_x": 1000,
+        "orbit_radius": 1561,
+        "orbit_x": 1561,
         "orbit_y": 1000,
         "radius": 2759,
         "reactive_shadows": {
@@ -13853,16 +13971,7 @@
             "vertical_falloff": 3.5
           }
         },
-        "screen_light": {
-          "color": [
-            240,
-            234,
-            255
-          ],
-          "max_opacity": 154,
-          "min_opacity": 68
-        },
-        "update_interval": 1
+        "update_interval": 2
       },
       "map_name": "FORREST",
       "reactive_shadows": {
@@ -13994,16 +14103,10 @@
               "position": "Perimeter",
               "priority": 1,
               "radius": 349,
-              "resolution": 2,
+              "resolution": 3,
               "spawn_id": "spn-dbc1671870c3"
             }
-          ],
-          "tags": {
-            "include": [
-              "man-made",
-              "passable"
-            ]
-          }
+          ]
         }
       },
       "trails_data": {
