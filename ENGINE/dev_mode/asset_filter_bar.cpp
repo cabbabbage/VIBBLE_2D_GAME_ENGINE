@@ -3,6 +3,7 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
+#include "dev_mode/dm_icons.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
@@ -92,7 +93,10 @@ void AssetFilterBar::initialize() {
     if (!use_saved_state) {
         filters_expanded_ = false;
     }
-    filter_toggle_button_ = std::make_unique<DMButton>("▲", &DMStyles::HeaderButton(), std::max(DMButton::height(), kToggleButtonMinWidth), DMButton::height());
+    filter_toggle_button_ = std::make_unique<DMButton>(std::string(DMIcons::CollapseExpanded()),
+                                                       &DMStyles::HeaderButton(),
+                                                       std::max(DMButton::height(), kToggleButtonMinWidth),
+                                                       DMButton::height());
     update_filter_toggle_label();
     sync_state_from_ui();
     layout_dirty_ = true;
@@ -505,7 +509,9 @@ void AssetFilterBar::update_filter_toggle_label() {
     if (!filter_toggle_button_) {
         return;
     }
-    filter_toggle_button_->set_text(filters_expanded_ ? "▲" : "▼");
+    filter_toggle_button_->set_text(filters_expanded_
+                                        ? std::string(DMIcons::CollapseExpanded())
+                                        : std::string(DMIcons::CollapseCollapsed()));
 }
 
 void AssetFilterBar::clear_checkbox_rects() {

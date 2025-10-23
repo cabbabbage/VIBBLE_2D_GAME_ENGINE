@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "spawn_group_utils.hpp"
+#include "dm_icons.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
@@ -1287,7 +1288,10 @@ SpawnGroupConfig::SpawnGroupConfig(bool floatable)
     set_col_gap(12);
     set_padding(12);
     // Header action buttons
-    header_delete_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+    header_delete_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                                    &DMStyles::DeleteButton(),
+                                                    DMButton::height(),
+                                                    DMButton::height());
     header_delete_widget_ = std::make_unique<ButtonWidget>(header_delete_btn_.get(), [](){});
 }
 

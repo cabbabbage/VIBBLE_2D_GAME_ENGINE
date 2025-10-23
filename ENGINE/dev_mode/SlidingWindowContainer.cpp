@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "dm_icons.hpp"
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
 #include "font_cache.hpp"
@@ -545,17 +546,34 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
     const int close_button_w = (header_visible_ && close_button_enabled_) ? label_height : 0;
     const int close_button_gap = (header_visible_ && close_button_enabled_) ? DMSpacing::item_gap() : 0;
 
-    if (header_visible_ && close_button_enabled_) {
-        close_button_rect_ = SDL_Rect{content_x, content_top, close_button_w, label_height};
-        int label_x = close_button_rect_.x + close_button_rect_.w + close_button_gap;
-        int label_w = std::max(0, (content_x + base_content_w) - label_x);
-        name_label_rect_ = SDL_Rect{label_x, content_top, label_w, label_height};
-        if (!close_button_) {
-            close_button_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), close_button_w, label_height);
+    if (header_visible_) {
+        int label_w = base_content_w;
+        if (close_button_enabled_) {
+            const int close_x = content_x + base_content_w - close_button_w;
+            close_button_rect_ = SDL_Rect{close_x, content_top, close_button_w, label_height};
+            label_w = std::max(0, close_x - close_button_gap - content_x);
+            if (!close_button_) {
+                close_button_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                                           &DMStyles::DeleteButton(),
+                                                           close_button_w,
+                                                           label_height);
+            }
+            if (close_button_) {
+                close_button_->set_rect(close_button_rect_);
+                close_button_->set_style(&DMStyles::DeleteButton());
+                close_button_->set_text(std::string(DMIcons::Close()));
+            }
+        } else {
+            close_button_rect_ = SDL_Rect{0, 0, 0, 0};
+            if (close_button_) {
+                close_button_->set_rect(close_button_rect_);
+            }
+            label_w = base_content_w;
+            if (!close_button_enabled_) {
+                close_button_.reset();
+            }
         }
-        if (close_button_) {
-            close_button_->set_rect(close_button_rect_);
-        }
+        name_label_rect_ = SDL_Rect{content_x, content_top, label_w, label_height};
     } else {
         close_button_rect_ = SDL_Rect{0, 0, 0, 0};
         name_label_rect_ = SDL_Rect{0, 0, 0, 0};

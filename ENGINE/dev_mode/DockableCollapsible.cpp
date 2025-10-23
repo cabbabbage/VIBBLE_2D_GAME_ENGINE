@@ -3,6 +3,7 @@
 #include "FloatingDockableManager.hpp"
 #include "draw_utils.hpp"
 #include "dev_ui_settings.hpp"
+#include "dm_icons.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -133,7 +134,10 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
     available_height_override_ = -1;
     rect_.x = x; rect_.y = y;
     header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), floating_content_width_, DMButton::height());
-    close_btn_  = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
+    close_btn_  = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                             &DMStyles::DeleteButton(),
+                                             DMButton::height(),
+                                             DMButton::height());
     padding_ = DMSpacing::panel_padding();
     row_gap_ = DMSpacing::item_gap();
     col_gap_ = DMSpacing::item_gap();
@@ -214,7 +218,10 @@ void DockableCollapsible::set_show_header(bool show) {
         int header_w = floatable_ ? floating_content_width_ : 260;
         header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), header_w, DMButton::height());
         if (floatable_ || close_button_enabled_) {
-            close_btn_ = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
+            close_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                                    &DMStyles::DeleteButton(),
+                                                    DMButton::height(),
+                                                    DMButton::height());
         }
         update_header_button();
     }
@@ -229,7 +236,10 @@ void DockableCollapsible::set_close_button_enabled(bool enabled) {
     if (show_header_) {
         if (floatable_ || close_button_enabled_) {
             if (!close_btn_) {
-                close_btn_ = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
+                close_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                                        &DMStyles::DeleteButton(),
+                                                        DMButton::height(),
+                                                        DMButton::height());
             }
         } else {
             close_btn_.reset();
@@ -916,7 +926,9 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
 
 void DockableCollapsible::update_header_button() const {
     if (!header_btn_) return;
-    std::string arrow = expanded_ ? " \xE2\x96\xB2" : " \xE2\x96\xBC";
+    const std::string arrow = std::string(" ") +
+                              std::string(expanded_ ? DMIcons::CollapseExpanded()
+                                                     : DMIcons::CollapseCollapsed());
     header_btn_->set_text(title_ + arrow);
 }
 
