@@ -234,10 +234,27 @@ SDL_Rect FloatingPanelLayoutManager::computeUsableRect(const SDL_Rect& viewport,
 
     usable_rect_.y = top;
     usable_rect_.h = std::max(0, bottom - top);
+    layoutTrackedPanels();
     return usable_rect_;
 }
 
 void FloatingPanelLayoutManager::layoutAll(const std::vector<PanelInfo>& panels) {
+    struct ScopedLayoutFlag {
+        FloatingPanelLayoutManager& manager;
+        bool active = false;
+        explicit ScopedLayoutFlag(FloatingPanelLayoutManager& m) : manager(m) {
+            if (!manager.applying_layout_) {
+                manager.applying_layout_ = true;
+                active = true;
+            }
+        }
+        ~ScopedLayoutFlag() {
+            if (active) {
+                manager.applying_layout_ = false;
+            }
+        }
+    } guard(*this);
+
     if (usable_rect_.w <= 0 || usable_rect_.h <= 0) {
         return;
     }
@@ -304,7 +321,7 @@ void FloatingPanelLayoutManager::layoutAll(const std::vector<PanelInfo>& panels)
             max_y = min_y;
         }
         y = std::clamp(y, min_y, max_y);
-        info.panel->set_position(x, y);
+        info.panel->set_position_from_layout_manager(x, y);
 
         current = x + width + kPanelGap;
     }
@@ -353,5 +370,74 @@ SDL_Point FloatingPanelLayoutManager::positionFor(const PanelInfo& panel, const 
     y = std::clamp(y, min_y, max_y);
 
     return SDL_Point{x, y};
+}
+
+void FloatingPanelLayoutManager::registerPanel(DockableCollapsible* panel) {
+    if (!panel) {
+        return;
+    }
+    if (isTracking(panel)) {
+        return;
+    }
+    tracked_panels_.push_back(panel);
+    layoutTrackedPanels();
+}
+
+void FloatingPanelLayoutManager::unregisterPanel(const DockableCollapsible* panel) {
+    if (!panel) {
+        return;
+    }
+    auto it = std::remove(tracked_panels_.begin(), tracked_panels_.end(), const_cast<DockableCollapsible*>(panel));
+    if (it == tracked_panels_.end()) {
+        return;
+    }
+    tracked_panels_.erase(it, tracked_panels_.end());
+    layoutTrackedPanels();
+}
+
+void FloatingPanelLayoutManager::notifyPanelGeometryChanged(DockableCollapsible* panel) {
+    if (!panel || !isTracking(panel) || applying_layout_) {
+        return;
+    }
+    layoutTrackedPanels();
+}
+
+void FloatingPanelLayoutManager::notifyPanelContentChanged(DockableCollapsible* panel) {
+    if (!panel || !isTracking(panel) || applying_layout_) {
+        return;
+    }
+    layoutTrackedPanels();
+}
+
+void FloatingPanelLayoutManager::layoutTrackedPanels() {
+    if (applying_layout_ || tracked_panels_.empty()) {
+        return;
+    }
+
+    std::vector<PanelInfo> panels;
+    panels.reserve(tracked_panels_.size());
+    for (DockableCollapsible* panel : tracked_panels_) {
+        if (!panel) {
+            continue;
+        }
+        if (!panel->is_visible() || !panel->is_floatable()) {
+            continue;
+        }
+        PanelInfo info;
+        info.panel = panel;
+        panels.push_back(info);
+    }
+
+    if (panels.empty()) {
+        return;
+    }
+
+    applying_layout_ = true;
+    layoutAll(panels);
+    applying_layout_ = false;
+}
+
+bool FloatingPanelLayoutManager::isTracking(const DockableCollapsible* panel) const {
+    return std::find(tracked_panels_.begin(), tracked_panels_.end(), panel) != tracked_panels_.end();
 }
 

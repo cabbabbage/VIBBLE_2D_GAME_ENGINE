@@ -37,13 +37,23 @@ public:
 
     SDL_Point positionFor(const PanelInfo& panel, const SlidingParentInfo* parent) const;
 
+    void registerPanel(DockableCollapsible* panel);
+    void unregisterPanel(const DockableCollapsible* panel);
+    void notifyPanelGeometryChanged(DockableCollapsible* panel);
+    void notifyPanelContentChanged(DockableCollapsible* panel);
+
 private:
     FloatingPanelLayoutManager() = default;
+
+    void layoutTrackedPanels();
+    bool isTracking(const DockableCollapsible* panel) const;
 
     SDL_Rect viewport_{0, 0, 0, 0};
     SDL_Rect header_bounds_{0, 0, 0, 0};
     SDL_Rect footer_bounds_{0, 0, 0, 0};
     SDL_Rect usable_rect_{0, 0, 0, 0};
     std::vector<SDL_Rect> sliding_rects_{};
+    std::vector<DockableCollapsible*> tracked_panels_{};
+    bool applying_layout_ = false;
 };
 
