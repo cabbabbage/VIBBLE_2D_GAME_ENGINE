@@ -48,8 +48,6 @@ public:
     void set_active_assets(std::vector<Asset*>& actives);
     void set_screen_dimensions(int width, int height);
     void set_current_room(Room* room, bool force_refresh = false);
-    void set_rooms(std::vector<Room*>* rooms);
-    void set_current_room(Room* room);
     void set_rooms(std::vector<Room*>* rooms, std::size_t generation = 0);
 
     void set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save);

@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
-#include "world/chunk.hpp"
 #include "global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
@@ -16,6 +15,7 @@
 class Assets;
 class Asset;
 class AnimationFrame;
+class LightMap;
 
 class SceneRenderer {
 
@@ -26,7 +26,7 @@ public:
                  int screen_height,
                  const nlohmann::json& map_manifest,
                  const std::string& map_id);
-    ~SceneRenderer() = default;
+    ~SceneRenderer();
     void render();
     void apply_map_light_config(const nlohmann::json& data);
     SDL_Renderer* get_renderer() const;

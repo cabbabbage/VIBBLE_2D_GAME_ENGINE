@@ -115,6 +115,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     main_light_source_.update();
 }
 
+SceneRenderer::~SceneRenderer() = default;
+
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
 
 LightMap* SceneRenderer::light_map() {
