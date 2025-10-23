@@ -1919,8 +1919,7 @@ void DevControls::pulse_modal_header() {
 
 void DevControls::apply_header_suppression() {
     if (map_mode_ui_) {
-        const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_;
-        map_mode_ui_->set_headers_suppressed(hide_headers);
+        map_mode_ui_->set_headers_suppressed(modal_headers_hidden_);
         map_mode_ui_->set_dev_sliding_headers_hidden(sliding_headers_hidden_);
     }
 }

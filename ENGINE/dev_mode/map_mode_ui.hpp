@@ -168,6 +168,7 @@ private:
     HeaderMode header_mode_ = HeaderMode::Map;
     PanelType active_panel_ = PanelType::None;
     bool headers_suppressed_ = false;
+    bool sliding_only_header_suppression_ = false;
     bool base_headers_suppressed_ = false;
     bool sliding_headers_hidden_external_ = false;
     bool dev_sliding_headers_hidden_ = false;

@@ -12,8 +12,10 @@
 #include "dev_mode/dev_ui_settings.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
+#include "color_range_widget.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "utils/input.hpp"
+#include "utils/ranged_color.hpp"
 
 using nlohmann::json;
 
@@ -175,22 +177,12 @@ void MapLightPanel::build_ui() {
     if (orbit_y_)        orbit_y_->set_defer_commit_until_unfocus(true);
     
 
-    base_r_ = std::make_unique<DMSlider>("Base R", 0, 255, 255);
-    base_g_ = std::make_unique<DMSlider>("Base G", 0, 255, 255);
-    base_b_ = std::make_unique<DMSlider>("Base B", 0, 255, 255);
-    base_a_ = std::make_unique<DMSlider>("Base A", 0, 255, 255);
-
     prev_key_btn_ = std::make_unique<DMButton>("< Prev", &DMStyles::HeaderButton(), 120, DMButton::height());
     next_key_btn_ = std::make_unique<DMButton>("Next >", &DMStyles::HeaderButton(), 120, DMButton::height());
     add_pair_btn_ = std::make_unique<DMButton>("+ Pair @Angle", &DMStyles::HeaderButton(), 180, DMButton::height());
     delete_btn_   = std::make_unique<DMButton>("Delete Key", &DMStyles::HeaderButton(), 140, DMButton::height());
 
     key_angle_ = std::make_unique<DMSlider>("Key Angle (deg)", 0, 360, 0);
-    key_r_     = std::make_unique<DMSlider>("Key R", 0, 255, 255);
-    key_g_     = std::make_unique<DMSlider>("Key G", 0, 255, 255);
-    key_b_     = std::make_unique<DMSlider>("Key B", 0, 255, 255);
-    key_a_     = std::make_unique<DMSlider>("Key A", 0, 255, 255);
-
     rebuild_rows();
 }
 
@@ -211,6 +203,8 @@ void MapLightPanel::rebuild_rows() {
 
     widget_wrappers_.clear();
     widget_wrappers_.reserve(128);
+    base_color_widget_ = nullptr;
+    key_color_widget_ = nullptr;
 
     auto add_widget = [this](std::unique_ptr<Widget> w) -> Widget* {
         Widget* raw = w.get();
@@ -254,14 +248,12 @@ void MapLightPanel::rebuild_rows() {
             add_widget(std::make_unique<SliderWidget>(mult_x100_.get())),
             add_widget(std::make_unique<SliderWidget>(falloff_.get()))
         });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(base_r_.get())),
-            add_widget(std::make_unique<SliderWidget>(base_g_.get()))
+        auto base_color = std::make_unique<DMColorRangeWidget>("Base Color");
+        base_color->set_on_value_changed([this](const utils::color::RangedColor&) {
+            this->needs_sync_to_json_ = true;
         });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(base_b_.get())),
-            add_widget(std::make_unique<SliderWidget>(base_a_.get()))
-        });
+        base_color_widget_ = base_color.get();
+        rows.push_back({ add_widget(std::move(base_color)) });
         rows.push_back({
             add_widget(std::make_unique<ButtonWidget>(prev_key_btn_.get(), [this]() { select_prev_key(); })),
             add_widget(std::make_unique<ButtonWidget>(next_key_btn_.get(), [this]() { select_next_key(); })),
@@ -269,14 +261,12 @@ void MapLightPanel::rebuild_rows() {
             add_widget(std::make_unique<ButtonWidget>(delete_btn_.get(), [this]() { delete_current_key(); }))
         });
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(key_angle_.get())) });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(key_r_.get())),
-            add_widget(std::make_unique<SliderWidget>(key_g_.get()))
+        auto key_color = std::make_unique<DMColorRangeWidget>("Key Color");
+        key_color->set_on_value_changed([this](const utils::color::RangedColor&) {
+            this->needs_sync_to_json_ = true;
         });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(key_b_.get())),
-            add_widget(std::make_unique<SliderWidget>(key_a_.get()))
-        });
+        key_color_widget_ = key_color.get();
+        rows.push_back({ add_widget(std::move(key_color)) });
         rows.push_back({
             add_widget(std::make_unique<ButtonWidget>(update_btn_.get(), [this]() { apply_changes(); }))
         });
@@ -288,11 +278,13 @@ void MapLightPanel::rebuild_rows() {
 void MapLightPanel::toggle_orbit_section() {
     orbit_section_collapsed_ = !orbit_section_collapsed_;
     rebuild_rows();
+    sync_ui_from_json();
 }
 
 void MapLightPanel::toggle_texture_section() {
     texture_section_collapsed_ = !texture_section_collapsed_;
     rebuild_rows();
+    sync_ui_from_json();
 }
 
 void MapLightPanel::apply_changes() {
@@ -410,14 +402,25 @@ nlohmann::json& MapLightPanel::ensure_light() {
     L["orbit_y"] = orbit_y;
     L["orbit_radius"] = std::max(orbit_x, orbit_y);
 
-    if (!L.contains("base_color") || !L["base_color"].is_array() || L["base_color"].size() < 4) {
-        L["base_color"] = {255,255,255,255};
+    utils::color::RangedColor base_range{{255,255},{255,255},{255,255},{255,255}};
+    if (auto parsed = utils::color::ranged_color_from_json(L.value("base_color", nlohmann::json{}))) {
+        base_range = *parsed;
     }
+    L["base_color"] = utils::color::ranged_color_to_json(base_range);
 
     if (!L.contains("keys") || !L["keys"].is_array()) {
 
         L["keys"] = json::array();
         L["keys"].push_back(json::array({ 0.0, L["base_color"] }));
+    } else {
+        auto& keys = L["keys"];
+        for (auto& entry : keys) {
+            if (entry.is_array() && entry.size() >= 2) {
+                if (auto parsed = utils::color::ranged_color_from_json(entry[1])) {
+                    entry[1] = utils::color::ranged_color_to_json(*parsed);
+                }
+            }
+        }
     }
     return L;
 }
@@ -488,49 +491,40 @@ void MapLightPanel::sync_ui_from_json() {
     set_orbit_sliders(orbit);
     last_applied_orbit_ = orbit;
 
-    auto bc = L["base_color"];
-    int br = 255, bg = 255, bb = 255, ba = 255;
-    try {
-        if (bc.is_array() && bc.size() >= 4) {
-            br = clamp_int(bc[0].get<int>(), 0, 255);
-            bg = clamp_int(bc[1].get<int>(), 0, 255);
-            bb = clamp_int(bc[2].get<int>(), 0, 255);
-            ba = clamp_int(bc[3].get<int>(), 0, 255);
-        }
-    } catch(...) {}
-    base_r_->set_value(br);
-    base_g_->set_value(bg);
-    base_b_->set_value(bb);
-    base_a_->set_value(ba);
+    utils::color::RangedColor base_range{
+        {255, 255}, {255, 255}, {255, 255}, {255, 255}
+    };
+    if (auto parsed = utils::color::ranged_color_from_json(L.value("base_color", nlohmann::json{}))) {
+        base_range = *parsed;
+    }
+    if (base_color_widget_) {
+        base_color_widget_->set_value(base_range);
+    }
 
     ensure_keys_array();
     clamp_key_index();
 
     const auto& keys = L["keys"];
-    if (!keys.empty() && keys[current_key_index_].is_array() && keys[current_key_index_].size() >= 2) {
-        float ang = 0.0f;
-        int r=255,g=255,b=255,a=255;
-        try {
-            ang = (float)keys[current_key_index_][0].get<double>();
-            auto kc = keys[current_key_index_][1];
-            if (kc.is_array() && kc.size() >= 4) {
-                r = clamp_int(kc[0].get<int>(), 0, 255);
-                g = clamp_int(kc[1].get<int>(), 0, 255);
-                b = clamp_int(kc[2].get<int>(), 0, 255);
-                a = clamp_int(kc[3].get<int>(), 0, 255);
+    utils::color::RangedColor key_range = base_range;
+    int key_angle_value = 0;
+    if (!keys.empty() && current_key_index_ >= 0 && current_key_index_ < (int)keys.size()) {
+        const auto& entry = keys[current_key_index_];
+        if (entry.is_array() && entry.size() >= 2) {
+            try {
+                key_angle_value = (int)std::round(wrap_angle(static_cast<float>(entry[0].get<double>())));
+            } catch (...) {
+                key_angle_value = 0;
             }
-        } catch(...) {}
-        key_angle_->set_value((int)std::round(wrap_angle(ang)));
-        key_r_->set_value(r);
-        key_g_->set_value(g);
-        key_b_->set_value(b);
-        key_a_->set_value(a);
-    } else {
-        key_angle_->set_value(0);
-        key_r_->set_value(br);
-        key_g_->set_value(bg);
-        key_b_->set_value(bb);
-        key_a_->set_value(ba);
+            if (auto parsed = utils::color::ranged_color_from_json(entry[1])) {
+                key_range = *parsed;
+            }
+        }
+    }
+    key_angle_->set_value(key_angle_value);
+    if (key_color_widget_) {
+        key_color_widget_->set_value(key_range);
+        std::string label = current_key_label_.empty() ? std::string("Key Color") : current_key_label_ + " Color";
+        key_color_widget_->set_label(label);
     }
 
     needs_sync_to_json_ = false;
@@ -549,12 +543,9 @@ void MapLightPanel::sync_json_from_ui() {
     L["mult"]           = static_cast<double>(slider_value(mult_x100_, 0)) / 100.0;
     L["fall_off"]       = slider_value(falloff_, 100);
 
-    L["base_color"]     = json::array({
-        slider_value(base_r_, 255),
-        slider_value(base_g_, 255),
-        slider_value(base_b_, 255),
-        slider_value(base_a_, 255)
-    });
+    if (base_color_widget_) {
+        L["base_color"] = utils::color::ranged_color_to_json(base_color_widget_->value());
+    }
 
     OrbitSettings orbit = sanitize_orbit_settings(current_orbit_settings_from_ui());
     write_orbit_settings_to_json(orbit);
@@ -567,11 +558,16 @@ void MapLightPanel::sync_json_from_ui() {
     auto& keys = L["keys"];
     if (!keys.empty() && current_key_index_ >= 0 && current_key_index_ < (int)keys.size()) {
         const int ang = clamp_int(key_angle_->value(), 0, 360);
-        const int r   = clamp_int(key_r_->value(),   0, 255);
-        const int g   = clamp_int(key_g_->value(),   0, 255);
-        const int b   = clamp_int(key_b_->value(),   0, 255);
-        const int a   = clamp_int(key_a_->value(),   0, 255);
-        keys[current_key_index_] = json::array({ (double)ang, json::array({ r, g, b, a }) });
+        json color_json = keys[current_key_index_];
+        if (color_json.is_array() && color_json.size() >= 2) {
+            color_json = color_json[1];
+        } else {
+            color_json = utils::color::ranged_color_to_json(utils::color::RangedColor{{255,255},{255,255},{255,255},{255,255}});
+        }
+        if (key_color_widget_) {
+            color_json = utils::color::ranged_color_to_json(key_color_widget_->value());
+        }
+        keys[current_key_index_] = json::array({ static_cast<double>(ang), color_json });
     }
 
     needs_sync_to_json_ = false;
@@ -699,15 +695,16 @@ void MapLightPanel::add_key_pair_at_current_angle() {
     json& L = ensure_light();
 
     const int ang = clamp_int(key_angle_->value(), 0, 360);
-    const int r   = clamp_int(key_r_->value(), 0, 255);
-    const int g   = clamp_int(key_g_->value(), 0, 255);
-    const int b   = clamp_int(key_b_->value(), 0, 255);
-    const int a   = clamp_int(key_a_->value(), 0, 255);
+    utils::color::RangedColor color = key_color_widget_
+        ? key_color_widget_->value()
+        : (base_color_widget_ ? base_color_widget_->value()
+                               : utils::color::RangedColor{{255,255},{255,255},{255,255},{255,255}});
 
     const int ang2 = (ang + 180) % 360;
 
-    auto key1 = json::array({ (double)ang,  json::array({ r,g,b,a }) });
-    auto key2 = json::array({ (double)ang2, json::array({ r,g,b,a }) });
+    auto color_json = utils::color::ranged_color_to_json(color);
+    auto key1 = json::array({ static_cast<double>(ang),  color_json });
+    auto key2 = json::array({ static_cast<double>(ang2), color_json });
 
     auto& keys = L["keys"];
     keys.push_back(key1);
@@ -757,10 +754,24 @@ void MapLightPanel::update(const Input& input, int screen_w, int screen_h) {
 bool MapLightPanel::handle_event(const SDL_Event& e) {
     if (!visible_) return false;
 
-    bool used = DockableCollapsible::handle_event(e);
+    bool overlay_used = false;
+    bool used = false;
+    if (base_color_widget_ && base_color_widget_->handle_overlay_event(e)) {
+        overlay_used = true;
+        used = true;
+    }
+    if (!overlay_used && key_color_widget_ && key_color_widget_->handle_overlay_event(e)) {
+        overlay_used = true;
+        used = true;
+    }
+    if (!overlay_used) {
+        used = DockableCollapsible::handle_event(e);
+    }
 
     if (used) {
-        needs_sync_to_json_ = true;
+        if (!overlay_used) {
+            needs_sync_to_json_ = true;
+        }
         if (update_map_light_checkbox_) {
             bool current = update_map_light_checkbox_->value();
             if (current != update_map_light_enabled_) {
@@ -780,6 +791,12 @@ bool MapLightPanel::handle_event(const SDL_Event& e) {
 void MapLightPanel::render(SDL_Renderer* r) const {
     if (!visible_) return;
     DockableCollapsible::render(r);
+    if (base_color_widget_) {
+        base_color_widget_->render_overlay(r);
+    }
+    if (key_color_widget_) {
+        key_color_widget_->render_overlay(r);
+    }
 }
 
 bool MapLightPanel::is_point_inside(int x, int y) const {
@@ -817,21 +834,13 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
     const auto& keys = *keys_it;
     if (keys.empty()) return;
 
-    int r_out=255,g_out=255,b_out=255,a_out=255;
-    double ang = 0.0;
+    SDL_Color fill_color = utils::color::resolve_ranged_color(L.value("base_color", nlohmann::json{}), SDL_Color{255,255,255,255});
     try {
         const auto& K = keys.at(std::min<int>(current_key_index_, (int)keys.size()-1));
         if (K.is_array() && K.size() >= 2) {
-            ang = K[0].get<double>();
-            const auto& kc = K[1];
-            if (kc.is_array() && kc.size() >= 4) {
-                r_out = clamp_int(kc[0].get<int>(), 0, 255);
-                g_out = clamp_int(kc[1].get<int>(), 0, 255);
-                b_out = clamp_int(kc[2].get<int>(), 0, 255);
-                a_out = clamp_int(kc[3].get<int>(), 0, 255);
-            }
+            fill_color = utils::color::resolve_ranged_color(K[1], fill_color);
         }
-    } catch(...) {}
+    } catch (...) {}
 
     SDL_Rect swatch = body_viewport_;
     swatch.y += std::max(0, swatch.h - 24);
@@ -839,7 +848,6 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
     swatch.w = std::min(120, swatch.w);
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    const SDL_Color fill_color{static_cast<Uint8>(r_out), static_cast<Uint8>(g_out), static_cast<Uint8>(b_out), static_cast<Uint8>(a_out)};
     const int radius = std::min(DMStyles::CornerRadius(), std::min(swatch.w, swatch.h) / 2);
     const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(swatch.w, swatch.h) / 2));
     dm_draw::DrawBeveledRect(

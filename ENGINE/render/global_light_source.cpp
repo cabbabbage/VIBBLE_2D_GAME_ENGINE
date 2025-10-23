@@ -7,6 +7,8 @@
 #include <random>
 #include <optional>
 #include <SDL.h>
+
+#include "utils/ranged_color.hpp"
 using json = nlohmann::json;
 
 Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
@@ -45,10 +47,22 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         orbit_radius_x_  = std::max(1, screen_width / 4);
         orbit_radius_y_  = orbit_radius_x_;
         update_interval_ = 2;
+        base_color_range_ = utils::color::RangedColor{
+            {fallback_base_color.r, fallback_base_color.r},
+            {fallback_base_color.g, fallback_base_color.g},
+            {fallback_base_color.b, fallback_base_color.b},
+            {fallback_base_color.a, fallback_base_color.a}
+        };
         base_color_      = clamp_color_alpha(fallback_base_color);
         current_color_   = base_color_;
         key_colors_.clear();
-        key_colors_.push_back({0.0f, base_color_});
+        key_colors_.push_back({0.0f, base_color_range_, base_color_, false});
+        resolve_each_orbit_ = false;
+        base_pending_resolve_ = false;
+        last_degree_ = 0.0f;
+        active_segment_start_ = 0;
+        active_segment_end_ = 0;
+        orbit_initialized_ = false;
         center_ = default_center_;
         default_map_center_ = default_center_;
         map_reference_center_ = default_map_center_;
@@ -109,44 +123,53 @@ void Global_Light_Source::apply_config(const json& data) {
         mult_          = std::clamp(data.value("mult", mult_), 0.0f, 1.0f);
         fall_off_      = data.value("fall_off", fall_off_);
 
-        const auto bc_it = data.find("base_color");
-        if (bc_it != data.end() && bc_it->is_array() && bc_it->size() >= 3) {
-                base_color_.r = static_cast<Uint8>(std::clamp((*bc_it)[0].get<int>(), 0, 255));
-                base_color_.g = static_cast<Uint8>(std::clamp((*bc_it)[1].get<int>(), 0, 255));
-                base_color_.b = static_cast<Uint8>(std::clamp((*bc_it)[2].get<int>(), 0, 255));
-                if (bc_it->size() >= 4) {
-                        base_color_.a = static_cast<Uint8>(std::clamp((*bc_it)[3].get<int>(), 0, 255));
-                } else {
-                        base_color_.a = 255;
-                }
+        if (auto parsed = utils::color::ranged_color_from_json(data.value("base_color", nlohmann::json{}))) {
+                base_color_range_ = *parsed;
         }
-        base_color_ = clamp_color_alpha(base_color_);
+        base_color_ = clamp_color_alpha(utils::color::resolve_ranged_color(base_color_range_));
 
         key_colors_.clear();
         const auto keys_it = data.find("keys");
         if (keys_it != data.end() && keys_it->is_array()) {
                 for (const auto& entry : *keys_it) {
-                        if (!entry.is_array() || entry.size() != 2) continue;
+                        if (!entry.is_array() || entry.size() < 2) continue;
                         float deg = 0.0f;
                         try {
                                 deg = static_cast<float>(entry[0].get<double>());
                         } catch (...) {
                                 continue;
                         }
-                        const auto& col = entry[1];
-                        if (!col.is_array() || col.size() < 4) continue;
-                        SDL_Color c{
-                                static_cast<Uint8>(std::clamp(col[0].get<int>(), 0, 255)), static_cast<Uint8>(std::clamp(col[1].get<int>(), 0, 255)), static_cast<Uint8>(std::clamp(col[2].get<int>(), 0, 255)), static_cast<Uint8>(std::clamp(col[3].get<int>(), 0, 255)) };
-                        key_colors_.push_back({deg, clamp_color_alpha(c)});
+                        utils::color::RangedColor range = base_color_range_;
+                        if (auto parsed = utils::color::ranged_color_from_json(entry[1])) {
+                                range = *parsed;
+                        }
+                        KeyEntry key{};
+                        key.degree = deg;
+                        key.range = range;
+                        resolve_key_entry(key);
+                        key_colors_.push_back(key);
                 }
         }
         if (key_colors_.empty()) {
-                key_colors_.push_back({0.0f, base_color_});
+                KeyEntry key{};
+                key.degree = 0.0f;
+                key.range = base_color_range_;
+                resolve_key_entry(key);
+                key_colors_.push_back(key);
         } else {
                 std::sort(key_colors_.begin(), key_colors_.end(), [](const KeyEntry& a, const KeyEntry& b) {
                         return a.degree < b.degree;
                 });
         }
+        resolve_each_orbit_ = key_colors_.size() > 2;
+        base_pending_resolve_ = false;
+        for (auto& key : key_colors_) {
+                key.needs_resolve = false;
+        }
+        last_degree_ = 0.0f;
+        active_segment_start_ = 0;
+        active_segment_end_ = key_colors_.size() > 1 ? 1 : 0;
+        orbit_initialized_ = false;
 
         center_ = default_center_;
         map_reference_center_ = default_map_center_;
@@ -198,6 +221,34 @@ void Global_Light_Source::apply_config(const json& data) {
         frame_counter_ = 0;
 }
 
+void Global_Light_Source::resolve_key_entry(KeyEntry& entry) {
+        entry.color = clamp_color_alpha(utils::color::resolve_ranged_color(entry.range));
+        entry.needs_resolve = false;
+}
+
+void Global_Light_Source::update_active_segment(float degree) {
+        if (key_colors_.empty()) {
+                active_segment_start_ = 0;
+                active_segment_end_ = 0;
+                return;
+        }
+        if (key_colors_.size() == 1) {
+                active_segment_start_ = active_segment_end_ = 0;
+                return;
+        }
+        for (size_t i = 0; i + 1 < key_colors_.size(); ++i) {
+                const auto& K0 = key_colors_[i];
+                const auto& K1 = key_colors_[i + 1];
+                if (degree >= K0.degree && degree <= K1.degree) {
+                        active_segment_start_ = i;
+                        active_segment_end_ = i + 1;
+                        return;
+                }
+        }
+        active_segment_start_ = key_colors_.size() - 1;
+        active_segment_end_ = 0;
+}
+
 void Global_Light_Source::update() {
 	if (++frame_counter_ % update_interval_ != 0) {
 		return;
@@ -214,9 +265,41 @@ void Global_Light_Source::update() {
 
 	recalc_position();
 
-	SDL_Color k = compute_color_from_horizon();
-	current_color_ = k;
-	set_light_brightness();
+        float deg = std::fmod(angle_ * (180.0f/float(M_PI)) + 270.0f, 360.0f);
+        if (deg < 0) deg += 360.0f;
+
+        if (resolve_each_orbit_) {
+                if (orbit_initialized_ && deg > last_degree_ + 180.0f) {
+                        base_pending_resolve_ = true;
+                        for (auto& key : key_colors_) {
+                                key.needs_resolve = true;
+                        }
+                }
+                last_degree_ = deg;
+        }
+
+        update_active_segment(deg);
+
+        if (resolve_each_orbit_) {
+                if (base_pending_resolve_) {
+                        base_color_ = clamp_color_alpha(utils::color::resolve_ranged_color(base_color_range_));
+                        base_pending_resolve_ = false;
+                }
+                for (size_t i = 0; i < key_colors_.size(); ++i) {
+                        if (!key_colors_[i].needs_resolve) {
+                                continue;
+                        }
+                        if (i == active_segment_start_ || i == active_segment_end_) {
+                                continue;
+                        }
+                        resolve_key_entry(key_colors_[i]);
+                }
+        }
+        orbit_initialized_ = true;
+
+        SDL_Color k = compute_color_from_horizon(deg);
+        current_color_ = k;
+        set_light_brightness();
 }
 
 SDL_Point Global_Light_Source::get_position() const {
@@ -247,22 +330,20 @@ SDL_Point Global_Light_Source::get_direction_target() const {
         return SDL_Point{ map_reference_center_.x + offset_x, map_reference_center_.y + offset_y };
 }
 
-SDL_Color Global_Light_Source::compute_color_from_horizon() const {
-        float deg = std::fmod(angle_ * (180.0f/float(M_PI)) + 270.0f, 360.0f);
-        if (deg < 0) deg += 360.0f;
-
-	auto lerp = [](Uint8 A, Uint8 B, float t){
-		return Uint8(A + (B - A) * t);
+SDL_Color Global_Light_Source::compute_color_from_horizon(float degree) const {
+        auto lerp = [](Uint8 A, Uint8 B, float t){
+                return Uint8(A + (B - A) * t);
 };
 
-	if (key_colors_.size() < 2) {
-		return key_colors_.empty() ? base_color_ : key_colors_.front().color;
-	}
+        if (key_colors_.size() < 2) {
+                return key_colors_.empty() ? base_color_ : key_colors_.front().color;
+        }
 
-	for (size_t i = 0; i + 1 < key_colors_.size(); ++i) {
-		auto &K0 = key_colors_[i], &K1 = key_colors_[i+1];
-		if (deg >= K0.degree && deg <= K1.degree) {
-			float t = (deg - K0.degree) / (K1.degree - K0.degree);
+        for (size_t i = 0; i + 1 < key_colors_.size(); ++i) {
+                auto &K0 = key_colors_[i], &K1 = key_colors_[i+1];
+                if (degree >= K0.degree && degree <= K1.degree) {
+                        float span = K1.degree - K0.degree;
+                        float t = span <= 0.0f ? 0.0f : (degree - K0.degree) / span;
                         return clamp_color_alpha({
                                 lerp(K0.color.r, K1.color.r, t),
                                 lerp(K0.color.g, K1.color.g, t),
@@ -274,7 +355,7 @@ SDL_Color Global_Light_Source::compute_color_from_horizon() const {
 
         auto &KL = key_colors_.back(), &KF = key_colors_.front();
         float span = 360.0f - KL.degree + KF.degree;
-        float t = (deg < KF.degree) ? (deg + 360.0f - KL.degree) / span : (deg - KL.degree) / span;
+        float t = (degree < KF.degree) ? (degree + 360.0f - KL.degree) / span : (degree - KL.degree) / span;
 
         return clamp_color_alpha({
                 lerp(KL.color.r, KF.color.r, t),

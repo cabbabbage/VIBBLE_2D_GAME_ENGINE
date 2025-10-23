@@ -14,6 +14,7 @@
 
 struct OrbitSettings;
 struct ScreenLightSettings;
+class DMColorRangeWidget;
 
 class MapLightPanel : public DockableCollapsible {
 public:
@@ -111,10 +112,7 @@ private:
     std::unique_ptr<DMSlider> mult_x100_;
     std::unique_ptr<DMSlider> falloff_;
 
-    std::unique_ptr<DMSlider> base_r_;
-    std::unique_ptr<DMSlider> base_g_;
-    std::unique_ptr<DMSlider> base_b_;
-    std::unique_ptr<DMSlider> base_a_;
+    class DMColorRangeWidget* base_color_widget_ = nullptr;
 
     std::unique_ptr<DMButton> prev_key_btn_;
     std::unique_ptr<DMButton> next_key_btn_;
@@ -122,10 +120,7 @@ private:
     std::unique_ptr<DMButton> delete_btn_;
 
     std::unique_ptr<DMSlider> key_angle_;
-    std::unique_ptr<DMSlider> key_r_;
-    std::unique_ptr<DMSlider> key_g_;
-    std::unique_ptr<DMSlider> key_b_;
-    std::unique_ptr<DMSlider> key_a_;
+    class DMColorRangeWidget* key_color_widget_ = nullptr;
 
     mutable std::string current_key_label_;
     mutable std::string persistence_warning_text_;

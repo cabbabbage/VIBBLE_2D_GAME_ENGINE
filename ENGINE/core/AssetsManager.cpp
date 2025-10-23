@@ -1,4 +1,6 @@
 #include "AssetsManager.hpp"
+
+#include "utils/ranged_color.hpp"
 #include "asset/initialize_assets.hpp"
 
 #include "find_current_room.hpp"
@@ -274,13 +276,25 @@ void Assets::hydrate_map_info_sections() {
         if (!D.contains("update_interval")) D["update_interval"] = 10;
         if (!D.contains("mult"))            D["mult"] = 0.0;
         if (!D.contains("fall_off"))        D["fall_off"] = 100;
-        if (!D.contains("base_color") || !D["base_color"].is_array() || D["base_color"].size() < 4) {
-            D["base_color"] = nlohmann::json::array({255, 255, 255, 255});
+        utils::color::RangedColor base_range{{255,255},{255,255},{255,255},{255,255}};
+        if (auto parsed = utils::color::ranged_color_from_json(D.value("base_color", nlohmann::json{}))) {
+            base_range = *parsed;
         }
+        D["base_color"] = utils::color::ranged_color_to_json(base_range);
+
         if (!D.contains("keys") || !D["keys"].is_array() || D["keys"].empty()) {
 
             D["keys"] = nlohmann::json::array();
             D["keys"].push_back(nlohmann::json::array({ 0.0, D["base_color"] }));
+        } else {
+            auto& keys = D["keys"];
+            for (auto& entry : keys) {
+                if (entry.is_array() && entry.size() >= 2) {
+                    if (auto parsed = utils::color::ranged_color_from_json(entry[1])) {
+                        entry[1] = utils::color::ranged_color_to_json(*parsed);
+                    }
+                }
+            }
         }
         D.erase("min_opacity");
         D.erase("max_opacity");

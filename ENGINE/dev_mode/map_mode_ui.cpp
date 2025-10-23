@@ -141,16 +141,16 @@ void MapModeUI::set_dev_sliding_headers_hidden(bool hidden) {
 
 void MapModeUI::refresh_header_suppression_state() {
     const bool final_state = base_headers_suppressed_ || sliding_headers_hidden_external_ || dev_sliding_headers_hidden_;
-    const bool state_changed = (headers_suppressed_ != final_state);
+    const bool suppression_from_sliding_only = !base_headers_suppressed_ &&
+                                               (sliding_headers_hidden_external_ || dev_sliding_headers_hidden_);
+    const bool state_changed = (headers_suppressed_ != final_state) ||
+                               (sliding_only_header_suppression_ != suppression_from_sliding_only);
     headers_suppressed_ = final_state;
-
-    const bool suppression_from_sliding_only = sliding_headers_hidden_external_ &&
-                                               !base_headers_suppressed_ &&
-                                               !dev_sliding_headers_hidden_;
+    sliding_only_header_suppression_ = suppression_from_sliding_only;
 
     if (state_changed) {
         ensure_panels();
-        if (headers_suppressed_ && !suppression_from_sliding_only) {
+        if (headers_suppressed_ && !sliding_only_header_suppression_) {
             if (layers_panel_) {
                 layers_panel_->close();
             }
@@ -652,7 +652,8 @@ void MapModeUI::sync_footer_button_states() {
 void MapModeUI::update_footer_visibility() {
     if (!footer_bar_) return;
     footer_bar_->set_bounds(screen_w_, screen_h_);
-    const bool should_show = !headers_suppressed_ && (footer_always_visible_ || map_mode_active_);
+    const bool headers_allow_footer = !headers_suppressed_ || sliding_only_header_suppression_;
+    const bool should_show = headers_allow_footer && (footer_always_visible_ || map_mode_active_);
     footer_bar_->set_visible(should_show);
 }
 
@@ -855,7 +856,7 @@ bool MapModeUI::handle_event(const SDL_Event& e) {
     }
 
     bool footer_used = false;
-    const bool allow_footer = !headers_suppressed_;
+    const bool allow_footer = !headers_suppressed_ || sliding_only_header_suppression_;
     if (allow_footer && footer_bar_ && footer_bar_->visible()) {
         footer_used = footer_bar_->handle_event(e);
     }
@@ -1448,7 +1449,7 @@ bool MapModeUI::is_point_inside(int x, int y) const {
     if (pointer_inside_floating_panel(x, y)) {
         return true;
     }
-    if (headers_suppressed_) {
+    if (headers_suppressed_ && !sliding_only_header_suppression_) {
         return false;
     }
     if (footer_bar_ && footer_bar_->visible() && footer_bar_->contains(x, y)) {
