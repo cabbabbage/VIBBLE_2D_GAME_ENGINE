@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <sstream>
+#include <unordered_set>
 #include <utility>
 
 #include <nlohmann/json.hpp>
@@ -119,6 +121,27 @@ void MapLayersPreviewWidget::set_on_show_room_list(ShowRoomListCallback cb) {
 
 void MapLayersPreviewWidget::set_on_change(std::function<void()> cb) {
     on_change_ = std::move(cb);
+}
+
+void MapLayersPreviewWidget::set_selected_layer(int index) {
+    if (selected_layer_index_ == index) {
+        return;
+    }
+    selected_layer_index_ = index;
+    mark_dirty();
+}
+
+void MapLayersPreviewWidget::set_layer_diagnostics(const std::vector<int>& invalid_layers,
+                                                   const std::vector<int>& warning_layers,
+                                                   const std::vector<int>& dependency_layers) {
+    auto to_set = [](const std::vector<int>& values, std::unordered_set<int>& target) {
+        target.clear();
+        target.insert(values.begin(), values.end());
+    };
+    to_set(invalid_layers, invalid_layers_);
+    to_set(warning_layers, warning_layers_);
+    to_set(dependency_layers, dependency_layers_);
+    mark_dirty();
 }
 
 void MapLayersPreviewWidget::set_rect(const SDL_Rect& r) {
@@ -238,10 +261,17 @@ void MapLayersPreviewWidget::rebuild_visuals() {
             visual.radius = radii.layer_radii[i];
         }
         visual.color = layer_color(visual.index);
+        visual.min_rooms = layer_json.value("min_rooms", 0);
+        visual.max_rooms = layer_json.value("max_rooms", 0);
+        visual.invalid = invalid_layers_.find(visual.index) != invalid_layers_.end();
+        visual.warning = warning_layers_.find(visual.index) != warning_layers_.end();
+        visual.dependency = dependency_layers_.find(visual.index) != dependency_layers_.end();
+        visual.selected = (visual.index == selected_layer_index_);
 
         const auto rooms_it = layer_json.find("rooms");
         if (rooms_it != layer_json.end() && rooms_it->is_array()) {
             const auto& rooms_array = *rooms_it;
+            visual.room_count = static_cast<int>(rooms_array.size());
             const size_t room_count = rooms_array.size();
             const double angle_step = room_count > 0 ? kTau / static_cast<double>(room_count) : 0.0;
             size_t room_idx = 0;
@@ -262,6 +292,7 @@ void MapLayersPreviewWidget::rebuild_visuals() {
                 ++room_idx;
             }
         }
+        visual.room_count = static_cast<int>(visual.rooms.size());
         layer_visuals_.push_back(std::move(visual));
     }
     recalculate_preview_scale();
@@ -472,18 +503,54 @@ void MapLayersPreviewWidget::render_preview(SDL_Renderer* renderer) const {
     const std::string hovered_room = hovered_room_key_;
     const_cast<MapLayersPreviewWidget*>(this)->preview_scale_ = compute_preview_scale();
 
+    const SDL_Color invalid_color{214, 63, 87, 255};
+    const SDL_Color warning_color{234, 179, 8, 255};
+    const SDL_Color dependency_color{125, 200, 255, 255};
+    const SDL_Color selection_outline = DMStyles::AccentButton().border;
+
+    const DMLabelStyle base_label = DMStyles::Label();
+    const int label_line_height = base_label.font_size + DMSpacing::small_gap();
+
     for (const auto& layer : layer_visuals_) {
         SDL_Color color = layer.color;
-        int thickness = 3;
+        if (layer.invalid) {
+            color = invalid_color;
+        } else if (layer.warning) {
+            color = warning_color;
+        } else if (layer.dependency) {
+            color = lighten(color, 0.2f);
+        }
+        int thickness = layer.selected ? 6 : 3;
         if (hovered_layer == layer.index && hovered_room.empty()) {
             color = lighten(color, 0.25f);
-            thickness = std::max(thickness, 5);
+            thickness = std::max(thickness, layer.selected ? 7 : 5);
         }
         const int radius_pixels = std::max(8, static_cast<int>(std::lround(layer.radius * preview_scale_)));
         draw_circle(renderer, center.x, center.y, radius_pixels, color, thickness);
+        if (layer.selected) {
+            draw_circle(renderer, center.x, center.y, radius_pixels + 4, selection_outline, 1);
+        }
+
         std::ostringstream oss;
         oss << layer.name;
-        draw_text(renderer, oss.str(), center.x - radius_pixels + 8, rect.y + 8, DMStyles::Label());
+        oss << " • " << layer.room_count << (layer.room_count == 1 ? " room" : " rooms");
+        oss << " • " << layer.min_rooms << "-" << layer.max_rooms << " total";
+        if (layer.invalid) {
+            oss << " • fix issues";
+        } else if (layer.warning) {
+            oss << " • review";
+        }
+        DMLabelStyle label_style = base_label;
+        if (layer.invalid) {
+            label_style.color = invalid_color;
+        } else if (layer.warning) {
+            label_style.color = warning_color;
+        } else if (layer.selected) {
+            label_style.color = lighten(label_style.color, 0.1f);
+        }
+        int text_x = rect.x + DMSpacing::small_gap();
+        int text_y = rect.y + DMSpacing::small_gap() + layer.index * label_line_height;
+        draw_text(renderer, oss.str(), text_x, text_y, label_style);
     }
 
     const SDL_Color hover_fill = DMStyles::AccentButton().hover_bg;
@@ -494,6 +561,15 @@ void MapLayersPreviewWidget::render_preview(SDL_Renderer* renderer) const {
             const double extent_pixels = std::max(8.0, room.extent * preview_scale_ * 0.75);
             const int radius_pixels = static_cast<int>(std::round(extent_pixels));
             SDL_Color outline = darken(layer.color, 0.15f);
+            if (layer.invalid) {
+                outline = invalid_color;
+            } else if (layer.warning) {
+                outline = warning_color;
+            } else if (layer.dependency) {
+                outline = dependency_color;
+            } else if (layer.selected) {
+                outline = lighten(outline, 0.15f);
+            }
             SDL_Color fill_color{0, 0, 0, 0};
             bool filled = false;
             if (!hovered_room.empty() && hovered_room == room.key) {
@@ -509,6 +585,11 @@ void MapLayersPreviewWidget::render_preview(SDL_Renderer* renderer) const {
         }
     }
 
+    std::ostringstream radius_stream;
+    radius_stream << "Map radius ≈ " << std::fixed << std::setprecision(0) << max_visual_radius_;
+    draw_text(renderer, radius_stream.str(), rect.x + 12,
+              rect.y + rect.h - (base_label.font_size + DMSpacing::small_gap() * 3), base_label);
+
     if (!hovered_room.empty()) {
         std::string label = display_name_for_room(hovered_room);
         if (label.empty()) {
@@ -520,7 +601,11 @@ void MapLayersPreviewWidget::render_preview(SDL_Renderer* renderer) const {
             return v.index == hovered_layer;
         });
         if (it != layer_visuals_.end()) {
-            draw_text(renderer, it->name, rect.x + 12, rect.y + rect.h - (DMStyles::Label().font_size + 12), DMStyles::Label());
+            std::ostringstream oss;
+            oss << it->name << " • " << it->room_count << (it->room_count == 1 ? " room" : " rooms");
+            oss << " • " << it->min_rooms << "-" << it->max_rooms << " total";
+            draw_text(renderer, oss.str(), rect.x + 12,
+                      rect.y + rect.h - (DMStyles::Label().font_size + 12), DMStyles::Label());
         }
     }
 }

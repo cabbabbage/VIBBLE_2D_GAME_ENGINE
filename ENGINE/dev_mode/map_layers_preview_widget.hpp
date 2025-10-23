@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <SDL.h>
@@ -28,6 +29,10 @@ public:
     void set_on_select_room(SelectRoomCallback cb);
     void set_on_show_room_list(ShowRoomListCallback cb);
     void set_on_change(std::function<void()> cb);
+    void set_selected_layer(int index);
+    void set_layer_diagnostics(const std::vector<int>& invalid_layers,
+                               const std::vector<int>& warning_layers,
+                               const std::vector<int>& dependency_layers);
 
     void set_rect(const SDL_Rect& r) override;
     const SDL_Rect& rect() const override { return rect_; }
@@ -55,6 +60,13 @@ private:
         std::string name;
         double radius = 0.0;
         SDL_Color color{255, 255, 255, 255};
+        int min_rooms = 0;
+        int max_rooms = 0;
+        int room_count = 0;
+        bool invalid = false;
+        bool warning = false;
+        bool dependency = false;
+        bool selected = false;
         std::vector<RoomVisual> rooms;
     };
 
@@ -95,6 +107,10 @@ private:
 
     int hovered_layer_index_ = -1;
     std::string hovered_room_key_;
+    int selected_layer_index_ = -1;
+    std::unordered_set<int> invalid_layers_;
+    std::unordered_set<int> warning_layers_;
+    std::unordered_set<int> dependency_layers_;
 
     SelectLayerCallback on_select_layer_{};
     SelectRoomCallback on_select_room_{};

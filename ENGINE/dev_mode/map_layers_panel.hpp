@@ -69,17 +69,29 @@ public:
 
 private:
     class LayersListWidget;
+    class ValidationSummaryWidget;
+
+    friend class LayersListWidget;
+    friend class ValidationSummaryWidget;
 
     struct LayerRow {
         int index = -1;
         std::string name;
         SDL_Rect rect{0, 0, 0, 0};
+        std::string summary;
+        bool invalid = false;
+        bool warning = false;
+        bool dependency_highlight = false;
     };
 
     void rebuild_layers();
     void update_layer_row_geometry();
     int list_height_for_width(int w) const;
     void render_layers_list(SDL_Renderer* renderer) const;
+    int validation_summary_height(int w) const;
+    void render_validation_summary(SDL_Renderer* renderer, const SDL_Rect& rect) const;
+    void update_validation_summary_layout(const std::vector<std::string>& errors,
+                                          const std::vector<std::string>& warnings);
     void commit_layer_name_edit();
     void trigger_save();
     void ensure_listener();
@@ -88,6 +100,20 @@ private:
     void notify_side_panel(SidePanel panel) const;
     void set_hovered_layer(int index);
     void clear_hover();
+
+    void on_layers_list_mouse_down(int index, int mouse_y);
+    void on_layers_list_mouse_motion(int mouse_y, Uint32 buttons);
+    void on_layers_list_mouse_up(int mouse_y, Uint8 button);
+    bool is_dragging_layer() const { return dragging_layer_active_; }
+    void cancel_drag();
+    int drop_slot_for_position(int y) const;
+    int find_visual_position(int layer_index) const;
+    void apply_dependency_highlights();
+    bool validate_layers();
+    void perform_save();
+    void update_preview_state();
+    void recalculate_dependency_highlights();
+    void rebuild_layer_rows_from_json(const nlohmann::json& layers);
 
     const nlohmann::json& layers_array() const;
     nlohmann::json& layers_array();
@@ -112,6 +138,7 @@ private:
     SDL_Rect embedded_bounds_{0, 0, 0, 0};
 
     std::unique_ptr<DMButton> add_layer_button_;
+    std::unique_ptr<DMButton> duplicate_layer_button_;
     std::unique_ptr<DMButton> delete_layer_button_;
     std::unique_ptr<DMButton> reload_button_;
     std::unique_ptr<DMTextBox> layer_name_box_;
@@ -119,6 +146,7 @@ private:
     std::vector<std::unique_ptr<Widget>> owned_widgets_;
     LayersListWidget* list_widget_ = nullptr;
     MapLayersPreviewWidget* preview_widget_ = nullptr;
+    ValidationSummaryWidget* validation_widget_ = nullptr;
     DMTextBox* layer_name_box_raw_ = nullptr;
 
     std::vector<LayerRow> layer_rows_;
@@ -128,5 +156,31 @@ private:
     std::string current_layer_name_;
 
     bool data_dirty_ = true;
+    bool validation_dirty_ = true;
+    bool pending_save_ = false;
+    bool save_blocked_ = false;
+
+    struct ValidationLine {
+        std::string text;
+        SDL_Color color{255, 255, 255, 255};
+    };
+    std::vector<ValidationLine> validation_lines_;
+    bool validation_has_errors_ = false;
+    bool validation_has_warnings_ = false;
+    double estimated_map_radius_ = 0.0;
+    std::string root_room_summary_;
+
+    std::vector<int> invalid_layers_;
+    std::vector<int> warning_layers_;
+    std::vector<std::vector<int>> layer_dependency_children_;
+    std::vector<std::vector<int>> layer_dependency_parents_;
+    std::vector<int> dependency_highlight_layers_;
+
+    bool dragging_layer_active_ = false;
+    bool drag_moved_ = false;
+    int dragging_layer_index_ = -1;
+    int dragging_start_slot_ = -1;
+    int drop_target_slot_ = -1;
+    int drag_start_mouse_y_ = 0;
 };
 

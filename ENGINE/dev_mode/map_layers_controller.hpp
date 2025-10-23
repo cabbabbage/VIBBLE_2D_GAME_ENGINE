@@ -40,6 +40,7 @@ public:
     int create_layer(const std::string& display_name = {});
     bool delete_layer(int index);
     bool reorder_layer(int from, int to);
+    int duplicate_layer(int index);
 
     bool rename_layer(int index, const std::string& name);
 

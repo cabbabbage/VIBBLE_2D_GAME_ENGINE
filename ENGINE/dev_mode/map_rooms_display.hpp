@@ -58,7 +58,7 @@ private:
     std::vector<RoomRow> rooms_;
     std::string hovered_room_;
     SelectRoomCallback on_select_room_{};
-    std::string header_text_ = "Rooms";
+    std::string header_text_ = "Room List";
     std::unique_ptr<DMButton> create_room_button_;
     std::function<void()> on_rooms_changed_{};
 };

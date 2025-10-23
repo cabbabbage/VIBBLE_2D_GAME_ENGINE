@@ -456,7 +456,7 @@ void MapModeUI::ensure_panels() {
     }
     if (!rooms_display_) {
         rooms_display_ = std::make_unique<MapRoomsDisplay>();
-        rooms_display_->set_header_text("Rooms");
+        rooms_display_->set_header_text("Room List");
         rooms_display_->set_on_select_room([this](const std::string& key) {
             this->open_room_configuration(key);
         });

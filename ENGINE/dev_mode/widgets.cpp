@@ -1747,11 +1747,7 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
         bool consumed = false;
         if (inside_options) {
             hovered_option_index_ = hovered_option;
-            if (!has_pending_index_ || pending_index_ != hovered_option) {
-                pending_index_ = hovered_option;
-                has_pending_index_ = true;
-                consumed = true;
-            }
+            consumed = true;
         } else {
             hovered_option_index_ = -1;
         }

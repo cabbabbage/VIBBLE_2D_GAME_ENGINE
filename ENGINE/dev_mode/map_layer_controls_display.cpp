@@ -49,6 +49,7 @@ void MapLayerControlsDisplay::attach_container(SlidingWindowContainer* container
     container_ = container;
     if (container_) {
         configure_container(*container_);
+        container_->set_header_text("Layer Controls");
         container_->set_header_visible(true);
         container_->set_scrollbar_visible(true);
         container_->set_close_button_enabled(false);
