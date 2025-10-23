@@ -227,6 +227,11 @@ public:
         return owner_ ? owner_->validation_summary_height(w) : 0;
     }
 
+    bool handle_event(const SDL_Event& e) override {
+        (void)e;
+        return false;
+    }
+
     void render(SDL_Renderer* renderer) const override {
         if (owner_) {
             owner_->render_validation_summary(renderer, rect_);

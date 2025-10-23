@@ -13805,6 +13805,13 @@
               "required_children": []
             }
           ]
+        },
+        {
+          "level": 1,
+          "max_rooms": 0,
+          "min_rooms": 0,
+          "name": "layer_1",
+          "rooms": []
         }
       ],
       "map_light_data": {

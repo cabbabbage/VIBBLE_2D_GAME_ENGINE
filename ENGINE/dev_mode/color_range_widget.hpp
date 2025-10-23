@@ -48,9 +48,6 @@ private:
     SDL_Rect rect_{0, 0, 0, 0};
     SDL_Rect label_rect_{0, 0, 0, 0};
     SDL_Rect swatch_rect_{0, 0, 0, 0};
-    SDL_Rect button_rect_{0, 0, 0, 0};
-
-    DMButton set_button_;
     RangedColor value_{};
     SDL_Color resolved_color_{255, 255, 255, 255};
     ValueChangedCallback on_value_changed_{};

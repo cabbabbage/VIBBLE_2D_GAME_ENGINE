@@ -406,8 +406,7 @@ private:
 // -----------------------------------------------------------------------------
 
 DMColorRangeWidget::DMColorRangeWidget(std::string label)
-    : label_(std::move(label)),
-      set_button_("Set", &DMStyles::AccentButton(), 72, DMButton::height()) {
+    : label_(std::move(label)) {
     value_.r = utils::color::ChannelRange{255, 255};
     value_.g = utils::color::ChannelRange{255, 255};
     value_.b = utils::color::ChannelRange{255, 255};
@@ -426,19 +425,24 @@ int DMColorRangeWidget::height_for_width(int) const {
     const DMLabelStyle label_style = DMStyles::Label();
     SDL_Point label_size = DMFontCache::instance().measure_text(label_style, label_);
     const int gap = DMSpacing::small_gap();
-    const int content_height = std::max(DMButton::height(), 32);
+    const int content_height = 32;
     return label_size.y + gap + content_height;
 }
 
 bool DMColorRangeWidget::handle_event(const SDL_Event& e) {
-    bool used = false;
-    if (set_button_.handle_event(e)) {
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            open_picker();
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        if (e.button.button != SDL_BUTTON_LEFT) {
+            return false;
         }
-        used = true;
+        SDL_Point p{e.button.x, e.button.y};
+        if (SDL_PointInRect(&p, &swatch_rect_)) {
+            if (e.type == SDL_MOUSEBUTTONUP) {
+                open_picker();
+            }
+            return true;
+        }
     }
-    return used;
+    return false;
 }
 
 void DMColorRangeWidget::render(SDL_Renderer* r) const {
@@ -461,8 +465,6 @@ void DMColorRangeWidget::render(SDL_Renderer* r) const {
 
     SDL_Color border = DMStyles::Border();
     dm_draw::DrawRoundedOutline(r, swatch_rect_, DMStyles::CornerRadius(), 1, border);
-
-    set_button_.render(r);
 }
 
 void DMColorRangeWidget::set_value(const RangedColor& value) {
@@ -533,18 +535,8 @@ void DMColorRangeWidget::update_layout() {
     const DMLabelStyle label_style = DMStyles::Label();
     SDL_Point label_size = DMFontCache::instance().measure_text(label_style, label_);
     label_rect_ = make_rect(rect_.x, rect_.y, rect_.w, label_size.y);
-    const int swatch_height = std::max(DMButton::height(), 32);
-    const int button_width = 72;
-    int swatch_width = rect_.w - button_width - gap;
-    swatch_width = std::max(60, swatch_width);
-    swatch_rect_ = make_rect(rect_.x, rect_.y + label_rect_.h + gap, swatch_width, swatch_height);
-    int button_x = swatch_rect_.x + swatch_rect_.w + gap;
-    if (button_x + button_width > rect_.x + rect_.w) {
-        button_x = rect_.x + rect_.w - button_width;
-        swatch_rect_.w = std::max(40, button_x - swatch_rect_.x - gap);
-    }
-    button_rect_ = make_rect(button_x, swatch_rect_.y, button_width, DMButton::height());
-    set_button_.set_rect(button_rect_);
+    const int swatch_height = 32;
+    swatch_rect_ = make_rect(rect_.x, rect_.y + label_rect_.h + gap, rect_.w, swatch_height);
 }
 
 void DMColorRangeWidget::open_picker() {
