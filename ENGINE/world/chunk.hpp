@@ -97,7 +97,7 @@ public:
         // New: min/max shadow scale as integer percents (50..200)
         int   min_scale_percent       = 80;   // 80% default
         int   max_scale_percent       = 120;  // 120% default
-        // Strength (0..1) of map-light directional X offset contribution
+        // Strength (0..1) of map-light directional offset contribution
         float map_light_dir_offset_strength = 0.5f;
         float parallax_percent        = 0.0f;
     };

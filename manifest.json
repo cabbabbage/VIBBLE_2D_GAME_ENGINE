@@ -13890,7 +13890,7 @@
         "virtual_light_map": {
           "horizontal_falloff": 2.4700000286102295,
           "max_offset_x": 100.0,
-          "max_offset_y": 100.0,
+          "max_offset_y": 24.56999969482422,
           "search_radius": 2,
           "shadow_scale": 1.0,
           "size_scale_factor": 1.0,

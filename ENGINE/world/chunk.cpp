@@ -316,12 +316,12 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
 static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
                                               const world::Grid& grid,
                                               const std::pair<float, float>& grad,
-                                              int map_dir_sign_x,
-                                              float map_light_opacity_norm,
+                                              const std::optional<SDL_FPoint>& map_light_direction,
+                                              float screen_light_opacity,
                                               world::Chunk& chunk) {
     // Opacity: inverse of front average strength.
     const auto [front_avg, behind_avg] =
-        compute_directional_average_strengths(settings, grid, chunk, map_light_opacity_norm);
+        compute_directional_average_strengths(settings, grid, chunk, screen_light_opacity);
     chunk.shadow.opacity  = std::clamp(1.0f - front_avg, 0.0f, 1.0f);
 
     // Scale: grow with front dominance, shrink with behind dominance (nonlinear towards min).
@@ -352,12 +352,18 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     float px = -nx * 100.0f;
     float py = -ny * 100.0f;
 
-    // Map-light directional X adjustment: push away from map-light direction
-    if (map_dir_sign_x != 0) {
-        const float dir_push = std::clamp(map_light_opacity_norm, 0.0f, 1.0f) *
-                               std::max(0.0f, settings.map_light_dir_offset_strength) * 100.0f;
-        // If light direction points +X, push left (negative X), and vice-versa.
-        px += static_cast<float>(-map_dir_sign_x) * dir_push;
+    // Map-light directional adjustment: push away from map-light direction with
+    // strength that peaks when the light is furthest left/right and fades to 0
+    // when directly above or below.
+    if (map_light_direction) {
+        const SDL_FPoint dir = *map_light_direction;
+        const float horizontal_influence = std::clamp(std::abs(dir.x), 0.0f, 1.0f);
+        const float direction_factor     = std::clamp(settings.map_light_dir_offset_strength, 0.0f, 1.0f);
+        const float dir_push             = horizontal_influence * direction_factor * 100.0f;
+        if (dir_push > 1e-4f) {
+            px += -dir.x * dir_push;
+            py += -dir.y * dir_push;
+        }
     }
 
     chunk.shadow.offset_x_percent = std::clamp(px, -100.0f, 100.0f);
@@ -534,14 +540,18 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
         const float fx     = std::max(0.0f, settings.falloff_horizontal);
         const float fy     = std::max(0.0f, settings.falloff_vertical);
         const auto grad    = compute_brightness_gradient(*chunk, grid, radius, fx, fy, screen_light_opacity);
-        int map_dir_sign_x = 0;
+        std::optional<SDL_FPoint> map_light_direction;
         if (const Global_Light_Source* gl = assets_->map_light_source()) {
             const SDL_Point ref = gl->get_direction_reference();
             const SDL_Point tgt = gl->get_direction_target();
-            const int dx = tgt.x - ref.x;
-            map_dir_sign_x = (dx > 0) ? 1 : ((dx < 0) ? -1 : 0);
+            const float dx = static_cast<float>(tgt.x - ref.x);
+            const float dy = static_cast<float>(tgt.y - ref.y);
+            const float len = std::sqrt(dx * dx + dy * dy);
+            if (len > 1e-4f) {
+                map_light_direction = SDL_FPoint{ dx / len, dy / len };
+            }
         }
-        compute_use_shadow_data_for_chunk(settings, grid, grad, map_dir_sign_x, screen_light_opacity, *chunk);
+        compute_use_shadow_data_for_chunk(settings, grid, grad, map_light_direction, screen_light_opacity, *chunk);
 
         chunk->lighting.needs_update = false;
     }
