@@ -128,6 +128,8 @@ public:
     void set_rooms(std::vector<Room*> rooms);
     std::vector<Room*>& rooms();
     const std::vector<Room*>& rooms() const;
+    void notify_rooms_changed();
+    std::size_t rooms_generation() const { return rooms_generation_; }
 
     void refresh_active_asset_lists();
     void refresh_filtered_active_assets();
@@ -181,6 +183,8 @@ private:
     void notify_light_map_static_assets_changed();
     void notify_reactive_shadow_settings_about_to_change();
     void notify_reactive_shadow_settings_available();
+    void sync_dev_controls_current_room(Room* room, bool force_refresh = false);
+    void reset_dev_controls_current_room_cache();
 
     friend class SceneRenderer;
     friend class Asset;
@@ -188,6 +192,7 @@ private:
     CurrentRoomFinder* finder_ = nullptr;
     Input* input = nullptr;
     DevControls* dev_controls_ = nullptr;
+    Room* dev_controls_last_room_ = nullptr;
     camera camera_;
     SceneRenderer* scene = nullptr;
     int screen_width;
@@ -202,6 +207,7 @@ private:
     std::unordered_set<Asset*> active_moving_light_lookup_;
     std::unordered_set<Asset*> scratch_moving_light_lookup_;
     std::vector<Room*> rooms_;
+    std::size_t rooms_generation_ = 0;
     Room* current_room_ = nullptr;
     int num_groups_ = 40;
     bool dev_mode = false;

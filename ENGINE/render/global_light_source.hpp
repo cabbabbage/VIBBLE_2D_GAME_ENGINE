@@ -20,8 +20,6 @@ class Global_Light_Source {
     SDL_Point get_orbit_center() const { return center_; }
     SDL_Point get_direction_reference() const { return map_reference_center_; }
     SDL_Point get_direction_target() const;
-    int       min_opacity() const { return min_opacity_; }
-    int       max_opacity() const { return max_opacity_; }
     bool      initialize_from_map_manifest(const nlohmann::json& map_info, std::string_view map_id);
 
         private:
@@ -57,7 +55,5 @@ class Global_Light_Source {
     int   orbit_radius_x_;
     int   orbit_radius_y_;
     int   update_interval_;
-    int   min_opacity_;
-    int   max_opacity_;
     std::vector<KeyEntry> key_colors_;
 };

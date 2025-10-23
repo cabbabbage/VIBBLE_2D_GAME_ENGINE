@@ -1021,7 +1021,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
 
         if (const world::Chunk* chunk = map->chunk_at(detail_chunk)) {
             if (const LightMapManager* manager = light_map_manager()) {
-                const float ui_opacity = std::clamp(manager->current_screen_light_opacity(), 0.0f, 1.0f);
+                const float ui_opacity = std::clamp(manager->current_map_light_opacity(), 0.0f, 1.0f);
                 const float static_brightness = world::static_brightness_for_opacity(*chunk, ui_opacity);
                 detail_lines.push_back("Static Brightness: " + format_float(static_brightness, 3));
             }

@@ -46,7 +46,7 @@ public:
     void begin_frame();
 
     const LightMap* light_map() const;
-    float current_screen_light_opacity() const { return last_screen_light_opacity_; }
+    float current_map_light_opacity() const { return last_map_light_opacity_; }
     std::vector<ChunkSnapshot> all_snapshots() const;
     std::vector<std::string>      assets_sampling_chunk(int index) const;
     std::optional<ChunkSnapshot> snapshot_for_chunk(int index) const;
@@ -58,7 +58,7 @@ private:
     std::optional<ShadowParameters> shadow_data_for_chunk(const world::Chunk* chunk) const;
 
     Assets* assets_ = nullptr;
-    float last_screen_light_opacity_ = -1.0f; // normalized [0,1]; forces update on first frame
+    float last_map_light_opacity_ = -1.0f; // normalized [0,1]; forces update on first frame
 };
 
 

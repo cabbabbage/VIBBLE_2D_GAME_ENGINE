@@ -311,8 +311,7 @@ void SceneRenderer::render(){
 
     SDL_SetRenderTarget(renderer_,nullptr);
     SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
-    // In chunk debug mode we explicitly keep the normal background.
-    const SDL_Color clear_color = chunk_debug_mode_ ? SLATE_COLOR : (light_map_only_mode_ ? SDL_Color{0,0,0,255} : SLATE_COLOR);
+    const SDL_Color clear_color = light_map_only_mode_ ? SDL_Color{0,0,0,255} : SLATE_COLOR;
     SDL_SetRenderDrawColor(renderer_,clear_color.r,clear_color.g,clear_color.b,clear_color.a);
     SDL_RenderClear(renderer_);
 
@@ -329,12 +328,8 @@ void SceneRenderer::render(){
         // darker scenes, so the overlay should become more prominent as the opacity rises.
         float alpha_mult = 1.0f;
         if (!chunk_debug_mode_) {
-            const int min_opacity = main_light_source_.min_opacity();
-            const int max_opacity = main_light_source_.max_opacity();
-            const int cur_a       = std::clamp(static_cast<int>(main_light_source_.get_current_color().a), min_opacity, max_opacity);
-            const int range       = std::max(1, max_opacity - min_opacity);
-            const float normalized = std::clamp(static_cast<float>(cur_a - min_opacity) / static_cast<float>(range), 0.0f, 1.0f);
-            alpha_mult            = std::clamp(normalized, 0.0f, 1.0f);
+            const float normalized = std::clamp(static_cast<float>(main_light_source_.get_current_color().a) / 255.0f, 0.0f, 1.0f);
+            alpha_mult            = normalized;
         }
 
         SDL_Rect screen_view{0,0,screen_width_,screen_height_};
@@ -343,17 +338,12 @@ void SceneRenderer::render(){
             previous_mode = SDL_BLENDMODE_BLEND;
         }
         SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
-        if (chunk_debug_mode_) {
-            // Draw chunks with additive blending + red outlines
-            light_map_->render_visible_chunks_debug(renderer_, screen_view, 1.0f);
-        } else {
-            light_map_->render_visible_chunks(renderer_, screen_view, alpha_mult);
-        }
+        light_map_->render_visible_chunks(renderer_, screen_view, alpha_mult);
         SDL_SetRenderDrawBlendMode(renderer_,previous_mode);
         rendered_light_map = true;
     };
 
-    if (!light_map_only_mode_ && !chunk_debug_mode_){
+    if (!light_map_only_mode_){
         const auto& camera_state=assets_->getView();
         const camera::RealismSettings& cam_settings = camera_state.realism_settings();
         const float quality_percent = std::clamp(static_cast<float>(cam_settings.render_quality_percent), 10.0f, 100.0f);
@@ -525,7 +515,12 @@ void SceneRenderer::render(){
 
     render_light_map();
 
-    if (!light_map_only_mode_ && !chunk_debug_mode_ && assets_){
+    if (chunk_preview_enabled_ && light_map_) {
+        SDL_Rect screen_view{0, 0, screen_width_, screen_height_};
+        light_map_->render_chunk_preview(renderer_, screen_view);
+    }
+
+    if (!light_map_only_mode_ && assets_){
         assets_->render_overlays(renderer_);
     }
 

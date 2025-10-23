@@ -47,8 +47,6 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         update_interval_ = 2;
         base_color_      = clamp_color_alpha(fallback_base_color);
         current_color_   = base_color_;
-        min_opacity_     = 0;
-        max_opacity_     = 255;
         key_colors_.clear();
         key_colors_.push_back({0.0f, base_color_});
         center_ = default_center_;
@@ -110,12 +108,6 @@ void Global_Light_Source::apply_config(const json& data) {
         update_interval_= std::max(1, data.value("update_interval", update_interval_));
         mult_          = std::clamp(data.value("mult", mult_), 0.0f, 1.0f);
         fall_off_      = data.value("fall_off", fall_off_);
-
-        min_opacity_ = std::clamp(data.value("min_opacity", min_opacity_), 0, 255);
-        max_opacity_ = std::clamp(data.value("max_opacity", max_opacity_), 0, 255);
-        if (min_opacity_ > max_opacity_) {
-                std::swap(min_opacity_, max_opacity_);
-        }
 
         const auto bc_it = data.find("base_color");
         if (bc_it != data.end() && bc_it->is_array() && bc_it->size() >= 3) {
@@ -236,18 +228,8 @@ float Global_Light_Source::get_angle() const {
 }
 
 void Global_Light_Source::set_light_brightness() {
-        const int alpha = static_cast<int>(current_color_.a);
-        if (alpha <= min_opacity_) {
-                light_brightness = 255;
-                return;
-        }
-        if (alpha >= max_opacity_) {
-                light_brightness = 0;
-                return;
-        }
-        const int range = std::max(1, max_opacity_ - min_opacity_);
-        const float scaled = static_cast<float>(max_opacity_ - alpha) / static_cast<float>(range);
-        light_brightness = static_cast<int>(std::clamp(scaled * 255.0f, 0.0f, 255.0f));
+        const int alpha = std::clamp(static_cast<int>(current_color_.a), 0, 255);
+        light_brightness = std::clamp(255 - alpha, 0, 255);
 }
 
 void Global_Light_Source::recalc_position() {
@@ -312,7 +294,7 @@ int Global_Light_Source::get_brightness() const {
 
 Uint8 Global_Light_Source::clamp_alpha(Uint8 value) const {
         int v = static_cast<int>(value);
-        v = std::clamp(v, min_opacity_, max_opacity_);
+        v = std::clamp(v, 0, 255);
         return static_cast<Uint8>(v);
 }
 

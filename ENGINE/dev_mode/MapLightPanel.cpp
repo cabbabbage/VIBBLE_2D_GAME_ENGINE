@@ -158,7 +158,6 @@ void MapLightPanel::build_ui() {
     update_map_light_checkbox_ = std::make_unique<DMCheckbox>("Update Map Light", false);
     update_btn_ = std::make_unique<DMButton>("Update Light", &DMStyles::AccentButton(), 160, DMButton::height());
     orbit_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
-    screen_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     texture_section_btn_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), 220, DMButton::height());
     update_section_header_labels();
 
@@ -169,25 +168,12 @@ void MapLightPanel::build_ui() {
     update_interval_= std::make_unique<DMSlider>("Update Interval", 1,   120, 10);
     mult_x100_      = std::make_unique<DMSlider>("Mult x100",       0,   100, 0);
     falloff_        = std::make_unique<DMSlider>("Fall-off",        0,   100, 100);
-    min_opacity_    = std::make_unique<DMSlider>("Min Opacity",     0,   255, 0);
-    max_opacity_    = std::make_unique<DMSlider>("Max Opacity",     0,   255, 255);
-
-    screen_r_          = std::make_unique<DMSlider>("Screen Base R",       0, 255, 255);
-    screen_g_          = std::make_unique<DMSlider>("Screen Base G",       0, 255, 255);
-    screen_b_          = std::make_unique<DMSlider>("Screen Base B",       0, 255, 255);
-    screen_min_opacity_= std::make_unique<DMSlider>("Screen Min Opacity",  0, 255, 0);
-    screen_max_opacity_= std::make_unique<DMSlider>("Screen Max Opacity",  0, 255, 255);
+    
 
     if (update_interval_) update_interval_->set_defer_commit_until_unfocus(true);
     if (orbit_x_)        orbit_x_->set_defer_commit_until_unfocus(true);
     if (orbit_y_)        orbit_y_->set_defer_commit_until_unfocus(true);
-    if (min_opacity_)    min_opacity_->set_defer_commit_until_unfocus(true);
-    if (max_opacity_)    max_opacity_->set_defer_commit_until_unfocus(true);
-    if (screen_r_)       screen_r_->set_defer_commit_until_unfocus(true);
-    if (screen_g_)       screen_g_->set_defer_commit_until_unfocus(true);
-    if (screen_b_)       screen_b_->set_defer_commit_until_unfocus(true);
-    if (screen_min_opacity_) screen_min_opacity_->set_defer_commit_until_unfocus(true);
-    if (screen_max_opacity_) screen_max_opacity_->set_defer_commit_until_unfocus(true);
+    
 
     base_r_ = std::make_unique<DMSlider>("Base R", 0, 255, 255);
     base_g_ = std::make_unique<DMSlider>("Base G", 0, 255, 255);
@@ -214,9 +200,6 @@ void MapLightPanel::update_section_header_labels() {
 };
     if (orbit_section_btn_) {
         orbit_section_btn_->set_text(label_for("Orbit Settings", orbit_section_collapsed_));
-    }
-    if (screen_section_btn_) {
-        screen_section_btn_->set_text(label_for("Screen Light", screen_section_collapsed_));
     }
     if (texture_section_btn_) {
         texture_section_btn_->set_text(label_for("Map Light Texture", texture_section_collapsed_));
@@ -258,25 +241,6 @@ void MapLightPanel::rebuild_rows() {
         });
         rows.push_back({
             add_widget(std::make_unique<SliderWidget>(orbit_y_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(min_opacity_.get())),
-            add_widget(std::make_unique<SliderWidget>(max_opacity_.get()))
-        });
-    }
-
-    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(screen_section_btn_.get(), [this]() { toggle_screen_section(); })) });
-    if (!screen_section_collapsed_) {
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(screen_r_.get())),
-            add_widget(std::make_unique<SliderWidget>(screen_g_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(screen_b_.get())),
-            add_widget(std::make_unique<SliderWidget>(screen_min_opacity_.get()))
-        });
-        rows.push_back({
-            add_widget(std::make_unique<SliderWidget>(screen_max_opacity_.get()))
         });
     }
 
@@ -326,11 +290,6 @@ void MapLightPanel::toggle_orbit_section() {
     rebuild_rows();
 }
 
-void MapLightPanel::toggle_screen_section() {
-    screen_section_collapsed_ = !screen_section_collapsed_;
-    rebuild_rows();
-}
-
 void MapLightPanel::toggle_texture_section() {
     texture_section_collapsed_ = !texture_section_collapsed_;
     rebuild_rows();
@@ -343,11 +302,9 @@ void MapLightPanel::apply_changes() {
 
     sync_json_from_ui();
     OrbitSettings orbit = sanitize_orbit_settings(current_orbit_settings_from_ui());
-    ScreenLightSettings screen = sanitize_screen_settings(current_screen_settings_from_ui(), orbit);
     bool ok = commit_light_changes();
     if (ok) {
         last_applied_orbit_ = orbit;
-        last_applied_screen_ = screen;
     }
 }
 
@@ -430,13 +387,8 @@ nlohmann::json& MapLightPanel::ensure_light() {
     double mult = read_double("mult", 0.0, 0.0, 1.0);
     L["mult"] = mult;
 
-    int min_opacity = read_int("min_opacity", 0, 0, 255);
-    int max_opacity = read_int("max_opacity", 255, 0, 255);
-    if (min_opacity > max_opacity) {
-        std::swap(min_opacity, max_opacity);
-    }
-    L["min_opacity"] = min_opacity;
-    L["max_opacity"] = max_opacity;
+    L.erase("min_opacity");
+    L.erase("max_opacity");
 
     auto read_radius = [&](const char* key) -> std::optional<int> {
         auto it = L.find(key);
@@ -462,67 +414,12 @@ nlohmann::json& MapLightPanel::ensure_light() {
         L["base_color"] = {255,255,255,255};
     }
 
-    ensure_screen_light(L);
-
     if (!L.contains("keys") || !L["keys"].is_array()) {
 
         L["keys"] = json::array();
         L["keys"].push_back(json::array({ 0.0, L["base_color"] }));
     }
     return L;
-}
-
-nlohmann::json& MapLightPanel::ensure_screen_light(nlohmann::json& light) {
-    if (!light.contains("screen_light") || !light["screen_light"].is_object()) {
-        light["screen_light"] = json::object();
-    }
-    json& screen = light["screen_light"];
-    if (!screen.contains("color") || !screen["color"].is_array() || screen["color"].size() < 3) {
-        screen["color"] = json::array({255, 255, 255});
-    }
-    auto clamp_component = [](const json& v) -> int {
-        try {
-            return clamp_int(v.get<int>(), 0, 255);
-        } catch (...) {
-            return 255;
-        }
-};
-    auto& color = screen["color"];
-    if (color.is_array()) {
-        for (std::size_t i = 0; i < 3; ++i) {
-            if (i >= color.size()) {
-                color.push_back(255);
-            } else {
-                color[i] = clamp_component(color[i]);
-            }
-        }
-        while (color.size() > 3) {
-            color.erase(color.size() - 1);
-        }
-    }
-
-    int map_min = 0;
-    int map_max = 255;
-    try { map_min = light.at("min_opacity").get<int>(); } catch (...) {}
-    try { map_max = light.at("max_opacity").get<int>(); } catch (...) {}
-    map_min = clamp_int(map_min, 0, 255);
-    map_max = clamp_int(map_max, 0, 255);
-    if (map_min > map_max) std::swap(map_min, map_max);
-
-    if (!screen.contains("min_opacity")) {
-        screen["min_opacity"] = map_min;
-    }
-    if (!screen.contains("max_opacity")) {
-        screen["max_opacity"] = map_max;
-    }
-    int scr_min = map_min;
-    int scr_max = map_max;
-    try { scr_min = clamp_int(screen.at("min_opacity").get<int>(), map_min, map_max); } catch (...) { scr_min = map_min; }
-    try { scr_max = clamp_int(screen.at("max_opacity").get<int>(), map_min, map_max); } catch (...) { scr_max = map_max; }
-    if (scr_min > scr_max) std::swap(scr_min, scr_max);
-    screen["min_opacity"] = scr_min;
-    screen["max_opacity"] = scr_max;
-    return screen;
 }
 
 render_pipeline::shading::ReactiveShadowSettings MapLightPanel::load_reactive_settings_from_json() const {
@@ -587,8 +484,6 @@ void MapLightPanel::sync_ui_from_json() {
     const int fallback_orbit = clamp_int(L.value("orbit_radius", 0), 0, 20000);
     orbit.orbit_x = clamp_int(L.value("orbit_x", fallback_orbit), 0, 20000);
     orbit.orbit_y = clamp_int(L.value("orbit_y", orbit.orbit_x), 0, 20000);
-    orbit.min_opacity = clamp_int(L.value("min_opacity", 0), 0, 255);
-    orbit.max_opacity = clamp_int(L.value("max_opacity", 255), 0, 255);
     orbit = sanitize_orbit_settings(orbit);
     set_orbit_sliders(orbit);
     last_applied_orbit_ = orbit;
@@ -607,24 +502,6 @@ void MapLightPanel::sync_ui_from_json() {
     base_g_->set_value(bg);
     base_b_->set_value(bb);
     base_a_->set_value(ba);
-
-    json& screen_json = ensure_screen_light(L);
-    ScreenLightSettings screen{};
-    try {
-        if (screen_json["color"].is_array()) {
-            auto color = screen_json["color"];
-            if (color.size() >= 3) {
-                screen.r = clamp_int(color[0].get<int>(), 0, 255);
-                screen.g = clamp_int(color[1].get<int>(), 0, 255);
-                screen.b = clamp_int(color[2].get<int>(), 0, 255);
-            }
-        }
-    } catch (...) {}
-    screen.min_opacity = screen_json.value("min_opacity", orbit.min_opacity);
-    screen.max_opacity = screen_json.value("max_opacity", orbit.max_opacity);
-    screen = sanitize_screen_settings(screen, orbit);
-    set_screen_sliders(screen);
-    last_applied_screen_ = screen;
 
     ensure_keys_array();
     clamp_key_index();
@@ -682,11 +559,7 @@ void MapLightPanel::sync_json_from_ui() {
     OrbitSettings orbit = sanitize_orbit_settings(current_orbit_settings_from_ui());
     write_orbit_settings_to_json(orbit);
 
-    ScreenLightSettings screen = sanitize_screen_settings(current_screen_settings_from_ui(), orbit);
-    write_screen_settings_to_json(screen);
-
     set_orbit_sliders(orbit);
-    set_screen_sliders(screen);
 
     ensure_keys_array();
     clamp_key_index();
@@ -725,28 +598,6 @@ MapLightPanel::OrbitSettings MapLightPanel::sanitize_orbit_settings(const OrbitS
     out.update_interval = clamp_int(out.update_interval, 1, 120);
     out.orbit_x = clamp_int(out.orbit_x, 0, 20000);
     out.orbit_y = clamp_int(out.orbit_y, 0, 20000);
-    out.min_opacity = clamp_int(out.min_opacity, 0, 255);
-    out.max_opacity = clamp_int(out.max_opacity, 0, 255);
-    if (out.min_opacity > out.max_opacity) {
-        std::swap(out.min_opacity, out.max_opacity);
-    }
-    return out;
-}
-
-MapLightPanel::ScreenLightSettings MapLightPanel::sanitize_screen_settings(const ScreenLightSettings& raw,
-                                                                          const OrbitSettings& orbit) const {
-    ScreenLightSettings out = raw;
-    out.r = clamp_int(out.r, 0, 255);
-    out.g = clamp_int(out.g, 0, 255);
-    out.b = clamp_int(out.b, 0, 255);
-    int lo = orbit.min_opacity;
-    int hi = orbit.max_opacity;
-    if (lo > hi) std::swap(lo, hi);
-    out.min_opacity = clamp_int(out.min_opacity, lo, hi);
-    out.max_opacity = clamp_int(out.max_opacity, lo, hi);
-    if (out.min_opacity > out.max_opacity) {
-        std::swap(out.min_opacity, out.max_opacity);
-    }
     return out;
 }
 
@@ -755,18 +606,6 @@ MapLightPanel::OrbitSettings MapLightPanel::current_orbit_settings_from_ui() con
     current.update_interval = update_interval_ ? update_interval_->displayed_value() : 10;
     current.orbit_x = orbit_x_ ? orbit_x_->displayed_value() : 0;
     current.orbit_y = orbit_y_ ? orbit_y_->displayed_value() : current.orbit_x;
-    current.min_opacity = min_opacity_ ? min_opacity_->displayed_value() : 0;
-    current.max_opacity = max_opacity_ ? max_opacity_->displayed_value() : 255;
-    return current;
-}
-
-MapLightPanel::ScreenLightSettings MapLightPanel::current_screen_settings_from_ui() const {
-    ScreenLightSettings current;
-    current.r = screen_r_ ? screen_r_->displayed_value() : 255;
-    current.g = screen_g_ ? screen_g_->displayed_value() : 255;
-    current.b = screen_b_ ? screen_b_->displayed_value() : 255;
-    current.min_opacity = screen_min_opacity_ ? screen_min_opacity_->displayed_value() : 0;
-    current.max_opacity = screen_max_opacity_ ? screen_max_opacity_->displayed_value() : 255;
     return current;
 }
 
@@ -774,16 +613,6 @@ void MapLightPanel::set_orbit_sliders(const OrbitSettings& orbit) {
     if (update_interval_) update_interval_->set_value(orbit.update_interval);
     if (orbit_x_)         orbit_x_->set_value(orbit.orbit_x);
     if (orbit_y_)         orbit_y_->set_value(orbit.orbit_y);
-    if (min_opacity_)     min_opacity_->set_value(orbit.min_opacity);
-    if (max_opacity_)     max_opacity_->set_value(orbit.max_opacity);
-}
-
-void MapLightPanel::set_screen_sliders(const ScreenLightSettings& screen) {
-    if (screen_r_)          screen_r_->set_value(screen.r);
-    if (screen_g_)          screen_g_->set_value(screen.g);
-    if (screen_b_)          screen_b_->set_value(screen.b);
-    if (screen_min_opacity_)screen_min_opacity_->set_value(screen.min_opacity);
-    if (screen_max_opacity_)screen_max_opacity_->set_value(screen.max_opacity);
 }
 
 void MapLightPanel::write_orbit_settings_to_json(const OrbitSettings& orbit) {
@@ -792,16 +621,9 @@ void MapLightPanel::write_orbit_settings_to_json(const OrbitSettings& orbit) {
     L["orbit_x"] = orbit.orbit_x;
     L["orbit_y"] = orbit.orbit_y;
     L["orbit_radius"] = std::max(orbit.orbit_x, orbit.orbit_y);
-    L["min_opacity"] = orbit.min_opacity;
-    L["max_opacity"] = orbit.max_opacity;
-}
-
-void MapLightPanel::write_screen_settings_to_json(const ScreenLightSettings& screen) {
-    json& L = ensure_light();
-    json& screen_json = ensure_screen_light(L);
-    screen_json["color"] = json::array({ screen.r, screen.g, screen.b });
-    screen_json["min_opacity"] = screen.min_opacity;
-    screen_json["max_opacity"] = screen.max_opacity;
+    L.erase("min_opacity");
+    L.erase("max_opacity");
+    L.erase("screen_light");
 }
 
 void MapLightPanel::apply_immediate_settings() {
@@ -810,30 +632,17 @@ void MapLightPanel::apply_immediate_settings() {
     }
 
     OrbitSettings orbit = sanitize_orbit_settings(current_orbit_settings_from_ui());
-    ScreenLightSettings screen = sanitize_screen_settings(current_screen_settings_from_ui(), orbit);
     bool orbit_changed = !(orbit == last_applied_orbit_);
-    bool screen_changed = !(screen == last_applied_screen_);
-    if (!orbit_changed && !screen_changed) {
+    if (!orbit_changed) {
         return;
     }
 
-    if (orbit_changed) {
-        write_orbit_settings_to_json(orbit);
-        set_orbit_sliders(orbit);
-    }
-    if (screen_changed) {
-        write_screen_settings_to_json(screen);
-        set_screen_sliders(screen);
-    }
+    write_orbit_settings_to_json(orbit);
+    set_orbit_sliders(orbit);
 
     bool ok = commit_light_changes();
     if (ok) {
-        if (orbit_changed) {
-            last_applied_orbit_ = orbit;
-        }
-        if (screen_changed) {
-            last_applied_screen_ = screen;
-        }
+        last_applied_orbit_ = orbit;
     }
 }
 
