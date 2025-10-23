@@ -1,4 +1,6 @@
 #include "AssetsManager.hpp"
+
+#include "utils/ranged_color.hpp"
 #include "asset/initialize_assets.hpp"
 
 #include "find_current_room.hpp"
@@ -274,59 +276,29 @@ void Assets::hydrate_map_info_sections() {
         if (!D.contains("update_interval")) D["update_interval"] = 10;
         if (!D.contains("mult"))            D["mult"] = 0.0;
         if (!D.contains("fall_off"))        D["fall_off"] = 100;
-        if (!D.contains("min_opacity"))     D["min_opacity"] = 0;
-        if (!D.contains("max_opacity"))     D["max_opacity"] = 255;
-        if (!D.contains("base_color") || !D["base_color"].is_array() || D["base_color"].size() < 4) {
-            D["base_color"] = nlohmann::json::array({255, 255, 255, 255});
+        utils::color::RangedColor base_range{{255,255},{255,255},{255,255},{255,255}};
+        if (auto parsed = utils::color::ranged_color_from_json(D.value("base_color", nlohmann::json{}))) {
+            base_range = *parsed;
         }
+        D["base_color"] = utils::color::ranged_color_to_json(base_range);
+
         if (!D.contains("keys") || !D["keys"].is_array() || D["keys"].empty()) {
 
             D["keys"] = nlohmann::json::array();
             D["keys"].push_back(nlohmann::json::array({ 0.0, D["base_color"] }));
-        }
-        auto clamp_component = [](int v) { return std::max(0, std::min(255, v)); };
-        if (!D.contains("screen_light") || !D["screen_light"].is_object()) {
-            D["screen_light"] = nlohmann::json::object();
-        }
-        nlohmann::json& screen = D["screen_light"];
-        if (!screen.contains("color") || !screen["color"].is_array() || screen["color"].size() < 3) {
-            screen["color"] = nlohmann::json::array({255, 255, 255});
         } else {
-            for (std::size_t i = 0; i < 3; ++i) {
-                if (i >= screen["color"].size()) {
-                    screen["color"].push_back(255);
-                } else {
-                    try {
-                        int comp = clamp_component(screen["color"][i].get<int>());
-                        screen["color"][i] = comp;
-                    } catch (...) {
-                        screen["color"][i] = 255;
+            auto& keys = D["keys"];
+            for (auto& entry : keys) {
+                if (entry.is_array() && entry.size() >= 2) {
+                    if (auto parsed = utils::color::ranged_color_from_json(entry[1])) {
+                        entry[1] = utils::color::ranged_color_to_json(*parsed);
                     }
                 }
             }
-            while (screen["color"].size() > 3) {
-                screen["color"].erase(screen["color"].size() - 1);
-            }
         }
-        int map_min = D.value("min_opacity", 0);
-        int map_max = D.value("max_opacity", 255);
-        map_min = std::max(0, std::min(255, map_min));
-        map_max = std::max(0, std::min(255, map_max));
-        if (map_min > map_max) std::swap(map_min, map_max);
-        if (!screen.contains("min_opacity")) screen["min_opacity"] = map_min;
-        if (!screen.contains("max_opacity")) screen["max_opacity"] = map_max;
-        try {
-            int smin = clamp_component(screen["min_opacity"].get<int>());
-            int smax = clamp_component(screen["max_opacity"].get<int>());
-            smin = std::max(map_min, std::min(map_max, smin));
-            smax = std::max(map_min, std::min(map_max, smax));
-            if (smin > smax) std::swap(smin, smax);
-            screen["min_opacity"] = smin;
-            screen["max_opacity"] = smax;
-        } catch (...) {
-            screen["min_opacity"] = map_min;
-            screen["max_opacity"] = map_max;
-        }
+        D.erase("min_opacity");
+        D.erase("max_opacity");
+        D.erase("screen_light");
     }
 }
 
@@ -421,6 +393,7 @@ const AssetLibrary& Assets::library() const {
 
 void Assets::set_rooms(std::vector<Room*> rooms) {
     rooms_ = std::move(rooms);
+    notify_rooms_changed();
 }
 
 std::vector<Room*>& Assets::rooms() {
@@ -429,6 +402,16 @@ std::vector<Room*>& Assets::rooms() {
 
 const std::vector<Room*>& Assets::rooms() const {
     return rooms_;
+}
+
+void Assets::notify_rooms_changed() {
+    ++rooms_generation_;
+    if (finder_) {
+        finder_->setRooms(rooms_);
+    }
+    if (dev_controls_) {
+        dev_controls_->set_rooms(&rooms_, rooms_generation_);
+    }
 }
 
 void Assets::refresh_active_asset_lists() {
@@ -467,6 +450,21 @@ void Assets::update_filtered_active_assets() {
     filtered_active_assets.clear();
 }
 
+void Assets::reset_dev_controls_current_room_cache() {
+    dev_controls_last_room_ = nullptr;
+}
+
+void Assets::sync_dev_controls_current_room(Room* room, bool force_refresh) {
+    if (!dev_controls_) {
+        return;
+    }
+    if (!force_refresh && dev_controls_last_room_ == room) {
+        return;
+    }
+    dev_controls_last_room_ = room;
+    dev_controls_->set_current_room(room, force_refresh);
+}
+
 void Assets::ensure_dev_controls() {
     if (dev_controls_) {
         return;
@@ -486,16 +484,18 @@ void Assets::ensure_dev_controls() {
     std::cout << msg_constructed << "\n";
     dev_mode_trace(msg_constructed);
 
+    reset_dev_controls_current_room_cache();
+
     dev_mode_trace("[Assets] Dev Controls -> set_player");
     dev_controls_->set_player(player);
     dev_mode_trace("[Assets] Dev Controls -> set_active_assets");
     dev_controls_->set_active_assets(filtered_active_assets);
-    dev_mode_trace("[Assets] Dev Controls -> set_current_room");
-    dev_controls_->set_current_room(current_room_);
+    dev_mode_trace("[Assets] Dev Controls -> sync_current_room");
+    sync_dev_controls_current_room(current_room_, true);
     dev_mode_trace("[Assets] Dev Controls -> set_screen_dimensions");
     dev_controls_->set_screen_dimensions(screen_width, screen_height);
     dev_mode_trace("[Assets] Dev Controls -> set_rooms");
-    dev_controls_->set_rooms(&rooms_);
+    dev_controls_->set_rooms(&rooms_, rooms_generation_);
     dev_mode_trace("[Assets] Dev Controls -> set_input");
     dev_controls_->set_input(input);
     dev_mode_trace("[Assets] Dev Controls -> set_map_info");
@@ -515,9 +515,9 @@ void Assets::set_input(Input* m) {
         if (dev_controls_->is_enabled()) {
             dev_controls_->set_player(player);
             dev_controls_->set_active_assets(filtered_active_assets);
-            dev_controls_->set_current_room(current_room_);
+            sync_dev_controls_current_room(current_room_);
             dev_controls_->set_screen_dimensions(screen_width, screen_height);
-            dev_controls_->set_rooms(&rooms_);
+            dev_controls_->set_rooms(&rooms_, rooms_generation_);
             dev_controls_->set_map_context(&map_info_json_, map_path_);
         }
     }
@@ -529,16 +529,10 @@ void Assets::update(const Input& input)
     render_pipeline::ScalingLogic::TickUsageSampling();
 
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
-    if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_M)) {
-        scene->toggle_light_map_only_mode();
-        std::cout << "[Assets] Light map-only view "
-                  << (scene->light_map_only_mode() ? "enabled" : "disabled")
-                  << " (Ctrl+M).\n";
-    }
     if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
-        scene->toggle_chunk_debug_mode();
-        std::cout << "[Assets] Chunk debug view "
-                  << (scene->chunk_debug_mode() ? "enabled" : "disabled")
+        scene->toggle_chunk_preview();
+        std::cout << "[Assets] Chunk preview "
+                  << (scene->chunk_preview_enabled() ? "enabled" : "disabled")
                   << " (Ctrl+Q).\n";
     }
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
@@ -663,9 +657,9 @@ void Assets::update(const Input& input)
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->set_player(player);
         dev_controls_->set_active_assets(filtered_active_assets);
-        dev_controls_->set_current_room(current_room_);
+        sync_dev_controls_current_room(current_room_);
         dev_controls_->set_screen_dimensions(screen_width, screen_height);
-        dev_controls_->set_rooms(&rooms_);
+        dev_controls_->set_rooms(&rooms_, rooms_generation_);
         dev_controls_->update(input);
         dev_controls_->update_ui(input);
     }
@@ -706,9 +700,9 @@ void Assets::set_dev_mode(bool mode) {
             dev_controls_->set_enabled(true);
             dev_controls_->set_player(player);
             dev_controls_->set_active_assets(filtered_active_assets);
-            dev_controls_->set_current_room(current_room_);
+            sync_dev_controls_current_room(current_room_, true);
             dev_controls_->set_screen_dimensions(screen_width, screen_height);
-            dev_controls_->set_rooms(&rooms_);
+            dev_controls_->set_rooms(&rooms_, rooms_generation_);
             dev_controls_->set_input(input);
             dev_controls_->set_map_info(&map_info_json_, [this]() { return on_map_light_changed(); });
             dev_controls_->set_map_context(&map_info_json_, map_path_);
@@ -727,6 +721,7 @@ void Assets::set_dev_mode(bool mode) {
             std::cout << "[Assets] Disabling Dev Controls\n";
             dev_controls_->set_enabled(false);
             dev_controls_->clear_selection();
+            reset_dev_controls_current_room_cache();
         }
         update_filtered_active_assets();
     }
@@ -1467,7 +1462,7 @@ void Assets::notify_spawn_group_removed(const std::string& spawn_id) {
 void Assets::set_editor_current_room(Room* room) {
     current_room_ = room;
     if (dev_controls_) {
-        dev_controls_->set_current_room(room);
+        sync_dev_controls_current_room(room, true);
     }
 }
 

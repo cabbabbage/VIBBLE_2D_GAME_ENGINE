@@ -49,6 +49,19 @@ PreloadInputs::PreloadInputs(SDL_Renderer* renderer, Assets* assets, world::Chun
     stageStaticLights();
 }
 
+SDL_BlendMode PreloadInputs::computeRuntimeLightBlendMode() {
+#if SDL_VERSION_ATLEAST(2, 0, 6)
+    return SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO,
+                                      SDL_BLENDFACTOR_SRC_COLOR,
+                                      SDL_BLENDOPERATION_ADD,
+                                      SDL_BLENDFACTOR_ZERO,
+                                      SDL_BLENDFACTOR_ONE,
+                                      SDL_BLENDOPERATION_ADD);
+#else
+    return SDL_BLENDMODE_ADD;
+#endif
+}
+
 void PreloadInputs::resolveChunkBounds() {
     if (!chunk_) {
         chunk_bounds_ = SDL_Rect{0, 0, 0, 0};
@@ -174,21 +187,7 @@ void PreloadInputs::stageStaticLights() {
 }
 
 void PreloadInputs::captureBlendConfig() {
-    if (!renderer_) {
-        light_blend_mode_ = SDL_BLENDMODE_BLEND;
-        return;
-    }
-
-#if SDL_VERSION_ATLEAST(2, 0, 6)
-    light_blend_mode_ = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO,
-                                                   SDL_BLENDFACTOR_SRC_COLOR,
-                                                   SDL_BLENDOPERATION_ADD,
-                                                   SDL_BLENDFACTOR_ZERO,
-                                                   SDL_BLENDFACTOR_ONE,
-                                                   SDL_BLENDOPERATION_ADD);
-#else
-    light_blend_mode_ = SDL_BLENDMODE_ADD;
-#endif
+    light_blend_mode_ = computeRuntimeLightBlendMode();
 }
 
 void PreloadInputs::disableScreenLightAndMovingLights() {

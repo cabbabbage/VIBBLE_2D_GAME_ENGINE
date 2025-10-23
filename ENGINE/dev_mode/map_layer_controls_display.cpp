@@ -49,6 +49,7 @@ void MapLayerControlsDisplay::attach_container(SlidingWindowContainer* container
     container_ = container;
     if (container_) {
         configure_container(*container_);
+        container_->set_header_text("Layer Controls");
         container_->set_header_visible(true);
         container_->set_scrollbar_visible(true);
         container_->set_close_button_enabled(false);
@@ -94,6 +95,10 @@ void MapLayerControlsDisplay::set_selected_layer(int index) {
 
 void MapLayerControlsDisplay::refresh() {
     mark_dirty();
+}
+
+void MapLayerControlsDisplay::set_on_change(std::function<void()> cb) {
+    on_change_ = std::move(cb);
 }
 
 void MapLayerControlsDisplay::configure_container(SlidingWindowContainer& container) {
@@ -235,6 +240,7 @@ bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
             if (controller_ && selected_layer_index_ >= 0) {
                 if (controller_->remove_candidate(selected_layer_index_, candidate.candidate_index)) {
                     mark_dirty();
+                    notify_change();
                 }
             }
             consumed = true;
@@ -242,6 +248,7 @@ bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
         }
         if (candidate.range_slider && candidate.range_slider->handle_event(e)) {
             if (handle_slider_change(candidate)) {
+                notify_change();
                 consumed = true;
             }
             // continue processing other candidates if necessary but event already consumed
@@ -410,6 +417,7 @@ void MapLayerControlsDisplay::on_room_selected(const std::string& room_key) {
     }
     if (controller_->add_candidate(selected_layer_index_, room_key)) {
         mark_dirty();
+        notify_change();
     }
 }
 
@@ -429,5 +437,11 @@ bool MapLayerControlsDisplay::handle_slider_change(CandidateRow& row) {
         return true;
     }
     return false;
+}
+
+void MapLayerControlsDisplay::notify_change() {
+    if (on_change_) {
+        on_change_();
+    }
 }
 

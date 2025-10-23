@@ -6,6 +6,8 @@
 #include <string_view>
 #include <nlohmann/json.hpp>
 
+#include "utils/ranged_color.hpp"
+
 class Global_Light_Source {
 
 	public:
@@ -20,25 +22,28 @@ class Global_Light_Source {
     SDL_Point get_orbit_center() const { return center_; }
     SDL_Point get_direction_reference() const { return map_reference_center_; }
     SDL_Point get_direction_target() const;
-    int       min_opacity() const { return min_opacity_; }
-    int       max_opacity() const { return max_opacity_; }
     bool      initialize_from_map_manifest(const nlohmann::json& map_info, std::string_view map_id);
 
         private:
     struct KeyEntry {
-        float degree;
-        SDL_Color color;
-};
+        float degree = 0.0f;
+        utils::color::RangedColor range{{255,255},{255,255},{255,255},{255,255}};
+        SDL_Color color{255, 255, 255, 255};
+        bool needs_resolve = false;
+    };
     bool load_from_map_manifest(const nlohmann::json& map_info, std::string_view map_id);
     void set_defaults(int screen_width, SDL_Color fallback_base_color);
     void set_light_brightness();
     Uint8 clamp_alpha(Uint8 value) const;
     SDL_Color clamp_color_alpha(SDL_Color color) const;
-    SDL_Color compute_color_from_horizon() const;
+    SDL_Color compute_color_from_horizon(float degree) const;
+    void update_active_segment(float degree);
+    void resolve_key_entry(KeyEntry& entry);
     void      recalc_position();
 
         private:
     SDL_Renderer* renderer_;
+    utils::color::RangedColor base_color_range_{{255,255},{255,255},{255,255},{255,255}};
     SDL_Color base_color_;
     SDL_Color current_color_;
     SDL_Point default_center_;
@@ -48,6 +53,7 @@ class Global_Light_Source {
     SDL_Point pos_;
     float angle_;
     bool  initialized_;
+    bool  orbit_initialized_ = false;
     int   frame_counter_;
     int   light_brightness;
     float radius_;
@@ -57,7 +63,10 @@ class Global_Light_Source {
     int   orbit_radius_x_;
     int   orbit_radius_y_;
     int   update_interval_;
-    int   min_opacity_;
-    int   max_opacity_;
     std::vector<KeyEntry> key_colors_;
+    bool resolve_each_orbit_ = false;
+    bool base_pending_resolve_ = false;
+    float last_degree_ = 0.0f;
+    size_t active_segment_start_ = 0;
+    size_t active_segment_end_ = 0;
 };

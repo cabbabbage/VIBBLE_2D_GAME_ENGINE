@@ -401,8 +401,8 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         const double elapsed_seconds = static_cast<double>(now - animation_start_ticks_) / 1000.0;
         const double angle = std::fmod(elapsed_seconds * degrees_per_second, 360.0);
 
-        const double pivot_x = static_cast<double>(screen_w_) * -0.10;
-        const double pivot_y = static_cast<double>(screen_h_) * 1.10;
+        const double pivot_x = static_cast<double>(screen_w_) * 0.5;
+        const double pivot_y = static_cast<double>(screen_h_) * 0.5;
 
         const double base_scale_x = static_cast<double>(screen_w_) / static_cast<double>(tex_w);
         const double base_scale_y = static_cast<double>(screen_h_) / static_cast<double>(tex_h);

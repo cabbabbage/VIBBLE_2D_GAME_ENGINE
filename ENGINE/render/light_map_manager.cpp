@@ -40,8 +40,8 @@ static void log_transparency_failure_mgr(const char* context,
 
 static float sample_chunk_transparency_mgr(SDL_Renderer* renderer,
                                            world::Chunk& chunk,
-                                           float screen_light_opacity) {
-    const float fallback = world::static_brightness_for_opacity(chunk, screen_light_opacity);
+                                           float map_light_opacity) {
+    const float fallback = world::static_brightness_for_opacity(chunk, map_light_opacity);
     if (!chunk.static_light_mask) {
         chunk.needs_retry   = true;
         chunk.static_clean  = false;
@@ -85,17 +85,13 @@ void LightMapManager::begin_frame() {
     if (chunks.empty()) return;
 
     // Normalize screen-light opacity to [0,1].
-    float screen_light_opacity = 0.0f;
+    float map_light_opacity = 0.0f;
     if (const Global_Light_Source* gl = assets_->map_light_source()) {
-        const int min_a = gl->min_opacity();
-        const int max_a = gl->max_opacity();
-        const int cur_a = std::clamp(static_cast<int>(gl->get_current_color().a), min_a, max_a);
-        const int range = std::max(1, max_a - min_a);
-        screen_light_opacity = std::clamp(static_cast<float>(cur_a - min_a) / static_cast<float>(range), 0.0f, 1.0f);
+        map_light_opacity = std::clamp(static_cast<float>(gl->get_current_color().a) / 255.0f, 0.0f, 1.0f);
     }
 
-    const bool screen_changed = (std::abs(screen_light_opacity - last_screen_light_opacity_) > 1e-4f);
-    last_screen_light_opacity_ = screen_light_opacity;
+    const bool map_changed = (std::abs(map_light_opacity - last_map_light_opacity_) > 1e-4f);
+    last_map_light_opacity_ = map_light_opacity;
 
     // Determine edge bounds in ij-space for active chunks.
     int min_i = INT32_MAX, max_i = INT32_MIN, min_j = INT32_MAX, max_j = INT32_MIN;
@@ -132,7 +128,7 @@ void LightMapManager::begin_frame() {
     for (world::Chunk* chunk : update_set) {
         if (!chunk) continue;
         chunk->lighting.is_active = true;
-        if (screen_changed) {
+        if (map_changed) {
             chunk->lighting.needs_update = true;
         }
         if (!chunk->lighting.needs_update) {
@@ -157,10 +153,10 @@ void LightMapManager::begin_frame() {
             // Recompute brightness (background + static lights; no shadows). For now,
             // approximate using the static mask average transparency.
             chunk->lighting.current_strength =
-                sample_chunk_transparency_mgr(renderer, *chunk, screen_light_opacity);
+                sample_chunk_transparency_mgr(renderer, *chunk, map_light_opacity);
         } else {
             chunk->lighting.current_strength =
-                world::static_brightness_for_opacity(*chunk, screen_light_opacity);
+                world::static_brightness_for_opacity(*chunk, map_light_opacity);
         }
 
         // Populate ChunkShadowParameters via dummy calculators.

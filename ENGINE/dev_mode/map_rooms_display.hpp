@@ -12,6 +12,7 @@
 class SlidingWindowContainer;
 class Input;
 struct SDL_Renderer;
+class DMButton;
 
 // Displays the rooms present in the current map inside a sliding container.
 // Provides simple selection handling that notifies when a room is chosen.
@@ -29,6 +30,7 @@ public:
     void set_on_select_room(SelectRoomCallback cb);
     void set_header_text(const std::string& text);
     void refresh();
+    void set_on_rooms_changed(std::function<void()> cb);
 
 private:
     struct RoomRow {
@@ -48,6 +50,7 @@ private:
     void rebuild_rows();
     void set_hovered_room(const std::string& key);
     void clear_hover();
+    void create_room_entry();
 
 private:
     SlidingWindowContainer* container_ = nullptr;
@@ -55,6 +58,8 @@ private:
     std::vector<RoomRow> rooms_;
     std::string hovered_room_;
     SelectRoomCallback on_select_room_{};
-    std::string header_text_ = "Rooms";
+    std::string header_text_ = "Room List";
+    std::unique_ptr<DMButton> create_room_button_;
+    std::function<void()> on_rooms_changed_{};
 };
 

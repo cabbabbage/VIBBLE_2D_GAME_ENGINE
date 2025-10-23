@@ -33,7 +33,6 @@ namespace {
 constexpr int kDefaultPanelX = 48;
 constexpr int kDefaultPanelY = 48;
 constexpr const char* kButtonIdLights = "lights";
-constexpr const char* kButtonIdShading = "shading";
 constexpr const char* kButtonIdLightMap = "light_map";
 }
 
@@ -142,16 +141,16 @@ void MapModeUI::set_dev_sliding_headers_hidden(bool hidden) {
 
 void MapModeUI::refresh_header_suppression_state() {
     const bool final_state = base_headers_suppressed_ || sliding_headers_hidden_external_ || dev_sliding_headers_hidden_;
-    const bool state_changed = (headers_suppressed_ != final_state);
+    const bool suppression_from_sliding_only = !base_headers_suppressed_ &&
+                                               (sliding_headers_hidden_external_ || dev_sliding_headers_hidden_);
+    const bool state_changed = (headers_suppressed_ != final_state) ||
+                               (sliding_only_header_suppression_ != suppression_from_sliding_only);
     headers_suppressed_ = final_state;
-
-    const bool suppression_from_sliding_only = sliding_headers_hidden_external_ &&
-                                               !base_headers_suppressed_ &&
-                                               !dev_sliding_headers_hidden_;
+    sliding_only_header_suppression_ = suppression_from_sliding_only;
 
     if (state_changed) {
         ensure_panels();
-        if (headers_suppressed_ && !suppression_from_sliding_only) {
+        if (headers_suppressed_ && !sliding_only_header_suppression_) {
             if (layers_panel_) {
                 layers_panel_->close();
             }
@@ -457,14 +456,20 @@ void MapModeUI::ensure_panels() {
     }
     if (!rooms_display_) {
         rooms_display_ = std::make_unique<MapRoomsDisplay>();
-        rooms_display_->set_header_text("Rooms");
+        rooms_display_->set_header_text("Room List");
         rooms_display_->set_on_select_room([this](const std::string& key) {
             this->open_room_configuration(key);
+        });
+        rooms_display_->set_on_rooms_changed([this]() {
+            this->auto_save_layers_data();
         });
     }
     if (rooms_display_) {
         rooms_display_->attach_container(rooms_list_container_.get());
         rooms_display_->set_map_info(map_info_);
+        rooms_display_->set_on_rooms_changed([this]() {
+            this->auto_save_layers_data();
+        });
     }
     if (!layer_controls_container_) {
         layer_controls_container_ = std::make_unique<SlidingWindowContainer>();
@@ -483,6 +488,9 @@ void MapModeUI::ensure_panels() {
         layer_controls_display_->attach_container(layer_controls_container_.get());
         layer_controls_display_->set_controller(layers_controller_);
         layer_controls_display_->set_selected_layer(layers_panel_ ? layers_panel_->selected_layer() : -1);
+        layer_controls_display_->set_on_change([this]() {
+            this->auto_save_layers_data();
+        });
     }
     if (layers_panel_) {
         layers_panel_->set_rooms_list_container(rooms_list_container_.get());
@@ -523,7 +531,7 @@ void MapModeUI::ensure_panels() {
         layers_preview_panel_->set_controller(layers_controller_);
     }
     if (layers_preview_panel_ && map_info_) {
-        layers_preview_panel_->set_map_info(map_info_, [this]() { return save_map_info_to_disk(); });
+        layers_preview_panel_->set_map_info(map_info_, [this]() { return auto_save_layers_data(); });
     }
     if (!footer_bar_) {
         footer_bar_ = std::make_unique<DevFooterBar>("");
@@ -591,10 +599,6 @@ void MapModeUI::configure_footer_buttons() {
                                                    [](const HeaderButtonConfig& cfg) {
                                                        return cfg.id == kButtonIdLights;
                                                    });
-        const bool has_shading_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
-                                                    [](const HeaderButtonConfig& cfg) {
-                                                        return cfg.id == kButtonIdShading;
-                                                    });
 
         if (!has_lights_button) {
             DevFooterBar::Button lights_btn;
@@ -608,20 +612,6 @@ void MapModeUI::configure_footer_buttons() {
                 }
             };
             buttons.push_back(std::move(lights_btn));
-        }
-
-        if (!has_shading_button) {
-            DevFooterBar::Button shading_btn;
-            shading_btn.id = kButtonIdShading;
-            shading_btn.label = "Shading";
-            shading_btn.on_toggle = [this](bool active) {
-                if (active) {
-                    this->open_shading_panel();
-                } else {
-                    this->close_shading_panel();
-                }
-            };
-            buttons.push_back(std::move(shading_btn));
         }
     } else if (header_mode_ == HeaderMode::Room) {
         append_custom(room_mode_buttons_, HeaderMode::Room);
@@ -639,10 +629,10 @@ void MapModeUI::sync_footer_button_states() {
     if (header_mode_ == HeaderMode::Map) {
         const bool lights_visible = light_panel_ && light_panel_->is_visible();
         const bool shading_visible = (shadow_panel_ && shadow_panel_->is_visible());
+        const bool lighting_controls_visible = lights_visible || shading_visible;
         const bool light_map_visible = preview_panel_ && preview_panel_->is_visible();
         const bool layers_visible = layers_panel_ && layers_panel_->is_visible();
-        footer_bar_->set_button_active_state(kButtonIdLights, lights_visible);
-        footer_bar_->set_button_active_state(kButtonIdShading, shading_visible);
+        footer_bar_->set_button_active_state(kButtonIdLights, lighting_controls_visible);
         footer_bar_->set_button_active_state(kButtonIdLightMap, light_map_visible);
         footer_bar_->set_button_active_state("layers", layers_visible);
         for (const auto& config : map_mode_buttons_) {
@@ -662,7 +652,8 @@ void MapModeUI::sync_footer_button_states() {
 void MapModeUI::update_footer_visibility() {
     if (!footer_bar_) return;
     footer_bar_->set_bounds(screen_w_, screen_h_);
-    const bool should_show = !headers_suppressed_ && (footer_always_visible_ || map_mode_active_);
+    const bool headers_allow_footer = !headers_suppressed_ || sliding_only_header_suppression_;
+    const bool should_show = headers_allow_footer && (footer_always_visible_ || map_mode_active_);
     footer_bar_->set_visible(should_show);
 }
 
@@ -754,7 +745,7 @@ void MapModeUI::sync_panel_map_info() {
             layers_controller_->bind(map_info_, map_path_);
         }
         layers_panel_->set_map_info(map_info_, map_path_);
-        layers_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
+        layers_panel_->set_on_save([this]() { return auto_save_layers_data(); });
     }
     if (rooms_display_) {
         rooms_display_->set_map_info(map_info_);
@@ -865,7 +856,7 @@ bool MapModeUI::handle_event(const SDL_Event& e) {
     }
 
     bool footer_used = false;
-    const bool allow_footer = !headers_suppressed_;
+    const bool allow_footer = !headers_suppressed_ || sliding_only_header_suppression_;
     if (allow_footer && footer_bar_ && footer_bar_->visible()) {
         footer_used = footer_bar_->handle_event(e);
     }
@@ -934,16 +925,22 @@ void MapModeUI::open_layers_panel() {
 
 void MapModeUI::open_light_panel() {
     ensure_panels();
-    if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
+    const bool light_unlocked = ensure_panel_unlocked(light_panel_.get(), "Light");
+    const bool shading_unlocked = ensure_panel_unlocked(shadow_panel_.get(), "Shading");
+    if (!light_unlocked || !shading_unlocked) {
         sync_footer_button_states();
         return;
     }
-    if (!light_panel_centered_) {
+    if (!light_panel_centered_ || !shading_panel_centered_) {
         ensure_light_and_shading_positions();
     }
     if (light_panel_) {
         light_panel_->open();
         bring_panel_to_front(light_panel_.get());
+    }
+    if (shadow_panel_) {
+        shadow_panel_->open();
+        bring_panel_to_front(shadow_panel_.get());
     }
     sync_footer_button_states();
 }
@@ -953,18 +950,25 @@ void MapModeUI::close_light_panel() {
     if (light_panel_) {
         light_panel_->close();
     }
+    if (shadow_panel_) {
+        shadow_panel_->close();
+    }
+    shading_panel_centered_ = false;
     sync_footer_button_states();
 }
 
 void MapModeUI::toggle_light_panel() {
     ensure_panels();
-    if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
+    const bool light_unlocked = ensure_panel_unlocked(light_panel_.get(), "Light");
+    const bool shading_unlocked = ensure_panel_unlocked(shadow_panel_.get(), "Shading");
+    if (!light_unlocked || !shading_unlocked) {
         sync_footer_button_states();
         return;
     }
-    if (light_panel_ && light_panel_->is_visible()) {
-        light_panel_->close();
-        sync_footer_button_states();
+    const bool lights_visible = light_panel_ && light_panel_->is_visible();
+    const bool shading_visible = shadow_panel_ && shadow_panel_->is_visible();
+    if (lights_visible || shading_visible) {
+        close_light_panel();
         return;
     }
     open_light_panel();
@@ -1422,7 +1426,7 @@ void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
     if (layers_preview_panel_) {
         LightSaveCallback callback = light_save_callback_;
         if (!callback) {
-            callback = [this]() { return save_map_info_to_disk(); };
+            callback = [this]() { return auto_save_layers_data(); };
         }
         layers_preview_panel_->set_map_info(map_info_, callback);
     }
@@ -1445,7 +1449,7 @@ bool MapModeUI::is_point_inside(int x, int y) const {
     if (pointer_inside_floating_panel(x, y)) {
         return true;
     }
-    if (headers_suppressed_) {
+    if (headers_suppressed_ && !sliding_only_header_suppression_) {
         return false;
     }
     if (footer_bar_ && footer_bar_->visible() && footer_bar_->contains(x, y)) {
@@ -1514,5 +1518,25 @@ bool MapModeUI::save_map_info_to_disk() const {
     }
     manifest_store_->flush();
     return true;
+}
+
+bool MapModeUI::auto_save_layers_data() {
+    bool saved = false;
+    if (layers_controller_) {
+        saved = layers_controller_->save();
+    }
+    if (!saved) {
+        saved = save_map_info_to_disk();
+    }
+    if (rooms_display_) {
+        rooms_display_->refresh();
+    }
+    if (layer_controls_display_) {
+        layer_controls_display_->refresh();
+    }
+    if (layers_panel_) {
+        layers_panel_->mark_dirty(true);
+    }
+    return saved;
 }
 

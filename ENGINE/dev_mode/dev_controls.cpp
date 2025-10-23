@@ -526,6 +526,9 @@ void DevControls::set_active_assets(std::vector<Asset*>& actives) {
 }
 
 void DevControls::set_screen_dimensions(int width, int height) {
+    if (screen_w_ == width && screen_h_ == height) {
+        return;
+    }
     screen_w_ = width;
     screen_h_ = height;
     if (room_editor_) room_editor_->set_screen_dimensions(width, height);
@@ -540,7 +543,12 @@ void DevControls::set_screen_dimensions(int width, int height) {
     asset_filter_.ensure_layout();
 }
 
-void DevControls::set_current_room(Room* room) {
+void DevControls::set_current_room(Room* room, bool force_refresh) {
+    if (!force_refresh && current_room_ == room) {
+        current_room_ = room;
+        dev_selected_room_ = room;
+        return;
+    }
     {
         std::ostringstream oss;
         oss << "[DevControls] set_current_room begin -> "
@@ -570,8 +578,14 @@ void DevControls::set_current_room(Room* room) {
     dev_mode_trace("[DevControls] set_current_room complete");
 }
 
-void DevControls::set_rooms(std::vector<Room*>* rooms) {
+void DevControls::set_rooms(std::vector<Room*>* rooms, std::size_t generation) {
+    if (rooms == rooms_ && generation == rooms_generation_) {
+        return;
+    }
+
     rooms_ = rooms;
+    rooms_generation_ = generation;
+
     if (rooms_ && assets_) {
         const std::string map_id = assets_->map_id();
         nlohmann::json* map_info = &assets_->map_info_json();
@@ -1905,8 +1919,7 @@ void DevControls::pulse_modal_header() {
 
 void DevControls::apply_header_suppression() {
     if (map_mode_ui_) {
-        const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_;
-        map_mode_ui_->set_headers_suppressed(hide_headers);
+        map_mode_ui_->set_headers_suppressed(modal_headers_hidden_);
         map_mode_ui_->set_dev_sliding_headers_hidden(sliding_headers_hidden_);
     }
 }

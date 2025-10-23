@@ -112,6 +112,9 @@ void AssetFilterBar::set_enabled(bool enabled) {
 }
 
 void AssetFilterBar::set_screen_dimensions(int width, int height) {
+    if (screen_w_ == width && screen_h_ == height) {
+        return;
+    }
     screen_w_ = width;
     screen_h_ = height;
     layout_dirty_ = true;

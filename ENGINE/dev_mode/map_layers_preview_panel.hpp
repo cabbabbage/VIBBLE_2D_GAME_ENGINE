@@ -36,6 +36,7 @@ public:
 
 private:
     void build_rows();
+    void trigger_save();
 
     nlohmann::json* map_info_ = nullptr;
     SaveCallback on_save_{};
@@ -46,7 +47,6 @@ private:
 
     std::unique_ptr<class DMButton> add_layer_btn_;
     std::unique_ptr<class DMButton> create_room_btn_;
-    std::unique_ptr<class DMButton> save_btn_;
     std::unique_ptr<class DMButton> reload_btn_;
 
     std::function<void(int)> on_select_layer_{};

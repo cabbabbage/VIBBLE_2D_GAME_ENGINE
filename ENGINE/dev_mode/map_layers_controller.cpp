@@ -189,6 +189,55 @@ bool MapLayersController::reorder_layer(int from, int to) {
     return true;
 }
 
+int MapLayersController::duplicate_layer(int index) {
+    if (!map_info_) return -1;
+    auto& arr = (*map_info_)["map_layers"];
+    if (!arr.is_array() || index < 0 || index >= static_cast<int>(arr.size())) return -1;
+
+    ensure_initialized();
+
+    json copy = arr[index];
+    if (!copy.is_object()) copy = json::object();
+
+    auto name_exists = [&](const std::string& candidate) {
+        return std::any_of(arr.begin(), arr.end(), [&](const json& entry) {
+            return entry.is_object() && entry.value("name", std::string()) == candidate;
+        });
+    };
+
+    std::string base_name = copy.value("name", std::string());
+    if (base_name.empty()) {
+        base_name = std::string("layer_") + std::to_string(index);
+    }
+    std::string candidate = base_name + " Copy";
+    int suffix = 2;
+    while (name_exists(candidate)) {
+        candidate = base_name + " Copy " + std::to_string(suffix++);
+    }
+    copy["name"] = candidate;
+
+    auto& rooms = copy["rooms"];
+    if (!rooms.is_array()) {
+        rooms = json::array();
+    }
+    for (auto& entry : rooms) {
+        if (!entry.is_object()) entry = json::object();
+        if (!entry.contains("name")) entry["name"] = "";
+        if (!entry.contains("min_instances")) entry["min_instances"] = 0;
+        if (!entry.contains("max_instances")) entry["max_instances"] = 1;
+        if (!entry.contains("required_children") || !entry["required_children"].is_array()) {
+            entry["required_children"] = json::array();
+        }
+    }
+
+    const int insert_index = std::min(index + 1, static_cast<int>(arr.size()));
+    arr.insert(arr.begin() + insert_index, std::move(copy));
+    ensure_layer_indices();
+    dirty_ = true;
+    notify();
+    return insert_index;
+}
+
 bool MapLayersController::rename_layer(int index, const std::string& name) {
     if (!validate_layer_index(index)) return false;
     auto* layer_json = layer(index);

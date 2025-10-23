@@ -123,7 +123,22 @@ void resample_image_bilinear(const ImageData& src, int dst_width, int dst_height
     }
 }
 
-// Gentle alpha blend for overlays (no inversion, no normalization).
+void invert_overlay_colors(std::vector<unsigned char>& pixels) {
+    if (pixels.empty()) {
+        return;
+    }
+
+    const size_t total_pixels = pixels.size() / 4;
+    for (size_t i = 0; i < total_pixels; ++i) {
+        const size_t idx = i * 4;
+        for (int channel = 0; channel < 3; ++channel) {
+            pixels[idx + static_cast<size_t>(channel)] =
+                static_cast<unsigned char>(255u - pixels[idx + static_cast<size_t>(channel)]);
+        }
+    }
+}
+
+// Gentle alpha blend for overlays (no normalization).
 void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
                            const std::vector<unsigned char>& overlay_pixels,
                            int width,
@@ -233,6 +248,8 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
     std::vector<unsigned char> merged(static_cast<size_t>(width) * static_cast<size_t>(height) * 4, 0u);
 
     if (has_esoteric && has_americana) {
+        invert_overlay_colors(overlay_esoteric);
+        invert_overlay_colors(overlay_americana);
         const size_t total_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
         for (size_t i = 0; i < total_pixels; ++i) {
             const size_t idx = i * 4;
@@ -243,12 +260,14 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
             }
         }
     } else if (has_esoteric) {
+        invert_overlay_colors(overlay_esoteric);
         merged = std::move(overlay_esoteric);
     } else {
+        invert_overlay_colors(overlay_americana);
         merged = std::move(overlay_americana);
     }
 
-    // No normalization or inversion — keep overlays exactly as provided, then blend gently.
+    // No additional normalization — blend the inverted overlay gently onto the base image.
     blend_overlay_texture(base_pixels, merged, width, height);
 }
 

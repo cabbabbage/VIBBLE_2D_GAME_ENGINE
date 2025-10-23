@@ -47,8 +47,8 @@ public:
     void set_player(Asset* player);
     void set_active_assets(std::vector<Asset*>& actives);
     void set_screen_dimensions(int width, int height);
-    void set_current_room(Room* room);
-    void set_rooms(std::vector<Room*>* rooms);
+    void set_current_room(Room* room, bool force_refresh = false);
+    void set_rooms(std::vector<Room*>* rooms, std::size_t generation = 0);
 
     void set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save);
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
@@ -190,6 +190,7 @@ private:
     Room* detected_room_ = nullptr;
     Room* dev_selected_room_ = nullptr;
     std::vector<Room*>* rooms_ = nullptr;
+    std::size_t rooms_generation_ = 0;
 
     int screen_w_ = 0;
     int screen_h_ = 0;

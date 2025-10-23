@@ -97,7 +97,7 @@ public:
         // New: min/max shadow scale as integer percents (50..200)
         int   min_scale_percent       = 80;   // 80% default
         int   max_scale_percent       = 120;  // 120% default
-        // Strength (0..1) of map-light directional X offset contribution
+        // Strength (0..1) of map-light directional offset contribution
         float map_light_dir_offset_strength = 0.5f;
         float parallax_percent        = 0.0f;
     };
@@ -127,7 +127,7 @@ public:
 
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
-    void render_visible_chunks_debug(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier) const;
+    void render_chunk_preview(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void present_static_previews(SDL_Renderer* renderer) const;
 
     void mark_region_dirty(const SDL_Rect& screen_rect);
@@ -155,7 +155,7 @@ private:
     int     screen_width_  = 0;
     int     screen_height_ = 0;
 
-    mutable float        last_screen_light_opacity_ = -1.0f;
+    mutable float        last_map_light_opacity_ = -1.0f;
     mutable std::recursive_mutex mutex_;
 };
 

@@ -33,6 +33,26 @@ constexpr int kControlOutlineThickness = 1;
 constexpr int kFocusRingThickness = 2;
 constexpr int kKnobOutlineThickness = 1;
 
+struct DropdownCandidate {
+    int delta;
+    float scale;
+    float alpha;
+};
+
+constexpr DropdownCandidate kDropdownCandidates[] = {
+    { -2, 0.82f, 0.35f },
+    { -1, 0.9f, 0.65f },
+    { 0, 1.0f, 1.0f },
+    { 1, 0.9f, 0.65f },
+    { 2, 0.82f, 0.35f },
+};
+
+SDL_Color ApplyAlpha(SDL_Color col, float alpha) {
+    const int scaled = static_cast<int>(std::round(col.a * alpha));
+    col.a = static_cast<Uint8>(std::clamp(scaled, 0, 255));
+    return col;
+}
+
 struct SliderFormatStats {
     int format_calls = 0;
     int allocations = 0;
@@ -759,7 +779,9 @@ bool DMSlider::handle_event(const SDL_Event& e) {
         if (inside) {
             bool was_focused = focused_;
             set_focus(true);
-            bool handled = !was_focused;
+            if (!was_focused) {
+                return true;
+            }
             SDL_Rect vr = value_rect();
             if (SDL_PointInRect(&p, &vr)) {
                 edit_box_ = std::make_unique<DMTextBox>("", format_value(display_value()));
@@ -775,9 +797,7 @@ bool DMSlider::handle_event(const SDL_Event& e) {
                 apply_interaction_value(value_for_x(p.x));
                 return true;
             }
-            if (handled) {
-                return true;
-            }
+            return false;
         } else if (!dragging_) {
             set_focus(false);
         }
@@ -1587,6 +1607,101 @@ DMDropdown* DMDropdown::active_ = nullptr;
 
 DMDropdown* DMDropdown::active_dropdown() { return active_; }
 
+struct DMDropdown::OptionEntry {
+    int index = 0;
+    int delta = 0;
+    float scale = 1.0f;
+    float alpha = 1.0f;
+    SDL_Rect rect{ 0, 0, 0, 0 };
+};
+
+bool DMDropdown::build_option_entries(std::vector<OptionEntry>& entries) const {
+    entries.clear();
+    if (options_.empty()) {
+        return false;
+    }
+
+    const int base_index = clamp_index(has_pending_index_ ? pending_index_ : index_);
+    entries.reserve(std::size(kDropdownCandidates));
+    for (const DropdownCandidate& candidate : kDropdownCandidates) {
+        const int idx = base_index + candidate.delta;
+        if (idx < 0 || idx >= static_cast<int>(options_.size())) {
+            continue;
+        }
+        OptionEntry entry;
+        entry.index = idx;
+        entry.delta = candidate.delta;
+        entry.scale = candidate.scale;
+        entry.alpha = candidate.alpha;
+        entries.push_back(entry);
+    }
+
+    if (entries.empty()) {
+        return false;
+    }
+
+    const int spacing = 6;
+    const int base_w = box_rect_.w;
+    const int base_h = box_rect_.h;
+    const int center_x = box_rect_.x + base_w / 2;
+    const int center_y = box_rect_.y + base_h / 2;
+
+    const auto compute_size = [&](const OptionEntry& e) {
+        const int w = std::max(1, static_cast<int>(std::round(base_w * e.scale)));
+        const int h = std::max(1, static_cast<int>(std::round(base_h * e.scale)));
+        SDL_Rect rect{ center_x - w / 2, center_y - h / 2, w, h };
+        return rect;
+    };
+
+    OptionEntry* center_entry = nullptr;
+    for (OptionEntry& entry : entries) {
+        if (entry.delta == 0) {
+            entry.rect = compute_size(entry);
+            center_entry = &entry;
+            break;
+        }
+    }
+
+    if (!center_entry) {
+        entries.front().rect = compute_size(entries.front());
+        center_entry = &entries.front();
+    }
+
+    int current_top = center_entry->rect.y;
+    std::vector<OptionEntry*> above;
+    std::vector<OptionEntry*> below;
+    above.reserve(entries.size());
+    below.reserve(entries.size());
+    for (OptionEntry& entry : entries) {
+        if (&entry == center_entry) continue;
+        if (entry.delta < 0) {
+            above.push_back(&entry);
+        } else {
+            below.push_back(&entry);
+        }
+    }
+
+    std::sort(above.begin(), above.end(), [](const OptionEntry* a, const OptionEntry* b) { return a->delta > b->delta; });
+    std::sort(below.begin(), below.end(), [](const OptionEntry* a, const OptionEntry* b) { return a->delta < b->delta; });
+
+    for (OptionEntry* entry : above) {
+        SDL_Rect rect = compute_size(*entry);
+        rect.y = current_top - spacing - rect.h;
+        entry->rect = rect;
+        current_top = rect.y;
+    }
+
+    int current_bottom = center_entry->rect.y + center_entry->rect.h;
+    for (OptionEntry* entry : below) {
+        SDL_Rect rect = compute_size(*entry);
+        rect.y = current_bottom + spacing;
+        entry->rect = rect;
+        current_bottom = rect.y + rect.h;
+    }
+
+    return true;
+}
+
 void DMDropdown::render_active_options(SDL_Renderer* r) {
     if (active_ && active_->focused_) active_->render_options(r);
 }
@@ -1607,21 +1722,45 @@ void DMDropdown::set_selected(int idx) {
     index_ = clamp_index(idx);
     pending_index_ = index_;
     has_pending_index_ = focused_;
+    hovered_option_index_ = focused_ ? pending_index_ : -1;
 }
 
 bool DMDropdown::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
-        const bool inside = SDL_PointInRect(&p, &box_rect_);
-        hovered_ = inside;
-        if (focused_ && active_ == this && !inside) {
+        const bool inside_box = SDL_PointInRect(&p, &box_rect_);
+        hovered_ = inside_box;
+
+        bool inside_options = false;
+        int hovered_option = -1;
+        std::vector<OptionEntry> entries;
+        if (focused_ && active_ == this && build_option_entries(entries)) {
+            for (const OptionEntry& entry : entries) {
+                if (SDL_PointInRect(&p, &entry.rect)) {
+                    inside_options = true;
+                    hovered_option = entry.index;
+                    break;
+                }
+            }
+        }
+
+        bool consumed = false;
+        if (inside_options) {
+            hovered_option_index_ = hovered_option;
+            consumed = true;
+        } else {
+            hovered_option_index_ = -1;
+        }
+
+        if (focused_ && active_ == this && !inside_box && !inside_options) {
             const bool applied = commit_pending_selection();
             focused_ = false;
             has_pending_index_ = false;
+            hovered_option_index_ = -1;
             if (active_ == this) active_ = nullptr;
-            return applied;
+            return applied || consumed;
         }
-        return false;
+        return consumed;
     }
 
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -1632,9 +1771,25 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
             return true;
         }
         if (focused_ && active_ == this) {
+            std::vector<OptionEntry> entries;
+            if (build_option_entries(entries)) {
+                for (const OptionEntry& entry : entries) {
+                    if (SDL_PointInRect(&p, &entry.rect)) {
+                        pending_index_ = entry.index;
+                        has_pending_index_ = true;
+                        hovered_option_index_ = -1;
+                        const bool applied = commit_pending_selection();
+                        focused_ = false;
+                        has_pending_index_ = false;
+                        if (active_ == this) active_ = nullptr;
+                        return true;
+                    }
+                }
+            }
             const bool applied = commit_pending_selection();
             focused_ = false;
             has_pending_index_ = false;
+            hovered_option_index_ = -1;
             if (active_ == this) active_ = nullptr;
             return applied;
         }
@@ -1660,6 +1815,7 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
             return false;
         }
         pending_index_ = clamped;
+        hovered_option_index_ = pending_index_;
         return true;
     }
 
@@ -1720,6 +1876,9 @@ void DMDropdown::render(SDL_Renderer* r) const {
         kControlOutlineThickness,
         border);
     DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
+    int arrow_space = box_rect_.w > 0 ? std::max(12, box_rect_.h / 2) : 0;
+    arrow_space = std::min(arrow_space, std::max(12, box_rect_.w / 2));
+    arrow_space = std::min(arrow_space, box_rect_.w);
     TTF_Font* f = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);
     if (f) {
         int safe_idx = 0;
@@ -1733,13 +1892,38 @@ void DMDropdown::render(SDL_Renderer* r) const {
         if (surf) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
             if (tex) {
-                SDL_Rect dst{ box_rect_.x + (box_rect_.w - surf->w)/2, box_rect_.y + (box_rect_.h - surf->h)/2, surf->w, surf->h };
+                const int text_area_width = std::max(0, box_rect_.w - arrow_space);
+                const int text_x_min = box_rect_.x;
+                const int text_x_max = box_rect_.x + std::max(0, text_area_width - surf->w);
+                const int centered = box_rect_.x + std::max(0, (text_area_width - surf->w) / 2);
+                const int dst_x = std::clamp(centered, text_x_min, text_x_max);
+                SDL_Rect dst{ dst_x, box_rect_.y + (box_rect_.h - surf->h)/2, surf->w, surf->h };
                 SDL_RenderCopy(r, tex, nullptr, &dst);
                 SDL_DestroyTexture(tex);
             }
             SDL_FreeSurface(surf);
         }
         TTF_CloseFont(f);
+    }
+
+    if (arrow_space > 0) {
+        const int arrow_center_x = box_rect_.x + box_rect_.w - arrow_space / 2;
+        const int arrow_center_y = box_rect_.y + box_rect_.h / 2;
+        const int arrow_half_width = std::max(3, arrow_space / 4);
+        const int arrow_half_height = std::max(2, arrow_space / 6);
+        SDL_Color arrow_color = border;
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, arrow_color.r, arrow_color.g, arrow_color.b, arrow_color.a);
+        SDL_RenderDrawLine(r,
+                           arrow_center_x - arrow_half_width,
+                           arrow_center_y - arrow_half_height,
+                           arrow_center_x,
+                           arrow_center_y + arrow_half_height);
+        SDL_RenderDrawLine(r,
+                           arrow_center_x + arrow_half_width,
+                           arrow_center_y - arrow_half_height,
+                           arrow_center_x,
+                           arrow_center_y + arrow_half_height);
     }
 }
 
@@ -1756,118 +1940,31 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
     const SDL_Color highlight = DMStyles::HighlightColor();
     const SDL_Color shadow = DMStyles::ShadowColor();
 
-    const int base_index = clamp_index(has_pending_index_ ? pending_index_ : index_);
-
-    struct Candidate {
-        int delta;
-        float scale;
-        float alpha;
-    };
-    static constexpr Candidate kCandidates[] = {
-        { -2, 0.82f, 0.35f },
-        { -1, 0.9f, 0.65f },
-        { 0, 1.0f, 1.0f },
-        { 1, 0.9f, 0.65f },
-        { 2, 0.82f, 0.35f },
-    };
-
-    struct Entry {
-        int index;
-        int delta;
-        float scale;
-        float alpha;
-        SDL_Rect rect{};
-    };
-
-    std::vector<Entry> entries;
-    entries.reserve(std::size(kCandidates));
-    for (const Candidate& c : kCandidates) {
-        const int idx = base_index + c.delta;
-        if (idx < 0 || idx >= static_cast<int>(options_.size())) {
-            continue;
-        }
-        entries.push_back(Entry{ idx, c.delta, c.scale, c.alpha, {} });
-    }
-    if (entries.empty()) {
+    std::vector<OptionEntry> entries;
+    if (!build_option_entries(entries)) {
         return;
     }
 
-    const auto apply_alpha = [](SDL_Color col, float alpha) {
-        const int scaled = static_cast<int>(std::round(col.a * alpha));
-        col.a = static_cast<Uint8>(std::clamp(scaled, 0, 255));
-        return col;
-    };
-
-    const int spacing = 6;
-    const int base_w = box_rect_.w;
-    const int base_h = box_rect_.h;
-    const int center_x = box_rect_.x + base_w / 2;
-    const int center_y = box_rect_.y + base_h / 2;
-
-    const auto compute_size = [&](const Entry& e) {
-        const int w = std::max(1, static_cast<int>(std::round(base_w * e.scale)));
-        const int h = std::max(1, static_cast<int>(std::round(base_h * e.scale)));
-        SDL_Rect rect{ center_x - w / 2, center_y - h / 2, w, h };
-        return rect;
-    };
-
-    Entry* center_entry = nullptr;
-    for (Entry& e : entries) {
-        if (e.delta == 0) {
-            e.rect = compute_size(e);
-            center_entry = &e;
-            break;
-        }
-    }
-    if (!center_entry) {
-        // Should not happen, but fall back to rendering the first entry centered.
-        entries.front().rect = compute_size(entries.front());
-        center_entry = &entries.front();
-    }
-
-    int current_top = center_entry->rect.y;
-    std::vector<Entry*> above;
-    std::vector<Entry*> below;
-    for (Entry& e : entries) {
-        if (&e == center_entry) continue;
-        if (e.delta < 0) {
-            above.push_back(&e);
-        } else {
-            below.push_back(&e);
-        }
-    }
-    std::sort(above.begin(), above.end(), [](const Entry* a, const Entry* b) { return a->delta > b->delta; });
-    std::sort(below.begin(), below.end(), [](const Entry* a, const Entry* b) { return a->delta < b->delta; });
-
-    for (Entry* e : above) {
-        SDL_Rect rect = compute_size(*e);
-        rect.y = current_top - spacing - rect.h;
-        e->rect = rect;
-        current_top = rect.y;
-    }
-
-    int current_bottom = center_entry->rect.y + center_entry->rect.h;
-    for (Entry* e : below) {
-        SDL_Rect rect = compute_size(*e);
-        rect.y = current_bottom + spacing;
-        e->rect = rect;
-        current_bottom = rect.y + rect.h;
-    }
+    const int selected_index = clamp_index(has_pending_index_ ? pending_index_ : index_);
 
     TTF_Font* font = TTF_OpenFont(labelStyle.font_path.c_str(), labelStyle.font_size);
-    for (Entry& entry : entries) {
-        const bool current = (entry.delta == 0);
+    for (const OptionEntry& entry : entries) {
         SDL_Rect rect = entry.rect;
-        SDL_Color fill = current ? focus_fill : base_fill;
-        SDL_Color border = current ? focus_border : base_border;
+        const bool is_selected = (entry.index == selected_index);
+        const bool is_hovered = (entry.index == hovered_option_index_);
+        const bool emphasize = is_selected || is_hovered;
+
+        SDL_Color fill = emphasize ? focus_fill : base_fill;
+        SDL_Color border = emphasize ? focus_border : base_border;
         SDL_Color hl = highlight;
         SDL_Color sh = shadow;
-        if (!current) {
-            fill = apply_alpha(fill, entry.alpha);
-            border = apply_alpha(border, entry.alpha);
-            hl = apply_alpha(hl, entry.alpha);
-            sh = apply_alpha(sh, entry.alpha);
+        if (!emphasize) {
+            fill = ApplyAlpha(fill, entry.alpha);
+            border = ApplyAlpha(border, entry.alpha);
+            hl = ApplyAlpha(hl, entry.alpha);
+            sh = ApplyAlpha(sh, entry.alpha);
         }
+
         dm_draw::DrawBeveledRect(
             r,
             rect,
@@ -1879,7 +1976,8 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
             false,
             DMStyles::HighlightIntensity(),
             DMStyles::ShadowIntensity());
-        if (current) {
+
+        if (emphasize) {
             const SDL_Color focus_ring = DMStyles::TextboxFocusOutline();
             dm_draw::DrawRoundedFocusRing(
                 r,
@@ -1888,19 +1986,23 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
                 kFocusRingThickness,
                 focus_ring);
         }
+
         dm_draw::DrawRoundedOutline(
             r,
             rect,
             DMStyles::CornerRadius(),
             kControlOutlineThickness,
             border);
+
         if (!font) {
             continue;
         }
+
         SDL_Color text_color = labelStyle.color;
-        if (!current) {
-            text_color = apply_alpha(text_color, entry.alpha);
+        if (!emphasize) {
+            text_color = ApplyAlpha(text_color, entry.alpha);
         }
+
         SDL_Surface* surf = TTF_RenderUTF8_Blended(font, options_[entry.index].c_str(), text_color);
         if (surf) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
@@ -1975,9 +2077,11 @@ void DMDropdown::begin_focus() {
         active_->commit_pending_selection();
         active_->focused_ = false;
         active_->has_pending_index_ = false;
+        active_->hovered_option_index_ = -1;
     }
     active_ = this;
     pending_index_ = index_;
     has_pending_index_ = true;
+    hovered_option_index_ = pending_index_;
 }
 

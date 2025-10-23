@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -29,6 +30,7 @@ public:
     void set_controller(std::shared_ptr<MapLayersController> controller);
     void set_selected_layer(int index);
     void refresh();
+    void set_on_change(std::function<void()> cb);
 
 private:
     struct CandidateRow {
@@ -59,6 +61,7 @@ private:
     void close_room_selector();
     void on_room_selected(const std::string& room_key);
     bool handle_slider_change(CandidateRow& row);
+    void notify_change();
 
     SlidingWindowContainer* container_ = nullptr;
     std::shared_ptr<MapLayersController> controller_{};
@@ -82,5 +85,6 @@ private:
     mutable std::vector<std::string> filtered_rooms_;
 
     std::unique_ptr<RoomSelectorPopup> room_selector_;
+    std::function<void()> on_change_{};
 };
 

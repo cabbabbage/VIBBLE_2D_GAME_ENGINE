@@ -113,6 +113,7 @@ private:
     void ensure_panels();
     void sync_panel_map_info();
     bool save_map_info_to_disk() const;
+    bool auto_save_layers_data();
     void configure_footer_buttons();
     void sync_footer_button_states();
     void update_footer_visibility();
@@ -167,6 +168,7 @@ private:
     HeaderMode header_mode_ = HeaderMode::Map;
     PanelType active_panel_ = PanelType::None;
     bool headers_suppressed_ = false;
+    bool sliding_only_header_suppression_ = false;
     bool base_headers_suppressed_ = false;
     bool sliding_headers_hidden_external_ = false;
     bool dev_sliding_headers_hidden_ = false;
