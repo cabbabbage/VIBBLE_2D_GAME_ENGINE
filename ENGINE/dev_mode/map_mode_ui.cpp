@@ -33,7 +33,6 @@ namespace {
 constexpr int kDefaultPanelX = 48;
 constexpr int kDefaultPanelY = 48;
 constexpr const char* kButtonIdLights = "lights";
-constexpr const char* kButtonIdShading = "shading";
 constexpr const char* kButtonIdLightMap = "light_map";
 }
 
@@ -600,10 +599,6 @@ void MapModeUI::configure_footer_buttons() {
                                                    [](const HeaderButtonConfig& cfg) {
                                                        return cfg.id == kButtonIdLights;
                                                    });
-        const bool has_shading_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
-                                                    [](const HeaderButtonConfig& cfg) {
-                                                        return cfg.id == kButtonIdShading;
-                                                    });
 
         if (!has_lights_button) {
             DevFooterBar::Button lights_btn;
@@ -617,20 +612,6 @@ void MapModeUI::configure_footer_buttons() {
                 }
             };
             buttons.push_back(std::move(lights_btn));
-        }
-
-        if (!has_shading_button) {
-            DevFooterBar::Button shading_btn;
-            shading_btn.id = kButtonIdShading;
-            shading_btn.label = "Shading";
-            shading_btn.on_toggle = [this](bool active) {
-                if (active) {
-                    this->open_shading_panel();
-                } else {
-                    this->close_shading_panel();
-                }
-            };
-            buttons.push_back(std::move(shading_btn));
         }
     } else if (header_mode_ == HeaderMode::Room) {
         append_custom(room_mode_buttons_, HeaderMode::Room);
@@ -648,10 +629,10 @@ void MapModeUI::sync_footer_button_states() {
     if (header_mode_ == HeaderMode::Map) {
         const bool lights_visible = light_panel_ && light_panel_->is_visible();
         const bool shading_visible = (shadow_panel_ && shadow_panel_->is_visible());
+        const bool lighting_controls_visible = lights_visible || shading_visible;
         const bool light_map_visible = preview_panel_ && preview_panel_->is_visible();
         const bool layers_visible = layers_panel_ && layers_panel_->is_visible();
-        footer_bar_->set_button_active_state(kButtonIdLights, lights_visible);
-        footer_bar_->set_button_active_state(kButtonIdShading, shading_visible);
+        footer_bar_->set_button_active_state(kButtonIdLights, lighting_controls_visible);
         footer_bar_->set_button_active_state(kButtonIdLightMap, light_map_visible);
         footer_bar_->set_button_active_state("layers", layers_visible);
         for (const auto& config : map_mode_buttons_) {
@@ -943,16 +924,22 @@ void MapModeUI::open_layers_panel() {
 
 void MapModeUI::open_light_panel() {
     ensure_panels();
-    if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
+    const bool light_unlocked = ensure_panel_unlocked(light_panel_.get(), "Light");
+    const bool shading_unlocked = ensure_panel_unlocked(shadow_panel_.get(), "Shading");
+    if (!light_unlocked || !shading_unlocked) {
         sync_footer_button_states();
         return;
     }
-    if (!light_panel_centered_) {
+    if (!light_panel_centered_ || !shading_panel_centered_) {
         ensure_light_and_shading_positions();
     }
     if (light_panel_) {
         light_panel_->open();
         bring_panel_to_front(light_panel_.get());
+    }
+    if (shadow_panel_) {
+        shadow_panel_->open();
+        bring_panel_to_front(shadow_panel_.get());
     }
     sync_footer_button_states();
 }
@@ -962,18 +949,25 @@ void MapModeUI::close_light_panel() {
     if (light_panel_) {
         light_panel_->close();
     }
+    if (shadow_panel_) {
+        shadow_panel_->close();
+    }
+    shading_panel_centered_ = false;
     sync_footer_button_states();
 }
 
 void MapModeUI::toggle_light_panel() {
     ensure_panels();
-    if (!ensure_panel_unlocked(light_panel_.get(), "Light")) {
+    const bool light_unlocked = ensure_panel_unlocked(light_panel_.get(), "Light");
+    const bool shading_unlocked = ensure_panel_unlocked(shadow_panel_.get(), "Shading");
+    if (!light_unlocked || !shading_unlocked) {
         sync_footer_button_states();
         return;
     }
-    if (light_panel_ && light_panel_->is_visible()) {
-        light_panel_->close();
-        sync_footer_button_states();
+    const bool lights_visible = light_panel_ && light_panel_->is_visible();
+    const bool shading_visible = shadow_panel_ && shadow_panel_->is_visible();
+    if (lights_visible || shading_visible) {
+        close_light_panel();
         return;
     }
     open_light_panel();
