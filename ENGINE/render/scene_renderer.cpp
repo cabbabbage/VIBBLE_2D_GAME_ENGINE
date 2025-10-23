@@ -329,10 +329,9 @@ void SceneRenderer::render(){
         // (same logic as shading stages). Higher map-light opacity values correspond to
         // darker scenes, so the overlay should become more prominent as the opacity rises.
         float alpha_mult = 1.0f;
-        if (!chunk_debug_mode_) {
-            const float normalized = std::clamp(static_cast<float>(main_light_source_.get_current_color().a) / 255.0f, 0.0f, 1.0f);
-            alpha_mult            = normalized;
-        }
+        const float normalized =
+            std::clamp(static_cast<float>(main_light_source_.get_current_color().a) / 255.0f, 0.0f, 1.0f);
+        alpha_mult = normalized;
 
         SDL_Rect screen_view{0,0,screen_width_,screen_height_};
         SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
