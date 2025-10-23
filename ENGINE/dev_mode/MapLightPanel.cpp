@@ -131,7 +131,11 @@ private:
     double point_angle(int x, int y) const;
     double line_distance_to_point(double angle_deg, int x, int y) const;
     void draw_orbit_circle(SDL_Renderer* r) const;
-    void draw_orbit_line(SDL_Renderer* r, double angle_deg, const SDL_Color& color, bool focused) const;
+    void draw_orbit_line(SDL_Renderer* r,
+                         double angle_deg,
+                         const SDL_Color& color,
+                         bool focused,
+                         bool hovered) const;
 };
 
 MapLightPanel::OrbitKeyWidget::OrbitKeyWidget(MapLightPanel& owner)
@@ -237,6 +241,12 @@ bool MapLightPanel::OrbitKeyWidget::handle_event(const SDL_Event& e) {
         }
     }
 
+    if (pointer_event && e.type == SDL_MOUSEMOTION) {
+        if (!SDL_PointInRect(&pointer, &rect_) && owner_.focused_pair_index_ != -1) {
+            owner_.set_focused_pair(-1);
+        }
+    }
+
     for (size_t i = 0; i < pair_entries_.size(); ++i) {
         auto& entry = pair_entries_[i];
         if (!entry.widget) {
@@ -282,15 +292,10 @@ void MapLightPanel::OrbitKeyWidget::render(SDL_Renderer* r) const {
         SDL_Color color = utils::color::resolve_ranged_color(pair.color);
         const bool focused = (owner_.focused_pair_index_ == static_cast<int>(i));
         const bool hovered_pair = (hovered_pair_index_ == static_cast<int>(i));
-        if (focused) {
-            color = focus_color;
-        } else if (hovered_pair) {
-            color = hover_color;
-        }
         const double primary = MapLightPanel::normalize_angle(pair.angle);
         const double mirror = MapLightPanel::normalize_angle(180.0 - pair.angle);
-        draw_orbit_line(r, primary, color, focused);
-        draw_orbit_line(r, mirror, color, focused);
+        draw_orbit_line(r, primary, color, focused, hovered_pair);
+        draw_orbit_line(r, mirror, color, focused, hovered_pair);
     }
 
     SDL_Color border = DMStyles::Border();
@@ -539,7 +544,11 @@ void MapLightPanel::OrbitKeyWidget::draw_orbit_circle(SDL_Renderer* r) const {
     SDL_RenderDrawLines(r, points.data(), segments + 1);
 }
 
-void MapLightPanel::OrbitKeyWidget::draw_orbit_line(SDL_Renderer* r, double angle_deg, const SDL_Color& color, bool focused) const {
+void MapLightPanel::OrbitKeyWidget::draw_orbit_line(SDL_Renderer* r,
+                                                    double angle_deg,
+                                                    const SDL_Color& color,
+                                                    bool focused,
+                                                    bool hovered) const {
     if (circle_rect_.w <= 0 || circle_rect_.h <= 0) {
         return;
     }
@@ -553,14 +562,26 @@ void MapLightPanel::OrbitKeyWidget::draw_orbit_line(SDL_Renderer* r, double angl
     SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
     SDL_RenderDrawLine(r, cx, cy, static_cast<int>(std::round(end_x)), static_cast<int>(std::round(end_y)));
 
-    if (focused) {
-        SDL_Color focus = DMStyles::ButtonFocusOutline();
-        SDL_SetRenderDrawColor(r, focus.r, focus.g, focus.b, focus.a);
-        const int ex = static_cast<int>(std::round(end_x));
-        const int ey = static_cast<int>(std::round(end_y));
-        SDL_RenderDrawLine(r, cx, cy, ex, ey);
-        SDL_RenderDrawLine(r, cx + 1, cy, ex + 1, ey);
-        SDL_RenderDrawLine(r, cx - 1, cy, ex - 1, ey);
+    const int ex = static_cast<int>(std::round(end_x));
+    const int ey = static_cast<int>(std::round(end_y));
+
+    if (focused || hovered) {
+        auto draw_glow = [&](const SDL_Color& glow_color, int offset_x, int offset_y, Uint8 alpha) {
+            SDL_SetRenderDrawColor(r, glow_color.r, glow_color.g, glow_color.b, alpha);
+            SDL_RenderDrawLine(r, cx + offset_x, cy + offset_y, ex + offset_x, ey + offset_y);
+        };
+
+        if (focused) {
+            const SDL_Color focus_glow = DMStyles::ButtonFocusOutline();
+            draw_glow(focus_glow, 0, 0, 200);
+            draw_glow(focus_glow, 1, 0, 130);
+            draw_glow(focus_glow, -1, 0, 130);
+        } else {
+            const SDL_Color hover_glow{255, 255, 255, 255};
+            draw_glow(hover_glow, 0, 0, 160);
+            draw_glow(hover_glow, 1, 0, 100);
+            draw_glow(hover_glow, -1, 0, 100);
+        }
     }
 }
 

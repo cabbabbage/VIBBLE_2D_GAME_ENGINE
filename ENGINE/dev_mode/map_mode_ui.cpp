@@ -6,6 +6,7 @@
 #include "map_layers_preview_panel.hpp"
 #include "map_grid_panel.hpp"
 #include "DockableCollapsible.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 #include "dev_footer_bar.hpp"
 #include "map_layers_controller.hpp"
 #include "map_layer_controls_display.hpp"
@@ -110,6 +111,29 @@ void MapModeUI::set_map_mode_active(bool active) {
 
 DevFooterBar* MapModeUI::get_footer_bar() const {
     return footer_bar_.get();
+}
+
+void MapModeUI::collect_sliding_container_rects(std::vector<SDL_Rect>& out) const {
+    auto append_container = [&out](const SlidingWindowContainer* container) {
+        if (!container || !container->is_visible()) {
+            return;
+        }
+        const SDL_Rect& rect = container->panel_rect();
+        if (rect.w > 0 && rect.h > 0) {
+            out.push_back(rect);
+        }
+    };
+
+    append_container(room_config_container_.get());
+    append_container(rooms_list_container_.get());
+    append_container(layer_controls_container_.get());
+
+    if (room_configurator_ && room_configurator_->visible()) {
+        const SDL_Rect& rect = room_configurator_->panel_rect();
+        if (rect.w > 0 && rect.h > 0) {
+            out.push_back(rect);
+        }
+    }
 }
 
 void MapModeUI::set_footer_always_visible(bool on) {
@@ -1167,90 +1191,47 @@ bool MapModeUI::is_grid_panel_visible() const {
 
 void MapModeUI::ensure_light_and_shading_positions() {
     ensure_panels();
-    if (screen_w_ <= 0 || screen_h_ <= 0) {
-        return;
-    }
 
-    constexpr int kPanelGap = 40;
     const int fallback_w = DockableCollapsible::kDefaultFloatingContentWidth;
     const int fallback_h = 400;
 
-    const auto resolve_dimensions = [&](DockableCollapsible* panel, int fallbackWidth, int fallbackHeight) {
-        int w = fallbackWidth;
-        int h = fallbackHeight;
-        if (panel) {
-            w = panel->rect().w > 0 ? panel->rect().w : fallbackWidth;
-            h = panel->rect().h > 0 ? panel->rect().h : panel->height();
-            if (h <= 0) h = fallbackHeight;
+    std::vector<FloatingPanelLayoutManager::PanelInfo> panels;
+    panels.reserve(3);
+    std::vector<bool*> updated_flags;
+    updated_flags.reserve(3);
+
+    auto add_panel = [&](DockableCollapsible* panel, bool& centered_flag) {
+        if (!panel || centered_flag) {
+            return;
         }
-        return std::pair<int, int>{w, h};
+        FloatingPanelLayoutManager::PanelInfo info;
+        info.panel = panel;
+        info.force_layout = true;
+        SDL_Rect rect = panel->rect();
+        info.preferred_width = rect.w > 0 ? rect.w : fallback_w;
+        int height = rect.h > 0 ? rect.h : panel->height();
+        if (height <= 0) {
+            height = fallback_h;
+        }
+        info.preferred_height = height;
+        panels.push_back(info);
+        updated_flags.push_back(&centered_flag);
     };
 
-    auto [light_w, light_h] = resolve_dimensions(light_panel_.get(), fallback_w, fallback_h);
-    auto [shading_w, shading_h] = resolve_dimensions(shadow_panel_.get(), fallback_w, fallback_h);
-    auto [preview_w, preview_h] = resolve_dimensions(preview_panel_.get(), fallback_w, fallback_h);
+    add_panel(light_panel_.get(), light_panel_centered_);
+    add_panel(shadow_panel_.get(), shading_panel_centered_);
+    add_panel(preview_panel_.get(), preview_panel_centered_);
 
-    if (!light_panel_ && !shadow_panel_ && !preview_panel_) {
+    if (panels.empty()) {
         return;
     }
 
-    struct PanelLayout {
-        DockableCollapsible* panel = nullptr;
-        int width = 0;
-        int height = 0;
-        bool* centered_flag = nullptr;
-    };
+    FloatingPanelLayoutManager::instance().layoutAll(panels);
 
-    std::vector<PanelLayout> layout_sequence;
-    layout_sequence.reserve(3);
-
-    if (light_panel_) {
-        layout_sequence.push_back({light_panel_.get(), light_w, light_h, &light_panel_centered_});
-    }
-    if (shadow_panel_) {
-        layout_sequence.push_back({shadow_panel_.get(), shading_w, shading_h, &shading_panel_centered_});
-    }
-    if (preview_panel_) {
-        layout_sequence.push_back({preview_panel_.get(), preview_w, preview_h, &preview_panel_centered_});
-    }
-
-    if (layout_sequence.empty()) {
-        return;
-    }
-
-    int total_width = 0;
-    int base_height = 0;
-    for (std::size_t i = 0; i < layout_sequence.size(); ++i) {
-        const PanelLayout& entry = layout_sequence[i];
-        total_width += entry.width;
-        if (i > 0) {
-            total_width += kPanelGap;
+    for (bool* flag : updated_flags) {
+        if (flag) {
+            *flag = true;
         }
-        base_height = std::max(base_height, entry.height);
-    }
-
-    int start_x = (screen_w_ - total_width) / 2;
-    if (start_x < 0) start_x = 0;
-    int base_y = (screen_h_ - base_height) / 2;
-    if (base_y < 0) base_y = 0;
-
-    int current_x = start_x;
-    for (PanelLayout& entry : layout_sequence) {
-        if (!entry.panel) {
-            continue;
-        }
-        int panel_x = current_x;
-        int panel_w = entry.width;
-        if (panel_x + panel_w > screen_w_) {
-            panel_x = std::max(0, screen_w_ - panel_w);
-        }
-        int panel_y = base_y + (base_height - entry.height) / 2;
-        if (panel_y < 0) panel_y = 0;
-        entry.panel->set_position(panel_x, panel_y);
-        if (entry.centered_flag) {
-            *entry.centered_flag = true;
-        }
-        current_x = panel_x + panel_w + kPanelGap;
     }
 }
 

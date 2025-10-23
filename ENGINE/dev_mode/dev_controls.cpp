@@ -9,6 +9,7 @@
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
@@ -541,6 +542,11 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (map_assets_modal_) map_assets_modal_->set_screen_dimensions(width, height);
     if (boundary_assets_modal_) boundary_assets_modal_->set_screen_dimensions(width, height);
     asset_filter_.ensure_layout();
+    FloatingPanelLayoutManager::instance().computeUsableRect(
+        bounds,
+        SDL_Rect{0, 0, 0, 0},
+        SDL_Rect{0, 0, 0, 0},
+        {});
 }
 
 void DevControls::set_current_room(Room* room, bool force_refresh) {
@@ -831,6 +837,28 @@ void DevControls::update(const Input& input) {
 
     asset_filter_.ensure_layout();
 
+    SDL_Rect header_rect = asset_filter_.header_rect();
+    SDL_Rect layout_rect = asset_filter_.layout_bounds();
+    SDL_Rect footer_rect{0, 0, 0, 0};
+    std::vector<SDL_Rect> sliding_rects;
+    if (map_mode_ui_) {
+        map_mode_ui_->collect_sliding_container_rects(sliding_rects);
+    }
+    if (layout_rect.w > 0 && layout_rect.h > 0) {
+        sliding_rects.push_back(layout_rect);
+    }
+    if (map_mode_ui_) {
+        DevFooterBar* footer = map_mode_ui_->get_footer_bar();
+        if (footer && footer->visible()) {
+            footer_rect = footer->rect();
+        }
+    }
+    FloatingPanelLayoutManager::instance().computeUsableRect(
+        SDL_Rect{0, 0, screen_w_, screen_h_},
+        header_rect,
+        footer_rect,
+        sliding_rects);
+
     if (room_editor_ && room_editor_->is_enabled()) {
         SDL_Point pointer{input.getX(), input.getY()};
         if (!hide_headers && asset_filter_.contains_point(pointer.x, pointer.y)) {
@@ -867,6 +895,28 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (!enabled_) return;
 
     asset_filter_.ensure_layout();
+
+    SDL_Rect header_rect = asset_filter_.header_rect();
+    SDL_Rect layout_rect = asset_filter_.layout_bounds();
+    SDL_Rect footer_rect{0, 0, 0, 0};
+    std::vector<SDL_Rect> sliding_rects;
+    if (map_mode_ui_) {
+        map_mode_ui_->collect_sliding_container_rects(sliding_rects);
+    }
+    if (layout_rect.w > 0 && layout_rect.h > 0) {
+        sliding_rects.push_back(layout_rect);
+    }
+    if (map_mode_ui_) {
+        DevFooterBar* footer = map_mode_ui_->get_footer_bar();
+        if (footer && footer->visible()) {
+            footer_rect = footer->rect();
+        }
+    }
+    FloatingPanelLayoutManager::instance().computeUsableRect(
+        SDL_Rect{0, 0, screen_w_, screen_h_},
+        header_rect,
+        footer_rect,
+        sliding_rects);
 
     const bool pointer_event = is_pointer_event(event);
     const bool wheel_event = (event.type == SDL_MOUSEWHEEL);

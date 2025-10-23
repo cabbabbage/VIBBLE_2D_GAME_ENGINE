@@ -47,6 +47,9 @@ public:
     bool handle_event(const SDL_Event& event);
     bool contains_point(int x, int y) const;
 
+    const SDL_Rect& header_rect() const { return header_rect_; }
+    const SDL_Rect& layout_bounds() const { return layout_bounds_; }
+
     void reset();
 
     bool passes(const Asset& asset) const;

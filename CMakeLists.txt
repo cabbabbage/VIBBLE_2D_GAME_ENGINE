@@ -195,6 +195,7 @@ add_executable(dev_mode_ui_tests
     ENGINE/dev_mode/dm_styles.cpp
     ENGINE/dev_mode/DockableCollapsible.cpp
     ENGINE/dev_mode/FloatingDockableManager.cpp
+    ENGINE/dev_mode/FloatingPanelLayoutManager.cpp
     ENGINE/dev_mode/search_assets.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
@@ -346,6 +347,7 @@ add_executable(manifest_store_tests
     ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/SpawnMethodDropdown.cpp
     ENGINE/dev_mode/DockableCollapsible.cpp
     ENGINE/dev_mode/FloatingDockableManager.cpp
+    ENGINE/dev_mode/FloatingPanelLayoutManager.cpp
     ENGINE/dev_mode/draw_utils.cpp
     ENGINE/dev_mode/font_cache.cpp
     ENGINE/dev_mode/widgets.cpp

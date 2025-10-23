@@ -88,6 +88,7 @@ public:
     void set_map_mode_active(bool active);
 
     DevFooterBar* get_footer_bar() const;
+    void collect_sliding_container_rects(std::vector<SDL_Rect>& out) const;
     void set_footer_always_visible(bool on);
     void set_headers_suppressed(bool suppressed);
     void set_sliding_headers_hidden(bool hidden);

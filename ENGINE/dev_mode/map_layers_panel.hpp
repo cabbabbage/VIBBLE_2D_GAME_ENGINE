@@ -78,6 +78,7 @@ private:
         int index = -1;
         std::string name;
         SDL_Rect rect{0, 0, 0, 0};
+        SDL_Rect delete_button_rect{0, 0, 0, 0};
         std::string summary;
         bool invalid = false;
         bool warning = false;
@@ -100,6 +101,9 @@ private:
     void notify_side_panel(SidePanel panel) const;
     void set_hovered_layer(int index);
     void clear_hover();
+    void set_hovered_delete_layer(int index);
+    void on_delete_layer_clicked(int index);
+    bool delete_layer_at(int index);
 
     void on_layers_list_mouse_down(int index, int mouse_y);
     void on_layers_list_mouse_motion(int mouse_y, Uint32 buttons);
@@ -151,6 +155,7 @@ private:
 
     std::vector<LayerRow> layer_rows_;
     int hovered_layer_index_ = -1;
+    int hovered_delete_layer_index_ = -1;
     int selected_layer_index_ = -1;
     std::string pending_room_selection_;
     std::string current_layer_name_;
