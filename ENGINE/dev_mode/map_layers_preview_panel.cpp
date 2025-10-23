@@ -21,6 +21,7 @@ void MapLayersPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback 
     on_save_ = std::move(on_save);
     if (preview_widget_) {
         preview_widget_->set_map_info(map_info_);
+        preview_widget_->set_on_change([this]() { this->trigger_save(); });
     }
 }
 
@@ -81,9 +82,6 @@ void MapLayersPreviewPanel::build_rows() {
     if (!create_room_btn_) {
         create_room_btn_ = std::make_unique<DMButton>("Create Room", &DMStyles::CreateButton(), 0, DMButton::height());
     }
-    if (!save_btn_) {
-        save_btn_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 0, DMButton::height());
-    }
     if (!reload_btn_) {
         reload_btn_ = std::make_unique<DMButton>("Reload", &DMStyles::ListButton(), 0, DMButton::height());
     }
@@ -91,9 +89,12 @@ void MapLayersPreviewPanel::build_rows() {
     std::vector<Widget*> button_row;
     owned_widgets_.push_back(std::make_unique<ButtonWidget>(add_layer_btn_.get(), [this]() {
         if (controller_) {
-            controller_->create_layer();
+            const int created = controller_->create_layer();
             if (preview_widget_) {
                 preview_widget_->mark_dirty();
+            }
+            if (created >= 0) {
+                trigger_save();
             }
         }
     }));
@@ -103,18 +104,7 @@ void MapLayersPreviewPanel::build_rows() {
         if (preview_widget_) {
             preview_widget_->create_new_room_entry();
         }
-    }));
-    button_row.push_back(owned_widgets_.back().get());
-
-    owned_widgets_.push_back(std::make_unique<ButtonWidget>(save_btn_.get(), [this]() {
-        bool ok = false;
-        if (controller_) {
-            ok = controller_->save();
-        }
-        if (!ok && on_save_) {
-            ok = on_save_();
-        }
-        (void)ok;
+        trigger_save();
     }));
     button_row.push_back(owned_widgets_.back().get());
 
@@ -134,6 +124,7 @@ void MapLayersPreviewPanel::build_rows() {
     preview->set_on_select_layer(on_select_layer_);
     preview->set_on_select_room(on_select_room_);
     preview->set_on_show_room_list(on_show_room_list_);
+    preview->set_on_change([this]() { this->trigger_save(); });
 
     owned_widgets_.push_back(std::move(preview));
     preview_widget_ = static_cast<MapLayersPreviewWidget*>(owned_widgets_.back().get());
@@ -142,5 +133,16 @@ void MapLayersPreviewPanel::build_rows() {
     rows.push_back(button_row);
     rows.push_back(Row{preview_widget_});
     set_rows(rows);
+}
+
+void MapLayersPreviewPanel::trigger_save() {
+    bool ok = false;
+    if (controller_) {
+        ok = controller_->save();
+    }
+    if (!ok && on_save_) {
+        ok = on_save_();
+    }
+    (void)ok;
 }
 

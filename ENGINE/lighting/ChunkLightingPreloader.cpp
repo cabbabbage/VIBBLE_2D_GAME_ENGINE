@@ -48,7 +48,11 @@ SDL_Texture* ChunkLightingPreloader::cloneMaskTexture(SDL_Texture* source,
         vibble::log::warn(std::string{"[Lighting] Failed to clone mask texture: "} + SDL_GetError());
         return nullptr;
     }
-    SDL_SetTextureBlendMode(clone, SDL_BLENDMODE_BLEND);
+    const SDL_BlendMode runtime_blend = inputs.runtimeLightBlendMode();
+    if (SDL_SetTextureBlendMode(clone, runtime_blend) != 0) {
+        vibble::log::warn(std::string{"[Lighting] Failed to configure cloned mask blend mode: "} + SDL_GetError());
+        // Leave texture usable even if blend configuration fails.
+    }
 
     SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
     if (SDL_SetRenderTarget(renderer_, clone) != 0) {

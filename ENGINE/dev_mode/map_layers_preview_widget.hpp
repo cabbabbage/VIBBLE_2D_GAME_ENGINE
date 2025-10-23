@@ -27,6 +27,7 @@ public:
     void set_on_select_layer(SelectLayerCallback cb);
     void set_on_select_room(SelectRoomCallback cb);
     void set_on_show_room_list(ShowRoomListCallback cb);
+    void set_on_change(std::function<void()> cb);
 
     void set_rect(const SDL_Rect& r) override;
     const SDL_Rect& rect() const override { return rect_; }
@@ -98,5 +99,6 @@ private:
     SelectLayerCallback on_select_layer_{};
     SelectRoomCallback on_select_room_{};
     ShowRoomListCallback on_show_room_list_{};
+    std::function<void()> on_change_{};
 };
 

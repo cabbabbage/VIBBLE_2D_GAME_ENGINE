@@ -117,6 +117,10 @@ void MapLayersPreviewWidget::set_on_show_room_list(ShowRoomListCallback cb) {
     on_show_room_list_ = std::move(cb);
 }
 
+void MapLayersPreviewWidget::set_on_change(std::function<void()> cb) {
+    on_change_ = std::move(cb);
+}
+
 void MapLayersPreviewWidget::set_rect(const SDL_Rect& r) {
     rect_ = r;
     preview_rect_ = rect_;
@@ -196,6 +200,9 @@ void MapLayersPreviewWidget::create_new_room_entry() {
     }
     rooms[key] = nlohmann::json{{"name", key}};
     mark_dirty();
+    if (on_change_) {
+        on_change_();
+    }
 }
 
 void MapLayersPreviewWidget::rebuild_visuals() {

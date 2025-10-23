@@ -106,7 +106,6 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     : DockableCollapsible("Map Layers", true, x, y) {
     add_layer_button_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 140, DMButton::height());
     delete_layer_button_ = std::make_unique<DMButton>("Delete Layer", &DMStyles::DeleteButton(), 140, DMButton::height());
-    save_button_ = std::make_unique<DMButton>("Save", &DMStyles::AccentButton(), 120, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::WarnButton(), 120, DMButton::height());
     layer_name_box_ = std::make_unique<DMTextBox>("Layer name", "");
     layer_name_box_raw_ = layer_name_box_.get();
@@ -117,6 +116,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
             mark_dirty();
             if (created >= 0) {
                 select_layer(created);
+                trigger_save();
             }
         } else {
             nlohmann::json& layers = layers_array();
@@ -126,6 +126,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
             layers.push_back(std::move(layer));
             mark_dirty();
             select_layer(new_index);
+            trigger_save();
         }
     }));
     Widget* add_widget = owned_widgets_.back().get();
@@ -151,22 +152,10 @@ MapLayersPanel::MapLayersPanel(int x, int y)
                 layer_name_box_raw_->set_value("");
             }
             mark_dirty();
+            trigger_save();
         }
     }));
     Widget* delete_widget = owned_widgets_.back().get();
-
-    owned_widgets_.push_back(std::make_unique<ButtonWidget>(save_button_.get(), [this]() {
-        commit_layer_name_edit();
-        bool ok = false;
-        if (controller_) {
-            ok = controller_->save();
-        }
-        if (!ok && on_save_) {
-            ok = on_save_();
-        }
-        (void)ok;
-    }));
-    Widget* save_widget = owned_widgets_.back().get();
 
     owned_widgets_.push_back(std::make_unique<ButtonWidget>(reload_button_.get(), [this]() {
         if (controller_ && controller_->reload()) {
@@ -199,7 +188,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     Widget* name_widget = owned_widgets_.back().get();
 
     Rows rows;
-    rows.push_back(Row{add_widget, delete_widget, save_widget, reload_widget});
+    rows.push_back(Row{add_widget, delete_widget, reload_widget});
     rows.push_back(Row{list_widget_});
     rows.push_back(Row{preview_widget_});
     rows.push_back(Row{name_widget});
@@ -583,12 +572,25 @@ void MapLayersPanel::commit_layer_name_edit() {
             }
         }
         mark_dirty();
+        trigger_save();
     } else {
         // Restore previous value if rename failed.
         if (layer_name_box_raw_) {
             layer_name_box_raw_->set_value(current_layer_name_);
         }
     }
+}
+
+void MapLayersPanel::trigger_save() {
+    commit_layer_name_edit();
+    bool ok = false;
+    if (controller_) {
+        ok = controller_->save();
+    }
+    if (!ok && on_save_) {
+        ok = on_save_();
+    }
+    (void)ok;
 }
 
 void MapLayersPanel::ensure_listener() {

@@ -1,5 +1,6 @@
 #include "persistence/LightingCache.hpp"
 
+#include "lighting/PreloadInputs.hpp"
 #include "utils/RenderReadback.hpp"
 #include "utils/log.hpp"
 #include "world/chunk.hpp"
@@ -178,7 +179,10 @@ bool LightingCache::loadChunk(SDL_Renderer* renderer, world::Chunk& chunk) {
         SDL_DestroyTexture(texture);
         return false;
     }
-    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    const SDL_BlendMode runtime_blend = PreloadInputs::computeRuntimeLightBlendMode();
+    if (SDL_SetTextureBlendMode(texture, runtime_blend) != 0) {
+        vibble::log::warn(std::string{"[Lighting] Failed to configure cached mask blend mode: "} + SDL_GetError());
+    }
 
     chunk.static_light_mask                  = texture;
     chunk.lighting_preloaded                 = true;

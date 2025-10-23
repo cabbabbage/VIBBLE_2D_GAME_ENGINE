@@ -461,10 +461,16 @@ void MapModeUI::ensure_panels() {
         rooms_display_->set_on_select_room([this](const std::string& key) {
             this->open_room_configuration(key);
         });
+        rooms_display_->set_on_rooms_changed([this]() {
+            this->auto_save_layers_data();
+        });
     }
     if (rooms_display_) {
         rooms_display_->attach_container(rooms_list_container_.get());
         rooms_display_->set_map_info(map_info_);
+        rooms_display_->set_on_rooms_changed([this]() {
+            this->auto_save_layers_data();
+        });
     }
     if (!layer_controls_container_) {
         layer_controls_container_ = std::make_unique<SlidingWindowContainer>();
@@ -483,6 +489,9 @@ void MapModeUI::ensure_panels() {
         layer_controls_display_->attach_container(layer_controls_container_.get());
         layer_controls_display_->set_controller(layers_controller_);
         layer_controls_display_->set_selected_layer(layers_panel_ ? layers_panel_->selected_layer() : -1);
+        layer_controls_display_->set_on_change([this]() {
+            this->auto_save_layers_data();
+        });
     }
     if (layers_panel_) {
         layers_panel_->set_rooms_list_container(rooms_list_container_.get());
@@ -523,7 +532,7 @@ void MapModeUI::ensure_panels() {
         layers_preview_panel_->set_controller(layers_controller_);
     }
     if (layers_preview_panel_ && map_info_) {
-        layers_preview_panel_->set_map_info(map_info_, [this]() { return save_map_info_to_disk(); });
+        layers_preview_panel_->set_map_info(map_info_, [this]() { return auto_save_layers_data(); });
     }
     if (!footer_bar_) {
         footer_bar_ = std::make_unique<DevFooterBar>("");
@@ -754,7 +763,7 @@ void MapModeUI::sync_panel_map_info() {
             layers_controller_->bind(map_info_, map_path_);
         }
         layers_panel_->set_map_info(map_info_, map_path_);
-        layers_panel_->set_on_save([this]() { return save_map_info_to_disk(); });
+        layers_panel_->set_on_save([this]() { return auto_save_layers_data(); });
     }
     if (rooms_display_) {
         rooms_display_->set_map_info(map_info_);
@@ -1422,7 +1431,7 @@ void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
     if (layers_preview_panel_) {
         LightSaveCallback callback = light_save_callback_;
         if (!callback) {
-            callback = [this]() { return save_map_info_to_disk(); };
+            callback = [this]() { return auto_save_layers_data(); };
         }
         layers_preview_panel_->set_map_info(map_info_, callback);
     }
@@ -1514,5 +1523,25 @@ bool MapModeUI::save_map_info_to_disk() const {
     }
     manifest_store_->flush();
     return true;
+}
+
+bool MapModeUI::auto_save_layers_data() {
+    bool saved = false;
+    if (layers_controller_) {
+        saved = layers_controller_->save();
+    }
+    if (!saved) {
+        saved = save_map_info_to_disk();
+    }
+    if (rooms_display_) {
+        rooms_display_->refresh();
+    }
+    if (layer_controls_display_) {
+        layer_controls_display_->refresh();
+    }
+    if (layers_panel_) {
+        layers_panel_->mark_dirty(true);
+    }
+    return saved;
 }
 

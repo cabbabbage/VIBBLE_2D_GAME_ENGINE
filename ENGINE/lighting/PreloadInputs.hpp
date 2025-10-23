@@ -43,6 +43,7 @@ public:
     const std::vector<TextureDraw>& staticLightDraws() const { return static_light_draws_; }
 
     SDL_BlendMode runtimeLightBlendMode() const { return light_blend_mode_; }
+    static SDL_BlendMode computeRuntimeLightBlendMode();
 
     void disableScreenLightAndMovingLights();
     void restoreRuntimeLighting();

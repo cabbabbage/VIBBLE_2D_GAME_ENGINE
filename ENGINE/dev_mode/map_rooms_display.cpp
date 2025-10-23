@@ -37,7 +37,9 @@ std::string room_display_name(const std::string& key, const nlohmann::json& payl
 
 }  // namespace
 
-MapRoomsDisplay::MapRoomsDisplay() = default;
+MapRoomsDisplay::MapRoomsDisplay() {
+    create_room_button_ = std::make_unique<DMButton>("Create Room", &DMStyles::CreateButton(), 180, DMButton::height());
+}
 
 MapRoomsDisplay::~MapRoomsDisplay() {
     detach_container();
@@ -82,6 +84,10 @@ void MapRoomsDisplay::set_on_select_room(SelectRoomCallback cb) {
     on_select_room_ = std::move(cb);
 }
 
+void MapRoomsDisplay::set_on_rooms_changed(std::function<void()> cb) {
+    on_rooms_changed_ = std::move(cb);
+}
+
 void MapRoomsDisplay::set_header_text(const std::string& text) {
     header_text_ = text;
     if (container_) {
@@ -117,6 +123,18 @@ int MapRoomsDisplay::layout_content(const SlidingWindowContainer::LayoutContext&
     const int gap = DMSpacing::item_gap();
     int y = ctx.content_top;
 
+    if (create_room_button_) {
+        int button_width = create_room_button_->preferred_width();
+        if (button_width <= 0) {
+            button_width = 180;
+        }
+        button_width = std::min(ctx.content_width, button_width);
+        button_width = std::max(button_width, 0);
+        SDL_Rect button_rect{ctx.content_x, y - ctx.scroll_value, button_width, DMButton::height()};
+        create_room_button_->set_rect(button_rect);
+        y += button_rect.h + gap;
+    }
+
     for (auto& row : rooms_) {
         row.rect = SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, row_height};
         y += row_height + gap;
@@ -134,6 +152,10 @@ void MapRoomsDisplay::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
 
     const DMLabelStyle& label_style = DMStyles::Label();
+
+    if (create_room_button_) {
+        create_room_button_->render(renderer);
+    }
 
     if (rooms_.empty()) {
         const std::string message = "No rooms defined";
@@ -176,7 +198,16 @@ void MapRoomsDisplay::render(SDL_Renderer* renderer) const {
 
 bool MapRoomsDisplay::handle_event(const SDL_Event& e) {
     if (rooms_.empty()) {
+        if (create_room_button_ && create_room_button_->handle_event(e)) {
+            create_room_entry();
+            return true;
+        }
         return false;
+    }
+
+    if (create_room_button_ && create_room_button_->handle_event(e)) {
+        create_room_entry();
+        return true;
     }
 
     switch (e.type) {
@@ -271,5 +302,29 @@ void MapRoomsDisplay::clear_hover() {
         return;
     }
     hovered_room_.clear();
+}
+
+void MapRoomsDisplay::create_room_entry() {
+    if (!map_info_ || !map_info_->is_object()) {
+        return;
+    }
+    nlohmann::json& rooms = (*map_info_)["rooms_data"];
+    if (!rooms.is_object()) {
+        rooms = nlohmann::json::object();
+    }
+    std::string base = "NewRoom";
+    std::string key = base;
+    int suffix = 1;
+    while (rooms.contains(key)) {
+        key = base + std::to_string(suffix++);
+    }
+    rooms[key] = nlohmann::json{{"name", key}};
+    rebuild_rows();
+    if (container_) {
+        container_->request_layout();
+    }
+    if (on_rooms_changed_) {
+        on_rooms_changed_();
+    }
 }
 

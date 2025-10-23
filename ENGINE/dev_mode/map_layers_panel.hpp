@@ -81,6 +81,7 @@ private:
     int list_height_for_width(int w) const;
     void render_layers_list(SDL_Renderer* renderer) const;
     void commit_layer_name_edit();
+    void trigger_save();
     void ensure_listener();
     void remove_listener();
     void notify_header_visibility() const;
@@ -112,7 +113,6 @@ private:
 
     std::unique_ptr<DMButton> add_layer_button_;
     std::unique_ptr<DMButton> delete_layer_button_;
-    std::unique_ptr<DMButton> save_button_;
     std::unique_ptr<DMButton> reload_button_;
     std::unique_ptr<DMTextBox> layer_name_box_;
 
