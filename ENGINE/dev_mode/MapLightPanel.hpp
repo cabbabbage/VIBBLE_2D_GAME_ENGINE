@@ -11,6 +11,7 @@
 #include "widgets.hpp"
 #include <nlohmann/json.hpp>
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
+#include "utils/ranged_color.hpp"
 
 struct OrbitSettings;
 struct ScreenLightSettings;
@@ -80,11 +81,16 @@ private:
     bool commit_light_changes();
 
     void ensure_keys_array();
-    void clamp_key_index();
-    void select_prev_key();
-    void select_next_key();
-    void add_key_pair_at_current_angle();
-    void delete_current_key();
+    void rebuild_orbit_key_pairs_from_json();
+    void write_orbit_pairs_to_json();
+    void refresh_orbit_widget();
+    void add_orbit_pair(double angle_degrees);
+    void delete_orbit_pair(int index);
+    void adjust_orbit_pair_angle(int index, int delta_degrees);
+    void set_focused_pair(int index);
+    void set_focused_pair_by_id(int id);
+    void handle_pair_color_changed(int index, const utils::color::RangedColor& color);
+    int find_pair_containing_angle(double angle_degrees) const;
 
     static int clamp_int(int v, int lo, int hi);
     static float clamp_float(float v, float lo, float hi);
@@ -95,8 +101,6 @@ private:
     nlohmann::json* map_info_ = nullptr;
     SaveCallback on_save_;
     nlohmann::json editing_light_{};
-
-    int current_key_index_ = 0;
 
     std::unique_ptr<DMCheckbox> update_map_light_checkbox_;
     std::unique_ptr<DMButton> update_btn_;
@@ -114,15 +118,17 @@ private:
 
     class DMColorRangeWidget* base_color_widget_ = nullptr;
 
-    std::unique_ptr<DMButton> prev_key_btn_;
-    std::unique_ptr<DMButton> next_key_btn_;
-    std::unique_ptr<DMButton> add_pair_btn_;
-    std::unique_ptr<DMButton> delete_btn_;
+    class OrbitKeyWidget;
+    struct OrbitKeyPair {
+        int id = 0;
+        double angle = 0.0;
+        utils::color::RangedColor color{};
+    };
 
-    std::unique_ptr<DMSlider> key_angle_;
-    class DMColorRangeWidget* key_color_widget_ = nullptr;
-
-    mutable std::string current_key_label_;
+    int next_pair_id_ = 1;
+    std::vector<OrbitKeyPair> orbit_key_pairs_;
+    int focused_pair_index_ = -1;
+    OrbitKeyWidget* orbit_key_widget_ = nullptr;
     mutable std::string persistence_warning_text_;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;
@@ -139,6 +145,11 @@ private:
     OrbitSettings last_applied_orbit_{};
 
     render_pipeline::shading::ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
+
+    friend class OrbitKeyWidget;
+
+    void sort_orbit_pairs();
+    static double normalize_angle(double angle);
 
 protected:
     std::string_view lock_settings_namespace() const override { return "lighting"; }

@@ -1,6 +1,7 @@
 #include "MapLightPanel.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <optional>
@@ -87,6 +88,445 @@ private:
     SDL_Color color_{255, 120, 120, 255};
 };
 
+MapLightPanel::OrbitKeyWidget::OrbitKeyWidget(MapLightPanel& owner)
+    : owner_(owner) {
+    update_internal_layout();
+}
+
+void MapLightPanel::OrbitKeyWidget::set_rect(const SDL_Rect& r) {
+    rect_ = r;
+    update_internal_layout();
+}
+
+int MapLightPanel::OrbitKeyWidget::height_for_width(int) const {
+    const int pad = DMSpacing::item_gap();
+    const int spacing = DMSpacing::small_gap();
+    const int min_circle = 200;
+    const int rows = std::max<int>(owner_.orbit_key_pairs_.size(), 1);
+    static const int row_height = []() {
+        DMColorRangeWidget tmp("Pair");
+        return tmp.height_for_width(0);
+    }();
+    const int list_height = rows * row_height + (rows - 1) * spacing;
+    const int content = std::max(min_circle, list_height);
+    return pad * 2 + content;
+}
+
+bool MapLightPanel::OrbitKeyWidget::handle_event(const SDL_Event& e) {
+    bool used = false;
+    const bool pointer_event =
+        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+
+    SDL_Point pointer{0, 0};
+    if (pointer_event) {
+        if (e.type == SDL_MOUSEMOTION) {
+            pointer = SDL_Point{e.motion.x, e.motion.y};
+        } else {
+            pointer = SDL_Point{e.button.x, e.button.y};
+        }
+    }
+
+    if (pointer_event && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        const int line_index = line_hit_test(pointer.x, pointer.y);
+        if (line_index >= 0) {
+            if (owner_.focused_pair_index_ != line_index) {
+                owner_.set_focused_pair(line_index);
+            }
+            if (e.button.clicks >= 2) {
+                owner_.delete_orbit_pair(line_index);
+            }
+            used = true;
+        } else if (SDL_PointInRect(&pointer, &circle_rect_)) {
+            if (owner_.focused_pair_index_ != -1) {
+                owner_.set_focused_pair(-1);
+            } else {
+                const double angle = point_angle(pointer.x, pointer.y);
+                const int existing = owner_.find_pair_containing_angle(angle);
+                if (existing >= 0) {
+                    owner_.set_focused_pair(existing);
+                } else {
+                    owner_.add_orbit_pair(angle);
+                }
+            }
+            used = true;
+        } else if (SDL_PointInRect(&pointer, &list_rect_)) {
+            const int idx = pair_index_at_point(pointer.x, pointer.y);
+            if (idx >= 0) {
+                owner_.set_focused_pair(idx);
+            } else if (owner_.focused_pair_index_ != -1) {
+                owner_.set_focused_pair(-1);
+            }
+            used = true;
+        } else if (SDL_PointInRect(&pointer, &rect_)) {
+            if (owner_.focused_pair_index_ != -1) {
+                owner_.set_focused_pair(-1);
+                used = true;
+            }
+        }
+    } else if (e.type == SDL_MOUSEWHEEL) {
+        if (owner_.focused_pair_index_ >= 0) {
+            const int delta = e.wheel.y;
+            if (delta != 0) {
+                owner_.adjust_orbit_pair_angle(owner_.focused_pair_index_, delta);
+                used = true;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < pair_entries_.size(); ++i) {
+        auto& entry = pair_entries_[i];
+        if (!entry.widget) {
+            continue;
+        }
+        if (pointer_event && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            if (SDL_PointInRect(&pointer, &entry.rect)) {
+                owner_.set_focused_pair(static_cast<int>(i));
+            }
+        }
+        if (entry.widget->handle_event(e)) {
+            owner_.set_focused_pair(static_cast<int>(i));
+            used = true;
+        }
+    }
+
+    if (owner_.focused_pair_index_ == -1) {
+        release_scroll_capture();
+    } else {
+        ensure_scroll_capture();
+    }
+
+    return used;
+}
+
+void MapLightPanel::OrbitKeyWidget::render(SDL_Renderer* r) const {
+    if (!r) {
+        return;
+    }
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_Color panel_bg = dm_draw::DarkenColor(DMStyles::PanelBG(), 0.08f);
+    SDL_SetRenderDrawColor(r, panel_bg.r, panel_bg.g, panel_bg.b, panel_bg.a);
+    SDL_RenderFillRect(r, &rect_);
+
+    draw_orbit_circle(r);
+
+    for (size_t i = 0; i < owner_.orbit_key_pairs_.size(); ++i) {
+        const auto& pair = owner_.orbit_key_pairs_[i];
+        const SDL_Color color = utils::color::resolve_ranged_color(pair.color);
+        const bool focused = (owner_.focused_pair_index_ == static_cast<int>(i));
+        const double primary = MapLightPanel::normalize_angle(pair.angle);
+        const double mirror = MapLightPanel::normalize_angle(180.0 - pair.angle);
+        draw_orbit_line(r, primary, color, focused);
+        draw_orbit_line(r, mirror, color, focused);
+    }
+
+    SDL_Color border = DMStyles::Border();
+    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+    if (list_rect_.w > 0 && list_rect_.h > 0) {
+        SDL_RenderDrawRect(r, &list_rect_);
+    }
+
+    for (size_t i = 0; i < pair_entries_.size(); ++i) {
+        const auto& entry = pair_entries_[i];
+        if (!entry.widget) {
+            continue;
+        }
+        if (owner_.focused_pair_index_ == static_cast<int>(i)) {
+            SDL_Color highlight = DMStyles::HighlightColor();
+            SDL_SetRenderDrawColor(r, highlight.r, highlight.g, highlight.b, 56);
+            SDL_RenderFillRect(r, &entry.rect);
+            SDL_SetRenderDrawColor(r, highlight.r, highlight.g, highlight.b, 160);
+            SDL_RenderDrawRect(r, &entry.rect);
+        }
+        entry.widget->render(r);
+    }
+}
+
+bool MapLightPanel::OrbitKeyWidget::handle_overlay_event(const SDL_Event& e) {
+    bool used = false;
+    for (size_t i = 0; i < pair_entries_.size(); ++i) {
+        auto& entry = pair_entries_[i];
+        if (entry.widget && entry.widget->handle_overlay_event(e)) {
+            owner_.set_focused_pair(static_cast<int>(i));
+            used = true;
+        }
+    }
+    return used;
+}
+
+void MapLightPanel::OrbitKeyWidget::render_overlay(SDL_Renderer* r) const {
+    for (const auto& entry : pair_entries_) {
+        if (entry.widget) {
+            entry.widget->render_overlay(r);
+        }
+    }
+}
+
+void MapLightPanel::OrbitKeyWidget::on_pairs_changed() {
+    rebuild_pair_entries();
+    update_internal_layout();
+}
+
+void MapLightPanel::OrbitKeyWidget::on_focus_changed() {
+    if (owner_.focused_pair_index_ >= 0) {
+        ensure_scroll_capture();
+    } else {
+        release_scroll_capture();
+    }
+}
+
+void MapLightPanel::OrbitKeyWidget::update_internal_layout() {
+    const int pad = DMSpacing::item_gap();
+    const int gap = DMSpacing::item_gap();
+    const int min_list_width = 200;
+
+    const int available_w = std::max(0, rect_.w - pad * 2);
+    const int available_h = std::max(0, rect_.h - pad * 2);
+
+    int circle_size = std::min(available_w, available_h);
+    if (circle_size > available_w - min_list_width - gap) {
+        circle_size = std::max(120, available_w - min_list_width - gap);
+    }
+    circle_size = std::max(120, std::min(circle_size, available_h));
+
+    circle_rect_ = SDL_Rect{ rect_.x + pad, rect_.y + pad, circle_size, circle_size };
+
+    int list_x = circle_rect_.x + circle_rect_.w + gap;
+    int list_w = rect_.x + rect_.w - pad - list_x;
+    if (list_w < min_list_width) {
+        const int deficit = min_list_width - list_w;
+        int adjusted_circle = std::max(80, circle_size - deficit);
+        adjusted_circle = std::min(adjusted_circle, available_h);
+        circle_rect_.w = circle_rect_.h = adjusted_circle;
+        list_x = circle_rect_.x + circle_rect_.w + gap;
+        list_w = rect_.x + rect_.w - pad - list_x;
+    }
+    if (list_w < 0) {
+        list_w = 0;
+    }
+    list_rect_ = SDL_Rect{ list_x, rect_.y + pad, list_w, available_h };
+
+    layout_color_widgets();
+}
+
+void MapLightPanel::OrbitKeyWidget::rebuild_pair_entries() {
+    const size_t count = owner_.orbit_key_pairs_.size();
+    pair_entries_.resize(count);
+    for (size_t i = 0; i < count; ++i) {
+        auto& entry = pair_entries_[i];
+        if (!entry.widget) {
+            entry.widget = std::make_unique<DMColorRangeWidget>("Pair " + std::to_string(i + 1));
+        }
+        entry.widget->set_label("Pair " + std::to_string(i + 1));
+        entry.widget->set_value(owner_.orbit_key_pairs_[i].color);
+        entry.widget->set_on_value_changed([this, idx = static_cast<int>(i)](const utils::color::RangedColor& value) {
+            owner_.handle_pair_color_changed(idx, value);
+        });
+    }
+}
+
+void MapLightPanel::OrbitKeyWidget::layout_color_widgets() {
+    const int gap = DMSpacing::small_gap();
+    int y = list_rect_.y;
+    const int width = std::max(list_rect_.w, 0);
+    for (auto& entry : pair_entries_) {
+        if (!entry.widget) {
+            continue;
+        }
+        const int h = entry.widget->height_for_width(width);
+        entry.rect = SDL_Rect{ list_rect_.x, y, width, h };
+        entry.widget->set_rect(entry.rect);
+        y += h + gap;
+    }
+}
+
+void MapLightPanel::OrbitKeyWidget::ensure_scroll_capture() {
+    if (!scroll_capture_active_) {
+        DMWidgetsSetSliderScrollCapture(this, true);
+        scroll_capture_active_ = true;
+    }
+}
+
+void MapLightPanel::OrbitKeyWidget::release_scroll_capture() {
+    if (scroll_capture_active_) {
+        DMWidgetsSetSliderScrollCapture(this, false);
+        scroll_capture_active_ = false;
+    }
+}
+
+int MapLightPanel::OrbitKeyWidget::pair_index_at_point(int x, int y) const {
+    SDL_Point p{x, y};
+    for (size_t i = 0; i < pair_entries_.size(); ++i) {
+        if (SDL_PointInRect(&p, &pair_entries_[i].rect)) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+double MapLightPanel::OrbitKeyWidget::line_distance_to_point(double angle_deg, int x, int y) const {
+    if (circle_rect_.w <= 0 || circle_rect_.h <= 0) {
+        return -1.0;
+    }
+    const int cx = circle_rect_.x + circle_rect_.w / 2;
+    const int cy = circle_rect_.y + circle_rect_.h / 2;
+    const double px = static_cast<double>(x - cx);
+    const double py = static_cast<double>(cy - y);
+    const double radians = angle_deg * M_PI / 180.0;
+    const double dir_x = std::cos(radians);
+    const double dir_y = std::sin(radians);
+    const double radius = circle_rect_.w * 0.5;
+    const double proj = px * dir_x + py * dir_y;
+    if (proj < 0.0 || proj > radius) {
+        return -1.0;
+    }
+    const double perp_x = px - proj * dir_x;
+    const double perp_y = py - proj * dir_y;
+    return std::sqrt(perp_x * perp_x + perp_y * perp_y);
+}
+
+int MapLightPanel::OrbitKeyWidget::line_hit_test(int x, int y) const {
+    if (owner_.orbit_key_pairs_.empty() || circle_rect_.w <= 0) {
+        return -1;
+    }
+    const double radius = circle_rect_.w * 0.5;
+    const int cx = circle_rect_.x + circle_rect_.w / 2;
+    const int cy = circle_rect_.y + circle_rect_.h / 2;
+    const double dx = static_cast<double>(x - cx);
+    const double dy = static_cast<double>(cy - y);
+    const double distance_sq = dx * dx + dy * dy;
+    const double max_distance = (radius + 6.0);
+    if (distance_sq > max_distance * max_distance) {
+        return -1;
+    }
+
+    int best_index = -1;
+    double best_distance = 6.0;
+    for (size_t i = 0; i < owner_.orbit_key_pairs_.size(); ++i) {
+        const auto& pair = owner_.orbit_key_pairs_[i];
+        const double primary = MapLightPanel::normalize_angle(pair.angle);
+        const double mirror = MapLightPanel::normalize_angle(180.0 - pair.angle);
+        const double dist_primary = line_distance_to_point(primary, x, y);
+        if (dist_primary >= 0.0 && dist_primary <= best_distance) {
+            best_distance = dist_primary;
+            best_index = static_cast<int>(i);
+        }
+        const double dist_mirror = line_distance_to_point(mirror, x, y);
+        if (dist_mirror >= 0.0 && dist_mirror <= best_distance) {
+            best_distance = dist_mirror;
+            best_index = static_cast<int>(i);
+        }
+    }
+    return best_index;
+}
+
+double MapLightPanel::OrbitKeyWidget::point_angle(int x, int y) const {
+    if (circle_rect_.w <= 0 || circle_rect_.h <= 0) {
+        return 0.0;
+    }
+    const int cx = circle_rect_.x + circle_rect_.w / 2;
+    const int cy = circle_rect_.y + circle_rect_.h / 2;
+    const double px = static_cast<double>(x - cx);
+    const double py = static_cast<double>(cy - y);
+    double angle = std::atan2(py, px) * 180.0 / M_PI;
+    if (angle < 0.0) {
+        angle += 360.0;
+    }
+    return angle;
+}
+
+void MapLightPanel::OrbitKeyWidget::draw_orbit_circle(SDL_Renderer* r) const {
+    if (circle_rect_.w <= 0 || circle_rect_.h <= 0) {
+        return;
+    }
+    SDL_Color circle_bg = dm_draw::DarkenColor(DMStyles::PanelBG(), 0.14f);
+    SDL_SetRenderDrawColor(r, circle_bg.r, circle_bg.g, circle_bg.b, circle_bg.a);
+    SDL_RenderFillRect(r, &circle_rect_);
+
+    const int cx = circle_rect_.x + circle_rect_.w / 2;
+    const int cy = circle_rect_.y + circle_rect_.h / 2;
+    const double radius = circle_rect_.w * 0.5;
+    const int segments = 96;
+    std::array<SDL_Point, segments + 1> points{};
+    SDL_Color border = DMStyles::Border();
+    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+    for (int i = 0; i <= segments; ++i) {
+        const double t = (static_cast<double>(i) / segments) * 2.0 * M_PI;
+        const int px = static_cast<int>(std::round(cx + std::cos(t) * radius));
+        const int py = static_cast<int>(std::round(cy - std::sin(t) * radius));
+        points[i] = SDL_Point{px, py};
+    }
+    SDL_RenderDrawLines(r, points.data(), segments + 1);
+}
+
+void MapLightPanel::OrbitKeyWidget::draw_orbit_line(SDL_Renderer* r, double angle_deg, const SDL_Color& color, bool focused) const {
+    if (circle_rect_.w <= 0 || circle_rect_.h <= 0) {
+        return;
+    }
+    const int cx = circle_rect_.x + circle_rect_.w / 2;
+    const int cy = circle_rect_.y + circle_rect_.h / 2;
+    const double radius = circle_rect_.w * 0.5;
+    const double radians = angle_deg * M_PI / 180.0;
+    const double end_x = cx + std::cos(radians) * radius;
+    const double end_y = cy - std::sin(radians) * radius;
+
+    SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
+    SDL_RenderDrawLine(r, cx, cy, static_cast<int>(std::round(end_x)), static_cast<int>(std::round(end_y)));
+
+    if (focused) {
+        SDL_Color focus = DMStyles::HighlightColor();
+        SDL_SetRenderDrawColor(r, focus.r, focus.g, focus.b, focus.a);
+        const int ex = static_cast<int>(std::round(end_x));
+        const int ey = static_cast<int>(std::round(end_y));
+        SDL_RenderDrawLine(r, cx, cy, ex, ey);
+        SDL_RenderDrawLine(r, cx + 1, cy, ex + 1, ey);
+        SDL_RenderDrawLine(r, cx - 1, cy, ex - 1, ey);
+    }
+}
+
+class MapLightPanel::OrbitKeyWidget : public Widget {
+public:
+    explicit OrbitKeyWidget(MapLightPanel& owner);
+
+    void set_rect(const SDL_Rect& r) override;
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int w) const override;
+    bool handle_event(const SDL_Event& e) override;
+    void render(SDL_Renderer* r) const override;
+    bool wants_full_row() const override { return true; }
+
+    bool handle_overlay_event(const SDL_Event& e);
+    void render_overlay(SDL_Renderer* r) const;
+
+    void on_pairs_changed();
+    void on_focus_changed();
+
+private:
+    struct PairEntry {
+        std::unique_ptr<DMColorRangeWidget> widget;
+        SDL_Rect rect{0, 0, 0, 0};
+    };
+
+    MapLightPanel& owner_;
+    SDL_Rect rect_{0, 0, 0, 0};
+    SDL_Rect circle_rect_{0, 0, 0, 0};
+    SDL_Rect list_rect_{0, 0, 0, 0};
+    std::vector<PairEntry> pair_entries_;
+    bool scroll_capture_active_ = false;
+
+    void update_internal_layout();
+    void rebuild_pair_entries();
+    void layout_color_widgets();
+    void ensure_scroll_capture();
+    void release_scroll_capture();
+    int pair_index_at_point(int x, int y) const;
+    int line_hit_test(int x, int y) const;
+    double point_angle(int x, int y) const;
+    double line_distance_to_point(double angle_deg, int x, int y) const;
+    void draw_orbit_circle(SDL_Renderer* r) const;
+    void draw_orbit_line(SDL_Renderer* r, double angle_deg, const SDL_Color& color, bool focused) const;
+};
+
 int MapLightPanel::clamp_int(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
 }
@@ -114,8 +554,10 @@ MapLightPanel::~MapLightPanel() = default;
 void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
     on_save_ = std::move(on_save);
-    current_key_index_ = 0;
     editing_light_ = json::object();
+    orbit_key_pairs_.clear();
+    focused_pair_index_ = -1;
+    next_pair_id_ = 1;
     if (map_info_ && map_info_->contains("map_light_data") && (*map_info_)["map_light_data"].is_object()) {
         editing_light_ = (*map_info_)["map_light_data"];
     }
@@ -177,12 +619,6 @@ void MapLightPanel::build_ui() {
     if (orbit_y_)        orbit_y_->set_defer_commit_until_unfocus(true);
     
 
-    prev_key_btn_ = std::make_unique<DMButton>("< Prev", &DMStyles::HeaderButton(), 120, DMButton::height());
-    next_key_btn_ = std::make_unique<DMButton>("Next >", &DMStyles::HeaderButton(), 120, DMButton::height());
-    add_pair_btn_ = std::make_unique<DMButton>("+ Pair @Angle", &DMStyles::HeaderButton(), 180, DMButton::height());
-    delete_btn_   = std::make_unique<DMButton>("Delete Key", &DMStyles::HeaderButton(), 140, DMButton::height());
-
-    key_angle_ = std::make_unique<DMSlider>("Key Angle (deg)", 0, 360, 0);
     rebuild_rows();
 }
 
@@ -204,7 +640,7 @@ void MapLightPanel::rebuild_rows() {
     widget_wrappers_.clear();
     widget_wrappers_.reserve(128);
     base_color_widget_ = nullptr;
-    key_color_widget_ = nullptr;
+    orbit_key_widget_ = nullptr;
 
     auto add_widget = [this](std::unique_ptr<Widget> w) -> Widget* {
         Widget* raw = w.get();
@@ -254,19 +690,9 @@ void MapLightPanel::rebuild_rows() {
         });
         base_color_widget_ = base_color.get();
         rows.push_back({ add_widget(std::move(base_color)) });
-        rows.push_back({
-            add_widget(std::make_unique<ButtonWidget>(prev_key_btn_.get(), [this]() { select_prev_key(); })),
-            add_widget(std::make_unique<ButtonWidget>(next_key_btn_.get(), [this]() { select_next_key(); })),
-            add_widget(std::make_unique<ButtonWidget>(add_pair_btn_.get(), [this]() { add_key_pair_at_current_angle(); })),
-            add_widget(std::make_unique<ButtonWidget>(delete_btn_.get(), [this]() { delete_current_key(); }))
-        });
-        rows.push_back({ add_widget(std::make_unique<SliderWidget>(key_angle_.get())) });
-        auto key_color = std::make_unique<DMColorRangeWidget>("Key Color");
-        key_color->set_on_value_changed([this](const utils::color::RangedColor&) {
-            this->needs_sync_to_json_ = true;
-        });
-        key_color_widget_ = key_color.get();
-        rows.push_back({ add_widget(std::move(key_color)) });
+        auto orbit_widget = std::make_unique<OrbitKeyWidget>(*this);
+        orbit_key_widget_ = orbit_widget.get();
+        rows.push_back({ add_widget(std::move(orbit_widget)) });
         rows.push_back({
             add_widget(std::make_unique<ButtonWidget>(update_btn_.get(), [this]() { apply_changes(); }))
         });
@@ -501,31 +927,8 @@ void MapLightPanel::sync_ui_from_json() {
         base_color_widget_->set_value(base_range);
     }
 
-    ensure_keys_array();
-    clamp_key_index();
-
-    const auto& keys = L["keys"];
-    utils::color::RangedColor key_range = base_range;
-    int key_angle_value = 0;
-    if (!keys.empty() && current_key_index_ >= 0 && current_key_index_ < (int)keys.size()) {
-        const auto& entry = keys[current_key_index_];
-        if (entry.is_array() && entry.size() >= 2) {
-            try {
-                key_angle_value = (int)std::round(wrap_angle(static_cast<float>(entry[0].get<double>())));
-            } catch (...) {
-                key_angle_value = 0;
-            }
-            if (auto parsed = utils::color::ranged_color_from_json(entry[1])) {
-                key_range = *parsed;
-            }
-        }
-    }
-    key_angle_->set_value(key_angle_value);
-    if (key_color_widget_) {
-        key_color_widget_->set_value(key_range);
-        std::string label = current_key_label_.empty() ? std::string("Key Color") : current_key_label_ + " Color";
-        key_color_widget_->set_label(label);
-    }
+    rebuild_orbit_key_pairs_from_json();
+    refresh_orbit_widget();
 
     needs_sync_to_json_ = false;
     sync_reactive_settings_shared();
@@ -553,22 +956,7 @@ void MapLightPanel::sync_json_from_ui() {
     set_orbit_sliders(orbit);
 
     ensure_keys_array();
-    clamp_key_index();
-
-    auto& keys = L["keys"];
-    if (!keys.empty() && current_key_index_ >= 0 && current_key_index_ < (int)keys.size()) {
-        const int ang = clamp_int(key_angle_->value(), 0, 360);
-        json color_json = keys[current_key_index_];
-        if (color_json.is_array() && color_json.size() >= 2) {
-            color_json = color_json[1];
-        } else {
-            color_json = utils::color::ranged_color_to_json(utils::color::RangedColor{{255,255},{255,255},{255,255},{255,255}});
-        }
-        if (key_color_widget_) {
-            color_json = utils::color::ranged_color_to_json(key_color_widget_->value());
-        }
-        keys[current_key_index_] = json::array({ static_cast<double>(ang), color_json });
-    }
+    write_orbit_pairs_to_json();
 
     needs_sync_to_json_ = false;
 }
@@ -585,7 +973,6 @@ void MapLightPanel::ensure_keys_array() {
     json& L = ensure_light();
     if (!L.contains("keys") || !L["keys"].is_array()) {
         L["keys"] = json::array();
-        L["keys"].push_back(json::array({ 0.0, L["base_color"] }));
     }
 }
 
@@ -660,86 +1047,273 @@ bool MapLightPanel::commit_light_changes() {
     return ok;
 }
 
-void MapLightPanel::clamp_key_index() {
-    json& L = ensure_light();
-    int n = (int)L["keys"].size();
-    if (n <= 0) {
-        L["keys"] = json::array();
-        L["keys"].push_back(json::array({ 0.0, L["base_color"] }));
-        n = 1;
+void MapLightPanel::refresh_orbit_widget() {
+    if (orbit_key_widget_) {
+        orbit_key_widget_->on_pairs_changed();
+        orbit_key_widget_->on_focus_changed();
     }
-    current_key_index_ = clamp_int(current_key_index_, 0, std::max(0, n-1));
-
-    std::ostringstream oss;
-    oss << "Key " << (current_key_index_ + 1) << " / " << n;
-    current_key_label_ = oss.str();
 }
 
-void MapLightPanel::select_prev_key() {
-    json& L = ensure_light();
-    int n = (int)L["keys"].size();
-    if (n <= 0) return;
-    current_key_index_ = (current_key_index_ - 1 + n) % n;
-    sync_ui_from_json();
+void MapLightPanel::set_focused_pair(int index) {
+    if (index < 0 || index >= static_cast<int>(orbit_key_pairs_.size())) {
+        focused_pair_index_ = -1;
+    } else {
+        focused_pair_index_ = index;
+    }
+    if (orbit_key_widget_) {
+        orbit_key_widget_->on_focus_changed();
+    }
 }
 
-void MapLightPanel::select_next_key() {
-    json& L = ensure_light();
-    int n = (int)L["keys"].size();
-    if (n <= 0) return;
-    current_key_index_ = (current_key_index_ + 1) % n;
-    sync_ui_from_json();
+void MapLightPanel::set_focused_pair_by_id(int id) {
+    if (id < 0) {
+        set_focused_pair(-1);
+        return;
+    }
+    for (size_t i = 0; i < orbit_key_pairs_.size(); ++i) {
+        if (orbit_key_pairs_[i].id == id) {
+            set_focused_pair(static_cast<int>(i));
+            return;
+        }
+    }
+    set_focused_pair(-1);
 }
 
-void MapLightPanel::add_key_pair_at_current_angle() {
+void MapLightPanel::add_orbit_pair(double angle_degrees) {
+    const int existing = find_pair_containing_angle(angle_degrees);
+    if (existing >= 0) {
+        set_focused_pair(existing);
+        return;
+    }
+
+    utils::color::RangedColor default_color{{255,255},{255,255},{255,255},{255,255}};
+    if (base_color_widget_) {
+        default_color = base_color_widget_->value();
+    } else if (auto parsed = utils::color::ranged_color_from_json(ensure_light().value("base_color", nlohmann::json{}))) {
+        default_color = *parsed;
+    }
+
+    OrbitKeyPair pair;
+    pair.id = next_pair_id_++;
+    pair.angle = normalize_angle(angle_degrees);
+    pair.color = utils::color::clamp_ranged_color(default_color);
+    orbit_key_pairs_.push_back(pair);
+
+    sort_orbit_pairs();
+    set_focused_pair_by_id(pair.id);
+    needs_sync_to_json_ = true;
+    refresh_orbit_widget();
+}
+
+void MapLightPanel::delete_orbit_pair(int index) {
+    if (index < 0 || index >= static_cast<int>(orbit_key_pairs_.size())) {
+        return;
+    }
+
+    orbit_key_pairs_.erase(orbit_key_pairs_.begin() + index);
+    if (orbit_key_pairs_.empty()) {
+        utils::color::RangedColor default_color{{255,255},{255,255},{255,255},{255,255}};
+        if (base_color_widget_) {
+            default_color = base_color_widget_->value();
+        } else if (auto parsed = utils::color::ranged_color_from_json(ensure_light().value("base_color", nlohmann::json{}))) {
+            default_color = *parsed;
+        }
+        OrbitKeyPair fallback;
+        fallback.id = next_pair_id_++;
+        fallback.angle = 0.0;
+        fallback.color = utils::color::clamp_ranged_color(default_color);
+        orbit_key_pairs_.push_back(fallback);
+    }
+
+    set_focused_pair(-1);
+    sort_orbit_pairs();
+    needs_sync_to_json_ = true;
+    refresh_orbit_widget();
+}
+
+void MapLightPanel::adjust_orbit_pair_angle(int index, int delta_degrees) {
+    if (index < 0 || index >= static_cast<int>(orbit_key_pairs_.size())) {
+        return;
+    }
+    OrbitKeyPair& pair = orbit_key_pairs_[index];
+    pair.angle = normalize_angle(pair.angle + static_cast<double>(delta_degrees));
+    const int id = pair.id;
+    sort_orbit_pairs();
+    set_focused_pair_by_id(id);
+    needs_sync_to_json_ = true;
+    refresh_orbit_widget();
+}
+
+void MapLightPanel::handle_pair_color_changed(int index, const utils::color::RangedColor& color) {
+    if (index < 0 || index >= static_cast<int>(orbit_key_pairs_.size())) {
+        return;
+    }
+    orbit_key_pairs_[index].color = utils::color::clamp_ranged_color(color);
+    needs_sync_to_json_ = true;
+}
+
+int MapLightPanel::find_pair_containing_angle(double angle_degrees) const {
+    if (orbit_key_pairs_.empty()) {
+        return -1;
+    }
+    const double target = normalize_angle(angle_degrees);
+    const double epsilon = 2.0;
+    for (size_t i = 0; i < orbit_key_pairs_.size(); ++i) {
+        const double primary = normalize_angle(orbit_key_pairs_[i].angle);
+        const double mirror = normalize_angle(180.0 - orbit_key_pairs_[i].angle);
+        auto diff = [](double a, double b) {
+            double delta = std::fabs(a - b);
+            return std::min(delta, 360.0 - delta);
+        };
+        if (diff(primary, target) <= epsilon || diff(mirror, target) <= epsilon) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+void MapLightPanel::rebuild_orbit_key_pairs_from_json() {
     json& L = ensure_light();
+    ensure_keys_array();
 
-    const int ang = clamp_int(key_angle_->value(), 0, 360);
-    utils::color::RangedColor color = key_color_widget_
-        ? key_color_widget_->value()
-        : (base_color_widget_ ? base_color_widget_->value()
-                               : utils::color::RangedColor{{255,255},{255,255},{255,255},{255,255}});
+    const int previous_focus_id =
+        (focused_pair_index_ >= 0 && focused_pair_index_ < static_cast<int>(orbit_key_pairs_.size()))
+            ? orbit_key_pairs_[focused_pair_index_].id
+            : -1;
 
-    const int ang2 = (ang + 180) % 360;
+    utils::color::RangedColor base_range{{255,255},{255,255},{255,255},{255,255}};
+    if (auto parsed = utils::color::ranged_color_from_json(L.value("base_color", nlohmann::json{}))) {
+        base_range = *parsed;
+    }
 
-    auto color_json = utils::color::ranged_color_to_json(color);
-    auto key1 = json::array({ static_cast<double>(ang),  color_json });
-    auto key2 = json::array({ static_cast<double>(ang2), color_json });
+    orbit_key_pairs_.clear();
+    next_pair_id_ = 1;
 
-    auto& keys = L["keys"];
-    keys.push_back(key1);
-    keys.push_back(key2);
-
-    std::sort(keys.begin(), keys.end(), [](const json& A, const json& B){
-        double a0 = 0.0, b0 = 0.0;
-        try { a0 = A[0].get<double>(); } catch(...) {}
-        try { b0 = B[0].get<double>(); } catch(...) {}
-        return a0 < b0;
-    });
-
-    for (int i=0;i<(int)keys.size();++i) {
+    const auto& keys = L["keys"];
+    std::vector<std::pair<double, utils::color::RangedColor>> parsed_keys;
+    parsed_keys.reserve(keys.size());
+    for (const auto& entry : keys) {
+        if (!entry.is_array() || entry.size() < 2) {
+            continue;
+        }
+        double angle = 0.0;
         try {
-            if ((int)std::round(keys[i][0].get<double>()) == ang) {
-                current_key_index_ = i;
+            angle = entry[0].get<double>();
+        } catch (...) {
+            continue;
+        }
+        utils::color::RangedColor color = base_range;
+        if (auto parsed_color = utils::color::ranged_color_from_json(entry[1])) {
+            color = *parsed_color;
+        }
+        parsed_keys.emplace_back(normalize_angle(angle), utils::color::clamp_ranged_color(color));
+    }
+
+    std::vector<bool> used(parsed_keys.size(), false);
+    const double epsilon = 0.5;
+    for (size_t i = 0; i < parsed_keys.size(); ++i) {
+        if (used[i]) {
+            continue;
+        }
+        used[i] = true;
+        const double angle = parsed_keys[i].first;
+        const utils::color::RangedColor color = parsed_keys[i].second;
+        const double mirror_target = normalize_angle(180.0 - angle);
+        for (size_t j = i + 1; j < parsed_keys.size(); ++j) {
+            if (used[j]) {
+                continue;
+            }
+            const double candidate = parsed_keys[j].first;
+            double diff = std::fabs(candidate - mirror_target);
+            diff = std::min(diff, 360.0 - diff);
+            if (diff <= epsilon) {
+                used[j] = true;
                 break;
             }
-        } catch(...) {}
+        }
+        OrbitKeyPair pair;
+        pair.id = next_pair_id_++;
+        pair.angle = angle;
+        pair.color = color;
+        orbit_key_pairs_.push_back(pair);
     }
 
-    needs_sync_to_json_ = true;
-    sync_ui_from_json();
+    if (orbit_key_pairs_.empty()) {
+        OrbitKeyPair fallback;
+        fallback.id = next_pair_id_++;
+        fallback.angle = 0.0;
+        fallback.color = base_range;
+        orbit_key_pairs_.push_back(fallback);
+    }
+
+    sort_orbit_pairs();
+    set_focused_pair_by_id(previous_focus_id);
+    refresh_orbit_widget();
 }
 
-void MapLightPanel::delete_current_key() {
+void MapLightPanel::write_orbit_pairs_to_json() {
     json& L = ensure_light();
-    auto& keys = L["keys"];
-    if (keys.size() <= 1) return;
-    if (current_key_index_ < 0 || current_key_index_ >= (int)keys.size()) return;
-    keys.erase(keys.begin() + current_key_index_);
-    if (current_key_index_ >= (int)keys.size()) current_key_index_ = (int)keys.size() - 1;
+    ensure_keys_array();
 
-    needs_sync_to_json_ = true;
-    sync_ui_from_json();
+    nlohmann::json keys = nlohmann::json::array();
+    for (const auto& pair : orbit_key_pairs_) {
+        const double primary = normalize_angle(pair.angle);
+        const double mirror = normalize_angle(180.0 - pair.angle);
+        auto color_json = utils::color::ranged_color_to_json(utils::color::clamp_ranged_color(pair.color));
+        std::array<double, 2> angles{primary, mirror};
+        std::sort(angles.begin(), angles.end());
+        if (std::fabs(angles[0] - angles[1]) < 1e-4) {
+            keys.push_back(nlohmann::json::array({ angles[0], color_json }));
+        } else {
+            keys.push_back(nlohmann::json::array({ angles[0], color_json }));
+            keys.push_back(nlohmann::json::array({ angles[1], color_json }));
+        }
+    }
+
+    std::sort(keys.begin(), keys.end(), [](const nlohmann::json& A, const nlohmann::json& B) {
+        double a = 0.0;
+        double b = 0.0;
+        try { a = A[0].get<double>(); } catch (...) {}
+        try { b = B[0].get<double>(); } catch (...) {}
+        return a < b;
+    });
+
+    L["keys"] = keys;
+}
+
+void MapLightPanel::sort_orbit_pairs() {
+    if (orbit_key_pairs_.empty()) {
+        focused_pair_index_ = -1;
+        return;
+    }
+
+    int focus_id = -1;
+    if (focused_pair_index_ >= 0 && focused_pair_index_ < static_cast<int>(orbit_key_pairs_.size())) {
+        focus_id = orbit_key_pairs_[focused_pair_index_].id;
+    }
+
+    std::sort(orbit_key_pairs_.begin(), orbit_key_pairs_.end(), [](const OrbitKeyPair& a, const OrbitKeyPair& b) {
+        return normalize_angle(a.angle) < normalize_angle(b.angle);
+    });
+
+    if (focus_id >= 0) {
+        for (size_t i = 0; i < orbit_key_pairs_.size(); ++i) {
+            if (orbit_key_pairs_[i].id == focus_id) {
+                focused_pair_index_ = static_cast<int>(i);
+                return;
+            }
+        }
+    }
+
+    focused_pair_index_ = -1;
+}
+
+double MapLightPanel::normalize_angle(double angle) {
+    double result = std::fmod(angle, 360.0);
+    if (result < 0.0) {
+        result += 360.0;
+    }
+    return result;
 }
 
 void MapLightPanel::update(const Input& input, int screen_w, int screen_h) {
@@ -760,7 +1334,7 @@ bool MapLightPanel::handle_event(const SDL_Event& e) {
         overlay_used = true;
         used = true;
     }
-    if (!overlay_used && key_color_widget_ && key_color_widget_->handle_overlay_event(e)) {
+    if (!overlay_used && orbit_key_widget_ && orbit_key_widget_->handle_overlay_event(e)) {
         overlay_used = true;
         used = true;
     }
@@ -794,8 +1368,8 @@ void MapLightPanel::render(SDL_Renderer* r) const {
     if (base_color_widget_) {
         base_color_widget_->render_overlay(r);
     }
-    if (key_color_widget_) {
-        key_color_widget_->render_overlay(r);
+    if (orbit_key_widget_) {
+        orbit_key_widget_->render_overlay(r);
     }
 }
 
@@ -828,19 +1402,15 @@ void MapLightPanel::render_content(SDL_Renderer* r) const {
     if (!r) return;
 
     if (!editing_light_.is_object()) return;
-    const json& L = editing_light_;
-    auto keys_it = L.find("keys");
-    if (keys_it == L.end() || !keys_it->is_array()) return;
-    const auto& keys = *keys_it;
-    if (keys.empty()) return;
+    SDL_Color fill_color = utils::color::resolve_ranged_color(
+        editing_light_.value("base_color", nlohmann::json{}),
+        SDL_Color{255, 255, 255, 255});
 
-    SDL_Color fill_color = utils::color::resolve_ranged_color(L.value("base_color", nlohmann::json{}), SDL_Color{255,255,255,255});
-    try {
-        const auto& K = keys.at(std::min<int>(current_key_index_, (int)keys.size()-1));
-        if (K.is_array() && K.size() >= 2) {
-            fill_color = utils::color::resolve_ranged_color(K[1], fill_color);
-        }
-    } catch (...) {}
+    if (focused_pair_index_ >= 0 && focused_pair_index_ < static_cast<int>(orbit_key_pairs_.size())) {
+        fill_color = utils::color::resolve_ranged_color(orbit_key_pairs_[focused_pair_index_].color);
+    } else if (!orbit_key_pairs_.empty()) {
+        fill_color = utils::color::resolve_ranged_color(orbit_key_pairs_.front().color, fill_color);
+    }
 
     SDL_Rect swatch = body_viewport_;
     swatch.y += std::max(0, swatch.h - 24);
