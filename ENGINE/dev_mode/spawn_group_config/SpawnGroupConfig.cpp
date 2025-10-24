@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "spawn_group_utils.hpp"
+#include "dm_icons.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
@@ -74,6 +75,9 @@ constexpr int kDefaultMaxNumber = 1;
 constexpr int kExactDefaultQuantity = 1;
 constexpr int kPerimeterRadiusSliderMin = 0;
 constexpr int kPerimeterRadiusSliderMax = 20000;
+constexpr int kEdgeInsetSliderMin = 0;
+constexpr int kEdgeInsetSliderMax = 200;
+constexpr int kEdgeInsetDefault = 100;
 
 std::function<std::vector<std::string>()> empty_provider() {
     return []() { return std::vector<std::string>{}; };
@@ -286,8 +290,16 @@ public:
         : checkbox_(std::move(checkbox)), on_change_(std::move(on_change)), editable_(editable) {}
 
     void set_rect(const SDL_Rect& r) override {
-        if (checkbox_) checkbox_->set_rect(r);
         rect_cache_ = r;
+        if (!checkbox_) return;
+        checkbox_->set_rect(r);
+        SDL_Rect applied = checkbox_->rect();
+        int preferred = checkbox_->preferred_width();
+        int minimum = applied.h;
+        int desired = std::max(minimum, preferred);
+        applied.w = std::min(desired, r.w);
+        checkbox_->set_rect(applied);
+        rect_cache_ = applied;
     }
 
     const SDL_Rect& rect() const override {
@@ -407,7 +419,7 @@ private:
 };
 
 std::vector<std::string> build_method_options(const std::string& method) {
-    std::vector<std::string> options{"Random", "Perimeter", "Exact"};
+    std::vector<std::string> options{"Random", "Perimeter", "Edge", "Exact"};
     if (!method.empty() && std::find(options.begin(), options.end(), method) == options.end()) {
         options.push_back(method);
     }
@@ -570,6 +582,15 @@ struct SpawnGroupConfig::Entry {
             [this](int value) { on_perimeter_radius_changed(value); },
             editable_);
 
+        auto inset_slider = std::make_unique<DMSlider>("Edge Inset (%)",
+                                                       kEdgeInsetSliderMin,
+                                                       kEdgeInsetSliderMax,
+                                                       kEdgeInsetDefault);
+        edge_inset_widget_ = std::make_unique<SpawnGroupCallbackSliderWidget>(
+            std::move(inset_slider),
+            [this](int value) { on_edge_inset_changed(value); },
+            editable_);
+
         candidate_header_ = std::make_unique<SpawnGroupLabelWidget>("Candidates");
         candidate_header_->set_subtle(true);
 
@@ -706,7 +727,9 @@ struct SpawnGroupConfig::Entry {
         current_method_ = method;
         use_exact_quantity_ = (method == "Exact" || method == "Exact Position");
         bool previous_show_radius = show_perimeter_radius_widget_;
+        bool previous_show_edge = show_edge_inset_widget_;
         show_perimeter_radius_widget_ = (method == "Perimeter");
+        show_edge_inset_widget_ = (method == "Edge");
 
         int resolution_value = vibble::grid::clamp_resolution(safe_int(entry, "resolution", owner_ ? owner_->default_resolution_ : current_resolution_));
         current_resolution_ = resolution_value;
@@ -723,7 +746,15 @@ struct SpawnGroupConfig::Entry {
             perimeter_radius_widget_->set_value(radius_value);
             perimeter_radius_widget_->set_editable(editable_ && show_perimeter_radius_widget_);
         }
-        if (previous_show_radius != show_perimeter_radius_widget_ && owner_) {
+        int edge_inset_value = std::clamp(safe_int(entry, "edge_inset_percent", kEdgeInsetDefault),
+                                              kEdgeInsetSliderMin,
+                                              kEdgeInsetSliderMax);
+        if (edge_inset_widget_) {
+            edge_inset_widget_->set_value(edge_inset_value);
+            edge_inset_widget_->set_editable(editable_ && show_edge_inset_widget_);
+        }
+        if ((previous_show_radius != show_perimeter_radius_widget_ ||
+             previous_show_edge != show_edge_inset_widget_) && owner_) {
             owner_->mark_layout_dirty();
         }
 
@@ -784,6 +815,9 @@ struct SpawnGroupConfig::Entry {
         if (perimeter_radius_widget_) {
             perimeter_radius_widget_->set_editable(editable_ && show_perimeter_radius_widget_);
         }
+        if (edge_inset_widget_) {
+            edge_inset_widget_->set_editable(editable_ && show_edge_inset_widget_);
+        }
     }
 
     void set_expanded(bool expanded) {
@@ -841,6 +875,10 @@ struct SpawnGroupConfig::Entry {
 
             if (show_perimeter_radius_widget_ && perimeter_radius_widget_) {
                 rows.push_back({perimeter_radius_widget_.get()});
+            }
+
+            if (show_edge_inset_widget_ && edge_inset_widget_) {
+                rows.push_back({edge_inset_widget_.get()});
             }
 
             // Candidates: header, optional empty label, and pie widget (with internal controls)
@@ -1125,12 +1163,18 @@ private:
                 (*entry)["min_number"] = quantity;
                 (*entry)["max_number"] = quantity;
                 (*entry)["quantity"] = quantity;
+                (*entry).erase("edge_inset_percent");
             } else {
                 int min_number = safe_int(*entry, "min_number", kDefaultMinNumber);
                 int max_number = safe_int(*entry, "max_number", std::max(min_number, kDefaultMaxNumber));
                 if (max_number < min_number) max_number = min_number;
                 (*entry)["min_number"] = min_number;
                 (*entry)["max_number"] = max_number;
+                if (method == "Edge") {
+                    (*entry)["edge_inset_percent"] = kEdgeInsetDefault;
+                } else {
+                    (*entry).erase("edge_inset_percent");
+                }
             }
             current_method_ = method;
             use_exact_quantity_ = (method == "Exact" || method == "Exact Position");
@@ -1220,6 +1264,20 @@ private:
         }
     }
 
+    void on_edge_inset_changed(int value) {
+        if (!editable_) return;
+        int clamped = std::clamp(value, kEdgeInsetSliderMin, kEdgeInsetSliderMax);
+        if (auto* entry = mutable_entry()) {
+            int current = safe_int(*entry, "edge_inset_percent", kEdgeInsetDefault);
+            if (current == clamped) {
+                return;
+            }
+            (*entry)["edge_inset_percent"] = clamped;
+            notify_change(false, false, false);
+            sync_from_json();
+        }
+    }
+
     SpawnGroupConfig* owner_ = nullptr;
     nlohmann::json* entry_ = nullptr;
     nlohmann::json shadow_entry_ = nlohmann::json::object();
@@ -1267,7 +1325,9 @@ private:
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> exact_widget_{};
     std::unique_ptr<SpawnGroupCallbackSliderWidget> resolution_widget_{};
     std::unique_ptr<SpawnGroupCallbackSliderWidget> perimeter_radius_widget_{};
+    std::unique_ptr<SpawnGroupCallbackSliderWidget> edge_inset_widget_{};
     bool show_perimeter_radius_widget_ = false;
+    bool show_edge_inset_widget_ = false;
     int current_resolution_ = 0;
 
     std::optional<size_t> array_index_{};
@@ -1287,7 +1347,10 @@ SpawnGroupConfig::SpawnGroupConfig(bool floatable)
     set_col_gap(12);
     set_padding(12);
     // Header action buttons
-    header_delete_btn_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+    header_delete_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                                    &DMStyles::DeleteButton(),
+                                                    DMButton::height(),
+                                                    DMButton::height());
     header_delete_widget_ = std::make_unique<ButtonWidget>(header_delete_btn_.get(), [](){});
 }
 

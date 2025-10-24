@@ -654,7 +654,6 @@ void MapModeUI::ensure_panels() {
     }
     if (layer_controls_display_) {
         layer_controls_display_->attach_container(layer_controls_container_.get());
-        layer_controls_display_->set_map_info(map_info_);
         layer_controls_display_->set_controller(layers_controller_);
         layer_controls_display_->set_selected_layer(layers_panel_ ? layers_panel_->selected_layer() : -1);
         layer_controls_display_->set_on_change([this]() {

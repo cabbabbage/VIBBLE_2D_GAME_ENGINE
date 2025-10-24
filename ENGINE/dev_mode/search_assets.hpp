@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "FloatingPanelLayoutManager.hpp"
+
 namespace devmode::core {
 class ManifestStore;
 }
@@ -27,6 +29,7 @@ public:
     void set_screen_dimensions(int width, int height);
     void set_floating_stack_key(std::string key);
     void set_anchor_position(int x, int y);
+    void layout_with_parent(const FloatingPanelLayoutManager::SlidingParentInfo& parent);
     void open(Callback cb);
     void close();
     bool visible() const;
@@ -46,7 +49,8 @@ private:
     void filter_assets();
     static std::string to_lower(std::string s);
     void apply_position(int x, int y);
-    void ensure_visible_position();
+    void ensure_visible_position(const FloatingPanelLayoutManager::SlidingParentInfo* parent = nullptr);
+    FloatingPanelLayoutManager::PanelInfo build_panel_info(bool force_layout) const;
     std::unique_ptr<DockableCollapsible> panel_;
     std::unique_ptr<DMTextBox> query_;
     std::unique_ptr<TextBoxWidget> query_widget_;

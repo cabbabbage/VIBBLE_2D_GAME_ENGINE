@@ -9,8 +9,10 @@
 #include "dev_mode/room_editor_map_info.hpp"
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
+#include "map_layers_common.hpp"
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/core/manifest_store.hpp"
+#include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
 #include "room_config/room_configurator.hpp"
@@ -24,6 +26,7 @@
 #include "spawn/methods/center_spawner.hpp"
 #include "spawn/methods/exact_spawner.hpp"
 #include "spawn/methods/perimeter_spawner.hpp"
+#include "spawn/methods/edge_spawner.hpp"
 #include "spawn/methods/percent_spawner.hpp"
 #include "spawn/methods/random_spawner.hpp"
 #include "spawn/spawn_context.hpp"
@@ -37,6 +40,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
+#include <optional>
 #include <iostream>
 #include <cctype>
 #include <limits>
@@ -109,38 +114,30 @@ std::string make_unique_room_key_excluding(const nlohmann::json& rooms_data,
     return candidate;
 }
 
-void rename_room_references_in_layers(nlohmann::json& map_info,
-                                      const std::string& old_name,
-                                      const std::string& new_name) {
-    if (old_name == new_name) {
-        return;
+std::optional<double> ray_segment_distance(SDL_Point origin,
+                                           SDL_FPoint direction,
+                                           const SDL_Point& a,
+                                           const SDL_Point& b) {
+    SDL_FPoint segment{static_cast<float>(b.x - a.x), static_cast<float>(b.y - a.y)};
+    SDL_FPoint offset{static_cast<float>(a.x - origin.x), static_cast<float>(a.y - origin.y)};
+
+    double denom = static_cast<double>(direction.x) * segment.y - static_cast<double>(direction.y) * segment.x;
+    if (std::fabs(denom) < 1e-6) {
+        return std::nullopt;
     }
-    auto lit = map_info.find("map_layers");
-    if (lit == map_info.end() || !lit->is_array()) {
-        return;
+
+    double t = (offset.x * segment.y - offset.y * segment.x) / denom;
+    double u = (offset.x * direction.y - offset.y * direction.x) / denom;
+    if (t < 0.0 || u < 0.0 || u > 1.0) {
+        return std::nullopt;
     }
-    for (auto& layer : *lit) {
-        auto rooms_it = layer.find("rooms");
-        if (rooms_it == layer.end() || !rooms_it->is_array()) {
-            continue;
-        }
-        for (auto& entry : *rooms_it) {
-            if (!entry.is_object()) {
-                continue;
-            }
-            if (entry.value("name", std::string()) == old_name) {
-                entry["name"] = new_name;
-            }
-            auto& children = entry["required_children"];
-            if (children.is_array()) {
-                for (auto& child : children) {
-                    if (child.is_string() && child.get<std::string>() == old_name) {
-                        child = new_name;
-                    }
-                }
-            }
-        }
+
+    double dir_length = std::hypot(static_cast<double>(direction.x), static_cast<double>(direction.y));
+    if (dir_length <= 1e-9) {
+        return std::nullopt;
     }
+
+    return t * dir_length;
 }
 
 void room_editor_trace(const std::string& message) {
@@ -210,6 +207,12 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
     }
     configure_shared_panel();
     refresh_room_config_visibility();
+
+    if (spawn_group_panel_) {
+        spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
+        spawn_group_panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        update_spawn_group_config_anchor();
+    }
 
 }
 
@@ -329,6 +332,7 @@ void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {
         }
         if (library_ui_) library_ui_->close();
         if (info_ui_) info_ui_->close();
+        if (spawn_group_panel_) spawn_group_panel_->set_visible(false);
         clear_active_spawn_group_target();
         if (area_editor_) area_editor_->cancel();
         clear_selection();
@@ -396,6 +400,7 @@ void RoomEditor::update_ui(const Input& input) {
                             selected_assets_.push_back(spawned);
                             hovered_asset_ = spawned;
                             update_highlighted_assets();
+                            sync_spawn_group_panel_with_selection();
                             spawned_asset = true;
                         }
                     }
@@ -415,6 +420,13 @@ void RoomEditor::update_ui(const Input& input) {
     if (room_cfg_ui_ && room_cfg_ui_->visible()) {
         room_cfg_ui_->update(input, screen_w_, screen_h_);
         update_spawn_group_config_anchor();
+    }
+
+    if (spawn_group_panel_) {
+        spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
+        if (spawn_group_panel_->is_visible()) {
+            spawn_group_panel_->update(input, screen_w_, screen_h_);
+        }
     }
 
     ensure_area_editor();
@@ -528,6 +540,23 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
         return result;
 };
 
+    auto route_spawn_groups = [&]() -> RouteResult {
+        RouteResult result;
+        if (!spawn_group_panel_ || !spawn_group_panel_->is_visible()) {
+            return result;
+        }
+        spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
+        if (spawn_group_panel_->handle_event(event)) {
+            result.handled = true;
+            result.pointer_blocked = true;
+            return result;
+        }
+        if (pointer_based && spawn_group_panel_->is_point_inside(mx, my)) {
+            result.pointer_blocked = true;
+        }
+        return result;
+};
+
     auto route_library_panel = [&]() -> RouteResult {
         RouteResult result;
         if (!library_ui_ || !library_ui_->is_visible()) {
@@ -548,6 +577,9 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
         return true;
     }
     if (apply_result(route_room_config(), pointer_blocked)) {
+        return true;
+    }
+    if (apply_result(route_spawn_groups(), pointer_blocked)) {
         return true;
     }
     if (apply_result(route_library_panel(), pointer_blocked)) {
@@ -590,6 +622,9 @@ bool RoomEditor::is_room_panel_blocking_point(int x, int y) const {
     if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(x, y)) {
         return true;
     }
+    if (spawn_group_panel_ && spawn_group_panel_->is_visible() && spawn_group_panel_->is_point_inside(x, y)) {
+        return true;
+    }
     return false;
 }
 
@@ -604,6 +639,9 @@ bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
     }
 
     if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(x, y)) {
+        return true;
+    }
+    if (spawn_group_panel_ && spawn_group_panel_->is_visible() && spawn_group_panel_->is_point_inside(x, y)) {
         return true;
     }
 
@@ -674,6 +712,9 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
     }
     if (room_cfg_ui_ && room_cfg_ui_->visible()) {
         room_cfg_ui_->render(renderer);
+    }
+    if (spawn_group_panel_ && spawn_group_panel_->is_visible()) {
+        spawn_group_panel_->render(renderer);
     }
     DMDropdown::render_active_options(renderer);
 }
@@ -752,7 +793,7 @@ void RoomEditor::open_asset_info_editor_for_asset(Asset* asset) {
     if (!asset || !asset->info) return;
     std::cout << "Opening AssetInfoUI for asset: " << asset->info->name << std::endl;
     clear_selection();
-    focus_camera_on_asset(asset, 0.8, 20);
+    focus_camera_on_asset(asset, 0.8, 0);
     open_asset_info_editor(asset->info);
     if (info_ui_) info_ui_->set_target_asset(asset);
 }
@@ -766,6 +807,12 @@ void RoomEditor::set_manifest_store(devmode::core::ManifestStore* store) {
 
 void RoomEditor::close_asset_info_editor() {
     if (info_ui_) info_ui_->close();
+    if (asset_info_panel_visible_) {
+        asset_info_panel_visible_ = false;
+        if (header_visibility_callback_) {
+            header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+        }
+    }
     if (active_modal_ == ActiveModal::AssetInfo) {
         active_modal_ = ActiveModal::None;
     }
@@ -866,69 +913,31 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
         return;
     }
     if (!assets_ || !current_room_ || !source_room) return;
-    auto& target_root = current_room_->assets_data();
-    auto& target_groups = ensure_spawn_groups_array(target_root);
-    target_groups = nlohmann::json::array();
 
-    const nlohmann::json* source_groups = find_spawn_groups_array(source_room->assets_data());
+    nlohmann::json template_root = source_room->assets_data();
+    auto& template_groups = ensure_spawn_groups_array(template_root);
     const int template_resolution = current_room_ ? current_room_->map_grid_settings().resolution
                                                   : MapGridSettings::defaults().resolution;
-    if (source_groups) {
-        for (const auto& entry : *source_groups) {
-            if (!entry.is_object()) continue;
-            nlohmann::json clone = entry;
-            clone["spawn_id"] = generate_spawn_id();
-            devmode::spawn::ensure_spawn_group_entry_defaults(
-                clone,
-                clone.contains("display_name") && clone["display_name"].is_string()
-                    ? clone["display_name"].get<std::string>()
-                    : std::string{"New Spawn"},
-                template_resolution);
-            target_groups.push_back(clone);
-        }
+    for (auto& entry : template_groups) {
+        if (!entry.is_object()) continue;
+        entry["spawn_id"] = generate_spawn_id();
+        devmode::spawn::ensure_spawn_group_entry_defaults(
+            entry,
+            entry.contains("display_name") && entry["display_name"].is_string()
+                ? entry["display_name"].get<std::string>()
+                : std::string{"New Spawn"},
+            template_resolution);
     }
 
-    sanitize_perimeter_spawn_groups(target_groups);
-    save_current_room_assets_json();
+    sanitize_perimeter_spawn_groups(template_groups);
 
-    if (assets_) {
-        std::vector<Asset*> to_remove;
-        for (Asset* asset : assets_->all) {
-            if (!asset || asset->dead) continue;
-            if (asset == player_) continue;
-            bool belongs = asset_belongs_to_room(asset);
-            if (!belongs && current_room_->room_area) {
-                SDL_Point pos{asset->pos.x, asset->pos.y};
-                if (current_room_->room_area->contains_point(pos)) {
-                    belongs = true;
-                }
-            }
-            if (belongs) {
-                to_remove.push_back(asset);
-            }
-        }
-        for (Asset* asset : to_remove) {
-            purge_asset(asset);
-            auto& all = assets_->all;
-            all.erase(std::remove(all.begin(), all.end(), asset), all.end());
-            asset->Delete();
-        }
-    }
+    auto& target_root = current_room_->assets_data();
+    target_root = std::move(template_root);
+
+    regenerate_current_room();
 
     rebuild_room_spawn_id_cache();
-    refresh_spawn_group_config_ui();
-    reopen_room_configurator();
-
-    if (const nlohmann::json* new_groups = find_spawn_groups_array(target_root)) {
-        for (const auto& entry : *new_groups) {
-            if (!entry.is_object()) continue;
-            respawn_spawn_group(entry);
-        }
-    }
-
-    if (assets_) {
-        assets_->refresh_active_asset_lists();
-    }
+    save_current_room_assets_json();
 }
 
 void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name) {
@@ -952,7 +961,7 @@ void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name
         info_target_for_reopen_ = nullptr;
     }
 
-    focus_camera_on_asset(target, 0.8, 20);
+    focus_camera_on_asset(target, 0.8, 0);
     if (area_editor_->begin(target->info.get(), target, area_name)) {
         apply_area_editor_camera_override(true);
         last_area_editor_active_ = true;
@@ -976,15 +985,16 @@ void RoomEditor::focus_camera_on_room_center(bool reframe_zoom) {
     cam.set_focus_override(center);
 
     if (reframe_zoom) {
-        cam.zoom_to_area(*current_room_->room_area, 5);
+        cam.zoom_to_area(*current_room_->room_area, 0);
     }
 }
 
 void RoomEditor::reset_click_state() {
     click_buffer_frames_ = 0;
     rclick_buffer_frames_ = 0;
-    last_click_time_ms_ = 0;
+    suppress_next_left_click_ = false;
     last_click_asset_ = nullptr;
+    last_click_time_ms_ = 0;
     reset_drag_state();
 }
 
@@ -993,6 +1003,7 @@ void RoomEditor::clear_selection() {
     highlighted_assets_.clear();
     hovered_asset_ = nullptr;
     reset_drag_state();
+    sync_spawn_group_panel_with_selection();
     if (!active_assets_) return;
     for (Asset* asset : *active_assets_) {
         if (!asset) continue;
@@ -1034,15 +1045,12 @@ void RoomEditor::clear_highlighted_assets() {
         const bool is_selected = std::find(selected_assets_.begin(), selected_assets_.end(), asset) != selected_assets_.end();
         asset->set_selected(is_selected);
     }
+    sync_spawn_group_panel_with_selection();
 }
 
 void RoomEditor::purge_asset(Asset* asset) {
     if (!asset) return;
     if (hovered_asset_ == asset) hovered_asset_ = nullptr;
-    if (last_click_asset_ == asset) {
-        last_click_asset_ = nullptr;
-        last_click_time_ms_ = 0;
-    }
     auto erase_from = [asset](std::vector<Asset*>& vec) {
         vec.erase(std::remove(vec.begin(), vec.end(), asset), vec.end());
 };
@@ -1058,6 +1066,7 @@ void RoomEditor::purge_asset(Asset* asset) {
     if (drag_states_.empty()) {
         reset_drag_state();
     }
+    sync_spawn_group_panel_with_selection();
 }
 
 void RoomEditor::set_zoom_scale_factor(double factor) {
@@ -1065,7 +1074,9 @@ void RoomEditor::set_zoom_scale_factor(double factor) {
     pan_zoom_.set_zoom_scale_factor(zoom_scale_factor_);
 }
 
-bool RoomEditor::is_spawn_group_panel_visible() const { return false; }
+bool RoomEditor::is_spawn_group_panel_visible() const {
+    return spawn_group_panel_ && spawn_group_panel_->is_visible();
+}
 
 void RoomEditor::handle_mouse_input(const Input& input) {
     camera& cam = assets_->getView();
@@ -1258,6 +1269,14 @@ void RoomEditor::handle_click(const Input& input) {
         world_mouse = assets_->getView().screen_to_map(SDL_Point{input_->getX(), input_->getY()});
     }
 
+    if (suppress_next_left_click_) {
+        if (input_->wasClicked(Input::LEFT)) {
+            suppress_next_left_click_ = false;
+            click_buffer_frames_ = 0;
+            return;
+        }
+    }
+
     if (input_->wasClicked(Input::RIGHT)) {
         if (rclick_buffer_frames_ > 0) {
             --rclick_buffer_frames_;
@@ -1288,6 +1307,13 @@ void RoomEditor::handle_click(const Input& input) {
         click_buffer_frames_ = 0;
         return;
     }
+
+    if (suppress_next_left_click_) {
+        suppress_next_left_click_ = false;
+        click_buffer_frames_ = 0;
+        return;
+    }
+
     if (click_buffer_frames_ > 0) {
         --click_buffer_frames_;
         return;
@@ -1296,6 +1322,16 @@ void RoomEditor::handle_click(const Input& input) {
 
     Asset* nearest = hovered_asset_;
     if (nearest) {
+        const bool already_selected =
+            std::find(selected_assets_.begin(), selected_assets_.end(), nearest) != selected_assets_.end();
+        if (already_selected) {
+            selected_assets_.clear();
+            highlighted_assets_.clear();
+            last_click_asset_ = nullptr;
+            last_click_time_ms_ = 0;
+            return;
+        }
+
         selected_assets_.clear();
         bool select_group = true;
         const std::string& method = nearest->spawn_method;
@@ -1314,20 +1350,11 @@ void RoomEditor::handle_click(const Input& input) {
                 selected_assets_.push_back(nearest);
             }
         }
-
-        Uint32 now = SDL_GetTicks();
-        if (last_click_asset_ == nearest && (now - last_click_time_ms_) <= 300) {
-            last_click_time_ms_ = 0;
-            last_click_asset_ = nullptr;
-        } else {
-            last_click_time_ms_ = now;
-            last_click_asset_ = nearest;
-        }
+        sync_spawn_group_panel_with_selection();
     } else {
         selected_assets_.clear();
         highlighted_assets_.clear();
-        last_click_asset_ = nullptr;
-        last_click_time_ms_ = 0;
+        sync_spawn_group_panel_with_selection();
 
         const bool asset_info_open = (active_modal_ == ActiveModal::AssetInfo);
         const bool floating_modal_open = FloatingDockableManager::instance().active_panel() != nullptr;
@@ -1356,7 +1383,7 @@ void RoomEditor::handle_click(const Input& input) {
             if (assets_) {
                 camera& cam = assets_->getView();
 
-                cam.pan_and_zoom_to_point(world_mouse, 1.0, 16);
+                cam.pan_and_zoom_to_point(world_mouse, 1.0, 0);
             }
         }
     }
@@ -1425,6 +1452,9 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
         }
     }
     if (room_cfg_ui_ && room_cfg_ui_->visible() && room_cfg_ui_->is_point_inside(mx, my)) {
+        return true;
+    }
+    if (spawn_group_panel_ && spawn_group_panel_->is_visible() && spawn_group_panel_->is_point_inside(mx, my)) {
         return true;
     }
     if (library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
@@ -1561,12 +1591,24 @@ std::string RoomEditor::rename_active_room(const std::string& old_name, const st
         rooms_data = nlohmann::json::object();
     }
 
-    std::string candidate_base = base.empty() ? (current_room_->room_name.empty() ? std::string("room") : current_room_->room_name) : base;
-    std::string final_key = make_unique_room_key_excluding(rooms_data, candidate_base, old_name);
+    std::string candidate = base.empty() ? current_room_->room_name : base;
+    if (candidate.empty()) {
+        candidate = old_name;
+    }
+
+    if (candidate == old_name) {
+        return old_name;
+    }
+
+    if (rooms_data.contains(candidate)) {
+        return old_name;
+    }
+
+    std::string final_key = candidate;
 
     if (final_key != current_room_->room_name) {
         current_room_->rename(final_key, map_info);
-        rename_room_references_in_layers(map_info, old_name, final_key);
+        map_layers::rename_room_references_in_layers(map_info, old_name, final_key);
         if (manifest_store_ && assets_) {
             if (devmode::persist_map_manifest_entry(
                     *manifest_store_, assets_->map_id(), map_info, std::cerr)) {
@@ -1580,7 +1622,47 @@ std::string RoomEditor::rename_active_room(const std::string& old_name, const st
 }
 
 void RoomEditor::ensure_spawn_group_config_ui() {
+    if (spawn_group_panel_) {
+        return;
+    }
 
+    spawn_group_panel_ = std::make_unique<SpawnGroupConfig>();
+    if (!spawn_group_panel_) {
+        return;
+    }
+
+    spawn_group_panel_->set_show_header(true);
+    spawn_group_panel_->set_close_button_enabled(true);
+    spawn_group_panel_->set_scroll_enabled(true);
+    spawn_group_panel_->set_visible(false);
+    spawn_group_panel_->set_expanded(true);
+    spawn_group_panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
+    spawn_group_panel_->set_on_close([this]() {
+        if (suppress_spawn_group_close_clear_) {
+            suppress_spawn_group_close_clear_ = false;
+            return;
+        }
+        clear_active_spawn_group_target();
+    });
+
+    SpawnGroupConfig::Callbacks callbacks{};
+    callbacks.on_add = [this]() { add_spawn_group_internal(); };
+    callbacks.on_duplicate = [this](const std::string& id) { duplicate_spawn_group_internal(id); };
+    callbacks.on_delete = [this](const std::string& id) { delete_spawn_group_internal(id); };
+    callbacks.on_reorder = [this](const std::string& id, size_t index) {
+        reorder_spawn_group_internal(id, index);
+    };
+    callbacks.on_regenerate = [this](const std::string& id) {
+        if (id.empty()) {
+            return;
+        }
+        if (nlohmann::json* entry = find_spawn_entry(id)) {
+            respawn_spawn_group(*entry);
+        }
+    };
+    spawn_group_panel_->set_callbacks(std::move(callbacks));
+    spawn_group_panel_->set_on_layout_changed([this]() { update_spawn_group_config_anchor(); });
 }
 
 void RoomEditor::update_room_config_bounds() {
@@ -1649,6 +1731,9 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     drag_room_center_ = get_room_center();
     drag_last_world_ = world_mouse;
     drag_anchor_asset_ = nullptr;
+    drag_edge_area_ = nullptr;
+    drag_edge_center_ = drag_room_center_;
+    drag_edge_inset_percent_ = 100.0;
 
     if (selected_assets_.empty()) return;
     Asset* primary = selected_assets_.front();
@@ -1660,9 +1745,11 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     MapGridSettings map_settings = current_room_ ? current_room_->map_grid_settings() : MapGridSettings::defaults();
     map_settings.clamp();
     drag_resolution_ = vibble::grid::clamp_resolution(map_settings.resolution);
+    nlohmann::json* spawn_entry = nullptr;
     if (!drag_spawn_id_.empty()) {
-        if (nlohmann::json* entry = find_spawn_entry(drag_spawn_id_)) {
-            drag_resolution_ = vibble::grid::clamp_resolution(entry->value("resolution", drag_resolution_));
+        spawn_entry = find_spawn_entry(drag_spawn_id_);
+        if (spawn_entry) {
+            drag_resolution_ = vibble::grid::clamp_resolution(spawn_entry->value("resolution", drag_resolution_));
         }
     }
 
@@ -1673,6 +1760,8 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         drag_mode_ = DragMode::Percent;
     } else if (method == "Perimeter") {
         drag_mode_ = ctrl_modifier ? DragMode::PerimeterCenter : DragMode::Perimeter;
+    } else if (method == "Edge") {
+        drag_mode_ = DragMode::Edge;
     } else if (method == "Random") {
         drag_mode_ = DragMode::None;
         dragging_ = false;
@@ -1690,21 +1779,35 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     drag_perimeter_center_offset_world_ = SDL_Point{0, 0};
     drag_perimeter_circle_center_ = drag_room_center_;
 
-    if (!drag_spawn_id_.empty()) {
-        if (nlohmann::json* entry = find_spawn_entry(drag_spawn_id_)) {
-            drag_perimeter_orig_w_ = std::max(1, entry->value("origional_width", drag_perimeter_curr_w_));
-            drag_perimeter_orig_h_ = std::max(1, entry->value("origional_height", drag_perimeter_curr_h_));
-            const int stored_dx = entry->value("dx", 0);
-            const int stored_dy = entry->value("dy", 0);
-            RelativeRoomPosition relative(SDL_Point{stored_dx, stored_dy},
-                                          drag_perimeter_orig_w_,
-                                          drag_perimeter_orig_h_);
-            drag_perimeter_center_offset_world_ = relative.scaled_offset(drag_perimeter_curr_w_, drag_perimeter_curr_h_);
-            drag_perimeter_circle_center_.x = drag_room_center_.x + drag_perimeter_center_offset_world_.x;
-            drag_perimeter_circle_center_.y = drag_room_center_.y + drag_perimeter_center_offset_world_.y;
-            if ((*entry).contains("radius") && (*entry)["radius"].is_number_integer()) {
-                drag_perimeter_base_radius_ = std::max(0, (*entry)["radius"].get<int>());
-            }
+    if (spawn_entry) {
+        drag_perimeter_orig_w_ = std::max(1, spawn_entry->value("origional_width", drag_perimeter_curr_w_));
+        drag_perimeter_orig_h_ = std::max(1, spawn_entry->value("origional_height", drag_perimeter_curr_h_));
+        const int stored_dx = spawn_entry->value("dx", 0);
+        const int stored_dy = spawn_entry->value("dy", 0);
+        RelativeRoomPosition relative(SDL_Point{stored_dx, stored_dy},
+                                      drag_perimeter_orig_w_,
+                                      drag_perimeter_orig_h_);
+        drag_perimeter_center_offset_world_ = relative.scaled_offset(drag_perimeter_curr_w_, drag_perimeter_curr_h_);
+        drag_perimeter_circle_center_.x = drag_room_center_.x + drag_perimeter_center_offset_world_.x;
+        drag_perimeter_circle_center_.y = drag_room_center_.y + drag_perimeter_center_offset_world_.y;
+        if ((*spawn_entry).contains("radius") && (*spawn_entry)["radius"].is_number_integer()) {
+            drag_perimeter_base_radius_ = std::max(0, (*spawn_entry)["radius"].get<int>());
+        }
+    }
+
+    if (drag_mode_ == DragMode::Edge) {
+        if (spawn_entry) {
+            drag_edge_area_ = find_edge_area_for_entry(*spawn_entry);
+            drag_edge_inset_percent_ = static_cast<double>(std::clamp(spawn_entry->value("edge_inset_percent", 100), 0, 200));
+        } else {
+            drag_edge_area_ = current_room_ ? current_room_->room_area.get() : nullptr;
+            drag_edge_inset_percent_ = 100.0;
+        }
+        if (drag_edge_area_) {
+            SDL_Point center = drag_edge_area_->get_center();
+            drag_edge_center_ = center;
+        } else {
+            drag_edge_center_ = drag_room_center_;
         }
     }
 
@@ -1737,6 +1840,24 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
                 state.direction.x = 0.0f;
                 state.direction.y = -1.0f;
             }
+        } else if (drag_mode_ == DragMode::Edge) {
+            double dx = static_cast<double>(asset->pos.x - drag_edge_center_.x);
+            double dy = static_cast<double>(asset->pos.y - drag_edge_center_.y);
+            double len = std::hypot(dx, dy);
+            if (len > 1e-6) {
+                state.direction.x = static_cast<float>(dx / len);
+                state.direction.y = static_cast<float>(dy / len);
+            } else {
+                state.direction.x = 0.0f;
+                state.direction.y = -1.0f;
+                len = 1.0;
+            }
+            if (drag_edge_area_) {
+                state.edge_length = edge_length_along_direction(*drag_edge_area_, drag_edge_center_, state.direction);
+            }
+            if (state.edge_length <= 1e-6) {
+                state.edge_length = len;
+            }
         }
         drag_states_.push_back(state);
     }
@@ -1751,6 +1872,11 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
 
     if (drag_mode_ == DragMode::Perimeter) {
         apply_perimeter_drag(world_mouse);
+        drag_last_world_ = world_mouse;
+        return;
+    }
+    if (drag_mode_ == DragMode::Edge) {
+        apply_edge_drag(world_mouse);
         drag_last_world_ = world_mouse;
         return;
     }
@@ -1796,24 +1922,23 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
 };
 
     double reference_length = compute_start_distance(*ref);
-    SDL_FPoint dir = ref->direction;
     if (reference_length <= 1e-6) {
         double dx = static_cast<double>(ref->asset->pos.x - drag_perimeter_circle_center_.x);
         double dy = static_cast<double>(ref->asset->pos.y - drag_perimeter_circle_center_.y);
         reference_length = std::hypot(dx, dy);
-        if (reference_length > 1e-6) {
-            dir.x = static_cast<float>(dx / reference_length);
-            dir.y = static_cast<float>(dy / reference_length);
-        }
     }
     if (reference_length <= 1e-6) reference_length = 1.0;
 
     double base_radius = drag_perimeter_base_radius_;
     if (base_radius <= 1e-6) base_radius = reference_length;
 
-    double target = (world_mouse.x - drag_perimeter_circle_center_.x) * dir.x + (world_mouse.y - drag_perimeter_circle_center_.y) * dir.y;
-    double new_length = std::max(0.0, target);
-    double ratio = base_radius > 1e-6 ? new_length / base_radius : 0.0;
+    double new_radius = std::hypot(static_cast<double>(world_mouse.x - drag_perimeter_circle_center_.x),
+                                   static_cast<double>(world_mouse.y - drag_perimeter_circle_center_.y));
+    if (!std::isfinite(new_radius)) {
+        new_radius = 0.0;
+    }
+
+    double ratio = base_radius > 1e-6 ? new_radius / base_radius : 0.0;
     if (!std::isfinite(ratio)) ratio = 0.0;
     if (ratio < 0.0) ratio = 0.0;
 
@@ -1844,6 +1969,124 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     if (changed) {
         drag_moved_ = true;
     }
+    snap_dragged_assets_to_grid();
+}
+
+void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
+    const SDL_Point center = drag_edge_center_;
+
+    const DraggedAssetState* ref = nullptr;
+    if (!drag_states_.empty()) {
+        for (const auto& state : drag_states_) {
+            if (state.asset == drag_anchor_asset_) {
+                ref = &state;
+                break;
+            }
+        }
+        if (!ref) {
+            ref = &drag_states_.front();
+        }
+    }
+
+    SDL_FPoint reference_direction{0.0f, 0.0f};
+    double reference_length = 0.0;
+
+    if (ref) {
+        reference_direction = ref->direction;
+        double dir_len = std::hypot(static_cast<double>(reference_direction.x),
+                                    static_cast<double>(reference_direction.y));
+        if (dir_len > 1e-6) {
+            reference_direction.x = static_cast<float>(reference_direction.x / dir_len);
+            reference_direction.y = static_cast<float>(reference_direction.y / dir_len);
+        } else {
+            reference_direction.x = 0.0f;
+            reference_direction.y = 0.0f;
+        }
+
+        reference_length = ref->edge_length;
+        if (reference_length <= 1e-6 && ref->asset) {
+            double dx = static_cast<double>(ref->asset->pos.x - center.x);
+            double dy = static_cast<double>(ref->asset->pos.y - center.y);
+            reference_length = std::hypot(dx, dy);
+        }
+    }
+
+    double dx_mouse = static_cast<double>(world_mouse.x - center.x);
+    double dy_mouse = static_cast<double>(world_mouse.y - center.y);
+    double mouse_len = std::hypot(dx_mouse, dy_mouse);
+
+    if ((reference_direction.x == 0.0f && reference_direction.y == 0.0f) && mouse_len > 1e-6) {
+        reference_direction.x = static_cast<float>(dx_mouse / mouse_len);
+        reference_direction.y = static_cast<float>(dy_mouse / mouse_len);
+    }
+
+    if (reference_length <= 1e-6 && drag_edge_area_ &&
+        !(reference_direction.x == 0.0f && reference_direction.y == 0.0f)) {
+        reference_length = edge_length_along_direction(*drag_edge_area_, center, reference_direction);
+    }
+
+    if (reference_length <= 1e-6) {
+        reference_length = mouse_len;
+    }
+    if (!std::isfinite(reference_length) || reference_length <= 1e-6) {
+        reference_length = 1.0;
+    }
+
+    double projected = dx_mouse * static_cast<double>(reference_direction.x) +
+                       dy_mouse * static_cast<double>(reference_direction.y);
+    double ratio = projected / reference_length;
+    if (!std::isfinite(ratio)) {
+        ratio = 0.0;
+    }
+    ratio = std::clamp(ratio, 0.0, 2.0);
+
+    int snapped_percent = std::clamp(static_cast<int>(std::lround(ratio * 100.0)), 0, 200);
+    double snapped_ratio = static_cast<double>(snapped_percent) / 100.0;
+
+    bool assets_changed = false;
+    for (auto& state : drag_states_) {
+        if (!state.asset) continue;
+        double base_length = state.edge_length;
+        if (base_length <= 1e-6) {
+            double dx = static_cast<double>(state.asset->pos.x - center.x);
+            double dy = static_cast<double>(state.asset->pos.y - center.y);
+            base_length = std::hypot(dx, dy);
+        }
+        SDL_FPoint dir = state.direction;
+        double dir_len = std::hypot(static_cast<double>(dir.x), static_cast<double>(dir.y));
+        if (dir_len > 1e-6) {
+            dir.x = static_cast<float>(dir.x / dir_len);
+            dir.y = static_cast<float>(dir.y / dir_len);
+        } else if (base_length > 1e-6) {
+            double dx = static_cast<double>(state.asset->pos.x - center.x);
+            double dy = static_cast<double>(state.asset->pos.y - center.y);
+            double len = std::hypot(dx, dy);
+            if (len > 1e-6) {
+                dir.x = static_cast<float>(dx / len);
+                dir.y = static_cast<float>(dy / len);
+            }
+        }
+        state.direction = dir;
+        double desired = base_length * snapped_ratio;
+        int new_x = center.x + static_cast<int>(std::lround(static_cast<double>(dir.x) * desired));
+        int new_y = center.y + static_cast<int>(std::lround(static_cast<double>(dir.y) * desired));
+        if (state.asset->pos.x != new_x || state.asset->pos.y != new_y) {
+            state.asset->pos.x = new_x;
+            state.asset->pos.y = new_y;
+            assets_changed = true;
+        }
+    }
+
+    double previous_percent = drag_edge_inset_percent_;
+    drag_edge_inset_percent_ = static_cast<double>(snapped_percent);
+
+    if (assets_changed) {
+        drag_moved_ = true;
+    }
+    if (std::fabs(previous_percent - drag_edge_inset_percent_) > 1e-6) {
+        drag_moved_ = true;
+    }
+
     snap_dragged_assets_to_grid();
 }
 
@@ -1898,6 +2141,7 @@ void RoomEditor::finalize_drag_session() {
         return;
     }
 
+    const bool drag_was_moved = drag_moved_;
     bool json_modified = false;
     SDL_Point center = get_room_center();
     auto [width, height] = get_room_dimensions();
@@ -1943,6 +2187,14 @@ void RoomEditor::finalize_drag_session() {
                         json_modified = true;
                     }
                     break;
+                case DragMode::Edge:
+                    if (drag_moved_) {
+                        int inset = static_cast<int>(std::lround(drag_edge_inset_percent_));
+                        inset = std::clamp(inset, 0, 200);
+                        save_edge_json(*entry, inset);
+                        json_modified = true;
+                    }
+                    break;
                 default:
                     break;
             }
@@ -1952,6 +2204,10 @@ void RoomEditor::finalize_drag_session() {
     if (json_modified) {
         save_current_room_assets_json();
         refresh_spawn_group_config_ui();
+    }
+
+    if (drag_was_moved) {
+        suppress_next_left_click_ = true;
     }
 
     reset_drag_state();
@@ -1972,6 +2228,9 @@ void RoomEditor::reset_drag_state() {
     drag_perimeter_curr_w_ = 0;
     drag_resolution_ = 0;
     drag_perimeter_curr_h_ = 0;
+    drag_edge_area_ = nullptr;
+    drag_edge_center_ = SDL_Point{0, 0};
+    drag_edge_inset_percent_ = 100.0;
     drag_moved_ = false;
     drag_spawn_id_.clear();
 }
@@ -1986,6 +2245,22 @@ nlohmann::json* RoomEditor::find_spawn_entry(const std::string& spawn_id) {
             entry["spawn_id"].get<std::string>() == spawn_id) {
             return &entry;
         }
+    }
+    return nullptr;
+}
+
+const Area* RoomEditor::find_edge_area_for_entry(const nlohmann::json& entry) const {
+    if (!current_room_) {
+        return nullptr;
+    }
+    const std::string area_name = entry.value("area", std::string{});
+    if (!area_name.empty()) {
+        if (Area* area = current_room_->find_area(area_name)) {
+            return area;
+        }
+    }
+    if (current_room_->room_area) {
+        return current_room_->room_area.get();
     }
     return nullptr;
 }
@@ -2006,18 +2281,104 @@ std::pair<int, int> RoomEditor::get_room_dimensions() const {
 }
 
 void RoomEditor::refresh_spawn_group_config_ui() {
-    if (!current_room_) return;
+    if (!current_room_) {
+        if (spawn_group_panel_) {
+            spawn_group_panel_->set_visible(false);
+        }
+        return;
+    }
     ensure_spawn_group_config_ui();
+    if (!spawn_group_panel_) {
+        return;
+    }
+
+    spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
+    spawn_group_panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    auto reopen = spawn_group_panel_->expanded_groups();
+
     auto& root = current_room_->assets_data();
     auto& arr = ensure_spawn_groups_array(root);
     if (sanitize_perimeter_spawn_groups(arr)) {
         save_current_room_assets_json();
     }
     rebuild_room_spawn_id_cache();
+
+    const int default_resolution = current_room_->map_grid_settings().resolution;
+    spawn_group_panel_->set_default_resolution(default_resolution);
+
+    auto area_names_provider = [this]() {
+        std::vector<std::string> names;
+        if (!current_room_) {
+            return names;
+        }
+        auto& data = current_room_->assets_data();
+        if (data.contains("areas") && data["areas"].is_array()) {
+            for (const auto& entry : data["areas"]) {
+                if (!entry.is_object()) continue;
+                const auto name_it = entry.find("name");
+                if (name_it != entry.end() && name_it->is_string()) {
+                    names.push_back(name_it->get<std::string>());
+                }
+            }
+        }
+        if (names.empty()) {
+            for (const auto& named : current_room_->areas) {
+                if (!named.name.empty()) {
+                    names.push_back(named.name);
+                }
+            }
+        }
+        return names;
+    };
+
+    auto on_change = [this]() {
+        if (!current_room_) {
+            return;
+        }
+        save_current_room_assets_json();
+        rebuild_room_spawn_id_cache();
+        reopen_room_configurator();
+    };
+
+    auto on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary& summary) {
+        if (!current_room_) {
+            return;
+        }
+        auto& root = current_room_->assets_data();
+        auto& arr = ensure_spawn_groups_array(root);
+        const bool sanitized = sanitize_perimeter_spawn_groups(arr);
+        save_current_room_assets_json();
+        rebuild_room_spawn_id_cache();
+        reopen_room_configurator();
+        if (sanitized || summary.method_changed || summary.quantity_changed || summary.candidates_changed ||
+            summary.resolution_changed) {
+            respawn_spawn_group(entry);
+        }
+    };
+
+    SpawnGroupConfig::ConfigureEntryCallback configure_entry = [area_names_provider, this](
+                                                                 SpawnGroupConfig::EntryController& entry,
+                                                                 const nlohmann::json&) {
+        entry.set_area_names_provider(area_names_provider);
+        if (current_room_) {
+            const std::string label = current_room_->room_name.empty() ? std::string("Room") : current_room_->room_name;
+            entry.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
+        }
+    };
+
+    spawn_group_panel_->load(arr, on_change, on_entry_change, std::move(configure_entry));
+    spawn_group_panel_->restore_expanded_groups(reopen);
+    update_spawn_group_config_anchor();
 }
 
 void RoomEditor::update_spawn_group_config_anchor() {
-
+    if (!spawn_group_panel_) {
+        return;
+    }
+    spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
+    spawn_group_panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+    SDL_Point anchor = spawn_groups_anchor_point();
+    spawn_group_panel_->set_anchor(anchor.x, anchor.y);
 }
 
 SDL_Point RoomEditor::spawn_groups_anchor_point() const {
@@ -2035,6 +2396,29 @@ SDL_Point RoomEditor::spawn_groups_anchor_point() const {
 
 void RoomEditor::clear_active_spawn_group_target() {
     active_spawn_group_id_.reset();
+}
+
+void RoomEditor::sync_spawn_group_panel_with_selection() {
+    Asset* primary = selected_assets_.empty() ? nullptr : selected_assets_.front();
+    std::string spawn_id;
+    if (primary) {
+        spawn_id = primary->spawn_id;
+    }
+
+    if (spawn_id.empty()) {
+        if (spawn_group_panel_) {
+            spawn_group_panel_->close();
+        }
+        clear_active_spawn_group_target();
+        return;
+    }
+
+    if (active_spawn_group_id_ && *active_spawn_group_id_ == spawn_id &&
+        spawn_group_panel_ && spawn_group_panel_->is_visible()) {
+        return;
+    }
+
+    open_spawn_group_editor_by_id(spawn_id);
 }
 
 void RoomEditor::sanitize_perimeter_spawn_groups() {
@@ -2303,7 +2687,43 @@ void RoomEditor::reorder_spawn_group_internal(const std::string& spawn_id, size_
     reopen_room_configurator();
 }
 
-void RoomEditor::open_spawn_group_editor_by_id(const std::string& ) {}
+void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
+    if (spawn_id.empty()) {
+        return;
+    }
+    if (!current_room_) {
+        return;
+    }
+
+    ensure_spawn_group_config_ui();
+    if (!spawn_group_panel_) {
+        return;
+    }
+
+    refresh_spawn_group_config_ui();
+
+    SDL_Point anchor = spawn_groups_anchor_point();
+    spawn_group_panel_->set_anchor(anchor.x, anchor.y);
+    spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
+    spawn_group_panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+
+    FloatingDockableManager::instance().open_floating(
+        "Spawn Group Config",
+        spawn_group_panel_.get(),
+        [this]() {
+            if (!spawn_group_panel_) {
+                return;
+            }
+            spawn_group_panel_->set_visible(false);
+        });
+
+    spawn_group_panel_->set_visible(true);
+    spawn_group_panel_->set_expanded(true);
+    spawn_group_panel_->request_open_spawn_group(spawn_id, anchor.x, anchor.y);
+    Input dummy;
+    spawn_group_panel_->update(dummy, screen_w_, screen_h_);
+    active_spawn_group_id_ = spawn_id;
+}
 
 void RoomEditor::reopen_room_configurator() {
     if (!room_cfg_ui_) return;
@@ -2421,10 +2841,31 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     if (occupancy) {
         ctx.set_spawn_resolution(occupancy->resolution());
     }
+    std::vector<const Area*> trail_areas;
+    if (current_room_) {
+        auto add_trail_area = [&trail_areas](const Area* candidate, const std::string& type) {
+            if (!candidate) return;
+            std::string lowered = type;
+            std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+            if (lowered == "trail") {
+                trail_areas.push_back(candidate);
+            }
+        };
+        if (current_room_->room_area) {
+            add_trail_area(current_room_->room_area.get(), current_room_->room_area->get_type());
+        }
+        for (const auto& named : current_room_->areas) {
+            add_trail_area(named.area.get(), named.type);
+        }
+    }
+    ctx.set_trail_areas(std::move(trail_areas));
     ExactSpawner exact;
     CenterSpawner center;
     RandomSpawner random;
     PerimeterSpawner perimeter;
+    EdgeSpawner edge;
     PercentSpawner percent;
     const Area* area = current_room_->room_area.get();
     for (const auto& info : queue) {
@@ -2435,6 +2876,8 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
             center.spawn(info, area, ctx);
         } else if (pos == "Perimeter") {
             perimeter.spawn(info, area, ctx);
+        } else if (pos == "Edge") {
+            edge.spawn(info, area, ctx);
         } else if (pos == "Percent") {
             percent.spawn(info, area, ctx);
         } else {
@@ -2454,6 +2897,20 @@ void RoomEditor::regenerate_current_room() {
         center.x = c.x;
         center.y = c.y;
         old_area_copy = std::make_unique<Area>(*current_room_->room_area);
+    }
+
+    std::string player_asset_name;
+    if (player_ && player_->info) {
+        player_asset_name = player_->info->name;
+    } else if (assets_->player && assets_->player->info) {
+        player_asset_name = assets_->player->info->name;
+    } else {
+        for (const auto& [name, info] : assets_->library().all()) {
+            if (info && info->type == asset_types::player) {
+                player_asset_name = name;
+                break;
+            }
+        }
     }
 
     int min_w = room_json.value("min_width", 64);
@@ -2482,29 +2939,38 @@ void RoomEditor::regenerate_current_room() {
             return std::max(1, diameter / 2);
 };
         int radius_value = room_json.value("radius", -1);
-        int min_radius = radius_value;
-        int max_radius = radius_value;
-        if (radius_value <= 0) {
-            int inferred = infer_radius(min_w, max_w, min_h, max_h);
-            min_radius = inferred;
-            max_radius = inferred;
-        }
+        int min_radius = room_json.value("min_radius", radius_value);
+        int max_radius = room_json.value("max_radius", radius_value);
+        if (min_radius <= 0 && radius_value > 0) min_radius = radius_value;
+        if (max_radius <= 0 && radius_value > 0) max_radius = radius_value;
         if (min_radius <= 0) {
             min_radius = infer_radius(min_w, max_w, min_h, max_h);
         }
         if (max_radius <= 0) {
             max_radius = infer_radius(min_w, max_w, min_h, max_h);
         }
-        if (min_radius <= 0) min_radius = 1;
-        if (max_radius < min_radius) max_radius = min_radius;
+        const int kMinimumRadius = 100;
+        if (min_radius < kMinimumRadius) {
+            min_radius = kMinimumRadius;
+        }
+        if (max_radius < kMinimumRadius) {
+            max_radius = kMinimumRadius;
+        }
+        if (max_radius < min_radius) {
+            max_radius = min_radius;
+        }
         std::uniform_int_distribution<int> dist_r(min_radius, max_radius);
         int chosen_radius = std::max(1, dist_r(rng));
         width = height = chosen_radius * 2;
+        int min_diameter = std::max(0, min_radius) * 2;
+        int max_diameter = std::max(min_diameter, std::max(0, max_radius) * 2);
         room_json["radius"] = chosen_radius;
-        room_json["min_width"] = width;
-        room_json["max_width"] = width;
-        room_json["min_height"] = height;
-        room_json["max_height"] = height;
+        room_json["min_radius"] = min_radius;
+        room_json["max_radius"] = max_radius;
+        room_json["min_width"] = min_diameter;
+        room_json["max_width"] = max_diameter;
+        room_json["min_height"] = min_diameter;
+        room_json["max_height"] = max_diameter;
     } else {
         std::uniform_int_distribution<int> dist_w(min_w, max_w);
         std::uniform_int_distribution<int> dist_h(min_h, max_h);
@@ -2538,29 +3004,51 @@ void RoomEditor::regenerate_current_room() {
     }
 
     std::vector<Asset*> to_remove;
+    std::unordered_set<Asset*> removal_set;
+    auto queue_for_removal = [&](Asset* asset) {
+        if (!asset || asset->dead) {
+            return;
+        }
+        if (removal_set.insert(asset).second) {
+            to_remove.push_back(asset);
+        }
+    };
+
     for (Asset* asset : assets_->all) {
         if (!asset || asset->dead) continue;
-        if (asset == player_) continue;
-        bool remove = false;
         if (!asset->spawn_id.empty() && spawn_ids.count(asset->spawn_id)) {
-            remove = true;
-        } else if (asset->info) {
-            if (asset->info->type == asset_types::boundary) {
-                SDL_Point pos{asset->pos.x, asset->pos.y};
-                bool inside_old = old_area_copy ? old_area_copy->contains_point(pos) : false;
-                bool inside_new = new_area.contains_point(pos);
-                if (inside_old || inside_new) {
-                    remove = true;
-                }
+            queue_for_removal(asset);
+        }
+    }
+
+    if (old_area_copy) {
+        for (Asset* asset : assets_->all) {
+            if (!asset || asset->dead) continue;
+            SDL_Point pos{asset->pos.x, asset->pos.y};
+            if (old_area_copy->contains_point(pos)) {
+                queue_for_removal(asset);
             }
         }
-        if (remove) {
-            to_remove.push_back(asset);
+    }
+
+    if (new_area_size > old_area_size) {
+        for (Asset* asset : assets_->all) {
+            if (!asset || asset->dead) continue;
+            SDL_Point pos{asset->pos.x, asset->pos.y};
+            if (new_area.contains_point(pos)) {
+                queue_for_removal(asset);
+            }
         }
     }
 
     for (Asset* asset : to_remove) {
         purge_asset(asset);
+        if (assets_->player == asset) {
+            assets_->player = nullptr;
+        }
+        if (player_ == asset) {
+            player_ = nullptr;
+        }
         auto& all = assets_->all;
         all.erase(std::remove(all.begin(), all.end(), asset), all.end());
         asset->Delete();
@@ -2573,6 +3061,12 @@ void RoomEditor::regenerate_current_room() {
     AssetSpawnPlanner::SourceContext room_context;
     room_context.json_ref = &room_json;
     planner_contexts.push_back(room_context);
+    if (room_json.value("inherits_map_assets", false) && map_info_json.contains("map_assets_data") &&
+        map_info_json["map_assets_data"].is_object()) {
+        planner_sources.push_back(map_info_json["map_assets_data"]);
+        AssetSpawnPlanner::SourceContext map_context;
+        planner_contexts.push_back(map_context);
+    }
     current_room_->planner = std::make_unique<AssetSpawnPlanner>(planner_sources, *current_room_->room_area, assets_->library(), planner_contexts);
 
     auto occupancy = build_room_grid(std::string{});
@@ -2610,52 +3104,126 @@ void RoomEditor::regenerate_current_room() {
     integrate_spawned_assets(spawned);
 
     if (old_area_copy && new_area_size < old_area_size) {
-        std::vector<std::pair<std::string, int>> boundary_options;
-        int boundary_spacing = 100;
-        if (map_info_json.contains("map_boundary_data") && map_info_json["map_boundary_data"].is_object()) {
-            const auto& boundary_json = map_info_json["map_boundary_data"];
-            if (boundary_json.contains("batch_assets")) {
-                const auto& batch = boundary_json["batch_assets"];
-                boundary_spacing = (batch.value("grid_spacing_min", boundary_spacing) + batch.value("grid_spacing_max", boundary_spacing)) / 2;
+        std::vector<std::pair<std::string, int>> edge_options;
+        int edge_spacing = 100;
+        if (map_info_json.contains("map_edge_data") && map_info_json["map_edge_data"].is_object()) {
+            const auto& edge_json = map_info_json["map_edge_data"];
+            if (edge_json.contains("batch_assets")) {
+                const auto& batch = edge_json["batch_assets"];
+                edge_spacing = (batch.value("grid_spacing_min", edge_spacing) + batch.value("grid_spacing_max", edge_spacing)) / 2;
                 for (const auto& asset_entry : batch.value("batch_assets", std::vector<nlohmann::json>{})) {
                     if (asset_entry.contains("name") && asset_entry["name"].is_string()) {
                         int weight = asset_entry.value("percent", 1);
-                        boundary_options.emplace_back(asset_entry["name"].get<std::string>(), weight);
+                        edge_options.emplace_back(asset_entry["name"].get<std::string>(), weight);
                     }
                 }
             }
         }
 
-        if (!boundary_options.empty()) {
-            const int boundary_resolution = std::clamp(
-                static_cast<int>(std::lround(std::log2(static_cast<double>(std::max(1, boundary_spacing))))),
+        if (!edge_options.empty()) {
+            const int edge_resolution = std::clamp(
+                static_cast<int>(std::lround(std::log2(static_cast<double>(std::max(1, edge_spacing))))),
                 0,
                 vibble::grid::kMaxResolution);
             vibble::grid::Grid& grid_service = vibble::grid::global_grid();
-            vibble::grid::Occupancy boundary_grid(*old_area_copy, boundary_resolution, grid_service);
-            auto vertices = boundary_grid.vertices_in_area(*old_area_copy);
+            vibble::grid::Occupancy edge_grid(*old_area_copy, edge_resolution, grid_service);
+            auto vertices = edge_grid.vertices_in_area(*old_area_copy);
             if (!vertices.empty()) {
                 std::vector<int> weights;
-                weights.reserve(boundary_options.size());
-                for (const auto& opt : boundary_options) {
+                weights.reserve(edge_options.size());
+                for (const auto& opt : edge_options) {
                     weights.push_back(std::max(1, opt.second));
                 }
                 std::discrete_distribution<int> pick(weights.begin(), weights.end());
-                std::mt19937 boundary_rng(std::random_device{}());
-                std::vector<std::unique_ptr<Asset>> boundary_spawned;
+                std::mt19937 edge_rng(std::random_device{}());
+                std::vector<std::unique_ptr<Asset>> edge_spawned;
                 for (auto* vertex : vertices) {
                     if (!vertex) continue;
                     if (current_room_->room_area->contains_point(vertex->world)) continue;
-                    int idx = pick(boundary_rng);
-                    const std::string& asset_name = boundary_options[idx].first;
+                    int idx = pick(edge_rng);
+                    const std::string& asset_name = edge_options[idx].first;
                     auto info = assets_->library().get(asset_name);
                     if (!info) continue;
                     std::string spawn_id = generate_spawn_id();
                     Area spawn_area(asset_name, vertex->world, 1, 1, "Point", 1, 1, 1);
                     auto asset = std::make_unique<Asset>(info, spawn_area, vertex->world, 0, nullptr, spawn_id, std::string(asset_types::boundary));
-                    boundary_spawned.push_back(std::move(asset));
+                    edge_spawned.push_back(std::move(asset));
                 }
-                integrate_spawned_assets(boundary_spawned);
+                integrate_spawned_assets(edge_spawned);
+            }
+        }
+    }
+
+    Asset* existing_player = nullptr;
+    for (Asset* asset : assets_->all) {
+        if (!asset || asset->dead || !asset->info) {
+            continue;
+        }
+        if (asset->info->type == asset_types::player) {
+            existing_player = asset;
+            break;
+        }
+    }
+
+    if (existing_player) {
+        assets_->player = existing_player;
+        player_ = existing_player;
+    } else if (!player_asset_name.empty() && current_room_->room_area) {
+        auto is_clear = [&](SDL_Point point) {
+            for (Asset* asset : assets_->all) {
+                if (!asset || asset->dead) {
+                    continue;
+                }
+                Area impassable = asset->get_area("impassable");
+                if (!impassable.get_points().empty() && impassable.contains_point(point)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        auto bounds = current_room_->room_area->get_bounds();
+        int minx = std::get<0>(bounds);
+        int miny = std::get<1>(bounds);
+        int maxx = std::get<2>(bounds);
+        int maxy = std::get<3>(bounds);
+        std::uniform_int_distribution<int> dist_x(minx, maxx);
+        std::uniform_int_distribution<int> dist_y(miny, maxy);
+
+        SDL_Point spawn_point = current_room_->room_area->get_center();
+        bool found_spot = current_room_->room_area->contains_point(spawn_point) && is_clear(spawn_point);
+        if (!found_spot) {
+            for (int attempt = 0; attempt < 200 && !found_spot; ++attempt) {
+                SDL_Point candidate{dist_x(regen_rng), dist_y(regen_rng)};
+                if (!current_room_->room_area->contains_point(candidate)) {
+                    continue;
+                }
+                if (is_clear(candidate)) {
+                    spawn_point = candidate;
+                    found_spot = true;
+                }
+            }
+        }
+        if (!found_spot) {
+            int step = std::max(1, std::min(maxx - minx + 1, maxy - miny + 1) / 25);
+            for (int y = miny; y <= maxy && !found_spot; y += step) {
+                for (int x = minx; x <= maxx && !found_spot; x += step) {
+                    SDL_Point candidate{x, y};
+                    if (!current_room_->room_area->contains_point(candidate)) {
+                        continue;
+                    }
+                    if (is_clear(candidate)) {
+                        spawn_point = candidate;
+                        found_spot = true;
+                    }
+                }
+            }
+        }
+        if (found_spot) {
+            if (Asset* spawned_player = assets_->spawn_asset(player_asset_name, spawn_point)) {
+                spawned_player->set_owning_room_name(current_room_->room_name);
+                assets_->player = spawned_player;
+                player_ = spawned_player;
             }
         }
     }
@@ -2732,6 +3300,35 @@ void RoomEditor::save_perimeter_json(nlohmann::json& entry, int dx, int dy, int 
             ++it;
         }
     }
+}
+
+void RoomEditor::save_edge_json(nlohmann::json& entry, int inset_percent) {
+    int clamped = std::clamp(inset_percent, 0, 200);
+    entry["edge_inset_percent"] = clamped;
+}
+
+double RoomEditor::edge_length_along_direction(const Area& area,
+                                                   SDL_Point center,
+                                                   SDL_FPoint direction) const {
+    const auto& pts = area.get_points();
+    const size_t count = pts.size();
+    if (count < 2) {
+        return 0.0;
+    }
+    double best = std::numeric_limits<double>::infinity();
+    for (size_t i = 0; i < count; ++i) {
+        const SDL_Point& a = pts[i];
+        const SDL_Point& b = pts[(i + 1) % count];
+        if (auto distance = ray_segment_distance(center, direction, a, b)) {
+            if (*distance >= 0.0 && *distance < best) {
+                best = *distance;
+            }
+        }
+    }
+    if (!std::isfinite(best) || best <= 0.0) {
+        return 0.0;
+    }
+    return best;
 }
 
 

@@ -119,5 +119,20 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                         }
                 }
         }
-	return raw;
+        return raw;
+}
+
+bool SpawnContext::point_overlaps_trail(SDL_Point pt, const Area* ignore) const {
+        for (const Area* trail : trail_areas_) {
+                if (!trail) {
+                        continue;
+                }
+                if (ignore && trail == ignore) {
+                        continue;
+                }
+                if (trail->contains_point(pt)) {
+                        return true;
+                }
+        }
+        return false;
 }

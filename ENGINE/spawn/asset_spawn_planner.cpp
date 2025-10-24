@@ -363,6 +363,10 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 
         if (position == "Perimeter") {
             s.perimeter_radius = asset.value("radius", asset.value("perimeter_radius", 0));
+        } else if (position == "Edge") {
+            int inset = asset.value("edge_inset_percent", asset.value("boundary_inset", 100));
+            inset = std::clamp(inset, 0, 200);
+            s.edge_inset_percent = inset;
         }
 
         s.candidates = std::move(candidates);

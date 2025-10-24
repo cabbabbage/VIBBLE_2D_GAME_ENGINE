@@ -24,13 +24,19 @@ struct MethodConfig {
     struct Perimeter {
         int min_number = 2;
         int max_number = 2;
-};
+    };
+
+    struct Edge {
+        int min_number = 1;
+        int max_number = 1;
+        int inset_percent = 100;
+    };
 
     struct Exact {
         int quantity = 1;
-};
+    };
 
-    using Variant = std::variant<None, Random, Perimeter, Exact>;
+    using Variant = std::variant<None, Random, Perimeter, Edge, Exact>;
 
     MethodConfig() = default;
     explicit MethodConfig(Variant data) : data(std::move(data)) {}
@@ -46,6 +52,18 @@ struct MethodConfig {
         return MethodConfig{Variant{Perimeter{min_number, max_number}}};
     }
 
+    static MethodConfig make_edge(int min_number = 1, int max_number = 1, int inset_percent = 100) {
+        if (min_number < 1) {
+            min_number = 1;
+        }
+        if (max_number < min_number) {
+            max_number = min_number;
+        }
+        if (inset_percent < 0) inset_percent = 0;
+        if (inset_percent > 200) inset_percent = 200;
+        return MethodConfig{Variant{Edge{min_number, max_number, inset_percent}}};
+    }
+
     static MethodConfig make_exact(int quantity = 1) {
         return MethodConfig{Variant{Exact{quantity}}};
     }
@@ -58,6 +76,9 @@ struct MethodConfig {
 
     Perimeter* as_perimeter() { return std::get_if<Perimeter>(&data); }
     const Perimeter* as_perimeter() const { return std::get_if<Perimeter>(&data); }
+
+    Edge* as_edge() { return std::get_if<Edge>(&data); }
+    const Edge* as_edge() const { return std::get_if<Edge>(&data); }
 
     Exact* as_exact() { return std::get_if<Exact>(&data); }
     const Exact* as_exact() const { return std::get_if<Exact>(&data); }
@@ -79,6 +100,8 @@ inline void switch_method(SpawnGroup& group, SpawnMethodId method) {
         group.method_config = MethodConfig::make_random();
     } else if (group.method == "Perimeter") {
         group.method_config = MethodConfig::make_perimeter();
+    } else if (group.method == "Edge") {
+        group.method_config = MethodConfig::make_edge();
     } else if (group.method == "Exact") {
         group.method_config = MethodConfig::make_exact();
     } else {

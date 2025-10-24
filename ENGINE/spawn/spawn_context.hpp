@@ -55,7 +55,11 @@ class SpawnContext {
 
     void set_clip_area(const Area* a) { clip_area_ = a; }
     const Area* clip_area() const { return clip_area_; }
-    
+
+    void set_trail_areas(std::vector<const Area*> areas) { trail_areas_ = std::move(areas); }
+    const std::vector<const Area*>& trail_areas() const { return trail_areas_; }
+    bool point_overlaps_trail(SDL_Point pt, const Area* ignore = nullptr) const;
+
         private:
     std::mt19937& rng_;
     Check& checker_;
@@ -67,4 +71,5 @@ class SpawnContext {
     vibble::grid::Occupancy* occupancy_ = nullptr;
     int spawn_resolution_ = 0;
     const Area* clip_area_ = nullptr;
+    std::vector<const Area*> trail_areas_{};
 };

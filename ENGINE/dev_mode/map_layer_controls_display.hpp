@@ -10,10 +10,6 @@
 
 #include "SlidingWindowContainer.hpp"
 
-namespace nlohmann {
-class json;
-}
-
 class DMButton;
 class DMRangeSlider;
 class Input;
@@ -22,7 +18,6 @@ union SDL_Event;
 struct SDL_Renderer;
 
 class RoomSelectorPopup;
-class RoomSearchPanel;
 
 class MapLayerControlsDisplay {
 public:
@@ -33,7 +28,6 @@ public:
     void detach_container();
 
     void set_controller(std::shared_ptr<MapLayersController> controller);
-    void set_map_info(nlohmann::json* map_info);
     void set_selected_layer(int index);
     void refresh();
     void set_on_change(std::function<void()> cb);
@@ -74,10 +68,12 @@ private:
     void ensure_data() const;
     void rebuild_content() const;
     void rebuild_available_rooms() const;
-    void update_room_search_entries() const;
     void mark_dirty() const;
     void update_header_text() const;
     void update_header_navigation_button();
+    void open_room_selector();
+    void close_room_selector();
+    void on_room_selected(const std::string& room_key);
     void open_child_selector(int candidate_index);
     void close_child_selector();
     void on_child_room_selected(const std::string& room_key);
@@ -94,6 +90,7 @@ private:
     int selected_layer_index_ = -1;
     mutable bool has_layer_data_ = false;
 
+    std::unique_ptr<DMButton> add_room_button_;
     std::unique_ptr<DMButton> new_room_button_;
     mutable std::vector<CandidateRow> candidates_;
     mutable std::vector<std::string> info_lines_;
@@ -103,14 +100,14 @@ private:
     mutable SDL_Rect empty_state_rect_{0, 0, 0, 0};
 
     mutable std::vector<std::string> available_rooms_;
+    mutable std::vector<std::string> filtered_rooms_;
 
-    mutable std::unique_ptr<RoomSearchPanel> room_search_panel_;
+    std::unique_ptr<RoomSelectorPopup> room_selector_;
     std::unique_ptr<RoomSelectorPopup> child_selector_;
     std::vector<std::string> child_selector_rooms_;
     int pending_child_candidate_index_ = -1;
     std::function<void()> on_change_{};
     std::function<void()> on_show_rooms_list_{};
     std::function<void()> on_create_room_{};
-    nlohmann::json* map_info_ = nullptr;
 };
 

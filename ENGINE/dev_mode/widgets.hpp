@@ -87,6 +87,7 @@ public:
     bool value() const { return value_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
+    int preferred_width() const;
     static int height() { return 28; }
 private:
     void draw_label(SDL_Renderer* r) const;

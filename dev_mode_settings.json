@@ -5,12 +5,22 @@
             "filters_expanded": false,
             "initialized": true,
             "map_assets": true,
+            "methods": {
+                "center": true,
+                "childrandom": true,
+                "edge": true,
+                "exact": true,
+                "exact_position": true,
+                "percent": true,
+                "perimeter": true,
+                "random": true
+            },
             "types": {
-                "boundary": true,
+                "boundary": false,
                 "enemy": true,
                 "npc": false,
                 "object": true,
-                "player": false,
+                "player": true,
                 "texture": true
             }
         }

@@ -141,7 +141,8 @@ struct RoomConfigurator::State {
     int width_max = 10000;
     int height_min = 1500;
     int height_max = 10000;
-    int radius = 0;
+    int radius_min = 100;
+    int radius_max = 100;
     int edge_smoothness = 2;
     int curvyness = 2;
     bool is_spawn = false;
@@ -152,51 +153,48 @@ struct RoomConfigurator::State {
 
     bool ensure_valid(bool allow_height, bool enforce_dimensions = true) {
         bool mutated = false;
-        if (enforce_dimensions) {
-            if (width_min > width_max) {
-                std::swap(width_min, width_max);
-                mutated = true;
-            }
-            if (allow_height) {
-                if (height_min > height_max) {
-                    std::swap(height_min, height_max);
+        if (!geometry_is_circle()) {
+            if (enforce_dimensions) {
+                if (width_min > width_max) {
+                    std::swap(width_min, width_max);
                     mutated = true;
                 }
-            } else {
-                if (height_min != width_min) {
-                    height_min = width_min;
+                if (allow_height) {
+                    if (height_min > height_max) {
+                        std::swap(height_min, height_max);
+                        mutated = true;
+                    }
+                } else {
+                    if (height_min != width_min) {
+                        height_min = width_min;
+                        mutated = true;
+                    }
+                    if (height_max != width_max) {
+                        height_max = width_max;
+                        mutated = true;
+                    }
+                }
+                int new_width_min = std::max(0, width_min);
+                if (new_width_min != width_min) {
+                    width_min = new_width_min;
                     mutated = true;
                 }
-                if (height_max != width_max) {
-                    height_max = width_max;
+                int new_width_max = std::max(width_min, width_max);
+                if (new_width_max != width_max) {
+                    width_max = new_width_max;
+                    mutated = true;
+                }
+                int new_height_min = std::max(0, height_min);
+                if (new_height_min != height_min) {
+                    height_min = new_height_min;
+                    mutated = true;
+                }
+                int new_height_max = std::max(height_min, height_max);
+                if (new_height_max != height_max) {
+                    height_max = new_height_max;
                     mutated = true;
                 }
             }
-            int new_width_min = std::max(0, width_min);
-            if (new_width_min != width_min) {
-                width_min = new_width_min;
-                mutated = true;
-            }
-            int new_width_max = std::max(width_min, width_max);
-            if (new_width_max != width_max) {
-                width_max = new_width_max;
-                mutated = true;
-            }
-            int new_height_min = std::max(0, height_min);
-            if (new_height_min != height_min) {
-                height_min = new_height_min;
-                mutated = true;
-            }
-            int new_height_max = std::max(height_min, height_max);
-            if (new_height_max != height_max) {
-                height_max = new_height_max;
-                mutated = true;
-            }
-        }
-        int new_radius = std::max(0, radius);
-        if (new_radius != radius) {
-            radius = new_radius;
-            mutated = true;
         }
         int new_edge = std::clamp(edge_smoothness, 0, 101);
         if (new_edge != edge_smoothness) {
@@ -209,28 +207,45 @@ struct RoomConfigurator::State {
             mutated = true;
         }
         if (geometry_is_circle() && enforce_dimensions) {
-            int diameter = std::max(width_max, height_max);
-            int desired_radius = std::max(radius, diameter / 2);
-            if (desired_radius != radius) {
-                radius = desired_radius;
+            int new_radius_min = std::max(0, radius_min);
+            int new_radius_max = std::max(0, radius_max);
+            const int kMinimumRadius = 100;
+            if (new_radius_min < kMinimumRadius) {
+                new_radius_min = kMinimumRadius;
+            }
+            if (new_radius_max < kMinimumRadius) {
+                new_radius_max = kMinimumRadius;
+            }
+            if (new_radius_max < new_radius_min) {
+                new_radius_max = new_radius_min;
+            }
+            if (new_radius_min != radius_min) {
+                radius_min = new_radius_min;
                 mutated = true;
             }
-            int circle_width = radius * 2;
-            if (width_min != circle_width) {
-                width_min = circle_width;
+            if (new_radius_max != radius_max) {
+                radius_max = new_radius_max;
                 mutated = true;
             }
-            if (width_max != circle_width) {
-                width_max = circle_width;
-                mutated = true;
-            }
-            if (height_min != circle_width) {
-                height_min = circle_width;
-                mutated = true;
-            }
-            if (height_max != circle_width) {
-                height_max = circle_width;
-                mutated = true;
+            {
+                int min_diameter = radius_min > 0 ? radius_min * 2 : 0;
+                int max_diameter = radius_max > 0 ? radius_max * 2 : min_diameter;
+                if (width_min != min_diameter) {
+                    width_min = min_diameter;
+                    mutated = true;
+                }
+                if (width_max != max_diameter) {
+                    width_max = max_diameter;
+                    mutated = true;
+                }
+                if (height_min != min_diameter) {
+                    height_min = min_diameter;
+                    mutated = true;
+                }
+                if (height_max != max_diameter) {
+                    height_max = max_diameter;
+                    mutated = true;
+                }
             }
         }
         if (is_spawn && is_boss) {
@@ -262,12 +277,46 @@ struct RoomConfigurator::State {
             }
         }
 
-        radius = 0;
+        radius_min = 0;
+        radius_max = 0;
+        if (auto value = read_json_int(src, "min_radius")) {
+            radius_min = std::max(0, *value);
+        }
+        if (auto value = read_json_int(src, "max_radius")) {
+            radius_max = std::max(0, *value);
+        }
         if (geometry_is_circle()) {
-            if (auto value = read_radius_value(src)) {
-                radius = *value;
-            } else {
-                radius = infer_radius_from_dimensions(width_min, width_max, height_min, height_max);
+            if (radius_min <= 0 && radius_max <= 0) {
+                if (auto single = read_radius_value(src)) {
+                    radius_min = std::max(0, *single);
+                    radius_max = std::max(radius_min, *single);
+                }
+            }
+            if (radius_min <= 0 && width_min > 0) {
+                radius_min = std::max(radius_min, width_min / 2);
+            }
+            if (radius_min <= 0 && height_min > 0) {
+                radius_min = std::max(radius_min, height_min / 2);
+            }
+            if (radius_max <= 0 && width_max > 0) {
+                radius_max = std::max(radius_max, width_max / 2);
+            }
+            if (radius_max <= 0 && height_max > 0) {
+                radius_max = std::max(radius_max, height_max / 2);
+            }
+            if (radius_min <= 0 && radius_max > 0) {
+                radius_min = radius_max;
+            }
+            if (radius_max <= 0 && radius_min > 0) {
+                radius_max = radius_min;
+            }
+            if (radius_min <= 0 && radius_max <= 0) {
+                int inferred = infer_radius_from_dimensions(width_min, width_max, height_min, height_max);
+                radius_min = radius_max = inferred;
+            }
+        } else {
+            if (radius_max < radius_min) {
+                radius_max = radius_min;
             }
         }
 
@@ -299,14 +348,21 @@ struct RoomConfigurator::State {
         }
 
         if (geometry_is_circle()) {
-            int diameter = std::max(0, radius) * 2;
-            dest["radius"] = radius;
-            dest["min_width"] = diameter;
-            dest["max_width"] = diameter;
-            dest["min_height"] = diameter;
-            dest["max_height"] = diameter;
+            int min_r = std::max(0, radius_min);
+            int max_r = std::max(min_r, radius_max);
+            int min_diameter = min_r * 2;
+            int max_diameter = max_r * 2;
+            dest["radius"] = max_r;
+            dest["min_radius"] = min_r;
+            dest["max_radius"] = max_r;
+            dest["min_width"] = min_diameter;
+            dest["max_width"] = max_diameter;
+            dest["min_height"] = min_diameter;
+            dest["max_height"] = max_diameter;
         } else {
             dest.erase("radius");
+            dest.erase("min_radius");
+            dest.erase("max_radius");
             dest["min_width"] = width_min;
             dest["max_width"] = width_max;
             dest["min_height"] = allow_height ? height_min : width_min;
@@ -458,6 +514,10 @@ void RoomConfigurator::configure_container(SlidingWindowContainer& container) {
             if (panel && panel->is_visible() && panel->handle_event(e)) {
                 used = true;
                 request_container_layout();
+                auto it = base_panel_keys_.find(panel);
+                if (it != base_panel_keys_.end()) {
+                    set_base_panel_expanded(it->second, panel->is_expanded());
+                }
             }
         }
         if (!used && add_spawn_widget_ && add_spawn_widget_->handle_event(e)) {
@@ -564,6 +624,7 @@ void RoomConfigurator::ensure_base_panels() {
             panel->set_row_gap(DMSpacing::item_gap());
             panel->set_col_gap(DMSpacing::item_gap());
             panel->set_padding(DMSpacing::panel_padding());
+            panel->force_pointer_ready();
         }
         base_panel_keys_[panel.get()] = key;
         bool expanded = base_panel_expanded(key);
@@ -584,7 +645,12 @@ void RoomConfigurator::refresh_base_panel_rows() {
         DockableCollapsible::Rows rows;
         if (name_widget_) rows.push_back({name_widget_.get()});
         if (geometry_widget_) rows.push_back({geometry_widget_.get()});
-        if (radius_widget_) rows.push_back({radius_widget_.get()});
+        if (radius_min_widget_ || radius_max_widget_) {
+            DockableCollapsible::Row row;
+            if (radius_min_widget_) row.push_back(radius_min_widget_.get());
+            if (radius_max_widget_) row.push_back(radius_max_widget_.get());
+            if (!row.empty()) rows.push_back(std::move(row));
+        }
         if (width_min_widget_ || width_max_widget_) {
             DockableCollapsible::Row row;
             if (width_min_widget_) row.push_back(width_min_widget_.get());
@@ -701,7 +767,7 @@ bool RoomConfigurator::base_panel_expanded(const std::string& key) const {
     if (it != base_panel_expanded_state_.end()) {
         return it->second;
     }
-    return true;
+    return false;
 }
 
 void RoomConfigurator::set_base_panel_expanded(const std::string& key, bool expanded) {
@@ -820,7 +886,8 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
             new_state.width_max != state_->width_max ||
             new_state.height_min != state_->height_min ||
             new_state.height_max != state_->height_max ||
-            new_state.radius != state_->radius ||
+            new_state.radius_min != state_->radius_min ||
+            new_state.radius_max != state_->radius_max ||
             new_state.edge_smoothness != state_->edge_smoothness ||
             new_state.curvyness != state_->curvyness ||
             new_state.is_spawn != state_->is_spawn ||
@@ -859,6 +926,10 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
 void RoomConfigurator::open(const nlohmann::json& room_data) {
     const bool was_visible = container_ && container_->is_visible();
 
+    if (!was_visible) {
+        reset_expanded_state_pending_ = true;
+    }
+
     room_ = nullptr;
     external_room_json_ = nullptr;
     on_external_spawn_change_ = {};
@@ -866,7 +937,7 @@ void RoomConfigurator::open(const nlohmann::json& room_data) {
     external_configure_entry_ = {};
     is_trail_context_ = false;
     bool changed = apply_room_data(room_data);
-    if (changed) {
+    if (changed || !was_visible) {
         rebuild_rows();
         if (!was_visible) {
             reset_scroll();
@@ -883,6 +954,10 @@ void RoomConfigurator::open(nlohmann::json& room_data,
                             SpawnGroupConfig::ConfigureEntryCallback configure_entry) {
     const bool was_visible = container_ && container_->is_visible();
 
+    if (!was_visible) {
+        reset_expanded_state_pending_ = true;
+    }
+
     room_ = nullptr;
     external_room_json_ = &room_data;
     on_external_spawn_change_ = std::move(on_change);
@@ -890,7 +965,7 @@ void RoomConfigurator::open(nlohmann::json& room_data,
     external_configure_entry_ = std::move(configure_entry);
     is_trail_context_ = false;
     bool changed = apply_room_data(room_data);
-    if (changed) {
+    if (changed || !was_visible) {
         rebuild_rows();
         if (!was_visible) {
             reset_scroll();
@@ -903,6 +978,10 @@ void RoomConfigurator::open(nlohmann::json& room_data,
 
 void RoomConfigurator::open(Room* room) {
     const bool was_visible = container_ && container_->is_visible();
+
+    if (!was_visible) {
+        reset_expanded_state_pending_ = true;
+    }
 
     Room* previous = room_;
     room_ = room;
@@ -920,7 +999,7 @@ void RoomConfigurator::open(Room* room) {
 
     const nlohmann::json& source = room ? room->assets_data() : empty_object();
     bool changed = (room != previous) || apply_room_data(source);
-    if (changed) {
+    if (changed || !was_visible) {
         rebuild_rows();
         if (!was_visible) {
             reset_scroll();
@@ -951,6 +1030,10 @@ bool RoomConfigurator::refresh_spawn_groups(nlohmann::json& room_data) {
 bool RoomConfigurator::refresh_spawn_groups(Room* room) {
     const nlohmann::json& src = room ? room->assets_data() : empty_object();
     return refresh_spawn_groups(src);
+}
+
+void RoomConfigurator::notify_spawn_groups_mutated() {
+    handle_spawn_groups_mutated();
 }
 
 void RoomConfigurator::close() {
@@ -988,7 +1071,7 @@ std::string RoomConfigurator::selected_geometry() const {
     return geometry_options_.front();
 }
 
-void RoomConfigurator::rebuild_spawn_rows() {
+void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
     add_spawn_button_.reset();
     add_spawn_widget_.reset();
 
@@ -1051,9 +1134,14 @@ void RoomConfigurator::rebuild_spawn_rows() {
         config->set_row_gap(DMSpacing::item_gap());
         config->set_col_gap(DMSpacing::item_gap());
         config->set_padding(DMSpacing::panel_padding());
+        config->set_header_button_style(&DMStyles::AccentButton());
+        config->set_header_highlight_color(DMStyles::AccentButton().bg);
         config->force_pointer_ready();
         if (created_new) {
             config->set_expanded(true);
+        }
+        if (force_collapse_sections) {
+            config->set_expanded(false);
         }
 
         config->set_screen_dimensions(last_screen_w_, last_screen_h_);
@@ -1303,6 +1391,14 @@ void RoomConfigurator::rebuild_rows_internal() {
         state_ = std::make_unique<State>();
     }
 
+    bool force_collapse_sections = reset_expanded_state_pending_;
+    if (reset_expanded_state_pending_) {
+        base_panel_expanded_state_.clear();
+        collapsible_height_cache_.clear();
+        base_panel_keys_.clear();
+    }
+    reset_expanded_state_pending_ = false;
+
     ensure_base_panels();
     ordered_base_panels_.clear();
 
@@ -1324,8 +1420,10 @@ void RoomConfigurator::rebuild_rows_internal() {
     }
 
     if (state_->geometry_is_circle()) {
-        radius_box_ = std::make_unique<DMTextBox>("Radius", std::to_string(state_->radius));
-        radius_widget_ = std::make_unique<TextBoxWidget>(radius_box_.get());
+        radius_min_box_ = std::make_unique<DMTextBox>("Min Radius", std::to_string(state_->radius_min));
+        radius_min_widget_ = std::make_unique<TextBoxWidget>(radius_min_box_.get());
+        radius_max_box_ = std::make_unique<DMTextBox>("Max Radius", std::to_string(state_->radius_max));
+        radius_max_widget_ = std::make_unique<TextBoxWidget>(radius_max_box_.get());
         width_min_box_.reset();
         width_min_widget_.reset();
         width_max_box_.reset();
@@ -1335,8 +1433,10 @@ void RoomConfigurator::rebuild_rows_internal() {
         height_max_box_.reset();
         height_max_widget_.reset();
     } else {
-        radius_box_.reset();
-        radius_widget_.reset();
+        radius_min_box_.reset();
+        radius_min_widget_.reset();
+        radius_max_box_.reset();
+        radius_max_widget_.reset();
 
         width_min_box_ = std::make_unique<DMTextBox>("Min Width", std::to_string(state_->width_min));
         width_min_widget_ = std::make_unique<TextBoxWidget>(width_min_box_.get());
@@ -1395,7 +1495,15 @@ void RoomConfigurator::rebuild_rows_internal() {
 
     refresh_base_panel_rows();
 
-    rebuild_spawn_rows();
+    if (force_collapse_sections) {
+        for (auto* panel : ordered_base_panels_) {
+            if (panel) {
+                panel->force_pointer_ready();
+            }
+        }
+    }
+
+    rebuild_spawn_rows(force_collapse_sections);
 
     add_spawn_button_ = std::make_unique<DMButton>("Add Spawn Group", &DMStyles::CreateButton(), 0, DMButton::height());
     add_spawn_widget_ = std::make_unique<ButtonWidget>(add_spawn_button_.get(), [this]() {
@@ -1506,7 +1614,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
         tags_changed = true;
     }
 
-    if (name_box_) {
+    if (name_box_ && !name_box_->is_editing()) {
         std::string new_name = name_box_->value();
         if (new_name != state_->name) {
             std::string final_name = new_name;
@@ -1531,21 +1639,33 @@ bool RoomConfigurator::sync_state_from_widgets() {
         if (selected != state_->geometry) {
             state_->geometry = selected;
             if (state_->geometry_is_circle()) {
-                if (!radius_box_) {
-                    state_->radius = infer_radius_from_dimensions(state_->width_min, state_->width_max, state_->height_min, state_->height_max);
+                int inferred_min = state_->radius_min;
+                int inferred_max = state_->radius_max;
+                if (!radius_min_box_ || !radius_max_box_) {
+                    int min_diameter = std::max(state_->width_min, state_->height_min);
+                    int max_diameter = std::max(state_->width_max, state_->height_max);
+                    if (min_diameter > 0) inferred_min = std::max(inferred_min, min_diameter / 2);
+                    if (max_diameter > 0) inferred_max = std::max(inferred_max, max_diameter / 2);
                 }
-            } else if (radius_box_) {
-                int diameter = std::max(0, state_->radius) * 2;
-                state_->width_min = state_->width_max = std::max(1, diameter);
-                state_->height_min = state_->height_max = std::max(1, diameter);
-                state_->radius = 0;
+                if (inferred_min <= 0 && inferred_max <= 0) {
+                    inferred_min = inferred_max = infer_radius_from_dimensions(
+                        state_->width_min, state_->width_max, state_->height_min, state_->height_max);
+                }
+                state_->radius_min = inferred_min;
+                state_->radius_max = std::max(inferred_min, inferred_max);
+            } else {
+                int min_diameter = std::max(0, state_->radius_min) * 2;
+                int max_radius = std::max(state_->radius_min, state_->radius_max);
+                int max_diameter = std::max(min_diameter, std::max(0, max_radius) * 2);
+                state_->width_min = state_->height_min = std::max(1, min_diameter);
+                state_->width_max = state_->height_max = std::max(state_->width_min, max_diameter);
             }
             rebuild_required = true;
             changed = true;
         }
     }
 
-    if (width_min_box_) {
+    if (width_min_box_ && !width_min_box_->is_editing()) {
         if (auto parsed = read_text_box_value(width_min_box_.get())) {
             if (*parsed != state_->width_min) {
                 state_->width_min = *parsed;
@@ -1554,7 +1674,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
         }
     }
 
-    if (width_max_box_) {
+    if (width_max_box_ && !width_max_box_->is_editing()) {
         if (auto parsed = read_text_box_value(width_max_box_.get())) {
             if (*parsed != state_->width_max) {
                 state_->width_max = *parsed;
@@ -1563,7 +1683,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
         }
     }
 
-    if (height_min_box_) {
+    if (height_min_box_ && !height_min_box_->is_editing()) {
         if (auto parsed = read_text_box_value(height_min_box_.get())) {
             if (*parsed != state_->height_min) {
                 state_->height_min = *parsed;
@@ -1572,7 +1692,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
         }
     }
 
-    if (height_max_box_) {
+    if (height_max_box_ && !height_max_box_->is_editing()) {
         if (auto parsed = read_text_box_value(height_max_box_.get())) {
             if (*parsed != state_->height_max) {
                 state_->height_max = *parsed;
@@ -1581,14 +1701,19 @@ bool RoomConfigurator::sync_state_from_widgets() {
         }
     }
 
-    if (radius_box_) {
-        if (auto parsed = read_text_box_value(radius_box_.get())) {
-            int clamped = std::max(0, *parsed);
-            if (clamped != *parsed) {
-                sync_text_box_with_value(radius_box_.get(), clamped);
+    if (radius_min_box_ && !radius_min_box_->is_editing()) {
+        if (auto parsed = read_text_box_value(radius_min_box_.get())) {
+            if (*parsed != state_->radius_min) {
+                state_->radius_min = *parsed;
+                changed = true;
             }
-            if (clamped != state_->radius) {
-                state_->radius = clamped;
+        }
+    }
+
+    if (radius_max_box_ && !radius_max_box_->is_editing()) {
+        if (auto parsed = read_text_box_value(radius_max_box_.get())) {
+            if (*parsed != state_->radius_max) {
+                state_->radius_max = *parsed;
                 changed = true;
             }
         }
@@ -1639,7 +1764,8 @@ bool RoomConfigurator::sync_state_from_widgets() {
         (width_max_box_ && width_max_box_->is_editing()) ||
         (height_min_box_ && height_min_box_->is_editing()) ||
         (height_max_box_ && height_max_box_->is_editing()) ||
-        (radius_box_ && radius_box_->is_editing());
+        (radius_min_box_ && radius_min_box_->is_editing()) ||
+        (radius_max_box_ && radius_max_box_->is_editing());
 
     if (state_->ensure_valid(!is_trail_context_, !editing_size_box)) {
         changed = true;
@@ -1654,7 +1780,8 @@ bool RoomConfigurator::sync_state_from_widgets() {
     sync_text_box_with_value(width_max_box_.get(), state_->width_max);
     sync_text_box_with_value(height_min_box_.get(), state_->height_min);
     sync_text_box_with_value(height_max_box_.get(), state_->height_max);
-    sync_text_box_with_value(radius_box_.get(), state_->radius);
+    sync_text_box_with_value(radius_min_box_.get(), state_->radius_min);
+    sync_text_box_with_value(radius_max_box_.get(), state_->radius_max);
 
     if (changed) {
         state_->apply_to_json(loaded_json_, !is_trail_context_);
@@ -1671,6 +1798,9 @@ bool RoomConfigurator::sync_state_from_widgets() {
             auto& root = live_room_json();
             state_->apply_to_json(root, !is_trail_context_);
             write_tags_to_json(root);
+        }
+        if (on_external_spawn_change_) {
+            on_external_spawn_change_();
         }
     }
 

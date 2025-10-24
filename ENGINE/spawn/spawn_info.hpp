@@ -36,6 +36,8 @@ struct SpawnInfo {
 
     int perimeter_radius = 0;
 
+    int edge_inset_percent = 100;
+
     std::vector<SpawnCandidate> candidates;
 
     bool has_candidates() const { return !candidates.empty(); }

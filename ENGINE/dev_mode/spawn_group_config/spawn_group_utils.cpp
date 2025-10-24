@@ -12,6 +12,11 @@
 namespace devmode::spawn {
 namespace {
 
+constexpr int kDefaultMinNumber = 1;
+constexpr int kEdgeInsetSliderMin = 0;
+constexpr int kEdgeInsetSliderMax = 200;
+constexpr int kEdgeInsetDefault = 100;
+
 int read_int(const nlohmann::json& obj, const char* key, int fallback) {
     if (!obj.is_object()) return fallback;
     const auto it = obj.find(key);
@@ -68,6 +73,9 @@ std::string generate_spawn_id() {
 }
 
 nlohmann::json& ensure_spawn_groups_array(nlohmann::json& root) {
+    if (root.is_array()) {
+        return root;
+    }
     if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
         return root["spawn_groups"];
     }
@@ -95,30 +103,60 @@ bool sanitize_perimeter_spawn_groups(nlohmann::json& groups) {
         if (method == "Exact Position") {
             method = "Exact";
         }
-        if (method != "Perimeter") {
+        if (method != "Perimeter" && method != "Edge") {
             continue;
         }
-        int min_number = entry.value("min_number", entry.value("max_number", 2));
-        int max_number = entry.value("max_number", min_number);
-        if (min_number < 2) {
-            min_number = 2;
-            changed = true;
-        }
-        if (max_number < 2) {
-            max_number = 2;
-            changed = true;
-        }
-        if (max_number < min_number) {
-            max_number = min_number;
-            changed = true;
-        }
-        if (!entry.contains("min_number") || !entry["min_number"].is_number_integer() ||
-            entry["min_number"].get<int>() != min_number) {
+        if (method == "Perimeter") {
+            int min_number = entry.value("min_number", entry.value("max_number", 2));
+            int max_number = entry.value("max_number", min_number);
+            if (min_number < 2) {
+                min_number = 2;
+                changed = true;
+            }
+            if (max_number < 2) {
+                max_number = 2;
+                changed = true;
+            }
+            if (max_number < min_number) {
+                max_number = min_number;
+                changed = true;
+            }
+            if (!entry.contains("min_number") || !entry["min_number"].is_number_integer() ||
+                entry["min_number"].get<int>() != min_number) {
+                entry["min_number"] = min_number;
+            }
+            if (!entry.contains("max_number") || !entry["max_number"].is_number_integer() ||
+                entry["max_number"].get<int>() != max_number) {
+                entry["max_number"] = max_number;
+            }
+        } else if (method == "Edge") {
+            int min_number = entry.value("min_number", entry.value("max_number", kDefaultMinNumber));
+            int max_number = entry.value("max_number", min_number);
+            if (min_number < 1) {
+                min_number = 1;
+                changed = true;
+            }
+            if (max_number < min_number) {
+                max_number = min_number;
+                changed = true;
+            }
+            int inset = entry.value("edge_inset_percent", kEdgeInsetDefault);
+            if (inset < kEdgeInsetSliderMin) {
+                inset = kEdgeInsetSliderMin;
+                changed = true;
+            }
+            if (inset > kEdgeInsetSliderMax) {
+                inset = kEdgeInsetSliderMax;
+                changed = true;
+            }
             entry["min_number"] = min_number;
-        }
-        if (!entry.contains("max_number") || !entry["max_number"].is_number_integer() ||
-            entry["max_number"].get<int>() != max_number) {
             entry["max_number"] = max_number;
+            entry["edge_inset_percent"] = inset;
+        } else {
+            if (entry.contains("edge_inset_percent")) {
+                entry.erase("edge_inset_percent");
+                changed = true;
+            }
         }
     }
     return changed;
@@ -219,6 +257,9 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
         changed = true;
     }
 
+    std::string method = entry.value("position", std::string{"Random"});
+    if (method == "Exact Position") method = "Exact";
+
     int min_number = read_int(entry, "min_number", 1);
     int max_number = read_int(entry, "max_number", min_number);
     min_number = std::max(1, min_number);
@@ -251,6 +292,20 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
     }
 
     if (sanitize_spawn_group_candidates(entry)) {
+        changed = true;
+    }
+
+    if (method == "Edge") {
+        int inset = entry.value("edge_inset_percent", kEdgeInsetDefault);
+        int clamped_inset = std::clamp(inset, kEdgeInsetSliderMin, kEdgeInsetSliderMax);
+        if (inset != clamped_inset ||
+            !entry.contains("edge_inset_percent") ||
+            !entry["edge_inset_percent"].is_number_integer()) {
+            entry["edge_inset_percent"] = clamped_inset;
+            changed = true;
+        }
+    } else if (entry.contains("edge_inset_percent")) {
+        entry.erase("edge_inset_percent");
         changed = true;
     }
 

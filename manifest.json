@@ -6906,8 +6906,18 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
       "size_settings": {
-        "scale_percentage": 2.0
+        "scale_percentage": 3.0
       },
       "start": "SRC/assets/Grass_1_FPS_2",
       "tags": [
@@ -7022,7 +7032,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "size_settings": {
-        "scale_percentage": 2.0
+        "scale_percentage": 3.0
       },
       "start": "SRC/assets/Grass_FPS_2",
       "tags": [
@@ -7039,7 +7049,7 @@
         "plant"
       ],
       "update_radius": 1000,
-      "z_threshold": -215
+      "z_threshold": -8
     },
     "Grave_1": {
       "animations": {
@@ -12729,6 +12739,22 @@
           "position": "Exact",
           "priority": 0,
           "spawn_id": "spn-c3fa5c634749"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Exact",
+          "priority": 1,
+          "resolution": 0,
+          "spawn_id": "spn-c36d009a35e8"
         }
       ],
       "tags": [
@@ -13743,8 +13769,12 @@
                 "name": "Small_Rock"
               },
               {
-                "chance": 64.05,
-                "name": "#grass"
+                "chance": 30.3,
+                "name": "Grass_1_FPS_2"
+              },
+              {
+                "chance": 24.3,
+                "name": "Grass_FPS_2"
               }
             ],
             "display_name": "batch_map_assets",
@@ -13753,11 +13783,12 @@
             "min_number": 53,
             "position": "Random",
             "priority": 2,
+            "resolution": 0,
             "spawn_id": "spn-5200d51e3675"
           }
         ]
       },
-      "map_boundary_data": {
+      "map_edge_data": {
         "inherits_map_assets": false,
         "spawn_groups": [
           {
@@ -13775,11 +13806,12 @@
                 "name": "Tree_Darker"
               }
             ],
-            "display_name": "batch_map_boundary",
+            "display_name": "batch_map_edge",
             "enforce_spacing": false,
             "max_number": 100,
             "min_number": 100,
             "position": "Random",
+            "resolution": 0,
             "spawn_id": "spn-88572bf1415f"
           }
         ]
@@ -13852,8 +13884,8 @@
                 "min": 255
               },
               "r": {
-                "max": 255,
-                "min": 255
+                "max": 170,
+                "min": 66
               }
             }
           ],
@@ -13873,8 +13905,8 @@
                 "min": 255
               },
               "r": {
-                "max": 255,
-                "min": 255
+                "max": 170,
+                "min": 66
               }
             }
           ],
@@ -13886,16 +13918,16 @@
                 "min": 255
               },
               "b": {
-                "max": 255,
-                "min": 255
+                "max": 188,
+                "min": 188
               },
               "g": {
-                "max": 80,
-                "min": 80
+                "max": 57,
+                "min": 57
               },
               "r": {
-                "max": 55,
-                "min": 55
+                "max": 38,
+                "min": 38
               }
             }
           ],
@@ -13903,8 +13935,8 @@
             260.0362269401454,
             {
               "a": {
-                "max": 255,
-                "min": 255
+                "max": 0,
+                "min": 0
               },
               "b": {
                 "max": 0,
@@ -13916,7 +13948,7 @@
               },
               "r": {
                 "max": 255,
-                "min": 255
+                "min": 254
               }
             }
           ],
@@ -13924,8 +13956,8 @@
             279.9637730598546,
             {
               "a": {
-                "max": 255,
-                "min": 255
+                "max": 0,
+                "min": 0
               },
               "b": {
                 "max": 0,
@@ -13937,7 +13969,7 @@
               },
               "r": {
                 "max": 255,
-                "min": 255
+                "min": 254
               }
             }
           ],
@@ -13949,16 +13981,16 @@
                 "min": 255
               },
               "b": {
-                "max": 255,
-                "min": 255
+                "max": 188,
+                "min": 188
               },
               "g": {
-                "max": 80,
-                "min": 80
+                "max": 57,
+                "min": 57
               },
               "r": {
-                "max": 55,
-                "min": 55
+                "max": 38,
+                "min": 38
               }
             }
           ]
@@ -14014,6 +14046,9 @@
         }
       },
       "rooms_data": {
+        "NewRoom": {
+          "name": "NewRoom"
+        },
         "spawn": {
           "areas": [
             {
@@ -14055,17 +14090,19 @@
             }
           ],
           "curvyness": 1,
-          "edge_smoothness": 27,
+          "edge_smoothness": 0,
           "geometry": "Circle",
           "inherits_map_assets": true,
           "is_boss": false,
           "is_spawn": true,
-          "max_height": 1800,
-          "max_width": 1800,
-          "min_height": 1800,
-          "min_width": 1800,
+          "max_height": 2200,
+          "max_radius": 1100,
+          "max_width": 2200,
+          "min_height": 1400,
+          "min_radius": 700,
+          "min_width": 1400,
           "name": "spawn",
-          "radius": 900,
+          "radius": 1100,
           "spawn_groups": [
             {
               "candidates": [
@@ -14098,9 +14135,9 @@
                   "name": "#candle"
                 }
               ],
-              "display_name": "Axe",
-              "dx": -78,
-              "dy": -1303,
+              "display_name": "Candles",
+              "dx": -32,
+              "dy": -631,
               "enforce_spacing": false,
               "max_number": 20,
               "min_number": 12,
@@ -14109,9 +14146,34 @@
               "perimeter_radius": 377,
               "position": "Perimeter",
               "priority": 1,
-              "radius": 349,
+              "radius": 648,
               "resolution": 3,
               "spawn_id": "spn-dbc1671870c3"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Axe"
+                }
+              ],
+              "display_name": "Axe",
+              "dx": -114,
+              "dy": 14,
+              "edge_inset_percent": 62,
+              "enforce_spacing": false,
+              "max_number": 50,
+              "min_number": 1,
+              "origional_height": 1878,
+              "origional_width": 1808,
+              "position": "Edge",
+              "priority": 2,
+              "resolution": 5,
+              "spawn_id": "spn-7fa417fa562d"
             }
           ]
         }
@@ -14191,7 +14253,7 @@
       "camera_settings": {},
       "content_root": "MAPS/test",
       "map_assets_data": {},
-      "map_boundary_data": {},
+      "map_edge_data": {},
       "map_grid_settings": {
         "jitter": 0,
         "spacing": 100

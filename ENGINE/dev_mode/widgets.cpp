@@ -516,6 +516,14 @@ DMCheckbox::DMCheckbox(const std::string& label, bool value)
 
 void DMCheckbox::set_rect(const SDL_Rect& r) { rect_ = r; }
 
+int DMCheckbox::preferred_width() const {
+    const DMCheckboxStyle& st = DMStyles::Checkbox();
+    SDL_Point label_size = DMFontCache::instance().measure_text(st.label, label_);
+    int box_size = rect_.h > 0 ? rect_.h : height();
+    int gap = label_size.x > 0 ? kCheckboxLabelGap : 0;
+    return box_size + gap + label_size.x;
+}
+
 bool DMCheckbox::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };

@@ -647,12 +647,13 @@ void LightMap::present_static_previews(SDL_Renderer* renderer) const {
 }
 
 void LightMap::render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {
-    render_visible_chunks(renderer, view_rect, 1.0f);
+    render_visible_chunks(renderer, view_rect, 1.0f, SDL_Color{255, 255, 255, 255});
 }
 
 void LightMap::render_visible_chunks(SDL_Renderer* renderer,
                                         const SDL_Rect& view_rect,
-                                        float alpha_multiplier) const {
+                                        float alpha_multiplier,
+                                        const SDL_Color& color_mod) const {
     std::scoped_lock lock(mutex_);
     if (!renderer || !assets_) {
         return;
@@ -705,6 +706,7 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
         }
 
         SDL_SetTextureAlphaMod(chunk->static_light_mask, chunk_alpha);
+        SDL_SetTextureColorMod(chunk->static_light_mask, color_mod.r, color_mod.g, color_mod.b);
         SDL_RenderCopy(renderer, chunk->static_light_mask, nullptr, &dst);
     }
 }

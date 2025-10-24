@@ -434,11 +434,16 @@
                 0,
                 0,
                 0,
-                0
+                39609
             ],
-            "last_updated": "2025-10-17T07:04:44Z",
+            "last_requested_percent": 3,
+            "last_requested_scale": 0.02675585262477398,
+            "last_updated": "2025-10-23T21:05:10Z",
+            "last_used_texture_scale": 0.5,
             "recommended_percentages": [
-                50
+                100,
+                75,
+                10
             ],
             "revision": 1
         },
@@ -533,14 +538,19 @@
                 0,
                 0,
                 0,
-                0,
+                81,
                 0
             ],
-            "last_updated": "2025-10-17T07:08:02Z",
+            "last_requested_percent": 19,
+            "last_requested_scale": 0.1944444477558136,
+            "last_updated": "2025-10-23T21:05:10Z",
+            "last_used_texture_scale": 0.5,
             "recommended_percentages": [
-                50
+                100,
+                75,
+                15
             ],
-            "revision": 1
+            "revision": 2
         },
         "Mushroom_2": {
             "histogram": [
@@ -759,8 +769,8 @@
         "Tree_Dark": {
             "histogram": [
                 3711,
-                52164,
-                10854,
+                55404,
+                11745,
                 331,
                 0,
                 0,
@@ -782,8 +792,8 @@
         },
         "Tree_Darker": {
             "histogram": [
-                39260,
-                14717,
+                42662,
+                16013,
                 478,
                 0,
                 0,
@@ -794,7 +804,7 @@
                 0
             ],
             "last_requested_percent": 88,
-            "last_requested_scale": 0.8775894641876221,
+            "last_requested_scale": 0.8757061958312988,
             "last_updated": "2025-10-22T08:21:44Z",
             "last_used_texture_scale": 0.8500000238418579,
             "recommended_percentages": [
@@ -814,7 +824,7 @@
                 0,
                 0,
                 2,
-                799,
+                880,
                 0
             ],
             "last_requested_percent": 16,
@@ -858,10 +868,10 @@
                 0,
                 0,
                 0,
-                13940
+                14912
             ],
             "last_requested_percent": 5,
-            "last_requested_scale": 0.054187193512916565,
+            "last_requested_scale": 0.05202312022447586,
             "last_updated": "2025-10-22T08:21:44Z",
             "last_used_texture_scale": 0.10000000149011612,
             "recommended_percentages": [
@@ -996,12 +1006,12 @@
                 0,
                 0,
                 0,
-                4109
+                4352
             ],
             "last_requested_percent": 5,
-            "last_requested_scale": 0.0518292672932148,
+            "last_requested_scale": 0.054054055362939835,
             "last_updated": "2025-10-22T08:21:44Z",
-            "last_used_texture_scale": 0.5,
+            "last_used_texture_scale": 0.10000000149011612,
             "recommended_percentages": [
                 100,
                 75,

@@ -1,8 +1,6 @@
 #include "map_layer_controls_display.hpp"
 
 #include <algorithm>
-#include <cctype>
-#include <set>
 #include <utility>
 
 #include <nlohmann/json.hpp>
@@ -12,12 +10,12 @@
 #include "font_cache.hpp"
 #include "map_layers_common.hpp"
 #include "map_layers_controller.hpp"
-#include "room_search_panel.hpp"
 #include "room_selector_popup.hpp"
 #include "utils/input.hpp"
 #include "widgets.hpp"
 
 namespace {
+constexpr int kAddButtonWidth = 180;
 constexpr int kNewButtonWidth = 160;
 constexpr int kRemoveButtonWidth = 120;
 constexpr int kAddChildButtonWidth = 220;
@@ -43,98 +41,13 @@ std::string room_display_label(const std::string& room_key) {
     return room_key;
 }
 
-std::string trim_copy(const std::string& value) {
-    auto begin = std::find_if_not(value.begin(), value.end(), [](unsigned char c) { return std::isspace(c) != 0; });
-    auto end = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char c) { return std::isspace(c) != 0; }).base();
-    if (begin >= end) {
-        return {};
-    }
-    return std::string(begin, end);
-}
-
-bool equals_ignore_case(const std::string& a, const std::string& b) {
-    if (a.size() != b.size()) {
-        return false;
-    }
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-std::string ensure_hashtag(std::string value) {
-    value = trim_copy(value);
-    if (value.empty()) {
-        return {};
-    }
-    if (value.front() != '#') {
-        value.insert(value.begin(), '#');
-    }
-    return value;
-}
-
-void append_tag_values(const nlohmann::json& node, std::set<std::string>& tags) {
-    if (node.is_string()) {
-        std::string normalized = ensure_hashtag(node.get<std::string>());
-        if (!normalized.empty()) {
-            tags.insert(std::move(normalized));
-        }
-        return;
-    }
-    if (node.is_array()) {
-        for (const auto& value : node) {
-            append_tag_values(value, tags);
-        }
-        return;
-    }
-    if (node.is_object()) {
-        for (const auto& [_, value] : node.items()) {
-            append_tag_values(value, tags);
-        }
-    }
-}
-
-void collect_room_tags(const nlohmann::json& node, std::set<std::string>& tags) {
-    if (!node.is_object()) {
-        if (node.is_array()) {
-            for (const auto& value : node) {
-                collect_room_tags(value, tags);
-            }
-        }
-        return;
-    }
-    for (const auto& [key, value] : node.items()) {
-        if (key == "tags" || key == "anti_tags") {
-            append_tag_values(value, tags);
-        } else if (value.is_object() || value.is_array()) {
-            collect_room_tags(value, tags);
-        }
-    }
-}
-
 }  // namespace
 
 MapLayerControlsDisplay::MapLayerControlsDisplay()
-    : child_selector_(std::make_unique<RoomSelectorPopup>()) {
-    room_search_panel_ = std::make_unique<RoomSearchPanel>();
-    if (room_search_panel_) {
-        room_search_panel_->set_embedded_mode(true);
-        room_search_panel_->set_on_select([this](const RoomSearchPanel::Selection& selection) {
-            if (!controller_ || selected_layer_index_ < 0) {
-                return;
-            }
-            if (selection.value.empty()) {
-                return;
-            }
-            if (controller_->add_candidate(selected_layer_index_, selection.value)) {
-                mark_dirty();
-                notify_change();
-            }
-        });
-    }
-    new_room_button_ = std::make_unique<DMButton>(kNewRoomLabel, &DMStyles::CreateButton(), kNewButtonWidth, DMButton::height());
+    : room_selector_(std::make_unique<RoomSelectorPopup>()),
+      child_selector_(std::make_unique<RoomSelectorPopup>()) {
+    add_room_button_ = std::make_unique<DMButton>("Add Room", &DMStyles::CreateButton(), kAddButtonWidth, DMButton::height());
+    new_room_button_ = std::make_unique<DMButton>(kNewRoomLabel, &DMStyles::AccentButton(), kNewButtonWidth, DMButton::height());
 }
 
 MapLayerControlsDisplay::~MapLayerControlsDisplay() {
@@ -165,10 +78,6 @@ void MapLayerControlsDisplay::attach_container(SlidingWindowContainer* container
         update_header_navigation_button();
         container_->request_layout();
     }
-    if (room_search_panel_) {
-        room_search_panel_->set_embedded_mode(true);
-        room_search_panel_->set_visible(has_layer_data_);
-    }
 }
 
 void MapLayerControlsDisplay::detach_container() {
@@ -179,9 +88,6 @@ void MapLayerControlsDisplay::detach_container() {
     container_->set_header_navigation_alignment_right(false);
     clear_container_callbacks(*container_);
     container_ = nullptr;
-    if (room_search_panel_) {
-        room_search_panel_->set_visible(false);
-    }
 }
 
 void MapLayerControlsDisplay::set_controller(std::shared_ptr<MapLayersController> controller) {
@@ -200,20 +106,13 @@ void MapLayerControlsDisplay::set_controller(std::shared_ptr<MapLayersController
     mark_dirty();
 }
 
-void MapLayerControlsDisplay::set_map_info(nlohmann::json* map_info) {
-    if (map_info_ == map_info) {
-        return;
-    }
-    map_info_ = map_info;
-    mark_dirty();
-}
-
 void MapLayerControlsDisplay::set_selected_layer(int index) {
     if (selected_layer_index_ == index) {
         mark_dirty();
         return;
     }
     selected_layer_index_ = index;
+    close_room_selector();
     close_child_selector();
     mark_dirty();
 }
@@ -279,27 +178,30 @@ int MapLayerControlsDisplay::layout_content(const SlidingWindowContainer::Layout
     const int scroll = ctx.scroll_value;
     int y = ctx.content_top + top_spacing;
 
-    if (room_search_panel_) {
-        if (has_layer_data_) {
-            room_search_panel_->set_visible(true);
-            int search_height = room_search_panel_->embedded_height_for_width(width);
-            SDL_Rect search_rect{x, y - scroll, width, search_height};
-            room_search_panel_->set_embedded_rect(search_rect);
-            y += search_height + gap;
-        } else {
-            room_search_panel_->set_visible(false);
-            room_search_panel_->set_embedded_rect(SDL_Rect{x, y - scroll, width, 0});
-        }
-    }
-
-    if (has_layer_data_ && new_room_button_) {
+    if (has_layer_data_ && add_room_button_ && new_room_button_) {
+        int add_width = std::min(width, add_room_button_->preferred_width() > 0 ? add_room_button_->preferred_width() : kAddButtonWidth);
         int new_width = std::min(width, new_room_button_->preferred_width() > 0 ? new_room_button_->preferred_width() : kNewButtonWidth);
+        add_width = std::max(0, add_width);
         new_width = std::max(0, new_width);
-        SDL_Rect new_rect{x, y - scroll, new_width, button_height};
+        int row_width = add_width + small_gap + new_width;
+        if (row_width > width) {
+            int excess = row_width - width;
+            int reduction = (excess + 1) / 2;
+            add_width = std::max(0, add_width - reduction);
+            new_width = std::max(0, new_width - (excess - reduction));
+        }
+        SDL_Rect add_rect{x, y - scroll, add_width, button_height};
+        add_room_button_->set_rect(add_rect);
+        SDL_Rect new_rect{x + add_width + small_gap, y - scroll, new_width, button_height};
         new_room_button_->set_rect(new_rect);
         y += button_height + gap;
-    } else if (new_room_button_) {
-        new_room_button_->set_rect(SDL_Rect{0, 0, 0, 0});
+    } else {
+        if (add_room_button_) {
+            add_room_button_->set_rect(SDL_Rect{0, 0, 0, 0});
+        }
+        if (new_room_button_) {
+            new_room_button_->set_rect(SDL_Rect{0, 0, 0, 0});
+        }
     }
 
     info_rects_.clear();
@@ -382,10 +284,10 @@ void MapLayerControlsDisplay::render(SDL_Renderer* renderer) const {
     }
     ensure_data();
 
-    if (room_search_panel_) {
-        room_search_panel_->render(renderer);
-    }
     if (has_layer_data_) {
+        if (add_room_button_) {
+            add_room_button_->render(renderer);
+        }
         if (new_room_button_) {
             new_room_button_->render(renderer);
         }
@@ -441,6 +343,9 @@ void MapLayerControlsDisplay::render(SDL_Renderer* renderer) const {
         DrawLabelText(renderer, empty_state_message_, empty_state_rect_.x, empty_state_rect_.y, style);
     }
 
+    if (room_selector_) {
+        room_selector_->render(renderer);
+    }
     if (child_selector_) {
         child_selector_->render(renderer);
     }
@@ -449,7 +354,7 @@ void MapLayerControlsDisplay::render(SDL_Renderer* renderer) const {
 bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
     ensure_data();
 
-    if (room_search_panel_ && room_search_panel_->visible() && room_search_panel_->handle_event(e)) {
+    if (room_selector_ && room_selector_->visible() && room_selector_->handle_event(e)) {
         return true;
     }
     if (child_selector_ && child_selector_->visible() && child_selector_->handle_event(e)) {
@@ -458,6 +363,13 @@ bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
 
     if (!has_layer_data_) {
         return false;
+    }
+
+    if (add_room_button_ && add_room_button_->handle_event(e)) {
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            open_room_selector();
+        }
+        return true;
     }
 
     if (new_room_button_ && new_room_button_->handle_event(e)) {
@@ -509,19 +421,15 @@ bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
 
 void MapLayerControlsDisplay::update(const Input& input, int, int) {
     ensure_data();
-    if (room_search_panel_) {
-        room_search_panel_->update(input);
+    if (room_selector_) {
+        room_selector_->update(input);
     }
     if (child_selector_) {
         child_selector_->update(input);
     }
     if (!container_ || !container_->is_visible()) {
-        if (room_search_panel_) {
-            room_search_panel_->set_visible(false);
-        }
+        close_room_selector();
         close_child_selector();
-    } else if (room_search_panel_) {
-        room_search_panel_->set_visible(has_layer_data_);
     }
 }
 
@@ -538,6 +446,7 @@ void MapLayerControlsDisplay::rebuild_content() const {
     info_lines_.clear();
     info_rects_.clear();
     available_rooms_.clear();
+    filtered_rooms_.clear();
     layer_name_.clear();
     empty_state_message_.clear();
     has_layer_data_ = false;
@@ -610,91 +519,32 @@ void MapLayerControlsDisplay::rebuild_content() const {
     }
 
     rebuild_available_rooms();
-    update_room_search_entries();
     update_header_text();
 }
 
 void MapLayerControlsDisplay::rebuild_available_rooms() const {
+    filtered_rooms_.clear();
     if (!controller_) {
-        if (room_search_panel_) {
-            room_search_panel_->set_entries({});
-            room_search_panel_->set_excluded_values({});
+        if (room_selector_) {
+            room_selector_->set_rooms(filtered_rooms_);
         }
         return;
     }
 
     available_rooms_ = controller_->available_rooms();
-}
-
-void MapLayerControlsDisplay::update_room_search_entries() const {
-    if (!room_search_panel_) {
-        return;
+    filtered_rooms_ = available_rooms_;
+    if (!candidates_.empty()) {
+        filtered_rooms_.erase(std::remove_if(filtered_rooms_.begin(), filtered_rooms_.end(), [this](const std::string& name) {
+                                   return std::any_of(candidates_.begin(), candidates_.end(), [&](const CandidateRow& row) {
+                                       return row.room_key == name;
+                                   });
+                               }),
+                               filtered_rooms_.end());
     }
 
-    std::vector<std::string> excluded;
-    excluded.reserve(candidates_.size());
-    for (const auto& row : candidates_) {
-        if (!row.room_key.empty()) {
-            excluded.push_back(row.room_key);
-        }
+    if (room_selector_) {
+        room_selector_->set_rooms(filtered_rooms_);
     }
-
-    if (!map_info_ || !map_info_->is_object()) {
-        room_search_panel_->set_entries({});
-        room_search_panel_->set_excluded_values(std::move(excluded));
-        return;
-    }
-
-    auto rooms_it = map_info_->find("rooms_data");
-    if (rooms_it == map_info_->end() || !rooms_it->is_object()) {
-        room_search_panel_->set_entries({});
-        room_search_panel_->set_excluded_values(std::move(excluded));
-        return;
-    }
-
-    const nlohmann::json& rooms_data = *rooms_it;
-    std::vector<RoomSearchPanel::Entry> entries;
-    entries.reserve(available_rooms_.size());
-
-    for (const auto& key : available_rooms_) {
-        RoomSearchPanel::Entry entry;
-        entry.value = key;
-
-        const nlohmann::json* room_json = nullptr;
-        auto room_it = rooms_data.find(key);
-        if (room_it != rooms_data.end() && room_it->is_object()) {
-            room_json = &(*room_it);
-        }
-
-        std::string display = room_display_label(key);
-        std::string name;
-        if (room_json) {
-            name = room_json->value("name", std::string{});
-            if (!name.empty()) {
-                display = name;
-            }
-        }
-        if (!name.empty() && !key.empty() && !equals_ignore_case(name, key)) {
-            display = name + " (" + key + ")";
-        }
-
-        entry.label = display;
-        entry.search_terms.push_back(key);
-        if (!name.empty()) {
-            entry.search_terms.push_back(name);
-        }
-
-        if (room_json) {
-            std::set<std::string> tags;
-            collect_room_tags(*room_json, tags);
-            entry.tags.assign(tags.begin(), tags.end());
-        }
-
-        entries.push_back(std::move(entry));
-    }
-
-    room_search_panel_->set_entries(std::move(entries));
-    room_search_panel_->set_excluded_values(std::move(excluded));
 }
 
 void MapLayerControlsDisplay::mark_dirty() const {
@@ -712,6 +562,42 @@ void MapLayerControlsDisplay::update_header_text() const {
         container_->set_header_text(std::string("Layer Controls: ") + layer_name_);
     } else {
         container_->set_header_text("Layer Controls");
+    }
+}
+
+void MapLayerControlsDisplay::open_room_selector() {
+    if (!controller_ || selected_layer_index_ < 0) {
+        return;
+    }
+    rebuild_available_rooms();
+    if (!room_selector_ || filtered_rooms_.empty()) {
+        if (room_selector_) {
+            room_selector_->close();
+        }
+        return;
+    }
+    if (container_) {
+        room_selector_->set_screen_bounds(container_->panel_rect());
+    }
+    if (add_room_button_) {
+        room_selector_->set_anchor_rect(add_room_button_->rect());
+    }
+    room_selector_->open(filtered_rooms_, [this](const std::string& room_key) { this->on_room_selected(room_key); });
+}
+
+void MapLayerControlsDisplay::close_room_selector() {
+    if (room_selector_) {
+        room_selector_->close();
+    }
+}
+
+void MapLayerControlsDisplay::on_room_selected(const std::string& room_key) {
+    if (!controller_ || selected_layer_index_ < 0) {
+        return;
+    }
+    if (controller_->add_candidate(selected_layer_index_, room_key)) {
+        mark_dirty();
+        notify_change();
     }
 }
 
@@ -804,6 +690,7 @@ void MapLayerControlsDisplay::notify_change() {
 }
 
 void MapLayerControlsDisplay::handle_back_to_rooms() {
+    close_room_selector();
     close_child_selector();
     if (on_show_rooms_list_) {
         on_show_rooms_list_();

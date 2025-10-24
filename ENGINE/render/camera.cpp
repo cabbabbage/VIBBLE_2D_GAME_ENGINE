@@ -233,11 +233,25 @@ void camera::recompute_current_view() {
 
 void camera::pan_and_zoom_to_point(SDL_Point world_pos, double zoom_scale_factor, int duration_steps) {
     set_focus_override(world_pos);
+    const double factor = (zoom_scale_factor > 0.0) ? zoom_scale_factor : 1.0;
+    const double new_scale = std::max(0.0001, static_cast<double>(scale_) * factor);
+    if (duration_steps <= 0) {
+        manual_zoom_override_ = true;
+        pan_override_ = false;
+        zooming_ = false;
+        steps_total_ = steps_done_ = 0;
+        start_scale_ = target_scale_ = new_scale;
+        start_center_ = target_center_ = world_pos;
+        set_screen_center(world_pos);
+        set_scale(static_cast<float>(new_scale));
+        recompute_current_view();
+        return;
+    }
+
     start_center_  = screen_center_;
     target_center_ = world_pos;
-    double factor = (zoom_scale_factor > 0.0) ? zoom_scale_factor : 1.0;
     start_scale_   = scale_;
-    target_scale_  = std::max(0.0001, static_cast<double>(scale_) * factor);
+    target_scale_  = new_scale;
     steps_total_   = std::max(1, duration_steps);
     steps_done_    = 0;
     zooming_       = true;
@@ -253,10 +267,23 @@ void camera::pan_and_zoom_to_asset(const Asset* a, double zoom_scale_factor, int
 
 void camera::animate_zoom_multiply(double factor, int duration_steps) {
     if (factor <= 0.0) factor = 1.0;
+    const double new_scale = std::max(0.0001, static_cast<double>(scale_) * factor);
+    if (duration_steps <= 0) {
+        manual_zoom_override_ = true;
+        pan_override_ = false;
+        zooming_ = false;
+        steps_total_ = steps_done_ = 0;
+        start_scale_ = target_scale_ = new_scale;
+        start_center_ = target_center_ = screen_center_;
+        set_scale(static_cast<float>(new_scale));
+        recompute_current_view();
+        return;
+    }
+
     start_center_  = screen_center_;
     target_center_ = screen_center_;
     start_scale_   = scale_;
-    target_scale_  = std::max(0.0001, static_cast<double>(scale_) * factor);
+    target_scale_  = new_scale;
     steps_total_   = std::max(1, duration_steps);
     steps_done_    = 0;
     zooming_       = true;
@@ -284,9 +311,25 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
     const double target_center_x = world_x - static_cast<double>(screen_point.x) * new_scale + (static_cast<double>(base_w) * new_scale) * 0.5;
     const double target_center_y = world_y - static_cast<double>(screen_point.y) * new_scale + (static_cast<double>(base_h) * new_scale) * 0.5;
 
-    start_center_  = screen_center_;
-    target_center_ = SDL_Point{
+    SDL_Point target_center{
         static_cast<int>(std::lround(target_center_x)), static_cast<int>(std::lround(target_center_y)) };
+
+    if (duration_steps <= 0) {
+        manual_zoom_override_ = true;
+        pan_override_ = false;
+        zooming_ = false;
+        steps_total_ = steps_done_ = 0;
+        start_scale_ = target_scale_ = new_scale;
+        start_center_ = screen_center_;
+        target_center_ = target_center;
+        set_screen_center(target_center);
+        set_scale(static_cast<float>(new_scale));
+        recompute_current_view();
+        return;
+    }
+
+    start_center_  = screen_center_;
+    target_center_ = target_center;
 
     start_scale_   = scale_;
     target_scale_  = new_scale;

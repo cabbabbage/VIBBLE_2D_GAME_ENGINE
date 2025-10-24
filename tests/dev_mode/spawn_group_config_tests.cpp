@@ -2,6 +2,7 @@
 #include "doctest/doctest.h"
 
 #include "dev_mode/spawn_group_config/SpawnGroupConfig.hpp"
+#include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -79,5 +80,46 @@ TEST_CASE("SpawnGroupConfig entries survive JSON array replacement") {
 
     REQUIRE_EQ(labels.size(), 1);
     CHECK_EQ(labels[0], std::string("Gamma"));
+}
+
+TEST_CASE("ensure_spawn_group_entry_defaults prunes edge inset for non-edge methods") {
+    ensure_sdl();
+
+    using nlohmann::json;
+
+    json entry = json::object({
+        {"spawn_id", "test"},
+        {"display_name", "Example"},
+        {"position", "Random"},
+        {"min_number", 1},
+        {"max_number", 2},
+        {"edge_inset_percent", 150},
+        {"candidates", json::array({json{{"name", "null"}, {"chance", 0}}})}
+    });
+
+    const bool changed = devmode::spawn::ensure_spawn_group_entry_defaults(entry, "Example");
+    CHECK(changed);
+    CHECK(entry.find("edge_inset_percent") == entry.end());
+}
+
+TEST_CASE("ensure_spawn_group_entry_defaults keeps clamped inset for edge method") {
+    ensure_sdl();
+
+    using nlohmann::json;
+
+    json entry = json::object({
+        {"spawn_id", "test"},
+        {"display_name", "Example"},
+        {"position", "Edge"},
+        {"min_number", 1},
+        {"max_number", 2},
+        {"edge_inset_percent", 250},
+        {"candidates", json::array({json{{"name", "null"}, {"chance", 0}}})}
+    });
+
+    const bool changed = devmode::spawn::ensure_spawn_group_entry_defaults(entry, "Example");
+    CHECK(changed);
+    REQUIRE(entry.contains("edge_inset_percent"));
+    CHECK(entry["edge_inset_percent"].get<int>() == 200);
 }
 

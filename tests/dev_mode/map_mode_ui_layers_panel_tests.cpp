@@ -100,7 +100,7 @@ TEST_CASE("Layers panel stays visible when sliding headers hidden") {
     CHECK(ui.is_layers_panel_visible());
 }
 
-TEST_CASE("Sliding header requests hide footer while visible") {
+TEST_CASE("Sliding header requests leave footer visible") {
     ensure_sdl();
 
     devmode::core::ManifestStore store;
@@ -124,7 +124,7 @@ TEST_CASE("Sliding header requests hide footer while visible") {
 
     ui.set_sliding_headers_hidden(true);
     ui.update(input);
-    CHECK_FALSE(footer->visible());
+    CHECK(footer->visible());
 
     ui.set_sliding_headers_hidden(false);
     ui.update(input);

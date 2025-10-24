@@ -348,7 +348,7 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     });
 
     map_info["map_assets_data"] = nlohmann::json::object();
-    map_info["map_boundary_data"] = nlohmann::json::object();
+    map_info["map_edge_data"] = nlohmann::json::object();
     map_info["map_light_data"] = std::move(default_light);
     map_info["trails_data"] = nlohmann::json::object();
 
@@ -356,6 +356,8 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     spawn_room["name"] = "spawn";
     spawn_room["geometry"] = "Circle";
     spawn_room["radius"] = kSpawnRadius;
+    spawn_room["min_radius"] = kSpawnRadius;
+    spawn_room["max_radius"] = kSpawnRadius;
     spawn_room["min_width"] = diameter;
     spawn_room["max_width"] = diameter;
     spawn_room["min_height"] = diameter;

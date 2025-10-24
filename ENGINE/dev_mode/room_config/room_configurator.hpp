@@ -54,6 +54,8 @@ public:
     bool refresh_spawn_groups(nlohmann::json& room_data);
     bool refresh_spawn_groups(Room* room);
 
+    void notify_spawn_groups_mutated();
+
     void close();
     bool visible() const;
     bool any_panel_visible() const;
@@ -90,7 +92,7 @@ private:
     bool apply_room_data(const nlohmann::json& data);
     void rebuild_rows();
     void rebuild_rows_internal();
-    void rebuild_spawn_rows();
+    void rebuild_spawn_rows(bool force_collapse_sections = false);
     // Request a rebuild on the next update tick to avoid re-entrant loops
     void request_rebuild();
     void load_tags_from_json(const nlohmann::json& data);
@@ -158,8 +160,10 @@ private:
     std::unique_ptr<TextBoxWidget> height_min_widget_;
     std::unique_ptr<DMTextBox> height_max_box_;
     std::unique_ptr<TextBoxWidget> height_max_widget_;
-    std::unique_ptr<DMTextBox> radius_box_;
-    std::unique_ptr<TextBoxWidget> radius_widget_;
+    std::unique_ptr<DMTextBox> radius_min_box_;
+    std::unique_ptr<TextBoxWidget> radius_min_widget_;
+    std::unique_ptr<DMTextBox> radius_max_box_;
+    std::unique_ptr<TextBoxWidget> radius_max_widget_;
     std::unique_ptr<DMSlider> edge_slider_;
     std::unique_ptr<SliderWidget> edge_widget_;
     std::unique_ptr<DMSlider> curvy_slider_;
@@ -184,6 +188,8 @@ private:
     std::unordered_map<const DockableCollapsible*, int> collapsible_height_cache_;
     std::unordered_map<const DockableCollapsible*, std::string> base_panel_keys_;
     std::unordered_map<std::string, bool> base_panel_expanded_state_;
+
+    bool reset_expanded_state_pending_ = false;
 
     std::function<void(const std::string&)> on_spawn_edit_;
     std::function<void(const std::string&)> on_spawn_duplicate_;

@@ -30,7 +30,7 @@ class RoomEditor;
 class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
-class RoomSearchPanel;
+class RegenerateRoomPopup;
 
 class DevControls {
 public:
@@ -205,7 +205,7 @@ private:
     std::function<void()> map_grid_regen_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;
     std::unique_ptr<CameraUIPanel> camera_panel_;
-    std::unique_ptr<RoomSearchPanel> room_search_panel_;
+    std::unique_ptr<RegenerateRoomPopup> regenerate_popup_;
     std::string map_path_;
     bool pointer_over_camera_panel_ = false;
     bool modal_headers_hidden_ = false;

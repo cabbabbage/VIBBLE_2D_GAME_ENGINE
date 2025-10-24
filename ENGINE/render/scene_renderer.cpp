@@ -325,13 +325,13 @@ void SceneRenderer::render(){
         if (!light_map_ || rendered_light_map) {
             return;
         }
-        // Compute a global alpha multiplier from the map light's current opacity window
-        // (same logic as shading stages). Higher map-light opacity values correspond to
-        // darker scenes, so the overlay should become more prominent as the opacity rises.
-        float alpha_mult = 1.0f;
+        // Compute the current screen-light color and derive a global alpha multiplier from its opacity.
+        // Higher map-light opacity values correspond to darker scenes, so the overlay should become
+        // more prominent as the opacity rises.
+        const SDL_Color current_color = main_light_source_.get_current_color();
         const float normalized =
-            std::clamp(static_cast<float>(main_light_source_.get_current_color().a) / 255.0f, 0.0f, 1.0f);
-        alpha_mult = normalized;
+            std::clamp(static_cast<float>(current_color.a) / 255.0f, 0.0f, 1.0f);
+        const float alpha_mult = normalized;
 
         SDL_Rect screen_view{0,0,screen_width_,screen_height_};
         SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
@@ -339,7 +339,7 @@ void SceneRenderer::render(){
             previous_mode = SDL_BLENDMODE_BLEND;
         }
         SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
-        light_map_->render_visible_chunks(renderer_, screen_view, alpha_mult);
+        light_map_->render_visible_chunks(renderer_, screen_view, alpha_mult, current_color);
         SDL_SetRenderDrawBlendMode(renderer_,previous_mode);
         rendered_light_map = true;
     };

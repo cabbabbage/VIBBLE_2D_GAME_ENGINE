@@ -1,6 +1,7 @@
 #include "search_assets.hpp"
 #include "DockableCollapsible.hpp"
 #include "FloatingDockableManager.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 #include "widgets.hpp"
 #include "dm_styles.hpp"
 #include "tag_utils.hpp"
@@ -10,6 +11,7 @@
 #include <set>
 #include <cctype>
 #include <algorithm>
+#include <vector>
 
 SearchAssets::SearchAssets(devmode::core::ManifestStore* manifest_store)
     : manifest_store_(manifest_store) {
@@ -36,6 +38,33 @@ SearchAssets::SearchAssets(devmode::core::ManifestStore* manifest_store)
 
 SearchAssets::~SearchAssets() = default;
 
+namespace {
+
+FloatingPanelLayoutManager::PanelInfo build_panel_info_for_panel(DockableCollapsible* panel,
+                                                                int fallback_width,
+                                                                int fallback_height,
+                                                                bool force_layout) {
+    FloatingPanelLayoutManager::PanelInfo info;
+    info.panel = panel;
+    info.force_layout = force_layout;
+    info.preferred_width = fallback_width;
+    info.preferred_height = fallback_height;
+    if (!panel) {
+        return info;
+    }
+    SDL_Rect rect = panel->rect();
+    if (rect.w > 0) {
+        info.preferred_width = rect.w;
+    }
+    int resolved_height = rect.h > 0 ? rect.h : panel->height();
+    if (resolved_height > 0) {
+        info.preferred_height = resolved_height;
+    }
+    return info;
+}
+
+}  // namespace
+
 void SearchAssets::apply_position(int x, int y) {
     if (!panel_) {
         panel_ = std::make_unique<DockableCollapsible>("Search Assets", true, x, y);
@@ -57,7 +86,6 @@ void SearchAssets::apply_position(int x, int y) {
         return;
     }
     panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-    panel_->set_position(x, y);
 }
 
 void SearchAssets::set_position(int x, int y) {
@@ -121,8 +149,6 @@ void SearchAssets::set_screen_dimensions(int width, int height) {
     }
     if (panel_) {
         panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-        SDL_Point pos = panel_->position();
-        panel_->set_position(pos.x, pos.y);
         ensure_visible_position();
         last_known_position_ = panel_->position();
         if (!has_custom_position_) {
@@ -130,6 +156,14 @@ void SearchAssets::set_screen_dimensions(int width, int height) {
             has_pending_position_ = true;
         }
     }
+}
+
+void SearchAssets::layout_with_parent(const FloatingPanelLayoutManager::SlidingParentInfo& parent) {
+    if (embedded_) {
+        return;
+    }
+    has_custom_position_ = false;
+    ensure_visible_position(&parent);
 }
 
 void SearchAssets::set_floating_stack_key(std::string key) {
@@ -212,9 +246,7 @@ void SearchAssets::open(Callback cb) {
         return;
     }
     SDL_Point target = last_known_position_;
-    if (has_custom_position_) {
-        target = last_known_position_;
-    } else if (has_pending_position_) {
+    if (has_pending_position_ && !has_custom_position_) {
         target = pending_position_;
     }
     apply_position(target.x, target.y);
@@ -405,54 +437,35 @@ std::vector<std::pair<std::string, bool>> SearchAssets::results_for_testing() co
     return results_;
 }
 
-void SearchAssets::ensure_visible_position() {
+FloatingPanelLayoutManager::PanelInfo SearchAssets::build_panel_info(bool force_layout) const {
+    constexpr int kFallbackWidth = DockableCollapsible::kDefaultFloatingContentWidth;
+    constexpr int kFallbackHeight = 400;
+    return build_panel_info_for_panel(panel_.get(), kFallbackWidth, kFallbackHeight, force_layout);
+}
+
+void SearchAssets::ensure_visible_position(const FloatingPanelLayoutManager::SlidingParentInfo* parent) {
     if (embedded_) {
         return;
     }
     if (!panel_) {
         return;
     }
-    if (screen_w_ <= 0 && screen_h_ <= 0) {
+    if (has_custom_position_) {
         return;
     }
-    SDL_Rect rect = panel_->rect();
-    if ((rect.w <= 0 || rect.h <= 0) && (screen_w_ > 0 || screen_h_ > 0)) {
-        Input dummy;
-        panel_->update(dummy, screen_w_, screen_h_);
-        rect = panel_->rect();
+
+    FloatingPanelLayoutManager::PanelInfo info = build_panel_info(true);
+
+    if (parent) {
+        SDL_Point placement = FloatingPanelLayoutManager::instance().positionFor(info, parent);
+        panel_->set_position_from_layout_manager(placement.x, placement.y);
+    } else {
+        std::vector<FloatingPanelLayoutManager::PanelInfo> panels;
+        panels.push_back(info);
+        FloatingPanelLayoutManager::instance().layoutAll(panels);
     }
-    const int margin = 12;
-    bool adjusted = false;
-    int x = rect.x;
-    int y = rect.y;
-    if (screen_w_ > 0) {
-        int max_x = std::max(margin, screen_w_ - rect.w - margin);
-        if (rect.w >= screen_w_ - margin * 2) {
-            max_x = margin;
-        }
-        int clamped = std::clamp(x, margin, max_x);
-        if (clamped != x) {
-            x = clamped;
-            adjusted = true;
-        }
-    }
-    if (screen_h_ > 0) {
-        int max_y = std::max(margin, screen_h_ - rect.h - margin);
-        if (rect.h >= screen_h_ - margin * 2) {
-            max_y = margin;
-        }
-        int clamped = std::clamp(y, margin, max_y);
-        if (clamped != y) {
-            y = clamped;
-            adjusted = true;
-        }
-    }
-    if (adjusted) {
-        panel_->set_position(x, y);
-        last_known_position_ = panel_->position();
-        if (!has_custom_position_) {
-            pending_position_ = last_known_position_;
-            has_pending_position_ = true;
-        }
-    }
+
+    last_known_position_ = panel_->position();
+    pending_position_ = last_known_position_;
+    has_pending_position_ = true;
 }

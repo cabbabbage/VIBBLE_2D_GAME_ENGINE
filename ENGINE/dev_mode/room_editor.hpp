@@ -20,6 +20,7 @@ class AssetLibraryUI;
 class AssetInfoUI;
 class AreaOverlayEditor;
 class RoomConfigurator;
+class SpawnGroupConfig;
 class AssetInfo;
 class Room;
 namespace vibble::grid {
@@ -87,7 +88,7 @@ public:
     void set_room_assets_saved_callback(RoomAssetsSavedCallback cb);
 
     void begin_area_edit_for_selected_asset(const std::string& area_name);
-    void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 25);
+    void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 0);
     void focus_camera_on_room_center(bool reframe_zoom = true);
 
     void reset_click_state();
@@ -115,6 +116,7 @@ private:
         Percent,
         Perimeter,
         PerimeterCenter,
+        Edge,
 };
 
     enum class ActiveModal {
@@ -132,6 +134,7 @@ private:
         SDL_Point  start_pos {0, 0};
         SDL_FPoint direction {0.0f, 0.0f};
         bool       active    = false;
+        double     edge_length = 0.0;
 };
     void handle_mouse_input(const Input& input);
     Asset* hit_test_asset(SDL_Point screen_point) const;
@@ -150,6 +153,7 @@ private:
     void begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier);
     void update_drag_session(const SDL_Point& world_mouse);
     void apply_perimeter_drag(const SDL_Point& world_mouse);
+    void apply_edge_drag(const SDL_Point& world_mouse);
     void snap_dragged_assets_to_grid();
     void finalize_drag_session();
     void reset_drag_state();
@@ -160,9 +164,13 @@ private:
     void update_spawn_group_config_anchor();
     SDL_Point spawn_groups_anchor_point() const;
     void clear_active_spawn_group_target();
+    void sync_spawn_group_panel_with_selection();
     void update_exact_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void update_percent_json(nlohmann::json& entry, const Asset& asset, SDL_Point center, int width, int height);
     void save_perimeter_json(nlohmann::json& entry, int dx, int dy, int orig_w, int orig_h, int radius);
+    void save_edge_json(nlohmann::json& entry, int inset_percent);
+    const Area* find_edge_area_for_entry(const nlohmann::json& entry) const;
+    double edge_length_along_direction(const Area& area, SDL_Point center, SDL_FPoint direction) const;
     void respawn_spawn_group(const nlohmann::json& entry);
     std::unique_ptr<vibble::grid::Occupancy> build_room_grid(const std::string& ignore_spawn_id) const;
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
@@ -233,19 +241,25 @@ private:
     int drag_perimeter_curr_w_ = 0;
     int drag_resolution_ = 0;
 
+    const Area* drag_edge_area_ = nullptr;
+    SDL_Point drag_edge_center_{0, 0};
+    double drag_edge_inset_percent_ = 100.0;
+
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     int drag_perimeter_curr_h_ = 0;
     bool drag_moved_ = false;
     std::string drag_spawn_id_;
-    Uint32 last_click_time_ms_ = 0;
-    Asset* last_click_asset_ = nullptr;
+    bool suppress_next_left_click_ = false;
 
     int click_buffer_frames_ = 0;
     int rclick_buffer_frames_ = 0;
     int hover_miss_frames_ = 0;
+    Asset* last_click_asset_ = nullptr;
+    Uint32 last_click_time_ms_ = 0;
     std::optional<SDL_Point> pending_spawn_world_pos_{};
     std::optional<std::string> active_spawn_group_id_{};
     bool suppress_spawn_group_close_clear_ = false;
+    std::unique_ptr<SpawnGroupConfig> spawn_group_panel_{};
 
     double zoom_scale_factor_ = 1.1;
     PanAndZoom pan_zoom_;

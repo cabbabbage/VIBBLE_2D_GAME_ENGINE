@@ -5,6 +5,7 @@
 #include "methods/center_spawner.hpp"
 #include "methods/random_spawner.hpp"
 #include "methods/perimeter_spawner.hpp"
+#include "methods/edge_spawner.hpp"
 #include "methods/children_spawner.hpp"
 #include "methods/percent_spawner.hpp"
 #include "check.hpp"
@@ -13,6 +14,7 @@
 #include <iostream>
 #include <numeric>
 #include <sstream>
+#include <cctype>
 #include <nlohmann/json.hpp>
 #include "util/grid.hpp"
 #include "util/grid_occupancy.hpp"
@@ -36,17 +38,17 @@ void AssetSpawner::spawn(Room& room) {
         room.add_room_assets(std::move(all_));
 }
 
-std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const nlohmann::json& boundary_json,
+std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_edge_from_json(const nlohmann::json& edge_json,
                                                                           const Area& spawn_area,
                                                                           const std::string& source_name) {
-        if (boundary_json.is_null()) {
+        if (edge_json.is_null()) {
                 return {};
         }
-    std::vector<nlohmann::json> json_sources{ boundary_json };
+    std::vector<nlohmann::json> json_sources{ edge_json };
     AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_);
-        boundary_mode_ = true;
+        edge_mode_ = true;
         run_spawning(&planner, spawn_area);
-        boundary_mode_ = false;
+        edge_mode_ = false;
         return extract_all_assets();
 }
 
@@ -65,8 +67,8 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::extract_all_assets() {
 void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         asset_info_library_ = asset_library_->all();
         spawn_queue_ = planner->get_spawn_queue();
-        if (boundary_mode_) {
-                run_boundary_spawning(area);
+        if (edge_mode_) {
+                run_edge_spawning(area);
                 return;
         }
     const int resolution = std::max(0, map_grid_settings_.resolution);
@@ -74,10 +76,33 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
     vibble::grid::Occupancy occupancy(area, resolution, grid_service);
     SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
     ctx.set_spawn_resolution(resolution);
+        std::vector<const Area*> trail_areas;
+        auto add_trail_area = [&trail_areas](const Area* candidate, const std::string& type) {
+                if (!candidate) {
+                        return;
+                }
+                std::string lowered = type;
+                std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char ch) {
+                        return static_cast<char>(std::tolower(ch));
+                });
+                if (lowered == "trail") {
+                        trail_areas.push_back(candidate);
+                }
+        };
+        if (current_room_) {
+                if (current_room_->room_area) {
+                        add_trail_area(current_room_->room_area.get(), current_room_->room_area->get_type());
+                }
+                for (const auto& named : current_room_->areas) {
+                        add_trail_area(named.area.get(), named.type);
+                }
+        }
+        ctx.set_trail_areas(std::move(trail_areas));
         ExactSpawner exact;
         CenterSpawner center;
         RandomSpawner random;
         PerimeterSpawner perimeter;
+        EdgeSpawner edge;
         PercentSpawner percent;
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
@@ -160,6 +185,8 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                         center.spawn(queue_item, &area, ctx);
                 } else if (pos == "Perimeter") {
                         perimeter.spawn(queue_item, &area, ctx);
+                } else if (pos == "Edge") {
+                        edge.spawn(queue_item, &area, ctx);
                 } else if (pos == "Percent") {
                         percent.spawn(queue_item, &area, ctx);
                 } else {
@@ -168,7 +195,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         }
 }
 
-void AssetSpawner::run_boundary_spawning(const Area& area) {
+void AssetSpawner::run_edge_spawning(const Area& area) {
         auto point_in_exclusion = [&](const SDL_Point& pt) {
                 return std::any_of(exclusion_zones.begin(), exclusion_zones.end(),
                 [&](const Area& zone) { return zone.contains_point(pt); });
@@ -179,10 +206,11 @@ void AssetSpawner::run_boundary_spawning(const Area& area) {
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
 
-                constexpr int kBoundaryResolution = 7;
-                vibble::grid::Occupancy occupancy(area, kBoundaryResolution, grid_service);
+                constexpr int kEdgeResolution = 7;
+                vibble::grid::Occupancy occupancy(area, kEdgeResolution, grid_service);
                 SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
-                ctx.set_spawn_resolution(kBoundaryResolution);
+                ctx.set_spawn_resolution(kEdgeResolution);
+                ctx.set_trail_areas({});
 
                 if (current_room_ && !queue_item.link_area_name.empty()) {
                         Area* link = current_room_->find_area(queue_item.link_area_name);
