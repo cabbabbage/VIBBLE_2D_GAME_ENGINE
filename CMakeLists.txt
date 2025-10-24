@@ -195,6 +195,7 @@ add_executable(dev_mode_ui_tests
     ENGINE/dev_mode/dm_styles.cpp
     ENGINE/dev_mode/DockableCollapsible.cpp
     ENGINE/dev_mode/FloatingDockableManager.cpp
+    ENGINE/dev_mode/FloatingPanelLayoutManager.cpp
     ENGINE/dev_mode/search_assets.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
@@ -329,6 +330,7 @@ add_executable(manifest_store_tests
     tests/manifest/manifest_store_tests.cpp
     tests/manifest/spawn_group_manifest_tests.cpp
     tests/dev_mode/room_editor_manifest_tests.cpp
+    tests/dev_mode/spawn_group_config_tests.cpp
     ENGINE/dev_mode/search_assets.cpp
     ENGINE/asset/asset_info.cpp
     ENGINE/asset/animation.cpp
@@ -341,11 +343,13 @@ add_executable(manifest_store_tests
     ENGINE/dev_mode/spawn_group_config/widgets/CandidateEditorPieGraphWidget.cpp
     ENGINE/dev_mode/spawn_group_config/widgets/ExactWidget.cpp
     ENGINE/dev_mode/spawn_group_config/widgets/PerimeterWidget.cpp
+    ENGINE/dev_mode/spawn_group_config/widgets/EdgeWidget.cpp
     ENGINE/dev_mode/spawn_group_config/widgets/RandomWidget.cpp
     ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/LinkToAreaButton.cpp
     ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/SpawnMethodDropdown.cpp
     ENGINE/dev_mode/DockableCollapsible.cpp
     ENGINE/dev_mode/FloatingDockableManager.cpp
+    ENGINE/dev_mode/FloatingPanelLayoutManager.cpp
     ENGINE/dev_mode/draw_utils.cpp
     ENGINE/dev_mode/font_cache.cpp
     ENGINE/dev_mode/widgets.cpp
@@ -427,4 +431,26 @@ target_link_libraries(asset_info_manifest_tests PRIVATE
 )
 target_compile_definitions(asset_info_manifest_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME asset_info_manifest_tests COMMAND asset_info_manifest_tests)
+
+add_executable(edge_spawner_tests
+    tests/spawn/edge_spawner_tests.cpp
+    ENGINE/spawn/methods/edge_spawner.cpp
+    ENGINE/utils/area.cpp
+    ENGINE/util/grid_math.cpp
+)
+target_include_directories(edge_spawner_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}/external/nlohmann_json/include
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/spawn
+    ${CMAKE_SOURCE_DIR}/ENGINE/util
+    ${CMAKE_SOURCE_DIR}/ENGINE/utils
+)
+target_link_libraries(edge_spawner_tests PRIVATE
+    SDL2::SDL2
+    vibble_log
+)
+target_compile_definitions(edge_spawner_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(edge_spawner_tests PRIVATE EDGE_SPAWNER_DISABLE_RUNTIME)
+add_test(NAME edge_spawner_tests COMMAND edge_spawner_tests)
 

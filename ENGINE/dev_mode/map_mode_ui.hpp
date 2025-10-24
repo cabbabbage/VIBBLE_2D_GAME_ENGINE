@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -49,6 +50,7 @@ public:
 
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
     void set_screen_dimensions(int w, int h);
+    void set_sliding_area_bounds(const SDL_Rect& bounds);
 
     void set_manifest_store(devmode::core::ManifestStore* store);
 
@@ -88,6 +90,7 @@ public:
     void set_map_mode_active(bool active);
 
     DevFooterBar* get_footer_bar() const;
+    void collect_sliding_container_rects(std::vector<SDL_Rect>& out) const;
     void set_footer_always_visible(bool on);
     void set_headers_suppressed(bool suppressed);
     void set_sliding_headers_hidden(bool hidden);
@@ -114,6 +117,7 @@ private:
     void sync_panel_map_info();
     bool save_map_info_to_disk() const;
     bool auto_save_layers_data();
+    void create_room_from_layers_controls();
     void configure_footer_buttons();
     void sync_footer_button_states();
     void update_footer_visibility();
@@ -136,6 +140,15 @@ private:
     void close_room_configuration(bool show_rooms_list = false);
     SDL_Rect room_config_bounds() const;
     void show_sliding_panel(SlidingPanel panel, bool preserve_layers_panel = false);
+    SDL_Rect sanitize_sliding_area(const SDL_Rect& bounds) const;
+    SDL_Rect effective_work_area() const;
+    void apply_sliding_area_bounds();
+    nlohmann::json* active_room_entry();
+    std::string rename_active_room(const std::string& old_name, const std::string& desired_name);
+    void duplicate_active_room_spawn_group(const std::string& spawn_id);
+    void delete_active_room_spawn_group(const std::string& spawn_id);
+    void reorder_active_room_spawn_group(const std::string& spawn_id, size_t index);
+    void handle_rooms_data_mutated(bool refresh_rooms_list);
 
 private:
     Assets* assets_ = nullptr;
@@ -144,6 +157,7 @@ private:
     std::string map_id_;
     int screen_w_ = 1920;
     int screen_h_ = 1080;
+    SDL_Rect sliding_area_bounds_{0, 0, 0, 0};
 
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     std::unique_ptr<MapLightPanel> light_panel_;
@@ -170,7 +184,7 @@ private:
     bool headers_suppressed_ = false;
     bool sliding_only_header_suppression_ = false;
     bool base_headers_suppressed_ = false;
-    bool sliding_headers_hidden_external_ = false;
+    int sliding_header_request_count_ = 0;
     bool dev_sliding_headers_hidden_ = false;
     std::vector<DockableCollapsible*> floating_panels_;
     LightSaveCallback light_save_callback_;

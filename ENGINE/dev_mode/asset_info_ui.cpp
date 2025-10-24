@@ -20,6 +20,7 @@
 #include "tag_utils.hpp"
 
 #include "DockableCollapsible.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 #include "SlidingWindowContainer.hpp"
 #include "dm_styles.hpp"
 #include "asset_sections/Section_BasicInfo.hpp"
@@ -232,6 +233,8 @@ AssetInfoUI::AssetInfoUI() {
         for (auto& section : sections_) section->render(renderer);
         if (configure_btn_) configure_btn_->render(renderer);
     });
+
+    container_.set_on_close([this]() { this->close(); });
 
     container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
         std::vector<bool> previously_expanded;
@@ -457,11 +460,12 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     container_.prepare_layout(screen_w, screen_h);
     const SDL_Rect& panel = container_.panel_rect();
     int editor_width = panel.x;
-    int editor_height = screen_h;
+    int editor_y = panel.y;
+    int editor_height = panel.h > 0 ? panel.h : std::max(0, screen_h - editor_y);
     if (editor_width <= 0 || editor_height <= 0) {
         animation_editor_rect_ = SDL_Rect{0, 0, 0, 0};
     } else {
-        animation_editor_rect_ = SDL_Rect{0, 0, editor_width, editor_height};
+        animation_editor_rect_ = SDL_Rect{0, editor_y, editor_width, editor_height};
     }
 }
 
@@ -556,11 +560,12 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     if (asset_selector_ && asset_selector_->visible()) {
         asset_selector_->update(input);
         const SDL_Rect& panel = container_.panel_rect();
-        int search_width = 280;
-        int search_x = panel.x - search_width - DMSpacing::panel_padding();
-        if (search_x < DMSpacing::panel_padding()) search_x = DMSpacing::panel_padding();
-        int search_y = panel.y + DMSpacing::panel_padding();
-        asset_selector_->set_position(search_x, search_y);
+        FloatingPanelLayoutManager::SlidingParentInfo parent;
+        parent.bounds = panel;
+        parent.padding = DMSpacing::panel_padding();
+        parent.anchor_left = true;
+        parent.align_top = true;
+        asset_selector_->layout_with_parent(parent);
     }
 
     container_.update(input, screen_w, screen_h);

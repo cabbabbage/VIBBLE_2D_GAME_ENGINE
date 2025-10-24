@@ -3,10 +3,11 @@
 #include <SDL.h>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 #include <unordered_set>
+#include <vector>
 
 #include "dm_styles.hpp"
 #include "widgets.hpp"
@@ -40,6 +41,10 @@ public:
     void set_show_header(bool show);
     bool show_header() const { return show_header_; }
 
+    void set_header_button_style(const DMButtonStyle* style);
+    void set_header_highlight_color(SDL_Color color);
+    void clear_header_highlight_color();
+
     void set_close_button_enabled(bool enabled);
 
     void setLocked(bool locked);
@@ -52,6 +57,7 @@ public:
     void set_available_height_override(int height);
 
     void set_position(int x, int y);
+    void set_position_from_layout_manager(int x, int y);
     void set_rect(const SDL_Rect& r);
     SDL_Point position() const { return SDL_Point{rect_.x, rect_.y}; }
     void set_floatable(bool floatable);
@@ -97,6 +103,10 @@ private:
     void apply_lock_state(bool locked, bool allow_auto_collapse, bool persist) const;
     void render_locked_children_overlay(SDL_Renderer* r) const;
     void log_locked_mutation(std::string_view method) const;
+    void set_position_internal(int x, int y, bool from_layout_manager);
+    void update_layout_manager_registration();
+    void notify_layout_manager_geometry_changed() const;
+    void notify_layout_manager_content_changed() const;
 
 protected:
     virtual void layout();
@@ -109,6 +119,8 @@ protected:
     mutable std::unique_ptr<DMButton> header_btn_;
     mutable std::unique_ptr<DMButton> close_btn_;
     mutable std::unique_ptr<DMButton> lock_btn_;
+    const DMButtonStyle* header_button_style_ = &DMStyles::HeaderButton();
+    std::optional<SDL_Color> header_highlight_override_{};
     mutable SDL_Rect rect_{32,32,260,DMButton::height()+8};
     mutable SDL_Rect header_rect_{0,0,0,0};
     mutable SDL_Rect handle_rect_{0,0,0,0};
@@ -162,4 +174,6 @@ protected:
     mutable bool needs_layout_ = true;
     mutable bool needs_geometry_ = true;
     mutable bool layout_initialized_ = false;
+
+    bool registered_with_layout_manager_ = false;
 };

@@ -6,10 +6,12 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <SDL_ttf.h>
 
 #include "DockableCollapsible.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 #include "dm_styles.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
 #include "spawn_group_config/widgets/CandidateEditorPieGraphWidget.hpp"
@@ -497,6 +499,7 @@ void SingleSpawnGroupModal::set_screen_dimensions(int width, int height) {
     screen_w_ = std::max(width, 0);
     screen_h_ = std::max(height, 0);
     if (panel_) panel_->set_screen_dimensions(screen_w_, screen_h_);
+    position_initialized_ = false;
     ensure_visible_position();
 }
 
@@ -511,34 +514,28 @@ void SingleSpawnGroupModal::set_on_open_area(
 
 void SingleSpawnGroupModal::ensure_visible_position() {
     if (!panel_) return;
+    if (position_initialized_) return;
+
+    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+
     SDL_Rect rect = panel_->rect();
     constexpr int kPreferredWidth = 360;
-    if (rect.w <= 0) rect.w = kPreferredWidth;
-    rect.w = std::max(rect.w, kPreferredWidth);
-    if (rect.h <= 0) rect.h = 420;
-    const int margin = 16;
-    const bool have_w = screen_w_ > 0;
-    const bool have_h = screen_h_ > 0;
-    int max_x = have_w ? std::max(margin, screen_w_ - rect.w - margin) : 0;
-    int max_y = have_h ? std::max(margin, screen_h_ - rect.h - margin) : 0;
-    SDL_Point pos = panel_->position();
-    bool reposition = !position_initialized_;
-    if (have_w && (pos.x < margin || pos.x > max_x)) reposition = true;
-    if (have_h && (pos.y < margin || pos.y > max_y)) reposition = true;
-    if (!reposition) return;
-    int x = pos.x;
-    int y = pos.y;
-    if (have_w) {
-        int centered = screen_w_ / 2 - rect.w / 2;
-        x = std::clamp(centered, margin, max_x);
+    constexpr int kPreferredHeight = 420;
+
+    FloatingPanelLayoutManager::PanelInfo info;
+    info.panel = panel_.get();
+    info.force_layout = true;
+    info.preferred_width = rect.w > 0 ? std::max(rect.w, kPreferredWidth) : kPreferredWidth;
+    int resolved_height = rect.h > 0 ? rect.h : panel_->height();
+    if (resolved_height <= 0) {
+        resolved_height = kPreferredHeight;
     }
-    if (have_h) {
-        int centered = screen_h_ / 2 - rect.h / 2;
-        y = std::clamp(centered, margin, max_y);
-    }
-    if (have_w || have_h) {
-        panel_->set_position(x, y);
-        position_initialized_ = true;
-    }
+    info.preferred_height = std::max(resolved_height, kPreferredHeight);
+
+    std::vector<FloatingPanelLayoutManager::PanelInfo> panels;
+    panels.push_back(info);
+    FloatingPanelLayoutManager::instance().layoutAll(panels);
+
+    position_initialized_ = true;
 }
 

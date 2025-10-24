@@ -9,6 +9,8 @@
 #include "widgets.hpp"
 #include "utils/ranged_color.hpp"
 
+class Input;
+
 class DMColorRangeWidget : public Widget {
 public:
     using RangedColor = utils::color::RangedColor;
@@ -35,6 +37,9 @@ public:
     void render_overlay(SDL_Renderer* r) const;
     bool overlay_visible() const;
     void close_overlay();
+    void update_overlay(const Input& input, int screen_w, int screen_h);
+
+    const std::string& label() const { return label_; }
 
 private:
     class Picker;

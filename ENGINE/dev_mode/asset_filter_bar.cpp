@@ -3,12 +3,14 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
+#include "dev_mode/dm_icons.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 #include "map_generation/room.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <limits>
 #include <string>
 #include <unordered_set>
@@ -22,11 +24,32 @@ constexpr const char* kSettingsInitializedKey = "dev.asset_filter.initialized";
 constexpr const char* kSettingsMapAssetsKey = "dev.asset_filter.map_assets";
 constexpr const char* kSettingsCurrentRoomKey = "dev.asset_filter.current_room";
 constexpr const char* kSettingsFiltersExpandedKey = "dev.asset_filter.filters_expanded";
+constexpr const char* kSettingsMethodPrefix = "dev.asset_filter.methods.";
 
 std::string make_type_setting_key(const std::string& type) {
     std::string canonical = asset_types::canonicalize(type);
     std::string key = "dev.asset_filter.types.";
     key += canonical;
+    return key;
+}
+
+std::string canonicalize_method_string(const std::string& method) {
+    std::string canonical;
+    canonical.reserve(method.size());
+    for (unsigned char ch : method) {
+        if (std::isalnum(ch)) {
+            canonical.push_back(static_cast<char>(std::tolower(ch)));
+        } else if (std::isspace(ch) || ch == '_' || ch == '-') {
+            if (canonical.empty() || canonical.back() == '_') continue;
+            canonical.push_back('_');
+        }
+    }
+    return canonical;
+}
+
+std::string make_method_setting_key(const std::string& method) {
+    std::string key = kSettingsMethodPrefix;
+    key += canonicalize_method_string(method);
     return key;
 }
 }
@@ -60,6 +83,34 @@ void AssetFilterBar::initialize() {
     }
     entries_.push_back(std::move(room_entry));
 
+    static const std::vector<std::string> kSpawnMethods = {
+        "Random",
+        "Perimeter",
+        "Edge",
+        "Exact",
+        "Exact Position",
+        "Percent",
+        "Center",
+        "ChildRandom",
+    };
+
+    std::unordered_set<std::string> known_methods;
+    known_methods.reserve(kSpawnMethods.size());
+    for (const std::string& method : kSpawnMethods) {
+        const std::string canonical = canonicalize_method(method);
+        FilterEntry entry;
+        entry.id = canonical;
+        entry.kind = FilterKind::SpawnMethod;
+        bool checkbox_value = default_method_enabled(canonical);
+        if (use_saved_state) {
+            checkbox_value = load_method_filter_value(canonical, checkbox_value);
+        }
+        entry.checkbox = std::make_unique<DMCheckbox>(format_method_label(method), checkbox_value);
+        state_.method_filters[canonical] = checkbox_value;
+        known_methods.insert(canonical);
+        entries_.push_back(std::move(entry));
+    }
+
     const auto all_types = asset_types::all_as_strings();
     std::unordered_set<std::string> known_types;
     known_types.reserve(all_types.size());
@@ -87,12 +138,22 @@ void AssetFilterBar::initialize() {
                 ++it;
             }
         }
+        for (auto it = state_.method_filters.begin(); it != state_.method_filters.end();) {
+            if (known_methods.find(it->first) == known_methods.end()) {
+                it = state_.method_filters.erase(it);
+            } else {
+                ++it;
+            }
+        }
     }
 
     if (!use_saved_state) {
         filters_expanded_ = false;
     }
-    filter_toggle_button_ = std::make_unique<DMButton>("▲", &DMStyles::HeaderButton(), std::max(DMButton::height(), kToggleButtonMinWidth), DMButton::height());
+    filter_toggle_button_ = std::make_unique<DMButton>(std::string(DMIcons::CollapseExpanded()),
+                                                       &DMStyles::HeaderButton(),
+                                                       std::max(DMButton::height(), kToggleButtonMinWidth),
+                                                       DMButton::height());
     update_filter_toggle_label();
     sync_state_from_ui();
     layout_dirty_ = true;
@@ -410,12 +471,18 @@ void AssetFilterBar::reset() {
             case FilterKind::Type:
                 entry.checkbox->set_value(default_type_enabled(entry.id));
                 break;
+            case FilterKind::SpawnMethod:
+                entry.checkbox->set_value(default_method_enabled(entry.id));
+                break;
         }
     }
     state_.map_assets = true;
     state_.current_room = true;
     for (auto& kv : state_.type_filters) {
         kv.second = default_type_enabled(kv.first);
+    }
+    for (auto& kv : state_.method_filters) {
+        kv.second = default_method_enabled(kv.first);
     }
     sync_state_from_ui();
     notify_state_changed();
@@ -424,6 +491,11 @@ void AssetFilterBar::reset() {
 bool AssetFilterBar::default_type_enabled(const std::string& type) const {
     const std::string canonical = asset_types::canonicalize(type);
     return canonical != asset_types::player;
+}
+
+bool AssetFilterBar::default_method_enabled(const std::string& method) const {
+    (void)method;
+    return true;
 }
 
 bool AssetFilterBar::passes(const Asset& asset) const {
@@ -435,6 +507,10 @@ bool AssetFilterBar::passes(const Asset& asset) const {
     }
     const std::string type = asset_types::canonicalize(asset.info->type);
     if (!type_filter_enabled(type)) {
+        return false;
+    }
+    const std::string method = canonicalize_method(asset.spawn_method);
+    if (!method.empty() && !method_filter_enabled(method)) {
         return false;
     }
     const bool is_map_asset = !asset.spawn_id.empty() && map_spawn_ids_.find(asset.spawn_id) != map_spawn_ids_.end();
@@ -490,6 +566,9 @@ void AssetFilterBar::sync_state_from_ui() {
         case FilterKind::Type:
             state_.type_filters[entry.id] = value;
             break;
+        case FilterKind::SpawnMethod:
+            state_.method_filters[entry.id] = value;
+            break;
         }
     }
     persist_state();
@@ -505,7 +584,9 @@ void AssetFilterBar::update_filter_toggle_label() {
     if (!filter_toggle_button_) {
         return;
     }
-    filter_toggle_button_->set_text(filters_expanded_ ? "▲" : "▼");
+    filter_toggle_button_->set_text(filters_expanded_
+                                        ? std::string(DMIcons::CollapseExpanded())
+                                        : std::string(DMIcons::CollapseCollapsed()));
 }
 
 void AssetFilterBar::clear_checkbox_rects() {
@@ -693,11 +774,26 @@ bool AssetFilterBar::type_filter_enabled(const std::string& type) const {
     return it->second;
 }
 
+bool AssetFilterBar::method_filter_enabled(const std::string& method) const {
+    auto it = state_.method_filters.find(method);
+    if (it == state_.method_filters.end()) {
+        return true;
+    }
+    return it->second;
+}
+
 bool AssetFilterBar::load_type_filter_value(const std::string& type, bool default_value) const {
     if (!has_saved_state_) {
         return default_value;
     }
     return devmode::ui_settings::load_bool(make_type_setting_key(type), default_value);
+}
+
+bool AssetFilterBar::load_method_filter_value(const std::string& method, bool default_value) const {
+    if (!has_saved_state_) {
+        return default_value;
+    }
+    return devmode::ui_settings::load_bool(make_method_setting_key(method), default_value);
 }
 
 std::string AssetFilterBar::format_type_label(const std::string& type) const {
@@ -710,6 +806,49 @@ std::string AssetFilterBar::format_type_label(const std::string& type) const {
     });
     label[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(label[0])));
     return label;
+}
+
+std::string AssetFilterBar::format_method_label(const std::string& method) const {
+    if (method.empty()) {
+        return std::string{};
+    }
+    std::string label;
+    label.reserve(method.size() + 4);
+    char prev = '\0';
+    for (unsigned char ch : method) {
+        if (ch == '_' || ch == '-') {
+            if (!label.empty() && label.back() != ' ') {
+                label.push_back(' ');
+            }
+            prev = ch;
+            continue;
+        }
+        if (std::isupper(ch) && !label.empty() &&
+            (std::islower(static_cast<unsigned char>(prev)) || std::isdigit(static_cast<unsigned char>(prev)))) {
+            label.push_back(' ');
+        }
+        label.push_back(static_cast<char>(ch));
+        prev = static_cast<char>(ch);
+    }
+    bool start = true;
+    for (char& ch : label) {
+        unsigned char uch = static_cast<unsigned char>(ch);
+        if (std::isspace(uch)) {
+            start = true;
+            continue;
+        }
+        if (start) {
+            ch = static_cast<char>(std::toupper(uch));
+            start = false;
+        } else {
+            ch = static_cast<char>(std::tolower(uch));
+        }
+    }
+    return label;
+}
+
+std::string AssetFilterBar::canonicalize_method(const std::string& method) {
+    return canonicalize_method_string(method);
 }
 
 void AssetFilterBar::collect_spawn_ids(const nlohmann::json& node, std::unordered_set<std::string>& out) const {
@@ -741,6 +880,7 @@ void AssetFilterBar::collect_spawn_ids(const nlohmann::json& node, std::unordere
 
 void AssetFilterBar::load_persisted_state() {
     state_.type_filters.clear();
+    state_.method_filters.clear();
     has_saved_state_ = devmode::ui_settings::load_bool(kSettingsInitializedKey, false);
     if (!has_saved_state_) {
         state_.map_assets = true;
@@ -759,6 +899,9 @@ void AssetFilterBar::persist_state() {
     devmode::ui_settings::save_bool(kSettingsCurrentRoomKey, state_.current_room);
     for (const auto& kv : state_.type_filters) {
         devmode::ui_settings::save_bool(make_type_setting_key(kv.first), kv.second);
+    }
+    for (const auto& kv : state_.method_filters) {
+        devmode::ui_settings::save_bool(make_method_setting_key(kv.first), kv.second);
     }
     has_saved_state_ = true;
 }

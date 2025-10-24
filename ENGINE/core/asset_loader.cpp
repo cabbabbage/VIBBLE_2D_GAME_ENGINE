@@ -234,7 +234,7 @@ void AssetLoader::loadRooms() {
                                 map_id_,
                                 map_info_json_,
                                 manifest_store_);
-        nlohmann::json empty_boundary = nlohmann::json::object();
+        nlohmann::json empty_edge = nlohmann::json::object();
         nlohmann::json empty_rooms    = nlohmann::json::object();
         nlohmann::json empty_trails   = nlohmann::json::object();
         nlohmann::json empty_assets   = nlohmann::json::object();
@@ -243,7 +243,7 @@ void AssetLoader::loadRooms() {
         auto room_ptrs = generator.build( asset_library_,
                                           map_radius_,
                                           layer_radii_,
-                                          map_boundary_data_ ? *map_boundary_data_ : empty_boundary,
+                                          map_edge_data_ ? *map_edge_data_ : empty_edge,
                                           rooms_data_        ? *rooms_data_        : empty_rooms,
                                           trails_data_       ? *trails_data_       : empty_trails,
                                           map_assets_data_   ? *map_assets_data_   : empty_assets,
@@ -393,8 +393,8 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
 
         map_assets_data_   = &map_info_json_["map_assets_data"];
         if (!map_assets_data_->is_object()) *map_assets_data_ = nlohmann::json::object();
-        map_boundary_data_ = &map_info_json_["map_boundary_data"];
-        if (!map_boundary_data_->is_object()) *map_boundary_data_ = nlohmann::json::object();
+        map_edge_data_ = &map_info_json_["map_edge_data"];
+        if (!map_edge_data_->is_object()) *map_edge_data_ = nlohmann::json::object();
         rooms_data_        = &map_info_json_["rooms_data"];
         if (!rooms_data_->is_object()) *rooms_data_ = nlohmann::json::object();
         trails_data_       = &map_info_json_["trails_data"];

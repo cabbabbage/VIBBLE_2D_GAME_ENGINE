@@ -22,6 +22,8 @@ public:
     DockableCollapsible* active_panel() const { return current_.panel; }
     const std::string& active_name() const { return current_.name; }
 
+    std::vector<DockableCollapsible*> open_panels() const;
+
 private:
     FloatingDockableManager() = default;
 

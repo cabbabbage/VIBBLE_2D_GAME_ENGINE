@@ -30,6 +30,7 @@
 
 #include "asset/asset_info.hpp"
 #include "dev_mode/core/manifest_store.hpp"
+#include "dev_mode/dm_icons.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
@@ -98,7 +99,10 @@ AnimationEditorWindow::AnimationEditorWindow() {
     configure_list_panel();
 
     header_corner_button_ =
-        std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
+        std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                   &DMStyles::DeleteButton(),
+                                   DMButton::height(),
+                                   DMButton::height());
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::AccentButton(), 120, DMButton::height());
     close_button_ = std::make_unique<DMButton>("Close", &DMStyles::DeleteButton(), 120, DMButton::height());
@@ -649,7 +653,7 @@ void AnimationEditorWindow::update_corner_button() {
         header_corner_button_->set_text(u8"\u2190");
         header_corner_button_->set_style(&DMStyles::HeaderButton());
     } else {
-        header_corner_button_->set_text("X");
+        header_corner_button_->set_text(std::string(DMIcons::Close()));
         header_corner_button_->set_style(&DMStyles::DeleteButton());
     }
 }

@@ -6,12 +6,16 @@
 #include "map_layers_preview_panel.hpp"
 #include "map_grid_panel.hpp"
 #include "DockableCollapsible.hpp"
+#include "FloatingPanelLayoutManager.hpp"
+#include "FloatingDockableManager.hpp"
 #include "dev_footer_bar.hpp"
 #include "map_layers_controller.hpp"
 #include "map_layer_controls_display.hpp"
+#include "map_layers_common.hpp"
 #include "map_layers_panel.hpp"
 #include "map_rooms_display.hpp"
 #include "room_config/room_configurator.hpp"
+#include "spawn_group_config/spawn_group_utils.hpp"
 #include "SlidingWindowContainer.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/widgets.hpp"
@@ -19,10 +23,13 @@
 #include "dev_mode/dev_controls_persistence.hpp"
 #include "dm_styles.hpp"
 #include "utils/input.hpp"
+#include "utils/map_grid_settings.hpp"
 
 #include <SDL.h>
 #include <SDL_log.h>
 #include <algorithm>
+#include <cctype>
+#include <cstddef>
 #include <iterator>
 #include <iostream>
 #include <vector>
@@ -34,6 +41,54 @@ constexpr int kDefaultPanelX = 48;
 constexpr int kDefaultPanelY = 48;
 constexpr const char* kButtonIdLights = "lights";
 constexpr const char* kButtonIdLightMap = "light_map";
+
+std::string trim_copy(const std::string& input) {
+    auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
+    std::string result = input;
+    result.erase(result.begin(), std::find_if(result.begin(), result.end(), [&](unsigned char ch) {
+        return !is_space(ch);
+    }));
+    result.erase(std::find_if(result.rbegin(), result.rend(), [&](unsigned char ch) {
+        return !is_space(ch);
+    }).base(), result.end());
+    return result;
+}
+
+using devmode::spawn::ensure_spawn_group_entry_defaults;
+using devmode::spawn::ensure_spawn_groups_array;
+using devmode::spawn::generate_spawn_id;
+using devmode::spawn::sanitize_perimeter_spawn_groups;
+
+std::string sanitize_room_key(const std::string& input) {
+    std::string out;
+    out.reserve(input.size());
+    bool last_underscore = false;
+    for (char ch : input) {
+        unsigned char uch = static_cast<unsigned char>(ch);
+        if (std::isalnum(uch)) {
+            out.push_back(static_cast<char>(std::tolower(uch)));
+            last_underscore = false;
+        } else if (ch == '_' || ch == '-') {
+            if (!last_underscore && !out.empty()) {
+                out.push_back('_');
+                last_underscore = true;
+            }
+        } else if (std::isspace(uch)) {
+            if (!last_underscore && !out.empty()) {
+                out.push_back('_');
+                last_underscore = true;
+            }
+        }
+    }
+    while (!out.empty() && out.back() == '_') {
+        out.pop_back();
+    }
+    if (out.empty()) {
+        out = "room";
+    }
+    return out;
+}
+
 }
 
 MapModeUI::MapModeUI(Assets* assets)
@@ -66,32 +121,23 @@ void MapModeUI::set_screen_dimensions(int w, int h) {
     shading_panel_centered_ = false;
     preview_panel_centered_ = false;
     ensure_panels();
-    SDL_Rect bounds{0, 0, screen_w_, screen_h_};
-    if (light_panel_) light_panel_->set_work_area(bounds);
-    if (shadow_panel_) shadow_panel_->set_work_area(bounds);
-    if (preview_panel_) preview_panel_->set_work_area(bounds);
-    if (layers_preview_panel_) layers_preview_panel_->set_work_area(bounds);
-    if (layers_panel_) {
-        layers_panel_->set_work_area(bounds);
-        SDL_Rect right_bounds = room_config_bounds();
-        SDL_Rect left_bounds{0, 0, std::max(0, right_bounds.x), screen_h_};
-        layers_panel_->set_embedded_bounds(left_bounds);
-    }
-    if (room_configurator_) {
-        room_configurator_->set_work_area(bounds);
-        room_configurator_->set_bounds(room_config_bounds());
-    }
-    SDL_Rect right_bounds = room_config_bounds();
-    if (room_config_container_) {
-        room_config_container_->set_panel_bounds_override(right_bounds);
-    }
-    if (rooms_list_container_) {
-        rooms_list_container_->set_panel_bounds_override(right_bounds);
-    }
-    if (layer_controls_container_) {
-        layer_controls_container_->set_panel_bounds_override(right_bounds);
-    }
+    sliding_area_bounds_ = sanitize_sliding_area(sliding_area_bounds_);
+    apply_sliding_area_bounds();
     update_footer_visibility();
+    ensure_light_and_shading_positions();
+}
+
+void MapModeUI::set_sliding_area_bounds(const SDL_Rect& bounds) {
+    SDL_Rect sanitized = sanitize_sliding_area(bounds);
+    if (sanitized.x == sliding_area_bounds_.x &&
+        sanitized.y == sliding_area_bounds_.y &&
+        sanitized.w == sliding_area_bounds_.w &&
+        sanitized.h == sliding_area_bounds_.h) {
+        return;
+    }
+    sliding_area_bounds_ = sanitized;
+    ensure_panels();
+    apply_sliding_area_bounds();
 }
 
 void MapModeUI::set_map_mode_active(bool active) {
@@ -112,6 +158,100 @@ DevFooterBar* MapModeUI::get_footer_bar() const {
     return footer_bar_.get();
 }
 
+void MapModeUI::collect_sliding_container_rects(std::vector<SDL_Rect>& out) const {
+    auto append_container = [&out](const SlidingWindowContainer* container) {
+        if (!container || !container->is_visible()) {
+            return;
+        }
+        const SDL_Rect& rect = container->panel_rect();
+        if (rect.w > 0 && rect.h > 0) {
+            out.push_back(rect);
+        }
+    };
+
+    append_container(room_config_container_.get());
+    append_container(rooms_list_container_.get());
+    append_container(layer_controls_container_.get());
+
+    if (room_configurator_ && room_configurator_->visible()) {
+        const SDL_Rect& rect = room_configurator_->panel_rect();
+        if (rect.w > 0 && rect.h > 0) {
+            out.push_back(rect);
+        }
+    }
+}
+
+SDL_Rect MapModeUI::sanitize_sliding_area(const SDL_Rect& bounds) const {
+    if (screen_w_ <= 0 || screen_h_ <= 0) {
+        return SDL_Rect{0, 0, 0, 0};
+    }
+    SDL_Rect result = bounds;
+    if (result.w <= 0 || result.h <= 0) {
+        result = SDL_Rect{0, 0, screen_w_, screen_h_};
+    }
+    if (result.w > screen_w_) {
+        result.w = screen_w_;
+    }
+    if (result.h > screen_h_) {
+        result.h = screen_h_;
+    }
+    int max_x = std::max(0, screen_w_ - result.w);
+    int max_y = std::max(0, screen_h_ - result.h);
+    result.x = std::clamp(result.x, 0, max_x);
+    result.y = std::clamp(result.y, 0, max_y);
+    return result;
+}
+
+SDL_Rect MapModeUI::effective_work_area() const {
+    if (screen_w_ <= 0 || screen_h_ <= 0) {
+        return SDL_Rect{0, 0, 0, 0};
+    }
+    SDL_Rect area = sliding_area_bounds_;
+    if (area.w <= 0 || area.h <= 0) {
+        return SDL_Rect{0, 0, screen_w_, screen_h_};
+    }
+    int height = std::min(area.h, screen_h_);
+    int y = std::clamp(area.y, 0, std::max(0, screen_h_ - height));
+    return SDL_Rect{0, y, screen_w_, height};
+}
+
+void MapModeUI::apply_sliding_area_bounds() {
+    sliding_area_bounds_ = sanitize_sliding_area(sliding_area_bounds_);
+    SDL_Rect work_area = effective_work_area();
+    SDL_Rect right_bounds = room_config_bounds();
+
+    if (light_panel_) light_panel_->set_work_area(work_area);
+    if (shadow_panel_) shadow_panel_->set_work_area(work_area);
+    if (preview_panel_) preview_panel_->set_work_area(work_area);
+    if (layers_preview_panel_) layers_preview_panel_->set_work_area(work_area);
+
+    if (layers_panel_) {
+        layers_panel_->set_work_area(work_area);
+        int left_width = work_area.w;
+        if (right_bounds.w > 0) {
+            int available = right_bounds.x - work_area.x;
+            left_width = std::clamp(available, 0, work_area.w);
+        }
+        SDL_Rect left_bounds{work_area.x, work_area.y, left_width, work_area.h};
+        layers_panel_->set_embedded_bounds(left_bounds);
+    }
+
+    if (room_configurator_) {
+        room_configurator_->set_work_area(work_area);
+        room_configurator_->set_bounds(right_bounds);
+    }
+
+    if (room_config_container_) {
+        room_config_container_->set_panel_bounds_override(right_bounds);
+    }
+    if (rooms_list_container_) {
+        rooms_list_container_->set_panel_bounds_override(right_bounds);
+    }
+    if (layer_controls_container_) {
+        layer_controls_container_->set_panel_bounds_override(right_bounds);
+    }
+}
+
 void MapModeUI::set_footer_always_visible(bool on) {
     footer_always_visible_ = on;
     ensure_panels();
@@ -124,10 +264,15 @@ void MapModeUI::set_headers_suppressed(bool suppressed) {
 }
 
 void MapModeUI::set_sliding_headers_hidden(bool hidden) {
-    if (sliding_headers_hidden_external_ == hidden) {
+    int previous = sliding_header_request_count_;
+    if (hidden) {
+        ++sliding_header_request_count_;
+    } else if (sliding_header_request_count_ > 0) {
+        --sliding_header_request_count_;
+    }
+    if (previous == sliding_header_request_count_) {
         return;
     }
-    sliding_headers_hidden_external_ = hidden;
     refresh_header_suppression_state();
 }
 
@@ -140,13 +285,13 @@ void MapModeUI::set_dev_sliding_headers_hidden(bool hidden) {
 }
 
 void MapModeUI::refresh_header_suppression_state() {
-    const bool final_state = base_headers_suppressed_ || sliding_headers_hidden_external_ || dev_sliding_headers_hidden_;
-    const bool suppression_from_sliding_only = !base_headers_suppressed_ &&
-                                               (sliding_headers_hidden_external_ || dev_sliding_headers_hidden_);
+    const bool sliding_requested = (sliding_header_request_count_ > 0) || dev_sliding_headers_hidden_;
+    const bool final_state = base_headers_suppressed_ || sliding_requested;
+    const bool sliding_only = sliding_requested && !base_headers_suppressed_;
     const bool state_changed = (headers_suppressed_ != final_state) ||
-                               (sliding_only_header_suppression_ != suppression_from_sliding_only);
+                               (sliding_only_header_suppression_ != sliding_only);
     headers_suppressed_ = final_state;
-    sliding_only_header_suppression_ = suppression_from_sliding_only;
+    sliding_only_header_suppression_ = sliding_only;
 
     if (state_changed) {
         ensure_panels();
@@ -283,6 +428,14 @@ bool MapModeUI::pointer_inside_floating_panel(int x, int y) const {
             return true;
         }
     }
+    for (DockableCollapsible* panel : FloatingDockableManager::instance().open_panels()) {
+        if (!panel || !panel->is_visible()) {
+            continue;
+        }
+        if (panel->is_point_inside(p.x, p.y)) {
+            return true;
+        }
+    }
     return false;
 }
 
@@ -357,6 +510,19 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
         }
     }
 
+    if (!consumed && (pointer_event || wheel_event)) {
+        for (DockableCollapsible* panel : FloatingDockableManager::instance().open_panels()) {
+            if (!panel || !panel->is_visible()) {
+                continue;
+            }
+            if (panel->is_point_inside(p.x, p.y)) {
+                used = true;
+                consumed = true;
+                break;
+            }
+        }
+    }
+
     return consumed;
 }
 
@@ -428,6 +594,8 @@ void MapModeUI::ensure_panels() {
         layers_panel_->set_on_close([this]() {
             this->close_room_configuration(false);
             active_panel_ = PanelType::None;
+            this->set_sliding_headers_hidden(false);
+            this->update_footer_visibility();
             sync_footer_button_states();
         });
     }
@@ -486,11 +654,16 @@ void MapModeUI::ensure_panels() {
     }
     if (layer_controls_display_) {
         layer_controls_display_->attach_container(layer_controls_container_.get());
+        layer_controls_display_->set_map_info(map_info_);
         layer_controls_display_->set_controller(layers_controller_);
         layer_controls_display_->set_selected_layer(layers_panel_ ? layers_panel_->selected_layer() : -1);
         layer_controls_display_->set_on_change([this]() {
             this->auto_save_layers_data();
         });
+        layer_controls_display_->set_on_show_rooms_list([this]() {
+            this->show_sliding_panel(SlidingPanel::RoomsList);
+        });
+        layer_controls_display_->set_on_create_room([this]() { this->create_room_from_layers_controls(); });
     }
     if (layers_panel_) {
         layers_panel_->set_rooms_list_container(rooms_list_container_.get());
@@ -585,6 +758,8 @@ void MapModeUI::configure_footer_buttons() {
         DevFooterBar::Button layers_btn;
         layers_btn.id = "layers";
         layers_btn.label = "Layers";
+        layers_btn.style_override = &DMStyles::FooterToggleButton();
+        layers_btn.active_style_override = &DMStyles::AccentButton();
         layers_btn.on_toggle = [this](bool active) {
             if (active) {
                 this->set_active_panel(PanelType::Layers);
@@ -604,6 +779,8 @@ void MapModeUI::configure_footer_buttons() {
             DevFooterBar::Button lights_btn;
             lights_btn.id = kButtonIdLights;
             lights_btn.label = "Lighting";
+            lights_btn.style_override = &DMStyles::FooterToggleButton();
+            lights_btn.active_style_override = &DMStyles::AccentButton();
             lights_btn.on_toggle = [this](bool active) {
                 if (active) {
                     this->open_light_panel();
@@ -652,8 +829,7 @@ void MapModeUI::sync_footer_button_states() {
 void MapModeUI::update_footer_visibility() {
     if (!footer_bar_) return;
     footer_bar_->set_bounds(screen_w_, screen_h_);
-    const bool headers_allow_footer = !headers_suppressed_ || sliding_only_header_suppression_;
-    const bool should_show = headers_allow_footer && (footer_always_visible_ || map_mode_active_);
+    const bool should_show = !headers_suppressed_ && (footer_always_visible_ || map_mode_active_);
     footer_bar_->set_visible(should_show);
 }
 
@@ -856,8 +1032,7 @@ bool MapModeUI::handle_event(const SDL_Event& e) {
     }
 
     bool footer_used = false;
-    const bool allow_footer = !headers_suppressed_ || sliding_only_header_suppression_;
-    if (allow_footer && footer_bar_ && footer_bar_->visible()) {
+    if (!headers_suppressed_ && footer_bar_ && footer_bar_->visible()) {
         footer_used = footer_bar_->handle_event(e);
     }
     if (footer_used) {
@@ -1167,107 +1342,76 @@ bool MapModeUI::is_grid_panel_visible() const {
 
 void MapModeUI::ensure_light_and_shading_positions() {
     ensure_panels();
-    if (screen_w_ <= 0 || screen_h_ <= 0) {
-        return;
-    }
 
-    constexpr int kPanelGap = 40;
     const int fallback_w = DockableCollapsible::kDefaultFloatingContentWidth;
     const int fallback_h = 400;
 
-    const auto resolve_dimensions = [&](DockableCollapsible* panel, int fallbackWidth, int fallbackHeight) {
-        int w = fallbackWidth;
-        int h = fallbackHeight;
-        if (panel) {
-            w = panel->rect().w > 0 ? panel->rect().w : fallbackWidth;
-            h = panel->rect().h > 0 ? panel->rect().h : panel->height();
-            if (h <= 0) h = fallbackHeight;
+    std::vector<FloatingPanelLayoutManager::PanelInfo> panels;
+    panels.reserve(3);
+    std::vector<bool*> updated_flags;
+    updated_flags.reserve(3);
+
+    auto add_panel = [&](DockableCollapsible* panel, bool& centered_flag) {
+        if (!panel || centered_flag) {
+            return;
         }
-        return std::pair<int, int>{w, h};
+        FloatingPanelLayoutManager::PanelInfo info;
+        info.panel = panel;
+        info.force_layout = true;
+        SDL_Rect rect = panel->rect();
+        info.preferred_width = rect.w > 0 ? rect.w : fallback_w;
+        int height = rect.h > 0 ? rect.h : panel->height();
+        if (height <= 0) {
+            height = fallback_h;
+        }
+        info.preferred_height = height;
+        panels.push_back(info);
+        updated_flags.push_back(&centered_flag);
     };
 
-    auto [light_w, light_h] = resolve_dimensions(light_panel_.get(), fallback_w, fallback_h);
-    auto [shading_w, shading_h] = resolve_dimensions(shadow_panel_.get(), fallback_w, fallback_h);
-    auto [preview_w, preview_h] = resolve_dimensions(preview_panel_.get(), fallback_w, fallback_h);
+    add_panel(light_panel_.get(), light_panel_centered_);
+    add_panel(shadow_panel_.get(), shading_panel_centered_);
+    add_panel(preview_panel_.get(), preview_panel_centered_);
 
-    if (!light_panel_ && !shadow_panel_ && !preview_panel_) {
+    if (panels.empty()) {
         return;
     }
 
-    struct PanelLayout {
-        DockableCollapsible* panel = nullptr;
-        int width = 0;
-        int height = 0;
-        bool* centered_flag = nullptr;
-    };
+    FloatingPanelLayoutManager::instance().layoutAll(panels);
 
-    std::vector<PanelLayout> layout_sequence;
-    layout_sequence.reserve(3);
-
-    if (light_panel_) {
-        layout_sequence.push_back({light_panel_.get(), light_w, light_h, &light_panel_centered_});
-    }
-    if (shadow_panel_) {
-        layout_sequence.push_back({shadow_panel_.get(), shading_w, shading_h, &shading_panel_centered_});
-    }
-    if (preview_panel_) {
-        layout_sequence.push_back({preview_panel_.get(), preview_w, preview_h, &preview_panel_centered_});
-    }
-
-    if (layout_sequence.empty()) {
-        return;
-    }
-
-    int total_width = 0;
-    int base_height = 0;
-    for (std::size_t i = 0; i < layout_sequence.size(); ++i) {
-        const PanelLayout& entry = layout_sequence[i];
-        total_width += entry.width;
-        if (i > 0) {
-            total_width += kPanelGap;
+    for (bool* flag : updated_flags) {
+        if (flag) {
+            *flag = true;
         }
-        base_height = std::max(base_height, entry.height);
-    }
-
-    int start_x = (screen_w_ - total_width) / 2;
-    if (start_x < 0) start_x = 0;
-    int base_y = (screen_h_ - base_height) / 2;
-    if (base_y < 0) base_y = 0;
-
-    int current_x = start_x;
-    for (PanelLayout& entry : layout_sequence) {
-        if (!entry.panel) {
-            continue;
-        }
-        int panel_x = current_x;
-        int panel_w = entry.width;
-        if (panel_x + panel_w > screen_w_) {
-            panel_x = std::max(0, screen_w_ - panel_w);
-        }
-        int panel_y = base_y + (base_height - entry.height) / 2;
-        if (panel_y < 0) panel_y = 0;
-        entry.panel->set_position(panel_x, panel_y);
-        if (entry.centered_flag) {
-            *entry.centered_flag = true;
-        }
-        current_x = panel_x + panel_w + kPanelGap;
     }
 }
 
 SDL_Rect MapModeUI::room_config_bounds() const {
-    int panel_x = (screen_w_ * 2) / 3;
-    if (panel_x < 0) panel_x = 0;
-    int panel_w = screen_w_ - panel_x;
+    if (screen_w_ <= 0 || screen_h_ <= 0) {
+        return SDL_Rect{0, 0, 0, 0};
+    }
+    SDL_Rect area = sanitize_sliding_area(sliding_area_bounds_);
+    if (area.w <= 0 || area.h <= 0) {
+        area = SDL_Rect{0, 0, screen_w_, screen_h_};
+    }
+    int area_x = area.x;
+    int area_y = area.y;
+    int area_w = area.w;
+    int area_h = area.h;
+
+    int panel_x = area_x + (area_w * 2) / 3;
+    int panel_w = area_w - (panel_x - area_x);
     const int min_width = std::max(320, screen_w_ / 3);
     if (panel_w < min_width) {
-        panel_w = min_width;
-        panel_x = std::max(0, screen_w_ - panel_w);
+        panel_w = std::min(min_width, area_w);
+        panel_x = area_x + std::max(0, area_w - panel_w);
     }
-    if (panel_w > screen_w_) {
-        panel_w = screen_w_;
-        panel_x = 0;
+    if (panel_w > area_w) {
+        panel_w = area_w;
+        panel_x = area_x;
     }
-    return SDL_Rect{panel_x, 0, std::max(0, panel_w), std::max(0, screen_h_)};
+    panel_x = std::clamp(panel_x, area_x, area_x + std::max(0, area_w - panel_w));
+    return SDL_Rect{panel_x, area_y, std::max(0, panel_w), std::max(0, area_h)};
 }
 
 void MapModeUI::show_sliding_panel(SlidingPanel panel, bool) {
@@ -1310,18 +1454,30 @@ void MapModeUI::show_sliding_panel(SlidingPanel panel, bool) {
 void MapModeUI::ensure_room_configurator() {
     if (!room_configurator_) {
         room_configurator_ = std::make_unique<RoomConfigurator>();
-        if (room_configurator_) {
-            room_configurator_->set_header_visibility_controller([this](bool visible) {
-                this->set_sliding_headers_hidden(visible);
-            });
-            room_configurator_->set_on_close([this]() {
-                active_room_config_key_.clear();
-                if (rooms_display_) {
-                    rooms_display_->refresh();
-                }
-                this->show_sliding_panel(SlidingPanel::RoomsList);
-            });
-        }
+    }
+    if (room_configurator_) {
+        room_configurator_->set_header_visibility_controller([this](bool visible) {
+            this->set_sliding_headers_hidden(visible);
+        });
+        room_configurator_->set_on_close([this]() {
+            active_room_config_key_.clear();
+            if (rooms_display_) {
+                rooms_display_->refresh();
+            }
+            this->show_sliding_panel(SlidingPanel::RoomsList);
+        });
+        room_configurator_->set_spawn_group_callbacks(
+            {},
+            [this](const std::string& spawn_id) { this->duplicate_active_room_spawn_group(spawn_id); },
+            [this](const std::string& spawn_id) { this->delete_active_room_spawn_group(spawn_id); },
+            [this](const std::string& spawn_id, size_t index) {
+                this->reorder_active_room_spawn_group(spawn_id, index);
+            },
+            {},
+            {});
+        room_configurator_->set_on_room_renamed([this](const std::string& old_name, const std::string& desired) {
+            return this->rename_active_room(old_name, desired);
+        });
     }
     if (!room_config_container_) {
         room_config_container_ = std::make_unique<SlidingWindowContainer>();
@@ -1331,6 +1487,7 @@ void MapModeUI::ensure_room_configurator() {
             room_config_container_->set_header_visibility_controller([this](bool visible) {
                 this->set_sliding_headers_hidden(visible);
             });
+            room_config_container_->set_blocks_editor_interactions(true);
         }
     }
     if (room_config_container_) {
@@ -1338,9 +1495,7 @@ void MapModeUI::ensure_room_configurator() {
     }
     if (room_configurator_ && room_config_container_) {
         room_configurator_->attach_container(room_config_container_.get());
-        room_configurator_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-        room_configurator_->set_bounds(room_config_bounds());
-        room_config_container_->set_panel_bounds_override(room_config_bounds());
+        apply_sliding_area_bounds();
     }
 }
 
@@ -1371,6 +1526,9 @@ void MapModeUI::open_room_configuration(const std::string& room_key) {
         if (layers_panel_) {
             layers_panel_->mark_dirty(true);
         }
+        if (rooms_display_) {
+            rooms_display_->refresh();
+        }
     };
     auto on_entry_change = [this](const nlohmann::json&, const auto&) {
         if (layers_panel_) {
@@ -1378,11 +1536,7 @@ void MapModeUI::open_room_configuration(const std::string& room_key) {
         }
     };
 
-    room_configurator_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-    room_configurator_->set_bounds(room_config_bounds());
-    if (room_config_container_) {
-        room_config_container_->set_panel_bounds_override(room_config_bounds());
-    }
+    apply_sliding_area_bounds();
     room_configurator_->open(room_entry, on_change, on_entry_change, {});
     show_sliding_panel(SlidingPanel::RoomConfig);
 }
@@ -1538,5 +1692,201 @@ bool MapModeUI::auto_save_layers_data() {
         layers_panel_->mark_dirty(true);
     }
     return saved;
+}
+
+nlohmann::json* MapModeUI::active_room_entry() {
+    if (!map_info_ || active_room_config_key_.empty()) {
+        return nullptr;
+    }
+    nlohmann::json& map_info = *map_info_;
+    nlohmann::json& rooms = map_info["rooms_data"];
+    if (!rooms.is_object()) {
+        return nullptr;
+    }
+    auto it = rooms.find(active_room_config_key_);
+    if (it == rooms.end() || !it->is_object()) {
+        return nullptr;
+    }
+    return &it.value();
+}
+
+std::string MapModeUI::rename_active_room(const std::string& old_name, const std::string& desired_name) {
+    std::string trimmed = trim_copy(desired_name);
+    std::string base = sanitize_room_key(trimmed.empty() ? desired_name : trimmed);
+    if (!map_info_) {
+        return base.empty() ? old_name : base;
+    }
+
+    nlohmann::json& map_info = *map_info_;
+    nlohmann::json& rooms = map_info["rooms_data"];
+    if (!rooms.is_object()) {
+        rooms = nlohmann::json::object();
+    }
+
+    std::string current_key = active_room_config_key_.empty() ? old_name : active_room_config_key_;
+    if (!rooms.contains(current_key)) {
+        current_key = old_name;
+    }
+    if (!rooms.contains(current_key)) {
+        return base.empty() ? old_name : base;
+    }
+
+    std::string candidate = base.empty() ? current_key : base;
+    if (candidate.empty()) {
+        candidate = current_key;
+    }
+
+    nlohmann::json entry = rooms[current_key];
+    entry["name"] = desired_name;
+
+    if (candidate == current_key || rooms.contains(candidate)) {
+        rooms[current_key] = std::move(entry);
+        handle_rooms_data_mutated(true);
+        return current_key;
+    }
+
+    rooms.erase(current_key);
+    rooms[candidate] = std::move(entry);
+    map_layers::rename_room_references_in_layers(map_info, current_key, candidate);
+    active_room_config_key_ = candidate;
+    handle_rooms_data_mutated(true);
+    return candidate;
+}
+
+void MapModeUI::duplicate_active_room_spawn_group(const std::string& spawn_id) {
+    if (spawn_id.empty()) {
+        return;
+    }
+    nlohmann::json* room_entry = active_room_entry();
+    if (!room_entry) {
+        return;
+    }
+    nlohmann::json& groups = ensure_spawn_groups_array(*room_entry);
+    nlohmann::json* original = nullptr;
+    for (auto& item : groups) {
+        if (!item.is_object()) continue;
+        if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"] == spawn_id) {
+            original = &item;
+            break;
+        }
+    }
+    if (!original) {
+        return;
+    }
+
+    nlohmann::json duplicate = *original;
+    std::string new_id = generate_spawn_id();
+    duplicate["spawn_id"] = new_id;
+    if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
+        duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
+    }
+    std::string display_name = duplicate.value("display_name", std::string{"New Spawn"});
+    const int default_resolution = MapGridSettings::defaults().resolution;
+    ensure_spawn_group_entry_defaults(duplicate, display_name, default_resolution);
+    groups.push_back(std::move(duplicate));
+
+    for (size_t i = 0; i < groups.size(); ++i) {
+        if (groups[i].is_object()) {
+            groups[i]["priority"] = static_cast<int>(i);
+        }
+    }
+
+    sanitize_perimeter_spawn_groups(groups);
+    room_configurator_->refresh_spawn_groups(*room_entry);
+    handle_rooms_data_mutated(true);
+    room_configurator_->notify_spawn_groups_mutated();
+}
+
+void MapModeUI::delete_active_room_spawn_group(const std::string& spawn_id) {
+    if (spawn_id.empty()) {
+        return;
+    }
+    nlohmann::json* room_entry = active_room_entry();
+    if (!room_entry) {
+        return;
+    }
+    nlohmann::json& groups = ensure_spawn_groups_array(*room_entry);
+    auto it = std::remove_if(groups.begin(), groups.end(), [&](nlohmann::json& entry) {
+        if (!entry.is_object()) return false;
+        if (!entry.contains("spawn_id") || !entry["spawn_id"].is_string()) return false;
+        return entry["spawn_id"].get<std::string>() == spawn_id;
+    });
+    if (it == groups.end()) {
+        return;
+    }
+    groups.erase(it, groups.end());
+    for (size_t i = 0; i < groups.size(); ++i) {
+        if (groups[i].is_object()) {
+            groups[i]["priority"] = static_cast<int>(i);
+        }
+    }
+    sanitize_perimeter_spawn_groups(groups);
+    room_configurator_->refresh_spawn_groups(*room_entry);
+    handle_rooms_data_mutated(true);
+    room_configurator_->notify_spawn_groups_mutated();
+}
+
+void MapModeUI::reorder_active_room_spawn_group(const std::string& spawn_id, size_t index) {
+    if (spawn_id.empty()) {
+        return;
+    }
+    nlohmann::json* room_entry = active_room_entry();
+    if (!room_entry) {
+        return;
+    }
+    nlohmann::json& groups = ensure_spawn_groups_array(*room_entry);
+    if (!groups.is_array() || groups.empty()) {
+        return;
+    }
+
+    auto it = std::find_if(groups.begin(), groups.end(), [&](const nlohmann::json& entry) {
+        if (!entry.is_object()) return false;
+        if (!entry.contains("spawn_id") || !entry["spawn_id"].is_string()) return false;
+        return entry["spawn_id"].get<std::string>() == spawn_id;
+    });
+    if (it == groups.end()) {
+        return;
+    }
+
+    nlohmann::json moved = *it;
+    groups.erase(it);
+    size_t clamped = std::min(index, groups.size());
+    groups.insert(groups.begin() + static_cast<std::ptrdiff_t>(clamped), std::move(moved));
+
+    for (size_t i = 0; i < groups.size(); ++i) {
+        if (groups[i].is_object()) {
+            groups[i]["priority"] = static_cast<int>(i);
+        }
+    }
+
+    room_configurator_->refresh_spawn_groups(*room_entry);
+    handle_rooms_data_mutated(false);
+    room_configurator_->notify_spawn_groups_mutated();
+}
+
+void MapModeUI::handle_rooms_data_mutated(bool refresh_rooms_list) {
+    if (!map_info_) {
+        return;
+    }
+    if (layers_panel_) {
+        layers_panel_->mark_dirty(true);
+    }
+    if (refresh_rooms_list && rooms_display_) {
+        rooms_display_->refresh();
+    }
+    if (layer_controls_display_) {
+        layer_controls_display_->refresh();
+    }
+}
+
+void MapModeUI::create_room_from_layers_controls() {
+    if (!map_info_ || !map_info_->is_object()) {
+        return;
+    }
+    std::string new_key = map_layers::create_room_entry(*map_info_);
+    if (new_key.empty()) {
+        return;
+    }
+    auto_save_layers_data();
 }
 

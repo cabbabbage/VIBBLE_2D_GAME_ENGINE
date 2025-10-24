@@ -65,7 +65,7 @@ class AssetLoader {
     MapGridSettings map_grid_settings_{};
     nlohmann::json map_info_json_;
     nlohmann::json* map_assets_data_   = nullptr;
-    nlohmann::json* map_boundary_data_ = nullptr;
+    nlohmann::json* map_edge_data_ = nullptr;
     nlohmann::json* rooms_data_        = nullptr;
     nlohmann::json* trails_data_       = nullptr;
     devmode::core::ManifestStore* manifest_store_ = nullptr;

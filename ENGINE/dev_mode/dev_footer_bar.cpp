@@ -12,8 +12,14 @@ namespace {
 constexpr int kDefaultFooterHeight = 40;
 
 const DMButtonStyle* button_style_for(const DevFooterBar::Button& btn) {
-    if (btn.active && btn.active_style_override) {
-        return btn.active_style_override;
+    if (btn.active) {
+        if (btn.active_style_override) {
+            return btn.active_style_override;
+        }
+        if (btn.style_override) {
+            return btn.style_override;
+        }
+        return &DMStyles::AccentButton();
     }
     if (btn.style_override) {
         return btn.style_override;
@@ -236,12 +242,6 @@ void DevFooterBar::render(SDL_Renderer* renderer) const {
 
     for (const auto& btn : buttons_) {
         if (!btn.widget) continue;
-        if (btn.active) {
-            SDL_Rect rect = btn.widget->rect();
-            const SDL_Color accent = DMStyles::AccentButton().hover_bg;
-            SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, 96);
-            SDL_RenderFillRect(renderer, &rect);
-        }
         btn.widget->render(renderer);
     }
 }

@@ -78,6 +78,7 @@ private:
         int index = -1;
         std::string name;
         SDL_Rect rect{0, 0, 0, 0};
+        SDL_Rect delete_button_rect{0, 0, 0, 0};
         std::string summary;
         bool invalid = false;
         bool warning = false;
@@ -92,7 +93,6 @@ private:
     void render_validation_summary(SDL_Renderer* renderer, const SDL_Rect& rect) const;
     void update_validation_summary_layout(const std::vector<std::string>& errors,
                                           const std::vector<std::string>& warnings);
-    void commit_layer_name_edit();
     void trigger_save();
     void ensure_listener();
     void remove_listener();
@@ -100,6 +100,9 @@ private:
     void notify_side_panel(SidePanel panel) const;
     void set_hovered_layer(int index);
     void clear_hover();
+    void set_hovered_delete_layer(int index);
+    void on_delete_layer_clicked(int index);
+    bool delete_layer_at(int index);
 
     void on_layers_list_mouse_down(int index, int mouse_y);
     void on_layers_list_mouse_motion(int mouse_y, Uint32 buttons);
@@ -138,23 +141,17 @@ private:
     SDL_Rect embedded_bounds_{0, 0, 0, 0};
 
     std::unique_ptr<DMButton> add_layer_button_;
-    std::unique_ptr<DMButton> duplicate_layer_button_;
-    std::unique_ptr<DMButton> delete_layer_button_;
     std::unique_ptr<DMButton> reload_button_;
-    std::unique_ptr<DMTextBox> layer_name_box_;
-
     std::vector<std::unique_ptr<Widget>> owned_widgets_;
     LayersListWidget* list_widget_ = nullptr;
     MapLayersPreviewWidget* preview_widget_ = nullptr;
     ValidationSummaryWidget* validation_widget_ = nullptr;
-    DMTextBox* layer_name_box_raw_ = nullptr;
 
     std::vector<LayerRow> layer_rows_;
     int hovered_layer_index_ = -1;
+    int hovered_delete_layer_index_ = -1;
     int selected_layer_index_ = -1;
     std::string pending_room_selection_;
-    std::string current_layer_name_;
-
     bool data_dirty_ = true;
     bool validation_dirty_ = true;
     bool pending_save_ = false;

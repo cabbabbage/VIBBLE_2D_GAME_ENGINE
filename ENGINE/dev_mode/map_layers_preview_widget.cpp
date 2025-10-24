@@ -12,22 +12,12 @@
 
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
+#include "dev_mode_color_utils.hpp"
 #include "map_layers_controller.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 
 namespace {
 constexpr double kTau = 6.28318530717958647692;
-
-SDL_Color mix_color(SDL_Color a, SDL_Color b, float t) {
-    t = std::clamp(t, 0.0f, 1.0f);
-    auto mix = [t](Uint8 x, Uint8 y) {
-        return static_cast<Uint8>(std::lround((1.0f - t) * x + t * y));
-    };
-    return SDL_Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a)};
-}
-
-SDL_Color lighten(SDL_Color c, float amount) { return mix_color(c, SDL_Color{255, 255, 255, c.a}, amount); }
-SDL_Color darken(SDL_Color c, float amount) { return mix_color(c, SDL_Color{0, 0, 0, c.a}, amount); }
 
 void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, const DMLabelStyle& style) {
     if (!renderer || text.empty()) {

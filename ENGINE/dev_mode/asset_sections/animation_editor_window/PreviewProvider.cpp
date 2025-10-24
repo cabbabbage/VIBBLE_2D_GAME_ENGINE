@@ -179,8 +179,42 @@ std::shared_ptr<SDL_Texture> PreviewProvider::build_texture_from_payload(SDL_Ren
     }
 
     std::filesystem::path folder = asset_root_;
-    if (!relative_path.empty()) {
-        folder /= relative_path;
+
+    auto should_treat_as_absolute = [&](const std::filesystem::path& requested) {
+        if (requested.is_absolute()) {
+            return true;
+        }
+
+        std::string requested_str = lowercase_copy(requested.generic_string());
+        if (requested_str.rfind("src/", 0) == 0) {
+            return true;
+        }
+
+        if (!asset_root_.empty()) {
+            std::string root_str = lowercase_copy(asset_root_.generic_string());
+            if (!root_str.empty()) {
+                if (requested_str == root_str) {
+                    return true;
+                }
+                std::string root_with_sep = root_str + "/";
+                if (requested_str.rfind(root_with_sep, 0) == 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    };
+
+    std::filesystem::path requested = relative_path;
+    if (should_treat_as_absolute(requested)) {
+        folder = requested;
+    } else if (!relative_path.empty()) {
+        if (!folder.empty()) {
+            folder /= requested;
+        } else {
+            folder = requested;
+        }
     }
 
     return load_folder_texture(renderer, folder, frames, flipped);

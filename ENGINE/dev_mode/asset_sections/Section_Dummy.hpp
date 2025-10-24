@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../DockableCollapsible.hpp"
+#include "../dm_icons.hpp"
 
 class DummySection : public DockableCollapsible {
   public:
@@ -11,7 +12,10 @@ class DummySection : public DockableCollapsible {
       DockableCollapsible::layout();
 
       content_height_ = 28;
-      if (header_) header_->set_text(expanded_ ? title_ + " ▲" : title_ + " ▼");
+      if (header_) {
+        header_->set_text(expanded_ ? title_ + " " + std::string(DMIcons::CollapseExpanded())
+                                   : title_ + " " + std::string(DMIcons::CollapseCollapsed()));
+      }
     }
 
     void render_content(SDL_Renderer* r) const override {

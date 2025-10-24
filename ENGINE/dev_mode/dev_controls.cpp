@@ -9,6 +9,9 @@
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"
+#include "DockableCollapsible.hpp"
+#include "FloatingPanelLayoutManager.hpp"
+#include "room_search_panel.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
@@ -36,6 +39,7 @@
 #include "spawn/methods/center_spawner.hpp"
 #include "spawn/methods/exact_spawner.hpp"
 #include "spawn/methods/perimeter_spawner.hpp"
+#include "spawn/methods/edge_spawner.hpp"
 #include "spawn/methods/percent_spawner.hpp"
 #include "spawn/methods/random_spawner.hpp"
 #include "utils/map_grid_settings.hpp"
@@ -204,147 +208,6 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
     return cached_;
 }
 
-class RegenerateRoomPopup {
-public:
-    using Callback = std::function<void(Room*)>;
-
-    void open(std::vector<std::pair<std::string, Room*>> rooms,
-              Callback cb,
-              int screen_w,
-              int screen_h) {
-        rooms_ = std::move(rooms);
-        callback_ = std::move(cb);
-        buttons_.clear();
-        if (rooms_.empty()) {
-            visible_ = false;
-            return;
-        }
-        const int margin = DMSpacing::item_gap();
-        const int spacing = DMSpacing::small_gap();
-        const int button_height = DMButton::height();
-        const int button_width = std::max(220, screen_w / 6);
-        rect_.w = button_width + margin * 2;
-        const int total_buttons = static_cast<int>(rooms_.size());
-        const int content_height = total_buttons * button_height + std::max(0, total_buttons - 1) * spacing;
-        rect_.h = margin * 2 + content_height;
-        const int max_height = std::max(240, screen_h - DMSpacing::panel_padding() * 2);
-        rect_.h = std::min(rect_.h, max_height);
-        rect_.x = std::max(16, screen_w - rect_.w - DMSpacing::panel_padding());
-        rect_.y = DMSpacing::panel_padding();
-
-        buttons_.reserve(rooms_.size());
-        for (const auto& entry : rooms_) {
-            auto btn = std::make_unique<DMButton>(entry.first, &DMStyles::ListButton(), button_width, button_height);
-            buttons_.push_back(std::move(btn));
-        }
-        visible_ = true;
-    }
-
-    void close() {
-        visible_ = false;
-        callback_ = nullptr;
-    }
-
-    bool visible() const { return visible_; }
-
-    void update(const Input&) {}
-
-    bool handle_event(const SDL_Event& e) {
-        if (!visible_) return false;
-        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
-            close();
-            return true;
-        }
-        if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
-            SDL_Point p{ e.type == SDL_MOUSEMOTION ? e.motion.x : e.button.x,
-                         e.type == SDL_MOUSEMOTION ? e.motion.y : e.button.y };
-            if (!SDL_PointInRect(&p, &rect_)) {
-                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-                    close();
-                }
-                return false;
-            }
-        }
-
-        bool used = false;
-        const int margin = DMSpacing::item_gap();
-        const int spacing = DMSpacing::small_gap();
-        const int button_height = DMButton::height();
-        SDL_Rect btn_rect{ rect_.x + margin, rect_.y + margin, rect_.w - margin * 2, button_height };
-        const int bottom = rect_.y + rect_.h - margin;
-        for (size_t i = 0; i < buttons_.size(); ++i) {
-            auto& btn = buttons_[i];
-            if (!btn) continue;
-            btn->set_rect(btn_rect);
-            if (btn->handle_event(e)) {
-                used = true;
-                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                    if (callback_) callback_(rooms_[i].second);
-                    close();
-                }
-            }
-            btn_rect.y += button_height + spacing;
-            if (btn_rect.y + button_height > bottom) {
-                break;
-            }
-        }
-        return used;
-    }
-
-    void render(SDL_Renderer* renderer) const {
-        if (!visible_ || !renderer) return;
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        const SDL_Color bg = DMStyles::PanelBG();
-        const SDL_Color highlight = DMStyles::HighlightColor();
-        const SDL_Color shadow = DMStyles::ShadowColor();
-        dm_draw::DrawBeveledRect(
-            renderer,
-            rect_,
-            DMStyles::CornerRadius(),
-            DMStyles::BevelDepth(),
-            bg,
-            highlight,
-            shadow,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
-        const SDL_Color border = DMStyles::Border();
-        dm_draw::DrawRoundedOutline(
-            renderer,
-            rect_,
-            DMStyles::CornerRadius(),
-            kPopupOutlineThickness,
-            border);
-        const int margin = DMSpacing::item_gap();
-        const int spacing = DMSpacing::small_gap();
-        const int button_height = DMButton::height();
-        SDL_Rect btn_rect{ rect_.x + margin, rect_.y + margin, rect_.w - margin * 2, button_height };
-        const int bottom = rect_.y + rect_.h - margin;
-        for (const auto& btn : buttons_) {
-            if (!btn) continue;
-            btn->set_rect(btn_rect);
-            btn->render(renderer);
-            btn_rect.y += button_height + spacing;
-            if (btn_rect.y > bottom) {
-                break;
-            }
-        }
-    }
-
-    bool is_point_inside(int x, int y) const {
-        if (!visible_) return false;
-        SDL_Point p{x, y};
-        return SDL_PointInRect(&p, &rect_);
-    }
-
-private:
-    bool visible_ = false;
-    SDL_Rect rect_{0, 0, 280, 320};
-    std::vector<std::pair<std::string, Room*>> rooms_;
-    std::vector<std::unique_ptr<DMButton>> buttons_;
-    Callback callback_;
-};
-
 DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     : assets_(owner),
       screen_w_(screen_w),
@@ -429,7 +292,8 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     asset_filter_.initialize();
     asset_filter_.set_state_changed_callback([this]() { refresh_active_asset_filters(); });
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    asset_filter_.set_enabled(enabled_ && !layers_panel_open);
+    const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_;
+    asset_filter_.set_enabled(enabled_ && !layers_panel_open && !hide_headers);
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
     asset_filter_.set_map_info(map_info_json_);
     asset_filter_.set_current_room(current_room_);
@@ -539,8 +403,17 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (trail_suite_) trail_suite_->set_screen_dimensions(width, height);
     asset_filter_.set_screen_dimensions(width, height);
     if (map_assets_modal_) map_assets_modal_->set_screen_dimensions(width, height);
-    if (boundary_assets_modal_) boundary_assets_modal_->set_screen_dimensions(width, height);
+    if (edge_assets_modal_) edge_assets_modal_->set_screen_dimensions(width, height);
+    if (room_search_panel_) room_search_panel_->set_screen_dimensions(width, height);
     asset_filter_.ensure_layout();
+    SDL_Rect usable = FloatingPanelLayoutManager::instance().computeUsableRect(
+        bounds,
+        SDL_Rect{0, 0, 0, 0},
+        SDL_Rect{0, 0, 0, 0},
+        {});
+    if (map_mode_ui_) {
+        map_mode_ui_->set_sliding_area_bounds(usable);
+    }
 }
 
 void DevControls::set_current_room(Room* room, bool force_refresh) {
@@ -558,7 +431,7 @@ void DevControls::set_current_room(Room* room, bool force_refresh) {
     current_room_ = room;
 
     dev_selected_room_ = room;
-    if (regenerate_popup_) regenerate_popup_->close();
+    if (room_search_panel_) room_search_panel_->close();
     if (room_editor_) {
         dev_mode_trace("[DevControls] set_current_room -> room_editor set_current_room");
         room_editor_->set_current_room(room);
@@ -639,7 +512,7 @@ bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
     if (map_mode_ui_ && map_mode_ui_->is_point_inside(x, y)) {
         return true;
     }
-    if (regenerate_popup_ && regenerate_popup_->visible() && regenerate_popup_->is_point_inside(x, y)) {
+    if (room_search_panel_ && room_search_panel_->visible() && room_search_panel_->is_point_inside(x, y)) {
         return true;
     }
     if (create_area_panel_ && create_area_panel_->visible() && create_area_panel_->is_point_inside(x, y)) {
@@ -689,7 +562,8 @@ void DevControls::set_enabled(bool enabled) {
     }
     enabled_ = enabled;
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    asset_filter_.set_enabled(enabled_ && !layers_panel_open);
+    const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_;
+    asset_filter_.set_enabled(enabled_ && !layers_panel_open && !hide_headers);
 
     if (enabled_) {
         const char* msg = "[DevControls] preparing enable flow";
@@ -807,14 +681,14 @@ void DevControls::update(const Input& input) {
     if (camera_panel_) {
         camera_panel_->update(input, screen_w_, screen_h_);
     }
-    if (regenerate_popup_ && regenerate_popup_->visible()) {
-        regenerate_popup_->update(input);
+    if (room_search_panel_ && room_search_panel_->visible()) {
+        room_search_panel_->update(input);
     }
     const bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
     const bool hide_headers = modal_hide || sliding_headers_hidden_;
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    asset_filter_.set_enabled(enabled_ && !layers_panel_open);
+    asset_filter_.set_enabled(enabled_ && !layers_panel_open && !hide_headers);
     apply_header_suppression();
     if (map_mode_ui_) {
         map_mode_ui_->update(input);
@@ -822,14 +696,39 @@ void DevControls::update(const Input& input) {
     if (map_assets_modal_ && map_assets_modal_->visible()) {
         map_assets_modal_->update(input);
     }
-    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
-        boundary_assets_modal_->update(input);
+    if (edge_assets_modal_ && edge_assets_modal_->visible()) {
+        edge_assets_modal_->update(input);
     }
     if (trail_suite_) {
         trail_suite_->update(input);
     }
 
     asset_filter_.ensure_layout();
+
+    SDL_Rect header_rect = asset_filter_.header_rect();
+    SDL_Rect layout_rect = asset_filter_.layout_bounds();
+    SDL_Rect footer_rect{0, 0, 0, 0};
+    std::vector<SDL_Rect> sliding_rects;
+    if (map_mode_ui_) {
+        map_mode_ui_->collect_sliding_container_rects(sliding_rects);
+    }
+    if (layout_rect.w > 0 && layout_rect.h > 0) {
+        sliding_rects.push_back(layout_rect);
+    }
+    if (map_mode_ui_) {
+        DevFooterBar* footer = map_mode_ui_->get_footer_bar();
+        if (footer && footer->visible()) {
+            footer_rect = footer->rect();
+        }
+    }
+    SDL_Rect usable_rect = FloatingPanelLayoutManager::instance().computeUsableRect(
+        SDL_Rect{0, 0, screen_w_, screen_h_},
+        header_rect,
+        footer_rect,
+        sliding_rects);
+    if (map_mode_ui_) {
+        map_mode_ui_->set_sliding_area_bounds(usable_rect);
+    }
 
     if (room_editor_ && room_editor_->is_enabled()) {
         SDL_Point pointer{input.getX(), input.getY()};
@@ -868,6 +767,31 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 
     asset_filter_.ensure_layout();
 
+    SDL_Rect header_rect = asset_filter_.header_rect();
+    SDL_Rect layout_rect = asset_filter_.layout_bounds();
+    SDL_Rect footer_rect{0, 0, 0, 0};
+    std::vector<SDL_Rect> sliding_rects;
+    if (map_mode_ui_) {
+        map_mode_ui_->collect_sliding_container_rects(sliding_rects);
+    }
+    if (layout_rect.w > 0 && layout_rect.h > 0) {
+        sliding_rects.push_back(layout_rect);
+    }
+    if (map_mode_ui_) {
+        DevFooterBar* footer = map_mode_ui_->get_footer_bar();
+        if (footer && footer->visible()) {
+            footer_rect = footer->rect();
+        }
+    }
+    SDL_Rect usable_rect = FloatingPanelLayoutManager::instance().computeUsableRect(
+        SDL_Rect{0, 0, screen_w_, screen_h_},
+        header_rect,
+        footer_rect,
+        sliding_rects);
+    if (map_mode_ui_) {
+        map_mode_ui_->set_sliding_area_bounds(usable_rect);
+    }
+
     const bool pointer_event = is_pointer_event(event);
     const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
     const bool pointer_relevant = pointer_event || wheel_event;
@@ -880,7 +804,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     modal_headers_hidden_ = modal_hide;
     const bool hide_headers = modal_hide || sliding_headers_hidden_;
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    asset_filter_.set_enabled(enabled_ && !layers_panel_open);
+    asset_filter_.set_enabled(enabled_ && !layers_panel_open && !hide_headers);
     apply_header_suppression();
 
     auto consume = [&](bool used) {
@@ -911,11 +835,22 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (consume_modal_event(map_assets_modal_.get(), event, pointer, pointer_relevant, input_)) {
         return;
     }
-    if (consume_modal_event(boundary_assets_modal_.get(), event, pointer, pointer_relevant, input_)) {
+    if (consume_modal_event(edge_assets_modal_.get(), event, pointer, pointer_relevant, input_)) {
         return;
     }
-    if (consume_modal_event(regenerate_popup_.get(), event, pointer, pointer_relevant, input_)) {
-        return;
+    if (room_search_panel_ && room_search_panel_->visible()) {
+        if (room_search_panel_->handle_event(event)) {
+            if (input_) {
+                input_->consumeEvent(event);
+            }
+            return;
+        }
+        if (pointer_relevant && room_search_panel_->is_point_inside(pointer.x, pointer.y)) {
+            if (input_) {
+                input_->consumeEvent(event);
+            }
+            return;
+        }
     }
 
     const bool room_editor_active = can_use_room_editor_ui();
@@ -1482,15 +1417,15 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (map_assets_modal_ && map_assets_modal_->visible()) {
         map_assets_modal_->render(renderer);
     }
-    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
-        boundary_assets_modal_->render(renderer);
+    if (edge_assets_modal_ && edge_assets_modal_->visible()) {
+        edge_assets_modal_->render(renderer);
     }
     if (trail_suite_) trail_suite_->render(renderer);
     if (camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
     }
-    if (regenerate_popup_ && regenerate_popup_->visible()) {
-        regenerate_popup_->render(renderer);
+    if (room_search_panel_ && room_search_panel_->visible()) {
+        room_search_panel_->render(renderer);
     }
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_;
@@ -1645,6 +1580,8 @@ void DevControls::configure_header_button_sets() {
         camera_btn.id = "camera";
         camera_btn.label = "Camera";
         camera_btn.active = camera_panel_ && camera_panel_->is_visible();
+        camera_btn.style_override = &DMStyles::FooterToggleButton();
+        camera_btn.active_style_override = &DMStyles::AccentButton();
         camera_btn.on_toggle = [this](bool active) {
             if (room_editor_) {
                 room_editor_->close_room_config();
@@ -1659,21 +1596,18 @@ void DevControls::configure_header_button_sets() {
             } else {
                 sync_header_button_states();
             }
-};
+        };
         return camera_btn;
-};
+    };
 
-    std::vector<MapModeUI::HeaderButtonConfig> map_buttons;
-    std::vector<MapModeUI::HeaderButtonConfig> room_buttons;
-    std::vector<MapModeUI::HeaderButtonConfig> area_buttons;
-
-    map_buttons.push_back(make_camera_button());
-
-    {
+    auto make_lighting_button = [this]() {
         MapModeUI::HeaderButtonConfig lights_btn;
         lights_btn.id = "lights";
         lights_btn.label = "Lighting";
-        lights_btn.active = map_mode_ui_ && map_mode_ui_->is_light_panel_visible();
+        const bool lights_visible = map_mode_ui_ && map_mode_ui_->is_light_panel_visible();
+        lights_btn.active = lights_visible;
+        lights_btn.style_override = &DMStyles::FooterToggleButton();
+        lights_btn.active_style_override = &DMStyles::AccentButton();
         lights_btn.on_toggle = [this](bool active) {
             if (room_editor_) {
                 room_editor_->close_room_config();
@@ -1693,8 +1627,51 @@ void DevControls::configure_header_button_sets() {
             }
             sync_header_button_states();
         };
-        map_buttons.push_back(std::move(lights_btn));
-    }
+        return lights_btn;
+    };
+
+    auto make_layers_button = [this]() {
+        MapModeUI::HeaderButtonConfig layers_btn;
+        layers_btn.id = "layers";
+        layers_btn.label = "Layers";
+        const bool layers_visible = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
+        layers_btn.active = layers_visible;
+        layers_btn.style_override = &DMStyles::FooterToggleButton();
+        layers_btn.active_style_override = &DMStyles::AccentButton();
+        layers_btn.on_toggle = [this](bool active) {
+            if (room_editor_) {
+                room_editor_->close_room_config();
+            }
+            if (!map_mode_ui_) {
+                sync_header_button_states();
+                return;
+            }
+            const bool currently_open = map_mode_ui_->is_layers_panel_visible();
+            if (active != currently_open) {
+                if (active && !currently_open && is_modal_blocking_panels()) {
+                    pulse_modal_header();
+                    sync_header_button_states();
+                    return;
+                }
+                if (active) {
+                    map_mode_ui_->open_layers_panel();
+                } else {
+                    map_mode_ui_->toggle_layers_panel();
+                }
+            } else if (active) {
+                map_mode_ui_->open_layers_panel();
+            }
+            sync_header_button_states();
+        };
+        return layers_btn;
+    };
+
+    std::vector<MapModeUI::HeaderButtonConfig> map_buttons;
+    std::vector<MapModeUI::HeaderButtonConfig> room_buttons;
+    std::vector<MapModeUI::HeaderButtonConfig> area_buttons;
+
+    map_buttons.push_back(make_camera_button());
+    map_buttons.push_back(make_lighting_button());
 
     // Removed Light Map preview button in dev mode
 
@@ -1744,22 +1721,24 @@ void DevControls::configure_header_button_sets() {
     }
 
     {
-        MapModeUI::HeaderButtonConfig boundary_btn;
-        boundary_btn.id = "map_boundary";
-        boundary_btn.label = "Boundary Assets";
-        boundary_btn.active = (boundary_assets_modal_ && boundary_assets_modal_->visible());
-        boundary_btn.on_toggle = [this](bool active) {
+        MapModeUI::HeaderButtonConfig edge_btn;
+        edge_btn.id = "map_edge";
+        edge_btn.label = "Edge Assets";
+        edge_btn.active = (edge_assets_modal_ && edge_assets_modal_->visible());
+        edge_btn.on_toggle = [this](bool active) {
             if (active) {
-                toggle_boundary_assets_modal();
+                toggle_edge_assets_modal();
             } else {
-                if (boundary_assets_modal_) boundary_assets_modal_->close();
+                if (edge_assets_modal_) edge_assets_modal_->close();
             }
             sync_header_button_states();
 };
-        map_buttons.push_back(std::move(boundary_btn));
+        map_buttons.push_back(std::move(edge_btn));
     }
 
     room_buttons.push_back(make_camera_button());
+    room_buttons.push_back(make_lighting_button());
+    room_buttons.push_back(make_layers_button());
 
     MapModeUI::HeaderButtonConfig room_config_btn;
     room_config_btn.id = "room_config";
@@ -1862,19 +1841,22 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "camera", camera_open);
     const bool lights_open = map_mode_ui_->is_light_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "lights", lights_open);
     const bool light_map_open = map_mode_ui_->is_light_map_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "light_map", light_map_open);
     const bool grid_open = map_mode_ui_->is_grid_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_grid", grid_open);
     const bool layers_open = map_mode_ui_->is_layers_panel_visible();
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "layers", layers_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_layers", layers_open);
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "layers", layers_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate", false);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
 
     const bool map_assets_open = map_assets_modal_ && map_assets_modal_->visible();
-    const bool boundary_open = boundary_assets_modal_ && boundary_assets_modal_->visible();
+    const bool edge_open = edge_assets_modal_ && edge_assets_modal_->visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_assets", map_assets_open);
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_boundary", boundary_open);
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_edge", edge_open);
 
     for (const auto& type : devmode::area_mode::area_types()) {
         const std::string id = std::string("area_") + type;
@@ -1895,12 +1877,12 @@ void DevControls::close_all_floating_panels() {
         map_mode_ui_->close_all_panels();
     }
     if (map_assets_modal_) map_assets_modal_->close();
-    if (boundary_assets_modal_) boundary_assets_modal_->close();
+    if (edge_assets_modal_) edge_assets_modal_->close();
     if (trail_suite_) {
         trail_suite_->close();
     }
-    if (regenerate_popup_) {
-        regenerate_popup_->close();
+    if (room_search_panel_) {
+        room_search_panel_->close();
     }
     sync_header_button_states();
 }
@@ -2027,6 +2009,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
     CenterSpawner center;
     RandomSpawner random;
     PerimeterSpawner perimeter;
+    EdgeSpawner edge;
     PercentSpawner percent;
 
     for (Room* room : rooms) {
@@ -2054,6 +2037,26 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         std::vector<Area> exclusion;
         SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, &occupancy);
         ctx.set_spawn_resolution(resolution);
+        std::vector<const Area*> trail_areas;
+        auto add_trail_area = [&trail_areas](const Area* candidate, const std::string& type) {
+            if (!candidate) return;
+            std::string lowered = type;
+            std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+            if (lowered == "trail") {
+                trail_areas.push_back(candidate);
+            }
+        };
+        if (room) {
+            if (room->room_area) {
+                add_trail_area(room->room_area.get(), room->room_area->get_type());
+            }
+            for (const auto& named : room->areas) {
+                add_trail_area(named.area.get(), named.type);
+            }
+        }
+        ctx.set_trail_areas(std::move(trail_areas));
 
         const auto& queue = planner.get_spawn_queue();
         const Area* area_ptr = room->room_area.get();
@@ -2129,6 +2132,8 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                 center.spawn(info, area_ptr, ctx);
             } else if (pos == "Perimeter") {
                 perimeter.spawn(info, area_ptr, ctx);
+            } else if (pos == "Edge") {
+                edge.spawn(info, area_ptr, ctx);
             } else if (pos == "Percent") {
                 percent.spawn(info, area_ptr, ctx);
             } else {
@@ -2162,7 +2167,7 @@ void DevControls::regenerate_map_grid_assets() {
     }
 }
 
-void DevControls::regenerate_boundary_spawn_group(const nlohmann::json& entry) {
+void DevControls::regenerate_edge_spawn_group(const nlohmann::json& entry) {
     if (!assets_ || !entry.is_object()) {
         return;
     }
@@ -2176,7 +2181,7 @@ void DevControls::regenerate_boundary_spawn_group(const nlohmann::json& entry) {
     const int radius = map_radius_or_default();
     const int diameter = radius * 2;
     SDL_Point center{radius, radius};
-    Area area("map_boundary_regen", center, diameter, diameter, "Circle", 1, diameter, diameter);
+    Area area("map_edge_regen", center, diameter, diameter, "Circle", 1, diameter, diameter);
 
     std::vector<Area> exclusion;
     const auto& rooms = assets_->rooms();
@@ -2193,9 +2198,9 @@ void DevControls::regenerate_boundary_spawn_group(const nlohmann::json& entry) {
     root["spawn_groups"].push_back(entry);
     std::string source = assets_->map_info_path();
     if (!source.empty()) {
-        source += "::map_boundary_data";
+        source += "::map_edge_data";
     }
-    auto spawned = spawner.spawn_boundary_from_json(root, area, source);
+    auto spawned = spawner.spawn_edge_from_json(root, area, source);
     integrate_spawned_assets(spawned);
 }
 
@@ -2283,23 +2288,23 @@ void DevControls::restore_filter_hidden_assets() const {
     filter_hidden_assets_.clear();
 }
 
-void DevControls::toggle_boundary_assets_modal() {
+void DevControls::toggle_edge_assets_modal() {
     if (!assets_) return;
-    if (!boundary_assets_modal_) {
-        boundary_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
-        boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
-        boundary_assets_modal_->set_floating_stack_key("boundary_assets_modal");
+    if (!edge_assets_modal_) {
+        edge_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
+        edge_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+        edge_assets_modal_->set_floating_stack_key("edge_assets_modal");
     } else {
-        boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+        edge_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
     auto save = [this]() { return persist_map_info_to_disk(); };
-    auto regen = [this](const nlohmann::json& entry) { this->regenerate_boundary_spawn_group(entry); };
+    auto regen = [this](const nlohmann::json& entry) { this->regenerate_edge_spawn_group(entry); };
     auto& map_json = assets_->map_info_json();
     SDL_Color color{255, 200, 120, 255};
-    boundary_assets_modal_->open(map_json,
-                                 "map_boundary_data",
-                                 "batch_map_boundary",
-                                 "Boundary",
+    edge_assets_modal_->open(map_json,
+                                 "map_edge_data",
+                                 "batch_map_edge",
+                                 "Edge",
                                  color,
                                  save,
                                  regen);
@@ -2308,11 +2313,11 @@ void DevControls::toggle_boundary_assets_modal() {
 void DevControls::open_regenerate_room_popup() {
     if (!can_use_room_editor_ui()) return;
     if (!rooms_ || rooms_->empty()) {
-        if (regenerate_popup_) regenerate_popup_->close();
+        if (room_search_panel_) room_search_panel_->close();
         return;
     }
 
-    std::vector<std::pair<std::string, Room*>> entries;
+    std::vector<RoomSearchPanel::Entry> entries;
     entries.reserve(rooms_->size());
     for (Room* room : *rooms_) {
         if (!room || room == current_room_) continue;
@@ -2321,31 +2326,47 @@ void DevControls::open_regenerate_room_popup() {
             continue;
         }
         std::string name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
-        entries.emplace_back(std::move(name), room);
+        RoomSearchPanel::Entry entry;
+        entry.label = name;
+        entry.value = room->room_name;
+        entry.room = room;
+        entry.search_terms.push_back(name);
+        entries.push_back(std::move(entry));
     }
 
     if (entries.empty()) {
-        if (regenerate_popup_) regenerate_popup_->close();
+        if (room_search_panel_) room_search_panel_->close();
         return;
     }
 
     std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
-        return to_lower_copy(a.first) < to_lower_copy(b.first);
+        return to_lower_copy(a.label) < to_lower_copy(b.label);
     });
 
-    if (!regenerate_popup_) {
-        regenerate_popup_ = std::make_unique<RegenerateRoomPopup>();
+    if (!room_search_panel_) {
+        room_search_panel_ = std::make_unique<RoomSearchPanel>();
     }
 
-    regenerate_popup_->open(entries,
-                            [this](Room* selected) {
-                                if (!selected || !room_editor_) return;
-                                room_editor_->regenerate_room_from_template(selected);
-                                if (regenerate_popup_) regenerate_popup_->close();
-                                sync_header_button_states();
-                            },
-                            screen_w_,
-                            screen_h_);
+    room_search_panel_->set_embedded_mode(false);
+    room_search_panel_->set_screen_dimensions(screen_w_, screen_h_);
+    room_search_panel_->set_entries(std::move(entries));
+    room_search_panel_->set_excluded_values({});
+    room_search_panel_->set_on_select([this](const RoomSearchPanel::Selection& selection) {
+        if (!room_editor_) {
+            return;
+        }
+        if (selection.room) {
+            room_editor_->regenerate_room_from_template(selection.room);
+        }
+        if (room_search_panel_) {
+            room_search_panel_->close();
+        }
+        sync_header_button_states();
+    });
+    const int anchor_x = std::max(16, screen_w_ - DockableCollapsible::kDefaultFloatingContentWidth - DMSpacing::panel_padding());
+    const int anchor_y = DMSpacing::panel_padding();
+    room_search_panel_->set_anchor_position(anchor_x, anchor_y);
+    room_search_panel_->open();
 }
 
 void DevControls::set_room_area_cache_listener(RoomAreaCache::Listener listener) {

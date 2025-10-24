@@ -1,8 +1,10 @@
 #include "DockableCollapsible.hpp"
 
 #include "FloatingDockableManager.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 #include "draw_utils.hpp"
 #include "dev_ui_settings.hpp"
+#include "dm_icons.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -20,14 +22,27 @@
 namespace {
 
     void draw_grip(SDL_Renderer* r, const SDL_Rect& area, SDL_Color col) {
-        const int lines = 3;
-        const int gap   = 3;
-        int total_h = lines*1 + (lines-1)*gap;
-        int start_y = area.y + (area.h - total_h)/2;
+        if (!r || area.w <= 0 || area.h <= 0) {
+            return;
+        }
+
+        const float margin = 3.0f;
+        const float usable = std::min(static_cast<float>(area.w), static_cast<float>(area.h)) - margin * 2.0f;
+        if (usable <= 0.0f) {
+            return;
+        }
+
+        const float radius = usable * 0.5f;
+        const float cx = static_cast<float>(area.x) + static_cast<float>(area.w) * 0.5f;
+        const float cy = static_cast<float>(area.y) + static_cast<float>(area.h) * 0.5f;
+
         SDL_SetRenderDrawColor(r, col.r, col.g, col.b, col.a);
-        for (int i=0;i<lines;++i) {
-            int y = start_y + i*(1+gap);
-            SDL_RenderDrawLine(r, area.x + 3, y, area.x + area.w - 3, y);
+        for (const auto& seg : DMIcons::CollapsibleHandleSegments()) {
+            int x0 = static_cast<int>(std::lround(cx + seg.x0 * radius));
+            int y0 = static_cast<int>(std::lround(cy + seg.y0 * radius));
+            int x1 = static_cast<int>(std::lround(cx + seg.x1 * radius));
+            int y1 = static_cast<int>(std::lround(cy + seg.y1 * radius));
+            SDL_RenderDrawLine(r, x0, y0, x1, y1);
         }
     }
 
@@ -132,8 +147,11 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
     scroll_enabled_ = floatable;
     available_height_override_ = -1;
     rect_.x = x; rect_.y = y;
-    header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), floating_content_width_, DMButton::height());
-    close_btn_  = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
+    header_btn_ = std::make_unique<DMButton>(title_, header_button_style_, floating_content_width_, DMButton::height());
+    close_btn_  = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                             &DMStyles::DeleteButton(),
+                                             DMButton::height(),
+                                             DMButton::height());
     padding_ = DMSpacing::panel_padding();
     row_gap_ = DMSpacing::item_gap();
     col_gap_ = DMSpacing::item_gap();
@@ -141,9 +159,15 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
         rect_.w = 2 * padding_ + floating_content_width_;
     }
     update_header_button();
+    update_layout_manager_registration();
 }
 
-DockableCollapsible::~DockableCollapsible() = default;
+DockableCollapsible::~DockableCollapsible() {
+    if (registered_with_layout_manager_) {
+        FloatingPanelLayoutManager::instance().unregisterPanel(this);
+        registered_with_layout_manager_ = false;
+    }
+}
 
 void DockableCollapsible::set_visible(bool v) {
     if (visible_ == v) {
@@ -161,6 +185,7 @@ void DockableCollapsible::set_visible(bool v) {
         if (on_close_) on_close_();
     }
     invalidate_layout();
+    update_layout_manager_registration();
 }
 
 void DockableCollapsible::open() {
@@ -212,13 +237,36 @@ void DockableCollapsible::set_show_header(bool show) {
         close_btn_.reset();
     } else {
         int header_w = floatable_ ? floating_content_width_ : 260;
-        header_btn_ = std::make_unique<DMButton>(title_, &DMStyles::HeaderButton(), header_w, DMButton::height());
+        header_btn_ = std::make_unique<DMButton>(title_, header_button_style_, header_w, DMButton::height());
         if (floatable_ || close_button_enabled_) {
-            close_btn_ = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
+            close_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                                    &DMStyles::DeleteButton(),
+                                                    DMButton::height(),
+                                                    DMButton::height());
         }
         update_header_button();
     }
     invalidate_layout();
+}
+
+void DockableCollapsible::set_header_button_style(const DMButtonStyle* style) {
+    const DMButtonStyle* resolved = style ? style : &DMStyles::HeaderButton();
+    if (header_button_style_ == resolved) {
+        return;
+    }
+    header_button_style_ = resolved;
+    if (header_btn_) {
+        header_btn_->set_style(header_button_style_);
+        update_header_button();
+    }
+}
+
+void DockableCollapsible::set_header_highlight_color(SDL_Color color) {
+    header_highlight_override_ = color;
+}
+
+void DockableCollapsible::clear_header_highlight_color() {
+    header_highlight_override_.reset();
 }
 
 void DockableCollapsible::set_close_button_enabled(bool enabled) {
@@ -229,7 +277,10 @@ void DockableCollapsible::set_close_button_enabled(bool enabled) {
     if (show_header_) {
         if (floatable_ || close_button_enabled_) {
             if (!close_btn_) {
-                close_btn_ = std::make_unique<DMButton>("X", &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
+                close_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                                        &DMStyles::DeleteButton(),
+                                                        DMButton::height(),
+                                                        DMButton::height());
             }
         } else {
             close_btn_.reset();
@@ -258,14 +309,16 @@ void DockableCollapsible::set_scroll_enabled(bool enabled) {
 }
 
 void DockableCollapsible::set_position(int x, int y) {
-    if (!floatable_) return;
-    rect_.x = x; rect_.y = y;
-    clamp_to_bounds(last_screen_w_, last_screen_h_);
-    invalidate_layout(true);
+    set_position_internal(x, y, false);
+}
+
+void DockableCollapsible::set_position_from_layout_manager(int x, int y) {
+    set_position_internal(x, y, true);
 }
 
 void DockableCollapsible::set_rect(const SDL_Rect& r) {
     rect_ = r;
+    notify_layout_manager_geometry_changed();
     invalidate_layout();
 }
 
@@ -278,6 +331,8 @@ void DockableCollapsible::set_floatable(bool floatable) {
     header_dragging_via_button_ = false;
     header_btn_drag_moved_ = false;
     pointer_block_frames_ = 0;
+    update_layout_manager_registration();
+    notify_layout_manager_geometry_changed();
     invalidate_layout();
 }
 
@@ -285,6 +340,7 @@ void DockableCollapsible::set_work_area(const SDL_Rect& area) {
     work_area_ = area;
     if (work_area_.w > 0) last_screen_w_ = work_area_.w;
     if (work_area_.h > 0) last_screen_h_ = work_area_.h;
+    notify_layout_manager_geometry_changed();
     invalidate_layout();
 }
 
@@ -294,6 +350,7 @@ void DockableCollapsible::set_available_height_override(int height) {
         return;
     }
     available_height_override_ = height;
+    notify_layout_manager_geometry_changed();
     invalidate_layout(true);
 }
 
@@ -303,6 +360,7 @@ void DockableCollapsible::set_cell_width(int w) {
         return;
     }
     cell_width_ = std::max(40, w);
+    notify_layout_manager_geometry_changed();
     invalidate_layout();
 }
 
@@ -312,6 +370,7 @@ void DockableCollapsible::set_padding(int p) {
         return;
     }
     padding_ = std::max(0, p);
+    notify_layout_manager_geometry_changed();
     invalidate_layout();
 }
 
@@ -321,6 +380,7 @@ void DockableCollapsible::set_row_gap(int g) {
         return;
     }
     row_gap_ = std::max(0, g);
+    notify_layout_manager_geometry_changed();
     invalidate_layout();
 }
 
@@ -330,6 +390,7 @@ void DockableCollapsible::set_col_gap(int g) {
         return;
     }
     col_gap_ = std::max(0, g);
+    notify_layout_manager_geometry_changed();
     invalidate_layout();
 }
 
@@ -339,6 +400,7 @@ void DockableCollapsible::set_visible_height(int h) {
         return;
     }
     visible_height_ = std::max(0, h);
+    notify_layout_manager_geometry_changed();
     invalidate_layout();
 }
 
@@ -352,7 +414,52 @@ void DockableCollapsible::set_floating_content_width(int w) {
         return;
     }
     floating_content_width_ = clamped;
+    notify_layout_manager_geometry_changed();
     invalidate_layout();
+}
+
+void DockableCollapsible::set_position_internal(int x, int y, bool from_layout_manager) {
+    if (!floatable_) {
+        return;
+    }
+    rect_.x = x;
+    rect_.y = y;
+
+    if (from_layout_manager) {
+        update_geometry_after_move();
+        return;
+    }
+
+    notify_layout_manager_geometry_changed();
+    clamp_to_bounds(last_screen_w_, last_screen_h_);
+    invalidate_layout(true);
+}
+
+void DockableCollapsible::update_layout_manager_registration() {
+    bool should_register = floatable_ && visible_;
+    if (should_register) {
+        if (!registered_with_layout_manager_) {
+            FloatingPanelLayoutManager::instance().registerPanel(this);
+            registered_with_layout_manager_ = true;
+        }
+    } else if (registered_with_layout_manager_) {
+        FloatingPanelLayoutManager::instance().unregisterPanel(this);
+        registered_with_layout_manager_ = false;
+    }
+}
+
+void DockableCollapsible::notify_layout_manager_geometry_changed() const {
+    if (!floatable_ || !registered_with_layout_manager_) {
+        return;
+    }
+    FloatingPanelLayoutManager::instance().notifyPanelGeometryChanged(const_cast<DockableCollapsible*>(this));
+}
+
+void DockableCollapsible::notify_layout_manager_content_changed() const {
+    if (!floatable_ || !registered_with_layout_manager_) {
+        return;
+    }
+    FloatingPanelLayoutManager::instance().notifyPanelContentChanged(const_cast<DockableCollapsible*>(this));
 }
 
 void DockableCollapsible::reset_scroll() const {
@@ -642,7 +749,7 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     const SDL_Color& fill = DMStyles::PanelBG();
-    const SDL_Color& header_highlight = DMStyles::PanelHeader();
+    SDL_Color header_highlight = header_highlight_override_.value_or(DMStyles::PanelHeader());
     const SDL_Color& border_shadow = DMStyles::Border();
     const float highlight_intensity = DMStyles::HighlightIntensity();
     const float shadow_intensity = DMStyles::ShadowIntensity();
@@ -778,6 +885,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
                 }
             }
         }
+        notify_layout_manager_content_changed();
     };
 
     int header_total_w = 0;
@@ -916,7 +1024,9 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
 
 void DockableCollapsible::update_header_button() const {
     if (!header_btn_) return;
-    std::string arrow = expanded_ ? " \xE2\x96\xB2" : " \xE2\x96\xBC";
+    const std::string arrow = std::string(" ") +
+                              std::string(expanded_ ? DMIcons::CollapseExpanded()
+                                                     : DMIcons::CollapseCollapsed());
     header_btn_->set_text(title_ + arrow);
 }
 

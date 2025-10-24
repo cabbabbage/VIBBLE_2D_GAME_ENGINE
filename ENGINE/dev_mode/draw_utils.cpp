@@ -172,6 +172,12 @@ void DrawBeveledRect(
     float shadow_intensity) {
     if (!renderer || rect.w <= 0 || rect.h <= 0) return;
 
+    (void)bevel_depth;
+    (void)highlight;
+    (void)shadow;
+    (void)highlight_intensity;
+    (void)shadow_intensity;
+
     const int effective_radius = effective_corner_radius(rect, corner_radius);
 
     SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
@@ -183,73 +189,9 @@ void DrawBeveledRect(
         }
     }
 
-    const int max_bevel = std::max(0, std::min({bevel_depth, rect.w / 2, rect.h / 2}));
-    if (max_bevel > 0) {
-        const int bevel_iterations = max_bevel;
-        for (int i = 0; i < bevel_iterations; ++i) {
-            const float t = (bevel_iterations <= 1) ? 1.0f : (1.0f - static_cast<float>(i) / (bevel_iterations - 1));
-            const SDL_Color top_color = LightenColor(highlight, highlight_intensity * t);
-            const SDL_Color left_color = LightenColor(highlight, highlight_intensity * t);
-            const SDL_Color bottom_color = DarkenColor(shadow, shadow_intensity * t);
-            const SDL_Color right_color = DarkenColor(shadow, shadow_intensity * t);
-
-            const int inset = i;
-
-            int start = 0;
-            int end = -1;
-
-            const int top_y = rect.y + inset;
-            if (compute_horizontal_span(rect, effective_radius, inset, top_y, start, end)) {
-                SDL_SetRenderDrawColor(renderer, top_color.r, top_color.g, top_color.b, top_color.a);
-                draw_horizontal(renderer, top_y, start, end);
-            }
-
-            const int bottom_y = rect.y + rect.h - 1 - inset;
-            if (bottom_y != top_y && compute_horizontal_span(rect, effective_radius, inset, bottom_y, start, end)) {
-                SDL_SetRenderDrawColor(renderer, bottom_color.r, bottom_color.g, bottom_color.b, bottom_color.a);
-                draw_horizontal(renderer, bottom_y, start, end);
-            }
-
-            const int left_x = rect.x + inset;
-            if (compute_vertical_span(rect, effective_radius, inset, left_x, start, end)) {
-                SDL_SetRenderDrawColor(renderer, left_color.r, left_color.g, left_color.b, left_color.a);
-                draw_vertical(renderer, left_x, start, end);
-            }
-
-            const int right_x = rect.x + rect.w - 1 - inset;
-            if (right_x != left_x && compute_vertical_span(rect, effective_radius, inset, right_x, start, end)) {
-                SDL_SetRenderDrawColor(renderer, right_color.r, right_color.g, right_color.b, right_color.a);
-                draw_vertical(renderer, right_x, start, end);
-            }
-        }
-    }
-
     if (draw_outline) {
         const SDL_Color outline_color = DarkenColor(fill, 0.4f);
-        SDL_SetRenderDrawColor(renderer, outline_color.r, outline_color.g, outline_color.b, outline_color.a);
-
-        int start = 0;
-        int end = -1;
-
-        const int top_y = rect.y;
-        if (compute_horizontal_span(rect, effective_radius, 0, top_y, start, end)) {
-            draw_horizontal(renderer, top_y, start, end);
-        }
-
-        const int bottom_y = rect.y + rect.h - 1;
-        if (bottom_y != top_y && compute_horizontal_span(rect, effective_radius, 0, bottom_y, start, end)) {
-            draw_horizontal(renderer, bottom_y, start, end);
-        }
-
-        const int left_x = rect.x;
-        if (compute_vertical_span(rect, effective_radius, 0, left_x, start, end)) {
-            draw_vertical(renderer, left_x, start, end);
-        }
-
-        const int right_x = rect.x + rect.w - 1;
-        if (right_x != left_x && compute_vertical_span(rect, effective_radius, 0, right_x, start, end)) {
-            draw_vertical(renderer, right_x, start, end);
-        }
+        DrawRoundedOutline(renderer, rect, effective_radius, 1, outline_color);
     }
 }
 

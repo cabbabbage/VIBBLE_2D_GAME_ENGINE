@@ -47,12 +47,15 @@ public:
     bool handle_event(const SDL_Event& event);
     bool contains_point(int x, int y) const;
 
+    const SDL_Rect& header_rect() const { return header_rect_; }
+    const SDL_Rect& layout_bounds() const { return layout_bounds_; }
+
     void reset();
 
     bool passes(const Asset& asset) const;
 
 private:
-    enum class FilterKind { MapAssets, CurrentRoom, Type };
+    enum class FilterKind { MapAssets, CurrentRoom, Type, SpawnMethod };
 
     struct FilterEntry {
         std::string id;
@@ -64,6 +67,7 @@ private:
         bool map_assets = false;
         bool current_room = true;
         std::unordered_map<std::string, bool> type_filters;
+        std::unordered_map<std::string, bool> method_filters;
     };
 
     void rebuild_map_spawn_ids();
@@ -75,9 +79,14 @@ private:
     void persist_filters_expanded() const;
     void notify_state_changed();
     bool type_filter_enabled(const std::string& type) const;
+    bool method_filter_enabled(const std::string& method) const;
     bool default_type_enabled(const std::string& type) const;
+    bool default_method_enabled(const std::string& method) const;
     bool load_type_filter_value(const std::string& type, bool default_value) const;
+    bool load_method_filter_value(const std::string& method, bool default_value) const;
     std::string format_type_label(const std::string& type) const;
+    std::string format_method_label(const std::string& method) const;
+    static std::string canonicalize_method(const std::string& method);
     void collect_spawn_ids(const nlohmann::json& node, std::unordered_set<std::string>& out) const;
     void update_filter_toggle_label();
     void clear_checkbox_rects();

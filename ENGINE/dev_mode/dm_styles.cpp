@@ -17,9 +17,9 @@ constexpr float kShadowIntensity    = 0.66f;
 constexpr int kCornerRadius         = 10;
 constexpr int kBevelDepth           = 1;
 
-const SDL_Color kHeaderBg          = dm::rgba(30, 41, 59, 235);
-const SDL_Color kHeaderHover       = dm::rgba(46, 64, 94, 245);
-const SDL_Color kHeaderPress       = dm::rgba(24, 34, 53, 245);
+const SDL_Color kHeaderBg          = dm::rgba(52, 71, 105, 240);
+const SDL_Color kHeaderHover       = dm::rgba(68, 92, 130, 245);
+const SDL_Color kHeaderPress       = dm::rgba(40, 57, 86, 245);
 const SDL_Color kHeaderText        = kTextPrimary;
 
 const SDL_Color kAccentOrange           = dm::rgba(249, 115, 22, 240);
@@ -31,15 +31,21 @@ const SDL_Color kAccentHover            = kAccentOrangeHover;
 const SDL_Color kAccentPress            = dm::rgba(194, 65, 12, 240);
 const SDL_Color kAccentText             = kHighlightWhite;
 
+const SDL_Color kFooterToggleBg     = dm::rgba(220, 200, 115, 220);
+const SDL_Color kFooterToggleHover  = dm::rgba(253, 224, 71, 235);
+const SDL_Color kFooterTogglePress  = dm::rgba(217, 119, 6, 235);
+const SDL_Color kFooterToggleBorder = dm::rgba(161, 98, 7, 255);
+const SDL_Color kFooterToggleText   = kHighlightWhite;
+
 const SDL_Color kWarnBg            = dm::rgba(234, 179, 8, 235);
 const SDL_Color kWarnHover         = dm::rgba(250, 204, 21, 245);
 const SDL_Color kWarnPress         = dm::rgba(202, 138, 4, 235);
 const SDL_Color kWarnBorder        = dm::rgba(161, 98, 7, 255);
 const SDL_Color kWarnText          = dm::rgba(30, 30, 30, 255);
 
-const SDL_Color kListBg            = dm::rgba(20, 30, 49, 210);
-const SDL_Color kListHover         = dm::rgba(31, 45, 70, 230);
-const SDL_Color kListPress         = dm::rgba(41, 56, 85, 240);
+const SDL_Color kListBg            = dm::rgba(45, 64, 96, 225);
+const SDL_Color kListHover         = dm::rgba(60, 82, 118, 240);
+const SDL_Color kListPress         = dm::rgba(38, 54, 82, 240);
 const SDL_Color kListBorder        = kNeutralBorder;
 const SDL_Color kListText          = dm::rgba(215, 224, 244, 255);
 
@@ -115,6 +121,17 @@ const DMButtonStyle &DMStyles::AccentButton() {
       kAccentPress,
       kAccentBorder,
       kAccentText};
+  return s;
+}
+
+const DMButtonStyle &DMStyles::FooterToggleButton() {
+  static const DMButtonStyle s{
+      {dm::FONT_PATH, 18, kFooterToggleText},
+      kFooterToggleBg,
+      kFooterToggleHover,
+      kFooterTogglePress,
+      kFooterToggleBorder,
+      kFooterToggleText};
   return s;
 }
 

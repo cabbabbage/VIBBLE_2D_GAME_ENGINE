@@ -93,3 +93,16 @@ void FloatingDockableManager::notify_panel_closed(const DockableCollapsible* pan
                                 }),
                  stack_.end());
 }
+
+std::vector<DockableCollapsible*> FloatingDockableManager::open_panels() const {
+    std::vector<DockableCollapsible*> panels;
+    if (current_.panel) {
+        panels.push_back(current_.panel);
+    }
+    for (const auto& entry : stack_) {
+        if (entry.panel) {
+            panels.push_back(entry.panel);
+        }
+    }
+    return panels;
+}

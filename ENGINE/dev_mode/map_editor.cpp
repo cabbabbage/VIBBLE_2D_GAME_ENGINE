@@ -165,7 +165,7 @@ void MapEditor::focus_on_room(Room* room) {
     Area adjusted = cam->convert_area_to_aspect(*room->room_area);
     cam->set_manual_zoom_override(true);
     cam->set_focus_override(adjusted.get_center());
-    cam->zoom_to_area(adjusted, 20);
+    cam->zoom_to_area(adjusted, 0);
 }
 
 void MapEditor::ensure_font() {
@@ -253,21 +253,21 @@ void MapEditor::apply_camera_to_bounds() {
 };
         Area area("map_bounds", pts);
         cam->set_focus_override(center);
-        cam->zoom_to_area(area, 35);
+        cam->zoom_to_area(area, 0);
     } else if (has_entry_center_) {
         cam->set_focus_override(entry_center_);
-        cam->zoom_to_scale(1.0, 20);
+        cam->zoom_to_scale(1.0, 0);
     } else if (has_spawn_center) {
         cam->set_focus_override(spawn_center);
         if (spawn_room && spawn_room->room_area) {
             Area adjusted = cam->convert_area_to_aspect(*spawn_room->room_area);
-            cam->zoom_to_area(adjusted, 35);
+            cam->zoom_to_area(adjusted, 0);
         } else {
-            cam->zoom_to_scale(1.0, 20);
+            cam->zoom_to_scale(1.0, 0);
         }
     } else {
         cam->set_focus_override(SDL_Point{0, 0});
-        cam->zoom_to_scale(1.0, 20);
+        cam->zoom_to_scale(1.0, 0);
     }
 }
 

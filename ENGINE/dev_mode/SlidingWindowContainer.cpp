@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "dm_icons.hpp"
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
 #include "font_cache.hpp"
@@ -65,6 +66,36 @@ void SlidingWindowContainer::set_scrollbar_visible(bool visible) {
         scroll_thumb_rect_ = SDL_Rect{0, 0, 0, 0};
     }
     layout(last_screen_w_, last_screen_h_);
+}
+
+void SlidingWindowContainer::set_header_navigation_button(const std::string& label, std::function<void()> on_click) {
+    if (label.empty() || !on_click) {
+        clear_header_navigation_button();
+        return;
+    }
+    header_nav_callback_ = std::move(on_click);
+    if (!header_nav_button_) {
+        header_nav_button_ = std::make_unique<DMButton>(label, &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+    } else {
+        header_nav_button_->set_style(&DMStyles::HeaderButton());
+        header_nav_button_->set_text(label);
+    }
+    layout_dirty_ = true;
+}
+
+void SlidingWindowContainer::clear_header_navigation_button() {
+    header_nav_button_.reset();
+    header_nav_callback_ = nullptr;
+    header_nav_rect_ = SDL_Rect{0, 0, 0, 0};
+    layout_dirty_ = true;
+}
+
+void SlidingWindowContainer::set_header_navigation_alignment_right(bool align_right) {
+    if (header_nav_align_right_ == align_right) {
+        return;
+    }
+    header_nav_align_right_ = align_right;
+    layout_dirty_ = true;
 }
 
 void SlidingWindowContainer::request_layout() {
@@ -210,6 +241,18 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
 
     if (event_function_) {
         if (event_function_(e)) return true;
+    }
+
+    if (header_visible_ && header_nav_button_) {
+        bool handled = header_nav_button_->handle_event(e);
+        if (handled) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                if (header_nav_callback_) {
+                    header_nav_callback_();
+                }
+            }
+            return true;
+        }
     }
 
     if (header_visible_ && close_button_enabled_ && close_button_) {
@@ -406,6 +449,9 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
             SDL_RenderFillRect(renderer, &header_region);
         }
 
+        if (header_nav_button_) {
+            header_nav_button_->render(renderer);
+        }
         if (close_button_enabled_ && close_button_) {
             close_button_->render(renderer);
         }
@@ -545,25 +591,84 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
     const int close_button_w = (header_visible_ && close_button_enabled_) ? label_height : 0;
     const int close_button_gap = (header_visible_ && close_button_enabled_) ? DMSpacing::item_gap() : 0;
 
-    if (header_visible_ && close_button_enabled_) {
-        close_button_rect_ = SDL_Rect{content_x, content_top, close_button_w, label_height};
-        int label_x = close_button_rect_.x + close_button_rect_.w + close_button_gap;
-        int label_w = std::max(0, (content_x + base_content_w) - label_x);
-        name_label_rect_ = SDL_Rect{label_x, content_top, label_w, label_height};
-        if (!close_button_) {
-            close_button_ = std::make_unique<DMButton>("X", &DMStyles::HeaderButton(), close_button_w, label_height);
+    if (header_visible_) {
+        int label_start_x = content_x;
+        int label_end_x = content_x + base_content_w;
+
+        if (close_button_enabled_) {
+            const int close_x = content_x + base_content_w - close_button_w;
+            close_button_rect_ = SDL_Rect{close_x, content_top, close_button_w, label_height};
+            label_end_x = std::max(content_x, close_x - close_button_gap);
+            if (!close_button_) {
+                close_button_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
+                                                           &DMStyles::DeleteButton(),
+                                                           close_button_w,
+                                                           label_height);
+            }
+            if (close_button_) {
+                close_button_->set_rect(close_button_rect_);
+                close_button_->set_style(&DMStyles::DeleteButton());
+                close_button_->set_text(std::string(DMIcons::Close()));
+            }
+        } else {
+            close_button_rect_ = SDL_Rect{0, 0, 0, 0};
+            if (close_button_) {
+                close_button_->set_rect(close_button_rect_);
+            }
+            if (!close_button_enabled_) {
+                close_button_.reset();
+            }
         }
-        if (close_button_) {
-            close_button_->set_rect(close_button_rect_);
+
+        if (header_nav_button_) {
+            const int nav_gap = DMSpacing::item_gap();
+            const int preferred_w = header_nav_button_->preferred_width();
+            int nav_width = std::max(DMButton::height(), preferred_w);
+            nav_width = std::min(nav_width, std::max(0, label_end_x - content_x));
+            if (header_nav_align_right_) {
+                int nav_x = std::max(content_x, label_end_x - nav_width);
+                header_nav_rect_ = SDL_Rect{nav_x, content_top, nav_width, label_height};
+                header_nav_button_->set_rect(header_nav_rect_);
+                header_nav_button_->set_style(&DMStyles::HeaderButton());
+                header_nav_rect_ = header_nav_button_->rect();
+                if (header_nav_rect_.w > 0) {
+                    label_end_x = std::max(content_x, header_nav_rect_.x - nav_gap);
+                } else {
+                    label_end_x = std::max(content_x, header_nav_rect_.x);
+                }
+            } else {
+                header_nav_rect_ = SDL_Rect{content_x, content_top, nav_width, label_height};
+                header_nav_button_->set_rect(header_nav_rect_);
+                header_nav_button_->set_style(&DMStyles::HeaderButton());
+                header_nav_rect_ = header_nav_button_->rect();
+                if (header_nav_rect_.w > 0) {
+                    label_start_x = std::min(label_end_x, header_nav_rect_.x + header_nav_rect_.w + nav_gap);
+                } else {
+                    label_start_x = std::min(label_end_x, header_nav_rect_.x);
+                }
+            }
+        } else {
+            header_nav_rect_ = SDL_Rect{0, 0, 0, 0};
+        }
+
+        int label_w = std::max(0, label_end_x - label_start_x);
+        name_label_rect_ = SDL_Rect{label_start_x, content_top, label_w, label_height};
+
+        if (header_nav_button_ && header_nav_rect_.w <= 0) {
+            header_nav_button_->set_rect(header_nav_rect_);
         }
     } else {
         close_button_rect_ = SDL_Rect{0, 0, 0, 0};
         name_label_rect_ = SDL_Rect{0, 0, 0, 0};
+        header_nav_rect_ = SDL_Rect{0, 0, 0, 0};
         if (close_button_) {
             close_button_->set_rect(close_button_rect_);
         }
         if (!close_button_enabled_) {
             close_button_.reset();
+        }
+        if (header_nav_button_) {
+            header_nav_button_->set_rect(header_nav_rect_);
         }
     }
 

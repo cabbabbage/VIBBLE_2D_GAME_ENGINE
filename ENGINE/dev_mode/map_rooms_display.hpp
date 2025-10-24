@@ -37,6 +37,7 @@ private:
         std::string key;
         std::string name;
         SDL_Rect rect{0, 0, 0, 0};
+        SDL_Rect delete_rect{0, 0, 0, 0};
     };
 
     void configure_container(SlidingWindowContainer& container);
@@ -51,14 +52,16 @@ private:
     void set_hovered_room(const std::string& key);
     void clear_hover();
     void create_room_entry();
+    void delete_room_entry(const std::string& key);
 
 private:
     SlidingWindowContainer* container_ = nullptr;
     nlohmann::json* map_info_ = nullptr;
     std::vector<RoomRow> rooms_;
     std::string hovered_room_;
+    std::string hovered_delete_room_;
     SelectRoomCallback on_select_room_{};
-    std::string header_text_ = "Room List";
+    std::string header_text_ = "Map Rooms";
     std::unique_ptr<DMButton> create_room_button_;
     std::function<void()> on_rooms_changed_{};
 };

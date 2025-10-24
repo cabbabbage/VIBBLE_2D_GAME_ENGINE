@@ -1,7 +1,6 @@
 #include "map_layers_panel.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <cctype>
 #include <iomanip>
 #include <set>
@@ -18,36 +17,15 @@
 #include "map_layers_preview_widget.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 #include "utils/input.hpp"
+#include "dev_mode_color_utils.hpp"
+#include "dev_mode_sdl_event_utils.hpp"
 
 namespace {
-
-SDL_Point event_point_from_event(const SDL_Event& e) {
-    if (e.type == SDL_MOUSEMOTION) {
-        return SDL_Point{e.motion.x, e.motion.y};
-    }
-    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
-        return SDL_Point{e.button.x, e.button.y};
-    }
-    int mx = 0;
-    int my = 0;
-    SDL_GetMouseState(&mx, &my);
-    return SDL_Point{mx, my};
-}
 
 constexpr int kMinimumListHeight = 200;
 constexpr int kRowHeight = 52;
 constexpr int kDropIndicatorThickness = 3;
-
-SDL_Color mix_color(SDL_Color a, SDL_Color b, float t) {
-    t = std::clamp(t, 0.0f, 1.0f);
-    auto mix = [t](Uint8 x, Uint8 y) {
-        return static_cast<Uint8>(std::lround((1.0f - t) * x + t * y));
-    };
-    return SDL_Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a)};
-}
-
-SDL_Color lighten(SDL_Color c, float amount) { return mix_color(c, SDL_Color{255, 255, 255, c.a}, amount); }
-SDL_Color darken(SDL_Color c, float amount) { return mix_color(c, SDL_Color{0, 0, 0, c.a}, amount); }
+constexpr int kLayerDeleteButtonSize = 26;
 
 const DMLabelStyle& summary_label_style() {
     static DMLabelStyle style{DMStyles::Label().font_path, std::max(12, DMStyles::Label().font_size - 2),
@@ -165,12 +143,18 @@ public:
                 }
 
                 int hit_index = -1;
+                int delete_hit_index = -1;
                 for (const auto& row : owner_->layer_rows_) {
                     if (SDL_PointInRect(&p, &row.rect) == SDL_TRUE) {
                         hit_index = row.index;
+                        if (SDL_PointInRect(&p, &row.delete_button_rect) == SDL_TRUE) {
+                            delete_hit_index = row.index;
+                        }
                         break;
                     }
                 }
+
+                owner_->set_hovered_delete_layer(delete_hit_index);
 
                 if (e.type == SDL_MOUSEMOTION) {
                     if (hit_index >= 0) {
@@ -184,6 +168,10 @@ public:
                 if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
                     if (hit_index >= 0) {
                         owner_->set_hovered_layer(hit_index);
+                        if (delete_hit_index >= 0) {
+                            owner_->on_delete_layer_clicked(delete_hit_index);
+                            return true;
+                        }
                         owner_->on_layers_list_mouse_down(hit_index, p.y);
                         return true;
                     }
@@ -191,6 +179,10 @@ public:
                 }
 
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    if (delete_hit_index >= 0) {
+                        owner_->set_hovered_delete_layer(-1);
+                        return true;
+                    }
                     owner_->on_layers_list_mouse_up(p.y, e.button.button);
                     return true;
                 }
@@ -248,13 +240,7 @@ private:
 MapLayersPanel::MapLayersPanel(int x, int y)
     : DockableCollapsible("Map Layers", true, x, y) {
     add_layer_button_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 140, DMButton::height());
-    duplicate_layer_button_ =
-        std::make_unique<DMButton>("Duplicate Layer", &DMStyles::ListButton(), 160, DMButton::height());
-    delete_layer_button_ = std::make_unique<DMButton>("Delete Layer", &DMStyles::DeleteButton(), 140, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::WarnButton(), 120, DMButton::height());
-    layer_name_box_ = std::make_unique<DMTextBox>("Layer name", "");
-    layer_name_box_raw_ = layer_name_box_.get();
-
     owned_widgets_.push_back(std::make_unique<ButtonWidget>(add_layer_button_.get(), [this]() {
         if (controller_) {
             const int created = controller_->create_layer();
@@ -275,78 +261,6 @@ MapLayersPanel::MapLayersPanel(int x, int y)
         }
     }));
     Widget* add_widget = owned_widgets_.back().get();
-
-    owned_widgets_.push_back(std::make_unique<ButtonWidget>(duplicate_layer_button_.get(), [this]() {
-        if (!controller_ && (!map_info_ || !map_info_->is_object())) {
-            return;
-        }
-        const int source = selected_layer_index_ >= 0 ? selected_layer_index_ : 0;
-        int duplicated_index = -1;
-        if (controller_) {
-            duplicated_index = controller_->duplicate_layer(source);
-        } else {
-            nlohmann::json& layers = layers_array();
-            if (layers.is_array() && source >= 0 && source < static_cast<int>(layers.size())) {
-                nlohmann::json copy = layers[source];
-                if (!copy.is_object()) {
-                    copy = nlohmann::json::object();
-                }
-                std::string base_name = copy.value("name", std::string{"Layer "} + std::to_string(source));
-                if (base_name.empty()) {
-                    base_name = std::string{"Layer "} + std::to_string(source);
-                }
-                auto name_exists = [&](const std::string& candidate) {
-                    return std::any_of(layers.begin(), layers.end(), [&](const nlohmann::json& entry) {
-                        return entry.is_object() && entry.value("name", std::string()) == candidate;
-                    });
-                };
-                std::string candidate = base_name + " Copy";
-                int suffix = 2;
-                while (name_exists(candidate)) {
-                    candidate = base_name + " Copy " + std::to_string(suffix++);
-                }
-                copy["name"] = candidate;
-                if (!copy.contains("rooms") || !copy["rooms"].is_array()) {
-                    copy["rooms"] = nlohmann::json::array();
-                }
-                const int insert_index = std::min(source + 1, static_cast<int>(layers.size()));
-                layers.insert(layers.begin() + insert_index, std::move(copy));
-                duplicated_index = insert_index;
-            }
-        }
-        if (duplicated_index >= 0) {
-            mark_dirty();
-            select_layer(duplicated_index);
-            trigger_save();
-        }
-    }));
-    Widget* duplicate_widget = owned_widgets_.back().get();
-
-    owned_widgets_.push_back(std::make_unique<ButtonWidget>(delete_layer_button_.get(), [this]() {
-        if (selected_layer_index_ < 0) {
-            return;
-        }
-        bool removed = false;
-        if (controller_) {
-            removed = controller_->delete_layer(selected_layer_index_);
-        } else {
-            nlohmann::json& layers = layers_array();
-            if (selected_layer_index_ >= 0 && selected_layer_index_ < static_cast<int>(layers.size())) {
-                layers.erase(layers.begin() + selected_layer_index_);
-                removed = true;
-            }
-        }
-        if (removed) {
-            selected_layer_index_ = -1;
-            current_layer_name_.clear();
-            if (layer_name_box_raw_) {
-                layer_name_box_raw_->set_value("");
-            }
-            mark_dirty();
-            trigger_save();
-        }
-    }));
-    Widget* delete_widget = owned_widgets_.back().get();
 
     owned_widgets_.push_back(std::make_unique<ButtonWidget>(reload_button_.get(), [this]() {
         if (controller_ && controller_->reload()) {
@@ -375,20 +289,17 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     preview_widget_->set_controller(controller_);
     preview_widget_->mark_dirty();
 
-    owned_widgets_.push_back(std::make_unique<TextBoxWidget>(layer_name_box_raw_, true));
-    Widget* name_widget = owned_widgets_.back().get();
-
     owned_widgets_.push_back(std::make_unique<ValidationSummaryWidget>(this));
     validation_widget_ = static_cast<ValidationSummaryWidget*>(owned_widgets_.back().get());
 
     Rows rows;
-    rows.push_back(Row{add_widget, duplicate_widget, delete_widget, reload_widget});
+    rows.push_back(Row{add_widget, reload_widget});
     rows.push_back(Row{list_widget_});
     rows.push_back(Row{preview_widget_});
-    rows.push_back(Row{name_widget});
     rows.push_back(Row{validation_widget_});
     set_rows(rows);
 
+    set_close_button_enabled(true);
     set_expanded(true);
     set_visible(false);
 }
@@ -496,7 +407,6 @@ void MapLayersPanel::set_embedded_mode(bool embedded) {
     }
     embedded_mode_ = embedded;
     set_floatable(!embedded_mode_);
-    set_close_button_enabled(!embedded_mode_);
     if (embedded_mode_ && embedded_bounds_.w > 0 && embedded_bounds_.h > 0) {
         set_rect(embedded_bounds_);
     }
@@ -517,7 +427,6 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
         rebuild_layers();
         data_dirty_ = false;
     }
-    commit_layer_name_edit();
     if (validation_dirty_) {
         validate_layers();
     }
@@ -553,10 +462,6 @@ void MapLayersPanel::select_layer(int index) {
     if (index < 0) {
         if (selected_layer_index_ != -1) {
             selected_layer_index_ = -1;
-            current_layer_name_.clear();
-            if (layer_name_box_raw_) {
-                layer_name_box_raw_->set_value("");
-            }
         }
         if (on_layer_selected_) {
             on_layer_selected_(-1);
@@ -597,10 +502,6 @@ void MapLayersPanel::select_layer(int index) {
     if (name.empty()) {
         name = "Layer " + std::to_string(selected_layer_index_);
     }
-    current_layer_name_ = name;
-    if (layer_name_box_raw_) {
-        layer_name_box_raw_->set_value(name);
-    }
     if (on_layer_selected_) {
         on_layer_selected_(selected_layer_index_);
     }
@@ -635,9 +536,7 @@ void MapLayersPanel::rebuild_layers() {
 
     if (selected_layer_index_ >= 0) {
         select_layer(selected_layer_index_);
-    } else if (layer_name_box_raw_) {
-        layer_name_box_raw_->set_value("");
-        current_layer_name_.clear();
+    } else {
         apply_dependency_highlights();
         update_preview_state();
     }
@@ -649,6 +548,7 @@ void MapLayersPanel::rebuild_layers() {
 
 void MapLayersPanel::rebuild_layer_rows_from_json(const nlohmann::json& layers) {
     layer_rows_.clear();
+    hovered_delete_layer_index_ = -1;
     if (!layers.is_array()) {
         return;
     }
@@ -728,6 +628,16 @@ void MapLayersPanel::update_layer_row_geometry() {
     const int width = std::max(0, area.w - padding * 2);
     for (auto& row : layer_rows_) {
         row.rect = SDL_Rect{area.x + padding, y, width, kRowHeight};
+        const int available_height = std::max(0, row.rect.h - padding * 2);
+        const int button_size = std::max(0, std::min(kLayerDeleteButtonSize, available_height));
+        if (button_size > 0) {
+            const int button_x = std::max(row.rect.x + padding,
+                                          row.rect.x + row.rect.w - padding - button_size);
+            const int button_y = row.rect.y + (row.rect.h - button_size) / 2;
+            row.delete_button_rect = SDL_Rect{button_x, button_y, button_size, button_size};
+        } else {
+            row.delete_button_rect = SDL_Rect{row.rect.x + row.rect.w, row.rect.y, 0, 0};
+        }
         y += kRowHeight + gap;
     }
 }
@@ -844,15 +754,53 @@ void MapLayersPanel::render_layers_list(SDL_Renderer* renderer) const {
             DrawLabelText(renderer, row.summary, text_x, summary_y, summary_style);
         }
 
+        SDL_Rect delete_rect = row.delete_button_rect;
+        if (delete_rect.w > 0 && delete_rect.h > 0) {
+            const bool delete_hovered = (hovered_delete_layer_index_ == row.index);
+            SDL_Color delete_border = error_color();
+            SDL_Color delete_fill = darken(delete_border, 0.35f);
+            if (delete_hovered) {
+                delete_fill = lighten(delete_border, 0.25f);
+            } else if (selected) {
+                delete_fill = lighten(delete_fill, 0.12f);
+            }
+
+            SDL_SetRenderDrawColor(renderer, delete_fill.r, delete_fill.g, delete_fill.b, delete_fill.a);
+            SDL_RenderFillRect(renderer, &delete_rect);
+
+            SDL_Color delete_outline = delete_border;
+            if (delete_hovered) {
+                delete_outline = lighten(delete_outline, 0.1f);
+            }
+            SDL_SetRenderDrawColor(renderer, delete_outline.r, delete_outline.g, delete_outline.b, delete_outline.a);
+            SDL_RenderDrawRect(renderer, &delete_rect);
+
+            const int cross_pad = std::max(3, delete_rect.w / 4);
+            SDL_Color cross_color{255, 255, 255, 255};
+            SDL_SetRenderDrawColor(renderer, cross_color.r, cross_color.g, cross_color.b, cross_color.a);
+            SDL_RenderDrawLine(renderer, delete_rect.x + cross_pad, delete_rect.y + cross_pad,
+                               delete_rect.x + delete_rect.w - cross_pad - 1,
+                               delete_rect.y + delete_rect.h - cross_pad - 1);
+            SDL_RenderDrawLine(renderer, delete_rect.x + delete_rect.w - cross_pad - 1, delete_rect.y + cross_pad,
+                               delete_rect.x + cross_pad, delete_rect.y + delete_rect.h - cross_pad - 1);
+        }
+
         const std::string level = std::string{"Lvl "} + std::to_string(row.index);
         SDL_Point level_size = MeasureLabelText(summary_style, level);
-        int level_x = rect.x + rect.w - level_size.x - padding;
+        int level_right_edge = rect.x + rect.w - padding;
+        if (delete_rect.w > 0) {
+            level_right_edge = delete_rect.x - padding;
+        }
+        level_right_edge = std::max(level_right_edge, text_x + level_size.x);
+        int level_x = level_right_edge - level_size.x;
         int level_y = rect.y + padding;
         DrawLabelText(renderer, level, level_x, level_y, summary_style);
 
         if (row.invalid || row.warning) {
             SDL_Color dot = row.invalid ? error_color() : warning_color();
-            SDL_Rect badge{level_x - 12, rect.y + rect.h / 2 - 4, 8, 8};
+            int badge_right = level_x - padding / 2;
+            int badge_x = std::max(text_x, badge_right - 8);
+            SDL_Rect badge{badge_x, rect.y + rect.h / 2 - 4, 8, 8};
             SDL_SetRenderDrawColor(renderer, dot.r, dot.g, dot.b, dot.a);
             SDL_RenderFillRect(renderer, &badge);
         }
@@ -1367,50 +1315,7 @@ void MapLayersPanel::update_validation_summary_layout(const std::vector<std::str
     validation_lines_.push_back({"Tip: Drag layers to reorder. Use Duplicate to branch quickly.", info_color()});
 }
 
-void MapLayersPanel::commit_layer_name_edit() {
-    if (!layer_name_box_raw_ || selected_layer_index_ < 0) {
-        return;
-    }
-    if (layer_name_box_raw_->is_editing()) {
-        return;
-    }
-    const std::string value = layer_name_box_raw_->value();
-    if (value == current_layer_name_) {
-        return;
-    }
-
-    bool renamed = false;
-    if (controller_) {
-        renamed = controller_->rename_layer(selected_layer_index_, value);
-    } else {
-        nlohmann::json& layers = layers_array();
-        if (selected_layer_index_ >= 0 && selected_layer_index_ < static_cast<int>(layers.size())) {
-            layers[selected_layer_index_]["name"] = value;
-            renamed = true;
-        }
-    }
-
-    if (renamed) {
-        current_layer_name_ = value;
-        for (auto& row : layer_rows_) {
-            if (row.index == selected_layer_index_) {
-                row.name = value;
-                break;
-            }
-        }
-        validation_dirty_ = true;
-        mark_dirty();
-        trigger_save();
-    } else {
-        // Restore previous value if rename failed.
-        if (layer_name_box_raw_) {
-            layer_name_box_raw_->set_value(current_layer_name_);
-        }
-    }
-}
-
 void MapLayersPanel::trigger_save() {
-    commit_layer_name_edit();
     if (!validate_layers()) {
         pending_save_ = true;
         save_blocked_ = true;
@@ -1453,8 +1358,54 @@ void MapLayersPanel::set_hovered_layer(int index) {
     hovered_layer_index_ = index;
 }
 
+void MapLayersPanel::set_hovered_delete_layer(int index) {
+    hovered_delete_layer_index_ = index;
+}
+
+void MapLayersPanel::on_delete_layer_clicked(int index) {
+    if (delete_layer_at(index)) {
+        hovered_layer_index_ = -1;
+        hovered_delete_layer_index_ = -1;
+    }
+}
+
+bool MapLayersPanel::delete_layer_at(int index) {
+    if (index < 0) {
+        return false;
+    }
+
+    bool removed = false;
+    if (controller_) {
+        removed = controller_->delete_layer(index);
+    } else {
+        nlohmann::json& layers = layers_array();
+        if (layers.is_array() && index >= 0 && index < static_cast<int>(layers.size())) {
+            layers.erase(layers.begin() + index);
+            removed = true;
+        }
+    }
+
+    if (!removed) {
+        return false;
+    }
+
+    if (selected_layer_index_ == index) {
+        selected_layer_index_ = -1;
+    } else if (selected_layer_index_ > index) {
+        --selected_layer_index_;
+    }
+
+    hovered_layer_index_ = -1;
+    hovered_delete_layer_index_ = -1;
+
+    mark_dirty();
+    trigger_save();
+    return true;
+}
+
 void MapLayersPanel::clear_hover() {
     hovered_layer_index_ = -1;
+    hovered_delete_layer_index_ = -1;
 }
 
 const nlohmann::json& MapLayersPanel::layers_array() const {

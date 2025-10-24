@@ -30,7 +30,7 @@ class RoomEditor;
 class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
-class RegenerateRoomPopup;
+class RoomSearchPanel;
 
 class DevControls {
 public:
@@ -118,7 +118,7 @@ public:
     bool is_map_light_panel_visible() const;
 
     void begin_area_edit_for_selected_asset(const std::string& area_name);
-    void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 25);
+    void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 0);
 
     void reset_click_state();
     void clear_selection();
@@ -148,7 +148,7 @@ private:
     void toggle_camera_panel();
     void close_camera_panel();
     void toggle_map_assets_modal();
-    void toggle_boundary_assets_modal();
+    void toggle_edge_assets_modal();
     void configure_header_button_sets();
     void sync_header_button_states();
     Room* find_spawn_room() const;
@@ -175,7 +175,7 @@ private:
     void remove_spawn_group_assets(const std::string& spawn_id);
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
     void regenerate_map_spawn_group(const nlohmann::json& entry);
-    void regenerate_boundary_spawn_group(const nlohmann::json& entry);
+    void regenerate_edge_spawn_group(const nlohmann::json& entry);
     void regenerate_map_grid_assets();
 
     bool persist_map_info_to_disk();
@@ -205,7 +205,7 @@ private:
     std::function<void()> map_grid_regen_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;
     std::unique_ptr<CameraUIPanel> camera_panel_;
-    std::unique_ptr<RegenerateRoomPopup> regenerate_popup_;
+    std::unique_ptr<RoomSearchPanel> room_search_panel_;
     std::string map_path_;
     bool pointer_over_camera_panel_ = false;
     bool modal_headers_hidden_ = false;
@@ -218,7 +218,7 @@ private:
     camera* camera_override_for_testing_ = nullptr;
 
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
-    std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
+    std::unique_ptr<SingleSpawnGroupModal> edge_assets_modal_;
 
     class PanAndZoom area_pan_zoom_;
     std::unique_ptr<class CreateRoomAreaPanel> create_area_panel_;

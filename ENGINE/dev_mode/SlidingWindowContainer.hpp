@@ -36,6 +36,9 @@ public:
     void set_header_visible(bool visible);
     void set_close_button_enabled(bool enabled);
     void set_scrollbar_visible(bool visible);
+    void set_header_navigation_button(const std::string& label, std::function<void()> on_click);
+    void clear_header_navigation_button();
+    void set_header_navigation_alignment_right(bool align_right);
 
     void request_layout();
 
@@ -98,6 +101,7 @@ private:
     mutable SDL_Rect panel_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};
     mutable SDL_Rect close_button_rect_{0,0,0,0};
+    mutable SDL_Rect header_nav_rect_{0,0,0,0};
     mutable SDL_Rect content_clip_rect_{0,0,0,0};
     mutable SDL_Rect scroll_region_{0,0,0,0};
     mutable SDL_Rect scroll_track_rect_{0,0,0,0};
@@ -115,6 +119,9 @@ private:
     mutable int pulse_frames_ = 0;
 
     mutable std::unique_ptr<DMButton> close_button_{};
+    mutable std::unique_ptr<DMButton> header_nav_button_{};
+    std::function<void()> header_nav_callback_{};
+    bool header_nav_align_right_ = false;
 
     mutable int last_screen_w_ = 0;
     mutable int last_screen_h_ = 0;

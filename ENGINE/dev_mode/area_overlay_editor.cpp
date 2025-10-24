@@ -1,6 +1,7 @@
 #include "area_overlay_editor.hpp"
 
 #include "DockableCollapsible.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 #include "widgets.hpp"
 #include "draw_utils.hpp"
 #include "dm_styles.hpp"
@@ -1152,13 +1153,29 @@ void AreaOverlayEditor::apply_mask_crop() {
 void AreaOverlayEditor::position_toolbox_near_anchor(int screen_w, int screen_h) {
     if (!toolbox_ || !assets_ || !has_anchor_) return;
     SDL_Point ap = assets_->getView().map_to_screen(anchor_world_);
-    int tb_w = toolbox_->rect().w;
-    int x = ap.x - tb_w - 16;
-    int y = ap.y - 200;
-    x = std::max(8, x);
-    y = std::max(8, y);
-    toolbox_->set_position(x, y);
     toolbox_->set_work_area(SDL_Rect{0, 0, screen_w, screen_h});
+
+    SDL_Rect rect = toolbox_->rect();
+    constexpr int kFallbackHeight = 320;
+
+    FloatingPanelLayoutManager::PanelInfo info;
+    info.panel = toolbox_.get();
+    info.force_layout = true;
+    info.preferred_width = rect.w > 0 ? rect.w : DockableCollapsible::kDefaultFloatingContentWidth;
+    int resolved_height = rect.h > 0 ? rect.h : toolbox_->height();
+    if (resolved_height <= 0) {
+        resolved_height = kFallbackHeight;
+    }
+    info.preferred_height = resolved_height;
+
+    FloatingPanelLayoutManager::SlidingParentInfo parent;
+    parent.bounds = SDL_Rect{ap.x, ap.y, 1, 1};
+    parent.padding = 16;
+    parent.anchor_left = true;
+    parent.align_top = true;
+
+    SDL_Point pos = FloatingPanelLayoutManager::instance().positionFor(info, &parent);
+    toolbox_->set_position_from_layout_manager(pos.x, pos.y);
 }
 
 void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
