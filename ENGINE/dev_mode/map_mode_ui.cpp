@@ -1137,9 +1137,14 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
         Uint32 pixel = 0;
         if (SDL_RenderReadPixels(renderer, &sample_rect, SDL_PIXELFORMAT_ARGB8888, &pixel, sizeof(pixel)) == 0) {
             Uint8 r = 0, g = 0, b = 0, a = 0;
-            SDL_GetRGBA(pixel, SDL_PIXELFORMAT_ARGB8888, &r, &g, &b, &a);
-            map_color_sampling_preview_ = SDL_Color{r, g, b, a};
-            map_color_sampling_preview_valid_ = true;
+            if (SDL_PixelFormat* format = SDL_AllocFormat(SDL_PIXELFORMAT_ARGB8888)) {
+                SDL_GetRGBA(pixel, format, &r, &g, &b, &a);
+                SDL_FreeFormat(format);
+                map_color_sampling_preview_ = SDL_Color{r, g, b, a};
+                map_color_sampling_preview_valid_ = true;
+            } else {
+                map_color_sampling_preview_valid_ = false;
+            }
         } else {
             map_color_sampling_preview_valid_ = false;
         }
