@@ -65,6 +65,7 @@ private:
         int      base_width    = 0;
         int      base_height   = 0;
         bool     flipped       = false;
+        float    asset_base_scale = 1.0f;
     };
 
     bool ensure_darkness_overlay();

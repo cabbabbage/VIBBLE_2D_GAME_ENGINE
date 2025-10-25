@@ -500,6 +500,11 @@ void SceneRenderer::render(){
                 source.base_width  = fw;
                 source.base_height = fh;
                 source.flipped     = a->flipped;
+                float base_scale   = 1.0f;
+                if (a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor > 0.0f) {
+                    base_scale = a->info->scale_factor;
+                }
+                source.asset_base_scale = base_scale;
                 light_overlay_sources_.push_back(source);
             }
 
@@ -683,6 +688,14 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
             continue;
         }
 
+        const float safe_base_scale = (std::isfinite(source.asset_base_scale) && source.asset_base_scale > 0.0f)
+                                          ? source.asset_base_scale
+                                          : 1.0f;
+        const float zoom_scale_x = scale_x / safe_base_scale;
+        const float zoom_scale_y = scale_y / safe_base_scale;
+        const float safe_zoom_scale_x = (std::isfinite(zoom_scale_x) && zoom_scale_x > 0.0f) ? zoom_scale_x : 1.0f;
+        const float safe_zoom_scale_y = (std::isfinite(zoom_scale_y) && zoom_scale_y > 0.0f) ? zoom_scale_y : 1.0f;
+
         const float center_base_x = static_cast<float>(source.asset_rect.x) +
                                     static_cast<float>(source.asset_rect.w) * 0.5f;
         const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
@@ -690,7 +703,7 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         for (const LightSource& light : lights) {
             SDL_Texture* light_texture = nullptr;
             if (light.texture) {
-                const float selection_scale = std::max(scale_x, scale_y);
+                const float selection_scale = std::max(safe_zoom_scale_x, safe_zoom_scale_y);
                 light_texture = light.texture_for_scale(selection_scale);
             }
 
@@ -722,8 +735,8 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
                 continue;
             }
 
-            const float scaled_w = std::max(1.0f, static_cast<float>(base_w) * scale_x);
-            const float scaled_h = std::max(1.0f, static_cast<float>(base_h) * scale_y);
+            const float scaled_w = std::max(1.0f, static_cast<float>(base_w) * safe_zoom_scale_x);
+            const float scaled_h = std::max(1.0f, static_cast<float>(base_h) * safe_zoom_scale_y);
 
             const float offset_x = static_cast<float>(source.flipped ? -light.offset_x : light.offset_x);
             const float offset_y = static_cast<float>(light.offset_y);

@@ -1120,10 +1120,15 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 };
 
         auto first_selected_type = [this]() -> std::string {
+            if (active_area_type_filters_.empty()) return std::string{};
+
+            // Prefer a specific tool selection over the catch-all option when both are active.
             for (const auto& t : devmode::area_mode::area_types()) {
+                if (t == "all") continue;
                 if (active_area_type_filters_.count(t)) return t;
             }
-            return std::string{};
+
+            return active_area_type_filters_.count("all") ? std::string("all") : std::string{};
         }();
 
         if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {

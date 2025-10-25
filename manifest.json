@@ -14159,9 +14159,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            75,
-            242,
+            228,
             36,
+            242,
             255
           ],
           "edge_smoothness": 2,
@@ -14216,7 +14216,7 @@
               },
               "anchor_relative_to_center": true,
               "kind": "Spawn",
-              "name": "spawning_area",
+              "name": "spawning_area_new",
               "points": [
                 {
                   "x": 388,
@@ -14237,9 +14237,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            190,
-            242,
+            133,
             36,
+            242,
             255
           ],
           "edge_smoothness": 101,
@@ -14298,7 +14298,8 @@
               "dx": 19,
               "dy": -44,
               "enforce_spacing": false,
-              "link_to_area": false,
+              "link_to_area": true,
+              "linked_area": "spawning_area_new",
               "max_number": 1,
               "min_number": 1,
               "origional_height": 1800,
@@ -14330,10 +14331,36 @@
               "origional_height": 1800,
               "origional_width": 1800,
               "position": "Exact",
+              "priority": 2,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-ce64c1af28ba"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Bomb"
+                }
+              ],
+              "display_name": "Bomb",
+              "dx": -264,
+              "dy": -52,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 1800,
+              "origional_width": 1800,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-08af5896c8e4"
             }
           ]
         }
