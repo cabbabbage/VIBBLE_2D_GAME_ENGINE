@@ -3,7 +3,9 @@
 #include <SDL.h>
 #include <fstream>
 #include <sstream>
+#include <array>
 #include <cmath>
+#include <cctype>
 #include <numeric>
 
 #include "dev_mode/map_editor.hpp"
@@ -144,6 +146,31 @@ std::string normalize_area_name_base(const std::string& raw) {
     }
 
     return result;
+}
+
+std::string canonicalize_asset_area_type(std::string raw) {
+    auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
+    raw.erase(raw.begin(), std::find_if(raw.begin(), raw.end(), [&](unsigned char ch) { return !is_space(ch); }));
+    raw.erase(std::find_if(raw.rbegin(), raw.rend(), [&](unsigned char ch) { return !is_space(ch); }).base(), raw.end());
+    std::transform(raw.begin(), raw.end(), raw.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return raw;
+}
+
+bool is_known_asset_area_type(const std::string& type) {
+    static const std::array<const char*, 4> kKnownTypes = {
+        "impassable",
+        "trigger",
+        "child",
+        "spawning"
+    };
+    for (const char* known : kKnownTypes) {
+        if (type == known) {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::string make_unique_asset_area_name(const AssetInfo& info, const std::string& preferred) {
@@ -1357,7 +1384,9 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 
         if (event.type == SDL_MOUSEBUTTONDOWN &&
             (event.button.button == SDL_BUTTON_LEFT || event.button.button == SDL_BUTTON_RIGHT)) {
-            auto begin_asset_area_session = [&](Asset* target_asset, const std::string& area_name) -> bool {
+            auto begin_asset_area_session = [&](Asset* target_asset,
+                                                const std::string& area_name,
+                                                const std::string& area_type) -> bool {
                 if (!target_asset || !target_asset->info) {
                     return false;
                 }
@@ -1369,7 +1398,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 }
                 asset_area_editor_->attach_assets(assets_);
                 asset_area_editor_->set_on_saved(nullptr);
-                if (asset_area_editor_->begin(target_asset->info.get(), target_asset, area_name)) {
+                if (asset_area_editor_->begin(target_asset->info.get(), target_asset, area_name, area_type)) {
                     if (map_mode_ui_) {
                         if (auto* footer = map_mode_ui_->get_footer_bar()) {
                             std::string label = std::string("Editing ") + target_asset->info->name +
@@ -1419,25 +1448,15 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             } else {
                 Asset* target_asset = area_hovered_asset_with_area_ ? area_hovered_asset_with_area_ : area_hovered_asset_;
                 if (target_asset && target_asset->info) {
-                    std::string selected_type = first_selected_type;
+                    std::string selected_type = canonicalize_asset_area_type(first_selected_type);
                     const bool specific_type = !selected_type.empty() && selected_type != "all";
                     std::string area_name;
+                    std::string area_type_override = specific_type ? selected_type : std::string{};
 
-                    if (specific_type) {
-                        area_name = selected_type;
-                        for (const auto& na : target_asset->info->areas) {
-                            const std::string normalized = !na.type.empty() ? na.type : na.name;
-                            if (normalized == selected_type) {
-                                area_name = na.name;
-                                if (target_asset->info->remove_area(na.name)) {
-                                    (void)target_asset->info->commit_manifest();
-                                }
-                                break;
-                            }
-                        }
-                    } else if (target_asset == area_hovered_asset_with_area_ && !area_hovered_area_name_.empty()) {
+                    if (target_asset == area_hovered_asset_with_area_ && !area_hovered_area_name_.empty()) {
                         area_name = area_hovered_area_name_;
-                    } else if (!target_asset->info->areas.empty()) {
+                        area_type_override.clear();
+                    } else if (!specific_type && !target_asset->info->areas.empty()) {
                         area_name = target_asset->info->areas.front().name;
                     }
 
@@ -1446,7 +1465,11 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         area_name = make_unique_asset_area_name(*target_asset->info, preferred);
                     }
 
-                    if (begin_asset_area_session(target_asset, area_name)) {
+                    if (!area_type_override.empty() && !is_known_asset_area_type(area_type_override)) {
+                        area_type_override.clear();
+                    }
+
+                    if (begin_asset_area_session(target_asset, area_name, area_type_override)) {
                         return;
                     }
                 }

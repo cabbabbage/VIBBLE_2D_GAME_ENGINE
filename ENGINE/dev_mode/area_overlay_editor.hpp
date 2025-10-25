@@ -25,9 +25,16 @@ public:
 
     void attach_assets(Assets* a) { assets_ = a; }
 
-    bool begin(AssetInfo* info, Asset* asset, const std::string& area_name);
+    bool begin(AssetInfo* info,
+               Asset* asset,
+               const std::string& area_name,
+               const std::string& area_type = std::string());
 
-    bool begin_at_point(AssetInfo* info, SDL_Point anchor_world, const std::string& area_name, Asset* asset = nullptr);
+    bool begin_at_point(AssetInfo* info,
+                        SDL_Point anchor_world,
+                        const std::string& area_name,
+                        Asset* asset = nullptr,
+                        const std::string& area_type = std::string());
 
     bool begin_for_room(Room* room, const std::string& area_name, const std::string& area_type);
     bool begin_for_room(Room* room, const std::string& area_name, const std::string& area_type, SDL_Point focus_world);
@@ -80,6 +87,7 @@ private:
     Room* room_ = nullptr;
     std::string area_name_;
     std::string room_area_type_;
+    std::string asset_area_type_;
     bool active_ = false;
 
     SDL_Surface* mask_ = nullptr;

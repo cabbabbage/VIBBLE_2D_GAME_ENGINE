@@ -15,6 +15,7 @@
 #include "utils/area.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <climits>
 #include <cctype>
@@ -97,6 +98,32 @@ namespace {
             return !is_space(ch);
         }).base(), value.end());
         return value;
+    }
+
+    static std::string canonical_area_type(std::string value) {
+        value = trim_copy(value);
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+        return value;
+    }
+
+    static bool is_known_area_type(const std::string& value) {
+        if (value.empty()) {
+            return false;
+        }
+        static const std::array<const char*, 4> kKnownTypes = {
+            "impassable",
+            "trigger",
+            "child",
+            "spawning"
+        };
+        for (const char* known : kKnownTypes) {
+            if (value == known) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static double point_to_segment_distance_sq(const SDL_Point& a, const SDL_Point& b, const SDL_Point& p) {
@@ -226,13 +253,24 @@ AreaOverlayEditor::~AreaOverlayEditor() {
     discard_autogen_base();
 }
 
-bool AreaOverlayEditor::begin(AssetInfo* info, Asset* asset, const std::string& area_name) {
+bool AreaOverlayEditor::begin(AssetInfo* info,
+                             Asset* asset,
+                             const std::string& area_name,
+                             const std::string& area_type) {
     if (!assets_ || !info || !asset) return false;
 
-    return begin_at_point(info, SDL_Point{asset->pos.x, asset->pos.y}, area_name, asset);
+    return begin_at_point(info,
+                          SDL_Point{asset->pos.x, asset->pos.y},
+                          area_name,
+                          asset,
+                          area_type);
 }
 
-bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, const std::string& area_name, Asset* asset) {
+bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
+                                       SDL_Point anchor_world,
+                                       const std::string& area_name,
+                                       Asset* asset,
+                                       const std::string& area_type) {
     if (!assets_ || !info) return false;
 
     const double base_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor >= 0.0f)
@@ -289,6 +327,7 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, 
     room_ = nullptr;
     area_name_ = area_name;
     room_area_type_.clear();
+    asset_area_type_ = canonical_area_type(area_type);
     canvas_w_ = cw;
     canvas_h_ = ch;
     mask_origin_x_ = 0;
@@ -314,6 +353,21 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info, SDL_Point anchor_world, 
     mask_ = SDL_CreateRGBSurfaceWithFormat(0, canvas_w_, canvas_h_, 32, SDL_PIXELFORMAT_RGBA32);
     if (!mask_) return false;
     clear_mask();
+
+    if (asset && info) {
+        if (Area* existing = info->find_area(area_name_)) {
+            const std::string existing_type = canonical_area_type(existing->get_type());
+            if (!existing_type.empty()) {
+                asset_area_type_ = existing_type;
+            }
+        }
+    }
+    if (asset_area_type_.empty()) {
+        std::string guess = canonical_area_type(area_name_);
+        if (!is_known_area_type(asset_area_type_) && is_known_area_type(guess)) {
+            asset_area_type_ = guess;
+        }
+    }
 
     init_mask_from_existing_area();
     upload_mask();
@@ -355,6 +409,7 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     room_ = room;
     area_name_ = area_name;
     room_area_type_ = area_type;
+    asset_area_type_.clear();
     name_box_ = std::make_unique<DMTextBox>("Area Name", area_name_);
 
     SDL_Point room_center = focus_world;
@@ -1504,11 +1559,22 @@ void AreaOverlayEditor::save_area() {
 
     auto upsert_area = [this, &determine_room_type](Area& area) {
         if (info_) {
-            if (Area* existing = info_->find_area(area_name_)) {
-                area.set_type(existing->get_type());
-            } else {
-                area.set_type(area_name_);
+            std::string final_type = canonical_area_type(asset_area_type_);
+            if (final_type.empty()) {
+                if (Area* existing = info_->find_area(area_name_)) {
+                    final_type = canonical_area_type(existing->get_type());
+                }
             }
+            if (final_type.empty()) {
+                std::string guess = canonical_area_type(area_name_);
+                if (is_known_area_type(guess)) {
+                    final_type = guess;
+                }
+            }
+            if (!final_type.empty()) {
+                area.set_type(final_type);
+            }
+            asset_area_type_ = final_type;
             AssetInfo::NamedArea::RenderFrame frame;
             frame.width = std::max(0, canvas_w_);
             frame.height = std::max(0, canvas_h_);
