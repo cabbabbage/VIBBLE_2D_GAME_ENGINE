@@ -40,6 +40,9 @@ struct StageContext {
     float         base_shadow_opacity     = 204.0f / 255.0f;
     int           screen_width_px         = 0;
     int           screen_height_px        = 0;
+    float         static_light_strength   = 1.0f;
+    float         dynamic_light_strength  = 1.0f;
+    float         blended_light_strength  = 1.0f;
 
     SDL_Rect asset_bounds() const { return SDL_Rect{ 0, 0, width, height }; }
     SDL_Point anchor_bottom_center() const { return SDL_Point{ width / 2, height }; }

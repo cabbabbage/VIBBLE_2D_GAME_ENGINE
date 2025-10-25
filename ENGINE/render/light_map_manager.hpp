@@ -30,6 +30,8 @@ public:
         bool     has_runtime_sample    = false;
         float    brightness            = 1.0f;
         float    runtime_sample        = 1.0f;
+        float    static_component      = 1.0f;
+        float    dynamic_component     = 1.0f;
         world::Chunk::ChunkShadowParameters shadow{};
     };
 

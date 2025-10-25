@@ -155,9 +155,11 @@ bool SceneRenderer::initialize_static_light_chunks() {
             continue;
         }
         chunk->releaseLightingArtifacts();
-        chunk->lighting.current_strength        = 1.0f;
+        chunk->lighting.static_strength          = 1.0f;
+        chunk->lighting.dynamic_strength         = 1.0f;
+        chunk->lighting.current_strength         = 1.0f;
         chunk->lighting.runtime_average_strength = 1.0f;
-        chunk->lighting.needs_update            = true;
+        chunk->lighting.needs_update             = true;
         initialized_chunks                      = true;
     }
 

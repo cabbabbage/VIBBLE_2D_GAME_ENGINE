@@ -4,6 +4,7 @@
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/IRenderStage.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
+#include "world/chunk.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -87,6 +88,9 @@ void StageContext::update_projection(Asset& asset) {
     screen_rect             = SDL_Rect{ 0, 0, 0, 0 };
     screen_center           = SDL_FPoint{ 0.0f, 0.0f };
     reference_screen_height = 1.0f;
+    static_light_strength   = 1.0f;
+    dynamic_light_strength  = 1.0f;
+    blended_light_strength  = 1.0f;
 
     if (!lighting || width <= 0 || height <= 0) {
         return;
@@ -135,6 +139,14 @@ void StageContext::update_projection(Asset& asset) {
     const SDL_Point cp = effects.screen_position;
     screen_rect   = SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
     screen_center = SDL_FPoint{ static_cast<float>(cp.x), static_cast<float>(cp.y - sh / 2) };
+
+    if (const LightMap* light_map_sampler = light_map()) {
+        const LightMap::SampledBrightness sample =
+            light_map_sampler->sample_lighting(asset.pos.x, asset.pos.y);
+        static_light_strength  = sample.static_component;
+        dynamic_light_strength = sample.dynamic_component;
+        blended_light_strength = sample.blended;
+    }
 }
 
 AssetRenderPipeline::AssetRenderPipeline(SDL_Renderer* renderer, const SceneLighting& lighting)

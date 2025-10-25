@@ -53,6 +53,8 @@ std::vector<LightMapManager::ChunkSnapshot> LightMapManager::all_snapshots() con
         snap.has_runtime_sample = chunk->lighting.has_runtime_average;
         snap.runtime_sample     = chunk->lighting.runtime_average_strength;
         snap.brightness         = chunk->lighting.current_strength;
+        snap.static_component   = chunk->lighting.static_strength;
+        snap.dynamic_component  = chunk->lighting.dynamic_strength;
         snap.shadow             = chunk->shadow;
         snapshots.push_back(snap);
     }
@@ -84,6 +86,8 @@ std::optional<LightMapManager::ChunkSnapshot> LightMapManager::snapshot_for_chun
     snap.has_runtime_sample = chunk->lighting.has_runtime_average;
     snap.runtime_sample     = chunk->lighting.runtime_average_strength;
     snap.brightness         = chunk->lighting.current_strength;
+    snap.static_component   = chunk->lighting.static_strength;
+    snap.dynamic_component  = chunk->lighting.dynamic_strength;
     snap.shadow             = chunk->shadow;
     return snap;
 }

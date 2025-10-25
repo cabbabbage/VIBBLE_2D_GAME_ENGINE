@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <utility>
 #include <vector>
 
 class Assets;
@@ -59,6 +60,10 @@ struct Chunk {
         bool is_active = false;
         // Flags that the chunk's cached lighting values should be recomputed.
         bool needs_update = true;
+        // Static lighting intensity sourced from map/lightmap data [0,1].
+        float static_strength = 1.0f;
+        // Dynamic runtime lighting intensity captured from the renderer [0,1].
+        float dynamic_strength = 1.0f;
         // Net light contribution applied to the chunk after static and dynamic blending [0,1].
         float current_strength = 1.0f;
         // Runtime measurement captured from the on-screen render output during this frame.
@@ -173,10 +178,18 @@ public:
         float map_light_dir_offset_strength = 0.5f;
         float parallax_percent        = 0.0f;
         int   frame_blend_falloff_frames = 100;
+        float sampling_static_weight  = 0.8f;
+        float sampling_dynamic_weight = 1.0f;
     };
 
     static constexpr float kDefaultStaticWeight  = 0.8f;
     static constexpr float kDefaultDynamicWeight = 1.0f;
+
+    struct SampledBrightness {
+        float static_component  = 1.0f;
+        float dynamic_component = 1.0f;
+        float blended           = 1.0f;
+    };
 
     LightMap(Assets* assets,
              int screen_width,
@@ -190,6 +203,14 @@ public:
     void update(SDL_Renderer* renderer, std::uint32_t delta_ms);
     void ingest_runtime_samples(const runtime_lighting::RuntimeLightingFrame& frame);
 
+    SampledBrightness sample_lighting(int world_x,
+                                      int world_y,
+                                      float static_weight = kDefaultStaticWeight,
+                                      float dynamic_weight = kDefaultDynamicWeight) const;
+    SampledBrightness sample_lighting_bilinear(float world_x,
+                                               float world_y,
+                                               float static_weight = kDefaultStaticWeight,
+                                               float dynamic_weight = kDefaultDynamicWeight) const;
     float sample_brightness(int world_x,
                             int world_y,
                             float static_weight = kDefaultStaticWeight,
@@ -233,6 +254,8 @@ private:
 
     void invalidate_scene_light_cache();
     void rebuild_scene_light_cache(const std::vector<world::Chunk*>& chunks);
+
+    std::pair<float, float> resolve_sampling_weights(float static_weight, float dynamic_weight) const;
 
     Assets* assets_ = nullptr;
     int     screen_width_  = 0;

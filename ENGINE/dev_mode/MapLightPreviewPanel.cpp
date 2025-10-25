@@ -749,6 +749,8 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         std::ostringstream stream;
         stream << (snap->active ? "A" : "-") << ' ' << (snap->needs_update ? "U" : "-") << '\n';
         stream << "B:" << format_float(snap->brightness, 2) << '\n';
+        stream << "S:" << format_float(snap->static_component, 2) << '\n';
+        stream << "D:" << format_float(snap->dynamic_component, 2) << '\n';
         if (snap->has_runtime_sample) {
             stream << "R:" << format_float(snap->runtime_sample, 2);
         } else {
@@ -915,8 +917,10 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                     SDL_Rect world_rect = chunk->world_bounds;
                     const float cx = static_cast<float>(world_rect.x) + static_cast<float>(world_rect.w) * 0.5f;
                     const float cy = static_cast<float>(world_rect.y) + static_cast<float>(world_rect.h) * 0.5f;
-                    brightness = map->sample_brightness(static_cast<int>(std::round(cx)),
-                                                        static_cast<int>(std::round(cy)));
+                    const LightMap::SampledBrightness sample =
+                        map->sample_lighting(static_cast<int>(std::round(cx)),
+                                             static_cast<int>(std::round(cy)));
+                    brightness = sample.blended;
                 }
             }
             brightness = std::clamp(brightness, 0.0f, 1.0f);
@@ -964,25 +968,36 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                                std::to_string(detail_chunk));
 
         float current_brightness = 0.0f;
+        float current_static     = 0.0f;
+        float current_dynamic    = 0.0f;
         bool  has_current        = false;
         if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
             current_brightness = std::clamp(snap->brightness, 0.0f, 1.0f);
+            current_static     = std::clamp(snap->static_component, 0.0f, 1.0f);
+            current_dynamic    = std::clamp(snap->dynamic_component, 0.0f, 1.0f);
             has_current        = true;
         } else if (const world::Chunk* chunk = map->chunk_at(detail_chunk)) {
             SDL_Rect world_rect = chunk->world_bounds;
             if (world_rect.w > 0 && world_rect.h > 0) {
                 const float cx = static_cast<float>(world_rect.x) + static_cast<float>(world_rect.w) * 0.5f;
                 const float cy = static_cast<float>(world_rect.y) + static_cast<float>(world_rect.h) * 0.5f;
-                current_brightness = map->sample_brightness(static_cast<int>(std::round(cx)),
-                                                            static_cast<int>(std::round(cy)));
-                current_brightness = std::clamp(current_brightness, 0.0f, 1.0f);
+                const LightMap::SampledBrightness sample =
+                    map->sample_lighting(static_cast<int>(std::round(cx)),
+                                         static_cast<int>(std::round(cy)));
+                current_brightness = std::clamp(sample.blended, 0.0f, 1.0f);
+                current_static     = std::clamp(sample.static_component, 0.0f, 1.0f);
+                current_dynamic    = std::clamp(sample.dynamic_component, 0.0f, 1.0f);
                 has_current        = true;
             }
         }
         if (!has_current) {
             detail_lines.push_back("Current Brightness: --");
+            detail_lines.push_back("Static Component: --");
+            detail_lines.push_back("Dynamic Component: --");
         } else {
             detail_lines.push_back("Current Brightness: " + format_float(current_brightness, 3));
+            detail_lines.push_back("Static Component: " + format_float(current_static, 3));
+            detail_lines.push_back("Dynamic Component: " + format_float(current_dynamic, 3));
         }
 
         if (const auto* snap = snapshot_for_chunk(detail_chunk)) {

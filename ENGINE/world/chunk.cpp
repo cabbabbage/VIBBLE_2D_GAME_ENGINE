@@ -40,6 +40,19 @@ SDL_BlendMode compute_runtime_light_blend_mode() {
     return kCachedBlend;
 }
 
+float blend_light_components(float static_strength, float dynamic_strength, float static_weight, float dynamic_weight) {
+    const float clamped_static  = std::clamp(static_strength, 0.0f, 1.0f);
+    const float clamped_dynamic = std::clamp(dynamic_strength, 0.0f, 1.0f);
+    const float sw = std::max(0.0f, static_weight);
+    const float dw = std::max(0.0f, dynamic_weight);
+    const float weight_sum = sw + dw;
+    if (weight_sum <= 1e-5f) {
+        return clamped_static;
+    }
+    const float blended = (clamped_static * sw + clamped_dynamic * dw) / weight_sum;
+    return std::clamp(blended, 0.0f, 1.0f);
+}
+
 } // namespace
 
 namespace world {
@@ -126,6 +139,8 @@ void Chunk::LightingChunk::releaseLightingArtifacts() {
     lighting_dirty                    = true;
     has_dynamic_overlay               = false;
     lighting                          = ChunkLightingState{};
+    lighting.static_strength          = 1.0f;
+    lighting.dynamic_strength         = 1.0f;
     lighting.current_strength         = 1.0f;
     lighting.runtime_average_strength = 1.0f;
     lighting.has_runtime_average      = false;
@@ -139,6 +154,8 @@ void Chunk::releaseLightingArtifacts() {
     lighting_dirty                     = true;
     has_dynamic_overlay                = false;
     lighting                           = ChunkLightingState{};
+    lighting.static_strength           = 1.0f;
+    lighting.dynamic_strength          = 1.0f;
     lighting.current_strength          = 1.0f;
     lighting.runtime_average_strength  = 1.0f;
     lighting.has_runtime_average       = false;
@@ -239,6 +256,8 @@ void Chunk::update_aggregate_from_lighting_chunks() {
 
     double accum_strength = 0.0;
     double accum_runtime  = 0.0;
+    double accum_static   = 0.0;
+    double accum_dynamic  = 0.0;
     bool   any_active     = false;
     bool   any_needs      = false;
     bool   any_runtime    = false;
@@ -246,6 +265,8 @@ void Chunk::update_aggregate_from_lighting_chunks() {
     for (auto& cell : lighting_chunks_) {
         accum_strength += static_cast<double>(cell.lighting.current_strength);
         accum_runtime  += static_cast<double>(cell.lighting.runtime_average_strength);
+        accum_static   += static_cast<double>(cell.lighting.static_strength);
+        accum_dynamic  += static_cast<double>(cell.lighting.dynamic_strength);
         any_active     = any_active || cell.lighting.is_active;
         any_needs      = any_needs || cell.lighting.needs_update;
         any_runtime    = any_runtime || cell.lighting.has_runtime_average;
@@ -254,6 +275,8 @@ void Chunk::update_aggregate_from_lighting_chunks() {
     const double inv = 1.0 / static_cast<double>(lighting_chunks_.size());
     lighting.current_strength         = static_cast<float>(accum_strength * inv);
     lighting.runtime_average_strength = static_cast<float>(accum_runtime * inv);
+    lighting.static_strength          = static_cast<float>(accum_static * inv);
+    lighting.dynamic_strength         = static_cast<float>(accum_dynamic * inv);
     lighting.is_active                = any_active;
     lighting.needs_update             = any_needs;
     lighting.has_runtime_average      = any_runtime;
@@ -462,8 +485,14 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
                                               const std::optional<SDL_FPoint>& map_light_direction,
                                               float map_light_opacity,
                                               bool prefer_fast_blend,
+                                              float static_strength,
+                                              float dynamic_strength,
+                                              float blended_strength,
                                               LightingChunk& chunk) {
     world::Chunk::ChunkShadowParameters sample{};
+
+    chunk.has_dynamic_overlay = (std::abs(dynamic_strength - static_strength) > 1e-3f);
+    chunk.lighting.current_strength = std::clamp(blended_strength, 0.0f, 1.0f);
 
     const auto [front_avg, behind_avg] =
         compute_directional_average_strengths(settings, grid, chunk);
@@ -606,6 +635,8 @@ LightMap::ShadowSettings LightMap::shadow_settings() const {
         std::clamp(sanitized.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
     settings.parallax_percent = std::clamp(sanitized.virtual_light_map.parallax_percent, 0.0f, 100.0f);
     settings.frame_blend_falloff_frames = sanitized.frame_blend_falloff_frames;
+    settings.sampling_static_weight  = std::max(0.0f, sanitized.sampling_weights.static_weight);
+    settings.sampling_dynamic_weight = std::max(0.0f, sanitized.sampling_weights.dynamic_weight);
 
     return settings;
 }
@@ -631,6 +662,30 @@ void LightMap::rebuild_scene_light_cache(const std::vector<world::Chunk*>& chunk
                             static_cast<double>(cell_count);
     }
     scene_light_cache_valid_ = true;
+}
+
+std::pair<float, float> LightMap::resolve_sampling_weights(float static_weight, float dynamic_weight) const {
+    float base_static  = kDefaultStaticWeight;
+    float base_dynamic = kDefaultDynamicWeight;
+    if (assets_) {
+        if (const auto* reactive = assets_->reactive_shadow_settings()) {
+            const auto sanitized =
+                render_pipeline::shading::sanitize_reactive_shadow_settings(*reactive);
+            base_static  = std::max(0.0f, sanitized.sampling_weights.static_weight);
+            base_dynamic = std::max(0.0f, sanitized.sampling_weights.dynamic_weight);
+        }
+    }
+
+    float effective_static  = static_weight;
+    float effective_dynamic = dynamic_weight;
+    if (std::abs(static_weight - kDefaultStaticWeight) <= 1e-4f) {
+        effective_static = base_static;
+    }
+    if (std::abs(dynamic_weight - kDefaultDynamicWeight) <= 1e-4f) {
+        effective_dynamic = base_dynamic;
+    }
+
+    return {std::max(0.0f, effective_static), std::max(0.0f, effective_dynamic)};
 }
 
 void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
@@ -660,6 +715,8 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
     }
 
     const ShadowSettings settings = shadow_settings();
+    const float          static_weight  = std::max(0.0f, settings.sampling_static_weight);
+    const float          dynamic_weight = std::max(0.0f, settings.sampling_dynamic_weight);
 
     float map_light_opacity = 0.0f;
     if (const Global_Light_Source* gl = assets_->map_light_source()) {
@@ -794,20 +851,34 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
                                  map_direction_changed;
 
         for (auto& cell : chunk->lighting_chunks()) {
-            const float prev_strength = std::clamp(cell.lighting.current_strength, 0.0f, 1.0f);
+            const float prev_blended = std::clamp(cell.lighting.current_strength, 0.0f, 1.0f);
+            const float prev_dynamic = std::clamp(cell.lighting.dynamic_strength, 0.0f, 1.0f);
 
             bool runtime_changed = false;
             if (cell.lighting.has_runtime_average) {
-                const float updated_strength =
+                const float updated_dynamic =
                     std::clamp(cell.lighting.runtime_average_strength, 0.0f, 1.0f);
-                runtime_changed                          = (std::abs(updated_strength - prev_strength) > 1e-4f);
-                cell.lighting.current_strength           = updated_strength;
-                cell.lighting.runtime_average_strength   = updated_strength;
-                cell.lighting.has_runtime_average        = false;
-                chunk_strength_delta += static_cast<double>(updated_strength - prev_strength);
+                runtime_changed = (std::abs(updated_dynamic - prev_dynamic) > 1e-4f);
+                cell.lighting.dynamic_strength          = updated_dynamic;
+                cell.lighting.runtime_average_strength  = updated_dynamic;
+                cell.lighting.has_runtime_average       = false;
             }
 
-            cell.lighting.current_strength = std::clamp(cell.lighting.current_strength, 0.0f, 1.0f);
+            cell.lighting.static_strength  = std::clamp(cell.lighting.static_strength, 0.0f, 1.0f);
+            cell.lighting.dynamic_strength = std::clamp(cell.lighting.dynamic_strength, 0.0f, 1.0f);
+
+            const float blended =
+                blend_light_components(cell.lighting.static_strength,
+                                       cell.lighting.dynamic_strength,
+                                       static_weight,
+                                       dynamic_weight);
+            const bool brightness_changed = std::abs(blended - prev_blended) > 1e-4f;
+            if (brightness_changed) {
+                chunk_strength_delta += static_cast<double>(blended - prev_blended);
+            }
+
+            cell.lighting.current_strength = blended;
+            runtime_changed                = runtime_changed || brightness_changed;
 
             const bool cell_dirty = runtime_changed || chunk_dirty || cell.lighting.needs_update;
             cell.lighting.is_active = cell_dirty;
@@ -845,6 +916,9 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
                                               map_light_direction,
                                               map_light_opacity,
                                               prefer_fast_blend,
+                                              cell.lighting.static_strength,
+                                              cell.lighting.dynamic_strength,
+                                              cell.lighting.current_strength,
                                               cell);
 
             cell.lighting.needs_update = false;
@@ -915,35 +989,91 @@ void LightMap::ingest_runtime_samples(const runtime_lighting::RuntimeLightingFra
     }
 }
 
+LightMap::SampledBrightness LightMap::sample_lighting(int world_x,
+                                                      int world_y,
+                                                      float static_weight,
+                                                      float dynamic_weight) const {
+    std::scoped_lock lock(mutex_);
+    SampledBrightness sample{};
+    const auto        weights = resolve_sampling_weights(static_weight, dynamic_weight);
+
+    world::Chunk* chunk = ensure_chunk_from_world(SDL_Point{world_x, world_y});
+    if (!chunk) {
+        vibble::log::warn("[LightMap] sample_lighting missing chunk for world point (" +
+                          std::to_string(world_x) + ", " + std::to_string(world_y) + ")");
+        sample.blended =
+            blend_light_components(sample.static_component, sample.dynamic_component, weights.first, weights.second);
+        return sample;
+    }
+
+    const world::Chunk::LightingChunk* cell =
+        chunk->lighting_chunk_from_world(SDL_Point{world_x, world_y});
+    if (cell) {
+        sample.static_component  = std::clamp(cell->lighting.static_strength, 0.0f, 1.0f);
+        sample.dynamic_component = std::clamp(cell->lighting.dynamic_strength, 0.0f, 1.0f);
+    } else {
+        sample.static_component  = std::clamp(chunk->lighting.static_strength, 0.0f, 1.0f);
+        sample.dynamic_component = std::clamp(chunk->lighting.dynamic_strength, 0.0f, 1.0f);
+    }
+
+    sample.blended = blend_light_components(sample.static_component,
+                                            sample.dynamic_component,
+                                            weights.first,
+                                            weights.second);
+    return sample;
+}
+
+LightMap::SampledBrightness LightMap::sample_lighting_bilinear(float world_x,
+                                                               float world_y,
+                                                               float static_weight,
+                                                               float dynamic_weight) const {
+    const int x0 = static_cast<int>(std::floor(world_x));
+    const int y0 = static_cast<int>(std::floor(world_y));
+    const int x1 = x0 + 1;
+    const int y1 = y0 + 1;
+
+    const float tx = world_x - static_cast<float>(x0);
+    const float ty = world_y - static_cast<float>(y0);
+
+    const SampledBrightness s00 = sample_lighting(x0, y0, static_weight, dynamic_weight);
+    const SampledBrightness s10 = sample_lighting(x1, y0, static_weight, dynamic_weight);
+    const SampledBrightness s01 = sample_lighting(x0, y1, static_weight, dynamic_weight);
+    const SampledBrightness s11 = sample_lighting(x1, y1, static_weight, dynamic_weight);
+
+    auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+
+    SampledBrightness result{};
+    result.static_component = std::clamp(lerp(lerp(s00.static_component, s10.static_component, tx),
+                                             lerp(s01.static_component, s11.static_component, tx),
+                                             ty),
+                                         0.0f,
+                                         1.0f);
+    result.dynamic_component = std::clamp(lerp(lerp(s00.dynamic_component, s10.dynamic_component, tx),
+                                              lerp(s01.dynamic_component, s11.dynamic_component, tx),
+                                              ty),
+                                          0.0f,
+                                          1.0f);
+
+    const auto weights = resolve_sampling_weights(static_weight, dynamic_weight);
+    result.blended = blend_light_components(result.static_component,
+                                            result.dynamic_component,
+                                            weights.first,
+                                            weights.second);
+    return result;
+}
+
 float LightMap::sample_brightness(int world_x,
                                   int world_y,
                                   float static_weight,
                                   float dynamic_weight) const {
-    std::scoped_lock lock(mutex_);
-    (void)dynamic_weight;
-    world::Chunk* chunk = ensure_chunk_from_world(SDL_Point{world_x, world_y});
-    if (!chunk) {
-        vibble::log::warn("[LightMap] sample_brightness missing chunk for world point (" +
-                          std::to_string(world_x) + ", " + std::to_string(world_y) + ")");
-        return 1.0f;
-    }
-    const float weight = std::clamp(static_weight, 0.0f, 1.0f);
-    const world::Chunk::LightingChunk* cell =
-        chunk->lighting_chunk_from_world(SDL_Point{world_x, world_y});
-    const float brightness = cell ? std::clamp(cell->lighting.current_strength, 0.0f, 1.0f)
-                                  : std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
-    return std::clamp(brightness * weight, 0.0f, 1.0f);
+    return sample_lighting(world_x, world_y, static_weight, dynamic_weight).blended;
 }
 
 float LightMap::sample_brightness_bilinear(float world_x,
                                            float world_y,
                                            float static_weight,
                                            float dynamic_weight) const {
-    std::scoped_lock lock(mutex_);
-    return sample_brightness(static_cast<int>(std::lround(world_x)),
-                             static_cast<int>(std::lround(world_y)),
-                             static_weight,
-                             dynamic_weight);
+    return sample_lighting_bilinear(world_x, world_y, static_weight, dynamic_weight).blended;
 }
 
 LightMap::~LightMap() {
