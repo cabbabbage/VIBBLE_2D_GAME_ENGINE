@@ -17,5 +17,5 @@ SDL_Color generate_distinct_color(const std::vector<SDL_Color>& used_colors);
 double color_distance(SDL_Color a, SDL_Color b);
 SDL_Color hsv_to_rgb(double hue_degrees, double saturation, double value);
 
-}  // namespace utils::display_color
+}
 

@@ -88,7 +88,7 @@ class AnimationInspectorPanel {
         kToggleMovement,
         kToggleOnEnd,
         kToggleAudio,
-    };
+};
 
     std::vector<FocusTarget> focus_order() const;
     void set_focus(FocusTarget target);

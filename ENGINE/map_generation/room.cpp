@@ -306,7 +306,7 @@ manifest_writer_(std::move(manifest_writer))
                         }
                         mutate(payload);
                         return payload;
-                };
+};
                 if (manifest_store_ && !manifest_map_id_.empty()) {
                         nlohmann::json payload;
                         if (map_info_root_) {
@@ -323,7 +323,7 @@ manifest_writer_(std::move(manifest_writer))
                         payload = apply_mutation(std::move(payload));
                         manifest_writer_(manifest_map_id_, payload);
                 }
-        };
+};
 
         json_sources.push_back(assets_json);
         AssetSpawnPlanner::SourceContext room_context;
@@ -339,7 +339,7 @@ manifest_writer_(std::move(manifest_writer))
                         }
                         section[room_name] = assets_json;
                 });
-        };
+};
         source_contexts.push_back(room_context);
 
         planner = std::make_unique<AssetSpawnPlanner>( json_sources, *room_area, *asset_lib, source_contexts );

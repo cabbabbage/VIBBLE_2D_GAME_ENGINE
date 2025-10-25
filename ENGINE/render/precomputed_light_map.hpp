@@ -62,5 +62,3 @@ struct PrecomputedLightMap {
     }
 };
 
-
-

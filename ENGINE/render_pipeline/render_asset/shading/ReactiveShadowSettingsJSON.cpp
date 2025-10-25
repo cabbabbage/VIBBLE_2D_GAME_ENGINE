@@ -76,10 +76,7 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
         read_int(json, "min_scale_percent", settings.virtual_light_map.min_scale_percent);
     settings.virtual_light_map.max_scale_percent =
         read_int(json, "max_scale_percent", settings.virtual_light_map.max_scale_percent);
-    settings.virtual_light_map.map_light_dir_offset_strength = read_float(
-        json,
-        "map_light_dir_offset_strength",
-        settings.virtual_light_map.map_light_dir_offset_strength);
+    settings.virtual_light_map.map_light_dir_offset_strength = read_float( json, "map_light_dir_offset_strength", settings.virtual_light_map.map_light_dir_offset_strength);
     settings.virtual_light_map.parallax_percent =
         read_float(json, "parallax_percent", settings.virtual_light_map.parallax_percent);
     settings.virtual_light_map.search_radius =
@@ -112,7 +109,7 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
         if (!entries.empty()) {
             settings.response_lut.entries = std::move(entries);
         }
-    };
+};
 
     if (auto lut_it = json.find("shadow_lut"); lut_it != json.end()) {
         parse_lut(*lut_it);
@@ -132,7 +129,7 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
     }
 }
 
-}  // namespace
+}
 
 ReactiveShadowSettings reactive_shadow_settings_from_json(const nlohmann::json& json,
                                                           const ReactiveShadowSettings& defaults) {
@@ -189,5 +186,5 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
     });
 }
 
-}  // namespace render_pipeline::shading
+}
 

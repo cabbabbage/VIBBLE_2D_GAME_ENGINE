@@ -116,7 +116,7 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
             }
         }
         return 0;
-    };
+};
 
     int total_dx = 0;
     int total_dy = 0;

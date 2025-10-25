@@ -54,8 +54,7 @@ void Occupancy::populate_vertices(const Area& area, int resolution, Grid& grid) 
                 const int cell_min_y = world.y;
                 const int cell_max_x = cell_min_x + cell_size;
                 const int cell_max_y = cell_min_y + cell_size;
-                overlaps = !(cell_max_x < minx || maxx < cell_min_x ||
-                             cell_max_y < miny || maxy < cell_min_y);
+                overlaps = !(cell_max_x < minx || maxx < cell_min_x || cell_max_y < miny || maxy < cell_min_y);
             }
             if (!inside && !overlaps) {
                 continue;
@@ -84,7 +83,7 @@ Occupancy::Vertex* Occupancy::nearest_vertex(SDL_Point world) {
             return nullptr;
         }
         return &vertices_[it->second];
-    };
+};
 
     if (Vertex* v = get_vertex(origin_index); v && !v->occupied) {
         return v;
@@ -209,8 +208,7 @@ bool Occupancy::cell_overlaps(const Area& area, SDL_Point world) const {
     const int cell_max_x = cell_min_x + cell_size;
     const int cell_max_y = cell_min_y + cell_size;
     auto [minx, miny, maxx, maxy] = area.get_bounds();
-    return !(cell_max_x < minx || maxx < cell_min_x ||
-             cell_max_y < miny || maxy < cell_min_y);
+    return !(cell_max_x < minx || maxx < cell_min_x || cell_max_y < miny || maxy < cell_min_y);
 }
 
 Occupancy::Key Occupancy::make_key(SDL_Point index) {
@@ -218,5 +216,5 @@ Occupancy::Key Occupancy::make_key(SDL_Point index) {
            static_cast<std::uint32_t>(index.y);
 }
 
-} // namespace vibble::grid
+}
 

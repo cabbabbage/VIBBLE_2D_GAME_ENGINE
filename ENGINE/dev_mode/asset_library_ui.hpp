@@ -41,12 +41,7 @@ public:
     bool is_dragging_asset() const;
     bool is_locked() const;
 
-    void update(const Input& input,
-                int screen_w,
-                int screen_h,
-                AssetLibrary& lib,
-                Assets& assets,
-                devmode::core::ManifestStore& store);
+    void update(const Input& input, int screen_w, int screen_h, AssetLibrary& lib, Assets& assets, devmode::core::ManifestStore& store);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
     bool handle_event(const SDL_Event& e);
 
@@ -97,7 +92,7 @@ private:
     struct PendingDeleteInfo {
         std::string name;
         std::string asset_dir;
-    };
+};
 
     Assets* assets_owner_ = nullptr;
     AssetLibrary* library_owner_ = nullptr;

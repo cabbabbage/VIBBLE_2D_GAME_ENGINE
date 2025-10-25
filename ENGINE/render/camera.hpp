@@ -22,7 +22,7 @@ class camera {
         float tripod_distance_y = 0.0f;
         float min_visible_screen_ratio = 0.015f;
         int   render_quality_percent = 100;
-    };
+};
 
     struct RenderEffects {
         SDL_Point screen_position{0, 0};

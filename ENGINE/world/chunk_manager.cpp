@@ -45,5 +45,5 @@ Chunk* ChunkManager::from_world(SDL_Point world_px, int r_chunk, SDL_Point origi
     return find(i, j);
 }
 
-} // namespace world
+}
 

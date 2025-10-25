@@ -31,7 +31,7 @@ class Asset {
         SDL_Texture* texture = nullptr;
         int          width   = 0;
         int          height  = 0;
-    };
+};
 
     Area get_area(const std::string& name) const;
     Asset(std::shared_ptr<AssetInfo> info,
@@ -68,7 +68,7 @@ class Asset {
         float requested_percent() const { return requested_scale * 100.0f; }
         float texture_percent() const { return texture_scale * 100.0f; }
         float remainder_percent() const { return remainder_scale * 100.0f; }
-    };
+};
 
     const ScaleUsageStats& last_scale_usage() const { return last_scale_usage_; }
 

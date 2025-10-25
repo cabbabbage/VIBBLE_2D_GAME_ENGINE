@@ -43,16 +43,13 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 }
                 oss << ']';
                 return oss.str();
-        };
+};
 
         render_pipeline::ScalingLogic::ConfigureUsageStorage(std::filesystem::path("loading") / "scaling_profiles.json");
         const bool scaling_refresh_pending = render_pipeline::ScalingLogic::HasPendingUsageData();
         const auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info.name);
         std::cout << "[AnimationLoader] " << info.name
-                  << " scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false")
-                  << ", profile_revision=" << profile.revision
-                  << ", profile_steps=" << format_steps(profile.steps)
-                  << "\n";
+                  << " scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false") << ", profile_revision=" << profile.revision << ", profile_steps=" << format_steps(profile.steps) << "\n";
         if (profile.created_entry) {
                 std::filesystem::path asset_cache = std::filesystem::path("cache") / info.name / "animations";
                 try {
@@ -72,8 +69,7 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         info.scale_variants = profile.steps;
         render_pipeline::ScalingLogic::NormalizeVariantSteps(info.scale_variants);
         std::cout << "[AnimationLoader] " << info.name
-                  << " normalized asset scaling steps: " << format_steps(info.scale_variants)
-                  << " (profile revision " << profile.revision << ")\n";
+                  << " normalized asset scaling steps: " << format_steps(info.scale_variants) << " (profile revision " << profile.revision << ")\n";
         info.scale_profile_revision = profile.revision;
 
         std::vector<std::pair<std::string, nlohmann::json>> alias_queue;

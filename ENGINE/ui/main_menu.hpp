@@ -19,13 +19,9 @@ class MainMenu {
     struct Selection {
         std::string    id;
         nlohmann::json data;
-    };
+};
 
-    MainMenu(SDL_Renderer* renderer,
-             int screen_w,
-             int screen_h,
-             const nlohmann::json& maps,
-             std::optional<std::filesystem::path> sky_background = std::nullopt);
+    MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h, const nlohmann::json& maps, std::optional<std::filesystem::path> sky_background = std::nullopt);
     ~MainMenu();
     void buildButtons();
     std::optional<Selection> handle_event(const SDL_Event& e);
@@ -53,7 +49,7 @@ class MainMenu {
         Button button;
         std::string action;
         bool is_map = false;
-    };
+};
 
     SDL_Texture* background_tex_ = nullptr;
     std::filesystem::path sky_background_path_;

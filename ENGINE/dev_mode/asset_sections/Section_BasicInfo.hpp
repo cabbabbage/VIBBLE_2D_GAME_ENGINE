@@ -177,10 +177,7 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     float scale = cam.get_scale();
     if (scale <= 0.0f) return;
     float inv_scale = 1.0f / scale;
-    const float base_scale = (target->info && std::isfinite(target->info->scale_factor) &&
-                              target->info->scale_factor >= 0.0f)
-                                 ? target->info->scale_factor
-                                 : 1.0f;
+    const float base_scale = (target->info && std::isfinite(target->info->scale_factor) && target->info->scale_factor >= 0.0f) ? target->info->scale_factor : 1.0f;
     float base_sw = static_cast<float>(fw) * base_scale * inv_scale;
     float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
     if (base_sw <= 0.0f || base_sh <= 0.0f) return;

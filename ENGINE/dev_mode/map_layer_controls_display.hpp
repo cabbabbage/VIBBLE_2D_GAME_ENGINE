@@ -40,7 +40,7 @@ private:
             std::string room_key;
             SDL_Rect label_rect{0, 0, 0, 0};
             std::unique_ptr<DMButton> remove_button;
-        };
+};
 
         int candidate_index = -1;
         std::string room_key;
@@ -57,7 +57,7 @@ private:
         SDL_Rect children_placeholder_rect{0, 0, 0, 0};
         bool hovered = false;
         bool slider_active = false;
-    };
+};
 
     void configure_container(SlidingWindowContainer& container);
     void clear_container_callbacks(SlidingWindowContainer& container);

@@ -40,7 +40,7 @@ struct RuntimeLightingFrame {
         SDL_FPoint world_position{0.0f, 0.0f};
         SDL_FPoint direction{0.0f, 0.0f};
         bool       has_direction = false;
-    };
+};
 
     std::vector<Sample> samples{};
 
@@ -59,7 +59,7 @@ struct RuntimeLightingFrame {
 struct ExternalLightSample {
     SDL_FPoint position{0.0f, 0.0f};
     float      radius    = 0.0f;
-    float      intensity = 0.0f; // normalized [0,1]
+    float      intensity = 0.0f;
     SDL_Color  color{255, 255, 255, 255};
     SDL_FPoint direction{0.0f, -1.0f};
     bool       has_direction = false;
@@ -79,8 +79,7 @@ public:
     void begin_frame();
     void add_external_sample(const ExternalLightSample& sample);
 
-    RuntimeLightingFrame gather(const std::vector<AssetLight>& asset_lights,
-                                const camera&                  cam);
+    RuntimeLightingFrame gather(const std::vector<AssetLight>& asset_lights, const camera&                  cam);
 
 private:
     friend class OcclusionSampler;
@@ -91,7 +90,7 @@ private:
         int                       height = 0;
         std::vector<std::uint8_t> mask{};
         std::uint64_t             revision = 0;
-    };
+};
     using OcclusionCache = std::unordered_map<world::Chunk*, CachedOcclusion>;
 
     Assets* assets_ = nullptr;
@@ -99,5 +98,5 @@ private:
     OcclusionCache                    occlusion_cache_{};
 };
 
-} // namespace runtime_lighting
+}
 

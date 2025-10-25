@@ -149,7 +149,7 @@ bool draw_outline_layer(SDL_Renderer* renderer, const SDL_Rect& rect, int effect
     return drew_any;
 }
 
-} // namespace
+}
 
 SDL_Color LightenColor(const SDL_Color& color, float amount) {
     return blend_toward(color, amount, true);
@@ -223,5 +223,5 @@ void DrawRoundedFocusRing(
     DrawRoundedOutline(renderer, rect, corner_radius, thickness, color);
 }
 
-} // namespace dm_draw
+}
 

@@ -45,7 +45,7 @@ std::unique_ptr<DMSlider> make_scaled_slider(const std::string& label,
     return slider;
 }
 
-}  // namespace
+}
 
 MapShadowPanel::MapShadowPanel(Assets* assets, int x, int y)
     : DockableCollapsible("Reactive Shadows", true, x, y), assets_(assets) {
@@ -163,36 +163,13 @@ void MapShadowPanel::build_ui() {
 
     const auto& vsettings = current_settings_.virtual_light_map;
 
-    horizontal_falloff_ = make_scaled_slider("Horizontal Falloff",
-                                             0.0f,
-                                             10.0f,
-                                             vsettings.horizontal_falloff,
-                                             100,
-                                             2);
-    vertical_falloff_ = make_scaled_slider("Vertical Falloff",
-                                           0.0f,
-                                           10.0f,
-                                           vsettings.vertical_falloff,
-                                           100,
-                                           2);
-    max_offset_x_ = make_scaled_slider("Max Offset X (px)",
-                                       0.0f,
-                                       500.0f,
-                                       vsettings.max_offset_x,
-                                       100,
-                                       2);
-    max_offset_y_ = make_scaled_slider("Max Offset Y (px)",
-                                       0.0f,
-                                       500.0f,
-                                       vsettings.max_offset_y,
-                                       100,
-                                       2);
+    horizontal_falloff_ = make_scaled_slider("Horizontal Falloff", 0.0f, 10.0f, vsettings.horizontal_falloff, 100, 2);
+    vertical_falloff_ = make_scaled_slider("Vertical Falloff", 0.0f, 10.0f, vsettings.vertical_falloff, 100, 2);
+    max_offset_x_ = make_scaled_slider("Max Offset X (px)", 0.0f, 500.0f, vsettings.max_offset_x, 100, 2);
+    max_offset_y_ = make_scaled_slider("Max Offset Y (px)", 0.0f, 500.0f, vsettings.max_offset_y, 100, 2);
     const float initial_sensitivity =
         std::clamp(current_settings_.opacity_sensitivity_percent, 0.0f, 100.0f);
-    opacity_sensitivity_percent_ = std::make_unique<DMSlider>("Opacity Sensitivity %",
-                                                              0,
-                                                              100,
-                                                              static_cast<int>(std::lround(initial_sensitivity)));
+    opacity_sensitivity_percent_ = std::make_unique<DMSlider>("Opacity Sensitivity %", 0, 100, static_cast<int>(std::lround(initial_sensitivity)));
     if (opacity_sensitivity_percent_) {
         opacity_sensitivity_percent_->set_defer_commit_until_unfocus(false);
     }
@@ -266,18 +243,8 @@ void MapShadowPanel::build_ui() {
         });
     }
 
-    map_light_dir_strength_ = make_scaled_slider("Directional Offset Strength",
-                                                 0.0f,
-                                                 1.0f,
-                                                 vsettings.map_light_dir_offset_strength,
-                                                 100,
-                                                 2);
-    parallax_percent_ = make_scaled_slider("Parallax %",
-                                          0.0f,
-                                          100.0f,
-                                          vsettings.parallax_percent,
-                                          100,
-                                          1);
+    map_light_dir_strength_ = make_scaled_slider("Directional Offset Strength", 0.0f, 1.0f, vsettings.map_light_dir_offset_strength, 100, 2);
+    parallax_percent_ = make_scaled_slider("Parallax %", 0.0f, 100.0f, vsettings.parallax_percent, 100, 1);
 
     const int search_radius_value = std::clamp(vsettings.search_radius, 0, 128);
     search_radius_ = std::make_unique<DMSlider>("Search Radius (cells)", 0, 128, search_radius_value);
@@ -309,7 +276,7 @@ void MapShadowPanel::build_ui() {
         auto widget = std::make_unique<SliderWidget>(slider.get());
         rows.push_back({widget.get()});
         widget_wrappers_.push_back(std::move(widget));
-    };
+};
 
     add_slider_row(horizontal_falloff_);
     add_slider_row(vertical_falloff_);
@@ -339,8 +306,7 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
     if (max_offset_x_) max_offset_x_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_x * 100.0f)));
     if (max_offset_y_) max_offset_y_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_y * 100.0f)));
     if (opacity_sensitivity_percent_)
-        opacity_sensitivity_percent_->set_value(
-            static_cast<int>(std::lround(std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f))));
+        opacity_sensitivity_percent_->set_value( static_cast<int>(std::lround(std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f))));
     if (min_scale_percent_)
         min_scale_percent_->set_value(std::clamp(settings.virtual_light_map.min_scale_percent, 10, 500));
     if (max_scale_percent_)

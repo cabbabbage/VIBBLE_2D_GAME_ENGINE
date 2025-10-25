@@ -19,7 +19,7 @@ class AssetSpawnPlanner {
     struct SourceContext {
         nlohmann::json* json_ref = nullptr;
         std::function<void(const nlohmann::json&)> persist;
-    };
+};
 
     AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
                       const Area& area,

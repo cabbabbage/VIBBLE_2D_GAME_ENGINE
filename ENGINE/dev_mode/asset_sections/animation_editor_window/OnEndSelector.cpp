@@ -86,17 +86,7 @@ void OnEndSelector::render(SDL_Renderer* renderer) const {
     layout_dropdown();
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(
-        renderer,
-        bounds_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelBG(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     if (dropdown_) {
         dropdown_->render(renderer);

@@ -59,7 +59,7 @@ bool is_playable_room_cached(const Room& room, PlayableRoomsCacheEntry& entry) {
     return it->second;
 }
 
-}  // namespace
+}
 
 namespace animation_update::detail {
 
@@ -71,9 +71,7 @@ bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_po
     auto& cache_entry = playable_rooms_cache()[assets];
 
     const std::vector<Room*>& rooms = assets->rooms();
-    const std::uintptr_t identity = rooms.empty()
-        ? 0
-        : reinterpret_cast<std::uintptr_t>(rooms.data());
+    const std::uintptr_t identity = rooms.empty() ? 0 : reinterpret_cast<std::uintptr_t>(rooms.data());
     if (cache_entry.rooms_identity != identity || cache_entry.rooms_size != rooms.size()) {
         cache_entry.rooms_identity = identity;
         cache_entry.rooms_size     = rooms.size();
@@ -89,7 +87,7 @@ bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_po
             return false;
         }
         return room->room_area->contains_point(bottom_point);
-    };
+};
 
     if (cache_entry.last_containing_room && contains_playable(cache_entry.last_containing_room)) {
         return true;
@@ -137,5 +135,5 @@ bool segment_leaves_playable_area(const Assets* assets, SDL_Point from, SDL_Poin
     return false;
 }
 
-}  // namespace animation_update::detail
+}
 

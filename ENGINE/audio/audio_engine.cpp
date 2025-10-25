@@ -127,7 +127,7 @@ std::vector<fs::path> collect_music_files(const nlohmann::json& audio_manifest,
     return result;
 }
 
-} // namespace
+}
 
 AudioEngine& AudioEngine::instance() {
     static AudioEngine engine;

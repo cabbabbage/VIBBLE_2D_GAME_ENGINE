@@ -41,7 +41,7 @@ std::string room_display_label(const std::string& room_key) {
     return room_key;
 }
 
-}  // namespace
+}
 
 MapLayerControlsDisplay::MapLayerControlsDisplay()
     : room_selector_(std::make_unique<RoomSelectorPopup>()),
@@ -376,7 +376,7 @@ bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
         for (auto& candidate : candidates_) {
             candidate.hovered = SDL_PointInRect(&pointer, &candidate.background_rect) == SDL_TRUE;
         }
-    };
+};
 
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point pointer{e.motion.x, e.motion.y};

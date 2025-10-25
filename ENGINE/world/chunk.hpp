@@ -15,6 +15,8 @@ class Assets;
 class Asset;
 class camera;
 namespace world { class Grid; }
+namespace world { class Grid; }
+namespace runtime_lighting { struct RuntimeLightingFrame; }
 namespace runtime_lighting { struct RuntimeLightingFrame; }
 namespace world {
 
@@ -28,20 +30,20 @@ struct Chunk {
     std::uint64_t       occlusion_revision = 0;
 
     struct ChunkShadowParameters {
-        // Scalar applied to the shadow mask relative to its authored size.
+
         float scale = 1.0f;
-        // Opacity multiplier applied to the darkness mask [0,1].
+
         float opacity = 1.0f;
-        // Horizontal offset of the shadow mask expressed as a percent of chunk width [-100,100].
+
         float offset_x_percent = 0.0f;
-        // Vertical offset of the shadow mask expressed as a percent of chunk height [-100,100].
+
         float offset_y_percent = 0.0f;
-        // Pixel offset relative to the chunk's world dimensions.
+
         float offset_x_px = 0.0f;
         float offset_y_px = 0.0f;
-        // Parallax offset intensity expressed as a percent [0,100].
+
         float parallax_intensity_percent = 0.0f;
-    };
+};
 
     struct ChunkShadowHistory {
         static constexpr int kMaxHistoryLength = 256;
@@ -54,40 +56,40 @@ struct Chunk {
         void reset();
         void push(const ChunkShadowParameters& sample, int fade_frames);
         const ChunkShadowParameters& value() const { return blended; }
-    };
+};
 
     struct ChunkLightingState {
-        // Whether this chunk participates in lighting updates during the current frame.
+
         bool is_active = false;
-        // Flags that the chunk's cached lighting values should be recomputed.
+
         bool needs_update = true;
-        // Static lighting intensity sourced from map/lightmap data [0,1].
+
         float static_strength = 1.0f;
-        // Dynamic runtime lighting intensity captured from the renderer [0,1].
+
         float dynamic_strength = 1.0f;
-        // Net light contribution applied to the chunk after static and dynamic blending [0,1].
+
         float current_strength = 1.0f;
-        // Snapshot of the chunk's light level captured before shadow updates are applied each frame.
+
         float pre_shadow_strength = 1.0f;
-        // Runtime measurement captured from the on-screen render output during this frame.
+
         float runtime_average_strength = 1.0f;
-        // Marks whether runtime_average_strength contains a valid measurement for the current frame.
+
         bool has_runtime_average = false;
-        // Averaged runtime light color captured during this frame.
+
         SDL_Color runtime_average_color{255, 255, 255, 255};
-        // Accumulated raw (unclamped) runtime intensity.
+
         float runtime_average_raw_intensity = 0.0f;
-        // Averaged runtime light direction.
+
         SDL_FPoint runtime_average_direction{0.0f, 0.0f};
-        // Tracks whether runtime_average_direction holds a normalized vector.
+
         bool has_runtime_direction = false;
-        // Normalized vector pointing away from the brightest runtime light inside the chunk.
+
         SDL_FPoint runtime_light_offset{0.0f, 0.0f};
-        // Strength of the runtime light offset measurement.
+
         float runtime_light_offset_weight = 0.0f;
-        // Marks whether runtime_light_offset holds a valid measurement.
+
         bool has_runtime_light_offset = false;
-    };
+};
 
     struct LightingChunk {
         Chunk* parent = nullptr;
@@ -127,7 +129,7 @@ struct Chunk {
             , world_bounds(bounds) {}
 
         void releaseLightingArtifacts();
-    };
+};
 
     ChunkShadowHistory shadow_history{};
 
@@ -175,9 +177,8 @@ private:
     std::vector<LightingChunk> lighting_chunks_{};
 };
 
-} // namespace world
+}
 
-// Unified LightMap implementation co-located with Chunk.
 class LightMap {
 public:
     struct ShadowSettings {
@@ -186,13 +187,13 @@ public:
         float falloff_vertical        = 1.0f;
         float max_offset_x_px         = 64.0f;
         float max_offset_y_px         = 48.0f;
-        // Controls how strongly global scene brightness influences opacity (0..100).
+
         float opacity_sensitivity_percent = 50.0f;
         float parallax_percent        = 0.0f;
         int   frame_blend_falloff_frames = 100;
         float sampling_static_weight  = 0.0f;
         float sampling_dynamic_weight = 1.0f;
-    };
+};
 
     static constexpr float kDefaultStaticWeight  = 0.0f;
     static constexpr float kDefaultDynamicWeight = 1.0f;
@@ -203,7 +204,7 @@ public:
         float blended           = 1.0f;
         SDL_Color color{255, 255, 255, 255};
         bool      has_color = false;
-    };
+};
 
     LightMap(Assets* assets,
              int screen_width,
@@ -217,33 +218,14 @@ public:
     void update(SDL_Renderer* renderer, std::uint32_t delta_ms);
     void ingest_runtime_samples(const runtime_lighting::RuntimeLightingFrame& frame);
 
-    SampledBrightness sample_lighting(int world_x,
-                                      int world_y,
-                                      float static_weight = kDefaultStaticWeight,
-                                      float dynamic_weight = kDefaultDynamicWeight) const;
-    SampledBrightness sample_lighting_bilinear(float world_x,
-                                               float world_y,
-                                               float static_weight = kDefaultStaticWeight,
-                                               float dynamic_weight = kDefaultDynamicWeight) const;
-    float sample_brightness(int world_x,
-                            int world_y,
-                            float static_weight = kDefaultStaticWeight,
-                            float dynamic_weight = kDefaultDynamicWeight) const;
-    float sample_brightness_bilinear(float world_x,
-                                     float world_y,
-                                     float static_weight = kDefaultStaticWeight,
-                                     float dynamic_weight = kDefaultDynamicWeight) const;
+    SampledBrightness sample_lighting(int world_x, int world_y, float static_weight = kDefaultStaticWeight, float dynamic_weight = kDefaultDynamicWeight) const;
+    SampledBrightness sample_lighting_bilinear(float world_x, float world_y, float static_weight = kDefaultStaticWeight, float dynamic_weight = kDefaultDynamicWeight) const;
+    float sample_brightness(int world_x, int world_y, float static_weight = kDefaultStaticWeight, float dynamic_weight = kDefaultDynamicWeight) const;
+    float sample_brightness_bilinear(float world_x, float world_y, float static_weight = kDefaultStaticWeight, float dynamic_weight = kDefaultDynamicWeight) const;
 
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
-    void render_visible_chunks(SDL_Renderer* renderer,
-                               const SDL_Rect& view_rect,
-                               float alpha_multiplier,
-                               const SDL_Color& color_mod) const;
-    void subtract_runtime_shadow_from_texture(SDL_Renderer* renderer,
-                                              SDL_Texture* target_texture,
-                                              const SDL_Rect& target_rect,
-                                              const SDL_Rect& screen_rect,
-                                              float alpha_multiplier) const;
+    void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect, float alpha_multiplier, const SDL_Color& color_mod) const;
+    void subtract_runtime_shadow_from_texture(SDL_Renderer* renderer, SDL_Texture* target_texture, const SDL_Rect& target_rect, const SDL_Rect& screen_rect, float alpha_multiplier) const;
     void render_chunk_preview(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void present_static_previews(SDL_Renderer* renderer) const;
 
@@ -272,12 +254,9 @@ private:
         SDL_Rect  dest_rect{0, 0, 0, 0};
         SDL_Color color{0, 0, 0, 0};
         float     alpha = 0.0f;
-    };
+};
 
-    void collect_runtime_shadow_masks(const SDL_Rect& view_rect,
-                                      float alpha_multiplier,
-                                      const SDL_Color& color_mod,
-                                      std::vector<RuntimeShadowMaskRender>& out) const;
+    void collect_runtime_shadow_masks(const SDL_Rect& view_rect, float alpha_multiplier, const SDL_Color& color_mod, std::vector<RuntimeShadowMaskRender>& out) const;
 
     SDL_Texture* ensure_runtime_shadow_mask(SDL_Renderer* renderer) const;
     void         destroy_runtime_shadow_mask() const;
@@ -309,5 +288,4 @@ private:
     int    cached_chunk_count_     = 0;
     bool   scene_light_cache_valid_ = false;
 };
-
 

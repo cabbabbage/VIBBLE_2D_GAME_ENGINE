@@ -53,7 +53,7 @@ struct ReactiveShadowSettings {
                    scale == other.scale;
         }
         bool operator!=(const ShadowResponseLutEntry& other) const { return !(*this == other); }
-    };
+};
 
     struct ShadowResponseLut {
         std::vector<ShadowResponseLutEntry> entries{};
@@ -121,7 +121,7 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
         entry.offset     = clampf(entry.offset, -1000.0f, 1000.0f);
         entry.scale      = clampf(entry.scale, 0.0f, 10.0f);
         return entry;
-    };
+};
 
     std::vector<ReactiveShadowSettings::ShadowResponseLutEntry> sanitized_entries;
     sanitized_entries.reserve(out.response_lut.entries.size());
@@ -172,12 +172,10 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
 
     out.response_lut.entries = std::move(sanitized_entries);
 
-    // Sampling is now fully dynamic; force a zero static weight and unit dynamic weight so runtime
-    // data always drives the lighting blend regardless of serialized values.
     out.sampling_weights.static_weight  = 0.0f;
     out.sampling_weights.dynamic_weight = 1.0f;
     return out;
 }
 
-}  // namespace render_pipeline::shading
+}
 

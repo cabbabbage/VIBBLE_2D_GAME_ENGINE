@@ -27,17 +27,17 @@ struct MethodConfig {
     struct Perimeter {
         int min_number = 2;
         int max_number = 2;
-    };
+};
 
     struct Edge {
         int min_number = 1;
         int max_number = 1;
         int inset_percent = 100;
-    };
+};
 
     struct Exact {
         int quantity = 1;
-    };
+};
 
     using Variant = std::variant<None, Random, Perimeter, Edge, Exact>;
 
@@ -159,7 +159,7 @@ inline float read_number(const nlohmann::json& value, float fallback) {
     return fallback;
 }
 
-} // namespace detail
+}
 
 inline float read_candidate_weight(const nlohmann::json& candidate) {
     if (!candidate.is_object()) return 0.0f;

@@ -111,7 +111,7 @@ SDL_Color dim_color(SDL_Color color, float factor) {
     factor = std::clamp(factor, 0.0f, 1.0f);
     auto apply = [factor](Uint8 channel) {
         return static_cast<Uint8>(std::clamp(static_cast<int>(std::lround(channel * factor)), 0, 255));
-    };
+};
     return SDL_Color{apply(color.r), apply(color.g), apply(color.b), color.a};
 }
 
@@ -120,11 +120,7 @@ const DMButtonStyle& disabled_priority_button_style() {
         const DMButtonStyle& base = DMStyles::ListButton();
         DMButtonStyle disabled{
             {base.label.font_path, base.label.font_size, dim_color(base.label.color, 0.55f)},
-            dim_color(base.bg, 0.45f),
-            dim_color(base.hover_bg, 0.45f),
-            dim_color(base.press_bg, 0.45f),
-            dim_color(base.border, 0.55f),
-            dim_color(base.text, 0.55f)};
+            dim_color(base.bg, 0.45f), dim_color(base.hover_bg, 0.45f), dim_color(base.press_bg, 0.45f), dim_color(base.border, 0.55f), dim_color(base.text, 0.55f)};
         return disabled;
     }();
     return style;
@@ -177,7 +173,6 @@ private:
     std::function<void()> on_click_{};
     bool enabled_ = true;
 };
-
 
 int parse_int_or(const std::string& text, int fallback) {
     if (text.empty()) return fallback;
@@ -571,7 +566,7 @@ struct SpawnGroupConfig::Entry {
         std::string id;
         std::string label;
         bool is_child = false;
-    };
+};
 
     struct CandidateWidgets {
         std::unique_ptr<DMTextBox> name_box;
@@ -705,29 +700,20 @@ struct SpawnGroupConfig::Entry {
         exact_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(exact_box),
             [this](const std::string& text) { on_exact_changed(text); }, false, editable_);
 
-        auto resolution_slider = std::make_unique<DMSlider>("Grid Resolution (2^r px)",
-                                                            0,
-                                                            vibble::grid::kMaxResolution,
-                                                            current_resolution_);
+        auto resolution_slider = std::make_unique<DMSlider>("Grid Resolution (2^r px)", 0, vibble::grid::kMaxResolution, current_resolution_);
         resolution_slider->set_defer_commit_until_unfocus(false);
         resolution_widget_ = std::make_unique<SpawnGroupCallbackSliderWidget>(
             std::move(resolution_slider),
             [this](int value) { on_resolution_changed(value); },
             editable_);
 
-        auto radius_slider = std::make_unique<DMSlider>("Perimeter Radius (px)",
-                                                        kPerimeterRadiusSliderMin,
-                                                        kPerimeterRadiusSliderMax,
-                                                        kPerimeterRadiusSliderMin);
+        auto radius_slider = std::make_unique<DMSlider>("Perimeter Radius (px)", kPerimeterRadiusSliderMin, kPerimeterRadiusSliderMax, kPerimeterRadiusSliderMin);
         perimeter_radius_widget_ = std::make_unique<SpawnGroupCallbackSliderWidget>(
             std::move(radius_slider),
             [this](int value) { on_perimeter_radius_changed(value); },
             editable_);
 
-        auto inset_slider = std::make_unique<DMSlider>("Edge Inset (%)",
-                                                       kEdgeInsetSliderMin,
-                                                       kEdgeInsetSliderMax,
-                                                       kEdgeInsetDefault);
+        auto inset_slider = std::make_unique<DMSlider>("Edge Inset (%)", kEdgeInsetSliderMin, kEdgeInsetSliderMax, kEdgeInsetDefault);
         edge_inset_widget_ = std::make_unique<SpawnGroupCallbackSliderWidget>(
             std::move(inset_slider),
             [this](int value) { on_edge_inset_changed(value); },
@@ -918,9 +904,7 @@ struct SpawnGroupConfig::Entry {
             perimeter_radius_widget_->set_value(radius_value);
             perimeter_radius_widget_->set_editable(editable_ && show_perimeter_radius_widget_);
         }
-        int edge_inset_value = std::clamp(safe_int(entry, "edge_inset_percent", kEdgeInsetDefault),
-                                              kEdgeInsetSliderMin,
-                                              kEdgeInsetSliderMax);
+        int edge_inset_value = std::clamp(safe_int(entry, "edge_inset_percent", kEdgeInsetDefault), kEdgeInsetSliderMin, kEdgeInsetSliderMax);
         if (edge_inset_widget_) {
             edge_inset_widget_->set_value(edge_inset_value);
             edge_inset_widget_->set_editable(editable_ && show_edge_inset_widget_);
@@ -1057,7 +1041,6 @@ struct SpawnGroupConfig::Entry {
 
             rows.push_back({method_widget_.get()});
 
-            // Method-specific configuration rows
             const bool hide_quantity_controls = quantity_hidden() || current_method_ == "Exact";
             const bool show_quantity_range = !hide_quantity_controls && !use_exact_quantity_;
             const bool show_exact_quantity = !hide_quantity_controls && use_exact_quantity_ && exact_widget_;
@@ -1094,7 +1077,6 @@ struct SpawnGroupConfig::Entry {
                 rows.push_back({resolution_widget_.get()});
             }
 
-            // Candidates: optional empty label and pie widget (with internal controls)
             if (candidate_entries_.empty()) {
                 rows.push_back({empty_candidates_label_.get()});
             }
@@ -1160,7 +1142,7 @@ struct SpawnGroupConfig::Entry {
             if (name_widget_) {
                 const SDL_Rect& name_rect = name_widget_->rect();
                 if (name_rect.w > 0 && name_rect.h > 0 && SDL_PointInRect(&point, &name_rect)) {
-                    // Allow dragging if there is horizontal space to the right of the textbox
+
                     int right_edge = name_rect.x + name_rect.w;
                     if (point.x <= right_edge) {
                         return false;
@@ -1234,7 +1216,6 @@ private:
             owner_->mark_layout_dirty();
         }
     }
-
 
     void on_terminate_with_parent_changed(bool value) {
         if (!editable_ || linked_area_id_.empty() || !linked_area_is_child_) return;
@@ -1490,7 +1471,7 @@ private:
                 linked_area_options_.push_back({descriptor.id, descriptor.label, descriptor.is_child_area});
                 linked_area_option_labels_.push_back(descriptor.label);
             }
-        };
+};
 
         if (asset_linkable_area_provider_) {
             append_descriptors(asset_linkable_area_provider_());
@@ -1658,9 +1639,7 @@ private:
         if (!editable_) return;
         int clamped = std::max(kPerimeterRadiusSliderMin, value);
         if (auto* entry = mutable_entry()) {
-            int current = safe_int(*entry,
-                                   "radius",
-                                   safe_int(*entry, "perimeter_radius", kPerimeterRadiusSliderMin));
+            int current = safe_int(*entry, "radius", safe_int(*entry, "perimeter_radius", kPerimeterRadiusSliderMin));
             if (current == clamped) {
                 return;
             }
@@ -2307,7 +2286,7 @@ void SpawnGroupConfig::reorder_json(size_t from, size_t to) {
         arr.erase(arr.begin() + static_cast<std::ptrdiff_t>(from));
         if (target > arr.size()) target = arr.size();
         arr.insert(arr.begin() + static_cast<std::ptrdiff_t>(target), std::move(moved));
-    };
+};
 
     if (bound_array_) apply(*bound_array_);
     if (bound_entry_) apply(single_entry_shadow_);
@@ -2335,7 +2314,7 @@ void SpawnGroupConfig::restore_order_from_snapshot(const std::vector<std::string
             }
         }
         return std::string{};
-    };
+};
 
     for (size_t i = 0; i < order.size(); ++i) {
         std::string desired = order[i];

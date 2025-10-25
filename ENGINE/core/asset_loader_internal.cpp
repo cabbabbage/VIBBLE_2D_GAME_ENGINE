@@ -31,7 +31,7 @@ double distance_sq_to_aabb(const SDL_Point& point,
     return dx * dx + dy * dy;
 }
 
-} // namespace
+}
 
 namespace asset_loader_internal {
 
@@ -74,12 +74,7 @@ double min_distance_sq_to_zones(const SDL_Point& point,
     const double pad = static_cast<double>(remove_threshold);
 
     for (const auto& entry : cache) {
-        const double padded_dist_sq = distance_sq_to_aabb(
-            point,
-            static_cast<double>(entry.min_x) - pad,
-            static_cast<double>(entry.min_y) - pad,
-            static_cast<double>(entry.max_x) + pad,
-            static_cast<double>(entry.max_y) + pad);
+        const double padded_dist_sq = distance_sq_to_aabb( point, static_cast<double>(entry.min_x) - pad, static_cast<double>(entry.min_y) - pad, static_cast<double>(entry.max_x) + pad, static_cast<double>(entry.max_y) + pad);
 
         if (padded_dist_sq >= min_dist_sq) {
             continue;
@@ -87,12 +82,7 @@ double min_distance_sq_to_zones(const SDL_Point& point,
 
         const auto* pts = entry.points;
         if (!pts || pts->size() < 2) {
-            const double bbox_dist_sq = distance_sq_to_aabb(
-                point,
-                static_cast<double>(entry.min_x),
-                static_cast<double>(entry.min_y),
-                static_cast<double>(entry.max_x),
-                static_cast<double>(entry.max_y));
+            const double bbox_dist_sq = distance_sq_to_aabb( point, static_cast<double>(entry.min_x), static_cast<double>(entry.min_y), static_cast<double>(entry.max_x), static_cast<double>(entry.max_y));
 
             if (bbox_dist_sq < min_dist_sq) {
                 min_dist_sq = bbox_dist_sq;
@@ -136,4 +126,4 @@ double min_distance_sq_to_zones(const SDL_Point& point,
     return min_dist_sq;
 }
 
-} // namespace asset_loader_internal
+}

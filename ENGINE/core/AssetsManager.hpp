@@ -165,7 +165,7 @@ public:
     Asset* player = nullptr;
 
     Asset* spawn_asset(const std::string& name, SDL_Point world_pos);
-    // Temporary: expose active chunks for early adopters (renderer/tests)
+
     const std::vector<world::Chunk*>& active_chunks() const { return world_grid_.active_chunks(); }
 
 private:
@@ -245,7 +245,7 @@ private:
         int texture_width = 0;
         int texture_height = 0;
         bool dirty = true;
-    };
+};
 
     std::optional<DevNotice> dev_notice_;
 
@@ -254,5 +254,4 @@ private:
     int active_search_radius() const;
 };
 #include "utils/map_grid_settings.hpp"
-
 

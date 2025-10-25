@@ -43,10 +43,10 @@ void Section_SpawnGroups::build() {
     auto on_change = [this]() {
         (void)this->save_to_file();
         this->schedule_rebuild();
-    };
+};
     auto on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary&) {
         notify_spawn_config_listeners(entry);
-    };
+};
     SpawnGroupConfig::Callbacks cb{};
     cb.on_delete    = [this](const std::string& id){ delete_spawn_group(id); };
     cb.on_reorder   = [this](const std::string& id, size_t index){ reorder_spawn_group(id, index); };
@@ -56,7 +56,7 @@ void Section_SpawnGroups::build() {
         if (idx < 0) return;
         const auto& entry = groups_.at(static_cast<std::size_t>(idx));
         notify_spawn_config_listeners(entry);
-    };
+};
     list_->set_callbacks(std::move(cb));
     const auto expanded = list_->expanded_groups();
     SpawnGroupConfig::ConfigureEntryCallback configure_entry;
@@ -71,7 +71,7 @@ void Section_SpawnGroups::build() {
                             return static_cast<char>(std::tolower(ch));
                         });
                         return value;
-                    };
+};
                     for (const auto& area : locked->areas) {
                         const std::string type = canonicalize(!area.type.empty() ? area.type : area.kind);
                         if (type != "child") continue;
@@ -100,7 +100,7 @@ void Section_SpawnGroups::build() {
                 return result;
             });
             entry.set_linkable_room_areas_provider({});
-        };
+};
         list_->load(groups_, on_change, std::move(on_entry_change), std::move(configure_entry));
     } else {
         const nlohmann::json& readonly = groups_;

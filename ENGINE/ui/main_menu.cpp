@@ -80,7 +80,7 @@ void MainMenu::buildButtons() {
         auto configure_button = [](Button& button) {
                 button.set_glass_style(Button::default_glass_style());
                 button.enable_glass_style(true);
-        };
+};
         if (maps_json_ && maps_json_->is_object()) {
                 for (auto it = maps_json_->cbegin(); it != maps_json_->cend(); ++it) {
                         if (!it.value().is_object()) continue;
@@ -430,7 +430,7 @@ void MainMenu::renderAnimatedBackground(SDL_Texture* tex) const {
         }
 
         required_scale = std::max(required_scale, 1.0);
-        // Provide a modest safety margin so corner rotation never exposes empty pixels.
+
         required_scale *= 1.18;
 
         SDL_Rect dst{};

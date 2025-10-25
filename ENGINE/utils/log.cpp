@@ -72,12 +72,11 @@ void log_line_impl(vibble::log::Level level, const std::string& message) {
     const double secs = duration_cast<duration<double>>(now - time_origin()).count();
     std::lock_guard<std::mutex> lock(log_mutex());
     std::ostream& os = (level == vibble::log::Level::Error) ? std::cerr : std::cout;
-    os << '[' << level_tag(level) << "] +" << std::fixed << std::setprecision(3) << secs
-       << "s: " << message << '\n';
+    os << '[' << level_tag(level) << "] +" << std::fixed << std::setprecision(3) << secs << "s: " << message << '\n';
     os.flush();
 }
 
-} // namespace
+}
 
 namespace vibble::log {
 
@@ -101,5 +100,5 @@ void warn (const std::string& message) { log_line_impl(Level::Warn,  message); }
 void info (const std::string& message) { log_line_impl(Level::Info,  message); }
 void debug(const std::string& message) { log_line_impl(Level::Debug, message); }
 
-} // namespace vibble::log
+}
 

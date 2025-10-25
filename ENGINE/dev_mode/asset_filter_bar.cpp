@@ -92,7 +92,7 @@ void AssetFilterBar::initialize() {
         "Percent",
         "Center",
         "ChildRandom",
-    };
+};
 
     std::unordered_set<std::string> known_methods;
     known_methods.reserve(kSpawnMethods.size());
@@ -150,10 +150,7 @@ void AssetFilterBar::initialize() {
     if (!use_saved_state) {
         filters_expanded_ = false;
     }
-    filter_toggle_button_ = std::make_unique<DMButton>(std::string(DMIcons::CollapseExpanded()),
-                                                       &DMStyles::HeaderButton(),
-                                                       std::max(DMButton::height(), kToggleButtonMinWidth),
-                                                       DMButton::height());
+    filter_toggle_button_ = std::make_unique<DMButton>(std::string(DMIcons::CollapseExpanded()), &DMStyles::HeaderButton(), std::max(DMButton::height(), kToggleButtonMinWidth), DMButton::height());
     update_filter_toggle_label();
     sync_state_from_ui();
     layout_dirty_ = true;
@@ -340,25 +337,10 @@ void AssetFilterBar::render(SDL_Renderer* renderer) const {
     const SDL_Color panel_bg = DMStyles::PanelBG();
     const SDL_Color highlight = DMStyles::HighlightColor();
     const SDL_Color shadow = DMStyles::ShadowColor();
-    dm_draw::DrawBeveledRect(
-        renderer,
-        layout_bounds_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        panel_bg,
-        highlight,
-        shadow,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, layout_bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), panel_bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     const SDL_Color border = DMStyles::Border();
-    dm_draw::DrawRoundedOutline(
-        renderer,
-        layout_bounds_,
-        DMStyles::CornerRadius(),
-        kPanelOutlineThickness,
-        border);
+    dm_draw::DrawRoundedOutline( renderer, layout_bounds_, DMStyles::CornerRadius(), kPanelOutlineThickness, border);
 
     const SDL_Color header_bg = DMStyles::PanelHeader();
     if (header_rect_.w > 0 && header_rect_.h > 0) {
@@ -584,9 +566,7 @@ void AssetFilterBar::update_filter_toggle_label() {
     if (!filter_toggle_button_) {
         return;
     }
-    filter_toggle_button_->set_text(filters_expanded_
-                                        ? std::string(DMIcons::CollapseExpanded())
-                                        : std::string(DMIcons::CollapseCollapsed()));
+    filter_toggle_button_->set_text(filters_expanded_ ? std::string(DMIcons::CollapseExpanded()) : std::string(DMIcons::CollapseCollapsed()));
 }
 
 void AssetFilterBar::clear_checkbox_rects() {

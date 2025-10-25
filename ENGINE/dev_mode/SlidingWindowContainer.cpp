@@ -411,17 +411,7 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
     const SDL_Color& panel_fill = DMStyles::PanelBG();
     const SDL_Color& panel_highlight = DMStyles::PanelHeader();
     const SDL_Color& panel_shadow = DMStyles::Border();
-    dm_draw::DrawBeveledRect(
-        renderer,
-        panel_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        panel_fill,
-        panel_highlight,
-        panel_shadow,
-        true,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, panel_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), panel_fill, panel_highlight, panel_shadow, true, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Rect header_region{panel_.x, panel_.y, panel_.w, 0};
     if (header_visible_) {
@@ -432,17 +422,7 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
             header_region.y += inset;
             header_region.w -= inset * 2;
             header_region.h -= inset;
-            dm_draw::DrawBeveledRect(
-                renderer,
-                header_region,
-                0,
-                DMStyles::BevelDepth(),
-                DMStyles::PanelHeader(),
-                DMStyles::HighlightColor(),
-                DMStyles::ShadowColor(),
-                false,
-                DMStyles::HighlightIntensity(),
-                DMStyles::ShadowIntensity());
+            dm_draw::DrawBeveledRect( renderer, header_region, 0, DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         }
 
         if (pulse_frames_ > 0 && header_region.h > 0 && header_region.w > 0) {
@@ -490,33 +470,13 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
         SDL_Rect track = scroll_track_rect_;
         const int track_radius = std::min(DMStyles::CornerRadius(), std::min(track.w, track.h) / 2);
         const int track_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(track.w, track.h) / 2));
-        dm_draw::DrawBeveledRect(
-            renderer,
-            track,
-            track_radius,
-            track_bevel,
-            DMStyles::SliderTrackBackground(),
-            DMStyles::HighlightColor(),
-            DMStyles::ShadowColor(),
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( renderer, track, track_radius, track_bevel, DMStyles::SliderTrackBackground(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
         if (scroll_thumb_rect_.h > 0) {
             SDL_Rect thumb = scroll_thumb_rect_;
             const int thumb_radius = std::min(DMStyles::CornerRadius(), std::min(thumb.w, thumb.h) / 2);
             const int thumb_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(thumb.w, thumb.h) / 2));
-            dm_draw::DrawBeveledRect(
-                renderer,
-                thumb,
-                thumb_radius,
-                thumb_bevel,
-                DMStyles::AccentButton().hover_bg,
-                DMStyles::HighlightColor(),
-                DMStyles::ShadowColor(),
-                true,
-                DMStyles::HighlightIntensity(),
-                DMStyles::ShadowIntensity());
+            dm_draw::DrawBeveledRect( renderer, thumb, thumb_radius, thumb_bevel, DMStyles::AccentButton().hover_bg, DMStyles::HighlightColor(), DMStyles::ShadowColor(), true, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         }
     }
 
@@ -603,10 +563,7 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
             close_button_rect_ = SDL_Rect{close_x, content_top, close_button_w, label_height};
             label_end_x = std::max(content_x, close_x - close_button_gap);
             if (!close_button_) {
-                close_button_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
-                                                           &DMStyles::DeleteButton(),
-                                                           close_button_w,
-                                                           label_height);
+                close_button_ = std::make_unique<DMButton>(std::string(DMIcons::Close()), &DMStyles::DeleteButton(), close_button_w, label_height);
             }
             if (close_button_) {
                 close_button_->set_rect(close_button_rect_);

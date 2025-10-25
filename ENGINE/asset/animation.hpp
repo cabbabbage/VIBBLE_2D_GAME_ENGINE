@@ -32,14 +32,14 @@ public:
             mask_widths.assign(variant_count, 0);
             mask_heights.assign(variant_count, 0);
         }
-    };
+};
     struct AudioClip {
         std::string name;
         std::string path;
         int volume = 100;
         bool effects = false;
         std::shared_ptr<Mix_Chunk> chunk;
-    };
+};
 
 public:
     Animation();
@@ -58,10 +58,7 @@ public:
     void clear_texture_cache();
     SDL_Texture* frame_variant(std::size_t frame_index, std::size_t variant_index) const;
     SDL_Texture* mask_variant(std::size_t frame_index, std::size_t variant_index) const;
-    void adopt_prebuilt_frames(std::vector<FrameCache> caches,
-                               std::vector<SDL_Texture*> base_frames,
-                               std::vector<SDL_Texture*> base_masks,
-                               std::vector<float> variant_steps);
+    void adopt_prebuilt_frames(std::vector<FrameCache> caches, std::vector<SDL_Texture*> base_frames, std::vector<SDL_Texture*> base_masks, std::vector<float> variant_steps);
     struct Source {
         std::string kind;
         std::string path;

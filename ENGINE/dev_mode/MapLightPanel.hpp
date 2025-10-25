@@ -27,10 +27,7 @@ public:
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
     void set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings);
 
-    using ColorSampleRequestCallback = std::function<void(
-        const utils::color::RangedColor&,
-        std::function<void(SDL_Color)>,
-        std::function<void()>)>;
+    using ColorSampleRequestCallback = std::function<void( const utils::color::RangedColor&, std::function<void(SDL_Color)>, std::function<void()>)>;
     void set_map_color_sample_callback(ColorSampleRequestCallback cb);
 
     void open();
@@ -126,7 +123,7 @@ private:
         int id = 0;
         double angle = 0.0;
         utils::color::RangedColor color{};
-    };
+};
 
     int next_pair_id_ = 1;
     std::vector<OrbitKeyPair> orbit_key_pairs_;

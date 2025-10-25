@@ -108,8 +108,7 @@ manifest_store_(manifest_store)
 
                 const auto preload_end = std::chrono::steady_clock::now();
                 const double preload_ms = std::chrono::duration_cast<std::chrono::milliseconds>(preload_end - preload_begin).count();
-                vibble::log::info(std::string("[AssetLoader] Preloaded animations for ") + std::to_string(preload_count) +
-                          " referenced assets in " + std::to_string(preload_ms) + "ms");
+                vibble::log::info(std::string("[AssetLoader] Preloaded animations for ") + std::to_string(preload_count) + " referenced assets in " + std::to_string(preload_ms) + "ms");
         } else {
                 vibble::log::info("[AssetLoader] Using shared asset library cache; skipping per-map preload.");
         }
@@ -217,25 +216,14 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                 }
         }
 
-        vibble::log::debug(std::string("[AssetLoader] collectDistantAssets: considered=") + std::to_string(considered) +
-                           " removed=" + std::to_string(removed) +
-                           " locked=" + std::to_string(locked) +
-                           " kept_in_room=" + std::to_string(kept_in_room) +
-                           " kept_in_zone=" + std::to_string(kept_in_zone) +
-                           " skipped_non_boundary=" + std::to_string(skipped_type));
+        vibble::log::debug(std::string("[AssetLoader] collectDistantAssets: considered=") + std::to_string(considered) + " removed=" + std::to_string(removed) + " locked=" + std::to_string(locked) + " kept_in_room=" + std::to_string(kept_in_room) + " kept_in_zone=" + std::to_string(kept_in_zone) + " skipped_non_boundary=" + std::to_string(skipped_type));
 
         return distant_assets;
 }
 
 void AssetLoader::loadRooms() {
         const double min_edge_distance = map_layers::min_edge_distance_from_map_info(map_info_json_);
-        GenerateRooms generator(map_layers_,
-                                map_center_x_,
-                                map_center_y_,
-                                map_id_,
-                                map_info_json_,
-                                min_edge_distance,
-                                manifest_store_);
+        GenerateRooms generator(map_layers_, map_center_x_, map_center_y_, map_id_, map_info_json_, min_edge_distance, manifest_store_);
         nlohmann::json empty_boundary = nlohmann::json::object();
         nlohmann::json empty_rooms    = nlohmann::json::object();
         nlohmann::json empty_trails   = nlohmann::json::object();
@@ -243,14 +231,7 @@ void AssetLoader::loadRooms() {
         map_grid_settings_ = MapGridSettings::from_json(map_info_json_.contains("map_grid_settings") ? &map_info_json_["map_grid_settings"] : nullptr);
         MapGridSettings grid_settings = map_grid_settings_;
         nlohmann::json& map_assets_json = map_assets_data_ ? *map_assets_data_ : empty_assets;
-        auto room_ptrs = generator.build( asset_library_,
-                                          map_radius_,
-                                          layer_radii_,
-                                          map_boundary_data_ ? *map_boundary_data_ : empty_boundary,
-                                          rooms_data_        ? *rooms_data_        : empty_rooms,
-                                          trails_data_       ? *trails_data_       : empty_trails,
-                                          map_assets_json,
-                                          grid_settings);
+        auto room_ptrs = generator.build( asset_library_, map_radius_, layer_radii_, map_boundary_data_ ? *map_boundary_data_ : empty_boundary, rooms_data_        ? *rooms_data_        : empty_rooms, trails_data_       ? *trails_data_       : empty_trails, map_assets_json, grid_settings);
         for (auto& up : room_ptrs) {
                 rooms_.push_back(up.get());
                 all_rooms_.push_back(std::move(up));
@@ -304,8 +285,7 @@ void AssetLoader::finalizeAssets() {
                 }
 
                 if (room_total > 0) {
-                        std::string msg = std::string("[AssetLoader] finalizeAssets: room=") + std::to_string(room_index) +
-                                          " finalized " + std::to_string(room_finalized) + "/" + std::to_string(room_total);
+                        std::string msg = std::string("[AssetLoader] finalizeAssets: room=") + std::to_string(room_index) + " finalized " + std::to_string(room_finalized) + "/" + std::to_string(room_total);
                         if (room_skipped > 0) {
                                 msg += std::string(" (skipped ") + std::to_string(room_skipped) + ")";
                         }
@@ -316,8 +296,7 @@ void AssetLoader::finalizeAssets() {
         }
 
         {
-                std::string msg = std::string("[AssetLoader] finalizeAssets complete: ") + std::to_string(finalized_assets) +
-                                  "/" + std::to_string(total_assets) + " assets ready";
+                std::string msg = std::string("[AssetLoader] finalizeAssets complete: ") + std::to_string(finalized_assets) + "/" + std::to_string(total_assets) + " assets ready";
                 if (skipped_assets > 0) {
                         msg += std::string(" (") + std::to_string(skipped_assets) + " skipped)";
                 }
@@ -363,12 +342,10 @@ void AssetLoader::createAssets(world::Grid& grid) {
                 if (!asset) continue;
                 grid.register_asset(asset);
         }
-        vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") +
-                           std::to_string(spawned_assets_.size()));
+        vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") + std::to_string(spawned_assets_.size()));
 
         const auto t1 = std::chrono::steady_clock::now();
-        vibble::log::debug(std::string("[AssetLoader] createAssets total ") +
-                           std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) + "ms");
+        vibble::log::debug(std::string("[AssetLoader] createAssets total ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) + "ms");
 }
 
 std::vector<std::unique_ptr<Asset>> AssetLoader::take_spawned_assets() {
@@ -420,12 +397,8 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
                         if (!layer_entry.is_object()) {
                                 continue;
                         }
-                        const double ring_radius = idx < radii_result.layer_radii.size()
-                                                      ? radii_result.layer_radii[idx]
-                                                      : 0.0;
-                        const double extent_value = idx < radii_result.layer_extents.size()
-                                                        ? radii_result.layer_extents[idx]
-                                                        : 0.0;
+                        const double ring_radius = idx < radii_result.layer_radii.size() ? radii_result.layer_radii[idx] : 0.0;
+                        const double extent_value = idx < radii_result.layer_extents.size() ? radii_result.layer_extents[idx] : 0.0;
                         layer_entry["ring_radius"] = ring_radius;
                         layer_entry["bounding_extent"] = extent_value;
                 }
@@ -476,12 +449,6 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
                 }
         }
 
-        vibble::log::debug(std::string("[AssetLoader] load_map_json: map_radius_=") + std::to_string(map_radius_) +
-                           " layers=" + std::to_string(map_layers_.size()));
+        vibble::log::debug(std::string("[AssetLoader] load_map_json: map_radius_=") + std::to_string(map_radius_) + " layers=" + std::to_string(map_layers_.size()));
 }
-
-
-        
-
-
 

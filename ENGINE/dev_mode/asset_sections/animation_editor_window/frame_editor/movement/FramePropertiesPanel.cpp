@@ -86,17 +86,7 @@ void FramePropertiesPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(
-        renderer,
-        bounds_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelBG(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Color text_color = DMStyles::Label().color;
     int x = bounds_.x + kPadding;
@@ -116,24 +106,9 @@ void FramePropertiesPanel::render(SDL_Renderer* renderer) const {
     const int toggle_radius = std::min(DMStyles::CornerRadius(), std::min(resort_toggle_rect_.w, resort_toggle_rect_.h) / 2);
     const int toggle_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(resort_toggle_rect_.w, resort_toggle_rect_.h) / 2));
     const SDL_Color fill_color{toggle_bg.r, toggle_bg.g, toggle_bg.b, 240};
-    dm_draw::DrawBeveledRect(
-        renderer,
-        resort_toggle_rect_,
-        toggle_radius,
-        toggle_bevel,
-        fill_color,
-        fill_color,
-        fill_color,
-        false,
-        0.0f,
-        0.0f);
+    dm_draw::DrawBeveledRect( renderer, resort_toggle_rect_, toggle_radius, toggle_bevel, fill_color, fill_color, fill_color, false, 0.0f, 0.0f);
     SDL_Color toggle_border = DMStyles::ListButton().border;
-    dm_draw::DrawRoundedOutline(
-        renderer,
-        resort_toggle_rect_,
-        toggle_radius,
-        1,
-        toggle_border);
+    dm_draw::DrawRoundedOutline( renderer, resort_toggle_rect_, toggle_radius, 1, toggle_border);
 
     render_label(renderer, cached_frame_.resort_z ? "Resort Z: Yes" : "Resort Z: No", resort_toggle_rect_.x + 8, resort_toggle_rect_.y + 6, text_color);
 }

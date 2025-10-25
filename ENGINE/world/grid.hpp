@@ -22,16 +22,13 @@ public:
     int  lighting_chunk_resolution() const { return std::max(0, r_chunk_ - 2); }
     int  lighting_subdivisions_per_chunk() const { return 1 << std::min(2, std::max(0, r_chunk_)); }
 
-    // Residency API
     void register_asset(Asset* a);
     void move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos);
     void unregister_asset(Asset* a);
 
-    // Activation
     void update_active_chunks(const SDL_Rect& camera_world, int margin_px);
     const std::vector<Chunk*>& active_chunks() const { return chunks_.active(); }
 
-    // Queries
     Chunk* find_chunk_ij(int i, int j) const { return chunks_.find(i, j); }
     Chunk& get_or_create_chunk_ij(int i, int j) { return chunks_.ensure(i, j, r_chunk_, origin_); }
     Chunk* ensure_chunk_from_world(SDL_Point world_px);
@@ -49,5 +46,5 @@ private:
     std::unordered_map<Asset*, Chunk*> residency_{};
 };
 
-} // namespace world
+}
 

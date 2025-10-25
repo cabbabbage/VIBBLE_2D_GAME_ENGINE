@@ -38,7 +38,7 @@ int round_div_nearest(int64 numerator, int64 denominator) noexcept {
     return static_cast<int>(rounded);
 }
 
-} // namespace
+}
 
 SDL_Point grid_index_to_world(int i, int j, int r, SDL_Point origin) noexcept {
     const int64 step = delta64(r);
@@ -67,9 +67,7 @@ SDL_Point world_to_grid_index(SDL_Point world, int r, SDL_Point origin) noexcept
     const double floored_x = std::floor(gx);
     const double floored_y = std::floor(gy);
     return SDL_Point{
-        clamp_to_int(static_cast<int64>(floored_x)),
-        clamp_to_int(static_cast<int64>(floored_y))
-    };
+        clamp_to_int(static_cast<int64>(floored_x)), clamp_to_int(static_cast<int64>(floored_y)) };
 }
 
 SDL_Point change_resolution(SDL_Point indices, int from_resolution, int to_resolution) noexcept {
@@ -142,5 +140,5 @@ Grid& global_grid() noexcept {
     return grid_instance;
 }
 
-} // namespace vibble::grid
+}
 

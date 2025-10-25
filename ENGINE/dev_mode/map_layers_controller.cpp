@@ -63,13 +63,11 @@ void MapLayersController::clear_listeners() {
 bool MapLayersController::save() {
     if (!map_info_) return false;
     if (!manifest_store_) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "[MapLayersController] Cannot save map info: manifest store is not available.");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[MapLayersController] Cannot save map info: manifest store is not available.");
         return false;
     }
     if (map_id_.empty()) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "[MapLayersController] Cannot save map info: map identifier is empty.");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[MapLayersController] Cannot save map info: map identifier is empty.");
         return false;
     }
     if (!devmode::persist_map_manifest_entry(*manifest_store_, map_id_, *map_info_, std::cerr)) {
@@ -83,13 +81,11 @@ bool MapLayersController::save() {
 bool MapLayersController::reload() {
     if (!map_info_) return false;
     if (!manifest_store_) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "[MapLayersController] Cannot reload map info: manifest store is not available.");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[MapLayersController] Cannot reload map info: manifest store is not available.");
         return false;
     }
     if (map_id_.empty()) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "[MapLayersController] Cannot reload map info: map identifier is empty.");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[MapLayersController] Cannot reload map info: map identifier is empty.");
         return false;
     }
     const nlohmann::json* entry = manifest_store_->find_map_entry(map_id_);
@@ -239,7 +235,7 @@ int MapLayersController::duplicate_layer(int index) {
         return std::any_of(arr.begin(), arr.end(), [&](const json& entry) {
             return entry.is_object() && entry.value("name", std::string()) == candidate;
         });
-    };
+};
 
     std::string base_name = copy.value("name", std::string());
     if (base_name.empty()) {
@@ -306,7 +302,7 @@ bool MapLayersController::add_candidate(int layer_index, const std::string& room
             {"min_instances", 1},
             {"max_instances", 1},
             {"required_children", json::array()}
-        };
+};
 
         if (!rooms.empty() && rooms[0].is_object()) {
             json& spawn_entry = rooms[0];
@@ -634,7 +630,7 @@ void MapLayersController::clamp_layer_counts(json& layer) const {
                 {"min_instances", 1},
                 {"max_instances", 1},
                 {"required_children", json::array()}
-            };
+};
             rooms_ref = json::array({candidate});
         }
         json& spawn_entry = rooms_ref[0];
@@ -711,7 +707,7 @@ void MapLayersController::ensure_spawn_room_data(const std::string& previous_nam
         entry["is_spawn"] = true;
         rooms_data[kSpawnRoomName] = std::move(entry);
         return true;
-    };
+};
 
     if (rooms_data.contains(kSpawnRoomName)) {
         json& spawn_entry = rooms_data[kSpawnRoomName];

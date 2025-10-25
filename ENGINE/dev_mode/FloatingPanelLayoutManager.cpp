@@ -187,7 +187,7 @@ SDL_Rect sanitize_rect(const SDL_Rect& rect) {
     return result;
 }
 
-}  // namespace
+}
 
 FloatingPanelLayoutManager& FloatingPanelLayoutManager::instance() {
     static FloatingPanelLayoutManager manager;

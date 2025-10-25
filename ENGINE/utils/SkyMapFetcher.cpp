@@ -1,4 +1,4 @@
-// SkyMapFetcher.cpp
+
 #include "SkyMapFetcher.hpp"
 
 #include <algorithm>
@@ -23,8 +23,6 @@
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 
-// stb_image and stb_image_write (public domain / MIT-like).
-// Embedded here so you do not need extra libs for PNG output.
 #define STB_IMAGE_IMPLEMENTATION
 #include <stdint.h>
 extern "C" {
@@ -45,13 +43,10 @@ inline int clamp_int(int value, int min_value, int max_value) {
     return std::min(std::max(value, min_value), max_value);
 }
 
-// No “contrast push” — keep these metadata constants at 0 so caches are reusable
-// without any aggressive post-processing.
 static constexpr double kSkyContrastFactor      = 0.0;
 static constexpr double kSkyHashStrength        = 0.0;
 static constexpr double kSkyLineSmoothStrength  = 0.0;
 
-// Very subtle overlay strength so the base NASA image remains the hero.
 static constexpr float  kOverlayStrength        = 0.12f;
 
 struct ImageData {
@@ -132,13 +127,11 @@ void invert_overlay_colors(std::vector<unsigned char>& pixels) {
     for (size_t i = 0; i < total_pixels; ++i) {
         const size_t idx = i * 4;
         for (int channel = 0; channel < 3; ++channel) {
-            pixels[idx + static_cast<size_t>(channel)] =
-                static_cast<unsigned char>(255u - pixels[idx + static_cast<size_t>(channel)]);
+            pixels[idx + static_cast<size_t>(channel)] = static_cast<unsigned char>(255u - pixels[idx + static_cast<size_t>(channel)]);
         }
     }
 }
 
-// Gentle alpha blend for overlays (no normalization).
 void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
                            const std::vector<unsigned char>& overlay_pixels,
                            int width,
@@ -158,18 +151,16 @@ void blend_overlay_texture(std::vector<unsigned char>& base_pixels,
         for (int channel = 0; channel < 3; ++channel) {
             const float overlay_c = static_cast<float>(overlay_pixels[idx + channel]) / 255.0f;
             const float base_c    = static_cast<float>(base_pixels[idx + channel]) / 255.0f;
-            // Simple lerp toward overlay at low strength
+
             const float blended = clamp01(base_c * (1.0f - overlay_alpha) + overlay_c * overlay_alpha);
             base_pixels[idx + channel] = static_cast<unsigned char>(std::round(blended * 255.0f));
         }
-        // keep base alpha as-is
+
     }
 }
 
-// NOTE: Old “normalize_overlay_linework” and “apply_harsh_contrast” removed from use.
-// Keeping a small no-op for future hooks if needed.
-void apply_sky_map_post_fx(std::vector<unsigned char>& /*pixels*/, int /*width*/, int /*height*/) {
-    // Intentionally empty: preserve original NASA image tonality.
+void apply_sky_map_post_fx(std::vector<unsigned char>& , int , int ) {
+
 }
 
 bool load_random_overlay_from_directory(std::vector<unsigned char>& out_pixels,
@@ -254,8 +245,7 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
         for (size_t i = 0; i < total_pixels; ++i) {
             const size_t idx = i * 4;
             for (int channel = 0; channel < 4; ++channel) {
-                const int value = static_cast<int>(overlay_esoteric[idx + channel]) +
-                                  static_cast<int>(overlay_americana[idx + channel]);
+                const int value = static_cast<int>(overlay_esoteric[idx + channel]) + static_cast<int>(overlay_americana[idx + channel]);
                 merged[idx + channel] = static_cast<unsigned char>(value / 2);
             }
         }
@@ -267,11 +257,10 @@ void overlay_random_texture(std::vector<unsigned char>& base_pixels, int width, 
         merged = std::move(overlay_americana);
     }
 
-    // No additional normalization — blend the inverted overlay gently onto the base image.
     blend_overlay_texture(base_pixels, merged, width, height);
 }
 
-} // namespace
+}
 
 static size_t CurlWriteToString(void* contents, size_t size, size_t nmemb, void* userp) {
     const size_t realSize = size * nmemb;
@@ -296,15 +285,15 @@ bool SkyMapFetcher::http_get_text(const std::string& url, std::string& out_text,
 }
 
 bool SkyMapFetcher::http_get_binary(const std::string& url, std::string& out_bytes, long& http_code) {
-    // Same as text; we keep raw bytes in std::string.
+
     return http_get_text(url, out_bytes, http_code);
 }
 
 bool SkyMapFetcher::geolocate_ip(double& lat_deg, double& lon_deg, std::string& city) {
-    // Try ip-api first (no key). Falls back to ipapi.co.
+
     {
         std::string body; long code = 0;
-        if (http_get_text("http://ip-api.com/json", body, code)) {
+        if (http_get_text("http:
             try {
                 auto j = json::parse(body);
                 if (j.value("status", std::string()) == "success") {
@@ -318,7 +307,7 @@ bool SkyMapFetcher::geolocate_ip(double& lat_deg, double& lon_deg, std::string& 
     }
     {
         std::string body; long code = 0;
-        if (http_get_text("https://ipapi.co/json/", body, code)) {
+        if (http_get_text("https:
             try {
                 auto j = json::parse(body);
                 lat_deg = j.value("latitude", 0.0);
@@ -332,17 +321,15 @@ bool SkyMapFetcher::geolocate_ip(double& lat_deg, double& lon_deg, std::string& 
 }
 
 double SkyMapFetcher::julian_date(std::time_t t) {
-    // Convert Unix time (UTC) to Julian Date.
-    // JD of Unix epoch (1970-01-01 00:00:00 UTC) is 2440587.5
+
     return 2440587.5 + static_cast<double>(t) / 86400.0;
 }
 
 double SkyMapFetcher::gmst_deg(double jd) {
-    // Approx GMST in degrees. Good enough for centering a several-degree cutout.
-    // GMST = 280.46061837 + 360.98564736629 * (JD - 2451545.0)
+
     constexpr double JD2000 = 2451545.0;
     double gmst = 280.46061837 + 360.98564736629 * (jd - JD2000);
-    // Normalize to [0,360)
+
     gmst = fmod(gmst, 360.0);
     if (gmst < 0) gmst += 360.0;
     return gmst;
@@ -355,31 +342,25 @@ std::pair<double,double> SkyMapFetcher::zenith_radec(double latitude_deg,
         utc_seconds_since_epoch = std::time(nullptr);
     }
     const double jd = julian_date(utc_seconds_since_epoch);
-    double lst = gmst_deg(jd) + longitude_deg; // degrees
+    double lst = gmst_deg(jd) + longitude_deg;
     lst = fmod(lst, 360.0);
     if (lst < 0) lst += 360.0;
 
-    double ra_deg = lst;           // RA at zenith ~ LST
-    double dec_deg = latitude_deg; // Dec at zenith ~ latitude
+    double ra_deg = lst;
+    double dec_deg = latitude_deg;
     return {ra_deg, dec_deg};
 }
 
 std::string SkyMapFetcher::build_skyview_url(double ra_deg, double dec_deg,
                                              int pixels, double fov_deg,
                                              const std::string& survey) {
-    // SkyView runquery parameters:
-    // Position=RA,Dec  coordinates=J2000  pixels=N  size=FOVdeg
-    // projection=Tan scaling=Linear survey=<survey>
-    // The response is an HTML page that contains a "quick look jpeg" link.
+
     char buf[2048];
-    // Survey must have spaces encoded as '+'
+
     std::string survey_enc = survey;
     for (auto& ch : survey_enc) if (ch == ' ') ch = '+';
 
-    std::snprintf(buf, sizeof(buf),
-        "https://skyview.gsfc.nasa.gov/current/cgi/runquery.pl?"
-        "Position=%.8f,%.8f&coordinates=J2000&pixels=%d&size=%.4f&projection=Tan&scaling=Linear&survey=%s",
-        ra_deg, dec_deg, pixels, fov_deg, survey_enc.c_str());
+    std::snprintf(buf, sizeof(buf), "https: "Position=%.8f,%.8f&coordinates=J2000&pixels=%d&size=%.4f&projection=Tan&scaling=Linear&survey=%s", ra_deg, dec_deg, pixels, fov_deg, survey_enc.c_str());
     return std::string(buf);
 }
 
@@ -394,21 +375,20 @@ std::string trim_left(const std::string& value) {
 }
 
 std::string resolve_skyview_href(const std::string& href_value) {
-    const std::string host_root = "https://skyview.gsfc.nasa.gov";
+    const std::string host_root = "https:
     std::string href = trim_left(href_value);
-    if (href.rfind("http://", 0) == 0 || href.rfind("https://", 0) == 0) {
+    if (href.rfind("http:
         return href;
     }
-    if (href.rfind("//", 0) == 0) {
+    if (href.rfind("
         return "https:" + href;
     }
 
     if (!href.empty() && href[0] == '/') {
-        // Absolute path on host.
+
         return host_root + href;
     }
 
-    // Resolve against https://skyview.gsfc.nasa.gov/current/cgi/
     const std::vector<std::string> base_segments = {"current", "cgi"};
     std::vector<std::string> resolved_segments = base_segments;
 
@@ -435,22 +415,21 @@ std::string resolve_skyview_href(const std::string& href_value) {
     return resolved;
 }
 
-} // namespace
+}
 
 bool SkyMapFetcher::extract_quicklook_jpeg_url(const std::string& html, std::string& jpg_url) {
-    // Look for a tempspace JPEG link.
-    // Example: https://skyview.gsfc.nasa.gov/tempspace/fits/skvXXXXXXXXXXX.jpg
-    std::regex re(R"(https://skyview\.gsfc\.nasa\.gov/tempspace/[^\s\"']+\.jpg)");
+
+    std::regex re(R"(https:
     std::smatch m;
     if (std::regex_search(html, m, re)) {
         jpg_url = m.str(0);
         return true;
     }
-    // Fallback: quick look jpeg link text, allowing optional quotes and relative paths.
+
     std::regex re2(R"(href\s*=\s*['\"]?([^'\">\s]+\.jpg))", std::regex::icase);
     if (std::regex_search(html, m, re2) && m.size() >= 2) {
         std::string candidate = m.str(1);
-        if (candidate.rfind("http", 0) != 0 && candidate.rfind("//", 0) != 0) {
+        if (candidate.rfind("http", 0) != 0 && candidate.rfind("
             jpg_url = resolve_skyview_href(candidate);
         } else {
             jpg_url = resolve_skyview_href(candidate);
@@ -472,10 +451,8 @@ bool SkyMapFetcher::jpeg_memory_to_png_file(const std::string& jpg_bytes,
     std::vector<unsigned char> pixels(rgba, rgba + total_bytes);
     stbi_image_free(rgba);
 
-    // Optional, very subtle texture overlay; does nothing if no assets exist.
     overlay_random_texture(pixels, w, h);
 
-    // No post contrast/normalization — keep NASA image tonality intact.
     apply_sky_map_post_fx(pixels, w, h);
 
     const int stride_in_bytes = w * 4;
@@ -496,7 +473,6 @@ SkyMapResult SkyMapFetcher::fetch_and_save_png(const std::string& output_png_pat
                                                const std::string& survey) {
     SkyMapResult res;
 
-    // 1) Geolocate
     double lat = 0.0, lon = 0.0; std::string city;
     if (!geolocate_ip(lat, lon, city)) {
         res.ok = false;
@@ -506,15 +482,12 @@ SkyMapResult SkyMapFetcher::fetch_and_save_png(const std::string& output_png_pat
     res.latitude_deg = lat;
     res.longitude_deg = lon;
 
-    // 2) Zenith RA/Dec now
     auto radec = zenith_radec(lat, lon, std::time(nullptr));
     res.ra_deg = radec.first;
     res.dec_deg = radec.second;
 
-    // 3) Build SkyView request
     std::string query_url = build_skyview_url(res.ra_deg, res.dec_deg, pixels, fov_deg, survey);
 
-    // 4) Get SkyView results page
     std::string html; long code = 0;
     if (!http_get_text(query_url, html, code)) {
         res.ok = false;
@@ -522,7 +495,6 @@ SkyMapResult SkyMapFetcher::fetch_and_save_png(const std::string& output_png_pat
         return res;
     }
 
-    // 5) Find the quicklook JPEG
     std::string jpg_url;
     if (!extract_quicklook_jpeg_url(html, jpg_url)) {
         res.ok = false;
@@ -531,7 +503,6 @@ SkyMapResult SkyMapFetcher::fetch_and_save_png(const std::string& output_png_pat
     }
     res.fetched_jpeg_url = jpg_url;
 
-    // 6) Download JPEG
     std::string jpg_bytes; long img_code = 0;
     if (!http_get_binary(jpg_url, jpg_bytes, img_code)) {
         res.ok = false;
@@ -539,7 +510,6 @@ SkyMapResult SkyMapFetcher::fetch_and_save_png(const std::string& output_png_pat
         return res;
     }
 
-    // 7) Convert to PNG
     if (!jpeg_memory_to_png_file(jpg_bytes, output_png_path)) {
         res.ok = false;
         res.message = "JPEG to PNG transcode failed";
@@ -563,7 +533,6 @@ SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& ou
     const auto now = std::chrono::system_clock::now();
     const std::time_t now_utc = std::chrono::system_clock::to_time_t(now);
 
-    // Attempt to reuse cached image if metadata indicates it is recent enough.
     if (fs::exists(output_png_path) && fs::exists(metadata_path)) {
         try {
             std::ifstream meta_in(metadata_path);
@@ -605,7 +574,7 @@ SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& ou
                 }
             }
         } catch (const std::exception&) {
-            // Fall back to fetching a new image if metadata cannot be read.
+
         }
     }
 
@@ -616,7 +585,7 @@ SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& ou
             fs::create_directories(output_parent);
         }
     } catch (const std::exception&) {
-        // Ignore directory creation failures and let the fetch call report errors.
+
     }
 
     SkyMapResult res = fetch_and_save_png(output_abs.u8string(), pixels, fov_deg, survey);
@@ -652,10 +621,9 @@ SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& ou
     meta_json["fov_deg"] = fov_deg;
     meta_json["post_processed_iso8601"] = iso8601.str();
 
-    // Store current (neutral) tuning so cache compares cleanly later.
-    meta_json["contrast_factor"] = kSkyContrastFactor;        // 0.0
-    meta_json["hash_strength"] = kSkyHashStrength;            // 0.0
-    meta_json["line_smoothing_strength"] = kSkyLineSmoothStrength; // 0.0
+    meta_json["contrast_factor"] = kSkyContrastFactor;
+    meta_json["hash_strength"] = kSkyHashStrength;
+    meta_json["line_smoothing_strength"] = kSkyLineSmoothStrength;
 
     try {
         fs::path meta_parent = metadata_path.parent_path();
@@ -667,7 +635,7 @@ SkyMapResult SkyMapFetcher::fetch_or_load_cached(const std::filesystem::path& ou
             meta_out << meta_json.dump(2);
         }
     } catch (const std::exception&) {
-        // Ignore metadata persistence errors; fetching succeeded.
+
     }
 
     return res;

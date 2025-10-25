@@ -54,5 +54,5 @@ private:
 
 Grid& global_grid() noexcept;
 
-} // namespace vibble::grid
+}
 

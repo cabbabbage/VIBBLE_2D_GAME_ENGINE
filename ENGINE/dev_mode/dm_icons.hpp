@@ -17,7 +17,7 @@ inline constexpr std::array<LineSegment, 4> CollapsibleHandleSegments() noexcept
         LineSegment{0.0f, -0.5f, 0.0f, 0.5f},
         LineSegment{-0.35f, -0.35f, 0.35f, 0.35f},
         LineSegment{-0.35f, 0.35f, 0.35f, -0.35f},
-    };
+};
 }
 
 inline constexpr std::string_view CollapseExpanded() noexcept { return u8"\u25B2"; }

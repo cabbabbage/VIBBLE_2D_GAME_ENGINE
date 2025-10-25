@@ -81,7 +81,7 @@ SDL_Color severity_fill(bool has_error, bool has_warning, bool selected) {
     return selected ? lighten(base, 0.22f) : base;
 }
 
-}  // namespace
+}
 
 class MapLayersPanel::LayersListWidget : public Widget {
 public:
@@ -422,7 +422,7 @@ bool MapLayersPanel::room_config_visible() const {
 }
 
 void MapLayersPanel::hide_main_container() {
-    // No-op in simplified panel.
+
 }
 
 void MapLayersPanel::show_room_list() {
@@ -744,8 +744,7 @@ void MapLayersPanel::update_layer_row_geometry() {
         if (!row.deletable) {
             row.delete_button_rect = SDL_Rect{row.rect.x + row.rect.w, row.rect.y, 0, 0};
         } else if (button_size > 0) {
-            const int button_x = std::max(row.rect.x + padding,
-                                          row.rect.x + row.rect.w - padding - button_size);
+            const int button_x = std::max(row.rect.x + padding, row.rect.x + row.rect.w - padding - button_size);
             const int button_y = row.rect.y + (row.rect.h - button_size) / 2;
             row.delete_button_rect = SDL_Rect{button_x, button_y, button_size, button_size};
         } else {
@@ -774,11 +773,9 @@ int MapLayersPanel::list_height_for_width(int w) const {
         int rows_present = 0;
         int other_heights = 0;
 
-        // Row containing the add/reload buttons.
         rows_present += 1;
         other_heights += DMButton::height();
 
-        // Layers list row itself.
         rows_present += 1;
 
         if (preview_widget_) {
@@ -926,11 +923,8 @@ void MapLayersPanel::render_layers_list(SDL_Renderer* renderer) const {
             const int cross_pad = std::max(3, delete_rect.w / 4);
             SDL_Color cross_color{255, 255, 255, 255};
             SDL_SetRenderDrawColor(renderer, cross_color.r, cross_color.g, cross_color.b, cross_color.a);
-            SDL_RenderDrawLine(renderer, delete_rect.x + cross_pad, delete_rect.y + cross_pad,
-                               delete_rect.x + delete_rect.w - cross_pad - 1,
-                               delete_rect.y + delete_rect.h - cross_pad - 1);
-            SDL_RenderDrawLine(renderer, delete_rect.x + delete_rect.w - cross_pad - 1, delete_rect.y + cross_pad,
-                               delete_rect.x + cross_pad, delete_rect.y + delete_rect.h - cross_pad - 1);
+            SDL_RenderDrawLine(renderer, delete_rect.x + cross_pad, delete_rect.y + cross_pad, delete_rect.x + delete_rect.w - cross_pad - 1, delete_rect.y + delete_rect.h - cross_pad - 1);
+            SDL_RenderDrawLine(renderer, delete_rect.x + delete_rect.w - cross_pad - 1, delete_rect.y + cross_pad, delete_rect.x + cross_pad, delete_rect.y + delete_rect.h - cross_pad - 1);
         }
 
         const std::string level = std::string{"Lvl "} + std::to_string(row.index);
@@ -1204,8 +1198,7 @@ bool MapLayersPanel::validate_layers() {
                 invalid_layers_.push_back(index);
                 layer_has_error = true;
             } else {
-                warnings.emplace_back("Layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) +
-                                      "' does not contain any rooms.");
+                warnings.emplace_back("Layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) + "' does not contain any rooms.");
                 warning_layers_.push_back(index);
             }
         } else if (i == 0) {
@@ -1249,15 +1242,13 @@ bool MapLayersPanel::validate_layers() {
 
         for (const auto& candidate : rooms_array) {
             if (!candidate.is_object()) {
-                warnings.emplace_back("Layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) +
-                                      "' has a room entry that is not an object.");
+                warnings.emplace_back("Layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) + "' has a room entry that is not an object.");
                 warning_layers_.push_back(index);
                 continue;
             }
             std::string room_name = trimmed(candidate.value("name", std::string()));
             if (room_name.empty()) {
-                errors.emplace_back("Layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) +
-                                    "' has a room with an empty name.");
+                errors.emplace_back("Layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) + "' has a room with an empty name.");
                 invalid_layers_.push_back(index);
                 layer_has_error = true;
                 continue;
@@ -1272,9 +1263,7 @@ bool MapLayersPanel::validate_layers() {
 
             int max_instances = candidate.value("max_instances", 1);
             if (max_instances <= 0) {
-                warnings.emplace_back("Room '" + room_name + "' in layer '" +
-                                      (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) +
-                                      "' has max_instances <= 0.");
+                warnings.emplace_back("Room '" + room_name + "' in layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) + "' has max_instances <= 0.");
                 warning_layers_.push_back(index);
             }
 
@@ -1282,17 +1271,13 @@ bool MapLayersPanel::validate_layers() {
             if (required_it != candidate.end() && required_it->is_array()) {
                 for (const auto& child_entry : *required_it) {
                     if (!child_entry.is_string()) {
-                        warnings.emplace_back("Room '" + room_name + "' in layer '" +
-                                              (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) +
-                                              "' has a non-string required child entry.");
+                        warnings.emplace_back("Room '" + room_name + "' in layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) + "' has a non-string required child entry.");
                         warning_layers_.push_back(index);
                         continue;
                     }
                     std::string child_name = trimmed(child_entry.get<std::string>());
                     if (child_name.empty()) {
-                        warnings.emplace_back("Room '" + room_name + "' in layer '" +
-                                              (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) +
-                                              "' has a blank required child name.");
+                        warnings.emplace_back("Room '" + room_name + "' in layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) + "' has a blank required child name.");
                         warning_layers_.push_back(index);
                         continue;
                     }
@@ -1309,7 +1294,7 @@ bool MapLayersPanel::validate_layers() {
     auto deduplicate_indices = [](std::vector<int>& vec) {
         std::sort(vec.begin(), vec.end());
         vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
-    };
+};
 
     deduplicate_indices(invalid_layers_);
     deduplicate_indices(warning_layers_);
@@ -1325,8 +1310,7 @@ bool MapLayersPanel::validate_layers() {
         for (const std::string& child_name : required_children_names[i]) {
             auto it = room_to_layer.find(child_name);
             const int index = static_cast<int>(i);
-            const std::string layer_label = (i < layer_rows_.size() ? layer_rows_[i].name
-                                                                     : std::string("Layer ") + std::to_string(i));
+            const std::string layer_label = (i < layer_rows_.size() ? layer_rows_[i].name : std::string("Layer ") + std::to_string(i));
             if (it == room_to_layer.end()) {
                 errors.emplace_back("Layer '" + layer_label + "' references unknown room '" + child_name + "'.");
                 invalid_layers_.push_back(index);
@@ -1334,8 +1318,7 @@ bool MapLayersPanel::validate_layers() {
             }
             const int child_layer = it->second;
             if (child_layer <= static_cast<int>(i)) {
-                errors.emplace_back("Layer '" + layer_label + "' requires '" + child_name +
-                                    "' from an earlier or same layer.");
+                errors.emplace_back("Layer '" + layer_label + "' requires '" + child_name + "' from an earlier or same layer.");
                 invalid_layers_.push_back(index);
                 continue;
             }

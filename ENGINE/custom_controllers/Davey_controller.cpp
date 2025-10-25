@@ -80,7 +80,7 @@ void DaveyController::update(const Input&) {
 
     auto target_active = [](Asset* asset) {
         return asset && !asset->dead && asset->active;
-    };
+};
 
     if (self_->anim_->path_requested) {
         switch (state_) {

@@ -111,7 +111,6 @@ void VibbleController::movement(const Input& input) {
     dx_ = dy_ = 0;
     if (!player_ || !player_->anim_) return;
 
-    // Support both WASD and Arrow keys for movement.
     const bool up    = input.isScancodeDown(SDL_SCANCODE_W) || input.isScancodeDown(SDL_SCANCODE_UP);
     const bool down  = input.isScancodeDown(SDL_SCANCODE_S) || input.isScancodeDown(SDL_SCANCODE_DOWN);
     const bool left  = input.isScancodeDown(SDL_SCANCODE_A) || input.isScancodeDown(SDL_SCANCODE_LEFT);
@@ -122,7 +121,7 @@ void VibbleController::movement(const Input& input) {
     const int raw_y = (down  ? 1 : 0) - (up    ? 1 : 0);
 
     if (raw_x == 0 && raw_y == 0) {
-        // Optional mouse movement: hold left mouse to move toward cursor within neighbor radius.
+
         if (Assets* owner = player_->get_assets()) {
             if (input.isDown(Input::LEFT)) {
                 SDL_Point mouse_screen{ input.getX(), input.getY() };
@@ -190,7 +189,7 @@ void VibbleController::movement(const Input& input) {
 
     const SDL_Point current_dest = player_->anim_->final_dest;
     const bool same_target = (current_dest.x == desired.x && current_dest.y == desired.y);
-    // Replan if target changed or a new path was requested by the player/engine.
+
     if (!same_target || player_->anim_->path_requested) {
         player_->anim_->clear_movement_plan();
     }
@@ -198,8 +197,6 @@ void VibbleController::movement(const Input& input) {
     std::vector<SDL_Point> path;
     path.push_back(SDL_Point{ dx_, dy_ });
 
-    // For per-frame player input, use a near-zero visit threshold so
-    // small checkpoints are not discarded by PathSanitizer.
     player_->anim_->move(path, 0);
 }
 

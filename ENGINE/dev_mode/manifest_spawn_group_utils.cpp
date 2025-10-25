@@ -43,5 +43,5 @@ bool remove_asset_from_spawn_groups(nlohmann::json& node, const std::string& ass
     return modified;
 }
 
-} // namespace devmode::manifest_utils
+}
 

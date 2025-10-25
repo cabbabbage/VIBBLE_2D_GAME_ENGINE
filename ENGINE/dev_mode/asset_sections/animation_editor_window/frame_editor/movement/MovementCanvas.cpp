@@ -65,17 +65,7 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    dm_draw::DrawBeveledRect(
-        renderer,
-        bounds_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelBG(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Color border = DMStyles::AccentButton().hover_bg;
 
@@ -130,24 +120,9 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
         const SDL_Color outline = DMStyles::ListButton().border;
         const int radius = std::min(DMStyles::CornerRadius(), std::min(marker.w, marker.h) / 2);
         const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(marker.w, marker.h) / 2));
-        dm_draw::DrawBeveledRect(
-            renderer,
-            marker,
-            radius,
-            bevel,
-            fill_color,
-            fill_color,
-            fill_color,
-            false,
-            0.0f,
-            0.0f);
+        dm_draw::DrawBeveledRect( renderer, marker, radius, bevel, fill_color, fill_color, fill_color, false, 0.0f, 0.0f);
 
-        dm_draw::DrawRoundedOutline(
-            renderer,
-            marker,
-            radius,
-            1,
-            outline);
+        dm_draw::DrawRoundedOutline( renderer, marker, radius, 1, outline);
 
         if (frames_[i].resort_z) {
             SDL_Color indicator = with_alpha(DMStyles::DeleteButton().bg, 220);

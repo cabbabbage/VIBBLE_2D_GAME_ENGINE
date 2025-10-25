@@ -27,7 +27,7 @@ SDL_Color clamp_color(SDL_Color color) {
     return color;
 }
 
-}  // namespace
+}
 
 std::optional<SDL_Color> read(const nlohmann::json& entry) {
     if (!entry.is_object()) {
@@ -89,7 +89,7 @@ SDL_Color hsv_to_rgb(double hue_degrees, double saturation, double value) {
     auto convert = [m](double component) -> Uint8 {
         component = std::clamp(component + m, 0.0, 1.0);
         return static_cast<Uint8>(std::lround(component * 255.0));
-    };
+};
 
     SDL_Color out{convert(r), convert(g), convert(b), 255};
     return clamp_color(out);
@@ -144,7 +144,7 @@ SDL_Color ensure(nlohmann::json& entry, std::vector<SDL_Color>& used_colors, boo
 
     auto colors_match = [](const SDL_Color& lhs, const SDL_Color& rhs) {
         return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b;
-    };
+};
 
     if (auto existing = read(entry)) {
         SDL_Color color = clamp_color(*existing);
@@ -183,5 +183,5 @@ std::vector<SDL_Color> collect(const nlohmann::json& entries) {
     return result;
 }
 
-}  // namespace utils::display_color
+}
 

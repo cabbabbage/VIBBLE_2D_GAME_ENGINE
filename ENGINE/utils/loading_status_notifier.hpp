@@ -23,4 +23,4 @@ private:
     Notifier previous_{};
 };
 
-}  // namespace loading_status
+}

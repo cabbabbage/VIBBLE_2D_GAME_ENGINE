@@ -117,7 +117,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                 if (text == "false" || text == "0" || text == "no") return false;
             }
             return fallback;
-        };
+};
 
         auto ensure_bool_field = [&](const char* key, bool value) {
             bool updated = false;
@@ -138,7 +138,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                     }
                 }
             }
-        };
+};
 
         const bool default_geometry = (position == "Exact" || position == "Perimeter");
         const bool resolve_geometry = read_bool(asset, "resolve_geometry_to_room_size", default_geometry);
@@ -236,7 +236,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
                 return chance.get<double>();
             }
             return 0.0;
-        };
+};
 
         auto sanitize_key = [](std::string value) {
             auto not_space = [](unsigned char ch) { return !std::isspace(ch); };

@@ -41,12 +41,8 @@ bool has_custom_shadow_settings(const ShadowMaskSettings& settings) {
     const ShadowMaskSettings defaults{};
     const auto differs = [](float a, float b) {
         return std::fabs(a - b) > 1e-4f;
-    };
-    return differs(settings.expansion_ratio, defaults.expansion_ratio) ||
-           differs(settings.blur_scale, defaults.blur_scale) ||
-           differs(settings.falloff_start, defaults.falloff_start) ||
-           differs(settings.falloff_exponent, defaults.falloff_exponent) ||
-           differs(settings.alpha_multiplier, defaults.alpha_multiplier);
+};
+    return differs(settings.expansion_ratio, defaults.expansion_ratio) || differs(settings.blur_scale, defaults.blur_scale) || differs(settings.falloff_start, defaults.falloff_start) || differs(settings.falloff_exponent, defaults.falloff_exponent) || differs(settings.alpha_multiplier, defaults.alpha_multiplier);
 }
 
 LightSource adjust_light_source(const LightSource& source, const Asset& asset, SDL_Point merged_origin) {
@@ -60,7 +56,7 @@ LightSource adjust_light_source(const LightSource& source, const Asset& asset, S
     return adjusted;
 }
 
-} // namespace
+}
 
 TemporaryMergedAssetInfo::TemporaryMergedAssetInfo(std::string name)
     : info_(std::make_shared<AssetInfo>(std::move(name), nlohmann::json::object())) {
@@ -167,12 +163,8 @@ std::shared_ptr<AssetInfo> TemporaryMergedAssetInfo::finalize(const std::vector<
     info_->moving_asset = moving_asset_;
     info_->is_light_source = is_light_source_;
     info_->shading_factor = shading_factor_;
-    info_->min_same_type_distance = (min_same_type_distance_ == std::numeric_limits<int>::max())
-                                        ? 0
-                                        : min_same_type_distance_;
-    info_->min_distance_all = (min_distance_all_ == std::numeric_limits<int>::max())
-                                  ? 0
-                                  : min_distance_all_;
+    info_->min_same_type_distance = (min_same_type_distance_ == std::numeric_limits<int>::max()) ? 0 : min_same_type_distance_;
+    info_->min_distance_all = (min_distance_all_ == std::numeric_limits<int>::max()) ? 0 : min_distance_all_;
     info_->NeighborSearchRadius = neighbor_radius_;
     info_->z_threshold = z_threshold_;
     if (shadow_settings_) {
@@ -249,8 +241,7 @@ SDL_Texture* AssetMerger::create_scaled_texture(SDL_Texture* source,
 }
 
 std::vector<float> AssetMerger::build_variant_steps(float camera_scale_hint) const {
-    std::vector<float> steps(render_pipeline::ScalingLogic::DefaultScaleSteps().begin(),
-                             render_pipeline::ScalingLogic::DefaultScaleSteps().end());
+    std::vector<float> steps(render_pipeline::ScalingLogic::DefaultScaleSteps().begin(), render_pipeline::ScalingLogic::DefaultScaleSteps().end());
     if (std::isfinite(camera_scale_hint) && camera_scale_hint > 0.0f) {
         const auto it = std::find_if(steps.begin(), steps.end(), [camera_scale_hint](float step) {
             return std::fabs(step - camera_scale_hint) <= 1e-3f;
@@ -389,9 +380,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     }
 
     SDL_Point merged_origin{
-        static_cast<int>(std::lround((min_x + max_x) * 0.5)),
-        static_cast<int>(std::lround(max_y))
-    };
+        static_cast<int>(std::lround((min_x + max_x) * 0.5)), static_cast<int>(std::lround(max_y)) };
 
     const int base_width = std::max(1, static_cast<int>(std::ceil(max_x - min_x)));
     const int base_height = std::max(1, static_cast<int>(std::ceil(max_y - min_y)));
@@ -402,7 +391,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
         SDL_Point{ static_cast<int>(std::lround(max_x - merged_origin.x + pivot.x)), static_cast<int>(std::lround(min_y - merged_origin.y + pivot.y)) },
         SDL_Point{ static_cast<int>(std::lround(max_x - merged_origin.x + pivot.x)), static_cast<int>(std::lround(max_y - merged_origin.y + pivot.y)) },
         SDL_Point{ static_cast<int>(std::lround(min_x - merged_origin.x + pivot.x)), static_cast<int>(std::lround(max_y - merged_origin.y + pivot.y)) }
-    };
+};
 
     SDL_Texture* composite = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, base_width, base_height);
     if (!composite) {
@@ -437,20 +426,14 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     for (const auto& sample : samples) {
         SDL_Rect src{0, 0, sample.width, sample.height};
         SDL_Rect dst{
-            static_cast<int>(std::lround(sample.left - min_x)),
-            static_cast<int>(std::lround(sample.top - min_y)),
-            sample.width,
-            sample.height
-        };
+            static_cast<int>(std::lround(sample.left - min_x)), static_cast<int>(std::lround(sample.top - min_y)), sample.width, sample.height };
 
         SDL_SetRenderTarget(renderer_, composite);
-        SDL_RenderCopyEx(renderer_, sample.frame_texture, &src, &dst, 0.0, nullptr,
-                         sample.asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+        SDL_RenderCopyEx(renderer_, sample.frame_texture, &src, &dst, 0.0, nullptr, sample.asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
 
         if (composite_mask && sample.mask_texture) {
             SDL_SetRenderTarget(renderer_, composite_mask);
-            SDL_RenderCopyEx(renderer_, sample.mask_texture, &src, &dst, 0.0, nullptr,
-                             sample.asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+            SDL_RenderCopyEx(renderer_, sample.mask_texture, &src, &dst, 0.0, nullptr, sample.asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
         }
     }
 
@@ -467,14 +450,10 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
 
     for (std::size_t idx = 0; idx < variant_steps.size(); ++idx) {
         const float step = variant_steps[idx];
-        SDL_Texture* texture_variant = (idx == 0)
-                                           ? composite
-                                           : create_scaled_texture(composite, base_width, base_height, step, true);
+        SDL_Texture* texture_variant = (idx == 0) ? composite : create_scaled_texture(composite, base_width, base_height, step, true);
         SDL_Texture* mask_variant = nullptr;
         if (composite_mask) {
-            mask_variant = (idx == 0)
-                               ? composite_mask
-                               : create_scaled_texture(composite_mask, base_width, base_height, step, true);
+            mask_variant = (idx == 0) ? composite_mask : create_scaled_texture(composite_mask, base_width, base_height, step, true);
         }
 
         caches[0].textures[idx] = texture_variant;
@@ -527,9 +506,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
 
     std::shared_ptr<AssetInfo> merged_info = info_builder.finalize(variant_steps);
 
-    Area spawn_area = merged_info->areas.empty() || !merged_info->areas.front().area
-                          ? Area("merged_spawn")
-                          : Area(*merged_info->areas.front().area);
+    Area spawn_area = merged_info->areas.empty() || !merged_info->areas.front().area ? Area("merged_spawn") : Area(*merged_info->areas.front().area);
 
     Asset* exemplar = samples.front().asset;
     const int depth = exemplar ? exemplar->depth : 0;
@@ -549,5 +526,5 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     return merged_asset;
 }
 
-} // namespace runtime
+}
 

@@ -25,7 +25,7 @@ public:
         const DMButtonStyle* style_override = nullptr;
         const DMButtonStyle* active_style_override = nullptr;
         std::unique_ptr<DMButton> widget;
-    };
+};
 
     explicit DevFooterBar(std::string title);
 

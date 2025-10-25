@@ -15,8 +15,7 @@ class Global_Light_Source {
     Global_Light_Source(SDL_Renderer* renderer, SDL_Point screen_center, int screen_width, SDL_Color fallback_base_color);
     void apply_config(const nlohmann::json& data);
     ~Global_Light_Source() = default;
-    void update(const std::optional<SDL_FPoint>& target_world,
-                const std::optional<SDL_FPoint>& average_direction);
+    void update(const std::optional<SDL_FPoint>& target_world, const std::optional<SDL_FPoint>& average_direction);
     SDL_Point get_position() const;
     float     get_angle() const;
     SDL_Color get_current_color() const;
@@ -35,7 +34,7 @@ class Global_Light_Source {
         utils::color::RangedColor range{{255,255},{255,255},{255,255},{255,255}};
         SDL_Color color{255, 255, 255, 255};
         bool needs_resolve = false;
-    };
+};
     bool load_from_map_manifest(const nlohmann::json& map_info, std::string_view map_id);
     void set_defaults(int screen_width, SDL_Color fallback_base_color);
     void set_light_brightness();

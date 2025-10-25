@@ -28,5 +28,5 @@ nlohmann::json resolve_map_info_blob(const Assets* assets,
     return nlohmann::json::object();
 }
 
-}  // namespace devmode::room_editor_detail
+}
 

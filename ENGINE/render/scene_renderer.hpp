@@ -21,12 +21,7 @@ class LightMap;
 class SceneRenderer {
 
 public:
-    SceneRenderer(SDL_Renderer* renderer,
-                 Assets* assets,
-                 int screen_width,
-                 int screen_height,
-                 const nlohmann::json& map_manifest,
-                 const std::string& map_id);
+    SceneRenderer(SDL_Renderer* renderer, Assets* assets, int screen_width, int screen_height, const nlohmann::json& map_manifest, const std::string& map_id);
     ~SceneRenderer();
     void render();
     void apply_map_light_config(const nlohmann::json& data);
@@ -60,7 +55,7 @@ private:
         bool         highlighted         = false;
         bool         selected            = false;
         bool         flipped             = false;
-    };
+};
 
     bool ensure_darkness_overlay();
     void destroy_darkness_overlay();
@@ -93,5 +88,4 @@ private:
     int          darkness_overlay_height_  = 0;
     SDL_Color    map_clear_color_{0, 0, 0, 255};
 };
-
 

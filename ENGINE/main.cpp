@@ -73,7 +73,7 @@ std::optional<fs::path> prepare_sky_background() {
     return std::nullopt;
 }
 
-} // namespace
+}
 
 #if defined(_WIN32)
 extern "C" {
@@ -111,7 +111,7 @@ void MainApp::init() {
 
 void MainApp::setup() {
         std::srand(static_cast<unsigned int>(std::time(nullptr)));
-        // Remove on-screen loading status updates; use terminal logging only.
+
         try {
                 nlohmann::json map_manifest_json = nlohmann::json::object();
                 std::string content_root;
@@ -129,12 +129,10 @@ void MainApp::setup() {
 
                 if (!manifest_entry_found) {
                         if (map_descriptor_.data.is_object() && !map_descriptor_.data.empty()) {
-                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier +
-                                                  "' missing from manifest. Using descriptor payload.");
+                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier + "' missing from manifest. Using descriptor payload.");
                                 map_manifest_json = map_descriptor_.data;
                         } else {
-                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier +
-                                                  "' missing from manifest. Generating default map info.");
+                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier + "' missing from manifest. Generating default map info.");
                                 map_manifest_json = build_default_map_info(map_identifier);
                         }
                 }
@@ -158,8 +156,7 @@ void MainApp::setup() {
                         relative_content_root = fs::path("MAPS") / map_identifier;
                         map_manifest_json["content_root"] = relative_content_root.generic_string();
                         manifest_updated = true;
-                        vibble::log::warn(std::string("[MainApp] No content_root for map '") + map_identifier +
-                                          "'. Using default '" + relative_content_root.generic_string() + "'.");
+                        vibble::log::warn(std::string("[MainApp] No content_root for map '") + map_identifier + "'. Using default '" + relative_content_root.generic_string() + "'.");
                 }
 
                 fs::path resolved_root = relative_content_root;
@@ -172,8 +169,7 @@ void MainApp::setup() {
                 fs::create_directories(resolved_root, dir_error);
                 if (dir_error) {
                         std::ostringstream oss;
-                        oss << "Failed to prepare content root '" << resolved_root.string() << "': "
-                            << dir_error.message();
+                        oss << "Failed to prepare content root '" << resolved_root.string() << "': " << dir_error.message();
                         throw std::runtime_error(oss.str());
                 }
                 content_root = resolved_root.string();
@@ -184,12 +180,10 @@ void MainApp::setup() {
                         if (map_info_stream.is_open()) {
                                 map_info_stream << map_manifest_json.dump(2);
                                 if (!map_info_stream.good()) {
-                                        vibble::log::warn(std::string("[MainApp] Failed to write map_info.json for '") +
-                                                          map_identifier + "'.");
+                                        vibble::log::warn(std::string("[MainApp] Failed to write map_info.json for '") + map_identifier + "'.");
                                 }
                         } else {
-                                vibble::log::warn(std::string("[MainApp] Unable to create map_info.json for '") +
-                                                  map_identifier + "'.");
+                                vibble::log::warn(std::string("[MainApp] Unable to create map_info.json for '") + map_identifier + "'.");
                         }
                 }
 
@@ -198,23 +192,16 @@ void MainApp::setup() {
                                 devmode::core::ManifestStore store;
                                 store.reload();
                                 if (!store.update_map_entry(map_identifier, map_manifest_json)) {
-                                        vibble::log::warn(std::string("[MainApp] Failed to persist manifest entry for '") +
-                                                          map_identifier + "'.");
+                                        vibble::log::warn(std::string("[MainApp] Failed to persist manifest entry for '") + map_identifier + "'.");
                                 } else {
                                         store.flush();
                                 }
                         } catch (const std::exception& ex) {
-                                vibble::log::warn(std::string("[MainApp] Unable to persist manifest entry for '") +
-                                                  map_identifier + "': " + ex.what());
+                                vibble::log::warn(std::string("[MainApp] Unable to persist manifest entry for '") + map_identifier + "': " + ex.what());
                         }
                 }
 
-                loader_ = std::make_unique<AssetLoader>(map_identifier,
-                                                       map_manifest_json,
-                                                       renderer_,
-                                                       content_root,
-                                                       nullptr,
-                                                       asset_library_);
+                loader_ = std::make_unique<AssetLoader>(map_identifier, map_manifest_json, renderer_, content_root, nullptr, asset_library_);
                 loading_status::notify("Spawning assets");
                 auto spawn_begin = std::chrono::steady_clock::now();
                 world::Grid world_grid{};
@@ -235,20 +222,7 @@ void MainApp::setup() {
                 if (!active_library) {
                         throw std::runtime_error("Asset library unavailable during game setup.");
                 }
-                game_assets_ = new Assets(std::move(all_assets),
-                                          *active_library,
-                                          player_ptr,
-                                          loader_->getRooms(),
-                                          screen_w_,
-                                          screen_h_,
-                                          start_px,
-                                          start_py,
-                                          static_cast<int>(loader_->getMapRadius() * 1.2),
-                                          renderer_,
-                                          loader_->map_identifier(),
-                                          loader_->map_manifest(),
-                                          loader_->content_root(),
-                                          std::move(world_grid));
+                game_assets_ = new Assets(std::move(all_assets), *active_library, player_ptr, loader_->getRooms(), screen_w_, screen_h_, start_px, start_py, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, loader_->map_identifier(), loader_->map_manifest(), loader_->content_root(), std::move(world_grid));
                 const double spawn_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - spawn_begin).count() / 1000.0;
                 std::ostringstream init_summary;
                 init_summary << "[Init] Assets initialized: " << asset_count
@@ -337,10 +311,7 @@ void MainApp::game_loop() {
                 if (idle_frame_counter >= IDLE_REPORT_INTERVAL) {
                         const double total_idle_ms = (idle_counts_accum * 1000.0) / perf_frequency;
                         const double average_idle_ms = total_idle_ms / static_cast<double>(idle_frame_counter);
-                        vibble::log::debug("[MainApp] Idle pacing: total " +
-                                           std::to_string(total_idle_ms) + "ms over " +
-                                           std::to_string(idle_frame_counter) + " frame(s); avg " +
-                                           std::to_string(average_idle_ms) + "ms.");
+                        vibble::log::debug("[MainApp] Idle pacing: total " + std::to_string(total_idle_ms) + "ms over " + std::to_string(idle_frame_counter) + " frame(s); avg " + std::to_string(average_idle_ms) + "ms.");
                         idle_counts_accum = 0.0;
                         idle_frame_counter = 0;
                 }
@@ -614,7 +585,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         MapDescriptor selected_map = std::move(*chosen_map);
         LoadingScreen loading_screen(renderer, screen_w, screen_h);
         loading_screen.init();
-        // Removed on-screen loading status; terminal logs will indicate progress.
+
         if (rebuild_cache) {
             vibble::log::info("[Main] Rebuilding asset cache...");
             RebuildAssets* rebuilder = new RebuildAssets(renderer, selected_map.id);
@@ -625,12 +596,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
             shared_asset_library->loadAllAnimations(renderer);
             vibble::log::info("[Main] Shared asset library refreshed.");
         }
-        MenuUI app(renderer,
-                   screen_w,
-                   screen_h,
-                   std::move(selected_map),
-                   &loading_screen,
-                   shared_asset_library.get());
+        MenuUI app(renderer, screen_w, screen_h, std::move(selected_map), &loading_screen, shared_asset_library.get());
         app.init();
         if (app.wants_return_to_main_menu()) continue;
         break;

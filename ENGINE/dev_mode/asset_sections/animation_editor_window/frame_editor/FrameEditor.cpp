@@ -64,17 +64,7 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
     }
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     if (tabs_rect_.w > 0 && tabs_rect_.h > 0) {
-        dm_draw::DrawBeveledRect(
-            renderer,
-            tabs_rect_,
-            DMStyles::CornerRadius(),
-            DMStyles::BevelDepth(),
-            DMStyles::PanelBG(),
-            DMStyles::HighlightColor(),
-            DMStyles::ShadowColor(),
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( renderer, tabs_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     }
 
     for (const auto& button : mode_buttons_) {

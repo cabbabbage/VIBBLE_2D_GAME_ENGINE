@@ -17,9 +17,7 @@ bool sanitize_perimeter_spawn_groups(nlohmann::json& groups);
 
 bool sanitize_spawn_group_candidates(nlohmann::json& entry);
 
-bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
-                                      const std::string& default_display_name,
-                                      std::optional<int> default_resolution = std::nullopt);
+bool ensure_spawn_group_entry_defaults(nlohmann::json& entry, const std::string& default_display_name, std::optional<int> default_resolution = std::nullopt);
 
 }
 

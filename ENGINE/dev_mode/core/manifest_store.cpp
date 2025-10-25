@@ -16,7 +16,7 @@ std::string to_lower(std::string value) {
     });
     return value;
 }
-} // namespace
+}
 
 ManifestStore::AssetEditSession::AssetEditSession(ManifestStore* owner,
                                                   std::string name,
@@ -90,7 +90,7 @@ ManifestStore::ManifestStore(const std::filesystem::path& manifest_path,
     if (!submit_) {
         submit_ = [](const std::filesystem::path& path, const nlohmann::json& data, int indent) {
             DevJsonStore::instance().submit(path, data, indent);
-        };
+};
     }
     if (!flush_) {
         flush_ = []() { DevJsonStore::instance().flush_all(); };
@@ -315,5 +315,5 @@ void ManifestStore::ensure_asset_container() {
     }
 }
 
-} // namespace devmode::core
+}
 

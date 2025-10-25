@@ -84,9 +84,7 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
         }
 
         const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(base_w, base_h, target_w, target_h);
-        const auto& scale_steps = (asset->info && !asset->info->scale_variants.empty())
-            ? static_cast<const std::vector<float>&>(asset->info->scale_variants)
-            : render_pipeline::ScalingLogic::DefaultScaleSteps();
+        const auto& scale_steps = (asset->info && !asset->info->scale_variants.empty()) ? static_cast<const std::vector<float>&>(asset->info->scale_variants) : render_pipeline::ScalingLogic::DefaultScaleSteps();
 
         if (asset->downscale_cache_.size() != scale_steps.size()) {
                 asset->clear_downscale_cache();

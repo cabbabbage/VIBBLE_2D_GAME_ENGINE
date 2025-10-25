@@ -33,7 +33,7 @@ public:
         std::string method;
         bool resolution_changed = false;
         int resolution = 0;
-    };
+};
 
     struct Callbacks {
         std::function<void(const std::string&)> on_regenerate;
@@ -47,12 +47,9 @@ public:
         void set_ownership_label(const std::string& label, SDL_Color color);
         void clear_ownership_label();
         void set_area_names_provider(std::function<std::vector<std::string>()> provider);
-        void set_linkable_asset_areas_provider(
-            std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider);
-        void set_linkable_room_areas_provider(
-            std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider);
-        void set_open_area_handler(std::function<void(const std::string&, const std::string&)> handler,
-                                   std::optional<std::string> stack_key = std::nullopt);
+        void set_linkable_asset_areas_provider( std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider);
+        void set_linkable_room_areas_provider( std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider);
+        void set_open_area_handler(std::function<void(const std::string&, const std::string&)> handler, std::optional<std::string> stack_key = std::nullopt);
         void set_stack_key(std::string key);
         void lock_method_to(const std::string& method);
         void clear_method_lock();
@@ -62,7 +59,7 @@ public:
         explicit EntryController(Entry* entry) : entry_(entry) {}
         Entry* entry_ = nullptr;
         friend class SpawnGroupConfig;
-    };
+};
 
     using ConfigureEntryCallback = std::function<void(EntryController&, const nlohmann::json&)>;
 
@@ -145,7 +142,7 @@ private:
         SDL_Rect source_rect{0, 0, 0, 0};
         int pointer_y = 0;
         bool pointer_inside = false;
-    };
+};
 
     bool default_floatable_mode_ = true;
     bool embedded_mode_ = false;

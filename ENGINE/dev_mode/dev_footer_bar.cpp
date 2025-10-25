@@ -47,7 +47,7 @@ void draw_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
     TTF_CloseFont(font);
 }
 
-}  // namespace
+}
 
 DevFooterBar::DevFooterBar(std::string title)
     : title_(std::move(title)),
@@ -219,17 +219,7 @@ bool DevFooterBar::handle_event(const SDL_Event& e) {
 void DevFooterBar::render(SDL_Renderer* renderer) const {
     if (!visible_ || !renderer) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(
-        renderer,
-        rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelHeader(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     if (show_title_ && !title_.empty()) {
         int text_x = rect_.x + DMSpacing::item_gap();
@@ -295,7 +285,7 @@ void DevFooterBar::layout_buttons() {
     struct ButtonLayoutInfo {
         DMButton* widget;
         int width;
-    };
+};
 
     std::vector<ButtonLayoutInfo> visible;
     visible.reserve(buttons_.size());

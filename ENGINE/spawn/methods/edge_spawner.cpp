@@ -149,7 +149,7 @@ void EdgeSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& c
         ctx.spawn_resolution(),
         ctx.get_area_center(*target_area),
         [&](SDL_Point pt) { return ctx.point_overlaps_trail(pt, target_area); }
-    };
+};
 
     std::vector<SDL_Point> positions = plan_positions(item, *target_area, placement);
 

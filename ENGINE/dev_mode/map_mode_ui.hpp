@@ -152,9 +152,7 @@ private:
     void reorder_active_room_spawn_group(const std::string& spawn_id, size_t index);
     void handle_rooms_data_mutated(bool refresh_rooms_list);
     void update_room_config_header_controls();
-    void begin_map_color_sampling(const utils::color::RangedColor& current,
-                                  std::function<void(SDL_Color)> on_sample,
-                                  std::function<void()> on_cancel);
+    void begin_map_color_sampling(const utils::color::RangedColor& current, std::function<void(SDL_Color)> on_sample, std::function<void()> on_cancel);
     void cancel_map_color_sampling(bool silent = false);
     void complete_map_color_sampling(SDL_Color color);
 

@@ -17,7 +17,7 @@
 
 namespace devmode::core {
 class ManifestStore;
-} // namespace devmode::core
+}
 
 struct ChildInfo {
     std::string area_name;
@@ -44,8 +44,7 @@ class AssetInfo {
     using ChildInfo = ::ChildInfo;
     AssetInfo(const std::string &asset_folder_name);
     AssetInfo(const std::string &asset_folder_name, const nlohmann::json& metadata);
-    static std::shared_ptr<AssetInfo> from_manifest_entry(const std::string& asset_folder_name,
-                                                         const nlohmann::json& metadata);
+    static std::shared_ptr<AssetInfo> from_manifest_entry(const std::string& asset_folder_name, const nlohmann::json& metadata);
     using ManifestStoreProvider = std::function<devmode::core::ManifestStore*()>;
     static void set_manifest_store_provider(ManifestStoreProvider provider);
     ~AssetInfo();
@@ -199,5 +198,4 @@ struct AssetInfoTestAccess {
     static void rebuild_anti_tag_cache(AssetInfo& info);
 };
 #endif
-
 

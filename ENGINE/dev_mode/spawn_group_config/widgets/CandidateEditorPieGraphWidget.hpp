@@ -45,7 +45,7 @@ private:
         SDL_FPoint center{0.f, 0.f};
         float radius = 0.f;
         SDL_Rect legend{0, 0, 0, 0};
-    };
+};
 
     Layout compute_layout() const;
     double total_weight() const;

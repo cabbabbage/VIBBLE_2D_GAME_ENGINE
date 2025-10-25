@@ -40,7 +40,7 @@ SDL_Point event_point(const SDL_Event& e) {
     return p;
 }
 
-}  // namespace
+}
 
 AnimationListContextMenu::AnimationListContextMenu() = default;
 
@@ -193,16 +193,7 @@ void AnimationListContextMenu::render(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    dm_draw::DrawBeveledRect(renderer,
-                             rect_,
-                             DMStyles::CornerRadius(),
-                             DMStyles::BevelDepth(),
-                             DMStyles::PanelBG(),
-                             DMStyles::HighlightColor(),
-                             DMStyles::ShadowColor(),
-                             false,
-                             DMStyles::HighlightIntensity(),
-                             DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     dm_draw::DrawRoundedOutline(renderer, rect_, DMStyles::CornerRadius(), 1, DMStyles::Border());
 
@@ -222,24 +213,11 @@ void AnimationListContextMenu::render(SDL_Renderer* renderer) const {
         const bool pressed = pressed_index_ == i;
         const SDL_Color fill = pressed ? press_fill : (hovered ? hover_fill : idle_fill);
 
-        dm_draw::DrawBeveledRect(renderer,
-                                 opt_rect,
-                                 DMStyles::CornerRadius(),
-                                 0,
-                                 fill,
-                                 DMStyles::HighlightColor(),
-                                 DMStyles::ShadowColor(),
-                                 false,
-                                 0.0f,
-                                 0.0f);
+        dm_draw::DrawBeveledRect(renderer, opt_rect, DMStyles::CornerRadius(), 0, fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, 0.0f, 0.0f);
 
-        DMFontCache::instance().draw_text(renderer,
-                                          draw_style,
-                                          options_[i].label,
-                                          opt_rect.x + padding_x,
-                                          opt_rect.y + padding_y);
+        DMFontCache::instance().draw_text(renderer, draw_style, options_[i].label, opt_rect.x + padding_x, opt_rect.y + padding_y);
     }
 }
 
-}  // namespace animation_editor
+}
 

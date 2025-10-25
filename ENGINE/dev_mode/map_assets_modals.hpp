@@ -19,13 +19,7 @@ class SingleSpawnGroupModal {
      SingleSpawnGroupModal();
      ~SingleSpawnGroupModal();
 
-    void open(nlohmann::json& map_info,
-              const std::string& section_key,
-              const std::string& default_display_name,
-              const std::string& ownership_label,
-              SDL_Color ownership_color,
-              SaveCallback on_save,
-              RegenCallback on_regen);
+    void open(nlohmann::json& map_info, const std::string& section_key, const std::string& default_display_name, const std::string& ownership_label, SDL_Color ownership_color, SaveCallback on_save, RegenCallback on_regen);
 
     void close();
     bool visible() const;

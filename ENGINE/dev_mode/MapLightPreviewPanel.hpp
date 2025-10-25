@@ -110,6 +110,3 @@ private:
     int                    preview_stage_index_ = 0;
 };
 
-
-
-

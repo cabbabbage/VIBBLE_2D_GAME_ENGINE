@@ -32,7 +32,7 @@ class TextBox {
     struct LineInfo {
         size_t start = 0;
         size_t length = 0;
-    };
+};
     std::vector<LineInfo> line_info() const;
     size_t line_index_from_position(size_t pos, const std::vector<LineInfo>& lines) const;
     void update_caret_column();

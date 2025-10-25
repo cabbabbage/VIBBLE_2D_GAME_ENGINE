@@ -38,16 +38,13 @@ public:
 
     private:
         friend class ManifestStore;
-        AssetEditSession(ManifestStore* owner,
-                         std::string name,
-                         nlohmann::json draft,
-                         bool is_new_asset);
+        AssetEditSession(ManifestStore* owner, std::string name, nlohmann::json draft, bool is_new_asset);
 
         ManifestStore* owner_ = nullptr;
         std::string name_;
         nlohmann::json draft_;
         bool is_new_ = false;
-    };
+};
 
     class AssetTransaction {
     public:
@@ -69,16 +66,13 @@ public:
 
     private:
         friend class ManifestStore;
-        AssetTransaction(ManifestStore* owner,
-                         std::string name,
-                         nlohmann::json draft,
-                         bool is_new_asset);
+        AssetTransaction(ManifestStore* owner, std::string name, nlohmann::json draft, bool is_new_asset);
 
         ManifestStore* owner_ = nullptr;
         std::string name_;
         nlohmann::json draft_;
         bool is_new_ = false;
-    };
+};
 
     struct AssetView {
         std::string name;
@@ -87,7 +81,7 @@ public:
         explicit operator bool() const { return data != nullptr; }
         const nlohmann::json* operator->() const { return data; }
         const nlohmann::json& operator*() const { return *data; }
-    };
+};
 
     ManifestStore();
 
@@ -133,5 +127,5 @@ private:
     std::uint64_t last_known_tag_version_ = std::numeric_limits<std::uint64_t>::max();
 };
 
-} // namespace devmode::core
+}
 

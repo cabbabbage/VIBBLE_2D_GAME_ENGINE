@@ -34,5 +34,5 @@ private:
     std::vector<Chunk*> active_;
 };
 
-} // namespace world
+}
 

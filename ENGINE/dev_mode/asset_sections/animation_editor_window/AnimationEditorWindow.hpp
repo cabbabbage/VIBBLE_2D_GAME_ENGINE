@@ -112,7 +112,7 @@ class AnimationEditorWindow {
     SDL_Rect inspector_rect_{0, 0, 0, 0};
     SDL_Rect status_rect_{0, 0, 0, 0};
     SDL_Rect frame_editor_rect_{0, 0, 0, 0};
-    // Modal container for the frame editor overlay
+
     SDL_Rect frame_editor_modal_rect_{0, 0, 0, 0};
     SDL_Rect frame_editor_modal_header_rect_{0, 0, 0, 0};
     std::string status_message_;

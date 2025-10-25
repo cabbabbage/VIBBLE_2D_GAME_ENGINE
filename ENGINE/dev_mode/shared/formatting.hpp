@@ -31,5 +31,5 @@ inline std::string_view FormatSliderValue(float value, int precision, std::array
     return FormatSliderValue(static_cast<double>(value), precision, buffer);
 }
 
-}  // namespace dev_mode
+}
 

@@ -55,7 +55,7 @@ fs::path resolve_source_folder(const std::string& dir_path, const std::string& s
 
         const auto starts_with = [](const std::string& value, const std::string& prefix) {
                 return value.rfind(prefix, 0) == 0;
-        };
+};
 
         const std::string source_string = source.generic_string();
         if (starts_with(source_string, "SRC/") || starts_with(source_string, "SRC\\")) {
@@ -282,15 +282,11 @@ void Animation::load(const std::string& trigger,
         clear_texture_cache();
         const bool prefer_cached = !scaling_refresh_pending;
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                  << " profile steps (pre-normalize): " << format_steps(variant_steps_)
-                  << ", prefer_cached=" << (prefer_cached ? "true" : "false")
-                  << ", scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false")
-                  << "\n";
+                  << " profile steps (pre-normalize): " << format_steps(variant_steps_) << ", prefer_cached=" << (prefer_cached ? "true" : "false") << ", scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false") << "\n";
         variant_steps_ = info.scale_variants;
         render_pipeline::ScalingLogic::NormalizeVariantSteps(variant_steps_);
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                  << " normalized profile steps: " << format_steps(variant_steps_)
-                  << "\n";
+                  << " normalized profile steps: " << format_steps(variant_steps_) << "\n";
         const std::size_t initial_variant_count = variant_steps_.size();
         if (anim_json.contains("source")) {
                 const auto& s = anim_json["source"];
@@ -534,15 +530,9 @@ void Animation::load(const std::string& trigger,
                 if (cache.load_metadata(meta_file, meta)) {
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " found metadata (revision "
-                                  << meta.value("scale_profile_revision", static_cast<std::uint64_t>(0))
-                                  << ") expecting revision " << expected_revision << "\n";
+                                  << meta.value("scale_profile_revision", static_cast<std::uint64_t>(0)) << ") expecting revision " << expected_revision << "\n";
                         const bool meta_has_masks = meta.value("has_masks", false);
-                        bool meta_ok = (
-                            meta.value("cache_version", 0) == kAnimationCacheVersion &&
-                            meta.value("frame_count", -1) == expected_frames &&
-                            meta.value("original_width", -1) == orig_w &&
-                            meta.value("original_height", -1) == orig_h &&
-                            (meta_has_masks == info.is_shaded));
+                        bool meta_ok = ( meta.value("cache_version", 0) == kAnimationCacheVersion && meta.value("frame_count", -1) == expected_frames && meta.value("original_width", -1) == orig_w && meta.value("original_height", -1) == orig_h && (meta_has_masks == info.is_shaded));
                         if (meta_ok) {
                                 if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
                                         const auto& stored = meta["scale_steps"];
@@ -562,9 +552,7 @@ void Animation::load(const std::string& trigger,
                                                 meta_ok = false;
                                         } else if (stored_steps != expected_steps) {
                                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " metadata steps " << format_percent_steps(stored_steps)
-                                                          << " differ from profile " << format_percent_steps(expected_steps)
-                                                          << " -> rebuild required\n";
+                                                          << " metadata steps " << format_percent_steps(stored_steps) << " differ from profile " << format_percent_steps(expected_steps) << " -> rebuild required\n";
                                                 meta_ok = false;
                                         }
                                 } else {
@@ -609,7 +597,7 @@ void Animation::load(const std::string& trigger,
                                 }
                                 list.clear();
                         }
-                };
+};
                 const std::string mask_cache_folder = cache_folder + "/masks";
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
                 GenerateFadedMask::MaskVariants mask_surfaces;
@@ -645,7 +633,7 @@ void Animation::load(const std::string& trigger,
                                 }
                         } catch (...) {
                         }
-                };
+};
 
                 cleanup_variant_directories(cache_folder);
                 cleanup_variant_directories(mask_cache_folder);
@@ -749,10 +737,7 @@ void Animation::load(const std::string& trigger,
                                 const std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, variant_steps_, idx);
                                 cache.save_surface_sequence(variant_path, variant_surfaces[idx]);
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " stored " << variant_surfaces[idx].size()
-                                          << " frame(s) for variant index " << idx
-                                          << " (scale " << std::fixed << std::setprecision(2) << variant_steps_[idx]
-                                          << std::defaultfloat << ")\n";
+                                          << " stored " << variant_surfaces[idx].size() << " frame(s) for variant index " << idx << " (scale " << std::fixed << std::setprecision(2) << variant_steps_[idx] << std::defaultfloat << ")\n";
                         }
                         nlohmann::json new_meta;
                         new_meta["cache_version"]    = kAnimationCacheVersion;
@@ -769,8 +754,7 @@ void Animation::load(const std::string& trigger,
                         cache.save_metadata(meta_file, new_meta);
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " wrote metadata with steps "
-                                  << format_percent_steps(expected_steps)
-                                  << " revision " << expected_revision << "\n";
+                                  << format_percent_steps(expected_steps) << " revision " << expected_revision << "\n";
                 } else if (!variant_surfaces.empty() && !variant_surfaces[0].empty() && variant_surfaces[0][0]) {
                         if (scaled_sprite_w <= 0 || scaled_sprite_h <= 0) {
                                 scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
@@ -785,11 +769,7 @@ void Animation::load(const std::string& trigger,
                 if (info.is_shaded) {
                         bool announced_generation = false;
                         loading_status::notify("Creating texture/mask for " + info.name);
-                        auto mask_result = GenerateFadedMask::BuildMasks(info.name,
-                                                                         trigger,
-                                                                         expected_steps,
-                                                                         variant_surfaces,
-                                                                         info.shadow_mask_settings);
+                        auto mask_result = GenerateFadedMask::BuildMasks(info.name, trigger, expected_steps, variant_surfaces, info.shadow_mask_settings);
                         mask_surfaces            = std::move(mask_result.first);
                         masks_loaded_from_cache  = mask_result.second;
                         if (masks_loaded_from_cache) {
@@ -804,13 +784,10 @@ void Animation::load(const std::string& trigger,
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                           << " loaded faded mask surfaces from cache\n";
                         } else {
-                                const std::size_t mask_frame_count = (!mask_surfaces.empty() && !mask_surfaces.front().empty())
-                                                                         ? mask_surfaces.front().size()
-                                                                         : 0;
+                                const std::size_t mask_frame_count = (!mask_surfaces.empty() && !mask_surfaces.front().empty()) ? mask_surfaces.front().size() : 0;
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                           << " generated " << mask_frame_count
-                                          << " faded mask frame(s) across " << mask_surfaces.size()
-                                          << " variant(s)\n";
+                                          << " faded mask frame(s) across " << mask_surfaces.size() << " variant(s)\n";
                                 if (announced_generation) {
                                         loading_status::notify("Loading assets");
                                 }
@@ -849,9 +826,7 @@ void Animation::load(const std::string& trigger,
                         cache_entry.resize(variant_count);
                         SDL_Texture* variant0_mask = nullptr;
                         for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
-                                SDL_Surface* surface = (frame_idx < variant_surfaces[variant_idx].size())
-                                                        ? variant_surfaces[variant_idx][frame_idx]
-                                                        : nullptr;
+                                SDL_Surface* surface = (frame_idx < variant_surfaces[variant_idx].size()) ? variant_surfaces[variant_idx][frame_idx] : nullptr;
                                 SDL_Texture* tex_variant = nullptr;
                                 if (surface) {
                                         tex_variant = cache.surface_to_texture(renderer, surface);
@@ -868,9 +843,7 @@ void Animation::load(const std::string& trigger,
                                 cache_entry.widths[variant_idx]   = tex_w;
                                 cache_entry.heights[variant_idx]  = tex_h;
 
-                                SDL_Surface* mask_surface = (variant_idx < mask_surfaces.size() && frame_idx < mask_surfaces[variant_idx].size())
-                                                                 ? mask_surfaces[variant_idx][frame_idx]
-                                                                 : nullptr;
+                                SDL_Surface* mask_surface = (variant_idx < mask_surfaces.size() && frame_idx < mask_surfaces[variant_idx].size()) ? mask_surfaces[variant_idx][frame_idx] : nullptr;
                                 SDL_Texture* mask_variant = nullptr;
                                 int mask_w = mask_surface ? mask_surface->w : 0;
                                 int mask_h = mask_surface ? mask_surface->h : 0;
@@ -1159,13 +1132,7 @@ int Animation::index_of(const AnimationFrame* frame) const {
                         return index;
                 }
         }
-        // Some animations reuse movement data from cached sources which can
-        // invalidate the raw AnimationFrame pointers held by assets after the
-        // vectors are reallocated. The frame_index, however, is still valid for
-        // locating the texture within the animation. If the pointer lookup
-        // above fails, fall back to the recorded frame_index so that callers
-        // such as Asset::get_current_frame() don't reset to the first frame on
-        // every render pass.
+
         return index;
 }
 

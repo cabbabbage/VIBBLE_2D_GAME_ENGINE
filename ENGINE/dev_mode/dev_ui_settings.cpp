@@ -71,7 +71,7 @@ std::vector<std::string> split_key(std::string_view key) {
     return parts;
 }
 
-} // namespace
+}
 
 bool load_bool(std::string_view key, bool default_value) {
     if (key.empty()) {
@@ -197,4 +197,4 @@ void save_number(std::string_view key, double value) {
     devmode::core::DevJsonStore::instance().submit(settings_path(), settings_cache(), 4);
 }
 
-} // namespace devmode::ui_settings
+}

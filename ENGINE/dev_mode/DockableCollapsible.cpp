@@ -22,8 +22,6 @@
 
 namespace {
 
-    // Reduce the drag threshold and pointer blocking windows to make
-    // floating panels feel more responsive during click + drag moves.
     constexpr int kHeaderDragStartThreshold = 2;
     constexpr Uint32 kPointerBlockOnShowMs = 16;
     constexpr Uint32 kPointerBlockAfterDragMs = 60;
@@ -55,12 +53,7 @@ namespace {
 
         SDL_Color stroke = DMStyles::Border();
         const int radius = std::min(DMStyles::CornerRadius(), std::min(body.w, body.h) / 2);
-        dm_draw::DrawRoundedOutline(
-            r,
-            body,
-            radius,
-            1,
-            stroke);
+        dm_draw::DrawRoundedOutline( r, body, radius, 1, stroke);
 
         SDL_Point shackle_left_top{shackle.x, shackle.y + shackle.h / 2};
         SDL_Point shackle_right_top{shackle.x + shackle.w, shackle.y + shackle.h / 2};
@@ -74,8 +67,7 @@ namespace {
         } else {
             SDL_RenderDrawLine(r, shackle_right_top.x, shackle_right_top.y, shackle_right_bottom.x, shackle_right_bottom.y);
             SDL_RenderDrawLine(r, shackle_left_top.x, shackle_left_top.y, shackle_right_top.x, shackle_right_top.y);
-            SDL_RenderDrawLine(r, shackle_left_top.x, shackle_left_top.y,
-                               shackle_left_top.x, shackle_left_top.y + shackle.h / 2);
+            SDL_RenderDrawLine(r, shackle_left_top.x, shackle_left_top.y, shackle_left_top.x, shackle_left_top.y + shackle.h / 2);
         }
     }
 
@@ -92,22 +84,13 @@ namespace {
               resized_(resized),
               forced_(forced),
               start_(std::chrono::steady_clock::now()) {
-            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                         "[DockableCollapsible] layout begin: %s (layout=%s geometry=%s resized=%s forced=%s)",
-                         title_.c_str(),
-                         layout_dirty_ ? "true" : "false",
-                         geometry_dirty_ ? "true" : "false",
-                         resized_ ? "true" : "false",
-                         forced_ ? "true" : "false");
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "[DockableCollapsible] layout begin: %s (layout=%s geometry=%s resized=%s forced=%s)", title_.c_str(), layout_dirty_ ? "true" : "false", geometry_dirty_ ? "true" : "false", resized_ ? "true" : "false", forced_ ? "true" : "false");
         }
 
         ~LayoutTimingScope() {
             auto elapsed = std::chrono::steady_clock::now() - start_;
             double ms = std::chrono::duration<double, std::milli>(elapsed).count();
-            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
-                         "[DockableCollapsible] layout end: %s (%.3f ms)",
-                         title_.c_str(),
-                         ms);
+            SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "[DockableCollapsible] layout end: %s (%.3f ms)", title_.c_str(), ms);
         }
 
     private:
@@ -117,7 +100,7 @@ namespace {
         bool resized_ = false;
         bool forced_ = false;
         std::chrono::steady_clock::time_point start_;
-    };
+};
 }
 
 DockableCollapsible::DockableCollapsible(const std::string& title, bool floatable,
@@ -130,10 +113,7 @@ DockableCollapsible::DockableCollapsible(const std::string& title, bool floatabl
     available_height_override_ = -1;
     rect_.x = x; rect_.y = y;
     header_btn_ = std::make_unique<DMButton>(title_, header_button_style_, floating_content_width_, DMButton::height());
-    close_btn_  = std::make_unique<DMButton>(std::string(DMIcons::Close()),
-                                             &DMStyles::DeleteButton(),
-                                             DMButton::height(),
-                                             DMButton::height());
+    close_btn_  = std::make_unique<DMButton>(std::string(DMIcons::Close()), &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
     padding_ = DMSpacing::panel_padding();
     row_gap_ = DMSpacing::item_gap();
     col_gap_ = DMSpacing::item_gap();
@@ -228,10 +208,7 @@ void DockableCollapsible::set_show_header(bool show) {
         int header_w = floatable_ ? floating_content_width_ : 260;
         header_btn_ = std::make_unique<DMButton>(title_, header_button_style_, header_w, DMButton::height());
         if (floatable_ || close_button_enabled_) {
-            close_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
-                                                    &DMStyles::DeleteButton(),
-                                                    DMButton::height(),
-                                                    DMButton::height());
+            close_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()), &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
         }
         update_header_button();
     }
@@ -266,10 +243,7 @@ void DockableCollapsible::set_close_button_enabled(bool enabled) {
     if (show_header_) {
         if (floatable_ || close_button_enabled_) {
             if (!close_btn_) {
-                close_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
-                                                        &DMStyles::DeleteButton(),
-                                                        DMButton::height(),
-                                                        DMButton::height());
+                close_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()), &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
             }
         } else {
             close_btn_.reset();
@@ -793,17 +767,7 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
     const SDL_Color& border_shadow = DMStyles::Border();
     const float highlight_intensity = DMStyles::HighlightIntensity();
     const float shadow_intensity = DMStyles::ShadowIntensity();
-    dm_draw::DrawBeveledRect(
-        r,
-        rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        fill,
-        header_highlight,
-        border_shadow,
-        false,
-        highlight_intensity,
-        shadow_intensity);
+    dm_draw::DrawBeveledRect( r, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, header_highlight, border_shadow, false, highlight_intensity, shadow_intensity);
 
     if (header_btn_) header_btn_->render(r);
     if (lock_btn_) {
@@ -922,7 +886,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
             }
         }
         notify_layout_manager_content_changed();
-    };
+};
 
     int header_total_w = 0;
     if (floatable_) {
@@ -1061,9 +1025,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
 
 void DockableCollapsible::update_header_button() const {
     if (!header_btn_) return;
-    const std::string arrow = std::string(" ") +
-                              std::string(expanded_ ? DMIcons::CollapseExpanded()
-                                                     : DMIcons::CollapseCollapsed());
+    const std::string arrow = std::string(" ") + std::string(expanded_ ? DMIcons::CollapseExpanded() : DMIcons::CollapseCollapsed());
     header_btn_->set_text(title_ + arrow);
 }
 

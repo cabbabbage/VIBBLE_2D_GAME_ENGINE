@@ -160,7 +160,7 @@ std::vector<double> normalize_angles(const std::vector<double>& raw_angles) {
     return adjusted;
 }
 
-}  // namespace
+}
 
 double room_extent_from_rooms_data(const nlohmann::json* rooms_data,
                                    const std::string& room_name) {
@@ -388,5 +388,5 @@ RadialLayout compute_radial_layout(double base_radius,
     return layout;
 }
 
-}  // namespace map_layers
+}
 

@@ -22,7 +22,4 @@ struct MapGridSettings {
 };
 
 void ensure_map_grid_settings(nlohmann::json& map_info);
-SDL_Point apply_map_grid_jitter(const MapGridSettings& settings,
-                                SDL_Point base,
-                                std::mt19937& rng,
-                                const Area& area);
+SDL_Point apply_map_grid_jitter(const MapGridSettings& settings, SDL_Point base, std::mt19937& rng, const Area& area);

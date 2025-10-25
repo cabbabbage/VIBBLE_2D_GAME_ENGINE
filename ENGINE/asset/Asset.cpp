@@ -667,9 +667,7 @@ void Asset::invalidate_downscale_cache() {
 }
 
 void Asset::clear_downscale_cache() {
-        const auto& steps = (info && !info->scale_variants.empty())
-            ? static_cast<const std::vector<float>&>(info->scale_variants)
-            : render_pipeline::ScalingLogic::DefaultScaleSteps();
+        const auto& steps = (info && !info->scale_variants.empty()) ? static_cast<const std::vector<float>&>(info->scale_variants) : render_pipeline::ScalingLogic::DefaultScaleSteps();
 
         for (std::size_t idx = 0; idx < downscale_cache_.size(); ++idx) {
                 auto& entry = downscale_cache_[idx];

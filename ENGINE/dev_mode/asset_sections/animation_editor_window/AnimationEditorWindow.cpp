@@ -105,10 +105,7 @@ AnimationEditorWindow::AnimationEditorWindow() {
     list_context_menu_ = std::make_unique<AnimationListContextMenu>();
 
     header_corner_button_ =
-        std::make_unique<DMButton>(std::string(DMIcons::Close()),
-                                   &DMStyles::DeleteButton(),
-                                   DMButton::height(),
-                                   DMButton::height());
+        std::make_unique<DMButton>(std::string(DMIcons::Close()), &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
     reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::AccentButton(), 120, DMButton::height());
     close_button_ = std::make_unique<DMButton>("Close", &DMStyles::DeleteButton(), 120, DMButton::height());
@@ -291,24 +288,19 @@ void AnimationEditorWindow::layout_children() {
     if (list_panel_) list_panel_->set_bounds(list_rect_);
     if (inspector_panel_) inspector_panel_->set_bounds(inspector_rect_);
 
-    // Default editor rect spans the window padding; if overlay is visible, compute a centered modal
     frame_editor_rect_ = SDL_Rect{bounds_.x + padding, bounds_.y + padding,
                                   std::max(0, bounds_.w - padding * 2), std::max(0, bounds_.h - padding * 2)};
 
     if (frame_editor_visible_) {
-        // Modal sizing: centered, constrained within the window bounds
+
         const int modal_outer_margin = DMSpacing::panel_padding();
         const int modal_max_w = std::min(bounds_.w - modal_outer_margin * 2, 1200);
         const int modal_max_h = std::min(bounds_.h - modal_outer_margin * 2, 800);
         const int modal_w = std::max(640, modal_max_w);
         const int modal_h = std::max(480, modal_max_h);
         frame_editor_modal_rect_ = SDL_Rect{
-            bounds_.x + (bounds_.w - modal_w) / 2,
-            bounds_.y + (bounds_.h - modal_h) / 2,
-            modal_w,
-            modal_h};
+            bounds_.x + (bounds_.w - modal_w) / 2, bounds_.y + (bounds_.h - modal_h) / 2, modal_w, modal_h};
 
-        // Modal header inside the modal container
         const int modal_header_gap = DMSpacing::small_gap();
         const int modal_header_h = DMButton::height() + modal_header_gap * 2;
         frame_editor_modal_header_rect_ = SDL_Rect{frame_editor_modal_rect_.x,
@@ -316,7 +308,6 @@ void AnimationEditorWindow::layout_children() {
                                                    frame_editor_modal_rect_.w,
                                                    modal_header_h};
 
-        // Content area inside modal (padding and below header)
         const int modal_inner_pad = DMSpacing::panel_padding();
         const int content_x = frame_editor_modal_rect_.x + modal_inner_pad;
         const int content_y = frame_editor_modal_header_rect_.y + frame_editor_modal_header_rect_.h + modal_inner_pad;
@@ -324,7 +315,7 @@ void AnimationEditorWindow::layout_children() {
         const int content_h = std::max(0, frame_editor_modal_rect_.y + frame_editor_modal_rect_.h - content_y - modal_inner_pad);
         frame_editor_rect_ = SDL_Rect{content_x, content_y, content_w, content_h};
     } else {
-        // Not visible as modal; keep full-window content rect
+
         frame_editor_modal_rect_ = SDL_Rect{0, 0, 0, 0};
         frame_editor_modal_header_rect_ = SDL_Rect{0, 0, 0, 0};
     }
@@ -509,7 +500,7 @@ void AnimationEditorWindow::render(SDL_Renderer* renderer) const {
     if (frame_editor_visible_) {
         render_frame_editor_overlay(renderer);
     }
-    // Render dropdown overlays last to ensure proper z-order
+
     DMDropdown::render_active_options(renderer);
 }
 
@@ -523,7 +514,7 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     }
 
     if (frame_editor_visible_ && frame_editor_) {
-        // Route events to the modal content first
+
         if (frame_editor_->handle_event(e)) {
             return true;
         }
@@ -572,14 +563,14 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
         else { p.x = e.button.x; p.y = e.button.y; }
         if (frame_editor_visible_) {
-            // Modal active: consume clicks; close on outside click
+
             if (!SDL_PointInRect(&p, &frame_editor_modal_rect_)) {
                 if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
                     close_frame_editor();
                 }
                 return true;
             }
-            return true; // Inside modal: block underlying UI
+            return true;
         } else if (SDL_PointInRect(&p, &bounds_)) {
             return true;
         }
@@ -591,7 +582,7 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         SDL_GetMouseState(&mx, &my);
         SDL_Point p{mx, my};
         if (frame_editor_visible_) {
-            // Swallow scroll when modal is open
+
             return true;
         }
         if (SDL_PointInRect(&p, &bounds_)) {
@@ -727,32 +718,12 @@ void AnimationEditorWindow::ensure_layout() const {
 
 void AnimationEditorWindow::render_background(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(
-        renderer,
-        bounds_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelBG(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 }
 
 void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(
-        renderer,
-        header_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelHeader(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     std::string title = "Animation Editor";
     if (auto info_ptr = info_.lock()) {
@@ -768,7 +739,7 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
         title += " — ";
         title += asset_root_path_.filename().string();
     }
-    // When frame editor modal is open, render the back button in the modal header instead
+
     if (!frame_editor_visible_ && header_corner_button_) header_corner_button_->render(renderer);
     if (add_button_) add_button_->render(renderer);
     if (reload_button_) reload_button_->render(renderer);
@@ -788,17 +759,7 @@ void AnimationEditorWindow::render_status(SDL_Renderer* renderer) const {
     if (status_message_.empty()) return;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(
-        renderer,
-        status_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelBG(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, status_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     render_label(renderer, status_message_, status_rect_.x + DMSpacing::panel_padding(), status_rect_.y + DMSpacing::panel_padding());
 }
@@ -815,16 +776,7 @@ void AnimationEditorWindow::render_inspector(SDL_Renderer* renderer) const {
     }
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(renderer,
-                             inspector_rect_,
-                             DMStyles::CornerRadius(),
-                             DMStyles::BevelDepth(),
-                             DMStyles::PanelBG(),
-                             DMStyles::HighlightColor(),
-                             DMStyles::ShadowColor(),
-                             false,
-                             DMStyles::HighlightIntensity(),
-                             DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, inspector_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     std::string message = "Select an animation to edit.";
     int text_x = inspector_rect_.x + DMSpacing::panel_padding();
@@ -834,45 +786,21 @@ void AnimationEditorWindow::render_inspector(SDL_Renderer* renderer) const {
 
 void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    // Dim the background
+
     SDL_SetRenderDrawColor(renderer, 10, 10, 14, 192);
     SDL_RenderFillRect(renderer, &bounds_);
 
-    // Ensure layout computed centered modal rect
     ensure_layout();
 
-    // Draw modal container with beveled panel and outline
     const SDL_Color bg = DMStyles::PanelBG();
     const SDL_Color hi = DMStyles::HighlightColor();
     const SDL_Color sh = DMStyles::ShadowColor();
     const SDL_Color border = DMStyles::Border();
-    dm_draw::DrawBeveledRect(
-        renderer,
-        frame_editor_modal_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        bg,
-        hi,
-        sh,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, frame_editor_modal_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), bg, hi, sh, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     dm_draw::DrawRoundedOutline(renderer, frame_editor_modal_rect_, DMStyles::CornerRadius(), 1, border);
 
-    // Modal header
-    dm_draw::DrawBeveledRect(
-        renderer,
-        frame_editor_modal_header_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelHeader(),
-        hi,
-        sh,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, frame_editor_modal_header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), hi, sh, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
-    // Place back button inside the modal header
     if (header_corner_button_) {
         const int pad = DMSpacing::panel_padding();
         const int y = frame_editor_modal_header_rect_.y + DMSpacing::small_gap();
@@ -882,7 +810,6 @@ void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) 
         header_corner_button_->render(renderer);
     }
 
-    // Title inside modal header
     std::string title = "Frame Editor";
     if (!frame_editor_animation_id_.empty()) {
         title += " — ";
@@ -894,7 +821,6 @@ void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) 
     }
     render_label(renderer, title, label_x, frame_editor_modal_header_rect_.y + DMSpacing::small_gap());
 
-    // Render the frame editor within the modal content
     if (frame_editor_) {
         frame_editor_->set_bounds(frame_editor_rect_);
         frame_editor_->render(renderer);
@@ -1105,7 +1031,7 @@ std::optional<std::string> AnimationEditorWindow::resolve_manifest_key(const Ass
             return static_cast<char>(std::tolower(c));
         });
         return value;
-    };
+};
 
     std::unordered_set<std::string> seen;
     for (const auto& candidate : candidates) {

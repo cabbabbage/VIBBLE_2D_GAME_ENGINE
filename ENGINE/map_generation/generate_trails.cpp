@@ -143,22 +143,7 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
                 bool success = false;
                 for (int attempts = 0; attempts < 1000 && !success; ++attempts) {
                         if (const auto* asset_ref = pick_random_asset()) {
-                                success = TrailGeometry::attempt_trail_connection( a,
-                                                                                   b,
-                                                                                   all_areas,
-                                                                                   manifest_context,
-                                                                                   asset_lib,
-                                                                                   trail_rooms,
-                                                                                   1,
-                                                                                   asset_ref->data,
-                                                                                   asset_ref->name,
-                                                                                   map_assets_data,
-                                                                                   map_radius,
-                                                                                   testing,
-                                                                                   rng_,
-                                                                                   map_manifest,
-                                                                                   manifest_store,
-                                                                                   manifest_writer);
+                                success = TrailGeometry::attempt_trail_connection( a, b, all_areas, manifest_context, asset_lib, trail_rooms, 1, asset_ref->data, asset_ref->name, map_assets_data, map_radius, testing, rng_, map_manifest, manifest_store, manifest_writer);
                         }
                 }
                 if (!success && testing) {
@@ -166,15 +151,7 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
                         << a->room_name << " and " << b->room_name << "\n";
                 }
         }
-        find_and_connect_isolated(manifest_context,
-                                  asset_lib,
-                                  all_areas,
-                                  trail_rooms,
-                                  map_assets_data,
-                                  map_radius,
-                                  map_manifest,
-                                  manifest_store,
-                                  manifest_writer);
+        find_and_connect_isolated(manifest_context, asset_lib, all_areas, trail_rooms, map_assets_data, map_radius, map_manifest, manifest_store, manifest_writer);
         if (testing) {
                 std::cout << "[TrailGen] Total trail rooms created: " << trail_rooms.size() << "\n";
         }
@@ -319,7 +296,7 @@ std::vector<std::pair<Room*, Room*>> GenerateTrails::plan_maze_connections(
                         components[dsu.find(i)].push_back(i);
                 }
                 return components;
-        };
+};
 
         std::vector<std::pair<double, double>> cached_centers;
         cached_centers.reserve(unique_rooms.size());
@@ -628,15 +605,7 @@ void GenerateTrails::remove_and_connect(std::vector<std::unique_ptr<Room>>& trai
 	illegal_connections.emplace_back(target, most_connected);
 	std::cout << "[Debug][remove_and_connect] Marked connection illegal: ('"
 	<< target->room_name << "', '" << most_connected->room_name << "')\n";
-        find_and_connect_isolated(manifest_context,
-                                  asset_lib,
-                                  existing_areas,
-                                  trail_rooms,
-                                  map_assets_data,
-                                  map_radius,
-                                  map_manifest,
-                                  manifest_store,
-                                  manifest_writer);
+        find_and_connect_isolated(manifest_context, asset_lib, existing_areas, trail_rooms, map_assets_data, map_radius, map_manifest, manifest_store, manifest_writer);
 	std::cout << "[Debug][remove_and_connect] Completed reconnect attempt for isolated groups.\n";
 }
 

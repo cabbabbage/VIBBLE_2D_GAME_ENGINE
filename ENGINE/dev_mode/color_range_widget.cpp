@@ -22,7 +22,7 @@ int clamp_int(int v, int lo, int hi) {
     return std::max(lo, std::min(hi, v));
 }
 
-} // namespace
+}
 
 class DMColorRangeWidget::Picker : public DockableCollapsible {
 public:
@@ -91,18 +91,14 @@ public:
         DMRangeSlider* slider_ = nullptr;
         SDL_Rect rect_{0, 0, 0, 0};
         SDL_Rect label_rect_{0, 0, 0, 0};
-    };
+};
 
     explicit Picker(DMColorRangeWidget& owner)
         : DockableCollapsible(owner.label() + " Picker", true, 48, 48),
           owner_(owner) {
         initialize_channels();
 
-        sample_button_ = std::make_unique<DMButton>(
-            "Select color from map",
-            &DMStyles::AccentButton(),
-            0,
-            DMButton::height());
+        sample_button_ = std::make_unique<DMButton>( "Select color from map", &DMStyles::AccentButton(), 0, DMButton::height());
         sample_button_widget_ = std::make_unique<ButtonWidget>(
             sample_button_.get(),
             [this]() { this->handle_sample_button(); });
@@ -176,7 +172,7 @@ private:
             auto slider = std::make_unique<DMRangeSlider>(0, 255, 0, 255);
             slider->set_defer_commit_until_unfocus(false);
             return slider;
-        };
+};
 
         channels_[0].label = "R";
         channels_[1].label = "G";
@@ -280,7 +276,7 @@ private:
             if (!slider) return;
             slider->set_min_value(clamp_int(channel.min, 0, 255));
             slider->set_max_value(clamp_int(channel.max, 0, 255));
-        };
+};
 
         set_slider(channels_[0].slider.get(), value_.r);
         set_slider(channels_[1].slider.get(), value_.g);
@@ -299,7 +295,7 @@ private:
             if (!slider) return;
             channel.min = clamp_int(slider->min_value(), 0, 255);
             channel.max = clamp_int(slider->max_value(), 0, 255);
-        };
+};
 
         get_slider_values(channels_[0].slider.get(), value_.r);
         get_slider_values(channels_[1].slider.get(), value_.g);
@@ -316,16 +312,11 @@ private:
         std::string label;
         std::unique_ptr<DMRangeSlider> slider;
         std::unique_ptr<ChannelWidget> widget;
-    };
+};
     std::array<ChannelEntry, 4> channels_{};
     std::unique_ptr<DMButton> sample_button_;
     std::unique_ptr<ButtonWidget> sample_button_widget_;
 };
-
-
-// -----------------------------------------------------------------------------
-// DMColorRangeWidget
-// -----------------------------------------------------------------------------
 
 DMColorRangeWidget::DMColorRangeWidget(std::string label)
     : label_(std::move(label)) {
@@ -375,17 +366,7 @@ void DMColorRangeWidget::render(SDL_Renderer* r) const {
     const DMLabelStyle label_style = DMStyles::Label();
     DMFontCache::instance().draw_text(r, label_style, label_, label_rect_.x, label_rect_.y);
 
-    dm_draw::DrawBeveledRect(
-        r,
-        swatch_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        resolved_color_,
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( r, swatch_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), resolved_color_, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Color border = DMStyles::Border();
     dm_draw::DrawRoundedOutline(r, swatch_rect_, DMStyles::CornerRadius(), 1, border);
@@ -497,14 +478,14 @@ bool DMColorRangeWidget::request_sample_from_map() {
             reopen_picker_after_sample_ = false;
             this->open_picker();
         }
-    };
+};
 
     auto cancel = [this]() {
         if (reopen_picker_after_sample_) {
             reopen_picker_after_sample_ = false;
             this->open_picker();
         }
-    };
+};
 
     on_sample_requested_(value_, std::move(apply), std::move(cancel));
     return true;
@@ -516,7 +497,7 @@ void DMColorRangeWidget::apply_sampled_color(SDL_Color color) {
         utils::color::ChannelRange range{};
         range.min = range.max = static_cast<int>(component);
         return range;
-    };
+};
 
     RangedColor ranged{};
     ranged.r = make_channel(clamped.r);

@@ -476,7 +476,7 @@ AssetInfo::ManifestStoreProvider& manifest_store_provider_slot() {
     return provider;
 }
 
-} // namespace
+}
 
 AssetInfo::AssetInfo(const std::string &asset_folder_name)
     : AssetInfo(asset_folder_name, nlohmann::json::object()) {}
@@ -557,7 +557,7 @@ bool AssetInfo::has_tag(const std::string &tag) const {
     return tag_lookup_.find(tag) != tag_lookup_.end();
 }
 
-void AssetInfo::generate_lights(SDL_Renderer* /*renderer*/) {}
+void AssetInfo::generate_lights(SDL_Renderer* ) {}
 
 bool AssetInfo::commit_manifest() {
         nlohmann::json payload = info_json_;
@@ -774,7 +774,7 @@ float sanitize_shading_ratio(float value, float lo, float hi, float fallback) {
     }
     return std::clamp(value, lo, hi);
 }
-} // namespace
+}
 
 void AssetInfo::set_shading_parallax_amount(float amount) {
         float sanitized = sanitize_shading_ratio(amount, kShadingParallaxMin, kShadingParallaxMax, shading_parallax_amount);
@@ -786,8 +786,7 @@ void AssetInfo::set_shading_parallax_amount(float amount) {
 }
 
 void AssetInfo::set_shading_screen_brightness_multiplier(float multiplier) {
-        float sanitized = sanitize_shading_ratio(
-                multiplier, kShadingBrightnessMin, kShadingBrightnessMax, shading_screen_brightness_multiplier);
+        float sanitized = sanitize_shading_ratio( multiplier, kShadingBrightnessMin, kShadingBrightnessMax, shading_screen_brightness_multiplier);
         shading_screen_brightness_multiplier = sanitized;
         if (!info_json_.is_object()) {
                 info_json_ = nlohmann::json::object();
@@ -796,8 +795,7 @@ void AssetInfo::set_shading_screen_brightness_multiplier(float multiplier) {
 }
 
 void AssetInfo::set_shading_opacity_multiplier(float multiplier) {
-        float sanitized = sanitize_shading_ratio(
-                multiplier, kShadingOpacityMin, kShadingOpacityMax, shading_opacity_multiplier);
+        float sanitized = sanitize_shading_ratio( multiplier, kShadingOpacityMin, kShadingOpacityMax, shading_opacity_multiplier);
         shading_opacity_multiplier = sanitized;
         if (!info_json_.is_object()) {
                 info_json_ = nlohmann::json::object();
@@ -925,7 +923,7 @@ void AssetInfo::load_animations(const nlohmann::json& data) {
                 converted["source"] = {
                     {"kind", "folder"},
                     {"path", anim_json.value("frames_path", it.key())}
-                };
+};
                 converted["locked"] = anim_json.value("lock_until_done", false);
                 converted["speed_factor"] = anim_json.value("speed", 1.0f);
                 converted.erase("frames_path");
@@ -1011,12 +1009,8 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
         set_shadow_mask_settings(parsed_settings);
 
         set_shading_parallax_amount(read_float_field(data, "shading_parallax_amount", shading_parallax_amount));
-        set_shading_screen_brightness_multiplier(
-                read_float_field(data,
-                                  "shading_screen_brightness_multiplier",
-                                  shading_screen_brightness_multiplier));
-        set_shading_opacity_multiplier(
-                read_float_field(data, "shading_opacity_multiplier", shading_opacity_multiplier));
+        set_shading_screen_brightness_multiplier( read_float_field(data, "shading_screen_brightness_multiplier", shading_screen_brightness_multiplier));
+        set_shading_opacity_multiplier( read_float_field(data, "shading_opacity_multiplier", shading_opacity_multiplier));
 
         const auto &ss = data.value("size_settings", nlohmann::json::object());
         scale_factor = ss.value("scale_percentage", 100.0f) / 100.0f;
@@ -1358,7 +1352,7 @@ bool AssetInfo::reload_animations_from_disk() {
         }
         info_json_["start"] = start_animation;
         return true;
-    };
+};
 
     auto& provider = manifest_store_provider_slot();
     if (!provider) {
@@ -1374,5 +1368,4 @@ bool AssetInfo::reload_animations_from_disk() {
     }
     return apply_payload(*view.data);
 }
-
 

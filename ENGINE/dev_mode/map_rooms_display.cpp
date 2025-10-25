@@ -50,7 +50,7 @@ std::string room_display_name(const std::string& key, const nlohmann::json& payl
     return key;
 }
 
-}  // namespace
+}
 
 MapRoomsDisplay::MapRoomsDisplay() {
     create_room_button_ = std::make_unique<DMButton>("Create Room", &DMStyles::CreateButton(), 180, DMButton::height());
@@ -162,9 +162,7 @@ int MapRoomsDisplay::layout_content(const SlidingWindowContainer::LayoutContext&
         delete_size = std::min(delete_size, kRoomDeleteButtonMaxSize);
         int actual_delete = std::max(16, delete_size);
         row.delete_rect = SDL_Rect{row.rect.x + row.rect.w - actual_delete - padding,
-                                   row.rect.y + (row.rect.h - actual_delete) / 2,
-                                   actual_delete,
-                                   actual_delete};
+                                   row.rect.y + (row.rect.h - actual_delete) / 2, actual_delete, actual_delete};
         y += row_height + gap;
     }
 
@@ -223,9 +221,7 @@ void MapRoomsDisplay::render(SDL_Renderer* renderer) const {
         const int swatch_size = std::max(12, std::min(base_swatch, max_swatch));
         const int swatch_height = std::max(8, std::min(swatch_size, std::max(0, row.rect.h - padding)));
         SDL_Rect swatch{row.rect.x + padding,
-                        row.rect.y + std::max(0, (row.rect.h - swatch_height) / 2),
-                        swatch_size,
-                        swatch_height};
+                        row.rect.y + std::max(0, (row.rect.h - swatch_height) / 2), swatch_size, swatch_height};
         int text_x = row.rect.x + padding;
         if (swatch.w > 0 && swatch.h > 0 && swatch.x + swatch.w <= row.rect.x + row.rect.w) {
             SDL_Color swatch_color = row.display_color;
@@ -267,16 +263,8 @@ void MapRoomsDisplay::render(SDL_Renderer* renderer) const {
         SDL_Color glyph = delete_style.text;
         SDL_SetRenderDrawColor(renderer, glyph.r, glyph.g, glyph.b, glyph.a);
         const int inset = std::max(2, row.delete_rect.w / 4);
-        SDL_RenderDrawLine(renderer,
-                           row.delete_rect.x + inset,
-                           row.delete_rect.y + inset,
-                           row.delete_rect.x + row.delete_rect.w - inset,
-                           row.delete_rect.y + row.delete_rect.h - inset);
-        SDL_RenderDrawLine(renderer,
-                           row.delete_rect.x + inset,
-                           row.delete_rect.y + row.delete_rect.h - inset,
-                           row.delete_rect.x + row.delete_rect.w - inset,
-                           row.delete_rect.y + inset);
+        SDL_RenderDrawLine(renderer, row.delete_rect.x + inset, row.delete_rect.y + inset, row.delete_rect.x + row.delete_rect.w - inset, row.delete_rect.y + row.delete_rect.h - inset);
+        SDL_RenderDrawLine(renderer, row.delete_rect.x + inset, row.delete_rect.y + row.delete_rect.h - inset, row.delete_rect.x + row.delete_rect.w - inset, row.delete_rect.y + inset);
     }
 }
 
@@ -344,7 +332,7 @@ bool MapRoomsDisplay::handle_event(const SDL_Event& e) {
 }
 
 void MapRoomsDisplay::update(const Input&, int, int) {
-    // No-op for now; placeholder for potential future behavior.
+
 }
 
 void MapRoomsDisplay::rebuild_rows() {
@@ -468,7 +456,7 @@ void MapRoomsDisplay::delete_room_entry(const std::string& key) {
                           }),
                           rooms_arr.end());
         }
-    };
+};
 
     auto layers_it = map_info_->find("map_layers");
     if (layers_it != map_info_->end() && layers_it->is_array()) {

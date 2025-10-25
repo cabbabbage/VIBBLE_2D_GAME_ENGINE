@@ -206,7 +206,7 @@ int AnimationInspectorPanel::height_for_width(int width) const {
             total += section_gap;
         }
         total += height;
-    };
+};
 
     if (!source_collapsed_ && source_config_) {
         add_section_height(source_config_->preferred_height(content_width));
@@ -254,29 +254,9 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     layout_widgets();
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(
-        renderer,
-        bounds_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelBG(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
-    dm_draw::DrawBeveledRect(
-        renderer,
-        header_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelHeader(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     if (collapse_toggle_button_) collapse_toggle_button_->render(renderer);
     if (name_box_) name_box_->render(renderer);
@@ -289,17 +269,7 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
         render_label(renderer, "Start Animation", header_rect_.x + kInspectorPadding, header_rect_.y + header_rect_.h - style.font_size - DMSpacing::small_gap(), accent);
     }
 
-    dm_draw::DrawBeveledRect(
-        renderer,
-        preview_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelHeader(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, preview_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Rect preview_clip = preview_rect_;
     const int preview_inset = DMStyles::BevelDepth();
@@ -380,7 +350,7 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
             rename_pending_ = true;
             handled = true;
         }
-    };
+};
 
     if (e.type == SDL_KEYDOWN) {
         if (name_box_ && name_box_->is_editing()) {
@@ -486,7 +456,7 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
                     activate_focus_target(target);
                 }
             }
-        };
+};
 
         handle_toggle(source_toggle_button_.get(), FocusTarget::kToggleSources);
         handle_toggle(playback_toggle_button_.get(), FocusTarget::kTogglePlayback);
@@ -626,19 +596,17 @@ void AnimationInspectorPanel::update_collapse_toggle_label() {
         return;
     }
 
-    const std::string label = collapsed_ ? std::string(DMIcons::CollapseCollapsed())
-                                         : std::string(DMIcons::CollapseExpanded());
+    const std::string label = collapsed_ ? std::string(DMIcons::CollapseCollapsed()) : std::string(DMIcons::CollapseExpanded());
     collapse_toggle_button_->set_text(label);
 }
 
 void AnimationInspectorPanel::update_section_toggle_labels() {
     auto make_label = [](bool collapsed, std::string_view name) {
-        std::string label = collapsed ? std::string(DMIcons::CollapseCollapsed())
-                                      : std::string(DMIcons::CollapseExpanded());
+        std::string label = collapsed ? std::string(DMIcons::CollapseCollapsed()) : std::string(DMIcons::CollapseExpanded());
         label.push_back(' ');
         label.append(name.begin(), name.end());
         return label;
-    };
+};
 
     if (source_toggle_button_) {
         source_toggle_button_->set_text(make_label(source_collapsed_, "Frame Sources"));
@@ -930,7 +898,7 @@ void AnimationInspectorPanel::layout_widgets() const {
         rect = SDL_Rect{x, y, width, section_height};
         widget->set_bounds(rect);
         y += section_height;
-    };
+};
 
     assign_section(source_collapsed_ || !source_config_, source_config_.get(), source_rect_);
     assign_section(playback_collapsed_ || !playback_settings_, playback_settings_.get(), playback_rect_);
@@ -1059,7 +1027,7 @@ int AnimationInspectorPanel::layout_toggle_row(int origin_x, int origin_y, int w
         }
         line_x += button_width + gap;
         bottom = std::max(bottom, line_y + button_height);
-    };
+};
 
     place_button(source_toggle_button_.get());
     place_button(playback_toggle_button_.get());
@@ -1074,4 +1042,4 @@ int AnimationInspectorPanel::layout_toggle_row(int origin_x, int origin_y, int w
     return height;
 }
 
-}  // namespace animation_editor
+}

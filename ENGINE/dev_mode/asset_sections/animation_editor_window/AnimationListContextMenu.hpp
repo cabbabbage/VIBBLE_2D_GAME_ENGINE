@@ -13,7 +13,7 @@ class AnimationListContextMenu {
     struct Option {
         std::string label;
         std::function<void()> callback;
-    };
+};
 
     AnimationListContextMenu();
 
@@ -38,5 +38,5 @@ class AnimationListContextMenu {
     int pressed_index_ = -1;
 };
 
-}  // namespace animation_editor
+}
 

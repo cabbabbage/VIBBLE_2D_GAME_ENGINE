@@ -14,8 +14,6 @@ class Input;
 struct SDL_Renderer;
 class DMButton;
 
-// Displays the rooms present in the current map inside a sliding container.
-// Provides simple selection handling that notifies when a room is chosen.
 class MapRoomsDisplay {
 public:
     using SelectRoomCallback = std::function<void(const std::string&)>;
@@ -40,7 +38,7 @@ private:
         SDL_Rect rect{0, 0, 0, 0};
         SDL_Rect delete_rect{0, 0, 0, 0};
         SDL_Color display_color{180, 188, 202, 255};
-    };
+};
 
     void configure_container(SlidingWindowContainer& container);
     void clear_container_callbacks(SlidingWindowContainer& container);

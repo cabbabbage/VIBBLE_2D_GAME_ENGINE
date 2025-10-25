@@ -102,10 +102,7 @@ std::string trim_copy_room_editor(const std::string& input) {
 }
 
 float display_color_luminance(SDL_Color color) {
-    return static_cast<float>(0.2126 * static_cast<double>(color.r) /
-                              255.0 +
-                              0.7152 * static_cast<double>(color.g) / 255.0 +
-                              0.0722 * static_cast<double>(color.b) / 255.0);
+    return static_cast<float>(0.2126 * static_cast<double>(color.r) / 255.0 + 0.7152 * static_cast<double>(color.g) / 255.0 + 0.0722 * static_cast<double>(color.b) / 255.0);
 }
 
 bool colors_equal(SDL_Color lhs, SDL_Color rhs) {
@@ -236,7 +233,7 @@ void room_editor_trace(const std::string& message) {
         std::ofstream log("dev_mode_trace.log", std::ios::app);
         log << message << '\n';
     } catch (...) {
-        // ignore logging failures
+
     }
 }
 
@@ -351,8 +348,7 @@ void RoomEditor::paste_spawn_group_from_clipboard() {
     }
 
     const std::string display_name = entry.value("display_name", std::string{"Spawn Group"});
-    const int default_resolution = current_room_ ? current_room_->map_grid_settings().resolution
-                                                : MapGridSettings::defaults().resolution;
+    const int default_resolution = current_room_ ? current_room_->map_grid_settings().resolution : MapGridSettings::defaults().resolution;
     devmode::spawn::ensure_spawn_group_entry_defaults(entry, display_name, default_resolution);
     remap_clipboard_entry_to_room(entry, current_room_);
 
@@ -458,7 +454,7 @@ void RoomEditor::select_spawn_group_assets(const std::string& spawn_id) {
             return true;
         }
         return !std::equal(selected_assets_.begin(), selected_assets_.end(), previous_selection.begin());
-    };
+};
     if (spawn_id.empty()) {
         sync_spawn_group_panel_with_selection();
         if (selection_changed()) {
@@ -836,7 +832,7 @@ void RoomEditor::update(const Input& input) {
             clear_selection();
             clear_highlighted_assets();
         }
-    };
+};
 
     if (!enabled_) {
         if (mouse_controls_enabled_last_frame_) {
@@ -891,8 +887,7 @@ void RoomEditor::update_ui(const Input& input) {
         if (manifest_store_) {
             library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_, *manifest_store_);
         } else {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "[RoomEditor] Manifest store unavailable; asset library UI update skipped.");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[RoomEditor] Manifest store unavailable; asset library UI update skipped.");
         }
     }
 
@@ -1023,7 +1018,7 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
             pointer_blocked = true;
         }
         return false;
-    };
+};
 
     bool pointer_blocked = false;
 
@@ -1242,7 +1237,7 @@ void RoomEditor::render_room_labels(SDL_Renderer* renderer) {
         Room* room = nullptr;
         SDL_FPoint desired_center{0.0f, 0.0f};
         float priority = 0.0f;
-    };
+};
 
     std::vector<LabelInfo> render_queue;
     render_queue.reserve(rooms.size());
@@ -1334,23 +1329,8 @@ void RoomEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoin
 
     const int radius = std::min(DMStyles::CornerRadius(), std::min(bg_rect.w, bg_rect.h) / 2);
     const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(bg_rect.w, bg_rect.h) / 2));
-    dm_draw::DrawBeveledRect(
-        renderer,
-        bg_rect,
-        radius,
-        bevel,
-        bg_color,
-        bg_color,
-        bg_color,
-        false,
-        0.0f,
-        0.0f);
-    dm_draw::DrawRoundedOutline(
-        renderer,
-        bg_rect,
-        radius,
-        1,
-        border_color);
+    dm_draw::DrawBeveledRect( renderer, bg_rect, radius, bevel, bg_color, bg_color, bg_color, false, 0.0f, 0.0f);
+    dm_draw::DrawRoundedOutline( renderer, bg_rect, radius, 1, border_color);
 
     SDL_Rect dst{bg_rect.x + kLabelPadding, bg_rect.y + kLabelPadding, cache.text_size.x, cache.text_size.y};
     SDL_RenderCopy(renderer, cache.texture, nullptr, &dst);
@@ -1382,7 +1362,7 @@ SDL_Rect RoomEditor::label_background_rect(int text_w, int text_h, SDL_FPoint de
         clamped.x = std::clamp(clamped.x, min_x, max_x);
         clamped.y = std::clamp(clamped.y, min_y, max_y);
         return clamped;
-    };
+};
 
     SDL_FPoint center = clamp_center(desired_center);
 
@@ -1405,7 +1385,7 @@ SDL_Rect RoomEditor::label_background_rect(int text_w, int text_h, SDL_FPoint de
                 if (t >= 0.0f) {
                     t_min = std::min(t_min, t);
                 }
-            };
+};
 
             if (dx > 0.0f) update_t(max_x, screen_center.x, dx);
             else if (dx < 0.0f) update_t(min_x, screen_center.x, dx);
@@ -1631,8 +1611,7 @@ SDL_Rect RoomEditor::resolve_vertical_edge_overlap(SDL_Rect rect, float desired_
 }
 
 bool RoomEditor::rects_overlap(const SDL_Rect& a, const SDL_Rect& b) {
-    return !(a.x + a.w <= b.x || b.x + b.w <= a.x ||
-             a.y + a.h <= b.y || b.y + b.h <= a.y);
+    return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
 }
 
 void RoomEditor::ensure_label_font() {
@@ -1651,11 +1630,7 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
     if (renderer) {
         if (assets_ && current_room_ && current_room_->room_area) {
             const auto style = dm_draw::ResolveRoomBoundsOverlayStyle(current_room_->display_color());
-            dm_draw::RenderRoomBoundsOverlay(
-                renderer,
-                assets_->getView(),
-                *current_room_->room_area,
-                style);
+            dm_draw::RenderRoomBoundsOverlay( renderer, assets_->getView(), *current_room_->room_area, style);
         }
         render_room_labels(renderer);
     }
@@ -1864,8 +1839,7 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     if (height > 0) entry["origional_height"] = height;
     entry["display_name"] = info->name;
 
-    const int default_resolution = current_room_ ? current_room_->map_grid_settings().resolution
-                                                 : MapGridSettings::defaults().resolution;
+    const int default_resolution = current_room_ ? current_room_->map_grid_settings().resolution : MapGridSettings::defaults().resolution;
     devmode::spawn::ensure_spawn_group_entry_defaults(entry, info->name, default_resolution);
 
     entry["candidates"].push_back({{"name", info->name}, {"chance", 100}});
@@ -1922,8 +1896,7 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
 
     nlohmann::json template_root = source_room->assets_data();
     auto& template_groups = ensure_spawn_groups_array(template_root);
-    const int template_resolution = current_room_ ? current_room_->map_grid_settings().resolution
-                                                  : MapGridSettings::defaults().resolution;
+    const int template_resolution = current_room_ ? current_room_->map_grid_settings().resolution : MapGridSettings::defaults().resolution;
     for (auto& entry : template_groups) {
         if (!entry.is_object()) continue;
         entry["spawn_id"] = generate_spawn_id();
@@ -2060,7 +2033,7 @@ void RoomEditor::clear_highlighted_assets() {
             return true;
         }
         return false;
-    };
+};
 
     selected_assets_.erase( std::remove_if(selected_assets_.begin(), selected_assets_.end(), erase_if_inactive), selected_assets_.end());
 
@@ -2098,7 +2071,7 @@ void RoomEditor::purge_asset(Asset* asset) {
         if (vec.size() != before) {
             highlight_sources_changed = true;
         }
-    };
+};
     erase_from(selected_assets_);
     erase_from(highlighted_assets_);
     if (drag_anchor_asset_ == asset) {
@@ -3047,7 +3020,7 @@ void RoomEditor::ensure_spawn_group_config_ui() {
     callbacks.on_delete = [this](const std::string& id) { delete_spawn_group_internal(id); };
     callbacks.on_reorder = [this](const std::string& id, size_t index) {
         reorder_spawn_group_internal(id, index);
-    };
+};
     callbacks.on_regenerate = [this](const std::string& id) {
         if (id.empty()) {
             return;
@@ -3055,20 +3028,20 @@ void RoomEditor::ensure_spawn_group_config_ui() {
         if (nlohmann::json* entry = find_spawn_entry(id)) {
             respawn_spawn_group(*entry);
         }
-    };
+};
     spawn_group_panel_->set_callbacks(std::move(callbacks));
     spawn_group_panel_->set_on_layout_changed([this]() { update_spawn_group_config_anchor(); });
 }
 
 void RoomEditor::update_room_config_bounds() {
-    const int side_margin = 0; // Align flush to the right edge
+    const int side_margin = 0;
     const int available_width = std::max(0, screen_w_ - 2 * side_margin);
     const int max_width = std::max(320, available_width);
     const int desired_width = std::max(360, screen_w_ / 3);
     const int width = std::min(max_width, desired_width);
     const int height = std::max(1, screen_h_);
     const int max_x = std::max(0, screen_w_ - width);
-    const int desired_x = screen_w_ - width; // no right margin gap
+    const int desired_x = screen_w_ - width;
     const int x = std::clamp(desired_x, 0, max_x);
     const int y = 0;
     room_config_bounds_ = SDL_Rect{x, y, width, height};
@@ -3121,7 +3094,7 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
         if (std::find(spawn_ids.begin(), spawn_ids.end(), id) == spawn_ids.end()) {
             spawn_ids.push_back(id);
         }
-    };
+};
 
     for (Asset* asset : selected_assets_) {
         append_spawn_id(asset);
@@ -3207,9 +3180,7 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     drag_perimeter_circle_center_ = drag_room_center_;
 
     if (spawn_entry) {
-        resolve_geometry = spawn_entry->value(
-            "resolve_geometry_to_room_size",
-            resolve_geometry);
+        resolve_geometry = spawn_entry->value( "resolve_geometry_to_room_size", resolve_geometry);
         if (resolve_geometry) {
             drag_perimeter_orig_w_ = std::max(1, spawn_entry->value("origional_width", drag_perimeter_curr_w_));
             drag_perimeter_orig_h_ = std::max(1, spawn_entry->value("origional_height", drag_perimeter_curr_h_));
@@ -3228,10 +3199,8 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         if ((*spawn_entry).contains("radius") && (*spawn_entry)["radius"].is_number_integer()) {
             drag_perimeter_base_radius_ = std::max(0, (*spawn_entry)["radius"].get<int>());
             if (resolve_geometry && drag_perimeter_base_radius_ > 0.0) {
-                const double width_ratio = static_cast<double>(std::max(1, drag_perimeter_curr_w_)) /
-                                           static_cast<double>(std::max(1, drag_perimeter_orig_w_));
-                const double height_ratio = static_cast<double>(std::max(1, drag_perimeter_curr_h_)) /
-                                            static_cast<double>(std::max(1, drag_perimeter_orig_h_));
+                const double width_ratio = static_cast<double>(std::max(1, drag_perimeter_curr_w_)) / static_cast<double>(std::max(1, drag_perimeter_orig_w_));
+                const double height_ratio = static_cast<double>(std::max(1, drag_perimeter_curr_h_)) / static_cast<double>(std::max(1, drag_perimeter_orig_h_));
                 const double ratio = (width_ratio + height_ratio) * 0.5;
                 drag_perimeter_base_radius_ = std::max(0.0, drag_perimeter_base_radius_ * ratio);
             }
@@ -3376,8 +3345,7 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     double base_radius = drag_perimeter_base_radius_;
     if (base_radius <= 1e-6) base_radius = reference_length;
 
-    double new_radius = std::hypot(static_cast<double>(world_mouse.x - drag_perimeter_circle_center_.x),
-                                   static_cast<double>(world_mouse.y - drag_perimeter_circle_center_.y));
+    double new_radius = std::hypot(static_cast<double>(world_mouse.x - drag_perimeter_circle_center_.x), static_cast<double>(world_mouse.y - drag_perimeter_circle_center_.y));
     if (!std::isfinite(new_radius)) {
         new_radius = 0.0;
     }
@@ -3440,8 +3408,7 @@ void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
 
     if (ref) {
         reference_direction = ref->direction;
-        double dir_len = std::hypot(static_cast<double>(reference_direction.x),
-                                    static_cast<double>(reference_direction.y));
+        double dir_len = std::hypot(static_cast<double>(reference_direction.x), static_cast<double>(reference_direction.y));
         if (dir_len > 1e-6) {
             reference_direction.x = static_cast<float>(reference_direction.x / dir_len);
             reference_direction.y = static_cast<float>(reference_direction.y / dir_len);
@@ -3479,8 +3446,7 @@ void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
         reference_length = 1.0;
     }
 
-    double projected = dx_mouse * static_cast<double>(reference_direction.x) +
-                       dy_mouse * static_cast<double>(reference_direction.y);
+    double projected = dx_mouse * static_cast<double>(reference_direction.x) + dy_mouse * static_cast<double>(reference_direction.y);
     double ratio = projected / reference_length;
     if (!std::isfinite(ratio)) {
         ratio = 0.0;
@@ -3813,7 +3779,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             }
         }
         return names;
-    };
+};
 
     auto on_change = [this]() {
         if (!current_room_) {
@@ -3822,7 +3788,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
         save_current_room_assets_json();
         rebuild_room_spawn_id_cache();
         reopen_room_configurator();
-    };
+};
 
     auto on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary& summary) {
         if (!current_room_) {
@@ -3838,7 +3804,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             summary.resolution_changed) {
             respawn_spawn_group(entry);
         }
-    };
+};
 
     SpawnGroupConfig::ConfigureEntryCallback configure_entry = [area_names_provider, this](
                                                                  SpawnGroupConfig::EntryController& entry,
@@ -3880,7 +3846,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             }
             return result;
         });
-    };
+};
 
     SpawnEntryResolution resolved;
     if (active_spawn_group_id_) {
@@ -3899,7 +3865,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             return;
         }
         assets_->persist_map_info_json();
-    };
+};
 
     auto map_on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary& summary) {
         if (!assets_) {
@@ -3918,7 +3884,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             summary.resolution_changed) {
             assets_->notify_spawn_group_config_changed(entry);
         }
-    };
+};
 
     if (resolved.valid()) {
         if (resolved.source == SpawnEntryResolution::Source::Room) {
@@ -4006,7 +3972,7 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
             return false;
         }
         return &(*groups_it) == resolved.owner_array;
-    };
+};
 
     const bool map_assets_entry = owner_matches_section("map_assets_data");
     const bool boundary_entry = owner_matches_section("map_boundary_data");
@@ -4016,7 +3982,7 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
             spawn_group_panel_->close();
             spawn_group_panel_->set_visible(false);
         }
-    };
+};
 
     auto close_room_config_preserving_selection = [this]() {
         if (!room_config_dock_open_) {
@@ -4025,7 +3991,7 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
         suppress_room_config_selection_clear_ = true;
         set_room_config_visible(false);
         suppress_room_config_selection_clear_ = false;
-    };
+};
 
     if (boundary_entry || boundary_asset) {
         close_spawn_group_panel();
@@ -4161,8 +4127,7 @@ void RoomEditor::add_spawn_group_internal() {
     nlohmann::json entry;
     const std::string new_spawn_id = generate_spawn_id();
     entry["spawn_id"] = new_spawn_id;
-    const int add_default_resolution = current_room_ ? current_room_->map_grid_settings().resolution
-                                                     : MapGridSettings::defaults().resolution;
+    const int add_default_resolution = current_room_ ? current_room_->map_grid_settings().resolution : MapGridSettings::defaults().resolution;
     devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn", add_default_resolution);
     arr.push_back(entry);
 
@@ -4467,7 +4432,7 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
             if (lowered == "trail") {
                 trail_areas.push_back(candidate);
             }
-        };
+};
         if (current_room_->room_area) {
             add_trail_area(current_room_->room_area.get(), current_room_->room_area->get_type());
         }
@@ -4534,7 +4499,7 @@ Asset* RoomEditor::find_asset_spawn_owner(const std::string& spawn_id) const {
             return nullptr;
         }
         return candidate;
-    };
+};
 
     if (info_ui_) {
         if (Asset* target = info_ui_->get_target_asset()) {
@@ -4612,7 +4577,7 @@ void RoomEditor::respawn_asset_child_spawn_group(Asset* owner, const nlohmann::j
         if (unique.insert(candidate).second) {
             to_remove.push_back(candidate);
         }
-    };
+};
 
     for (Asset* child : owner->children) {
         if (child && child->spawn_id == spawn_id) {
@@ -4779,10 +4744,7 @@ void RoomEditor::regenerate_current_room() {
     }
 
     const std::string map_id = assets_ ? assets_->map_id() : std::string{};
-    nlohmann::json map_info_json = devmode::room_editor_detail::resolve_map_info_blob(
-        assets_,
-        manifest_store_,
-        map_id);
+    nlohmann::json map_info_json = devmode::room_editor_detail::resolve_map_info_blob( assets_, manifest_store_, map_id);
 
     double map_radius_value = map_layers::map_radius_from_map_info(map_info_json);
     const int map_radius = map_radius_value > 0.0 ? static_cast<int>(std::lround(map_radius_value)) : 0;
@@ -4811,7 +4773,7 @@ void RoomEditor::regenerate_current_room() {
         if (removal_set.insert(asset).second) {
             to_remove.push_back(asset);
         }
-    };
+};
 
     for (Asset* asset : assets_->all) {
         if (!asset || asset->dead) continue;
@@ -4924,10 +4886,7 @@ void RoomEditor::regenerate_current_room() {
         }
 
         if (!boundary_options.empty()) {
-            const int boundary_resolution = std::clamp(
-                static_cast<int>(std::lround(std::log2(static_cast<double>(std::max(1, boundary_spacing))))),
-                0,
-                vibble::grid::kMaxResolution);
+            const int boundary_resolution = std::clamp( static_cast<int>(std::lround(std::log2(static_cast<double>(std::max(1, boundary_spacing))))), 0, vibble::grid::kMaxResolution);
             vibble::grid::Grid& grid_service = vibble::grid::global_grid();
             vibble::grid::Occupancy boundary_grid(*old_area_copy, boundary_resolution, grid_service);
             auto vertices = boundary_grid.vertices_in_area(*old_area_copy);
@@ -4983,7 +4942,7 @@ void RoomEditor::regenerate_current_room() {
                 }
             }
             return true;
-        };
+};
 
         auto bounds = current_room_->room_area->get_bounds();
         int minx = std::get<0>(bounds);
@@ -5133,9 +5092,4 @@ double RoomEditor::edge_length_along_direction(const Area& area,
     }
     return best;
 }
-
-
-
-
-
 

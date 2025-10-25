@@ -89,7 +89,7 @@ private:
         bool warning = false;
         bool dependency_highlight = false;
         bool deletable = true;
-    };
+};
 
     void rebuild_layers();
     void update_layer_row_geometry();
@@ -97,8 +97,7 @@ private:
     void render_layers_list(SDL_Renderer* renderer) const;
     int validation_summary_height(int w) const;
     void render_validation_summary(SDL_Renderer* renderer, const SDL_Rect& rect) const;
-    void update_validation_summary_layout(const std::vector<std::string>& errors,
-                                          const std::vector<std::string>& warnings);
+    void update_validation_summary_layout(const std::vector<std::string>& errors, const std::vector<std::string>& warnings);
     void trigger_save();
     void ensure_listener();
     void remove_listener();
@@ -185,7 +184,7 @@ private:
     struct ValidationLine {
         std::string text;
         SDL_Color color{255, 255, 255, 255};
-    };
+};
     std::vector<ValidationLine> validation_lines_;
     bool validation_has_errors_ = false;
     bool validation_has_warnings_ = false;

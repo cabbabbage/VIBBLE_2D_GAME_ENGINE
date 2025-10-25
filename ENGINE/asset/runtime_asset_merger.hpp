@@ -23,10 +23,7 @@ public:
     explicit TemporaryMergedAssetInfo(std::string name);
 
     void absorb(const Asset& asset, SDL_Point merged_origin);
-    void set_geometry(int width,
-                      int height,
-                      SDL_Point pivot,
-                      const std::vector<SDL_Point>& local_polygon);
+    void set_geometry(int width, int height, SDL_Point pivot, const std::vector<SDL_Point>& local_polygon);
     void set_animation(const std::string& animation_id, Animation animation);
     std::shared_ptr<AssetInfo> finalize(const std::vector<float>& variant_steps);
 
@@ -73,23 +70,15 @@ private:
         double pivot_y = 0.0;
         float pivot_ratio_x = 0.5f;
         float pivot_ratio_y = 1.0f;
-    };
+};
 
-    SDL_Texture* create_scaled_texture(SDL_Texture* source,
-                                       int source_w,
-                                       int source_h,
-                                       float scale,
-                                       bool smooth) const;
+    SDL_Texture* create_scaled_texture(SDL_Texture* source, int source_w, int source_h, float scale, bool smooth) const;
     std::vector<float> build_variant_steps(float camera_scale_hint) const;
-    std::vector<SampledAsset> sample_assets(const std::vector<std::unique_ptr<Asset>>& assets,
-                                           double& min_x,
-                                           double& min_y,
-                                           double& max_x,
-                                           double& max_y) const;
+    std::vector<SampledAsset> sample_assets(const std::vector<std::unique_ptr<Asset>>& assets, double& min_x, double& min_y, double& max_x, double& max_y) const;
 
     SDL_Renderer* renderer_ = nullptr;
     const camera* camera_ = nullptr;
 };
 
-} // namespace runtime
+}
 

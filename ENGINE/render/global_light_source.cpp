@@ -53,7 +53,7 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
             {fallback_base_color.g, fallback_base_color.g},
             {fallback_base_color.b, fallback_base_color.b},
             {fallback_base_color.a, fallback_base_color.a}
-        };
+};
         base_color_      = clamp_color_alpha(fallback_base_color);
         current_color_   = base_color_;
         key_colors_.clear();
@@ -271,11 +271,10 @@ void Global_Light_Source::update(const std::optional<SDL_FPoint>& target_world,
 
         const auto lerp = [](float a, float b, float t) {
                 return a + (b - a) * t;
-        };
+};
 
         const SDL_FPoint fallback_target{
-                static_cast<float>(map_reference_center_.x),
-                static_cast<float>(map_reference_center_.y)};
+                static_cast<float>(map_reference_center_.x), static_cast<float>(map_reference_center_.y)};
         const SDL_FPoint desired_target = target_world.value_or(fallback_target);
 
         if (!smoothed_target_valid_) {
@@ -294,8 +293,7 @@ void Global_Light_Source::update(const std::optional<SDL_FPoint>& target_world,
         bool       have_direction = false;
         if (average_direction) {
                 desired_direction = *average_direction;
-                const float len = std::sqrt(desired_direction.x * desired_direction.x +
-                                            desired_direction.y * desired_direction.y);
+                const float len = std::sqrt(desired_direction.x * desired_direction.x + desired_direction.y * desired_direction.y);
                 if (len > 1e-4f) {
                         desired_direction.x /= len;
                         desired_direction.y /= len;
@@ -305,8 +303,7 @@ void Global_Light_Source::update(const std::optional<SDL_FPoint>& target_world,
         if (!have_direction) {
                 desired_direction.x = smoothed_target_world_.x - static_cast<float>(map_reference_center_.x);
                 desired_direction.y = smoothed_target_world_.y - static_cast<float>(map_reference_center_.y);
-                const float len = std::sqrt(desired_direction.x * desired_direction.x +
-                                            desired_direction.y * desired_direction.y);
+                const float len = std::sqrt(desired_direction.x * desired_direction.x + desired_direction.y * desired_direction.y);
                 if (len > 1e-4f) {
                         desired_direction.x /= len;
                         desired_direction.y /= len;
@@ -324,8 +321,7 @@ void Global_Light_Source::update(const std::optional<SDL_FPoint>& target_world,
                 constexpr float kDirectionLerp = 0.2f;
                 smoothed_direction_.x = lerp(smoothed_direction_.x, desired_direction.x, kDirectionLerp);
                 smoothed_direction_.y = lerp(smoothed_direction_.y, desired_direction.y, kDirectionLerp);
-                const float len = std::sqrt(smoothed_direction_.x * smoothed_direction_.x +
-                                            smoothed_direction_.y * smoothed_direction_.y);
+                const float len = std::sqrt(smoothed_direction_.x * smoothed_direction_.x + smoothed_direction_.y * smoothed_direction_.y);
                 if (len > 1e-4f) {
                         smoothed_direction_.x /= len;
                         smoothed_direction_.y /= len;
@@ -339,7 +335,7 @@ void Global_Light_Source::update(const std::optional<SDL_FPoint>& target_world,
                 while (angle > float(M_PI)) angle -= two_pi;
                 while (angle < -float(M_PI)) angle += two_pi;
                 return angle;
-        };
+};
 
         const float desired_angle = std::atan2(-smoothed_direction_.y, smoothed_direction_.x);
         if (!initialized_) {

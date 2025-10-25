@@ -19,8 +19,8 @@ namespace {
 
 namespace fs = std::filesystem;
 
-constexpr int   kCaptureBleed  = 16;   // margin so refraction lookups are in-bounds
-constexpr float kEdgeFeatherPx = 2.0f; // AA feather for rounded mask
+constexpr int   kCaptureBleed  = 16;
+constexpr float kEdgeFeatherPx = 2.0f;
 
 struct Float3 {
     float r = 0.0f;
@@ -41,10 +41,7 @@ inline Float3 make_float3(float r, float g, float b) {
 
 inline Float3 clamp01(const Float3& c) {
     return Float3{
-        std::clamp(c.r, 0.0f, 1.0f),
-        std::clamp(c.g, 0.0f, 1.0f),
-        std::clamp(c.b, 0.0f, 1.0f)
-    };
+        std::clamp(c.r, 0.0f, 1.0f), std::clamp(c.g, 0.0f, 1.0f), std::clamp(c.b, 0.0f, 1.0f) };
 }
 
 inline Float3 add(const Float3& a, const Float3& b) {
@@ -57,12 +54,10 @@ inline Float3 mul(const Float3& a, float s) {
 
 inline Float3 lerp(const Float3& a, const Float3& b, float t) {
     return Float3{
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t
-    };
+        a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t };
 }
 
+struct SurfaceDeleter { void operator()(SDL_Surface* s) const { if (s) SDL_FreeSurface(s); } };
 struct SurfaceDeleter { void operator()(SDL_Surface* s) const { if (s) SDL_FreeSurface(s); } };
 using SurfacePtr = std::unique_ptr<SDL_Surface, SurfaceDeleter>;
 
@@ -238,12 +233,8 @@ Float4 sample_overlay(const OverlayImage& img, float fx, float fy) {
 
     auto lerp4 = [](const Float4& a, const Float4& b, float t) {
         return Float4{
-            a.r + (b.r - a.r) * t,
-            a.g + (b.g - a.g) * t,
-            a.b + (b.b - a.b) * t,
-            a.a + (b.a - a.a) * t
-        };
-    };
+            a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t };
+};
 
     Float4 cx0 = lerp4(c00, c10, tx);
     Float4 cx1 = lerp4(c01, c11, tx);
@@ -298,7 +289,7 @@ const std::vector<Float4>& scaled_overlay_pixels(const GlassButtonStyle& style, 
                     sample.g,
                     sample.b,
                     alpha
-                };
+};
             }
         }
     }
@@ -333,7 +324,6 @@ SurfacePtr capture(SDL_Renderer* renderer, const SDL_Rect& rect) {
     return s;
 }
 
-// -------------------- Procedural value-noise FBM --------------------
 static inline uint32_t wang_hash(uint32_t x) {
     x ^= 61u; x ^= x >> 16; x *= 9u; x ^= x >> 4; x *= 0x27d4eb2du; x ^= x >> 15;
     return x;
@@ -372,7 +362,6 @@ static float fbm(float x, float y, int octaves=4, float lacunarity=2.0f, float g
     return sum;
 }
 
-// Gradient of FBM (central difference)
 static std::array<float,2> fbm_grad(float x, float y, float eps=0.8f) {
     float nx1 = fbm(x + eps, y);
     float nx0 = fbm(x - eps, y);
@@ -384,7 +373,6 @@ static std::array<float,2> fbm_grad(float x, float y, float eps=0.8f) {
     return { gx/len, gy/len };
 }
 
-// Rounded-rect coverage with 2x2 SSAA and subtle feathering (no visible border)
 inline float rr_coverage_px(int x, int y, int w, int h, int radius) {
     if (radius <= 0) return 1.0f;
     const float cx[2] = { x + 0.25f, x + 0.75f };
@@ -400,7 +388,7 @@ inline float rr_coverage_px(int x, int y, int w, int h, int radius) {
         float dx = (px < left)  ? (left  - px) : ((px > right)  ? (px - right)  : 0.0f);
         float dy = (py < top)   ? (top   - py) : ((py > bottom) ? (py - bottom) : 0.0f);
         return (dx*dx + dy*dy) <= (R * R);
-    };
+};
 
     int count = 0;
     for (float yy : cy) for (float xx : cx) if (inside(xx, yy)) ++count;
@@ -415,15 +403,13 @@ SDL_Texture* to_texture(SDL_Renderer* r, SDL_Surface* s) {
     return t;
 }
 
-// Clamp coordinates into the capture rect
 inline void clamp_sample(int& sx, int& sy, int w, int h) {
     if (sx < 0) sx = 0; else if (sx >= w) sx = w - 1;
     if (sy < 0) sy = 0; else if (sy >= h) sy = h - 1;
 }
 
-} // namespace
+}
 
-// ----------------------------- Public API -----------------------------
 Button Button::get_main_button(const std::string& text) {
     return Button(text, &Styles::MainDecoButton(), width(), height());
 }
@@ -466,10 +452,10 @@ void Button::render(SDL_Renderer* renderer) const {
         draw_glass_text(renderer, rect_);
         return;
     }
-    // Fallback decoration (not used for your main/pause menus)
+
     draw_deco(renderer, rect_, hovered_);
     const SDL_Color chosen = hovered_ ? style_->text_hover : style_->text_normal;
-    // basic text render via style (kept for compatibility)
+
     TTF_Font* f = style_->label.open_font();
     if (f) {
         int tw=0, th=0; TTF_SizeText(f, label_.c_str(), &tw, &th);
@@ -514,13 +500,12 @@ void Button::refresh_glass_overlay() {
     std::uniform_int_distribution<size_t> dist(0, res.overlays.size() - 1);
     res.current_index = dist(rng);
     ++res.generation;
-    if (res.generation == 0) ++res.generation; // avoid zero so cache notices change
+    if (res.generation == 0) ++res.generation;
 }
 
 void Button::enable_glass_style(bool enabled) { glass_enabled_ = enabled; }
 void Button::set_glass_style(const GlassButtonStyle& style) { glass_style_ = style; }
 
-// ----------------------------- Hammered Glass -----------------------------
 void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     SDL_Rect r = adjusted_for_state(rect, hovered_, pressed_);
 
@@ -683,7 +668,7 @@ void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
         Float3 cx0 = lerp(c00, c10, tx);
         Float3 cx1 = lerp(c01, c11, tx);
         return clamp01(lerp(cx0, cx1, ty));
-    };
+};
 
     double Lacc = 0.0;
     int Lcount = 0;
@@ -715,8 +700,7 @@ void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
             Float3 accum{0.0f, 0.0f, 0.0f};
             float weight = 0.0f;
 
-            Float3 center = sample_processed(static_cast<float>(x) + wx + g[0] * rough_px,
-                                             static_cast<float>(y) + wy + g[1] * rough_px);
+            Float3 center = sample_processed(static_cast<float>(x) + wx + g[0] * rough_px, static_cast<float>(y) + wy + g[1] * rough_px);
             accum = add(accum, mul(center, 2.0f));
             weight += 2.0f;
 
@@ -776,7 +760,6 @@ void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     SDL_DestroyTexture(tex);
 }
 
-// ----------------------------- Text -----------------------------
 void Button::draw_glass_text(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     if (label_.empty()) return;
     TTF_Font* font = style_->label.open_font();

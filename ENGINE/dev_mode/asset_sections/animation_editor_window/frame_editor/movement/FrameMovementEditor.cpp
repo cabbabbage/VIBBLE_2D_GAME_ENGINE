@@ -337,7 +337,7 @@ void FrameMovementEditor::apply_changes() {
             totals.dy += static_cast<int>(std::lround(frames[i].dy));
         }
         return totals;
-    };
+};
 
     const auto totals = compute_totals(variants_.front().frames);
     payload["movement_total"] = nlohmann::json{{"dx", totals.dx}, {"dy", totals.dy}};
@@ -459,17 +459,7 @@ void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    dm_draw::DrawBeveledRect(
-        renderer,
-        header_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelBG(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     const DMButtonStyle& active_style = DMStyles::AccentButton();
     const DMButtonStyle& inactive_style = DMStyles::HeaderButton();
@@ -488,23 +478,8 @@ void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {
         }
         const int tab_radius = std::min(DMStyles::CornerRadius(), std::min(tab.rect.w, tab.rect.h) / 2);
         const int tab_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(tab.rect.w, tab.rect.h) / 2));
-        dm_draw::DrawBeveledRect(
-            renderer,
-            tab.rect,
-            tab_radius,
-            tab_bevel,
-            button_color,
-            button_color,
-            button_color,
-            false,
-            0.0f,
-            0.0f);
-        dm_draw::DrawRoundedOutline(
-            renderer,
-            tab.rect,
-            tab_radius,
-            1,
-            style.border);
+        dm_draw::DrawBeveledRect( renderer, tab.rect, tab_radius, tab_bevel, button_color, button_color, button_color, false, 0.0f, 0.0f);
+        dm_draw::DrawRoundedOutline( renderer, tab.rect, tab_radius, 1, style.border);
 
         SDL_Rect text_rect = tab.rect;
         if (tab.close_visible) {
@@ -521,23 +496,8 @@ void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {
             }
             const int close_radius = std::min(DMStyles::CornerRadius(), std::min(tab.close_rect.w, tab.close_rect.h) / 2);
             const int close_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(tab.close_rect.w, tab.close_rect.h) / 2));
-            dm_draw::DrawBeveledRect(
-                renderer,
-                tab.close_rect,
-                close_radius,
-                close_bevel,
-                close_bg,
-                close_bg,
-                close_bg,
-                false,
-                0.0f,
-                0.0f);
-            dm_draw::DrawRoundedOutline(
-                renderer,
-                tab.close_rect,
-                close_radius,
-                1,
-                style.border);
+            dm_draw::DrawBeveledRect( renderer, tab.close_rect, close_radius, close_bevel, close_bg, close_bg, close_bg, false, 0.0f, 0.0f);
+            dm_draw::DrawRoundedOutline( renderer, tab.close_rect, close_radius, 1, style.border);
             render_tab_text(renderer, "×", tab.close_rect, style.text);
         }
     }
@@ -545,23 +505,8 @@ void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {
     SDL_Color add_color = add_button_pressed_ ? active_style.press_bg : (add_button_hovered_ ? active_style.hover_bg : active_style.bg);
     const int add_radius = std::min(DMStyles::CornerRadius(), std::min(add_button_rect_.w, add_button_rect_.h) / 2);
     const int add_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(add_button_rect_.w, add_button_rect_.h) / 2));
-    dm_draw::DrawBeveledRect(
-        renderer,
-        add_button_rect_,
-        add_radius,
-        add_bevel,
-        add_color,
-        add_color,
-        add_color,
-        false,
-        0.0f,
-        0.0f);
-    dm_draw::DrawRoundedOutline(
-        renderer,
-        add_button_rect_,
-        add_radius,
-        1,
-        active_style.border);
+    dm_draw::DrawBeveledRect( renderer, add_button_rect_, add_radius, add_bevel, add_color, add_color, add_color, false, 0.0f, 0.0f);
+    dm_draw::DrawRoundedOutline( renderer, add_button_rect_, add_radius, 1, active_style.border);
     render_tab_text(renderer, "+", add_button_rect_, active_style.text);
 }
 

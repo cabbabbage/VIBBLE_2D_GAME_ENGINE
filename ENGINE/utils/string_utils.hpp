@@ -27,5 +27,5 @@ inline std::string trim_copy(std::string_view value) {
     return std::string(value.substr(start, end - start));
 }
 
-}  // namespace vibble::strings
+}
 

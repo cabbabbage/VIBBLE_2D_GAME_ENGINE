@@ -76,7 +76,7 @@ void dev_mode_trace(const std::string& message) {
         std::ofstream log("dev_mode_trace.log", std::ios::app);
         log << message << '\n';
     } catch (...) {
-        // Never propagate logging failures.
+
     }
 }
 
@@ -164,7 +164,7 @@ bool is_known_asset_area_type(const std::string& type) {
         "trigger",
         "child",
         "spawning"
-    };
+};
     for (const char* known : kKnownTypes) {
         if (type == known) {
             return true;
@@ -397,24 +397,9 @@ public:
         const SDL_Color bg = DMStyles::PanelBG();
         const SDL_Color highlight = DMStyles::HighlightColor();
         const SDL_Color shadow = DMStyles::ShadowColor();
-        dm_draw::DrawBeveledRect(
-            renderer,
-            rect_,
-            DMStyles::CornerRadius(),
-            DMStyles::BevelDepth(),
-            bg,
-            highlight,
-            shadow,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( renderer, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         const SDL_Color border = DMStyles::Border();
-        dm_draw::DrawRoundedOutline(
-            renderer,
-            rect_,
-            DMStyles::CornerRadius(),
-            kPopupOutlineThickness,
-            border);
+        dm_draw::DrawRoundedOutline( renderer, rect_, DMStyles::CornerRadius(), kPopupOutlineThickness, border);
         const int margin = DMSpacing::item_gap();
         const int spacing = DMSpacing::small_gap();
         const int button_height = DMButton::height();
@@ -1223,7 +1208,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         auto first_selected_type = [this]() -> std::string {
             if (active_area_type_filters_.empty()) return std::string{};
 
-            // Prefer a specific tool selection over the catch-all option when both are active.
             for (const auto& t : devmode::area_mode::area_types()) {
                 if (t == "all") continue;
                 if (active_area_type_filters_.count(t)) return t;
@@ -1257,10 +1241,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     if (ph <= 0) {
                         if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
                     }
-                    const float base_scale = (playerAsset->info && std::isfinite(playerAsset->info->scale_factor) &&
-                                              playerAsset->info->scale_factor >= 0.0f)
-                                                 ? playerAsset->info->scale_factor
-                                                 : 1.0f;
+                    const float base_scale = (playerAsset->info && std::isfinite(playerAsset->info->scale_factor) && playerAsset->info->scale_factor >= 0.0f) ? playerAsset->info->scale_factor : 1.0f;
                     if (ph > 0) player_screen_height = static_cast<float>(ph) * base_scale * inv_scale;
                 }
                 if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
@@ -1290,9 +1271,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         }
                     }
                     if (fw <= 0 || fh <= 0) return zero;
-                    const float base_scale = (a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor >= 0.0f)
-                                                 ? a->info->scale_factor
-                                                 : 1.0f;
+                    const float base_scale = (a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor >= 0.0f) ? a->info->scale_factor : 1.0f;
                     float base_sw = static_cast<float>(fw) * base_scale * inv_scale;
                     float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
                     camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, base_sh, player_screen_height);
@@ -1342,10 +1321,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     if (ph <= 0) {
                         if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
                     }
-                    const float base_scale = (playerAsset->info && std::isfinite(playerAsset->info->scale_factor) &&
-                                              playerAsset->info->scale_factor >= 0.0f)
-                                                 ? playerAsset->info->scale_factor
-                                                 : 1.0f;
+                    const float base_scale = (playerAsset->info && std::isfinite(playerAsset->info->scale_factor) && playerAsset->info->scale_factor >= 0.0f) ? playerAsset->info->scale_factor : 1.0f;
                     if (ph > 0) player_screen_height = static_cast<float>(ph) * base_scale * inv_scale;
                 }
                 if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
@@ -1410,8 +1386,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 if (asset_area_editor_->begin(target_asset->info.get(), target_asset, area_name, area_type)) {
                     if (map_mode_ui_) {
                         if (auto* footer = map_mode_ui_->get_footer_bar()) {
-                            std::string label = std::string("Editing ") + target_asset->info->name +
-                                                std::string(" — Area: ") + area_name;
+                            std::string label = std::string("Editing ") + target_asset->info->name + std::string(" — Area: ") + area_name;
                             footer->set_title(label);
                         }
                     }
@@ -1420,7 +1395,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     return true;
                 }
                 return false;
-            };
+};
 
             if (!first_selected_type.empty() && (first_selected_type == "trigger" || first_selected_type == "spawning")) {
                 if (assets_ && current_room_) {
@@ -1457,9 +1432,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             } else {
                 Asset* target_asset = area_hovered_asset_with_area_ ? area_hovered_asset_with_area_ : area_hovered_asset_;
                 const SDL_Keymod mods = SDL_GetModState();
-                // Holding Shift forces a brand new area to be created even when the cursor is
-                // hovering an existing one. This makes it easy to author multiple child areas
-                // for a single asset without needing to find empty canvas space.
+
                 const bool shift_down = (mods & KMOD_SHIFT) != 0;
 
                 if (target_asset && target_asset->info) {
@@ -1470,8 +1443,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 
                     const bool should_reuse_hovered =
                         target_asset == area_hovered_asset_with_area_ &&
-                        !area_hovered_area_name_.empty() &&
-                        !shift_down;
+                        !area_hovered_area_name_.empty() && !shift_down;
 
                     if (should_reuse_hovered) {
                         area_name = area_hovered_area_name_;
@@ -1539,11 +1511,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             const auto overlay_style = dm_draw::ResolveRoomBoundsOverlayStyle(overlay_base);
 
             if (current_room_ && current_room_->room_area) {
-                dm_draw::RenderRoomBoundsOverlay(
-                    renderer,
-                    cam,
-                    *current_room_->room_area,
-                    overlay_style);
+                dm_draw::RenderRoomBoundsOverlay( renderer, cam, *current_room_->room_area, overlay_style);
             }
 
             SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
@@ -1634,10 +1602,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                             if (ph <= 0) {
                                 if (SDL_Texture* pf = playerAsset->get_final_texture()) SDL_QueryTexture(pf, nullptr, nullptr, nullptr, &ph);
                             }
-                            const float base_scale = (playerAsset->info && std::isfinite(playerAsset->info->scale_factor) &&
-                                                      playerAsset->info->scale_factor >= 0.0f)
-                                                         ? playerAsset->info->scale_factor
-                                                         : 1.0f;
+                            const float base_scale = (playerAsset->info && std::isfinite(playerAsset->info->scale_factor) && playerAsset->info->scale_factor >= 0.0f) ? playerAsset->info->scale_factor : 1.0f;
                             if (ph > 0) player_screen_height = static_cast<float>(ph) * base_scale * inv_scale;
                         }
                         if (player_screen_height <= 0.0f) player_screen_height = 1.0f;
@@ -1930,9 +1895,9 @@ void DevControls::configure_header_button_sets() {
             } else {
                 sync_header_button_states();
             }
-        };
+};
         return camera_btn;
-    };
+};
 
     auto make_lighting_button = [this]() {
         MapModeUI::HeaderButtonConfig lights_btn;
@@ -1960,9 +1925,9 @@ void DevControls::configure_header_button_sets() {
                 map_mode_ui_->toggle_light_panel();
             }
             sync_header_button_states();
-        };
+};
         return lights_btn;
-    };
+};
 
     auto make_layers_button = [this]() {
         MapModeUI::HeaderButtonConfig layers_btn;
@@ -1996,9 +1961,9 @@ void DevControls::configure_header_button_sets() {
                 map_mode_ui_->open_layers_panel();
             }
             sync_header_button_states();
-        };
+};
         return layers_btn;
-    };
+};
 
     std::vector<MapModeUI::HeaderButtonConfig> map_buttons;
     std::vector<MapModeUI::HeaderButtonConfig> room_buttons;
@@ -2006,8 +1971,6 @@ void DevControls::configure_header_button_sets() {
 
     map_buttons.push_back(make_camera_button());
     map_buttons.push_back(make_lighting_button());
-
-    // Removed Light Map preview button in dev mode
 
     {
         MapModeUI::HeaderButtonConfig grid_btn;
@@ -2032,11 +1995,9 @@ void DevControls::configure_header_button_sets() {
                 map_mode_ui_->toggle_grid_panel();
             }
             sync_header_button_states();
-        };
+};
         map_buttons.push_back(std::move(grid_btn));
     }
-
-    // Removed duplicate Map Layers button; use built-in "Layers" button
 
     {
         MapModeUI::HeaderButtonConfig map_assets_btn;
@@ -2080,7 +2041,7 @@ void DevControls::configure_header_button_sets() {
         trail_btn.style_override = &DMStyles::CreateButton();
         trail_btn.on_toggle = [this](bool) {
             this->create_trail_template();
-        };
+};
         map_buttons.push_back(std::move(trail_btn));
     }
 
@@ -2133,7 +2094,7 @@ void DevControls::configure_header_button_sets() {
         }
         open_regenerate_room_popup();
         sync_header_button_states();
-    };
+};
     room_buttons.push_back(std::move(regenerate_btn));
 
     for (const auto& type : devmode::area_mode::area_types()) {
@@ -2147,7 +2108,7 @@ void DevControls::configure_header_button_sets() {
                 if (active_area_type_filters_.empty()) {
                     active_area_type_filters_.insert("all");
                 }
-            };
+};
 
             if (active) {
                 if (type == "all") {
@@ -2441,7 +2402,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
             if (lowered == "trail") {
                 trail_areas.push_back(candidate);
             }
-        };
+};
         if (room) {
             if (room->room_area) {
                 add_trail_area(room->room_area.get(), room->room_area->get_type());
@@ -2512,14 +2473,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                             attempt_weights[idx] = 0.0;
                             continue;
                         }
-                        auto* result = ctx.spawnAsset(candidate.name,
-                                                      candidate.info,
-                                                      *area_ptr,
-                                                      spawn_pos,
-                                                      0,
-                                                      nullptr,
-                                                      info.spawn_id,
-                                                      info.position);
+                        auto* result = ctx.spawnAsset(candidate.name, candidate.info, *area_ptr, spawn_pos, 0, nullptr, info.spawn_id, info.position);
                         if (!result) {
                             attempt_weights[idx] = 0.0;
                             continue;
@@ -2749,13 +2703,7 @@ void DevControls::ensure_boundary_assets_modal_open() {
     auto regen = [this](const nlohmann::json& entry) { this->regenerate_boundary_spawn_group(entry); };
     auto& map_json = assets_->map_info_json();
     SDL_Color color{255, 200, 120, 255};
-    boundary_assets_modal_->open(map_json,
-                                 "map_boundary_data",
-                                 "batch_map_boundary",
-                                 "Boundary",
-                                 color,
-                                 save,
-                                 regen);
+    boundary_assets_modal_->open(map_json, "map_boundary_data", "batch_map_boundary", "Boundary", color, save, regen);
 }
 
 void DevControls::open_boundary_assets_modal() {
@@ -3204,8 +3152,7 @@ bool DevControls::persist_map_info_to_disk() {
         return false;
     }
     const std::string map_id = assets_->map_id();
-    const bool map_saved = devmode::persist_map_manifest_entry(
-        manifest_store_, map_id, assets_->map_info_json(), std::cerr);
+    const bool map_saved = devmode::persist_map_manifest_entry( manifest_store_, map_id, assets_->map_info_json(), std::cerr);
     if (map_saved) {
         manifest_store_.flush();
     }

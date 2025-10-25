@@ -64,16 +64,11 @@ bool chunk_lighting_suspended_flag() {
 }
 
 SDL_BlendMode darkness_cutout_blend_mode() {
-    static SDL_BlendMode cached = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO,
-                                                             SDL_BLENDFACTOR_ONE,
-                                                             SDL_BLENDOPERATION_ADD,
-                                                             SDL_BLENDFACTOR_ZERO,
-                                                             SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                                                             SDL_BLENDOPERATION_ADD);
+    static SDL_BlendMode cached = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
     return cached;
 }
 
-} // namespace
+}
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                             Assets* assets,
@@ -105,9 +100,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     }
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
     chunk_lighting_suspended_ = chunk_lighting_suspended_flag();
-    light_map_ = std::make_unique<LightMap>(assets_,
-                                            screen_width_,
-                                            screen_height_);
+    light_map_ = std::make_unique<LightMap>(assets_, screen_width_, screen_height_);
     if (chunk_lighting_suspended_) {
         vibble::log::info("[SceneRenderer] Chunk lighting suspended; skipping light-map initialization.");
         render_pipeline_.lighting().light_map_sampler = nullptr;
@@ -257,10 +250,8 @@ void SceneRenderer::render(){
         should_update_light=devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true);
     }
 
-    // Per-chunk shadow data is updated inside LightMap::update
-
     if (light_map_ && !chunk_lighting_suspended_){
-        // Keep the sampler available for the pipeline.
+
         render_pipeline_.lighting().light_map_sampler = light_map_.get();
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
@@ -299,7 +290,7 @@ void SceneRenderer::render(){
         light_map_->render_visible_chunks(renderer_, screen_view, alpha_mult, map_light_color);
         SDL_SetRenderDrawBlendMode(renderer_, previous_mode);
         rendered_light_map = true;
-    };
+};
 
     if (runtime_lighting_sampler_) {
         runtime_lighting_sampler_->set_assets(assets_);
@@ -313,8 +304,7 @@ void SceneRenderer::render(){
         const auto& camera_state=assets_->getView();
         const camera::RealismSettings& cam_settings = camera_state.realism_settings();
         const int effective_quality_percent = assets_
-                                                  ? assets_->effective_render_quality_percent()
-                                                  : cam_settings.render_quality_percent;
+                                                  ? assets_->effective_render_quality_percent() : cam_settings.render_quality_percent;
         const float quality_percent =
             std::clamp(static_cast<float>(effective_quality_percent), 10.0f, 100.0f);
         render_pipeline::ScalingLogic::SetQualityCap(quality_percent / 100.0f);
@@ -366,11 +356,9 @@ void SceneRenderer::render(){
             cmd.selected            = asset->is_selected();
             cmd.flipped             = asset->flipped;
 
-            auto& target_commands = (asset->info->type == asset_types::texture)
-                                        ? texture_commands_
-                                        : remaining_commands_;
+            auto& target_commands = (asset->info->type == asset_types::texture) ? texture_commands_ : remaining_commands_;
             target_commands.push_back(std::move(cmd));
-        };
+};
 
         for (Asset* a : active) {
             if (!a || !a->info) {
@@ -417,9 +405,7 @@ void SceneRenderer::render(){
             if (a->info && !a->info->light_sources.empty() && dst.w > 0 && dst.h > 0 && fw > 0 && fh > 0) {
                 const std::string canonical_type = asset_types::canonicalize(a->info->type);
                 const bool        punches_overlay =
-                    (canonical_type == asset_types::object ||
-                     canonical_type == asset_types::texture ||
-                     canonical_type == asset_types::player);
+                    (canonical_type == asset_types::object || canonical_type == asset_types::texture || canonical_type == asset_types::player);
                 if (!punches_overlay) {
                     continue;
                 }
@@ -443,8 +429,6 @@ void SceneRenderer::render(){
                 last_rendered_frames_.erase(a);
             }
         }
-
-        // Dynamic light-ray stamping removed.
 
         auto render_commands = [&](const std::vector<AssetRenderCommand>& commands) {
             for (const AssetRenderCommand& cmd : commands) {
@@ -479,15 +463,14 @@ void SceneRenderer::render(){
                     SDL_SetTextureColorMod(mod_target, 255, 255, 255);
                 }
 
-                SDL_RenderCopyEx(renderer_, cmd.source_texture, nullptr, &cmd.dst, 0, nullptr,
-                                 cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+                SDL_RenderCopyEx(renderer_, cmd.source_texture, nullptr, &cmd.dst, 0, nullptr, cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
                 SDL_SetTextureColorMod(mod_target, 255, 255, 255);
                 if (cmd.uses_scaled_texture && cmd.final_texture) {
                     SDL_SetTextureColorMod(cmd.final_texture, 255, 255, 255);
                 }
             }
             SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-        };
+};
 
         render_commands(texture_commands_);
         render_dynamic_darkness_overlay(map_light_opacity);
@@ -545,8 +528,6 @@ void SceneRenderer::render(){
     SDL_RenderPresent(renderer_);
 }
 
-
-
 bool SceneRenderer::ensure_darkness_overlay() {
     if (!renderer_ || screen_width_ <= 0 || screen_height_ <= 0) {
         return false;
@@ -558,11 +539,7 @@ bool SceneRenderer::ensure_darkness_overlay() {
     }
 
     if (!darkness_overlay_texture_) {
-        SDL_Texture* texture = SDL_CreateTexture(renderer_,
-                                                 SDL_PIXELFORMAT_RGBA8888,
-                                                 SDL_TEXTUREACCESS_TARGET,
-                                                 screen_width_,
-                                                 screen_height_);
+        SDL_Texture* texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, screen_width_, screen_height_);
         if (!texture) {
             vibble::log::warn(std::string{"[SceneRenderer] Failed to allocate darkness overlay: "} + SDL_GetError());
             return false;
@@ -598,10 +575,7 @@ void SceneRenderer::inject_map_light_sample() {
     const SDL_Color light_color = map_light->get_current_color();
     const float     opacity     = std::clamp(static_cast<float>(light_color.a) / 255.0f, 0.0f, 1.0f);
     const float     brightness  = std::clamp(1.0f - opacity, 0.0f, 1.0f);
-    const float     strength    = std::clamp(
-        reactive_shadow_settings_.virtual_light_map.map_light_dir_offset_strength,
-        0.0f,
-        1.0f);
+    const float     strength    = std::clamp( reactive_shadow_settings_.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
     const float effective_intensity = brightness * strength;
     if (effective_intensity <= 1e-4f) {
         return;
@@ -630,8 +604,7 @@ void SceneRenderer::inject_map_light_sample() {
 
     SDL_Point reference = map_light->get_direction_reference();
     SDL_FPoint default_dir{
-        static_cast<float>(reference.x) - sample.position.x,
-        static_cast<float>(reference.y) - sample.position.y};
+        static_cast<float>(reference.x) - sample.position.x, static_cast<float>(reference.y) - sample.position.y};
     const float dir_len = std::sqrt(default_dir.x * default_dir.x + default_dir.y * default_dir.y);
     if (dir_len > 1e-4f) {
         const float inv = 1.0f / dir_len;
@@ -685,27 +658,20 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
 
         const float base_width  = static_cast<float>(std::max(1, source.base_width));
         const float base_height = static_cast<float>(std::max(1, source.base_height));
-        const float scale_x     = std::isfinite(static_cast<float>(source.asset_rect.w) / base_width)
-                                      ? static_cast<float>(source.asset_rect.w) / base_width
-                                      : 1.0f;
-        const float scale_y_base = std::isfinite(static_cast<float>(source.asset_rect.h) / base_height)
-                                        ? static_cast<float>(source.asset_rect.h) / base_height
-                                        : scale_x;
+        const float scale_x     = std::isfinite(static_cast<float>(source.asset_rect.w) / base_width) ? static_cast<float>(source.asset_rect.w) / base_width : 1.0f;
+        const float scale_y_base = std::isfinite(static_cast<float>(source.asset_rect.h) / base_height) ? static_cast<float>(source.asset_rect.h) / base_height : scale_x;
         const float scale_y = (source.base_height > 0) ? scale_y_base : scale_x;
         if (!std::isfinite(scale_x) || !std::isfinite(scale_y)) {
             continue;
         }
 
-        const float safe_base_scale = (std::isfinite(source.asset_base_scale) && source.asset_base_scale > 0.0f)
-                                          ? source.asset_base_scale
-                                          : 1.0f;
+        const float safe_base_scale = (std::isfinite(source.asset_base_scale) && source.asset_base_scale > 0.0f) ? source.asset_base_scale : 1.0f;
         const float zoom_scale_x = scale_x / safe_base_scale;
         const float zoom_scale_y = scale_y / safe_base_scale;
         const float safe_zoom_scale_x = (std::isfinite(zoom_scale_x) && zoom_scale_x > 0.0f) ? zoom_scale_x : 1.0f;
         const float safe_zoom_scale_y = (std::isfinite(zoom_scale_y) && zoom_scale_y > 0.0f) ? zoom_scale_y : 1.0f;
 
-        const float center_base_x = static_cast<float>(source.asset_rect.x) +
-                                    static_cast<float>(source.asset_rect.w) * 0.5f;
+        const float center_base_x = static_cast<float>(source.asset_rect.x) + static_cast<float>(source.asset_rect.w) * 0.5f;
         const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
 
         for (const LightSource& light : lights) {
@@ -809,8 +775,7 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         return;
     }
 
-    SDL_SetTextureAlphaMod(darkness_overlay_texture_,
-                           static_cast<Uint8>(std::clamp(std::lround(overlay_alpha * 255.0f), 0L, 255L)));
+    SDL_SetTextureAlphaMod(darkness_overlay_texture_, static_cast<Uint8>(std::clamp(std::lround(overlay_alpha * 255.0f), 0L, 255L)));
     SDL_SetTextureColorMod(darkness_overlay_texture_, 0, 0, 0);
 
     SDL_Rect screen_dst{0, 0, screen_width_, screen_height_};

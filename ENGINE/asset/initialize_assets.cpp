@@ -68,8 +68,6 @@ void InitializeAssets::initialize(Assets& assets,
     assets.mark_active_assets_dirty();
     assets.refresh_active_asset_lists();
 
-    // Set an intuitive starting view: frame the spawn room if available.
-    // Fallback to a neutral 1.0 scale without animation.
     {
         Room* spawn_room = nullptr;
         for (Room* r : assets.rooms()) {

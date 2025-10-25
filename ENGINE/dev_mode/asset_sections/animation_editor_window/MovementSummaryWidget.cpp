@@ -135,17 +135,7 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    dm_draw::DrawBeveledRect(
-        renderer,
-        bounds_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelBG(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     const int padding = kPanelPadding;
     int text_x = bounds_.x + padding;
@@ -166,24 +156,9 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
         }
         const int button_radius = std::min(DMStyles::CornerRadius(), std::min(button_rect_.w, button_rect_.h) / 2);
         const int button_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(button_rect_.w, button_rect_.h) / 2));
-        dm_draw::DrawBeveledRect(
-            renderer,
-            button_rect_,
-            button_radius,
-            button_bevel,
-            button_color,
-            button_color,
-            button_color,
-            false,
-            0.0f,
-            0.0f);
+        dm_draw::DrawBeveledRect( renderer, button_rect_, button_radius, button_bevel, button_color, button_color, button_color, false, 0.0f, 0.0f);
 
-        dm_draw::DrawRoundedOutline(
-            renderer,
-            button_rect_,
-            button_radius,
-            1,
-            button_style.border);
+        dm_draw::DrawRoundedOutline( renderer, button_rect_, button_radius, 1, button_style.border);
 
         const std::string button_text = "Frame Editor";
         int label_width = measure_text_width(button_style.label, button_text);

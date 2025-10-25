@@ -24,7 +24,7 @@ std::optional<int> parse_channel_component(const nlohmann::json& value) {
         if (value.is_string()) {
             const std::string text = value.get<std::string>();
             if (!text.empty() && text[0] == '#') {
-                // Let the caller interpret packed color strings.
+
                 return std::nullopt;
             }
             size_t idx = 0;
@@ -62,7 +62,7 @@ std::optional<SDL_Color> parse_hex_color_string(const std::string& text) {
             value = (value << 4) | digit;
         }
         return value;
-    };
+};
 
     if (text.size() != 7 && text.size() != 9) {
         return std::nullopt;
@@ -75,9 +75,7 @@ std::optional<SDL_Color> parse_hex_color_string(const std::string& text) {
         return std::nullopt;
     }
     SDL_Color color{static_cast<Uint8>(clamp_channel_value(*r)),
-                    static_cast<Uint8>(clamp_channel_value(*g)),
-                    static_cast<Uint8>(clamp_channel_value(*b)),
-                    static_cast<Uint8>(clamp_channel_value(*a))};
+                    static_cast<Uint8>(clamp_channel_value(*g)), static_cast<Uint8>(clamp_channel_value(*b)), static_cast<Uint8>(clamp_channel_value(*a))};
     return color;
 }
 
@@ -99,7 +97,7 @@ Uint8 random_channel_value(const ChannelRange& range) {
     return static_cast<Uint8>(dist(rng));
 }
 
-} // namespace
+}
 
 ChannelRange clamp_channel_range(const ChannelRange& range) {
     ChannelRange out;
@@ -155,7 +153,7 @@ std::optional<RangedColor> ranged_color_from_json(const nlohmann::json& value) {
                 }
             }
             return std::nullopt;
-        };
+};
 
         if (auto range = read_channel("r")) { out.r = *range; parsed = true; }
         if (auto range = read_channel("g")) { out.g = *range; parsed = true; }
@@ -195,23 +193,19 @@ nlohmann::json ranged_color_to_json(const RangedColor& color) {
     const RangedColor clamped = clamp_ranged_color(color);
     auto pack = [](const ChannelRange& range) {
         return nlohmann::json{{"min", range.min}, {"max", range.max}};
-    };
+};
     return nlohmann::json{
         {"r", pack(clamped.r)},
         {"g", pack(clamped.g)},
         {"b", pack(clamped.b)},
         {"a", pack(clamped.a)}
-    };
+};
 }
 
 SDL_Color resolve_ranged_color(const RangedColor& color) {
     const RangedColor clamped = clamp_ranged_color(color);
     return SDL_Color{
-        random_channel_value(clamped.r),
-        random_channel_value(clamped.g),
-        random_channel_value(clamped.b),
-        random_channel_value(clamped.a)
-    };
+        random_channel_value(clamped.r), random_channel_value(clamped.g), random_channel_value(clamped.b), random_channel_value(clamped.a) };
 }
 
 SDL_Color resolve_ranged_color(const nlohmann::json& value, SDL_Color fallback) {
@@ -245,9 +239,7 @@ std::optional<SDL_Color> color_from_json(const nlohmann::json& value) {
         if (components[0] && components[1] && components[2]) {
             const int alpha = components[3].value_or(255);
             SDL_Color color{static_cast<Uint8>(clamp_channel_value(*components[0])),
-                            static_cast<Uint8>(clamp_channel_value(*components[1])),
-                            static_cast<Uint8>(clamp_channel_value(*components[2])),
-                            static_cast<Uint8>(clamp_channel_value(alpha))};
+                            static_cast<Uint8>(clamp_channel_value(*components[1])), static_cast<Uint8>(clamp_channel_value(*components[2])), static_cast<Uint8>(clamp_channel_value(alpha))};
             return clamp_color(color);
         }
     }
@@ -259,16 +251,14 @@ std::optional<SDL_Color> color_from_json(const nlohmann::json& value) {
                 return std::nullopt;
             }
             return parse_channel_component(*it);
-        };
+};
         auto r = read_component("r");
         auto g = read_component("g");
         auto b = read_component("b");
         if (r && g && b) {
             const int alpha = read_component("a").value_or(255);
             SDL_Color color{static_cast<Uint8>(clamp_channel_value(*r)),
-                            static_cast<Uint8>(clamp_channel_value(*g)),
-                            static_cast<Uint8>(clamp_channel_value(*b)),
-                            static_cast<Uint8>(clamp_channel_value(alpha))};
+                            static_cast<Uint8>(clamp_channel_value(*g)), static_cast<Uint8>(clamp_channel_value(*b)), static_cast<Uint8>(clamp_channel_value(alpha))};
             return clamp_color(color);
         }
     }
@@ -286,6 +276,6 @@ nlohmann::json color_to_json(SDL_Color color) {
     });
 }
 
-} // namespace color
-} // namespace utils
+}
+}
 

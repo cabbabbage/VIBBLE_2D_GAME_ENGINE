@@ -131,12 +131,10 @@ void LoadingScreen::set_status(std::string status) {
 }
 
 void LoadingScreen::draw_frame() {
-        // Always clear and draw text, even if there are no images.
-        // This ensures a visible loading screen regardless of content files.
+
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
         SDL_RenderClear(renderer_);
 
-        // Advance slideshow if we have images.
         if (!images_.empty()) {
                 Uint32 now = SDL_GetTicks();
                 if (now - last_switch_time_ > 250) {
@@ -162,7 +160,6 @@ void LoadingScreen::draw_frame() {
                 }
         }
 
-        // Title and status text
         const std::string mono_font = ui_fonts::monospace();
         TTF_Font* title_font = TTF_OpenFont(mono_font.c_str(), 48);
         SDL_Color white{255, 255, 255, 255};
@@ -188,12 +185,10 @@ void LoadingScreen::draw_frame() {
                 }
         }
 
-        // Image (if available)
         if (current_texture_) {
                 render_scaled_center(current_texture_, screen_w_ / 3, screen_h_ / 3, screen_w_ / 2, screen_h_ / 2);
         }
 
-        // Body message (optional; only if provided)
         const bool has_message = !message_.empty();
         if (has_message) {
                 TTF_Font* body_font = TTF_OpenFont(mono_font.c_str(), 26);

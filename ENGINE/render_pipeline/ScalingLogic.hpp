@@ -58,7 +58,7 @@ struct ScalingLogic {
         bool                had_entry = false;
         bool                created_entry = false;
         bool has_custom_steps() const { return !steps.empty(); }
-    };
+};
 
     static constexpr std::size_t kMaxVariantCount     = 3;
     static constexpr std::size_t kDefaultVariantCount = kMaxVariantCount;
@@ -230,9 +230,7 @@ struct ScalingLogic {
     }
 
     static inline std::string VariantFolder(const std::string& base, const ScaleSteps& steps, std::size_t index) {
-        return std::filesystem::path(base)
-            .append("scale_" + std::to_string(ScalePercent(steps, index)))
-            .string();
+        return std::filesystem::path(base) .append("scale_" + std::to_string(ScalePercent(steps, index))) .string();
     }
 
     static inline std::array<int, kDefaultVariantCount> PercentSteps() {
@@ -272,7 +270,7 @@ struct ScalingLogic {
         state.enabled          = enabled;
         if (enabled && !was_enabled) {
             if (update_new_values_flag(state, true)) {
-                // Flag transitioned from false to true - persist immediately.
+
                 save_to_disk(state);
             }
         }
@@ -486,12 +484,12 @@ private:
         struct Sample {
             float requested_scale = 1.0f;
             float stored_scale    = 1.0f;
-        };
+};
         std::unordered_map<std::string, std::vector<Sample>> pending_samples;
         std::unordered_map<std::string, Uint32>               next_allowed_sample;
         std::deque<std::string>                               sampling_queue;
         std::unordered_set<std::string>                       queued_assets;
-    };
+};
 
     static inline UsageState& usage_state() {
         static UsageState state;
@@ -596,11 +594,7 @@ private:
 
         const UsageState::Sample& last_sample = samples.back();
         const std::vector<int> recommended = compute_recommendations(histogram);
-        const bool changed = update_entry(entry,
-                                          histogram,
-                                          recommended,
-                                          last_sample.requested_scale,
-                                          last_sample.stored_scale);
+        const bool changed = update_entry(entry, histogram, recommended, last_sample.requested_scale, last_sample.stored_scale);
         if (changed) {
             state.dirty = true;
         }
@@ -697,7 +691,7 @@ private:
             }
             result.push_back(percent);
             return true;
-        };
+};
 
         bool has_usage = false;
         for (std::uint64_t value : histogram) {
@@ -727,7 +721,7 @@ private:
         struct BucketInfo {
             int              index;
             std::uint64_t    count;
-        };
+};
         std::vector<BucketInfo> buckets;
         buckets.reserve(histogram.size());
         for (std::size_t idx = 1; idx < histogram.size(); ++idx) {
@@ -921,4 +915,4 @@ inline SDL_Surface* CreateScaledSurface(SDL_Surface* src, float scale) {
     return dst;
 }
 
-}  // namespace render_pipeline
+}

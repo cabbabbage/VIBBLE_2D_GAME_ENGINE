@@ -32,4 +32,4 @@ bool persist_map_manifest_entry(core::ManifestStore& store,
     return false;
 }
 
-} // namespace devmode
+}

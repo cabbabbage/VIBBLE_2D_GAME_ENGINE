@@ -113,19 +113,16 @@ class SourceConfigPanel {
     mutable std::filesystem::path cached_asset_root_;
     mutable bool cached_asset_root_valid_ = false;
 
-    // New UI controls
     std::unique_ptr<DMCheckbox> from_animation_checkbox_;
     std::unique_ptr<DMDropdown> animation_dropdown_;
     std::unique_ptr<DMButton> source_button_;
-    std::array<std::unique_ptr<DMButton>, 3> modal_buttons_{}; // GIF, Folder, PNG sequence
+    std::array<std::unique_ptr<DMButton>, 3> modal_buttons_{};
 
-    // Layout rects
     SDL_Rect checkbox_rect_{0,0,0,0};
     SDL_Rect dropdown_rect_{0,0,0,0};
     SDL_Rect source_button_rect_{0,0,0,0};
     SDL_Rect modal_rect_{0,0,0,0};
 
-    // State
     bool busy_indicator_ = false;
     bool use_animation_reference_ = false;
     bool show_import_modal_ = false;

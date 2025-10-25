@@ -64,11 +64,7 @@ struct SliderFormatStats {
         if (format_calls - last_logged_calls < kLogInterval) {
             return;
         }
-        SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION,
-                       "[DMSlider] format stats: calls=%d allocations=%d (delta=%d)",
-                       format_calls,
-                       allocations,
-                       allocations - last_logged_allocations);
+        SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION, "[DMSlider] format stats: calls=%d allocations=%d (delta=%d)", format_calls, allocations, allocations - last_logged_allocations);
         last_logged_calls = format_calls;
         last_logged_allocations = allocations;
     }
@@ -181,25 +177,10 @@ void DMButton::render(SDL_Renderer* r) const {
     const SDL_Color bg = pressed_ ? style_->press_bg : (hovered_ ? style_->hover_bg : style_->bg);
     const SDL_Color& highlight = DMStyles::HighlightColor();
     const SDL_Color& shadow = DMStyles::ShadowColor();
-    dm_draw::DrawBeveledRect(
-        r,
-        rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        bg,
-        highlight,
-        shadow,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( r, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Color border = style_->border;
-    dm_draw::DrawRoundedOutline(
-        r,
-        rect_,
-        DMStyles::CornerRadius(),
-        kControlOutlineThickness,
-        border);
+    dm_draw::DrawRoundedOutline( r, rect_, DMStyles::CornerRadius(), kControlOutlineThickness, border);
     draw_label(r, style_->text);
 }
 
@@ -313,17 +294,7 @@ void DMTextBox::render(SDL_Renderer* r) const {
     }
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     const SDL_Color fill = (hovered_ || editing_) ? DMStyles::TextboxHoverFill() : DMStyles::TextboxBaseFill();
-    dm_draw::DrawBeveledRect(
-        r,
-        box_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        fill,
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( r, box_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Color border = st.border;
     if (hovered_ && !editing_) {
@@ -331,20 +302,10 @@ void DMTextBox::render(SDL_Renderer* r) const {
     }
     if (editing_) {
         const SDL_Color focus = DMStyles::TextboxFocusOutline();
-        dm_draw::DrawRoundedFocusRing(
-            r,
-            box_rect_,
-            DMStyles::CornerRadius(),
-            kFocusRingThickness,
-            focus);
+        dm_draw::DrawRoundedFocusRing( r, box_rect_, DMStyles::CornerRadius(), kFocusRingThickness, focus);
         border = DMStyles::TextboxActiveOutline();
     }
-    dm_draw::DrawRoundedOutline(
-        r,
-        box_rect_,
-        DMStyles::CornerRadius(),
-        kControlOutlineThickness,
-        border);
+    dm_draw::DrawRoundedOutline( r, box_rect_, DMStyles::CornerRadius(), kControlOutlineThickness, border);
     DMLabelStyle valStyle{ st.label.font_path, st.label.font_size, st.text };
     draw_text(r, text_, box_rect_.x + kTextboxHorizontalPadding, box_rect_.y + kTextboxHorizontalPadding, std::max(1, box_rect_.w - 2 * kTextboxHorizontalPadding), valStyle);
     if (editing_) {
@@ -548,17 +509,7 @@ void DMCheckbox::render(SDL_Renderer* r) const {
     SDL_Rect box{ rect_.x, rect_.y, rect_.h, rect_.h };
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     const SDL_Color fill = hovered_ ? DMStyles::CheckboxHoverFill() : DMStyles::CheckboxBaseFill();
-    dm_draw::DrawBeveledRect(
-        r,
-        box,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        fill,
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( r, box, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Color border = DMStyles::CheckboxOutlineColor();
     if (hovered_) {
@@ -567,26 +518,11 @@ void DMCheckbox::render(SDL_Renderer* r) const {
     if (value_) {
         border = DMStyles::CheckboxActiveOutline();
     }
-    dm_draw::DrawRoundedOutline(
-        r,
-        box,
-        DMStyles::CornerRadius(),
-        kControlOutlineThickness,
-        border);
+    dm_draw::DrawRoundedOutline( r, box, DMStyles::CornerRadius(), kControlOutlineThickness, border);
     if (value_) {
         SDL_Color check = DMStyles::CheckboxCheckColor();
         SDL_Rect inner{ box.x + 4, box.y + 4, box.w - 8, box.h - 8 };
-        dm_draw::DrawBeveledRect(
-            r,
-            inner,
-            std::min(DMStyles::CornerRadius(), 3),
-            std::max(0, DMStyles::BevelDepth() - 1),
-            check,
-            DMStyles::HighlightColor(),
-            DMStyles::ShadowColor(),
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( r, inner, std::min(DMStyles::CornerRadius(), 3), std::max(0, DMStyles::BevelDepth() - 1), check, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     }
     draw_label(r);
 }
@@ -872,20 +808,10 @@ void DMSlider::render(SDL_Renderer* r) const {
     const bool active = focused_ || dragging_;
     if (active) {
         const SDL_Color& focus_outline = DMStyles::SliderFocusOutline();
-        dm_draw::DrawRoundedFocusRing(
-            r,
-            rect_,
-            DMStyles::CornerRadius(),
-            kFocusRingThickness,
-            focus_outline);
+        dm_draw::DrawRoundedFocusRing( r, rect_, DMStyles::CornerRadius(), kFocusRingThickness, focus_outline);
     } else if (hovered_) {
         const SDL_Color& hover_outline = DMStyles::SliderHoverOutline();
-        dm_draw::DrawRoundedOutline(
-            r,
-            rect_,
-            DMStyles::CornerRadius(),
-            kControlOutlineThickness,
-            hover_outline);
+        dm_draw::DrawRoundedOutline( r, rect_, DMStyles::CornerRadius(), kControlOutlineThickness, hover_outline);
     }
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -893,34 +819,14 @@ void DMSlider::render(SDL_Renderer* r) const {
     const SDL_Color& shadow = DMStyles::ShadowColor();
     const int radius = std::min(DMStyles::CornerRadius(), std::min(tr.w, tr.h) / 2);
     const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(tr.w, tr.h) / 2));
-    dm_draw::DrawBeveledRect(
-        r,
-        tr,
-        radius,
-        bevel,
-        DMStyles::SliderTrackBackground(),
-        highlight,
-        shadow,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( r, tr, radius, bevel, DMStyles::SliderTrackBackground(), highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     int range = std::max(1, max_ - min_);
     int current_value = display_value();
     SDL_Rect fill{ tr.x, tr.y, (int)((current_value - min_) * tr.w / (double)range), tr.h };
     if (fill.w > 0) {
         SDL_Rect fill_rect = fill;
         const SDL_Color track_fill = active ? st.track_fill_active : st.track_fill;
-        dm_draw::DrawBeveledRect(
-            r,
-            fill_rect,
-            radius,
-            bevel,
-            track_fill,
-            highlight,
-            shadow,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( r, fill_rect, radius, bevel, track_fill, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     }
     SDL_Rect krect = knob_rect();
     SDL_Color knob_col = st.knob;
@@ -934,23 +840,8 @@ void DMSlider::render(SDL_Renderer* r) const {
     }
     const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(krect.w, krect.h) / 2);
     const int knob_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(krect.w, krect.h) / 2));
-    dm_draw::DrawBeveledRect(
-        r,
-        krect,
-        knob_radius,
-        knob_bevel,
-        knob_col,
-        highlight,
-        shadow,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
-    dm_draw::DrawRoundedOutline(
-        r,
-        krect,
-        knob_radius,
-        kKnobOutlineThickness,
-        kborder);
+    dm_draw::DrawBeveledRect( r, krect, knob_radius, knob_bevel, knob_col, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    dm_draw::DrawRoundedOutline( r, krect, knob_radius, kKnobOutlineThickness, kborder);
     if (edit_box_) {
         edit_box_->render(r);
     } else {
@@ -990,10 +881,7 @@ const std::string& DMSlider::format_value(int v) const {
         }
         if (formatted_value_cache_.capacity() > before_capacity) {
             ++stats.allocations;
-            SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION,
-                           "[DMSlider] format allocation grew: before=%zu after=%zu",
-                           before_capacity,
-                           formatted_value_cache_.capacity());
+            SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION, "[DMSlider] format allocation grew: before=%zu after=%zu", before_capacity, formatted_value_cache_.capacity());
         }
         stats.log_if_needed();
         return formatted_value_cache_;
@@ -1011,10 +899,7 @@ const std::string& DMSlider::format_value(int v) const {
     }
     if (formatted_value_cache_.capacity() > before_capacity) {
         ++stats.allocations;
-        SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION,
-                       "[DMSlider] integer format allocation grew: before=%zu after=%zu",
-                       before_capacity,
-                       formatted_value_cache_.capacity());
+        SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION, "[DMSlider] integer format allocation grew: before=%zu after=%zu", before_capacity, formatted_value_cache_.capacity());
     }
     stats.log_if_needed();
     return formatted_value_cache_;
@@ -1233,7 +1118,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                 int nv = std::stoi(edit_min_->value());
                 set_min_value(nv);
             } catch (...) {
-                // Restore the displayed value if parsing fails.
+
             }
             edit_min_->set_value(std::to_string(display_min_value()));
             edit_min_.reset();
@@ -1255,7 +1140,7 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                 int nv = std::stoi(edit_max_->value());
                 set_max_value(nv);
             } catch (...) {
-                // Restore the displayed value if parsing fails.
+
             }
             edit_max_->set_value(std::to_string(display_max_value()));
             edit_max_.reset();
@@ -1505,20 +1390,10 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     const bool active = focused_ || dragging;
     if (active) {
         const SDL_Color& focus_outline = DMStyles::SliderFocusOutline();
-        dm_draw::DrawRoundedFocusRing(
-            r,
-            rect_,
-            DMStyles::CornerRadius(),
-            kFocusRingThickness,
-            focus_outline);
+        dm_draw::DrawRoundedFocusRing( r, rect_, DMStyles::CornerRadius(), kFocusRingThickness, focus_outline);
     } else if (hovered_) {
         const SDL_Color& hover_outline = DMStyles::SliderHoverOutline();
-        dm_draw::DrawRoundedOutline(
-            r,
-            rect_,
-            DMStyles::CornerRadius(),
-            kControlOutlineThickness,
-            hover_outline);
+        dm_draw::DrawRoundedOutline( r, rect_, DMStyles::CornerRadius(), kControlOutlineThickness, hover_outline);
     }
     SDL_Rect tr = track_rect();
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -1526,17 +1401,7 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     const SDL_Color& shadow = DMStyles::ShadowColor();
     const int radius = std::min(DMStyles::CornerRadius(), std::min(tr.w, tr.h) / 2);
     const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(tr.w, tr.h) / 2));
-    dm_draw::DrawBeveledRect(
-        r,
-        tr,
-        radius,
-        bevel,
-        DMStyles::SliderTrackBackground(),
-        highlight,
-        shadow,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( r, tr, radius, bevel, DMStyles::SliderTrackBackground(), highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     SDL_Rect kmin = min_knob_rect();
     SDL_Rect kmax = max_knob_rect();
     int fill_x = kmin.x + kSliderKnobWidth / 2;
@@ -1544,17 +1409,7 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     SDL_Rect fill{ fill_x, tr.y, std::max(0, fill_w), tr.h };
     if (fill.w > 0) {
         const SDL_Color track_fill = active ? st.track_fill_active : st.track_fill;
-        dm_draw::DrawBeveledRect(
-            r,
-            fill,
-            radius,
-            bevel,
-            track_fill,
-            highlight,
-            shadow,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( r, fill, radius, bevel, track_fill, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     }
     const bool min_active = focused_ || dragging_min_;
     const bool max_active = focused_ || dragging_max_;
@@ -1578,40 +1433,10 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     }
     const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(kmin.w, kmin.h) / 2);
     const int knob_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(kmin.w, kmin.h) / 2));
-    dm_draw::DrawBeveledRect(
-        r,
-        kmin,
-        knob_radius,
-        knob_bevel,
-        col_min,
-        highlight,
-        shadow,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
-    dm_draw::DrawRoundedOutline(
-        r,
-        kmin,
-        knob_radius,
-        kKnobOutlineThickness,
-        border_min);
-    dm_draw::DrawBeveledRect(
-        r,
-        kmax,
-        knob_radius,
-        knob_bevel,
-        col_max,
-        highlight,
-        shadow,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
-    dm_draw::DrawRoundedOutline(
-        r,
-        kmax,
-        knob_radius,
-        kKnobOutlineThickness,
-        border_max);
+    dm_draw::DrawBeveledRect( r, kmin, knob_radius, knob_bevel, col_min, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    dm_draw::DrawRoundedOutline( r, kmin, knob_radius, kKnobOutlineThickness, border_min);
+    dm_draw::DrawBeveledRect( r, kmax, knob_radius, knob_bevel, col_max, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    dm_draw::DrawRoundedOutline( r, kmax, knob_radius, kKnobOutlineThickness, border_max);
     if (edit_min_) {
         edit_min_->render(r);
     } else {
@@ -1627,8 +1452,7 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
         std::string value = std::to_string(display_max_value());
         SDL_Point size = DMFontCache::instance().measure_text(st.label, value);
         int text_y = max_value_rect_.y + (max_value_rect_.h - size.y) / 2;
-        int text_x = std::max(max_value_rect_.x + kSliderValueHorizontalPadding,
-                              max_value_rect_.x + max_value_rect_.w - size.x - kSliderValueHorizontalPadding);
+        int text_x = std::max(max_value_rect_.x + kSliderValueHorizontalPadding, max_value_rect_.x + max_value_rect_.w - size.x - kSliderValueHorizontalPadding);
         DMFontCache::instance().draw_text(r, st.label, value, text_x, text_y);
     }
 }
@@ -1694,7 +1518,7 @@ bool DMDropdown::build_option_entries(std::vector<OptionEntry>& entries) const {
         const int h = std::max(1, static_cast<int>(std::round(base_h * e.scale)));
         SDL_Rect rect{ center_x - w / 2, center_y - h / 2, w, h };
         return rect;
-    };
+};
 
     OptionEntry* center_entry = nullptr;
     for (OptionEntry& entry : entries) {
@@ -1906,17 +1730,7 @@ void DMDropdown::render(SDL_Renderer* r) const {
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     const bool has_focus = focused_ && active_ == this;
     const SDL_Color fill = has_focus ? DMStyles::TextboxHoverFill() : (hovered_ ? DMStyles::TextboxHoverFill() : DMStyles::TextboxBaseFill());
-    dm_draw::DrawBeveledRect(
-        r,
-        box_rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        fill,
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( r, box_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     if (!label_.empty() && label_height_ > 0) {
         DMLabelStyle lbl = DMStyles::Label();
         TTF_Font* f = TTF_OpenFont(lbl.font_path.c_str(), lbl.font_size);
@@ -1940,20 +1754,10 @@ void DMDropdown::render(SDL_Renderer* r) const {
     }
     if (has_focus) {
         const SDL_Color focus = DMStyles::TextboxFocusOutline();
-        dm_draw::DrawRoundedFocusRing(
-            r,
-            box_rect_,
-            DMStyles::CornerRadius(),
-            kFocusRingThickness,
-            focus);
+        dm_draw::DrawRoundedFocusRing( r, box_rect_, DMStyles::CornerRadius(), kFocusRingThickness, focus);
         border = DMStyles::TextboxActiveOutline();
     }
-    dm_draw::DrawRoundedOutline(
-        r,
-        box_rect_,
-        DMStyles::CornerRadius(),
-        kControlOutlineThickness,
-        border);
+    dm_draw::DrawRoundedOutline( r, box_rect_, DMStyles::CornerRadius(), kControlOutlineThickness, border);
     DMLabelStyle labelStyle{ st.label.font_path, st.label.font_size, st.text };
     int arrow_space = box_rect_.w > 0 ? std::max(12, box_rect_.h / 2) : 0;
     arrow_space = std::min(arrow_space, std::max(12, box_rect_.w / 2));
@@ -1993,16 +1797,8 @@ void DMDropdown::render(SDL_Renderer* r) const {
         SDL_Color arrow_color = border;
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(r, arrow_color.r, arrow_color.g, arrow_color.b, arrow_color.a);
-        SDL_RenderDrawLine(r,
-                           arrow_center_x - arrow_half_width,
-                           arrow_center_y - arrow_half_height,
-                           arrow_center_x,
-                           arrow_center_y + arrow_half_height);
-        SDL_RenderDrawLine(r,
-                           arrow_center_x + arrow_half_width,
-                           arrow_center_y - arrow_half_height,
-                           arrow_center_x,
-                           arrow_center_y + arrow_half_height);
+        SDL_RenderDrawLine(r, arrow_center_x - arrow_half_width, arrow_center_y - arrow_half_height, arrow_center_x, arrow_center_y + arrow_half_height);
+        SDL_RenderDrawLine(r, arrow_center_x + arrow_half_width, arrow_center_y - arrow_half_height, arrow_center_x, arrow_center_y + arrow_half_height);
     }
 }
 
@@ -2044,34 +1840,14 @@ void DMDropdown::render_options(SDL_Renderer* r) const {
             sh = ApplyAlpha(sh, entry.alpha);
         }
 
-        dm_draw::DrawBeveledRect(
-            r,
-            rect,
-            DMStyles::CornerRadius(),
-            DMStyles::BevelDepth(),
-            fill,
-            hl,
-            sh,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( r, rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, hl, sh, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
         if (emphasize) {
             const SDL_Color focus_ring = DMStyles::TextboxFocusOutline();
-            dm_draw::DrawRoundedFocusRing(
-                r,
-                rect,
-                DMStyles::CornerRadius(),
-                kFocusRingThickness,
-                focus_ring);
+            dm_draw::DrawRoundedFocusRing( r, rect, DMStyles::CornerRadius(), kFocusRingThickness, focus_ring);
         }
 
-        dm_draw::DrawRoundedOutline(
-            r,
-            rect,
-            DMStyles::CornerRadius(),
-            kControlOutlineThickness,
-            border);
+        dm_draw::DrawRoundedOutline( r, rect, DMStyles::CornerRadius(), kControlOutlineThickness, border);
 
         if (!font) {
             continue;

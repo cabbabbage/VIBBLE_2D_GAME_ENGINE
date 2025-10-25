@@ -24,7 +24,7 @@ struct RuntimeEmitter {
     bool       has_default_direction = false;
     float      radius          = 0.0f;
     float      radius_squared  = 0.0f;
-    float      intensity       = 0.0f; // normalized [0,1]
+    float      intensity       = 0.0f;
     SDL_Color  color{255, 255, 255, 255};
     SDL_FRect  influence_bounds_f{0.0f, 0.0f, 0.0f, 0.0f};
     SDL_Rect   influence_bounds{0, 0, 0, 0};
@@ -103,8 +103,7 @@ RuntimeEmitter make_emitter_from_external(const ExternalLightSample& sample) {
     emitter.color     = sample.color;
     if (sample.has_direction) {
         emitter.default_direction      = sample.direction;
-        const float mag                = std::sqrt(sample.direction.x * sample.direction.x +
-                                     sample.direction.y * sample.direction.y);
+        const float mag                = std::sqrt(sample.direction.x * sample.direction.x + sample.direction.y * sample.direction.y);
         if (mag > 1e-4f) {
             emitter.default_direction.x = sample.direction.x / mag;
             emitter.default_direction.y = sample.direction.y / mag;
@@ -138,8 +137,7 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
     const float center_y = static_cast<float>(dst.y) + static_cast<float>(dst.h) * 0.5f;
 
     const SDL_Point screen_center{
-        static_cast<int>(std::lround(center_x)),
-        static_cast<int>(std::lround(center_y))};
+        static_cast<int>(std::lround(center_x)), static_cast<int>(std::lround(center_y))};
     const SDL_Point world_center = cam.screen_to_map(screen_center);
     emitter.position.x           = static_cast<float>(world_center.x);
     emitter.position.y           = static_cast<float>(world_center.y);
@@ -185,7 +183,7 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
     return emitter;
 }
 
-} // namespace
+}
 
 class OcclusionSampler {
 public:
@@ -249,8 +247,7 @@ private:
         if (local_x < 0 || local_y < 0 || local_x >= data.width || local_y >= data.height) {
             return false;
         }
-        const std::size_t index = static_cast<std::size_t>(local_y) * static_cast<std::size_t>(data.width) +
-                                  static_cast<std::size_t>(local_x);
+        const std::size_t index = static_cast<std::size_t>(local_y) * static_cast<std::size_t>(data.width) + static_cast<std::size_t>(local_x);
         if (index >= data.mask.size()) {
             return false;
         }
@@ -294,9 +291,7 @@ private:
                 if (local_x < 0 || local_y < 0 || local_x >= entry.width || local_y >= entry.height) {
                     continue;
                 }
-                const std::size_t index = static_cast<std::size_t>(local_y) *
-                                          static_cast<std::size_t>(entry.width) +
-                                          static_cast<std::size_t>(local_x);
+                const std::size_t index = static_cast<std::size_t>(local_y) * static_cast<std::size_t>(entry.width) + static_cast<std::size_t>(local_x);
                 if (index < entry.mask.size()) {
                     entry.mask[index] = 1;
                 }
@@ -372,31 +367,20 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
 
         const float base_width  = static_cast<float>(std::max(1, source.base_width));
         const float base_height = static_cast<float>(std::max(1, source.base_height));
-        const float scale_x     = std::isfinite(static_cast<float>(source.asset_rect.w) / base_width)
-                                      ? static_cast<float>(source.asset_rect.w) / base_width
-                                      : 1.0f;
-        const float scale_y_base = std::isfinite(static_cast<float>(source.asset_rect.h) / base_height)
-                                        ? static_cast<float>(source.asset_rect.h) / base_height
-                                        : scale_x;
+        const float scale_x     = std::isfinite(static_cast<float>(source.asset_rect.w) / base_width) ? static_cast<float>(source.asset_rect.w) / base_width : 1.0f;
+        const float scale_y_base = std::isfinite(static_cast<float>(source.asset_rect.h) / base_height) ? static_cast<float>(source.asset_rect.h) / base_height : scale_x;
         const float scale_y = (source.base_height > 0) ? scale_y_base : scale_x;
         if (!std::isfinite(scale_x) || !std::isfinite(scale_y)) {
             continue;
         }
 
-        const float safe_base_scale = (std::isfinite(source.asset_base_scale) && source.asset_base_scale > 0.0f)
-                                          ? source.asset_base_scale
-                                          : 1.0f;
+        const float safe_base_scale = (std::isfinite(source.asset_base_scale) && source.asset_base_scale > 0.0f) ? source.asset_base_scale : 1.0f;
         const float zoom_scale_x    = scale_x / safe_base_scale;
         const float zoom_scale_y    = scale_y / safe_base_scale;
-        const float safe_zoom_scale_x = (std::isfinite(zoom_scale_x) && zoom_scale_x > 0.0f)
-                                            ? zoom_scale_x
-                                            : 1.0f;
-        const float safe_zoom_scale_y = (std::isfinite(zoom_scale_y) && zoom_scale_y > 0.0f)
-                                            ? zoom_scale_y
-                                            : 1.0f;
+        const float safe_zoom_scale_x = (std::isfinite(zoom_scale_x) && zoom_scale_x > 0.0f) ? zoom_scale_x : 1.0f;
+        const float safe_zoom_scale_y = (std::isfinite(zoom_scale_y) && zoom_scale_y > 0.0f) ? zoom_scale_y : 1.0f;
 
-        const float center_base_x = static_cast<float>(source.asset_rect.x) +
-                                    static_cast<float>(source.asset_rect.w) * 0.5f;
+        const float center_base_x = static_cast<float>(source.asset_rect.x) + static_cast<float>(source.asset_rect.w) * 0.5f;
         const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
 
         for (const LightSource& light : lights) {
@@ -430,7 +414,7 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
             const SDL_FPoint world_offset{
                 offset_x * scale_x,
                 offset_y * scale_y,
-            };
+};
 
             const float center_x = center_base_x + world_offset.x;
             const float center_y = center_base_y + world_offset.y;
@@ -510,9 +494,7 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
 
             for (int row = min_row; row <= max_row; ++row) {
                 for (int col = min_col; col <= max_col; ++col) {
-                    const std::size_t cell_index = static_cast<std::size_t>(row) *
-                                                   static_cast<std::size_t>(columns) +
-                                                   static_cast<std::size_t>(col);
+                    const std::size_t cell_index = static_cast<std::size_t>(row) * static_cast<std::size_t>(columns) + static_cast<std::size_t>(col);
                     if (cell_index >= lighting_cells.size()) {
                         continue;
                     }
@@ -529,8 +511,7 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
             const auto&       cell   = lighting_cells[cell_index];
             const SDL_Rect& bounds = cell.world_bounds;
             const SDL_FPoint center{
-                static_cast<float>(bounds.x) + static_cast<float>(bounds.w) * 0.5f,
-                static_cast<float>(bounds.y) + static_cast<float>(bounds.h) * 0.5f};
+                static_cast<float>(bounds.x) + static_cast<float>(bounds.w) * 0.5f, static_cast<float>(bounds.y) + static_cast<float>(bounds.h) * 0.5f};
 
             float brightness_sum = 0.0f;
             float accum_r        = 0.0f;
@@ -579,8 +560,7 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
                 } else if (emitter.has_default_direction) {
                     contribution_dir = emitter.default_direction;
                 }
-                const float dir_mag = std::sqrt(contribution_dir.x * contribution_dir.x +
-                                                contribution_dir.y * contribution_dir.y);
+                const float dir_mag = std::sqrt(contribution_dir.x * contribution_dir.x + contribution_dir.y * contribution_dir.y);
                 if (dir_mag > 1e-4f) {
                     contribution_dir.x /= dir_mag;
                     contribution_dir.y /= dir_mag;
@@ -726,5 +706,5 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
     return frame;
 }
 
-} // namespace runtime_lighting
+}
 

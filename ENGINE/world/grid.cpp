@@ -127,7 +127,7 @@ void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
         camera_world.y - margin_px,
         camera_world.w + margin_px * 2,
         camera_world.h + margin_px * 2
-    };
+};
     const int i_min = floor_div(expanded.x - origin_.x, step);
     const int j_min = floor_div(expanded.y - origin_.y, step);
     const int i_max = floor_div((expanded.x + expanded.w) - origin_.x, step);
@@ -150,5 +150,5 @@ void Grid::remove_from_chunk(Asset* a, Chunk* c) {
     }
 }
 
-} // namespace world
+}
 

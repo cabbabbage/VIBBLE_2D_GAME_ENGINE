@@ -45,7 +45,7 @@ void dev_mode_trace(const std::string& message) {
         std::ofstream log("dev_mode_trace.log", std::ios::app);
         log << message << '\n';
     } catch (...) {
-        // Swallow logging errors; tracing must never throw.
+
     }
 }
 
@@ -142,12 +142,7 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
         camera_.set_up_rooms(finder_);
     }
 
-    scene = new SceneRenderer(renderer,
-                              this,
-                              screen_width_,
-                              screen_height_,
-                              map_info_json_,
-                              map_id_);
+    scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_info_json_, map_id_);
     notify_reactive_shadow_settings_available();
     apply_map_light_config();
     apply_map_grid_settings(map_grid_settings_, false);
@@ -542,8 +537,7 @@ void Assets::update(const Input& input)
     if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
         scene->toggle_chunk_preview();
         std::cout << "[Assets] Chunk preview "
-                  << (scene->chunk_preview_enabled() ? "enabled" : "disabled")
-                  << " (Ctrl+Q).\n";
+                  << (scene->chunk_preview_enabled() ? "enabled" : "disabled") << " (Ctrl+Q).\n";
     }
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
         const bool enabled = render_pipeline::ScalingLogic::ToggleUsageTracking();
@@ -563,7 +557,6 @@ void Assets::update(const Input& input)
 
     camera_.update_zoom(active_room, finder_, player);
 
-    // Keep world grid active chunk set in sync with camera
     {
         const Area view = camera_.get_camera_area();
         auto [minx, miny, maxx, maxy] = view.get_bounds();
@@ -637,7 +630,7 @@ void Assets::update(const Input& input)
             }
         }
     }
-    // Sync asset residency; re-home moving assets
+
     for (Asset* asset : all) {
         if (!asset) {
             continue;
@@ -675,9 +668,6 @@ void Assets::set_dev_mode(bool mode) {
     const bool changed = (dev_mode != mode);
     dev_mode = mode;
 
-    // In dev mode, prefer low-quality rendering for responsiveness.
-    // This avoids creating large intermediate render targets that can stall/freeze some GPUs.
-    // When not in dev mode, use the normal (high quality) pipeline.
     force_high_quality_rendering_ = false;
     update_scene_render_quality();
 
@@ -685,8 +675,7 @@ void Assets::set_dev_mode(bool mode) {
         if (SDL_Renderer* renderer_ptr = renderer()) {
             library_.ensureAllAnimationsLoaded(renderer_ptr);
         } else {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "[Assets] Dev mode asset cache skipped: renderer unavailable.");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[Assets] Dev mode asset cache skipped: renderer unavailable.");
         }
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
         if (changed) {
@@ -1049,7 +1038,7 @@ void Assets::process_removals() {
 
     for (Asset* asset : pending_removals) {
         render_pipeline::shading::ClearShadowStateFor(asset);
-        // Unregister from world grid residency
+
         world_grid_.unregister_asset(asset);
         if (asset) {
             asset->clear_grid_residency_cache();
@@ -1134,8 +1123,7 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         }
 
         SDL_Color color{255, 255, 255, 255};
-        std::unique_ptr<SDL_Surface, SDLSurfaceDeleter> surface(
-            TTF_RenderUTF8_Blended(font, notice.message.c_str(), color));
+        std::unique_ptr<SDL_Surface, SDLSurfaceDeleter> surface( TTF_RenderUTF8_Blended(font, notice.message.c_str(), color));
         if (!surface) {
             return;
         }
@@ -1168,7 +1156,7 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         dest.y - padding_y,
         dest.w + padding_x * 2,
         dest.h + padding_y * 2
-    };
+};
 
     background.x = std::clamp(background.x, 0, std::max(0, screen_width - background.w));
     background.y = std::clamp(background.y, 0, std::max(0, screen_height - background.h));
@@ -1270,7 +1258,7 @@ void Assets::force_shaded_assets_rerender() {
         if (asset->get_final_texture()) {
             asset->set_final_texture(nullptr);
         }
-    };
+};
 
     for (Asset* asset : all) {
         flush_asset(asset);
@@ -1488,5 +1476,4 @@ void Assets::set_editor_current_room(Room* room) {
         sync_dev_controls_current_room(room, true);
     }
 }
-
 

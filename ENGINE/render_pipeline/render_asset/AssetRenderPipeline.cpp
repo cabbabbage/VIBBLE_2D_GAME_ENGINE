@@ -45,7 +45,7 @@ float compute_asset_screen_height(Asset& asset, float inv_scale) {
     return static_cast<float>(cached_h) * scale * inv_scale;
 }
 
-}  // namespace
+}
 
 Uint8 StageContext::main_light_alpha() const {
     return lighting ? lighting->main_light.get_current_color().a : 0;

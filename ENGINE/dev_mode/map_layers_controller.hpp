@@ -68,7 +68,7 @@ private:
     struct ListenerEntry {
         ListenerId id = 0;
         Listener callback;
-    };
+};
 
     nlohmann::json* map_info_ = nullptr;
     std::string map_id_;

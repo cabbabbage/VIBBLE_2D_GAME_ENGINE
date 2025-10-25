@@ -73,7 +73,7 @@ SDL_Color hsv_to_rgb(float hue, float saturation, float value) {
     auto to_channel = [m](float c) {
         c = std::clamp(c + m, 0.0f, 1.0f);
         return static_cast<Uint8>(std::lround(c * 255.0f));
-    };
+};
     return SDL_Color{to_channel(r), to_channel(g), to_channel(b), 255};
 }
 
@@ -157,7 +157,7 @@ void fill_ring(SDL_Renderer* renderer, int cx, int cy, int inner_radius, int out
         SDL_RenderDrawLine(renderer, cx + inner_dx, cy + y, cx + outer_dx, cy + y);
     }
 }
-}  // namespace
+}
 
 MapLayersPreviewWidget::MapLayersPreviewWidget()
     : preview_seed_(generate_preview_seed()) {}
@@ -209,7 +209,7 @@ void MapLayersPreviewWidget::set_layer_diagnostics(const std::vector<int>& inval
     auto to_set = [](const std::vector<int>& values, std::unordered_set<int>& target) {
         target.clear();
         target.insert(values.begin(), values.end());
-    };
+};
     to_set(invalid_layers, invalid_layers_);
     to_set(warning_layers, warning_layers_);
     to_set(dependency_layers, dependency_layers_);
@@ -443,7 +443,7 @@ void MapLayersPreviewWidget::rebuild_visuals() {
                 std::string name;
                 int min_instances = 0;
                 int max_instances = 0;
-            };
+};
             std::vector<RoomSpec> room_specs;
             room_specs.reserve(rooms_it->size());
             for (const auto& candidate : *rooms_it) {
@@ -462,7 +462,7 @@ void MapLayersPreviewWidget::rebuild_visuals() {
                     RoomSpec spec;
                     int count = 0;
                     int max_count = 0;
-                };
+};
 
                 std::vector<Allocation> allocations;
                 allocations.reserve(room_specs.size());
@@ -670,9 +670,9 @@ SDL_Color MapLayersPreviewWidget::room_color(const std::string& key) const {
     std::size_t hash = std::hash<std::string>{}(key);
     const float golden_ratio = 0.61803398875f;
     float hue = std::fmod(static_cast<float>(hash % 360) + static_cast<float>(hash) * golden_ratio, 360.0f);
-    float saturation = 0.6f + static_cast<float>((hash >> 8) % 40) / 100.0f;  // 0.6 - 1.0
+    float saturation = 0.6f + static_cast<float>((hash >> 8) % 40) / 100.0f;
     saturation = std::clamp(saturation, 0.55f, 0.95f);
-    float value = 0.78f + static_cast<float>((hash >> 4) % 20) / 100.0f;      // 0.78 - 0.98
+    float value = 0.78f + static_cast<float>((hash >> 4) % 20) / 100.0f;
     value = std::clamp(value, 0.75f, 0.98f);
     return hsv_to_rgb(hue, saturation, value);
 }
@@ -1028,9 +1028,7 @@ void MapLayersPreviewWidget::render_refresh_button(SDL_Renderer* renderer) const
     SDL_Color fill = refresh_hovered_ ? style.hover_bg : style.bg;
     const int corner_radius = std::max(4, DMStyles::CornerRadius() / 2);
 
-    dm_draw::DrawBeveledRect(renderer, button_rect, corner_radius, DMStyles::BevelDepth(), fill,
-                             DMStyles::HighlightColor(), DMStyles::ShadowColor(), true,
-                             DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, button_rect, corner_radius, DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), true, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     dm_draw::DrawRoundedOutline(renderer, button_rect, corner_radius, 1, style.border);
 
     DMLabelStyle icon_style = style.label;
@@ -1039,7 +1037,7 @@ void MapLayersPreviewWidget::render_refresh_button(SDL_Renderer* renderer) const
         icon_style.color = lighten(icon_style.color, 0.08f);
     }
 
-    const std::string refresh_icon = "\xE2\x86\xBB";  // ↻
+    const std::string refresh_icon = "\xE2\x86\xBB";
     int text_w = 0;
     int text_h = icon_style.font_size;
     if (TTF_Font* font = icon_style.open_font()) {

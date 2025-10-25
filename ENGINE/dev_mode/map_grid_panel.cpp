@@ -117,7 +117,7 @@ void MapGridPanel::rebuild_rows() {
         Widget* raw = widget.get();
         widget_wrappers_.push_back(std::move(widget));
         return raw;
-    };
+};
 
     if (resolution_slider_) {
         rows.push_back({add_widget(std::make_unique<SliderWidget>(resolution_slider_.get()))});

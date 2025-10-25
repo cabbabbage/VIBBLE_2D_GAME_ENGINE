@@ -14,7 +14,7 @@ loading_status::Notifier& notifier_slot() {
     static loading_status::Notifier notifier;
     return notifier;
 }
-}  // namespace
+}
 
 namespace loading_status {
 
@@ -52,4 +52,4 @@ ScopedNotifier::~ScopedNotifier() {
     notifier_slot() = std::move(previous_);
 }
 
-}  // namespace loading_status
+}

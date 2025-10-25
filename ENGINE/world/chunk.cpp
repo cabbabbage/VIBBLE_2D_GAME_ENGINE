@@ -1,4 +1,4 @@
-// Unified Chunk + LightMap implementation
+
 #include "world/chunk.hpp"
 
 #include <SDL.h>
@@ -32,10 +32,7 @@
 namespace {
 
 SDL_BlendMode compute_runtime_light_blend_mode() {
-    // Darken the destination by modulating it against the runtime shadow mask's alpha.
-    // The mask is tinted black before rendering, so the default blend mode already
-    // produces the desired "multiply" style effect: dst = dst * (1 - srcAlpha).
-    // Cache the result so the SDL runtime only computes the blend mode once.
+
     static const SDL_BlendMode kCachedBlend = SDL_BLENDMODE_BLEND;
     return kCachedBlend;
 }
@@ -53,7 +50,7 @@ float blend_light_components(float static_strength, float dynamic_strength, floa
     return std::clamp(blended, 0.0f, 1.0f);
 }
 
-} // namespace
+}
 
 namespace world {
 int floor_div(int value, int step);
@@ -191,8 +188,7 @@ Chunk::LightingChunk* Chunk::lighting_chunk_at(int local_i, int local_j) {
     if (local_i >= lighting_columns_ || local_j >= lighting_rows_) {
         return nullptr;
     }
-    const std::size_t index = static_cast<std::size_t>(local_j) * static_cast<std::size_t>(lighting_columns_) +
-                              static_cast<std::size_t>(local_i);
+    const std::size_t index = static_cast<std::size_t>(local_j) * static_cast<std::size_t>(lighting_columns_) + static_cast<std::size_t>(local_i);
     if (index >= lighting_chunks_.size()) {
         return nullptr;
     }
@@ -247,14 +243,7 @@ void Chunk::rebuild_lighting_chunks() {
             const int global_i = i * lighting_columns_ + col;
             const int global_j = j * lighting_rows_ + row;
 
-            lighting_chunks_.emplace_back(this,
-                                          col,
-                                          row,
-                                          global_i,
-                                          global_j,
-                                          lighting_resolution_,
-                                          lighting_step_,
-                                          cell_bounds);
+            lighting_chunks_.emplace_back(this, col, row, global_i, global_j, lighting_resolution_, lighting_step_, cell_bounds);
             lighting_chunks_.back().releaseLightingArtifacts();
         }
     }
@@ -308,8 +297,7 @@ void Chunk::update_aggregate_from_lighting_chunks() {
             }
         }
         if (cell.lighting.has_runtime_direction) {
-            const float dir_weight = std::max(cell.lighting.runtime_average_raw_intensity,
-                                              cell.lighting.runtime_average_strength);
+            const float dir_weight = std::max(cell.lighting.runtime_average_raw_intensity, cell.lighting.runtime_average_strength);
             if (dir_weight > 1e-5f) {
                 accum_dir_x += static_cast<double>(cell.lighting.runtime_average_direction.x) * dir_weight;
                 accum_dir_y += static_cast<double>(cell.lighting.runtime_average_direction.y) * dir_weight;
@@ -389,14 +377,13 @@ void Chunk::update_aggregate_from_lighting_chunks() {
         lighting.has_runtime_light_offset    = false;
     }
 
-    // Use center cell's shadow parameters as representative aggregate.
     const int center_index = static_cast<int>(lighting_chunks_.size() / 2);
     shadow                  = lighting_chunks_[center_index].shadow;
     shadow_history.reset();
     shadow_history.push(shadow, 0);
 }
 
-} // namespace world
+}
 
 namespace {
 using LightingChunk = world::Chunk::LightingChunk;
@@ -595,7 +582,7 @@ LightInfluence compute_light_influence(const LightingChunk& center,
     return result;
 }
 
-} // namespace
+}
 
 static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
                                               float scene_average_strength,
@@ -622,12 +609,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     const float chunk_h = static_cast<float>(std::max(1, chunk.world_bounds.h));
     const float percent_to_px_x = (chunk_w > 1e-3f) ? (chunk_w / 100.0f) : 0.0f;
     const float percent_to_px_y = (chunk_h > 1e-3f) ? (chunk_h / 100.0f) : 0.0f;
-    const float raw_max_x_percent = (chunk_w > 1e-3f)
-                                        ? (settings.max_offset_x_px / chunk_w) * 100.0f
-                                        : 0.0f;
-    const float raw_max_y_percent = (chunk_h > 1e-3f)
-                                        ? (settings.max_offset_y_px / chunk_h) * 100.0f
-                                        : 0.0f;
+    const float raw_max_x_percent = (chunk_w > 1e-3f) ? (settings.max_offset_x_px / chunk_w) * 100.0f : 0.0f;
+    const float raw_max_y_percent = (chunk_h > 1e-3f) ? (settings.max_offset_y_px / chunk_h) * 100.0f : 0.0f;
     const float safe_max_x_percent = std::clamp(raw_max_x_percent, 0.0f, 100.0f);
     const float safe_max_y_percent = std::clamp(raw_max_y_percent, 0.0f, 100.0f);
 
@@ -650,8 +633,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
     const world::Chunk::ChunkShadowParameters previous = chunk.shadow_history.value();
     const float delta_opacity = std::abs(sample.opacity - previous.opacity);
-    const float delta_offset  = std::max(std::abs(sample.offset_x_percent - previous.offset_x_percent),
-                                         std::abs(sample.offset_y_percent - previous.offset_y_percent));
+    const float delta_offset  = std::max(std::abs(sample.offset_x_percent - previous.offset_x_percent), std::abs(sample.offset_y_percent - previous.offset_y_percent));
 
     int blend_frames = std::clamp(settings.frame_blend_falloff_frames, 0, world::Chunk::ChunkShadowHistory::kMaxHistoryLength - 1);
     const bool significant_change = (delta_opacity > 0.1f) || (delta_offset > 5.0f);
@@ -668,7 +650,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
             return 0.0f;
         }
         return std::clamp(value, -clamped_limit, clamped_limit);
-    };
+};
     blended.offset_x_percent = std::clamp(clamp_percent(blended.offset_x_percent, safe_max_x_percent), -100.0f, 100.0f);
     blended.offset_y_percent = std::clamp(clamp_percent(blended.offset_y_percent, safe_max_y_percent), -100.0f, 100.0f);
     blended.offset_x_px      = blended.offset_x_percent * percent_to_px_x;
@@ -678,10 +660,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     chunk.shadow = blended;
 }
 
-} // namespace
-
-// LightMap implementation
-// ctor/dtor inlined in header
+}
 
 LightMap::ShadowSettings LightMap::shadow_settings() const {
     ShadowSettings settings{};
@@ -760,7 +739,7 @@ std::pair<float, float> LightMap::resolve_sampling_weights(float static_weight, 
     return {std::max(0.0f, effective_static), std::max(0.0f, effective_dynamic)};
 }
 
-void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
+void LightMap::rebuild(SDL_Renderer* ) {
     std::scoped_lock lock(mutex_);
     if (!assets_) {
         return;
@@ -775,7 +754,7 @@ void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
     }
 }
 
-void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
+void LightMap::update(SDL_Renderer* , std::uint32_t ) {
     std::scoped_lock lock(mutex_);
     if (chunk_lighting_suspended_flag() || !assets_) {
         return;
@@ -846,7 +825,7 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
             return;
         }
         dedupe_set.insert(candidate);
-    };
+};
 
     for (world::Chunk* chunk : chunks) {
         enqueue_candidate(chunk);
@@ -922,9 +901,7 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
     const double frame_scene_sum   = scene_light_sum_;
     const int    frame_scene_count = scene_light_count_;
     const float  frame_scene_average =
-        (frame_scene_count > 0)
-            ? static_cast<float>(frame_scene_sum / static_cast<double>(frame_scene_count))
-            : 1.0f;
+        (frame_scene_count > 0) ? static_cast<float>(frame_scene_sum / static_cast<double>(frame_scene_count)) : 1.0f;
 
     const int   radius = std::max(0, settings.search_radius_cells);
     const float fx     = std::max(0.0f, settings.falloff_horizontal);
@@ -933,7 +910,7 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
     struct DirtyCellInfo {
         world::Chunk::LightingChunk* cell            = nullptr;
         bool                         runtime_changed = false;
-    };
+};
 
     std::vector<DirtyCellInfo> dirty_cells;
 
@@ -968,10 +945,7 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
             cell.lighting.dynamic_strength = std::clamp(cell.lighting.dynamic_strength, 0.0f, 1.0f);
 
             const float blended =
-                blend_light_components(cell.lighting.static_strength,
-                                       cell.lighting.dynamic_strength,
-                                       static_weight,
-                                       dynamic_weight);
+                blend_light_components(cell.lighting.static_strength, cell.lighting.dynamic_strength, static_weight, dynamic_weight);
             const bool brightness_changed = std::abs(blended - prev_blended) > 1e-4f;
             if (brightness_changed) {
                 chunk_strength_delta += static_cast<double>(blended - prev_blended);
@@ -1004,14 +978,7 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
             const auto influence = compute_light_influence(cell, grid, radius, fx, fy);
             const bool prefer_fast_blend = chunk_prefers_fast_blend || info.runtime_changed;
 
-            compute_use_shadow_data_for_chunk(settings,
-                                              scene_average_strength,
-                                              influence,
-                                              prefer_fast_blend,
-                                              cell.lighting.static_strength,
-                                              cell.lighting.dynamic_strength,
-                                              cell.lighting.current_strength,
-                                              cell);
+            compute_use_shadow_data_for_chunk(settings, scene_average_strength, influence, prefer_fast_blend, cell.lighting.static_strength, cell.lighting.dynamic_strength, cell.lighting.current_strength, cell);
 
             cell.lighting.needs_update = false;
         }
@@ -1126,8 +1093,7 @@ LightMap::SampledBrightness LightMap::sample_lighting(int world_x,
 
     world::Chunk* chunk = ensure_chunk_from_world(SDL_Point{world_x, world_y});
     if (!chunk) {
-        vibble::log::warn("[LightMap] sample_lighting missing chunk for world point (" +
-                          std::to_string(world_x) + ", " + std::to_string(world_y) + ")");
+        vibble::log::warn("[LightMap] sample_lighting missing chunk for world point (" + std::to_string(world_x) + ", " + std::to_string(world_y) + ")");
         sample.blended =
             blend_light_components(sample.static_component, sample.dynamic_component, weights.first, weights.second);
         return sample;
@@ -1147,10 +1113,7 @@ LightMap::SampledBrightness LightMap::sample_lighting(int world_x,
         sample.color             = chunk->lighting.runtime_average_color;
     }
 
-    sample.blended = blend_light_components(sample.static_component,
-                                            sample.dynamic_component,
-                                            weights.first,
-                                            weights.second);
+    sample.blended = blend_light_components(sample.static_component, sample.dynamic_component, weights.first, weights.second);
     return sample;
 }
 
@@ -1174,22 +1137,11 @@ LightMap::SampledBrightness LightMap::sample_lighting_bilinear(float world_x,
     auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
 
     SampledBrightness result{};
-    result.static_component = std::clamp(lerp(lerp(s00.static_component, s10.static_component, tx),
-                                             lerp(s01.static_component, s11.static_component, tx),
-                                             ty),
-                                         0.0f,
-                                         1.0f);
-    result.dynamic_component = std::clamp(lerp(lerp(s00.dynamic_component, s10.dynamic_component, tx),
-                                              lerp(s01.dynamic_component, s11.dynamic_component, tx),
-                                              ty),
-                                          0.0f,
-                                          1.0f);
+    result.static_component = std::clamp(lerp(lerp(s00.static_component, s10.static_component, tx), lerp(s01.static_component, s11.static_component, tx), ty), 0.0f, 1.0f);
+    result.dynamic_component = std::clamp(lerp(lerp(s00.dynamic_component, s10.dynamic_component, tx), lerp(s01.dynamic_component, s11.dynamic_component, tx), ty), 0.0f, 1.0f);
 
     const auto weights = resolve_sampling_weights(static_weight, dynamic_weight);
-    result.blended = blend_light_components(result.static_component,
-                                            result.dynamic_component,
-                                            weights.first,
-                                            weights.second);
+    result.blended = blend_light_components(result.static_component, result.dynamic_component, weights.first, weights.second);
 
     const float w00 = (1.0f - tx) * (1.0f - ty);
     const float w10 = tx * (1.0f - ty);
@@ -1208,7 +1160,7 @@ LightMap::SampledBrightness LightMap::sample_lighting_bilinear(float world_x,
         accum_g += static_cast<float>(s.color.g) * weight;
         accum_b += static_cast<float>(s.color.b) * weight;
         color_weight += weight;
-    };
+};
 
     accumulate_color(s00, w00);
     accumulate_color(s10, w10);
@@ -1264,11 +1216,7 @@ SDL_Texture* LightMap::ensure_runtime_shadow_mask(SDL_Renderer* renderer) const 
         constexpr int kMaskSize       = 256;
         runtime_shadow_mask_blend_    = compute_runtime_light_blend_mode();
 
-        SDL_Texture* mask = SDL_CreateTexture(renderer,
-                                              SDL_PIXELFORMAT_RGBA32,
-                                              SDL_TEXTUREACCESS_STREAMING,
-                                              kMaskSize,
-                                              kMaskSize);
+        SDL_Texture* mask = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, kMaskSize, kMaskSize);
         if (!mask) {
             vibble::log::warn(std::string{"[LightMap] Failed to allocate runtime shadow mask: "} + SDL_GetError());
             return nullptr;
@@ -1410,7 +1358,7 @@ void LightMap::collect_runtime_shadow_masks(const SDL_Rect& view_rect,
         const float tint_norm = static_cast<float>(tint) / 255.0f;
         const float value     = std::clamp(base_norm * tint_norm, 0.0f, 1.0f);
         return static_cast<Uint8>(std::lround(value * 255.0f));
-    };
+};
 
     for (world::Chunk* chunk : active_chunks()) {
         if (!chunk) {
@@ -1473,9 +1421,7 @@ void LightMap::collect_runtime_shadow_masks(const SDL_Rect& view_rect,
         }
 
         SDL_Color applied_color{combine_color(color_mod.r, runtime_color.r),
-                                combine_color(color_mod.g, runtime_color.g),
-                                combine_color(color_mod.b, runtime_color.b),
-                                255};
+                                combine_color(color_mod.g, runtime_color.g), combine_color(color_mod.b, runtime_color.b), 255};
 
         float alpha = (1.0f - brightness) * alpha_multiplier;
         alpha *= std::clamp(chunk->shadow.opacity, 0.0f, 1.0f);
@@ -1486,10 +1432,8 @@ void LightMap::collect_runtime_shadow_masks(const SDL_Rect& view_rect,
 
         const auto& shadow = chunk->shadow;
         const float scale = (shadow.scale <= 1e-4f) ? 1.0f : shadow.scale;
-        const float base_center_x = static_cast<float>(screen_rect.x) +
-                                    static_cast<float>(screen_rect.w) * 0.5f;
-        const float base_center_y = static_cast<float>(screen_rect.y) +
-                                    static_cast<float>(screen_rect.h) * 0.5f;
+        const float base_center_x = static_cast<float>(screen_rect.x) + static_cast<float>(screen_rect.w) * 0.5f;
+        const float base_center_y = static_cast<float>(screen_rect.y) + static_cast<float>(screen_rect.h) * 0.5f;
 
         const float dest_w_f = std::max(static_cast<float>(screen_rect.w) * scale, 1.0f);
         const float dest_h_f = std::max(static_cast<float>(screen_rect.h) * scale, 1.0f);
@@ -1625,12 +1569,7 @@ void LightMap::subtract_runtime_shadow_from_texture(SDL_Renderer* renderer,
         mask_h = std::max(1, mask_h);
     }
 
-    const SDL_BlendMode subtract_blend = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO,
-                                                                    SDL_BLENDFACTOR_ONE,
-                                                                    SDL_BLENDOPERATION_ADD,
-                                                                    SDL_BLENDFACTOR_ZERO,
-                                                                    SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                                                                    SDL_BLENDOPERATION_ADD);
+    const SDL_BlendMode subtract_blend = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
     if (subtract_blend == SDL_BLENDMODE_INVALID) {
         return;
     }
@@ -1679,7 +1618,7 @@ void LightMap::subtract_runtime_shadow_from_texture(SDL_Renderer* renderer,
             if (pos + size > max) {
                 size = max - pos;
             }
-        };
+};
 
         clamp_dimension(src.x, src.w, mask_w);
         clamp_dimension(src.y, src.h, mask_h);
@@ -1737,7 +1676,7 @@ void LightMap::render_chunk_preview(SDL_Renderer* renderer, const SDL_Rect& view
     struct ChunkPreviewRender {
         world::Chunk* chunk = nullptr;
         SDL_Rect      world_rect_on_screen{0, 0, 0, 0};
-    };
+};
 
     std::vector<ChunkPreviewRender> preview_chunks;
     preview_chunks.reserve(active_chunks().size());
@@ -1847,8 +1786,7 @@ void LightMap::mark_asset_lights_dirty(const Asset* asset) {
     if (world::Chunk* chunk = ensure_chunk_from_world(asset->pos)) {
         chunk->lighting.needs_update = true;
     } else {
-        vibble::log::warn("[LightMap] mark_asset_lights_dirty missing chunk for asset at (" +
-                          std::to_string(asset->pos.x) + ", " + std::to_string(asset->pos.y) + ")");
+        vibble::log::warn("[LightMap] mark_asset_lights_dirty missing chunk for asset at (" + std::to_string(asset->pos.x) + ", " + std::to_string(asset->pos.y) + ")");
     }
 }
 
@@ -1952,5 +1890,4 @@ std::optional<world::Chunk::ChunkShadowParameters> LightMap::get_shadow_data(SDL
     }
     return chunk->shadow;
 }
-
 

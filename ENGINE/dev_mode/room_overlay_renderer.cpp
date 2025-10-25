@@ -21,7 +21,7 @@ int compute_center_arm(const camera& cam) {
     return arm;
 }
 
-} // namespace
+}
 
 namespace dm_draw {
 
@@ -82,5 +82,5 @@ void RenderRoomBoundsOverlay(
     SDL_SetRenderDrawBlendMode(renderer, prev_mode);
 }
 
-} // namespace dm_draw
+}
 

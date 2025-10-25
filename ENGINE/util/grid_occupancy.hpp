@@ -19,7 +19,7 @@ public:
         SDL_Point index{0, 0};
         SDL_Point world{0, 0};
         bool occupied{false};
-    };
+};
 
     Occupancy() = default;
     Occupancy(const Area& area, int resolution, Grid& grid, bool allow_partial_overlap = false);
@@ -54,5 +54,5 @@ private:
     SDL_Point max_index_{0, 0};
 };
 
-} // namespace vibble::grid
+}
 

@@ -65,7 +65,7 @@ bool write_file(const std::filesystem::path& path,
     return true;
 }
 
-} // namespace
+}
 
 struct DevJsonStore::Impl {
     Impl()
@@ -182,7 +182,7 @@ struct DevJsonStore::Impl {
 
     void flush_all() {
 #ifdef DEV_MODE_DISABLE_JSON_DEBOUNCE
-        // No-op: writes are synchronous when debounce disabled.
+
         return;
 #else
         std::vector<PendingWrite> ready;
@@ -281,7 +281,7 @@ struct DevJsonStore::Impl {
             std::filesystem::file_time_type mtime{};
             std::size_t coalesce_count{};
             bool success = false;
-        };
+};
 
         std::vector<Result> results;
         results.reserve(writes.size());
@@ -301,8 +301,7 @@ struct DevJsonStore::Impl {
                 result.mtime = std::filesystem::last_write_time(pending.path, ec);
                 if (ec) {
                     result.mtime = std::filesystem::file_time_type::clock::now();
-                    error_buffer << "[DevJsonStore] last_write_time('" << pending.path.string()
-                                 << "') failed after write: " << ec.message() << "\n";
+                    error_buffer << "[DevJsonStore] last_write_time('" << pending.path.string() << "') failed after write: " << ec.message() << "\n";
                 }
                 result.success = true;
                 flushed_paths.emplace_back(pending.path.string(), pending.coalesce_count);
@@ -314,8 +313,7 @@ struct DevJsonStore::Impl {
         }
 
         if (!flushed_paths.empty()) {
-            std::string message = "[DevJsonStore] Flushed " + std::to_string(flushed_paths.size()) +
-                                  " JSON file(s): ";
+            std::string message = "[DevJsonStore] Flushed " + std::to_string(flushed_paths.size()) + " JSON file(s): ";
             for (size_t i = 0; i < flushed_paths.size(); ++i) {
                 message += flushed_paths[i].first;
                 message += " (coalesced: ";
@@ -384,4 +382,4 @@ void DevJsonStore::shutdown() {
     impl_->shutdown();
 }
 
-} // namespace devmode::core
+}

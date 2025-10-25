@@ -35,8 +35,7 @@ CandidateEditorPieGraphWidget::CandidateEditorPieGraphWidget() {
     regen_button_ = std::make_unique<DMButton>("Regen", &DMStyles::AccentButton(), 0, DMButton::height());
     add_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 0, DMButton::height());
     collapse_button_ =
-        std::make_unique<DMButton>(std::string(DMIcons::CollapseExpanded()), &DMStyles::ListButton(),
-                                   DMButton::height(), DMButton::height());
+        std::make_unique<DMButton>(std::string(DMIcons::CollapseExpanded()), &DMStyles::ListButton(), DMButton::height(), DMButton::height());
     update_collapse_button();
     update_internal_layout();
 }
@@ -235,11 +234,11 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
 
             if (steps != 0) {
                 on_adjust_(active_index_, steps);
-                return true; // prevent container scrolling while focused
+                return true;
             }
 
             if (delta_value != 0.0) {
-                return true; // absorb fractional scroll deltas while accumulating
+                return true;
             }
         }
     }
@@ -870,25 +869,10 @@ void CandidateEditorPieGraphWidget::render_legend(SDL_Renderer* renderer, const 
             SDL_Rect box{row_rect.x, row_rect.y + std::max(0, (row_rect.h - 16) / 2), 16, 16};
             const int radius = std::min(DMStyles::CornerRadius(), std::min(box.w, box.h) / 2);
             const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(box.w, box.h) / 2));
-            dm_draw::DrawBeveledRect(
-                renderer,
-                box,
-                radius,
-                bevel,
-                swatch,
-                swatch,
-                swatch,
-                false,
-                0.0f,
-                0.0f);
+            dm_draw::DrawBeveledRect( renderer, box, radius, bevel, swatch, swatch, swatch, false, 0.0f, 0.0f);
             SDL_Color outline_color = DMStyles::Border();
             outline_color.a = 255;
-            dm_draw::DrawRoundedOutline(
-                renderer,
-                box,
-                radius,
-                1,
-                outline_color);
+            dm_draw::DrawRoundedOutline( renderer, box, radius, 1, outline_color);
 
             double percent = total > 0.0 ? (clamp_positive(candidates_[i].weight) / total) * 100.0 : 0.0;
             std::ostringstream label;
@@ -907,8 +891,7 @@ void CandidateEditorPieGraphWidget::update_collapse_button() {
     if (!collapse_button_) {
         return;
     }
-    collapse_button_->set_text(collapsed_ ? std::string(DMIcons::CollapseCollapsed())
-                                          : std::string(DMIcons::CollapseExpanded()));
+    collapse_button_->set_text(collapsed_ ? std::string(DMIcons::CollapseCollapsed()) : std::string(DMIcons::CollapseExpanded()));
 }
 
 SDL_Rect CandidateEditorPieGraphWidget::draw_text(SDL_Renderer* renderer, TTF_Font* font, const std::string& text,

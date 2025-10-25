@@ -137,7 +137,7 @@ bool stage_requires_blend(PreviewStage stage) {
     return false;
 }
 
-}  // namespace
+}
 
 class MapLightPreviewPanel::PreviewWidget : public Widget {
 public:
@@ -252,8 +252,7 @@ bool MapLightPreviewPanel::handle_event(const SDL_Event& e) {
         return false;
     }
 
-    const bool pointer_event = (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP ||
-                                e.type == SDL_MOUSEMOTION);
+    const bool pointer_event = (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
 
     bool handled = DockableCollapsible::handle_event(e);
     if (!handled) {
@@ -353,17 +352,11 @@ int MapLightPreviewPanel::chunk_index_from_point(int x, int y) const {
         return -1;
     }
 
-    const float norm_x = static_cast<float>(x - preview_grid_rect_.x) /
-                         static_cast<float>(preview_grid_rect_.w);
-    const float norm_y = static_cast<float>(y - preview_grid_rect_.y) /
-                         static_cast<float>(preview_grid_rect_.h);
+    const float norm_x = static_cast<float>(x - preview_grid_rect_.x) / static_cast<float>(preview_grid_rect_.w);
+    const float norm_y = static_cast<float>(y - preview_grid_rect_.y) / static_cast<float>(preview_grid_rect_.h);
 
-    const int gx = clamp_int(static_cast<int>(std::floor(norm_x * static_cast<float>(grid_w))),
-                             0,
-                             grid_w - 1);
-    const int gy = clamp_int(static_cast<int>(std::floor(norm_y * static_cast<float>(grid_h))),
-                             0,
-                             grid_h - 1);
+    const int gx = clamp_int(static_cast<int>(std::floor(norm_x * static_cast<float>(grid_w))), 0, grid_w - 1);
+    const int gy = clamp_int(static_cast<int>(std::floor(norm_y * static_cast<float>(grid_h))), 0, grid_h - 1);
     return gy * grid_w + gx;
 }
 
@@ -414,11 +407,9 @@ int MapLightPreviewPanel::preview_height_for_width(int width) const {
 
     float aspect = 1.0f;
     if (map && map->screen_width() > 0) {
-        aspect = static_cast<float>(std::max(1, map->screen_height())) /
-                 static_cast<float>(std::max(1, map->screen_width()));
+        aspect = static_cast<float>(std::max(1, map->screen_height())) / static_cast<float>(std::max(1, map->screen_width()));
     } else if (screen_width_px_ > 0 && screen_height_px_ > 0) {
-        aspect = static_cast<float>(screen_height_px_) /
-                 static_cast<float>(std::max(1, screen_width_px_));
+        aspect = static_cast<float>(screen_height_px_) / static_cast<float>(std::max(1, screen_width_px_));
     }
 
     int grid_width_px = std::max(40, std::min(available_width, 320));
@@ -476,18 +467,17 @@ int MapLightPreviewPanel::estimated_detail_line_count() const {
         (selected_chunk_ >= 0 && selected_chunk_ < total_chunks) ? selected_chunk_ : -1;
 
     if (detail_chunk >= 0) {
-        count += 1;  // Tile header
-        count += 1;  // Stage line
+        count += 1;
+        count += 1;
 
-        // Assume full snapshot metrics when available.
         count += 7;
 
         if (map) {
-            count += 2;  // Grid resolution + padding
+            count += 2;
         }
 
-        count += 1;  // Blank line before assets
-        count += 1;  // Assets Sampling header
+        count += 1;
+        count += 1;
 
         int asset_lines = 1;
         if (manager) {
@@ -496,11 +486,11 @@ int MapLightPreviewPanel::estimated_detail_line_count() const {
         }
         count += asset_lines;
     } else {
-        count += 1;  // No Chunk selected
+        count += 1;
     }
 
     if (!chunk_note_text_.empty()) {
-        count += 1;  // Blank line before note
+        count += 1;
         count += count_lines(chunk_note_text_);
     }
 
@@ -563,13 +553,10 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
 
     const int map_screen_width  = map->screen_width();
     const int map_screen_height = map->screen_height();
-    const float aspect = (map_screen_width > 0)
-                             ? static_cast<float>(map_screen_height) / static_cast<float>(map_screen_width)
-                             : 1.0f;
+    const float aspect = (map_screen_width > 0) ? static_cast<float>(map_screen_height) / static_cast<float>(map_screen_width) : 1.0f;
 
     int grid_width_px = std::max(40, std::min(available_width, 320));
-    int grid_height_px = static_cast<int>(
-        std::lround(static_cast<double>(grid_width_px) * static_cast<double>(aspect)));
+    int grid_height_px = static_cast<int>( std::lround(static_cast<double>(grid_width_px) * static_cast<double>(aspect)));
     grid_height_px = std::max(grid_height_px, 40);
 
     int  detail_gap   = DMSpacing::item_gap();
@@ -591,7 +578,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     screen_width_px_  = map->screen_width();
     screen_height_px_ = map->screen_height();
 
-    // Clip all preview rendering to the preview widget bounds to prevent overlap
     SDL_Rect prev_clip;
     SDL_RenderGetClipRect(renderer, &prev_clip);
     SDL_RenderSetClipRect(renderer, &preview_widget_bounds_);
@@ -602,13 +588,11 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
 
     const DMLabelStyle& label_style = DMStyles::Label();
     std::unique_ptr<TTF_Font, decltype(&TTF_CloseFont)> detail_font(label_style.open_font(), &TTF_CloseFont);
-    std::unique_ptr<TTF_Font, decltype(&TTF_CloseFont)> tile_font(
-        TTF_OpenFont(label_style.font_path.c_str(), std::max(8, label_style.font_size - 4)), &TTF_CloseFont);
+    std::unique_ptr<TTF_Font, decltype(&TTF_CloseFont)> tile_font( TTF_OpenFont(label_style.font_path.c_str(), std::max(8, label_style.font_size - 4)), &TTF_CloseFont);
     SDL_Color text_color = label_style.color;
 
     const int detail_available_height = detail_below
-                                            ? std::max(0, preview_widget_bounds_.h - grid_height_px - detail_gap)
-                                            : grid_height_px;
+                                            ? std::max(0, preview_widget_bounds_.h - grid_height_px - detail_gap) : grid_height_px;
 
     PreviewStage stage = normalize_stage(preview_stage_index_);
     std::string stage_label_text{kPreviewStageLabels[static_cast<int>(stage)]};
@@ -683,9 +667,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             stage_texture_height = 0;
         } else if (adjusted_height != stage_texture_height && texture_w > 0 && texture_h > 0) {
             const double aspect = static_cast<double>(texture_h) / static_cast<double>(texture_w);
-            stage_texture_width = std::min(available_stage_width,
-                                           static_cast<int>(std::lround(static_cast<double>(adjusted_height) /
-                                                                        aspect)));
+            stage_texture_width = std::min(available_stage_width, static_cast<int>(std::lround(static_cast<double>(adjusted_height) / aspect)));
             stage_texture_height = adjusted_height;
         } else {
             stage_texture_height = adjusted_height;
@@ -700,16 +682,13 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     SDL_Rect stage_panel_rect{detail_rect.x, detail_rect.y, detail_width, stage_block_height};
     SDL_Rect stage_label_rect{detail_rect.x + stage_padding,
                               detail_rect.y + stage_padding,
-                              std::max(0, detail_width - stage_padding * 2),
-                              stage_label_height};
+                              std::max(0, detail_width - stage_padding * 2), stage_label_height};
     if (stage_label_rect.h > std::max(0, stage_panel_rect.h - stage_padding * 2)) {
         stage_label_rect.h = std::max(0, stage_panel_rect.h - stage_padding * 2);
     }
 
     SDL_Rect stage_texture_rect{detail_rect.x + stage_padding,
-                                stage_label_rect.y + stage_label_rect.h + (stage_label_rect.h > 0 ? stage_padding : 0),
-                                stage_texture_width,
-                                stage_texture_height};
+                                stage_label_rect.y + stage_label_rect.h + (stage_label_rect.h > 0 ? stage_padding : 0), stage_texture_width, stage_texture_height};
     if (stage_texture_rect.w > 0) {
         int centered_x = detail_rect.x + stage_padding +
                          std::max(0, (available_stage_width - stage_texture_rect.w) / 2);
@@ -717,16 +696,12 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     }
 
     auto fallback_cell_rect = [&](int gx, int gy) -> SDL_Rect {
-        const int left   = preview_grid_rect_.x + static_cast<int>(
-            std::lround(static_cast<double>(gx) * preview_grid_rect_.w / static_cast<double>(grid_w)));
-        const int right  = preview_grid_rect_.x + static_cast<int>(
-            std::lround(static_cast<double>(gx + 1) * preview_grid_rect_.w / static_cast<double>(grid_w)));
-        const int top    = preview_grid_rect_.y + static_cast<int>(
-            std::lround(static_cast<double>(gy) * preview_grid_rect_.h / static_cast<double>(grid_h)));
-        const int bottom = preview_grid_rect_.y + static_cast<int>(
-            std::lround(static_cast<double>(gy + 1) * preview_grid_rect_.h / static_cast<double>(grid_h)));
+        const int left   = preview_grid_rect_.x + static_cast<int>( std::lround(static_cast<double>(gx) * preview_grid_rect_.w / static_cast<double>(grid_w)));
+        const int right  = preview_grid_rect_.x + static_cast<int>( std::lround(static_cast<double>(gx + 1) * preview_grid_rect_.w / static_cast<double>(grid_w)));
+        const int top    = preview_grid_rect_.y + static_cast<int>( std::lround(static_cast<double>(gy) * preview_grid_rect_.h / static_cast<double>(grid_h)));
+        const int bottom = preview_grid_rect_.y + static_cast<int>( std::lround(static_cast<double>(gy + 1) * preview_grid_rect_.h / static_cast<double>(grid_h)));
         return SDL_Rect{left, top, std::max(1, right - left), std::max(1, bottom - top)};
-    };
+};
 
     auto draw_indicator = [&](const SDL_Rect& rect, const SDL_Color& color, bool top_right) {
         if (rect.w <= 4 || rect.h <= 4) {
@@ -739,7 +714,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         }
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         SDL_RenderFillRect(renderer, &indicator);
-    };
+};
 
     auto render_tile_annotation = [&](const SDL_Rect& rect,
                                       const LightMapManager::ChunkSnapshot* snap) {
@@ -785,7 +760,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             SDL_DestroyTexture(texture);
         }
         SDL_FreeSurface(surface);
-    };
+};
 
     auto draw_light_debug_overlay = [&](const SDL_Rect& grid_rect) {
         if (!assets_) {
@@ -795,7 +770,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         struct LightDebugSample {
             SDL_Color color{};
             Uint8     intensity = 0;
-        };
+};
 
         constexpr int kMaxOverlayLights = 12;
 
@@ -861,9 +836,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             const int row = static_cast<int>(i) / max_per_row;
             const int col = static_cast<int>(i) % max_per_row;
             SDL_Rect swatch_rect{overlay_rect.x + col * cell_width,
-                                 overlay_rect.y + row * (swatch_size + spacing),
-                                 swatch_size,
-                                 swatch_size};
+                                 overlay_rect.y + row * (swatch_size + spacing), swatch_size, swatch_size};
 
             const float intensity_scale = static_cast<float>(samples[i].intensity) / 255.0f;
             const Uint8 draw_r = static_cast<Uint8>(std::lround(static_cast<float>(samples[i].color.r) * intensity_scale));
@@ -888,15 +861,11 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                                    bar_rect.y + bar_rect.h - bar_fill_height,
                                    bar_rect.w,
                                    bar_fill_height};
-                SDL_SetRenderDrawColor(renderer,
-                                       samples[i].color.r,
-                                       samples[i].color.g,
-                                       samples[i].color.b,
-                                       220);
+                SDL_SetRenderDrawColor(renderer, samples[i].color.r, samples[i].color.g, samples[i].color.b, 220);
                 SDL_RenderFillRect(renderer, &fill_rect);
             }
         }
-    };
+};
 
     const SDL_Color update_color{200, 120, 40, 255};
     const SDL_Color outline_color{249, 115, 22, 255};
@@ -918,8 +887,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                     const float cx = static_cast<float>(world_rect.x) + static_cast<float>(world_rect.w) * 0.5f;
                     const float cy = static_cast<float>(world_rect.y) + static_cast<float>(world_rect.h) * 0.5f;
                     const LightMap::SampledBrightness sample =
-                        map->sample_lighting(static_cast<int>(std::round(cx)),
-                                             static_cast<int>(std::round(cy)));
+                        map->sample_lighting(static_cast<int>(std::round(cx)), static_cast<int>(std::round(cy)));
                     brightness = sample.blended;
                 }
             }
@@ -964,8 +932,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     if (detail_chunk >= 0) {
         const int gx = detail_chunk % grid_w;
         const int gy = detail_chunk / grid_w;
-        detail_lines.push_back("Chunk(" + std::to_string(gx) + ", " + std::to_string(gy) + ") #" +
-                               std::to_string(detail_chunk));
+        detail_lines.push_back("Chunk(" + std::to_string(gx) + ", " + std::to_string(gy) + ") #" + std::to_string(detail_chunk));
 
         float current_brightness = 0.0f;
         float current_static     = 0.0f;
@@ -982,8 +949,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                 const float cx = static_cast<float>(world_rect.x) + static_cast<float>(world_rect.w) * 0.5f;
                 const float cy = static_cast<float>(world_rect.y) + static_cast<float>(world_rect.h) * 0.5f;
                 const LightMap::SampledBrightness sample =
-                    map->sample_lighting(static_cast<int>(std::round(cx)),
-                                         static_cast<int>(std::round(cy)));
+                    map->sample_lighting(static_cast<int>(std::round(cx)), static_cast<int>(std::round(cy)));
                 current_brightness = std::clamp(sample.blended, 0.0f, 1.0f);
                 current_static     = std::clamp(sample.static_component, 0.0f, 1.0f);
                 current_dynamic    = std::clamp(sample.dynamic_component, 0.0f, 1.0f);
@@ -1025,8 +991,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             detail_lines.push_back("Shadow Scale: " + format_float(snap->shadow.scale, 3));
             detail_lines.push_back("Shadow Offset X%: " + format_float(snap->shadow.offset_x_percent, 3));
             detail_lines.push_back("Shadow Offset Y%: " + format_float(snap->shadow.offset_y_percent, 3));
-            detail_lines.push_back("Shadow Parallax%: " +
-                                   format_float(snap->shadow.parallax_intensity_percent, 3));
+            detail_lines.push_back("Shadow Parallax%: " + format_float(snap->shadow.parallax_intensity_percent, 3));
         }
 
         detail_lines.push_back("");
@@ -1101,8 +1066,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     int detail_text_drawn  = 0;
     if (!detail_text.empty() && detail_width > 0 && detail_font && detail_text_rect.h > 0) {
         SDL_Surface* surface =
-            TTF_RenderUTF8_Blended_Wrapped(detail_font.get(), detail_text.c_str(), text_color,
-                                           std::max(10, detail_width));
+            TTF_RenderUTF8_Blended_Wrapped(detail_font.get(), detail_text.c_str(), text_color, std::max(10, detail_width));
         if (surface) {
             detail_text_height = surface->h;
             SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -1127,7 +1091,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         detail_drawn_height += text_gap + detail_text_drawn;
     }
 
-    // Clamp final heights to the widget bounds to avoid drawing over controls
     const int max_preview_h = std::max(0, preview_widget_bounds_.h);
     if (detail_below) {
         const int remaining = detail_available_height;
@@ -1142,7 +1105,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         preview_rect_.h = std::min(max_preview_h, std::max(grid_height_px, detail_panel_height));
     }
 
-    // Restore previous clip rectangle
     SDL_RenderSetClipRect(renderer, &prev_clip);
 }
 
@@ -1154,7 +1116,7 @@ void MapLightPreviewPanel::rebuild_rows() {
         Widget* raw = widget.get();
         widget_wrappers_.push_back(std::move(widget));
         return raw;
-    };
+};
 
     Rows rows;
 
@@ -1162,17 +1124,13 @@ void MapLightPreviewPanel::rebuild_rows() {
         rows.push_back({ add_widget(std::make_unique<SliderWidget>(chunk_resolution_.get())) });
     }
 
-    // Preview-only: do not attach any other sliders or buttons here.
     rows.push_back({ add_widget(std::make_unique<PreviewWidget>(this)) });
 
     set_rows(rows);
 }
 
 void MapLightPreviewPanel::build_ui() {
-    chunk_resolution_ = std::make_unique<DMSlider>("Chunk Resolution (2^r px)",
-                                                  0,
-                                                  vibble::grid::kMaxResolution,
-                                                  last_chunk_resolution_);
+    chunk_resolution_ = std::make_unique<DMSlider>("Chunk Resolution (2^r px)", 0, vibble::grid::kMaxResolution, last_chunk_resolution_);
     if (chunk_resolution_) {
         chunk_resolution_->set_defer_commit_until_unfocus(false);
         chunk_resolution_->set_value_formatter([](int value,
@@ -1280,33 +1238,17 @@ void MapLightPreviewPanel::set_reactive_sliders(const render_pipeline::shading::
 render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reactive_settings_from_dev_settings() {
     using devmode::ui_settings::load_number;
     render_pipeline::shading::ReactiveShadowSettings settings = render_pipeline::shading::sanitize_reactive_shadow_settings({});
-    settings.virtual_light_map.horizontal_falloff = static_cast<float>(
-        load_number(make_setting_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff));
-    settings.virtual_light_map.vertical_falloff = static_cast<float>(
-        load_number(make_setting_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff));
-    settings.virtual_light_map.max_offset_x = static_cast<float>(
-        load_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x));
-    settings.virtual_light_map.max_offset_y = static_cast<float>(
-        load_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y));
-    settings.opacity_sensitivity_percent = static_cast<float>(
-        load_number(make_setting_key("opacity_sensitivity_percent"), settings.opacity_sensitivity_percent));
-    settings.virtual_light_map.min_scale_percent = static_cast<int>(std::lround(load_number(
-        make_setting_key("virtual_light_map.min_scale_percent"),
-        static_cast<double>(settings.virtual_light_map.min_scale_percent))));
-    settings.virtual_light_map.max_scale_percent = static_cast<int>(std::lround(load_number(
-        make_setting_key("virtual_light_map.max_scale_percent"),
-        static_cast<double>(settings.virtual_light_map.max_scale_percent))));
-    settings.frame_blend_falloff_frames = static_cast<int>(std::lround(load_number(
-        make_setting_key("frame_blend_falloff_frames"),
-        static_cast<double>(settings.frame_blend_falloff_frames))));
-    settings.virtual_light_map.map_light_dir_offset_strength = static_cast<float>(load_number(
-        make_setting_key("virtual_light_map.map_light_dir_offset_strength"),
-        settings.virtual_light_map.map_light_dir_offset_strength));
-    settings.virtual_light_map.parallax_percent = static_cast<float>(load_number(
-        make_setting_key("virtual_light_map.parallax_percent"), settings.virtual_light_map.parallax_percent));
-    settings.virtual_light_map.search_radius = static_cast<int>(
-        std::lround(load_number(make_setting_key("virtual_light_map.search_radius"),
-                                 static_cast<double>(settings.virtual_light_map.search_radius))));
+    settings.virtual_light_map.horizontal_falloff = static_cast<float>( load_number(make_setting_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff));
+    settings.virtual_light_map.vertical_falloff = static_cast<float>( load_number(make_setting_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff));
+    settings.virtual_light_map.max_offset_x = static_cast<float>( load_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x));
+    settings.virtual_light_map.max_offset_y = static_cast<float>( load_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y));
+    settings.opacity_sensitivity_percent = static_cast<float>( load_number(make_setting_key("opacity_sensitivity_percent"), settings.opacity_sensitivity_percent));
+    settings.virtual_light_map.min_scale_percent = static_cast<int>(std::lround(load_number( make_setting_key("virtual_light_map.min_scale_percent"), static_cast<double>(settings.virtual_light_map.min_scale_percent))));
+    settings.virtual_light_map.max_scale_percent = static_cast<int>(std::lround(load_number( make_setting_key("virtual_light_map.max_scale_percent"), static_cast<double>(settings.virtual_light_map.max_scale_percent))));
+    settings.frame_blend_falloff_frames = static_cast<int>(std::lround(load_number( make_setting_key("frame_blend_falloff_frames"), static_cast<double>(settings.frame_blend_falloff_frames))));
+    settings.virtual_light_map.map_light_dir_offset_strength = static_cast<float>(load_number( make_setting_key("virtual_light_map.map_light_dir_offset_strength"), settings.virtual_light_map.map_light_dir_offset_strength));
+    settings.virtual_light_map.parallax_percent = static_cast<float>(load_number( make_setting_key("virtual_light_map.parallax_percent"), settings.virtual_light_map.parallax_percent));
+    settings.virtual_light_map.search_radius = static_cast<int>( std::lround(load_number(make_setting_key("virtual_light_map.search_radius"), static_cast<double>(settings.virtual_light_map.search_radius))));
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
@@ -1320,8 +1262,7 @@ void MapLightPreviewPanel::persist_reactive_settings_to_dev_settings(const rende
     save_number(make_setting_key("virtual_light_map.min_scale_percent"), settings.virtual_light_map.min_scale_percent);
     save_number(make_setting_key("virtual_light_map.max_scale_percent"), settings.virtual_light_map.max_scale_percent);
     save_number(make_setting_key("frame_blend_falloff_frames"), settings.frame_blend_falloff_frames);
-    save_number(make_setting_key("virtual_light_map.map_light_dir_offset_strength"),
-                settings.virtual_light_map.map_light_dir_offset_strength);
+    save_number(make_setting_key("virtual_light_map.map_light_dir_offset_strength"), settings.virtual_light_map.map_light_dir_offset_strength);
     save_number(make_setting_key("virtual_light_map.parallax_percent"), settings.virtual_light_map.parallax_percent);
     save_number(make_setting_key("virtual_light_map.search_radius"), settings.virtual_light_map.search_radius);
 }
@@ -1355,11 +1296,4 @@ void MapLightPreviewPanel::force_shading_refresh_if_needed(bool force_refresh) {
 void MapLightPreviewPanel::handle_chunk_resolution_changed() {
     needs_sync_to_json_ = true;
 }
-
-
-
-
-
-
-
 

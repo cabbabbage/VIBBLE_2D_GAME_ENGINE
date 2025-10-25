@@ -122,7 +122,7 @@ private:
         MapLayers,
         AssetLibrary,
         Count,
-    };
+};
 
     void set_blocking_panel_visible(BlockingPanel panel, bool visible);
     bool any_blocking_panel_visible() const;
@@ -182,12 +182,12 @@ private:
             None,
             Room,
             Map,
-        };
+};
         nlohmann::json* entry = nullptr;
         nlohmann::json* owner_array = nullptr;
         Source source = Source::None;
         bool valid() const { return entry != nullptr; }
-    };
+};
     SpawnEntryResolution locate_spawn_entry(const std::string& spawn_id);
     SDL_Point get_room_center() const;
     std::pair<int, int> get_room_dimensions() const;
@@ -254,18 +254,13 @@ private:
         int screen_y = std::numeric_limits<int>::min();
         int z_index = std::numeric_limits<int>::min();
         std::vector<int64_t> cells;
-    };
+};
 
     void mark_spatial_index_dirty() const;
     bool ensure_spatial_index(const camera& cam) const;
     bool camera_state_changed(const camera& cam) const;
     float compute_reference_screen_height(const camera& cam, float inv_scale) const;
-    bool compute_asset_screen_bounds(const camera& cam,
-                                     float reference_height,
-                                     float inv_scale,
-                                     Asset* asset,
-                                     SDL_Rect& out_rect,
-                                     int& out_screen_y) const;
+    bool compute_asset_screen_bounds(const camera& cam, float reference_height, float inv_scale, Asset* asset, SDL_Rect& out_rect, int& out_screen_y) const;
     void rebuild_spatial_index(const camera& cam) const;
     void insert_asset_entry(Asset* asset, const SDL_Rect& rect, int screen_y) const;
     void add_asset_to_cell(Asset* asset, int cell_x, int cell_y, std::vector<int64_t>& cell_keys) const;
@@ -355,7 +350,7 @@ private:
         nlohmann::json entry;
         std::string base_display_name;
         int paste_count = 0;
-    };
+};
     std::optional<SpawnGroupClipboard> spawn_group_clipboard_{};
 
     TTF_Font* label_font_ = nullptr;
@@ -366,7 +361,7 @@ private:
         std::string last_name;
         SDL_Color last_color{0, 0, 0, 0};
         bool dirty = true;
-    };
+};
     std::unordered_map<Room*, LabelCacheEntry> label_cache_;
 
     double zoom_scale_factor_ = 1.1;

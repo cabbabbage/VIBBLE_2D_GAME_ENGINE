@@ -11,5 +11,5 @@ ReactiveShadowSettings reactive_shadow_settings_from_json(const nlohmann::json& 
 
 void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowSettings& settings);
 
-}  // namespace render_pipeline::shading
+}
 

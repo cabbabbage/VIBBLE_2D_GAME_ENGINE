@@ -43,7 +43,7 @@ public:
         }
     }
 
-    void layout_custom_content(int /*screen_w*/, int /*screen_h*/) const override {
+    void layout_custom_content(int , int ) const override {
         int x = rect_.x + DMSpacing::panel_padding();
         int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
@@ -124,7 +124,7 @@ public:
                 } else if (slider_used) {
                     used = true;
                 }
-            };
+};
 
             handle_slider(r.s_intensity,
                           [&]() { return r.light.intensity; },
@@ -243,7 +243,7 @@ private:
     void configure_row_sliders(Row& r) {
         auto configure_regen_slider = [](std::unique_ptr<DMSlider>& slider) {
             if (slider) slider->set_defer_commit_until_unfocus(true);
-        };
+};
         configure_regen_slider(r.s_intensity);
         configure_regen_slider(r.s_radius);
         configure_regen_slider(r.s_falloff);

@@ -174,24 +174,9 @@ void RoomSelectorPopup::render(SDL_Renderer* renderer) const {
     const SDL_Color bg = DMStyles::PanelBG();
     const SDL_Color highlight = DMStyles::HighlightColor();
     const SDL_Color shadow = DMStyles::ShadowColor();
-    dm_draw::DrawBeveledRect(
-        renderer,
-        rect_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        bg,
-        highlight,
-        shadow,
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     const SDL_Color border = DMStyles::Border();
-    dm_draw::DrawRoundedOutline(
-        renderer,
-        rect_,
-        DMStyles::CornerRadius(),
-        1,
-        border);
+    dm_draw::DrawRoundedOutline( renderer, rect_, DMStyles::CornerRadius(), 1, border);
 
     SDL_Rect prev_clip{};
     SDL_RenderGetClipRect(renderer, &prev_clip);

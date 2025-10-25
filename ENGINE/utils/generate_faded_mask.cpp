@@ -42,7 +42,7 @@ int compute_base_blur_radius(int expand_radius, float blur_scale) {
 
 float bell_curve_weight(float t) {
     const float clamped = std::clamp(t, 0.0f, 1.0f);
-    // Smooth start/end using a cosine bell curve for softer transitions.
+
     const float pi = static_cast<float>(std::acos(-1.0));
     return 0.5f - 0.5f * std::cos(clamped * pi);
 }
@@ -175,9 +175,7 @@ SDL_Surface* generate_mask_surface(SDL_Surface* source, const ShadowMaskSettings
     }
 
     static const std::array<std::pair<int, int>, 8> kNeighborOffsets = {
-        std::make_pair(1, 0), std::make_pair(-1, 0), std::make_pair(0, 1), std::make_pair(0, -1),
-        std::make_pair(1, 1), std::make_pair(-1, 1), std::make_pair(1, -1), std::make_pair(-1, -1)
-    };
+        std::make_pair(1, 0), std::make_pair(-1, 0), std::make_pair(0, 1), std::make_pair(0, -1), std::make_pair(1, 1), std::make_pair(-1, 1), std::make_pair(1, -1), std::make_pair(-1, -1) };
 
     while (!queue.empty()) {
         const DistanceNode node = queue.top();
@@ -264,7 +262,7 @@ void free_surface_list(std::vector<SDL_Surface*>& list) {
     list.clear();
 }
 
-}  // namespace
+}
 
 std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     const std::string& asset_name,
@@ -303,12 +301,8 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
         if (reference_w > 0 && reference_h > 0) break;
     }
 
-    const int expected_expand_radius = (reference_w > 0 && reference_h > 0)
-        ? compute_expand_radius(reference_w, reference_h, settings.expansion_ratio)
-        : 0;
-    const int expected_base_blur_radius = (expected_expand_radius > 0)
-        ? compute_base_blur_radius(expected_expand_radius, settings.blur_scale)
-        : 0;
+    const int expected_expand_radius = (reference_w > 0 && reference_h > 0) ? compute_expand_radius(reference_w, reference_h, settings.expansion_ratio) : 0;
+    const int expected_base_blur_radius = (expected_expand_radius > 0) ? compute_base_blur_radius(expected_expand_radius, settings.blur_scale) : 0;
 
     json meta;
     bool cache_ok = false;
@@ -360,11 +354,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
             const bool falloff_exp_ok   = std::fabs(stored_falloff_exponent - settings.falloff_exponent) <= 1e-4f;
             const bool alpha_mult_ok    = std::fabs(stored_alpha_multiplier - settings.alpha_multiplier) <= 1e-4f;
 
-            cache_ok = (stored_version == kCacheVersion &&
-                        stored_frame_count == static_cast<int>(frame_count) &&
-                        stored_variant_count == static_cast<int>(variant_count) &&
-                        ratio_ok && blur_ok && expand_ok && steps_ok &&
-                        falloff_start_ok && falloff_exp_ok && alpha_mult_ok);
+            cache_ok = (stored_version == kCacheVersion && stored_frame_count == static_cast<int>(frame_count) && stored_variant_count == static_cast<int>(variant_count) && ratio_ok && blur_ok && expand_ok && steps_ok && falloff_start_ok && falloff_exp_ok && alpha_mult_ok);
         } catch (...) {
             cache_ok = false;
         }
@@ -403,7 +393,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
         for (SDL_Surface* frame_surface : frames) {
             SDL_Surface* mask_surface = generate_mask_surface(frame_surface, settings);
             if (!mask_surface) {
-                // Clean up partial work and abort.
+
                 for (auto& list : masks) {
                     free_surface_list(list);
                 }

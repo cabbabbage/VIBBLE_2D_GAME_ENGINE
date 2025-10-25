@@ -48,9 +48,7 @@ public:
         if (!renderer) return;
         DMLabelStyle style = DMStyles::Label();
         SDL_Color color = subtle_ ? SDL_Color{static_cast<Uint8>(style.color.r / 2),
-                                              static_cast<Uint8>(style.color.g / 2),
-                                              static_cast<Uint8>(style.color.b / 2), style.color.a}
-                                  : style.color;
+                                              static_cast<Uint8>(style.color.g / 2), static_cast<Uint8>(style.color.b / 2), style.color.a} : style.color;
         if (color_.a != 0) color = color_;
         TTF_Font* font = TTF_OpenFont(style.font_path.c_str(), style.font_size);
         if (!font) return;
@@ -194,8 +192,7 @@ public:
         if (!display_name_widget_) display_name_widget_ = std::make_unique<LabelWidget>();
         if (!candidates_header_) candidates_header_ = std::make_unique<LabelWidget>("Candidates");
         if (!instructions_label_) {
-            instructions_label_ = std::make_unique<LabelWidget>(
-                "Scroll on a slice to adjust weight. Double-click to remove.", DMStyles::Label().color, true);
+            instructions_label_ = std::make_unique<LabelWidget>( "Scroll on a slice to adjust weight. Double-click to remove.", DMStyles::Label().color, true);
         }
         if (!pie_widget_) {
             pie_widget_ = std::make_unique<CandidateEditorPieGraphWidget>();
@@ -404,7 +401,7 @@ private:
     std::unique_ptr<CandidateEditorPieGraphWidget> pie_widget_{};
 };
 
-}  // namespace
+}
 
 class CandidateListPanel : public CandidateListPanelImpl {
 public:

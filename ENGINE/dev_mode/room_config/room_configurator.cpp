@@ -649,7 +649,7 @@ void RoomConfigurator::ensure_base_panels() {
         if (panel->is_expanded() != expanded) {
             panel->set_expanded(expanded);
         }
-    };
+};
 
     const std::string geometry_title = is_trail_context_ ? "Trail Geometry" : "Room Geometry";
     const std::string tags_title = is_trail_context_ ? "Trail Tags" : "Room Tags";
@@ -816,7 +816,6 @@ void RoomConfigurator::handle_spawn_group_entry_changed(const nlohmann::json& en
     }
 }
 
-
 int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext& ctx) const {
     int y = ctx.content_top;
 
@@ -828,7 +827,7 @@ int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext
         SDL_Rect rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, panel_height};
         panel->set_rect(rect);
         y += panel_height + ctx.gap;
-    };
+};
 
     for (auto* panel : ordered_base_panels_) {
         place_panel(panel);
@@ -1150,7 +1149,6 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
         }
         config->set_default_resolution(default_resolution);
 
-        // Panels are dockable collapsibles anchored inside the container
         config->set_embedded_mode(true);
         config->set_show_header(true);
         config->set_close_button_enabled(false);
@@ -1173,7 +1171,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
         SpawnGroupConfig::Callbacks callbacks{};
         callbacks.on_regenerate = [this](const std::string& value) {
             if (on_spawn_regenerate_) on_spawn_regenerate_(value);
-        };
+};
         callbacks.on_delete = [this](const std::string& value) {
             if (on_spawn_delete_) on_spawn_delete_(value);
             if (room_) {
@@ -1184,7 +1182,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                 this->request_rebuild();
             }
             this->persist_spawn_group_changes();
-        };
+};
         callbacks.on_reorder = [this, groups = &group_array](const std::string& value, size_t index) {
             if (on_spawn_reorder_) on_spawn_reorder_(value, index);
             if (!groups || !groups->is_array() || groups->empty()) {
@@ -1229,7 +1227,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
             }
 
             renumber_spawn_group_priorities(arr);
-        };
+};
         config->set_callbacks(std::move(callbacks));
 
         SpawnGroupConfig::EntryCallbacks entry_callbacks{};
@@ -1252,14 +1250,13 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                                         SpawnGroupConfig::EntryController& entry, const nlohmann::json& cfg_entry) {
                 configure_entry(entry, cfg_entry);
                 entry.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
-            };
+};
         } else if (on_spawn_area_open_ || !spawn_area_stack_key_.empty()) {
             final_configure_entry = [this](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
                 entry.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
-            };
+};
         }
 
-        // Derive a header title from the spawn entry
         auto title_from = [](const nlohmann::json& e) -> std::string {
             if (e.is_object()) {
                 if (e.contains("display_name") && e["display_name"].is_string()) {
@@ -1272,29 +1269,23 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                 }
             }
             return std::string{"Spawn Group"};
-        };
+};
         config->set_title(title_from(entry));
 
-        // Bind and build panel first with callbacks suppressed to avoid
-        // re-entrant rebuild loops during initial construction.
         auto wrapped_entry_change = [this, cfg=config.get(), on_entry_change = std::move(on_entry_change), title_from](
                                         const nlohmann::json& updated,
                                         const SpawnGroupConfig::ChangeSummary& summary) {
-            // Update title when name changes
+
             if (cfg) cfg->set_title(title_from(updated));
             this->handle_spawn_group_entry_changed(updated, summary);
             if (on_entry_change) on_entry_change(updated, summary);
-        };
+};
         auto wrapped_on_change = [this, extra = std::move(on_change)]() {
             this->handle_spawn_groups_mutated();
             if (extra) extra();
-        };
-        config->bind_entry(entry,
-                           std::move(wrapped_on_change),
-                           std::move(wrapped_entry_change),
-                           std::move(entry_callbacks),
-                           std::move(final_configure_entry));
-        // When the panel layout changes (collapse/expand), refresh cached height and relayout
+};
+        config->bind_entry(entry, std::move(wrapped_on_change), std::move(wrapped_entry_change), std::move(entry_callbacks), std::move(final_configure_entry));
+
         config->set_on_layout_changed([this, cfg_ptr = config.get()]() {
             this->update_collapsible_height_cache(cfg_ptr, cfg_ptr->height());
             this->request_container_layout();
@@ -1359,7 +1350,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                 }
                 return result;
             });
-        };
+};
 
         for (auto& entry : groups) {
             have_groups = true;
@@ -1390,7 +1381,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
             bind_spawn_entry(entry, groups, {}, std::move(on_change), std::move(on_entry_change));
         }
     }
-    (void)have_groups; // Panels are handled above; basic panel handles add button
+    (void)have_groups;
     request_container_layout();
 }
 
@@ -1416,8 +1407,7 @@ void RoomConfigurator::rebuild_rows() {
         if (!pending_rebuild_) {
             break;
         }
-        // Failsafe: if rebuilds keep getting requested, schedule a deferred
-        // rebuild on the next tick and bail to avoid freezing.
+
         static int guard_counter = 0;
         if (++guard_counter > 8) {
             deferred_rebuild_ = true;
@@ -1705,8 +1695,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
                     if (max_diameter > 0) inferred_max = std::max(inferred_max, max_diameter / 2);
                 }
                 if (inferred_min <= 0 && inferred_max <= 0) {
-                    inferred_min = inferred_max = infer_radius_from_dimensions(
-                        state_->width_min, state_->width_max, state_->height_min, state_->height_max);
+                    inferred_min = inferred_max = infer_radius_from_dimensions( state_->width_min, state_->width_max, state_->height_min, state_->height_max);
                 }
                 state_->radius_min = inferred_min;
                 state_->radius_max = std::max(inferred_min, inferred_max);
@@ -1817,12 +1806,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
     }
 
     const bool editing_size_box =
-        (width_min_box_ && width_min_box_->is_editing()) ||
-        (width_max_box_ && width_max_box_->is_editing()) ||
-        (height_min_box_ && height_min_box_->is_editing()) ||
-        (height_max_box_ && height_max_box_->is_editing()) ||
-        (radius_min_box_ && radius_min_box_->is_editing()) ||
-        (radius_max_box_ && radius_max_box_->is_editing());
+        (width_min_box_ && width_min_box_->is_editing()) || (width_max_box_ && width_max_box_->is_editing()) || (height_min_box_ && height_min_box_->is_editing()) || (height_max_box_ && height_max_box_->is_editing()) || (radius_min_box_ && radius_min_box_->is_editing()) || (radius_max_box_ && radius_max_box_->is_editing());
 
     if (state_->ensure_valid(allow_height, !editing_size_box)) {
         changed = true;
@@ -2067,7 +2051,6 @@ void RoomConfigurator::set_spawn_area_open_callback(
         }
     }
 }
-
 
 void RoomConfigurator::request_rebuild() {
     deferred_rebuild_ = true;

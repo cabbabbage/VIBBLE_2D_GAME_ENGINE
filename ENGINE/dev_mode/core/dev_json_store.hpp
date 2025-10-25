@@ -10,9 +10,7 @@ public:
     static DevJsonStore& instance();
 
     nlohmann::json load(const std::filesystem::path& path);
-    void submit(const std::filesystem::path& path,
-                const nlohmann::json& data,
-                int indent = 4);
+    void submit(const std::filesystem::path& path, const nlohmann::json& data, int indent = 4);
     void flush_all();
     void shutdown();
 
@@ -27,4 +25,4 @@ private:
     Impl* impl_;
 };
 
-} // namespace devmode::core
+}

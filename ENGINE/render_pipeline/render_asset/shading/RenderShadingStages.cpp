@@ -46,7 +46,7 @@ float compute_parallax_shift(const StageContext& context, const Asset& asset, in
     return parallax_px * weight;
 }
 
-}  // namespace
+}
 
 void ClearShadowStateFor(const Asset*) {}
 
@@ -224,7 +224,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
             }
             parallax_percent = shadow.parallax_intensity_percent;
         } else {
-            // Fallback to base context values when no manager data is available.
+
             opacity = std::clamp(context.base_shadow_opacity, 0.0f, 1.0f);
             scale   = std::max(context.base_shadow_scale, 0.0f);
         }
@@ -233,8 +233,6 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     const float parallax_weight = std::max(0.0f, parallax_percent / 100.0f);
     const float parallax_shift  = compute_parallax_shift(context, asset, height, parallax_weight);
     offset_x += parallax_shift;
-
-    // Do not clamp to deprecated max offset sliders; rely on manager-calculated offsets.
 
     SDL_Texture* mask_texture = nullptr;
     const auto& scale_usage   = asset.last_scale_usage();
@@ -310,12 +308,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         SDL_GetTextureAlphaMod(base_mask, &base_a);
         SDL_GetTextureBlendMode(base_mask, &base_blend);
 
-        const SDL_BlendMode crop_blend = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO,
-                                                                    SDL_BLENDFACTOR_SRC_ALPHA,
-                                                                    SDL_BLENDOPERATION_ADD,
-                                                                    SDL_BLENDFACTOR_ZERO,
-                                                                    SDL_BLENDFACTOR_SRC_ALPHA,
-                                                                    SDL_BLENDOPERATION_ADD);
+        const SDL_BlendMode crop_blend = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_SRC_ALPHA, SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
         if (crop_blend != SDL_BLENDMODE_INVALID) {
             SDL_SetTextureBlendMode(base_mask, crop_blend);
             SDL_SetTextureColorMod(base_mask, 255, 255, 255);
@@ -334,11 +327,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
             std::clamp(static_cast<float>(main_color.a) / 255.0f, 0.0f, 1.0f);
         SDL_Rect target_bounds{0, 0, width, height};
         if (target_bounds.w > 0 && target_bounds.h > 0 && context.screen_rect.w > 0 && context.screen_rect.h > 0) {
-            vmap->subtract_runtime_shadow_from_texture(renderer,
-                                                       cache.texture,
-                                                       target_bounds,
-                                                       context.screen_rect,
-                                                       alpha_multiplier);
+            vmap->subtract_runtime_shadow_from_texture(renderer, cache.texture, target_bounds, context.screen_rect, alpha_multiplier);
         }
     }
 
@@ -351,5 +340,5 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     return cache.texture;
 }
 
-}  // namespace render_pipeline::shading
+}
 

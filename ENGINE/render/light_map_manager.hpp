@@ -35,7 +35,7 @@ public:
         SDL_Color runtime_color{255, 255, 255, 255};
         bool      has_runtime_color = false;
         world::Chunk::ChunkShadowParameters shadow{};
-    };
+};
 
     explicit LightMapManager(Assets* assets);
 
@@ -55,8 +55,6 @@ private:
     std::optional<ShadowParameters> shadow_data_for_chunk(const LightingChunk* chunk) const;
 
     Assets* assets_ = nullptr;
-    float last_map_light_opacity_ = -1.0f; // normalized [0,1]; forces update on first frame
+    float last_map_light_opacity_ = -1.0f;
 };
-
-
 

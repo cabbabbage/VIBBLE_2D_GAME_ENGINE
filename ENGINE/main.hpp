@@ -22,12 +22,7 @@ class AssetLibrary;
 class MainApp {
 
         public:
-    MainApp(MapDescriptor map,
-            SDL_Renderer* renderer,
-            int screen_w,
-            int screen_h,
-            LoadingScreen* loading_screen = nullptr,
-            AssetLibrary* asset_library = nullptr);
+    MainApp(MapDescriptor map, SDL_Renderer* renderer, int screen_w, int screen_h, LoadingScreen* loading_screen = nullptr, AssetLibrary* asset_library = nullptr);
     virtual ~MainApp();
     virtual void init();
     virtual void game_loop();

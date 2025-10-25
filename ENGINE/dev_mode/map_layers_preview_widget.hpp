@@ -33,9 +33,7 @@ public:
     void set_on_show_room_list(ShowRoomListCallback cb);
     void set_on_change(std::function<void()> cb);
     void set_selected_layer(int index);
-    void set_layer_diagnostics(const std::vector<int>& invalid_layers,
-                               const std::vector<int>& warning_layers,
-                               const std::vector<int>& dependency_layers);
+    void set_layer_diagnostics(const std::vector<int>& invalid_layers, const std::vector<int>& warning_layers, const std::vector<int>& dependency_layers);
 
     void set_rect(const SDL_Rect& r) override;
     const SDL_Rect& rect() const override { return rect_; }
@@ -58,7 +56,7 @@ private:
         double extent = 0.0;
         SDL_FPoint position{0.0f, 0.0f};
         SDL_Color color{255, 255, 255, 255};
-    };
+};
 
     struct LayerVisual {
         int index = -1;
@@ -75,13 +73,13 @@ private:
         bool dependency = false;
         bool selected = false;
         std::vector<RoomVisual> rooms;
-    };
+};
 
     struct RoomLegendEntry {
         std::string key;
         std::string display_name;
         SDL_Color color{255, 255, 255, 255};
-    };
+};
 
     void rebuild_visuals();
     void ensure_latest_visuals() const;

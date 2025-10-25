@@ -26,7 +26,7 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
 
                 auto clamp_int = [](int value, int min_value, int max_value) {
                         return std::clamp(value, min_value, max_value);
-                };
+};
 
                 light.intensity = clamp_int(l.value("light_intensity", light.intensity), 1, 255);
                 light.radius    = std::max(1, l.value("radius", light.radius));

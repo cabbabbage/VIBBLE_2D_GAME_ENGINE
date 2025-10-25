@@ -16,5 +16,5 @@ ManifestData load_manifest();
 
 std::string manifest_path();
 
-} // namespace manifest
+}
 

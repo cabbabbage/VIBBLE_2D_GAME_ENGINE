@@ -63,7 +63,7 @@ FloatingPanelLayoutManager::PanelInfo build_panel_info_for_panel(DockableCollaps
     return info;
 }
 
-}  // namespace
+}
 
 void SearchAssets::apply_position(int x, int y) {
     if (!panel_) {

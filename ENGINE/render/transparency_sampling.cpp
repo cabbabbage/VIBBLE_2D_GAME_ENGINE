@@ -53,7 +53,7 @@ void record_result(bool success) {
     }
 }
 
-}  // namespace
+}
 
 namespace vibble::render {
 
@@ -104,8 +104,7 @@ TransparencySampleResult sample_texture_transparency(SDL_Renderer* renderer, SDL
     }
     RenderTargetReset reset{renderer, previous_target};
 
-    std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> fmt(
-        SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
+    std::unique_ptr<SDL_PixelFormat, decltype(&SDL_FreeFormat)> fmt( SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), &SDL_FreeFormat);
     if (!fmt) {
         result.error_message = "SDL_AllocFormat failed";
         record_result(false);
@@ -191,5 +190,5 @@ void reset_transparency_readback_stats() {
     consecutive_failures_counter().store(0, std::memory_order_relaxed);
 }
 
-}  // namespace vibble::render
+}
 

@@ -96,7 +96,7 @@ private:
     void rebuild_rows();
     void rebuild_rows_internal();
     void rebuild_spawn_rows(bool force_collapse_sections = false);
-    // Request a rebuild on the next update tick to avoid re-entrant loops
+
     void request_rebuild();
     void load_tags_from_json(const nlohmann::json& data);
     void write_tags_to_json(nlohmann::json& object) const;
@@ -123,8 +123,7 @@ private:
     void set_base_panel_expanded(const std::string& key, bool expanded);
     void persist_spawn_group_changes();
     void handle_spawn_groups_mutated();
-    void handle_spawn_group_entry_changed(const nlohmann::json& entry,
-                                          const SpawnGroupConfig::ChangeSummary& summary);
+    void handle_spawn_group_entry_changed(const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary& summary);
 
     std::unique_ptr<State> state_;
     std::unique_ptr<SlidingWindowContainer> default_container_;

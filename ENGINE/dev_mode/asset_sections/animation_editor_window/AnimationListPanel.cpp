@@ -126,16 +126,7 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
     }
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(renderer,
-                             bounds_,
-                             DMStyles::CornerRadius(),
-                             DMStyles::BevelDepth(),
-                             DMStyles::PanelBG(),
-                             DMStyles::HighlightColor(),
-                             DMStyles::ShadowColor(),
-                             false,
-                             DMStyles::HighlightIntensity(),
-                             DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Rect clip = bounds_;
     const int inset = DMStyles::BevelDepth();
@@ -166,23 +157,13 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         const bool hovered = hovered_row_ && *hovered_row_ == i;
         const SDL_Color fill = selected ? selected_bg : (hovered ? hover_bg : idle_bg);
 
-        dm_draw::DrawBeveledRect(renderer,
-                                 rect,
-                                 DMStyles::CornerRadius(),
-                                 DMStyles::BevelDepth(),
-                                 fill,
-                                 DMStyles::HighlightColor(),
-                                 DMStyles::ShadowColor(),
-                                 false,
-                                 DMStyles::HighlightIntensity(),
-                                 DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect(renderer, rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         dm_draw::DrawRoundedOutline(renderer, rect, DMStyles::CornerRadius(), 1, border);
 
         int content_x = rect.x + row_padding;
         int content_y = rect.y + row_padding;
         const int content_h = rect.h - row_padding * 2;
 
-        // Thumbnail
         if (preview_provider_) {
             SDL_Texture* texture = preview_provider_->get_preview_texture(renderer, cached_animation_ids_[i]);
             if (texture) {
@@ -192,14 +173,11 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
                 int tex_h = 0;
                 SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h);
                 if (tex_w > 0 && tex_h > 0) {
-                    float scale = std::min(static_cast<float>(thumb_rect.w) / static_cast<float>(tex_w),
-                                            static_cast<float>(thumb_rect.h) / static_cast<float>(tex_h));
+                    float scale = std::min(static_cast<float>(thumb_rect.w) / static_cast<float>(tex_w), static_cast<float>(thumb_rect.h) / static_cast<float>(tex_h));
                     int draw_w = std::max(1, static_cast<int>(tex_w * scale));
                     int draw_h = std::max(1, static_cast<int>(tex_h * scale));
                     SDL_Rect dst{thumb_rect.x + (thumb_rect.w - draw_w) / 2,
-                                 thumb_rect.y + (thumb_rect.h - draw_h) / 2,
-                                 draw_w,
-                                 draw_h};
+                                 thumb_rect.y + (thumb_rect.h - draw_h) / 2, draw_w, draw_h};
                     SDL_RenderCopy(renderer, texture, nullptr, &dst);
                 }
                 content_x += thumb_rect.w + row_padding;
@@ -221,22 +199,9 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
                                 badge_size.x + badge_padding * 2,
                                 badge_size.y + badge_padding};
             badge_rect.x = std::max(badge_rect.x, rect.x + content_x - row_padding);
-            dm_draw::DrawBeveledRect(renderer,
-                                     badge_rect,
-                                     DMStyles::CornerRadius(),
-                                     DMStyles::BevelDepth(),
-                                     badge_style.bg,
-                                     DMStyles::HighlightColor(),
-                                     DMStyles::ShadowColor(),
-                                     false,
-                                     DMStyles::HighlightIntensity(),
-                                     DMStyles::ShadowIntensity());
+            dm_draw::DrawBeveledRect(renderer, badge_rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), badge_style.bg, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
             dm_draw::DrawRoundedOutline(renderer, badge_rect, DMStyles::CornerRadius(), 1, badge_style.border);
-            DMFontCache::instance().draw_text(renderer,
-                                              badge_label,
-                                              badge_text,
-                                              badge_rect.x + badge_padding,
-                                              badge_rect.y + (badge_rect.h - badge_size.y) / 2);
+            DMFontCache::instance().draw_text(renderer, badge_label, badge_text, badge_rect.x + badge_padding, badge_rect.y + (badge_rect.h - badge_size.y) / 2);
         }
     }
 
@@ -414,4 +379,4 @@ std::optional<size_t> AnimationListPanel::row_index_at_point(const SDL_Point& p)
     return std::nullopt;
 }
 
-}  // namespace animation_editor
+}

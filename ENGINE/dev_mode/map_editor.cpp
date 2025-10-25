@@ -27,9 +27,7 @@ const SDL_Color kLabelBorder{255, 255, 255, 96};
 const SDL_Color kLabelText{240, 240, 240, 255};
 
 float display_color_luminance(SDL_Color color) {
-    return static_cast<float>(0.2126 * static_cast<double>(color.r) / 255.0 +
-                              0.7152 * static_cast<double>(color.g) / 255.0 +
-                              0.0722 * static_cast<double>(color.b) / 255.0);
+    return static_cast<float>(0.2126 * static_cast<double>(color.r) / 255.0 + 0.7152 * static_cast<double>(color.g) / 255.0 + 0.0722 * static_cast<double>(color.b) / 255.0);
 }
 
 SDL_Color with_alpha(SDL_Color color, Uint8 alpha) {
@@ -161,7 +159,7 @@ void MapEditor::render(SDL_Renderer* renderer) {
         Room* room = nullptr;
         SDL_FPoint desired_center{0.0f, 0.0f};
         float priority = 0.0f;
-    };
+};
 
     std::vector<LabelInfo> render_queue;
     render_queue.reserve(rooms_->size());
@@ -175,11 +173,7 @@ void MapEditor::render(SDL_Renderer* renderer) {
         if (!room || !room->room_area) continue;
         const auto style = dm_draw::ResolveRoomBoundsOverlayStyle(room->display_color());
 
-        dm_draw::RenderRoomBoundsOverlay(
-            renderer,
-            view,
-            *room->room_area,
-            style);
+        dm_draw::RenderRoomBoundsOverlay( renderer, view, *room->room_area, style);
 
         SDL_Point center = room->room_area->get_center();
         SDL_Point screen_pt = view.map_to_screen(center);
@@ -402,23 +396,8 @@ void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoint
 
     const int radius = std::min(DMStyles::CornerRadius(), std::min(bg_rect.w, bg_rect.h) / 2);
     const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(bg_rect.w, bg_rect.h) / 2));
-    dm_draw::DrawBeveledRect(
-        renderer,
-        bg_rect,
-        radius,
-        bevel,
-        bg_color,
-        bg_color,
-        bg_color,
-        false,
-        0.0f,
-        0.0f);
-    dm_draw::DrawRoundedOutline(
-        renderer,
-        bg_rect,
-        radius,
-        1,
-        border_color);
+    dm_draw::DrawBeveledRect( renderer, bg_rect, radius, bevel, bg_color, bg_color, bg_color, false, 0.0f, 0.0f);
+    dm_draw::DrawRoundedOutline( renderer, bg_rect, radius, 1, border_color);
 
     SDL_Texture* text_tex = SDL_CreateTextureFromSurface(renderer, text_surface);
     if (text_tex) {
@@ -457,7 +436,7 @@ SDL_Rect MapEditor::label_background_rect(const SDL_Surface* surface, SDL_FPoint
         clamped.x = std::clamp(clamped.x, min_x, max_x);
         clamped.y = std::clamp(clamped.y, min_y, max_y);
         return clamped;
-    };
+};
 
     SDL_FPoint center = clamp_center(desired_center);
 
@@ -480,7 +459,7 @@ SDL_Rect MapEditor::label_background_rect(const SDL_Surface* surface, SDL_FPoint
                 if (t >= 0.0f) {
                     t_min = std::min(t_min, t);
                 }
-            };
+};
 
             if (dx > 0.0f) update_t(max_x, screen_center.x, dx);
             else if (dx < 0.0f) update_t(min_x, screen_center.x, dx);
@@ -708,6 +687,5 @@ SDL_Rect MapEditor::resolve_vertical_edge_overlap(SDL_Rect rect, float desired_c
 }
 
 bool MapEditor::rects_overlap(const SDL_Rect& a, const SDL_Rect& b) {
-    return !(a.x + a.w <= b.x || b.x + b.w <= a.x ||
-             a.y + a.h <= b.y || b.y + b.h <= a.y);
+    return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
 }

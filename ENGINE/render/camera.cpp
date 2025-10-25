@@ -517,7 +517,7 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         } else if (it->is_number_float()) {
             target = static_cast<int>(std::lround(it->get<double>()));
         }
-    };
+};
 
     try_read_int("render_quality_percent", settings_.render_quality_percent);
 
@@ -559,7 +559,7 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
             }
         }
         return best;
-    };
+};
 
     settings_.render_quality_percent = align_quality(settings_.render_quality_percent);
 }

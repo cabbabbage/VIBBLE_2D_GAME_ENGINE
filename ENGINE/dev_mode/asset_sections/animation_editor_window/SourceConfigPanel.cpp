@@ -93,7 +93,7 @@ void render_button_label(SDL_Renderer* renderer, const SDL_Rect& rect, const std
 }
 
 SourceConfigPanel::SourceConfigPanel() {
-    // UI controls are created lazily in layout_controls
+
 }
 
 void SourceConfigPanel::set_document(std::shared_ptr<AnimationDocument> document) {
@@ -145,19 +145,8 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    dm_draw::DrawBeveledRect(
-        renderer,
-        bounds_,
-        DMStyles::CornerRadius(),
-        DMStyles::BevelDepth(),
-        DMStyles::PanelBG(),
-        DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(),
-        false,
-        DMStyles::HighlightIntensity(),
-        DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
-    // Render controls
     if (from_animation_checkbox_) from_animation_checkbox_->render(renderer);
     if (use_animation_reference_) {
         if (animation_dropdown_) animation_dropdown_->render(renderer);
@@ -173,25 +162,13 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
         SDL_RenderFillRect(renderer, &indicator);
     }
 
-    // Modal for import options
     if (show_import_modal_) {
-        // Darken background within panel
+
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, 10, 10, 14, 180);
         SDL_RenderFillRect(renderer, &bounds_);
 
-        // Modal panel
-        dm_draw::DrawBeveledRect(
-            renderer,
-            modal_rect_,
-            DMStyles::CornerRadius(),
-            DMStyles::BevelDepth(),
-            DMStyles::PanelBG(),
-            DMStyles::HighlightColor(),
-            DMStyles::ShadowColor(),
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( renderer, modal_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
         for (const auto& btn : modal_buttons_) {
             if (btn) btn->render(renderer);
@@ -202,14 +179,13 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 bool SourceConfigPanel::handle_event(const SDL_Event& e) {
     if (bounds_.w <= 0 || bounds_.h <= 0) return false;
 
-    // Modal captures interactions first
     if (show_import_modal_) {
-        // Close on ESC
+
         if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
             show_import_modal_ = false;
             return true;
         }
-        // Click outside closes
+
         if (e.type == SDL_MOUSEBUTTONDOWN) {
             SDL_Point p{e.button.x, e.button.y};
             bool inside = SDL_PointInRect(&p, &modal_rect_) != 0;
@@ -218,19 +194,19 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
                 return true;
             }
         }
-        // Buttons inside modal
+
         for (size_t i = 0; i < modal_buttons_.size(); ++i) {
             auto& btn = modal_buttons_[i];
             if (btn && btn->handle_event(e)) {
-                // Trigger appropriate import
+
                 switch (i) {
-                    case 0: // GIF
+                    case 0:
                         import_from_gif();
                         break;
-                    case 1: // Folder
+                    case 1:
                         import_from_folder();
                         break;
-                    case 2: // PNG sequence
+                    case 2:
                         import_from_png_sequence();
                         break;
                     default:
@@ -240,7 +216,7 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
                 return true;
             }
         }
-        // Swallow events within modal area
+
         if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
             SDL_Point p;
             if (e.type == SDL_MOUSEMOTION) { p = SDL_Point{e.motion.x, e.motion.y}; } else { p = SDL_Point{e.button.x, e.button.y}; }
@@ -248,14 +224,14 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
                 return true;
             }
         }
-        // Fallback
+
         return false;
     }
 
     bool consumed = false;
     if (from_animation_checkbox_ && from_animation_checkbox_->handle_event(e)) {
         use_animation_reference_ = from_animation_checkbox_->value();
-        // If switching to animation reference, default to first valid option and apply
+
         if (use_animation_reference_) {
             refresh_animation_options();
             if (!animation_options_.empty()) {
@@ -264,7 +240,7 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
                 }
                 animation_index_ = std::max(0, std::min(static_cast<int>(animation_options_.size()) - 1, animation_index_));
                 animation_dropdown_->set_selected(animation_index_ >= 0 ? animation_index_ : 0);
-                // Clean frames when switching to animation source
+
                 clean_output_frames();
                 apply_animation_selection();
             }
@@ -328,10 +304,10 @@ void SourceConfigPanel::reload_from_document() {
     }
 
     cached_asset_root_valid_ = false;
-    // Initialize UI state from payload
+
     use_animation_reference_ = (current_source_.kind == std::string("animation"));
     refresh_animation_options();
-    // Seed dropdown selection
+
     if (use_animation_reference_) {
         std::string target = current_source_.name.value_or(std::string{});
         if (target.empty()) target = current_source_.path;
@@ -376,7 +352,7 @@ void SourceConfigPanel::apply_source_config(const SourceConfig& config) {
     payload_["source"] = build_source_json(config);
     update_number_of_frames();
     commit_payload();
-    // If switching from folder/spritesheet -> animation, remove existing frames
+
     if (previous_kind != std::string("animation") && config.kind == std::string("animation")) {
         clean_output_frames();
     }
@@ -564,7 +540,7 @@ bool SourceConfigPanel::clean_output_frames() const {
     }
     try {
         if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
-            return true; // nothing to clean
+            return true;
         }
         for (const auto& entry : std::filesystem::directory_iterator(dir)) {
             if (!entry.is_regular_file()) continue;
@@ -649,7 +625,7 @@ void SourceConfigPanel::post_copy_process(const std::vector<std::filesystem::pat
 }
 
 void SourceConfigPanel::layout_controls() {
-    // Lazily create controls
+
     if (!from_animation_checkbox_) {
         from_animation_checkbox_ = std::make_unique<DMCheckbox>("Select frames from animation", use_animation_reference_);
     } else {
@@ -659,7 +635,7 @@ void SourceConfigPanel::layout_controls() {
         source_button_ = std::make_unique<DMButton>("Select Source Frames...", &DMStyles::AccentButton(), 220, DMButton::height());
     }
     if (use_animation_reference_ && !animation_dropdown_) {
-        // Build options if needed
+
         refresh_animation_options();
         int idx = std::max(0, animation_index_);
         animation_dropdown_ = std::make_unique<DMDropdown>("Select Animation", animation_options_, idx);
@@ -686,7 +662,7 @@ void SourceConfigPanel::layout_controls() {
 }
 
 void SourceConfigPanel::layout_modal() {
-    // Center a small modal within the panel
+
     const int padding = 8;
     const int width = std::min(400, std::max(240, bounds_.w - 40));
     const int button_height = DMButton::height();
@@ -732,7 +708,7 @@ void SourceConfigPanel::refresh_animation_options() {
         }
     }
     if (animation_dropdown_) {
-        // Recreate dropdown to refresh options cleanly
+
         int idx = std::max(0, animation_index_);
         animation_dropdown_.reset();
         if (!animation_options_.empty()) {
@@ -745,7 +721,7 @@ void SourceConfigPanel::apply_animation_selection() {
     if (!use_animation_reference_ || !animation_dropdown_ || animation_options_.empty()) return;
     int idx = animation_dropdown_->pending_index();
     idx = std::max(0, std::min(static_cast<int>(animation_options_.size()) - 1, idx));
-    if (idx == animation_index_) return; // no change
+    if (idx == animation_index_) return;
     animation_index_ = idx;
     const std::string& target = animation_options_[animation_index_];
     if (target.empty() || target == animation_id_) return;

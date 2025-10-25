@@ -69,6 +69,6 @@ private:
     struct ManualAnimationState {
         std::string id;
         bool        loop = true;
-    };
+};
     std::optional<ManualAnimationState> manual_animation_{};
 };

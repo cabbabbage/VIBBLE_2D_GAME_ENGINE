@@ -204,7 +204,7 @@ std::shared_ptr<SDL_Texture> PreviewProvider::build_texture_from_payload(SDL_Ren
         }
 
         return false;
-    };
+};
 
     std::filesystem::path requested = relative_path;
     if (should_treat_as_absolute(requested)) {

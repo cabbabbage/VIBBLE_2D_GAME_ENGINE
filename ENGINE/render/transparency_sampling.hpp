@@ -26,5 +26,5 @@ TransparencySampleResult sample_texture_transparency(SDL_Renderer* renderer, SDL
 TransparencyReadbackStats transparency_readback_stats();
 void reset_transparency_readback_stats();
 
-}  // namespace vibble::render
+}
 

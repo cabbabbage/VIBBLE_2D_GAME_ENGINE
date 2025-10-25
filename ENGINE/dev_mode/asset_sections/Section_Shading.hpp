@@ -66,7 +66,7 @@ public:
                 }
             });
             return slider;
-        };
+};
 
         expansion_ratio_slider_ = make_scaled_slider("Expansion Ratio", 0.0f, 4.0f, settings.expansion_ratio, 100);
         blur_scale_slider_      = make_scaled_slider("Blur Scale", 0.0f, 8.0f, settings.blur_scale, 100);
@@ -78,7 +78,7 @@ public:
             auto widget = std::make_unique<SliderWidget>(slider.get());
             rows.push_back({ widget.get() });
             widgets_.push_back(std::move(widget));
-        };
+};
 
         add_slider_row(expansion_ratio_slider_);
         add_slider_row(blur_scale_slider_);
@@ -116,7 +116,7 @@ public:
         auto read_slider = [](const std::unique_ptr<DMSlider>& slider, float fallback, int scale) {
             if (!slider) return fallback;
             return static_cast<float>(slider->displayed_value()) / static_cast<float>(scale);
-        };
+};
 
         updated.expansion_ratio  = read_slider(expansion_ratio_slider_, updated.expansion_ratio, 100);
         updated.blur_scale       = read_slider(blur_scale_slider_, updated.blur_scale, 100);
@@ -126,13 +126,9 @@ public:
 
         auto nearly_equal = [](float a, float b) {
             return std::fabs(a - b) <= 0.0005f;
-        };
+};
 
-        const bool changed = !nearly_equal(previous.expansion_ratio, updated.expansion_ratio) ||
-                             !nearly_equal(previous.blur_scale, updated.blur_scale) ||
-                             !nearly_equal(previous.falloff_start, updated.falloff_start) ||
-                             !nearly_equal(previous.falloff_exponent, updated.falloff_exponent) ||
-                             !nearly_equal(previous.alpha_multiplier, updated.alpha_multiplier);
+        const bool changed = !nearly_equal(previous.expansion_ratio, updated.expansion_ratio) || !nearly_equal(previous.blur_scale, updated.blur_scale) || !nearly_equal(previous.falloff_start, updated.falloff_start) || !nearly_equal(previous.falloff_exponent, updated.falloff_exponent) || !nearly_equal(previous.alpha_multiplier, updated.alpha_multiplier);
 
         if (changed) {
             info_->set_shadow_mask_settings(updated);
@@ -170,7 +166,7 @@ private:
     private:
         Section_Shading* owner_ = nullptr;
         SDL_Rect         rect_{0, 0, 0, 0};
-    };
+};
 
     void on_generate_all();
     void render_preview(SDL_Renderer* renderer, const SDL_Rect& bounds) const;

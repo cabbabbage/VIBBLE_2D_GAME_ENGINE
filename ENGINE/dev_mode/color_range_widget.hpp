@@ -15,10 +15,7 @@ class DMColorRangeWidget : public Widget {
 public:
     using RangedColor = utils::color::RangedColor;
     using ValueChangedCallback = std::function<void(const RangedColor&)>;
-    using SampleRequestCallback = std::function<void(
-        const RangedColor&,
-        std::function<void(SDL_Color)>,
-        std::function<void()>)>;
+    using SampleRequestCallback = std::function<void( const RangedColor&, std::function<void(SDL_Color)>, std::function<void()>)>;
 
     explicit DMColorRangeWidget(std::string label);
     ~DMColorRangeWidget() override;

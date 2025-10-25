@@ -64,9 +64,7 @@ void AssetLibrary::load_all_from_SRC() {
         }
         const auto end_ms = std::chrono::steady_clock::now();
         const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_ms - start_ms).count();
-        vibble::log::info(std::string("[AssetLibrary] Loaded ") + std::to_string(info_by_name_.size()) +
-                  " assets (ok=" + std::to_string(loaded) + ", failed=" + std::to_string(failed) + ") in " +
-                  std::to_string(elapsed_ms) + "ms");
+        vibble::log::info(std::string("[AssetLibrary] Loaded ") + std::to_string(info_by_name_.size()) + " assets (ok=" + std::to_string(loaded) + ", failed=" + std::to_string(failed) + ") in " + std::to_string(elapsed_ms) + "ms");
 }
 
 std::shared_ptr<AssetInfo> AssetLibrary::get(const std::string& name) const {
@@ -98,8 +96,7 @@ void AssetLibrary::loadAllAnimations(SDL_Renderer* renderer) {
     }
     const auto end = std::chrono::steady_clock::now();
     const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
-    vibble::log::info(std::string("[AssetLibrary] Preloaded animations for ") + std::to_string(loaded) +
-              " asset(s) in " + std::to_string(elapsed_ms) + "ms");
+    vibble::log::info(std::string("[AssetLibrary] Preloaded animations for ") + std::to_string(loaded) + " asset(s) in " + std::to_string(elapsed_ms) + "ms");
     animations_fully_cached_ = true;
 }
 
@@ -127,9 +124,7 @@ void AssetLibrary::ensureAllAnimationsLoaded(SDL_Renderer* renderer) {
     if (loaded_now > 0) {
         const auto end = std::chrono::steady_clock::now();
         const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
-        vibble::log::info(std::string("[AssetLibrary] Cached animations for ") + std::to_string(loaded_now) +
-                  " additional asset(s) (" + std::to_string(already_cached) +
-                  ") in " + std::to_string(elapsed_ms) + "ms");
+        vibble::log::info(std::string("[AssetLibrary] Cached animations for ") + std::to_string(loaded_now) + " additional asset(s) (" + std::to_string(already_cached) + ") in " + std::to_string(elapsed_ms) + "ms");
     }
 }
 
@@ -137,7 +132,7 @@ void AssetLibrary::loadAnimationsFor(SDL_Renderer* renderer, const std::unordere
     vibble::log::debug(std::string("[AssetLibrary] loadAnimationsFor: count=") + std::to_string(names.size()));
     std::size_t idx = 0;
     for (const auto& name : names) {
-        // Verbose per-asset line moved to debug level
+
         vibble::log::debug(std::string("[AssetLibrary] (") + std::to_string(idx) + "/" + std::to_string(names.size()) + ") loading '" + name + "'...");
         auto it = info_by_name_.find(name);
         if (it != info_by_name_.end() && it->second) {

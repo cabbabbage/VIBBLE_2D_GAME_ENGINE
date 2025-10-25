@@ -105,7 +105,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
         auto room_extent_lookup = [&](const std::string& room_name) {
                 double extent = map_layers::room_extent_from_rooms_data(rooms_data_lookup, room_name);
                 return (extent > 0.0) ? extent : 1.0;
-        };
+};
         if (!map_assets_data.is_object()) {
                 map_assets_data = nlohmann::json::object();
         }
@@ -152,7 +152,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                         const double span = (prev_gap + next_gap) * 0.5;
                         out.push_back({ rooms[idx], static_cast<float>(start), static_cast<float>(span) });
                 }
-        };
+};
         for (size_t li = 1; li < map_layers_.size(); ++li) {
                 const LayerSpec& layer = map_layers_[li];
                 const double radius = (li < layer_radii.size()) ? layer_radii[li] : 0.0;
@@ -173,8 +173,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                         extents.push_back(room_extent_lookup(spec.name));
                                 }
                                 std::uniform_real_distribution<double> start_angle_dist(0.0, kTau);
-                                map_layers::RadialLayout layout = map_layers::compute_radial_layout(
-                                        radius, extents, min_edge_distance_, start_angle_dist(rng_));
+                                map_layers::RadialLayout layout = map_layers::compute_radial_layout( radius, extents, min_edge_distance_, start_angle_dist(rng_));
                                 std::vector<double> angles = layout.angles;
                                 if (angles.size() != children_specs.size()) {
                                         angles.resize(children_specs.size());
@@ -268,8 +267,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                 extents.push_back(room_extent_lookup(spec.name));
                                         }
                                         std::uniform_real_distribution<double> start_angle_dist(0.0, kTau);
-                                        map_layers::RadialLayout layout = map_layers::compute_radial_layout(
-                                                radius, extents, min_edge_distance_, start_angle_dist(rng_));
+                                        map_layers::RadialLayout layout = map_layers::compute_radial_layout( radius, extents, min_edge_distance_, start_angle_dist(rng_));
                                         std::vector<double> angles = layout.angles;
                                         if (angles.size() != ordered_specs.size()) {
                                                 angles.resize(ordered_specs.size());
@@ -346,15 +344,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                         room_refs.push_back(room_ptr.get());
                 }
                 trailgen.set_all_rooms_reference(room_refs);
-                auto trail_objects = trailgen.generate_trails( connections,
-                                                               existing_areas,
-                                                               map_id_,
-                                                               asset_lib,
-                                                               map_assets_ptr,
-                                                               map_radius,
-                                                               map_manifest_,
-                                                               manifest_store_,
-                                                               manifest_writer_);
+                auto trail_objects = trailgen.generate_trails( connections, existing_areas, map_id_, asset_lib, map_assets_ptr, map_radius, map_manifest_, manifest_store_, manifest_writer_);
                 for (auto& t : trail_objects) {
                         all_rooms.push_back(std::move(t));
                 }
@@ -376,10 +366,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 SDL_Point center{map_radius_int, map_radius_int};
                 Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
                 AssetSpawner spawner(asset_lib, exclusion_zones);
-                std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json(
-                        boundary_data,
-                        area,
-                        map_id_ + "::map_boundary_data");
+                std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json( boundary_data, area, map_id_ + "::map_boundary_data");
                 int assigned_count = 0;
                 for (auto& asset_ptr : boundary_assets) {
                         Asset* asset = asset_ptr.get();

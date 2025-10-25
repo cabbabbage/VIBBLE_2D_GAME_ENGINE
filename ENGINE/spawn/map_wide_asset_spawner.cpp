@@ -32,7 +32,7 @@ std::uint64_t mix_value(std::uint64_t seed, std::uint64_t value) {
 }
 
 using vibble::strings::to_lower_copy;
-} // namespace
+}
 
 MapWideAssetSpawner::MapWideAssetSpawner(AssetLibrary* asset_library,
                                          const MapGridSettings& grid_settings,
@@ -91,7 +91,7 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
         SDL_Point{max_x, min_y},
         SDL_Point{max_x, max_y},
         SDL_Point{min_x, max_y},
-    };
+};
     Area sweep_area("map_wide_sweep", polygon);
     sweep_area.set_type("map_wide");
 
@@ -181,7 +181,7 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
     struct Cell {
         vibble::grid::Occupancy::Vertex* vertex = nullptr;
         Room* owner = nullptr;
-    };
+};
     std::vector<Cell> cells;
     cells.reserve(vertices.size());
     for (auto* vertex : vertices) {
@@ -231,14 +231,7 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
     std::vector<Area> exclusion_zones;
     auto asset_info_library = asset_library_->all();
     std::mt19937 rng;
-    SpawnContext context(rng,
-                         checker,
-                         exclusion_zones,
-                         asset_info_library,
-                         global_assets,
-                         asset_library_,
-                         grid_service,
-                         &occupancy);
+    SpawnContext context(rng, checker, exclusion_zones, asset_info_library, global_assets, asset_library_, grid_service, &occupancy);
     context.set_map_grid_settings(grid_settings_);
     context.set_spawn_resolution(resolution);
     context.set_trail_areas(trail_areas);
@@ -292,14 +285,7 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
             continue;
         }
 
-        Asset* spawned = context.spawnAsset(candidate->name,
-                                            candidate->info,
-                                            *owner->room_area,
-                                            spawn_pos,
-                                            0,
-                                            nullptr,
-                                            spawn_info->spawn_id,
-                                            "MapWide");
+        Asset* spawned = context.spawnAsset(candidate->name, candidate->info, *owner->room_area, spawn_pos, 0, nullptr, spawn_info->spawn_id, "MapWide");
         if (spawned) {
             spawned->set_owning_room_name(owner->room_name);
             owner_map[spawned] = owner;

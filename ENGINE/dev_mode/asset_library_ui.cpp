@@ -121,7 +121,7 @@ namespace {
         return original_size != arr.size();
     }
 
-} // namespace
+}
 
 struct AssetLibraryUI::AssetTileWidget : public Widget {
     static constexpr int kPad = 8;
@@ -231,35 +231,12 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
         const int bevel_depth = DMStyles::BevelDepth();
         const SDL_Color& highlight = DMStyles::HighlightColor();
         const SDL_Color& shadow = DMStyles::ShadowColor();
-        dm_draw::DrawBeveledRect(
-            r,
-            button_rect,
-            corner_radius,
-            bevel_depth,
-            delete_bg,
-            highlight,
-            shadow,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
-        dm_draw::DrawRoundedOutline(
-            r,
-            button_rect,
-            corner_radius,
-            1,
-            delete_style.border);
+        dm_draw::DrawBeveledRect( r, button_rect, corner_radius, bevel_depth, delete_bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        dm_draw::DrawRoundedOutline( r, button_rect, corner_radius, 1, delete_style.border);
         SDL_SetRenderDrawColor(r, delete_style.text.r, delete_style.text.g, delete_style.text.b, delete_style.text.a);
         const int cross_inset = std::max(bevel_depth + 1, button_rect.w / 4);
-        SDL_RenderDrawLine(r,
-                           button_rect.x + cross_inset,
-                           button_rect.y + cross_inset,
-                           button_rect.x + button_rect.w - cross_inset,
-                           button_rect.y + button_rect.h - cross_inset);
-        SDL_RenderDrawLine(r,
-                           button_rect.x + button_rect.w - cross_inset,
-                           button_rect.y + cross_inset,
-                           button_rect.x + cross_inset,
-                           button_rect.y + button_rect.h - cross_inset);
+        SDL_RenderDrawLine(r, button_rect.x + cross_inset, button_rect.y + cross_inset, button_rect.x + button_rect.w - cross_inset, button_rect.y + button_rect.h - cross_inset);
+        SDL_RenderDrawLine(r, button_rect.x + button_rect.w - cross_inset, button_rect.y + cross_inset, button_rect.x + cross_inset, button_rect.y + button_rect.h - cross_inset);
 
         int label_left = button_rect.x + button_rect.w + pad;
         int label_right = rect_.x + rect_.w - pad;
@@ -330,12 +307,7 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
         }
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
         const int tile_radius = std::min(DMStyles::CornerRadius(), std::min(rect_.w, rect_.h) / 2);
-        dm_draw::DrawRoundedOutline(
-            r,
-            rect_,
-            tile_radius,
-            1,
-            kTileBd);
+        dm_draw::DrawRoundedOutline( r, rect_, tile_radius, 1, kTileBd);
         if (label_font && label_rect.w > 0) {
             SDL_Color text_color = DMStyles::Label().color;
             SDL_Surface* surf = TTF_RenderUTF8_Blended(label_font, render_label.c_str(), text_color);
@@ -350,9 +322,7 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
                         dw = label_rect.w;
                     }
                     SDL_Rect dst{ label_rect.x,
-                                  label_rect.y + std::max(0, (label_rect.h - dh) / 2),
-                                  dw,
-                                  dh };
+                                  label_rect.y + std::max(0, (label_rect.h - dh) / 2), dw, dh };
                     SDL_RenderCopy(r, tex, nullptr, &dst);
                     SDL_DestroyTexture(tex);
                 }
@@ -457,35 +427,12 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
         const int bevel_depth = DMStyles::BevelDepth();
         const SDL_Color& highlight = DMStyles::HighlightColor();
         const SDL_Color& shadow = DMStyles::ShadowColor();
-        dm_draw::DrawBeveledRect(
-            r,
-            button_rect,
-            corner_radius,
-            bevel_depth,
-            delete_bg,
-            highlight,
-            shadow,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
-        dm_draw::DrawRoundedOutline(
-            r,
-            button_rect,
-            corner_radius,
-            1,
-            delete_style.border);
+        dm_draw::DrawBeveledRect( r, button_rect, corner_radius, bevel_depth, delete_bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        dm_draw::DrawRoundedOutline( r, button_rect, corner_radius, 1, delete_style.border);
         SDL_SetRenderDrawColor(r, delete_style.text.r, delete_style.text.g, delete_style.text.b, delete_style.text.a);
         const int cross_inset = std::max(bevel_depth + 1, button_rect.w / 4);
-        SDL_RenderDrawLine(r,
-                           button_rect.x + cross_inset,
-                           button_rect.y + cross_inset,
-                           button_rect.x + button_rect.w - cross_inset,
-                           button_rect.y + button_rect.h - cross_inset);
-        SDL_RenderDrawLine(r,
-                           button_rect.x + button_rect.w - cross_inset,
-                           button_rect.y + cross_inset,
-                           button_rect.x + cross_inset,
-                           button_rect.y + button_rect.h - cross_inset);
+        SDL_RenderDrawLine(r, button_rect.x + cross_inset, button_rect.y + cross_inset, button_rect.x + button_rect.w - cross_inset, button_rect.y + button_rect.h - cross_inset);
+        SDL_RenderDrawLine(r, button_rect.x + button_rect.w - cross_inset, button_rect.y + cross_inset, button_rect.x + cross_inset, button_rect.y + button_rect.h - cross_inset);
 
         int label_left = button_rect.x + button_rect.w + pad;
         int label_right = rect_.x + rect_.w - pad;
@@ -496,15 +443,13 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
         SDL_Rect label_rect{ label_left, rect_.y + pad, std::max(0, label_right - label_left), label_h };
         SDL_Rect footer_rect{ rect_.x + pad,
                               rect_.y + rect_.h - pad - footer_h,
-                              std::max(0, rect_.w - 2 * pad),
-                              footer_h };
+                              std::max(0, rect_.w - 2 * pad), footer_h };
         int preview_top = label_rect.y + label_rect.h + pad;
         int preview_bottom = footer_rect.y - pad;
         if (preview_bottom < preview_top) preview_bottom = preview_top;
         SDL_Rect preview_rect{ rect_.x + pad,
                                preview_top,
-                               std::max(0, rect_.w - 2 * pad),
-                               std::max(0, preview_bottom - preview_top) };
+                               std::max(0, rect_.w - 2 * pad), std::max(0, preview_bottom - preview_top) };
 
         TTF_Font* label_font = load_font(17);
         std::string caption = "#" + tag;
@@ -537,9 +482,7 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
                     int dh = 0;
                     SDL_QueryTexture(tex, nullptr, nullptr, &dw, &dh);
                     SDL_Rect dst{ label_rect.x,
-                                  label_rect.y + std::max(0, (label_rect.h - dh) / 2),
-                                  std::min(dw, label_rect.w),
-                                  dh };
+                                  label_rect.y + std::max(0, (label_rect.h - dh) / 2), std::min(dw, label_rect.w), dh };
                     SDL_RenderCopy(r, tex, nullptr, &dst);
                     SDL_DestroyTexture(tex);
                 }
@@ -576,9 +519,7 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
                         int dw = std::min(icon_w, preview_rect.w);
                         int dh = std::min(icon_h, preview_rect.h);
                         SDL_Rect dst{ preview_rect.x + (preview_rect.w - dw) / 2,
-                                      preview_rect.y + (preview_rect.h - dh) / 2,
-                                      dw,
-                                      dh };
+                                      preview_rect.y + (preview_rect.h - dh) / 2, dw, dh };
                         SDL_RenderCopy(r, tex, nullptr, &dst);
                         SDL_DestroyTexture(tex);
                     }
@@ -610,9 +551,7 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
                     int dh = 0;
                     SDL_QueryTexture(tex, nullptr, nullptr, &dw, &dh);
                     SDL_Rect dst{ footer_rect.x,
-                                  footer_rect.y + std::max(0, (footer_rect.h - dh) / 2),
-                                  std::min(dw, footer_rect.w),
-                                  dh };
+                                  footer_rect.y + std::max(0, (footer_rect.h - dh) / 2), std::min(dw, footer_rect.w), dh };
                     SDL_RenderCopy(r, tex, nullptr, &dst);
                     SDL_DestroyTexture(tex);
                 }
@@ -869,7 +808,7 @@ std::shared_ptr<AssetInfo> AssetLibraryUI::resolve_tag_to_asset(const std::strin
 
     auto pick_first = [](const auto& vec) -> std::shared_ptr<AssetInfo> {
         return vec.empty() ? nullptr : vec.front();
-    };
+};
 
     auto it = tag_asset_lookup_.find(normalized);
     if (it != tag_asset_lookup_.end()) {
@@ -878,7 +817,6 @@ std::shared_ptr<AssetInfo> AssetLibraryUI::resolve_tag_to_asset(const std::strin
         }
     }
 
-    // Fall back to raw tag lookup if normalization changed the value.
     if (auto raw_it = tag_asset_lookup_.find(tag); raw_it != tag_asset_lookup_.end()) {
         if (auto found = pick_first(raw_it->second)) {
             return found;
@@ -1125,9 +1063,7 @@ void AssetLibraryUI::confirm_delete_request() {
 
     const PendingDeleteInfo pending = *pending_delete_;
     const std::string asset_name = pending.name;
-    const std::filesystem::path asset_dir = pending.asset_dir.empty()
-        ? std::filesystem::path("SRC") / asset_name
-        : std::filesystem::path(pending.asset_dir);
+    const std::filesystem::path asset_dir = pending.asset_dir.empty() ? std::filesystem::path("SRC") / asset_name : std::filesystem::path(pending.asset_dir);
     const std::filesystem::path cache_dir = std::filesystem::path("cache") / asset_name;
 
     showing_delete_popup_ = false;
@@ -1259,11 +1195,7 @@ void AssetLibraryUI::update_delete_modal_geometry(int screen_w, int screen_h) {
     const int modal_w = 420;
     const int modal_h = 160;
     delete_modal_rect_ = SDL_Rect{
-        std::max(0, screen_w / 2 - modal_w / 2),
-        std::max(0, screen_h / 2 - modal_h / 2),
-        modal_w,
-        modal_h
-    };
+        std::max(0, screen_w / 2 - modal_w / 2), std::max(0, screen_h / 2 - modal_h / 2), modal_w, modal_h };
     const int button_w = 140;
     const int button_h = 40;
     const int button_gap = 20;
@@ -1317,7 +1249,7 @@ bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
             {"asset_type", "Object"},
             {"animations", nlohmann::json::object()},
             {"start", ""}
-        };
+};
         manifest_entry["start"] = asset_dir_str;
         manifest_entry["asset_directory"] = asset_dir_str;
         manifest_entry["tags"] = nlohmann::json::array();
@@ -1332,7 +1264,7 @@ bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
         manifest_entry["lighting_info"] = nlohmann::json::array();
         manifest_entry["size_settings"] = {
             {"scale_percentage", 100.0}
-        };
+};
 
         session.data() = manifest_entry;
         if (!session.commit()) {
@@ -1361,7 +1293,7 @@ bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
                     }
                     escaped.push_back('\"');
                     return escaped;
-                };
+};
                 std::string cmd = std::string("python scripts/animation_ui.py ") +
                                    "--manifest " + quote(manifest_arg) + " " +
                                    "--asset " + quote(asset_arg);
@@ -1588,44 +1520,14 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         const SDL_Color& shadow = DMStyles::ShadowColor();
         const int corner_radius = DMStyles::CornerRadius();
         const int bevel_depth = DMStyles::BevelDepth();
-        dm_draw::DrawBeveledRect(
-            r,
-            box,
-            corner_radius,
-            bevel_depth,
-            panel_bg,
-            highlight,
-            shadow,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( r, box, corner_radius, bevel_depth, panel_bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         const SDL_Color panel_border = DMStyles::Border();
-        dm_draw::DrawRoundedOutline(
-            r,
-            box,
-            corner_radius,
-            1,
-            panel_border);
+        dm_draw::DrawRoundedOutline( r, box, corner_radius, 1, panel_border);
 
         SDL_Rect input_rect{ box.x + 8, box.y + 8, box.w - 16, box.h - 16 };
         const DMTextBoxStyle& textbox = DMStyles::TextBox();
-        dm_draw::DrawBeveledRect(
-            r,
-            input_rect,
-            corner_radius,
-            bevel_depth,
-            textbox.bg,
-            highlight,
-            shadow,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
-        dm_draw::DrawRoundedOutline(
-            r,
-            input_rect,
-            corner_radius,
-            1,
-            textbox.border);
+        dm_draw::DrawBeveledRect( r, input_rect, corner_radius, bevel_depth, textbox.bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        dm_draw::DrawRoundedOutline( r, input_rect, corner_radius, 1, textbox.border);
 
         const int text_padding = 12 + bevel_depth;
         const int interior_h = std::max(0, input_rect.h - 2 * bevel_depth);
@@ -1710,24 +1612,9 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         const SDL_Color& shadow = DMStyles::ShadowColor();
         const int corner_radius = DMStyles::CornerRadius();
         const int bevel_depth = DMStyles::BevelDepth();
-        dm_draw::DrawBeveledRect(
-            r,
-            box,
-            corner_radius,
-            bevel_depth,
-            panel_bg,
-            highlight,
-            shadow,
-            false,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( r, box, corner_radius, bevel_depth, panel_bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         const SDL_Color panel_border = DMStyles::Border();
-        dm_draw::DrawRoundedOutline(
-            r,
-            box,
-            corner_radius,
-            1,
-            panel_border);
+        dm_draw::DrawRoundedOutline( r, box, corner_radius, 1, panel_border);
 
         std::string asset_label = "(Unnamed)";
         if (pending_delete_ && !pending_delete_->name.empty()) {
@@ -1752,8 +1639,7 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                     SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
                     SDL_Rect dst{ text_rect.x,
                                   text_rect.y,
-                                  std::min(tw, text_rect.w),
-                                  std::min(th, text_rect.h) };
+                                  std::min(tw, text_rect.w), std::min(th, text_rect.h) };
                     SDL_RenderCopy(r, tex, nullptr, &dst);
                     SDL_DestroyTexture(tex);
                 }
@@ -1767,23 +1653,8 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
             } else if (hovered) {
                 bg = style.hover_bg;
             }
-            dm_draw::DrawBeveledRect(
-                r,
-                rect,
-                corner_radius,
-                bevel_depth,
-                bg,
-                highlight,
-                shadow,
-                false,
-                DMStyles::HighlightIntensity(),
-                DMStyles::ShadowIntensity());
-            dm_draw::DrawRoundedOutline(
-                r,
-                rect,
-                corner_radius,
-                1,
-                style.border);
+            dm_draw::DrawBeveledRect( r, rect, corner_radius, bevel_depth, bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+            dm_draw::DrawRoundedOutline( r, rect, corner_radius, 1, style.border);
 
             TTF_Font* btn_font = load_font(style.label.font_size > 0 ? style.label.font_size : 16);
             if (!btn_font) {
@@ -1803,17 +1674,13 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                         text_y = std::max(text_y, rect.y + bevel_depth);
                         text_y = std::min(text_y, rect.y + rect.h - bevel_depth - th);
                         SDL_Rect dst{
-                            rect.x + (rect.w - tw) / 2,
-                            text_y,
-                            tw,
-                            th
-                        };
+                            rect.x + (rect.w - tw) / 2, text_y, tw, th };
                         SDL_RenderCopy(r, tex, nullptr, &dst);
                         SDL_DestroyTexture(tex);
                     }
                 }
             }
-        };
+};
 
         render_button(delete_yes_rect_, delete_yes_hovered_, delete_yes_pressed_, "Yes, delete", DMStyles::DeleteButton());
         render_button(delete_no_rect_, delete_no_hovered_, delete_no_pressed_, "Cancel", DMStyles::HeaderButton());

@@ -117,7 +117,7 @@ namespace {
             "trigger",
             "child",
             "spawning"
-        };
+};
         for (const char* known : kKnownTypes) {
             if (value == known) {
                 return true;
@@ -155,13 +155,11 @@ namespace {
     }
 
     static long long orientation(const SDL_Point& a, const SDL_Point& b, const SDL_Point& c) {
-        return static_cast<long long>(b.x - a.x) * static_cast<long long>(c.y - a.y) -
-               static_cast<long long>(b.y - a.y) * static_cast<long long>(c.x - a.x);
+        return static_cast<long long>(b.x - a.x) * static_cast<long long>(c.y - a.y) - static_cast<long long>(b.y - a.y) * static_cast<long long>(c.x - a.x);
     }
 
     static bool on_segment(const SDL_Point& a, const SDL_Point& b, const SDL_Point& c) {
-        return std::min(a.x, b.x) <= c.x && c.x <= std::max(a.x, b.x) &&
-               std::min(a.y, b.y) <= c.y && c.y <= std::max(a.y, b.y);
+        return std::min(a.x, b.x) <= c.x && c.x <= std::max(a.x, b.x) && std::min(a.y, b.y) <= c.y && c.y <= std::max(a.y, b.y);
     }
 
     static bool segments_intersect(const SDL_Point& a1, const SDL_Point& a2,
@@ -188,7 +186,7 @@ namespace {
                                       const SDL_Point& b1, const SDL_Point& b2) {
         auto equal = [](const SDL_Point& lhs, const SDL_Point& rhs) {
             return lhs.x == rhs.x && lhs.y == rhs.y;
-        };
+};
         return equal(a1, b1) || equal(a1, b2) || equal(a2, b1) || equal(a2, b2);
     }
 
@@ -223,7 +221,7 @@ namespace {
                     if (segments_intersect(s0, s1, q0, q1)) return false;
                 }
                 return true;
-            };
+};
 
             if (!segment_clear(from, candidate)) continue;
             if (!segment_clear(candidate, to)) continue;
@@ -273,9 +271,7 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
                                        const std::string& area_type) {
     if (!assets_ || !info) return false;
 
-    const double base_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor >= 0.0f)
-                                  ? static_cast<double>(info->scale_factor)
-                                  : 1.0;
+    const double base_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor >= 0.0f) ? static_cast<double>(info->scale_factor) : 1.0;
     auto scaled_dim = [&](int dimension) {
         if (dimension <= 0) {
             return 0;
@@ -289,7 +285,7 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
             return std::numeric_limits<int>::max();
         }
         return static_cast<int>(scaled);
-    };
+};
 
     int cw = std::max(32, scaled_dim(info->original_canvas_width));
     int ch = std::max(32, scaled_dim(info->original_canvas_height));
@@ -304,10 +300,7 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
         if ((fw == 0 || fh == 0) && fr) {
             SDL_QueryTexture(fr, nullptr, nullptr, &fw, &fh);
         }
-        const double asset_scale = (asset->info && std::isfinite(asset->info->scale_factor) &&
-                                    asset->info->scale_factor >= 0.0f)
-                                       ? static_cast<double>(asset->info->scale_factor)
-                                       : base_scale;
+        const double asset_scale = (asset->info && std::isfinite(asset->info->scale_factor) && asset->info->scale_factor >= 0.0f) ? static_cast<double>(asset->info->scale_factor) : base_scale;
         auto scale_with_asset = [&](int dimension) {
             if (dimension <= 0) return 0;
             if (asset_scale <= 0.0) return 0;
@@ -317,7 +310,7 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
                 return std::numeric_limits<int>::max();
             }
             return static_cast<int>(scaled);
-        };
+};
         if (fw > 0) cw = std::max(32, scale_with_asset(fw));
         if (fh > 0) ch = std::max(32, scale_with_asset(fh));
     }
@@ -779,8 +772,7 @@ void AreaOverlayEditor::ensure_toolbox() {
     toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
 
     toolbox_->set_expanded(true);
-    // Improve spacing and alignment for the Area Tools panel
-    // Target two-column layout (180px each) with a 12px gap: 2*180 + 12 = 372
+
     toolbox_->set_floating_content_width(372);
     toolbox_->set_padding(12);
     toolbox_->set_row_gap(10);
@@ -861,7 +853,7 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
     }
 
     if (mode_ == Mode::Mask) {
-        // Sliders request full-row layout; add them as single-column rows for clean alignment
+
         if (crop_left_slider_) {
             owned_widgets_.push_back(std::make_unique<SliderWidget>(crop_left_slider_.get()));
             rows.push_back({ owned_widgets_.back().get() });
@@ -1403,23 +1395,8 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
                     const SDL_Color outline{0, 0, 0, 255};
                     const int radius = std::min(DMStyles::CornerRadius(), std::min(mr.w, mr.h) / 2);
                     const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(mr.w, mr.h) / 2));
-                    dm_draw::DrawBeveledRect(
-                        r,
-                        mr,
-                        radius,
-                        bevel,
-                        fill,
-                        fill,
-                        fill,
-                        false,
-                        0.0f,
-                        0.0f);
-                    dm_draw::DrawRoundedOutline(
-                        r,
-                        mr,
-                        radius,
-                        1,
-                        outline);
+                    dm_draw::DrawBeveledRect( r, mr, radius, bevel, fill, fill, fill, false, 0.0f, 0.0f);
+                    dm_draw::DrawRoundedOutline( r, mr, radius, 1, outline);
                 }
             }
 

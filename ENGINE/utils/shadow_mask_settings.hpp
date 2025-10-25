@@ -3,11 +3,11 @@
 #include <algorithm>
 
 struct ShadowMaskSettings {
-    float expansion_ratio = 0.8f;        // Multiplier applied to the larger sprite dimension to extend the mask.
-    float blur_scale      = 1.0f;        // Multiplier for the automatically calculated blur radius.
-    float falloff_start   = 0.0f;        // Fraction [0,1) of the extension kept at full opacity before fade.
-    float falloff_exponent = 1.05f;      // Controls the steepness of the fade curve.
-    float alpha_multiplier = 1.0f;       // Global multiplier applied to the resulting alpha values.
+    float expansion_ratio = 0.8f;
+    float blur_scale      = 1.0f;
+    float falloff_start   = 0.0f;
+    float falloff_exponent = 1.05f;
+    float alpha_multiplier = 1.0f;
 };
 
 inline ShadowMaskSettings SanitizeShadowMaskSettings(const ShadowMaskSettings& settings) {

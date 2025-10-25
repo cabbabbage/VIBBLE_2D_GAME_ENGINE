@@ -20,11 +20,9 @@ public:
         int resolution = 0;
         SDL_Point center{0, 0};
         std::function<bool(SDL_Point)> overlaps_trail;
-    };
+};
 
-    std::vector<SDL_Point> plan_positions(const SpawnInfo& item,
-                                          const Area& area,
-                                          PlacementContext& placement) const;
+    std::vector<SDL_Point> plan_positions(const SpawnInfo& item, const Area& area, PlacementContext& placement) const;
 
     void spawn(const SpawnInfo& item, const Area* area, SpawnContext& ctx);
 };

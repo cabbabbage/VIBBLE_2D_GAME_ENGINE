@@ -236,22 +236,7 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 			continue;
 		}
 
-                auto trail_room = std::make_unique<Room>( a->map_origin,
-                                                         "trail",
-                                                         name,
-                                                         nullptr,
-                                                         manifest_context,
-                                                         asset_lib,
-                                                         &candidate,
-                                                         trail_config,
-                                                         map_assets_data,
-                                                         MapGridSettings::defaults(),
-                                                         map_radius,
-                                                         "trails_data",
-                                                         map_manifest,
-                                                         manifest_store,
-                                                         manifest_context,
-                                                         manifest_writer );
+                auto trail_room = std::make_unique<Room>( a->map_origin, "trail", name, nullptr, manifest_context, asset_lib, &candidate, trail_config, map_assets_data, MapGridSettings::defaults(), map_radius, "trails_data", map_manifest, manifest_store, manifest_context, manifest_writer );
 		a->add_connecting_room(trail_room.get());
 		b->add_connecting_room(trail_room.get());
 		trail_room->add_connecting_room(a);

@@ -63,7 +63,7 @@ std::vector<LightMapManager::ChunkSnapshot> LightMapManager::all_snapshots() con
     return snapshots;
 }
 
-std::vector<std::string> LightMapManager::assets_sampling_chunk(int /*index*/) const {
+std::vector<std::string> LightMapManager::assets_sampling_chunk(int ) const {
     return {};
 }
 

@@ -14,10 +14,7 @@ class AssetLibrary;
 class Room;
 class MapWideAssetSpawner {
 public:
-    MapWideAssetSpawner(AssetLibrary* asset_library,
-                        const MapGridSettings& grid_settings,
-                        std::string map_seed,
-                        nlohmann::json& map_assets_json);
+    MapWideAssetSpawner(AssetLibrary* asset_library, const MapGridSettings& grid_settings, std::string map_seed, nlohmann::json& map_assets_json);
 
     void spawn(std::vector<std::unique_ptr<Room>>& rooms);
 

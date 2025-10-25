@@ -315,14 +315,11 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
             animation_editor_window_->set_manifest_store(manifest_store_);
             animation_editor_window_->set_info(info_);
         } catch (const std::exception& ex) {
-            SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s",
-                    info_ ? info_->name.c_str() : "<null>",
-                    ex.what());
+            SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s", info_ ? info_->name.c_str() : "<null>", ex.what());
             animation_editor_window_->clear_info();
             animation_editor_window_->set_visible(false);
         } catch (...) {
-            SDL_Log("AssetInfoUI: failed to configure animation editor for %s due to unknown error.",
-                    info_ ? info_->name.c_str() : "<null>");
+            SDL_Log("AssetInfoUI: failed to configure animation editor for %s due to unknown error.", info_ ? info_->name.c_str() : "<null>");
             animation_editor_window_->clear_info();
             animation_editor_window_->set_visible(false);
         }
@@ -333,12 +330,9 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
             s->reset_scroll();
             s->build();
         } catch (const std::exception& ex) {
-            SDL_Log("AssetInfoUI: failed to build section while loading %s: %s",
-                    info_ ? info_->name.c_str() : "<null>",
-                    ex.what());
+            SDL_Log("AssetInfoUI: failed to build section while loading %s: %s", info_ ? info_->name.c_str() : "<null>", ex.what());
         } catch (...) {
-            SDL_Log("AssetInfoUI: failed to build section while loading %s due to unknown error.",
-                    info_ ? info_->name.c_str() : "<null>");
+            SDL_Log("AssetInfoUI: failed to build section while loading %s due to unknown error.", info_ ? info_->name.c_str() : "<null>");
         }
     }
 }
@@ -601,10 +595,7 @@ float AssetInfoUI::compute_player_screen_height(const camera& cam) const {
 
     float scale = cam.get_scale();
     float inv_scale = (scale > 0.0f) ? (1.0f / scale) : 1.0f;
-    const float base_scale = (player_asset->info && std::isfinite(player_asset->info->scale_factor) &&
-                              player_asset->info->scale_factor >= 0.0f)
-                                 ? player_asset->info->scale_factor
-                                 : 1.0f;
+    const float base_scale = (player_asset->info && std::isfinite(player_asset->info->scale_factor) && player_asset->info->scale_factor >= 0.0f) ? player_asset->info->scale_factor : 1.0f;
     if (ph > 0) {
         float screen_h = static_cast<float>(ph) * base_scale * inv_scale;
         return screen_h > 0.0f ? screen_h : 1.0f;
@@ -638,7 +629,7 @@ void AssetInfoUI::refresh_target_asset_scale() {
         }
         asset->on_scale_factor_changed();
         return true;
-    };
+};
 
     bool refreshed_any = false;
     if (assets_) {
@@ -683,7 +674,7 @@ void AssetInfoUI::sync_target_z_threshold() {
         }
         asset->set_z_index();
         return true;
-    };
+};
 
     bool updated_any = false;
     if (assets_) {
@@ -787,8 +778,7 @@ bool AssetInfoUI::apply_section_to_assets(AssetInfoSectionId section_id, const s
     }
 
     if (!manifest_store_) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "[AssetInfoUI] Manifest store unavailable; cannot apply settings to other assets.");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Manifest store unavailable; cannot apply settings to other assets.");
         return false;
     }
 
@@ -952,7 +942,7 @@ bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& f
             return;
         }
         fn(asset);
-    };
+};
 
     if (assets_) {
         for (Asset* asset : assets_->all) {
@@ -1027,9 +1017,7 @@ void AssetInfoUI::on_animation_document_saved() {
 
     const bool reloaded = info_->reload_animations_from_disk();
     if (!reloaded) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "[AssetInfoUI] Failed to reload animations for %s.",
-                    info_->name.c_str());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to reload animations for %s.", info_->name.c_str());
         return;
     }
 

@@ -92,7 +92,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 if (lowered == "trail") {
                         trail_areas.push_back(candidate);
                 }
-        };
+};
         if (current_room_) {
                 if (current_room_->room_area) {
                         add_trail_area(current_room_->room_area.get(), current_room_->room_area->get_type());
@@ -177,14 +177,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                                 attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
-                                        auto* result = ctx.spawnAsset(candidate.name,
-                                                                      candidate.info,
-                                                                      area,
-                                                                      spawn_pos,
-                                                                      0,
-                                                                      nullptr,
-                                                                      queue_item.spawn_id,
-                                                                      queue_item.position);
+                                        auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
                                         if (!result) {
                                                 attempt_weights[idx] = 0.0;
                                                 continue;
@@ -309,14 +302,7 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
                                         continue;
                                 }
 
-                                auto* result = ctx.spawnAsset(candidate.name,
-                                                             candidate.info,
-                                                             area,
-                                                             spawn_pos,
-                                                             0,
-                                                             nullptr,
-                                                             queue_item.spawn_id,
-                                                             queue_item.position);
+                                auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
                                 if (!result) {
                                         attempt_weights[idx] = 0.0;
                                         continue;
@@ -356,7 +342,7 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
         struct AreaOccupancy {
                 const Area* area = nullptr;
                 std::unique_ptr<vibble::grid::Occupancy> occupancy;
-        };
+};
 
         std::vector<AreaOccupancy> occupancy_cache;
         occupancy_cache.reserve(area_lookup.size() + 1);
@@ -376,7 +362,7 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
                         return occupancy_cache.back().occupancy.get();
                 }
                 return it->occupancy.get();
-        };
+};
 
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
@@ -397,14 +383,7 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
                         continue;
                 }
 
-                SpawnContext ctx(rng_,
-                                 checker_,
-                                 exclusion_zones,
-                                 asset_info_library_,
-                                 all_,
-                                 asset_library_,
-                                 grid_service,
-                                 occupancy);
+                SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, occupancy);
                 ctx.set_map_grid_settings(map_grid_settings_);
                 ctx.set_spawn_resolution(resolution);
                 ctx.set_trail_areas({});

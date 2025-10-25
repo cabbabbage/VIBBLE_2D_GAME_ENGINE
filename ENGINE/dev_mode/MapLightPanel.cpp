@@ -26,7 +26,7 @@ namespace {
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
 constexpr utils::color::RangedColor kDefaultMapColor{{0, 0}, {0, 0}, {0, 0}, {255, 255}};
 
-} // namespace
+}
 
 class MapLightPanel::WarningLabel : public Widget {
 public:
@@ -103,13 +103,10 @@ public:
         button_rect_ = SDL_Rect{
             rect_.x + horizontal_pad,
             rect_.y + vertical_pad,
-            std::max(0, rect_.w - horizontal_pad * 2),
-            button_height};
+            std::max(0, rect_.w - horizontal_pad * 2), button_height};
         card_rect_ = SDL_Rect{
             button_rect_.x,
-            button_rect_.y - std::max(0, vertical_pad / 2),
-            button_rect_.w,
-            button_rect_.h + vertical_pad};
+            button_rect_.y - std::max(0, vertical_pad / 2), button_rect_.w, button_rect_.h + vertical_pad};
         if (button_) {
             button_->set_rect(button_rect_);
         }
@@ -143,17 +140,7 @@ public:
             if (button_ && button_->is_hovered()) {
                 base = dm_draw::LightenColor(base, 0.12f);
             }
-            dm_draw::DrawBeveledRect(
-                r,
-                card_rect_,
-                radius,
-                1,
-                base,
-                base,
-                base,
-                false,
-                0.0f,
-                0.0f);
+            dm_draw::DrawBeveledRect( r, card_rect_, radius, 1, base, base, base, false, 0.0f, 0.0f);
             SDL_Color outline = DMStyles::Border();
             dm_draw::DrawRoundedOutline(r, card_rect_, radius, 1, outline);
         }
@@ -197,7 +184,7 @@ private:
         std::unique_ptr<DMColorRangeWidget> widget;
         SDL_Rect outer_rect{0, 0, 0, 0};
         SDL_Rect widget_rect{0, 0, 0, 0};
-    };
+};
 
     MapLightPanel& owner_;
     SDL_Rect rect_{0, 0, 0, 0};
@@ -219,11 +206,7 @@ private:
     double point_angle(int x, int y) const;
     double line_distance_to_point(double angle_deg, int x, int y) const;
     void draw_orbit_circle(SDL_Renderer* r) const;
-    void draw_orbit_line(SDL_Renderer* r,
-                         double angle_deg,
-                         const SDL_Color& color,
-                         bool focused,
-                         bool hovered) const;
+    void draw_orbit_line(SDL_Renderer* r, double angle_deg, const SDL_Color& color, bool focused, bool hovered) const;
 };
 
 MapLightPanel::OrbitKeyWidget::OrbitKeyWidget(MapLightPanel& owner)
@@ -414,17 +397,7 @@ void MapLightPanel::OrbitKeyWidget::render(SDL_Renderer* r) const {
                 base = dm_draw::LightenColor(base, 0.2f);
                 outline = focus_color;
             }
-            dm_draw::DrawBeveledRect(
-                r,
-                entry.outer_rect,
-                radius,
-                1,
-                base,
-                base,
-                base,
-                false,
-                0.0f,
-                0.0f);
+            dm_draw::DrawBeveledRect( r, entry.outer_rect, radius, 1, base, base, base, false, 0.0f, 0.0f);
             dm_draw::DrawRoundedOutline(r, entry.outer_rect, radius, 1, outline);
         }
         entry.widget->render(r);
@@ -549,8 +522,7 @@ void MapLightPanel::OrbitKeyWidget::layout_color_widgets() {
         entry.widget_rect = SDL_Rect{
             entry.outer_rect.x + inner_gap,
             entry.outer_rect.y + inner_gap,
-            std::max(0, entry.outer_rect.w - inner_gap * 2),
-            widget_height};
+            std::max(0, entry.outer_rect.w - inner_gap * 2), widget_height};
         entry.widget->set_rect(entry.widget_rect);
         y += outer_height + gap;
     }
@@ -700,7 +672,7 @@ void MapLightPanel::OrbitKeyWidget::draw_orbit_line(SDL_Renderer* r,
         auto draw_glow = [&](const SDL_Color& glow_color, int offset_x, int offset_y, Uint8 alpha) {
             SDL_SetRenderDrawColor(r, glow_color.r, glow_color.g, glow_color.b, alpha);
             SDL_RenderDrawLine(r, cx + offset_x, cy + offset_y, ex + offset_x, ey + offset_y);
-        };
+};
 
         if (focused) {
             const SDL_Color focus_glow = DMStyles::ButtonFocusOutline();
@@ -775,7 +747,7 @@ bool MapLightPanel::commit_light_changes_external() {
 void MapLightPanel::open()   {
     set_visible(true);
     set_expanded(true);
-    // Ensure controls are enabled/unlocked when opening in Map Mode
+
     setLocked(false);
 }
 void MapLightPanel::close()  { set_visible(false); }
@@ -802,19 +774,17 @@ void MapLightPanel::build_ui() {
     if (update_interval_) update_interval_->set_defer_commit_until_unfocus(true);
     if (orbit_x_)        orbit_x_->set_defer_commit_until_unfocus(true);
     if (orbit_y_)        orbit_y_->set_defer_commit_until_unfocus(true);
-    
 
     rebuild_rows();
 }
 
 void MapLightPanel::update_section_header_labels() {
     auto label_for = [](const std::string& title, bool collapsed) {
-        std::string label = collapsed ? std::string(DMIcons::CollapseCollapsed())
-                                      : std::string(DMIcons::CollapseExpanded());
+        std::string label = collapsed ? std::string(DMIcons::CollapseCollapsed()) : std::string(DMIcons::CollapseExpanded());
         label.push_back(' ');
         label += title;
         return label;
-    };
+};
     if (orbit_section_btn_) {
         orbit_section_btn_->set_text(label_for("Orbit Settings", orbit_section_collapsed_));
     }
@@ -1060,8 +1030,7 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPanel::load_reactive_se
 
     if (reactive_source) {
         try {
-            return render_pipeline::shading::sanitize_reactive_shadow_settings(
-                render_pipeline::shading::reactive_shadow_settings_from_json(*reactive_source, fallback));
+            return render_pipeline::shading::sanitize_reactive_shadow_settings( render_pipeline::shading::reactive_shadow_settings_from_json(*reactive_source, fallback));
         } catch (...) {
         }
     }
@@ -1090,7 +1059,7 @@ void MapLightPanel::sync_ui_from_json() {
 
     utils::color::RangedColor base_range{
         {255, 255}, {255, 255}, {255, 255}, {255, 255}
-    };
+};
     if (auto parsed = utils::color::ranged_color_from_json(L.value("base_color", nlohmann::json{}))) {
         base_range = *parsed;
     }
@@ -1127,7 +1096,7 @@ void MapLightPanel::sync_json_from_ui() {
 }
 
 void MapLightPanel::load_update_map_light_setting() {
-    // Default live update to ON when opening; persist user's choice thereafter
+
     update_map_light_enabled_ = devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true);
     if (update_map_light_checkbox_) {
         update_map_light_checkbox_->set_value(update_map_light_enabled_);
@@ -1361,7 +1330,7 @@ int MapLightPanel::find_pair_containing_angle(double angle_degrees) const {
         auto diff = [](double a, double b) {
             double delta = std::fabs(a - b);
             return std::min(delta, 360.0 - delta);
-        };
+};
         if (diff(primary, target) <= epsilon || diff(mirror, target) <= epsilon) {
             return static_cast<int>(i);
         }
@@ -1385,9 +1354,7 @@ void MapLightPanel::rebuild_orbit_key_pairs_from_json() {
     ensure_keys_array();
 
     const int previous_focus_id =
-        (focused_pair_index_ >= 0 && focused_pair_index_ < static_cast<int>(orbit_key_pairs_.size()))
-            ? orbit_key_pairs_[focused_pair_index_].id
-            : -1;
+        (focused_pair_index_ >= 0 && focused_pair_index_ < static_cast<int>(orbit_key_pairs_.size())) ? orbit_key_pairs_[focused_pair_index_].id : -1;
 
     utils::color::RangedColor base_range{{255,255},{255,255},{255,255},{255,255}};
     if (auto parsed = utils::color::ranged_color_from_json(L.value("base_color", nlohmann::json{}))) {
