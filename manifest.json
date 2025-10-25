@@ -1472,7 +1472,7 @@
           "max_number": 33,
           "min_number": 1,
           "placed_on_top_parent": true,
-          "position": "Exact",
+          "position": "Random",
           "priority": 0,
           "resolution": 0,
           "resolve_geometry_to_room_size": true,
