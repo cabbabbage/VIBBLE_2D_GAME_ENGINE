@@ -168,6 +168,8 @@ class AssetInfo {
         static std::optional<NamedArea> decode_entry(const AssetInfo& info, const nlohmann::json& entry);
 };
 
+    void set_spawn_groups(const nlohmann::json& groups);
+
         private:
     void load_base_properties(const nlohmann::json &data);
     void generate_lights(SDL_Renderer *renderer);

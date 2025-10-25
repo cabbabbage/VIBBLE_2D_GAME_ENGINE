@@ -1117,6 +1117,13 @@ nlohmann::json AssetInfo::spawn_groups_payload() const {
         }
     }
     return nlohmann::json::array();
+void AssetInfo::set_spawn_groups(const nlohmann::json& groups) {
+    nlohmann::json sanitized = nlohmann::json::array();
+    if (groups.is_array()) {
+        sanitized = groups;
+    }
+
+    info_json_["spawn_groups"] = std::move(sanitized);
 }
 
 void AssetInfo::set_lighting(bool is_shaded_,

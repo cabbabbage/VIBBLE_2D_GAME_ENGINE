@@ -978,18 +978,18 @@
             },
             {
               "chance": 5.0,
-              "name": "Axe"
+              "name": "Book"
             }
           ],
           "display_name": "New Spawn",
           "enforce_spacing": false,
           "link_to_area": true,
           "linked_area": "child_area_1_barrel",
-          "max_number": 1,
+          "max_number": 100,
           "min_number": 1,
           "perimeter_radius": 1,
           "placed_on_top_parent": true,
-          "position": "Perimeter",
+          "position": "Random",
           "priority": 0,
           "quantity": 1,
           "radius": 1,

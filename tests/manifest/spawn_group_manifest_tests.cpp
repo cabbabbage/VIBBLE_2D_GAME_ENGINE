@@ -6,6 +6,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -23,6 +24,15 @@ struct SectionSpawnGroupsTestAccess {
     }
     static void delete_spawn_group(Section_SpawnGroups& section, const std::string& id) {
         section.delete_spawn_group(id);
+    }
+};
+
+struct ManifestStoreProviderGuard {
+    explicit ManifestStoreProviderGuard(AssetInfo::ManifestStoreProvider provider) {
+        AssetInfo::set_manifest_store_provider(std::move(provider));
+    }
+    ~ManifestStoreProviderGuard() {
+        AssetInfo::set_manifest_store_provider({});
     }
 };
 
@@ -95,6 +105,9 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
     const auto manifest_path = make_manifest_path("spawn_group_edits", manifest);
     auto loader = [manifest_path]() { return load_manifest_from_path(manifest_path); };
     devmode::core::ManifestStore store(manifest_path, loader);
+    ManifestStoreProviderGuard provider_guard([&store]() -> devmode::core::ManifestStore* {
+        return &store;
+    });
 
     Section_SpawnGroups section;
     section.set_manifest_store(&store);
@@ -161,6 +174,12 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
     }));
     REQUIRE_FALSE(removed_ids.empty());
     CHECK(removed_ids.back() == added_id);
+
+    REQUIRE(info->commit_manifest());
+    auto after_commit = read_json(manifest_path);
+    auto& committed_groups = after_commit["assets"]["TestAsset"]["spawn_groups"];
+    REQUIRE(committed_groups.is_array());
+    CHECK(committed_groups.size() == deleted.size());
 
     devmode::core::DevJsonStore::instance().flush_all();
     fs::remove_all(manifest_path.parent_path());
