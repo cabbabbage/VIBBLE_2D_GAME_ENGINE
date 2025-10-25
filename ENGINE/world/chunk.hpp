@@ -44,6 +44,10 @@ struct Chunk {
         bool is_occupied_by_moving_source = false;
         // Net light contribution applied to the chunk after static and dynamic blending [0,1].
         float current_strength = 0.0f;
+        // Runtime measurement captured from the on-screen render output during this frame.
+        float runtime_average_strength = 0.0f;
+        // Marks whether runtime_average_strength contains a valid measurement for the current frame.
+        bool  has_runtime_average = false;
         // Lower bound of the static brightness samples observed for this chunk [0,1].
         float min_static_avg_strength = 0.0f;
         // Upper bound of the static brightness samples observed for this chunk [0,1].
@@ -115,6 +119,7 @@ public:
 
     void rebuild(SDL_Renderer* renderer);
     void update(SDL_Renderer* renderer, std::uint32_t delta_ms);
+    void capture_runtime_brightness(SDL_Renderer* renderer);
 
     float sample_brightness(int world_x,
                             int world_y,

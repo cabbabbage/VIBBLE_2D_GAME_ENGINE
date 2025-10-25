@@ -67,7 +67,7 @@ void Section_SpawnGroups::build() {
                 if (auto locked = weak_info.lock()) {
                     for (const auto& area : locked->areas) {
                         if (!area.name.empty()) {
-                            result.push_back({area.name, area.name});
+                            result.push_back({area.name, area.name, true});
                         }
                     }
                 }

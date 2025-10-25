@@ -20,6 +20,7 @@ class SpawnGroupLabelWidget;
 struct SpawnGroupLinkableAreaDescriptor {
     std::string id;
     std::string label;
+    bool is_child_area = false;
 };
 
 class SpawnGroupConfig : public DockableCollapsible {

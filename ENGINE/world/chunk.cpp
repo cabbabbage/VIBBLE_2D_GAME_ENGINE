@@ -5,10 +5,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <new>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -44,6 +46,8 @@ void Chunk::releaseLightingArtifacts() {
     lighting_dirty     = true;
     lighting.needs_update = true;
     lighting.current_strength = 0.0f;
+    lighting.runtime_average_strength = 0.0f;
+    lighting.has_runtime_average = false;
     lighting.min_static_avg_strength = 0.0f;
     lighting.max_static_avg_strength = 1.0f;
 }
@@ -249,6 +253,56 @@ void log_transparency_failure(const char* context,
 template <typename T>
 T lerp(T a, T b, float t) {
     return static_cast<T>(a + (b - a) * t);
+}
+
+float average_luminance_for_region(const std::vector<std::uint8_t>& pixels,
+                                   int buffer_width,
+                                   int buffer_height,
+                                   const SDL_Rect& region) {
+    if (buffer_width <= 0 || buffer_height <= 0 || pixels.empty()) {
+        return 0.0f;
+    }
+
+    const int start_x = std::clamp(region.x, 0, buffer_width);
+    const int start_y = std::clamp(region.y, 0, buffer_height);
+    const int end_x   = std::clamp(region.x + region.w, 0, buffer_width);
+    const int end_y   = std::clamp(region.y + region.h, 0, buffer_height);
+
+    if (end_x <= start_x || end_y <= start_y) {
+        return 0.0f;
+    }
+
+    double       accum = 0.0;
+    std::size_t  count = 0;
+    const double rw    = 0.2126;
+    const double gw    = 0.7152;
+    const double bw    = 0.0722;
+
+    for (int y = start_y; y < end_y; ++y) {
+        for (int x = start_x; x < end_x; ++x) {
+            const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(buffer_width) +
+                                       static_cast<std::size_t>(x)) *
+                                      4u;
+            if (index + 3 >= pixels.size()) {
+                continue;
+            }
+
+            const double r = static_cast<double>(pixels[index + 0]) / 255.0;
+            const double g = static_cast<double>(pixels[index + 1]) / 255.0;
+            const double b = static_cast<double>(pixels[index + 2]) / 255.0;
+            const double a = static_cast<double>(pixels[index + 3]) / 255.0;
+
+            const double luminance = (r * rw) + (g * gw) + (b * bw);
+            accum += luminance * a;
+            ++count;
+        }
+    }
+
+    if (count == 0) {
+        return 0.0f;
+    }
+
+    return static_cast<float>(accum / static_cast<double>(count));
 }
 
 std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
@@ -571,7 +625,10 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
 
         if (!chunk->lighting.needs_update) continue;
 
-        if (chunk->lighting.is_occupied_by_moving_source) {
+        if (chunk->lighting.has_runtime_average) {
+            chunk->lighting.current_strength = std::clamp(chunk->lighting.runtime_average_strength, 0.0f, 1.0f);
+            chunk->lighting.has_runtime_average = false;
+        } else if (chunk->lighting.is_occupied_by_moving_source) {
             float static_avg = world::static_brightness_for_opacity(*chunk, map_light_opacity);
             if (chunk->static_light_mask) {
                 const auto sample = vibble::render::sample_texture_transparency(renderer, chunk->static_light_mask);
@@ -608,6 +665,84 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
         compute_use_shadow_data_for_chunk(settings, grid, grad, map_light_direction, map_light_opacity, *chunk);
 
         chunk->lighting.needs_update = false;
+    }
+}
+
+void LightMap::capture_runtime_brightness(SDL_Renderer* renderer) {
+    std::scoped_lock lock(mutex_);
+    if (chunk_lighting_suspended_flag()) {
+        return;
+    }
+    if (!renderer || !assets_) {
+        return;
+    }
+    if (screen_width_ <= 0 || screen_height_ <= 0) {
+        return;
+    }
+
+    for (world::Chunk* chunk : active_chunks()) {
+        if (!chunk) {
+            continue;
+        }
+        chunk->lighting.has_runtime_average = false;
+        chunk->lighting.runtime_average_strength = 0.0f;
+    }
+
+    const SDL_Rect screen_rect{0, 0, screen_width_, screen_height_};
+    const int      pitch       = screen_rect.w * 4;
+
+    std::vector<std::uint8_t> pixels;
+    try {
+        pixels.resize(static_cast<std::size_t>(pitch) * static_cast<std::size_t>(screen_rect.h));
+    } catch (const std::bad_alloc&) {
+        vibble::log::warn("[LightMap] Unable to allocate runtime brightness buffer");
+        return;
+    }
+
+    if (SDL_RenderReadPixels(renderer,
+                              &screen_rect,
+                              SDL_PIXELFORMAT_RGBA32,
+                              pixels.data(),
+                              pitch) != 0) {
+        vibble::log::warn(std::string{"[LightMap] Failed to capture runtime brightness: "} + SDL_GetError());
+        return;
+    }
+
+    const camera& cam = assets_->getView();
+    SDL_Rect      world_view = world_rect_from_screen(cam, screen_rect);
+
+    for (world::Chunk* chunk : active_chunks()) {
+        if (!chunk) {
+            continue;
+        }
+        if (!intersects(chunk->world_bounds, world_view)) {
+            continue;
+        }
+
+        SDL_Point top_left =
+            cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
+        SDL_Point bottom_right = cam.map_to_screen({chunk->world_bounds.x + chunk->world_bounds.w,
+                                                    chunk->world_bounds.y + chunk->world_bounds.h});
+
+        SDL_Rect screen_chunk{};
+        screen_chunk.x = std::min(top_left.x, bottom_right.x);
+        screen_chunk.y = std::min(top_left.y, bottom_right.y);
+        screen_chunk.w = std::abs(bottom_right.x - top_left.x);
+        screen_chunk.h = std::abs(bottom_right.y - top_left.y);
+
+        SDL_Rect overlap{};
+        if (SDL_IntersectRect(&screen_chunk, &screen_rect, &overlap) == SDL_FALSE) {
+            continue;
+        }
+        if (overlap.w <= 0 || overlap.h <= 0) {
+            continue;
+        }
+
+        const float luminance = average_luminance_for_region(pixels, screen_rect.w, screen_rect.h, overlap);
+        chunk->lighting.runtime_average_strength = std::clamp(luminance, 0.0f, 1.0f);
+        chunk->lighting.has_runtime_average      = true;
+        chunk->lighting.needs_update             = true;
+        chunk->lighting.is_active                = true;
     }
 }
 

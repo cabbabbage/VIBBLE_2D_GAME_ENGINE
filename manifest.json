@@ -14084,9 +14084,9 @@
           }
         },
         "mult": 0.32,
-        "orbit_radius": 1561,
+        "orbit_radius": 2003,
         "orbit_x": 1561,
-        "orbit_y": 1000,
+        "orbit_y": 2003,
         "radius": 2759,
         "reactive_shadows": {
           "virtual_light_map": {
@@ -14101,7 +14101,7 @@
             "vertical_falloff": 3.5
           }
         },
-        "update_interval": 2
+        "update_interval": 4
       },
       "map_name": "FORREST",
       "reactive_shadows": {
@@ -14143,9 +14143,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            120,
-            36,
             242,
+            193,
+            36,
             255
           ],
           "edge_smoothness": 2,
@@ -14221,9 +14221,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            36,
-            242,
-            242,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 101,

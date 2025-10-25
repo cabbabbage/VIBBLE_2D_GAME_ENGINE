@@ -328,8 +328,6 @@ void SceneRenderer::render(){
     if (light_map_ && !chunk_lighting_suspended_){
         // Keep the sampler available for the pipeline.
         render_pipeline_.lighting().light_map_sampler = light_map_.get();
-        // Update chunk tile masks so moving lights affecting them are reflected this frame.
-        light_map_->update(renderer_, 0u);
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
@@ -544,6 +542,10 @@ void SceneRenderer::render(){
 
         render_commands(texture_commands_);
         render_dynamic_darkness_overlay(map_light_opacity);
+        if (light_map_ && !chunk_lighting_suspended_) {
+            light_map_->capture_runtime_brightness(renderer_);
+            light_map_->update(renderer_, 0u);
+        }
         render_light_map();
 
         render_commands(remaining_commands_);

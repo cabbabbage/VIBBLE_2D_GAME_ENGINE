@@ -204,6 +204,8 @@ void PreloadInputs::disableScreenLightAndMovingLights() {
     backup_.lighting_active       = chunk_->lighting.is_active;
     backup_.moving_light_occupied = chunk_->lighting.is_occupied_by_moving_source;
     backup_.current_strength      = chunk_->lighting.current_strength;
+    backup_.runtime_average_valid    = chunk_->lighting.has_runtime_average;
+    backup_.runtime_average_strength = chunk_->lighting.runtime_average_strength;
     backup_.valid                 = true;
 
     chunk_->brightness_strength              = 0.0f;
@@ -215,6 +217,8 @@ void PreloadInputs::disableScreenLightAndMovingLights() {
     chunk_->lighting.is_active               = false;
     chunk_->lighting.is_occupied_by_moving_source = false;
     chunk_->lighting.current_strength        = 0.0f;
+    chunk_->lighting.has_runtime_average     = false;
+    chunk_->lighting.runtime_average_strength = 0.0f;
 }
 
 void PreloadInputs::restoreRuntimeLighting() {
@@ -231,6 +235,8 @@ void PreloadInputs::restoreRuntimeLighting() {
     chunk_->lighting.is_active               = backup_.lighting_active;
     chunk_->lighting.is_occupied_by_moving_source = backup_.moving_light_occupied;
     chunk_->lighting.current_strength        = backup_.current_strength;
+    chunk_->lighting.has_runtime_average     = backup_.runtime_average_valid;
+    chunk_->lighting.runtime_average_strength = backup_.runtime_average_strength;
 
     backup_.valid = false;
 }

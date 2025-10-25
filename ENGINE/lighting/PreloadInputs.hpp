@@ -82,6 +82,8 @@ private:
         bool  lighting_active              = false;
         bool  moving_light_occupied        = false;
         float current_strength             = 0.0f;
+        bool  runtime_average_valid        = false;
+        float runtime_average_strength     = 0.0f;
     } backup_{};
 };
 

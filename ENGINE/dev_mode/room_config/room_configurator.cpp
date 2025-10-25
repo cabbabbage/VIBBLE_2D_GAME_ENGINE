@@ -1338,7 +1338,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                         if (name_it != area_entry.end() && name_it->is_string()) {
                             std::string name = name_it->get<std::string>();
                             if (!name.empty()) {
-                                result.push_back({name, name});
+                                result.push_back({name, name, true});
                             }
                         }
                     }
@@ -1350,7 +1350,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                 if (!room_) return result;
                 for (const auto& named : room_->areas) {
                     if (!named.name.empty()) {
-                        result.push_back({named.name, named.name});
+                        result.push_back({named.name, named.name, false});
                     }
                 }
                 return result;

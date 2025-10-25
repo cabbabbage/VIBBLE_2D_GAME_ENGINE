@@ -3404,7 +3404,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
                     if (name_it != area_entry.end() && name_it->is_string()) {
                         std::string name = name_it->get<std::string>();
                         if (!name.empty()) {
-                            result.push_back({name, name});
+                            result.push_back({name, name, true});
                         }
                     }
                 }
@@ -3416,7 +3416,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             if (!current_room_) return result;
             for (const auto& named : current_room_->areas) {
                 if (!named.name.empty()) {
-                    result.push_back({named.name, named.name});
+                    result.push_back({named.name, named.name, false});
                 }
             }
             return result;
