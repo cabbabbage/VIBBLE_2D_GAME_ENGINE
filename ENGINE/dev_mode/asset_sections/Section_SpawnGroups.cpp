@@ -163,11 +163,21 @@ void Section_SpawnGroups::reload_from_file() {
         return;
     }
 
+    bool found_groups = false;
     auto view = manifest_store_->get_asset(info_->name);
     if (view && view->is_object()) {
         const auto it = view->find("spawn_groups");
         if (it != view->end() && it->is_array()) {
             groups_ = *it;
+            found_groups = true;
+        }
+    }
+
+    if (info_) {
+        if (found_groups) {
+            info_->set_spawn_groups_payload(groups_);
+        } else {
+            info_->set_spawn_groups_payload(nlohmann::json());
         }
     }
 }
@@ -204,6 +214,9 @@ bool Section_SpawnGroups::save_to_file() {
 
     manifest_store_->flush();
     groups_ = std::move(sanitized);
+    if (info_) {
+        info_->set_spawn_groups_payload(groups_);
+    }
     return true;
 }
 

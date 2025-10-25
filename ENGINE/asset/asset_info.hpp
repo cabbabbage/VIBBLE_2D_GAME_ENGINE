@@ -134,6 +134,9 @@ class AssetInfo {
     void set_shading_screen_brightness_multiplier(float multiplier);
     void set_shading_opacity_multiplier(float multiplier);
 
+    void set_spawn_groups_payload(const nlohmann::json& groups);
+    nlohmann::json spawn_groups_payload() const;
+
     std::string info_json_path() const { return info_json_path_; }
     std::string asset_dir_path() const { return dir_path_; }
 

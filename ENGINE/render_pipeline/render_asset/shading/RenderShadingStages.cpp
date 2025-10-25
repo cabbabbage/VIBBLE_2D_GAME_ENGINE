@@ -271,15 +271,28 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     SDL_SetTextureColorMod(mask_texture, 0, 0, 0);
     SDL_SetTextureAlphaMod(mask_texture, shade_alpha);
 
-    const int scaled_w   = std::max(1, static_cast<int>(std::lround(static_cast<float>(width) * scale)));
-    const int scaled_h   = std::max(1, static_cast<int>(std::lround(static_cast<float>(height) * scale)));
-    const int offset_px_x = static_cast<int>(std::lround(offset_x));
-    const int offset_px_y = static_cast<int>(std::lround(offset_y));
-    const SDL_Point anchor{ width / 2, height / 2 };
-    SDL_Rect dest{ anchor.x - scaled_w / 2 + offset_px_x,
-                   anchor.y - scaled_h / 2 + offset_px_y,
-                   scaled_w,
-                   scaled_h };
+    int mask_w = width;
+    int mask_h = height;
+    if (mask_texture) {
+        int queried_w = mask_w;
+        int queried_h = mask_h;
+        if (SDL_QueryTexture(mask_texture, nullptr, nullptr, &queried_w, &queried_h) == 0) {
+            mask_w = std::max(1, queried_w);
+            mask_h = std::max(1, queried_h);
+        }
+    }
+
+    const float scaled_w_f = std::max(static_cast<float>(mask_w) * scale, 1.0f);
+    const float scaled_h_f = std::max(static_cast<float>(mask_h) * scale, 1.0f);
+    const int   scaled_w   = std::max(1, static_cast<int>(std::lround(scaled_w_f)));
+    const int   scaled_h   = std::max(1, static_cast<int>(std::lround(scaled_h_f)));
+    const float base_center_x = static_cast<float>(width) * 0.5f;
+    const float base_center_y = static_cast<float>(height) * 0.5f;
+    const float dest_x_f    = base_center_x - static_cast<float>(scaled_w) * 0.5f + offset_x;
+    const float dest_y_f    = base_center_y - static_cast<float>(scaled_h) * 0.5f + offset_y;
+    const int   dest_px_x   = static_cast<int>(std::lround(dest_x_f));
+    const int   dest_px_y   = static_cast<int>(std::lround(dest_y_f));
+    SDL_Rect    dest{dest_px_x, dest_px_y, scaled_w, scaled_h};
     SDL_RenderCopy(renderer, mask_texture, nullptr, &dest);
 
     SDL_SetTextureBlendMode(mask_texture, saved_blend);

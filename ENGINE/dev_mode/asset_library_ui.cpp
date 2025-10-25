@@ -1163,14 +1163,6 @@ void AssetLibraryUI::confirm_delete_request() {
                       << asset_name << "'\n";
         }
 
-        if (library_owner_) {
-            library_owner_->remove(asset_name);
-            if (assets_owner_) {
-                if (SDL_Renderer* renderer = assets_owner_->renderer()) {
-                    library_owner_->ensureAllAnimationsLoaded(renderer);
-                }
-            }
-        }
     }
 
     if (!asset_dir.empty()) {
@@ -1234,6 +1226,15 @@ void AssetLibraryUI::confirm_delete_request() {
 
     if (manifest_store_owner_ && manifest_flush_required) {
         manifest_store_owner_->flush();
+    }
+
+    if (library_owner_ && !asset_name.empty()) {
+        library_owner_->remove(asset_name);
+        if (assets_owner_) {
+            if (SDL_Renderer* renderer = assets_owner_->renderer()) {
+                library_owner_->ensureAllAnimationsLoaded(renderer);
+            }
+        }
     }
 
     preview_attempted_.erase(asset_name);

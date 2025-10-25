@@ -845,6 +845,22 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         }
     }
 
+    bool map_direction_changed = false;
+    if (map_light_direction) {
+        const SDL_FPoint dir = *map_light_direction;
+        if (!last_map_light_direction_valid_ ||
+            std::abs(dir.x - last_map_light_direction_.x) > 1e-4f ||
+            std::abs(dir.y - last_map_light_direction_.y) > 1e-4f) {
+            map_direction_changed = true;
+        }
+        last_map_light_direction_        = dir;
+        last_map_light_direction_valid_ = true;
+    } else if (last_map_light_direction_valid_) {
+        map_direction_changed            = true;
+        last_map_light_direction_valid_ = false;
+        last_map_light_direction_        = SDL_FPoint{0.0f, 0.0f};
+    }
+
     const int   radius = std::max(0, settings.search_radius_cells);
     const float fx     = std::max(0.0f, settings.falloff_horizontal);
     const float fy     = std::max(0.0f, settings.falloff_vertical);
@@ -857,23 +873,19 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         bool any_cell_active = false;
 
         for (auto& cell : chunk->lighting_chunks()) {
-            cell.lighting.is_active = true;
-            any_cell_active         = true;
+            cell.lighting.is_active     = true;
+            cell.lighting.needs_update = true;
+            any_cell_active             = true;
 
             if (cell.lighting.has_runtime_average) {
                 cell.lighting.current_strength =
                     std::clamp(cell.lighting.runtime_average_strength, 0.0f, 1.0f);
                 cell.lighting.runtime_average_strength = cell.lighting.current_strength;
                 cell.lighting.has_runtime_average      = false;
-                cell.lighting.needs_update             = true;
             }
 
-            if (map_opacity_changed) {
+            if (map_opacity_changed || map_direction_changed) {
                 cell.lighting.needs_update = true;
-            }
-
-            if (!cell.lighting.needs_update) {
-                continue;
             }
 
             cell.lighting.current_strength = std::clamp(cell.lighting.current_strength, 0.0f, 1.0f);
@@ -915,9 +927,8 @@ void LightMap::capture_runtime_brightness(SDL_Renderer* renderer) {
         }
         for (auto& cell : chunk->lighting_chunks()) {
             cell.lighting.has_runtime_average      = false;
-            cell.lighting.runtime_average_strength = cell.lighting.current_strength;
+            cell.lighting.runtime_average_strength = 0.0f;
         }
-        chunk->update_aggregate_from_lighting_chunks();
     }
 
     const SDL_Rect screen_rect{0, 0, screen_width_, screen_height_};

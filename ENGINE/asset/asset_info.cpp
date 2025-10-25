@@ -1097,6 +1097,28 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
     info_json_["child_assets"] = std::move(arr);
 }
 
+void AssetInfo::set_spawn_groups_payload(const nlohmann::json& groups) {
+    if (!info_json_.is_object()) {
+        info_json_ = nlohmann::json::object();
+    }
+
+    if (groups.is_array()) {
+        info_json_["spawn_groups"] = groups;
+    } else {
+        info_json_.erase("spawn_groups");
+    }
+}
+
+nlohmann::json AssetInfo::spawn_groups_payload() const {
+    if (info_json_.is_object()) {
+        auto it = info_json_.find("spawn_groups");
+        if (it != info_json_.end() && it->is_array()) {
+            return *it;
+        }
+    }
+    return nlohmann::json::array();
+}
+
 void AssetInfo::set_lighting(bool is_shaded_,
                              const LightSource& shading,
                              int shading_factor,

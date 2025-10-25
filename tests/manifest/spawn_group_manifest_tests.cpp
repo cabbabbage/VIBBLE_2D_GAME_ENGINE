@@ -166,3 +166,67 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
     fs::remove_all(manifest_path.parent_path());
 }
 
+TEST_CASE("Section_SpawnGroups synchronizes AssetInfo spawn_groups payload") {
+    nlohmann::json manifest = {
+        {"assets", {
+            {"TestAsset", {
+                {"spawn_groups", nlohmann::json::array({
+                    nlohmann::json{
+                        {"spawn_id", "alpha"},
+                        {"display_name", "One"},
+                        {"priority", 0},
+                        {"candidates", nlohmann::json::array({
+                            nlohmann::json{{"name", "first"}, {"chance", 100}}
+                        })}
+                    }
+                })}
+            }}
+        }},
+        {"maps", nlohmann::json::object()}
+    };
+
+    const auto manifest_path = make_manifest_path("spawn_group_sync", manifest);
+    auto loader = [manifest_path]() { return load_manifest_from_path(manifest_path); };
+    devmode::core::ManifestStore store(manifest_path, loader);
+
+    AssetInfo::set_manifest_store_provider([&store]() -> devmode::core::ManifestStore* {
+        return &store;
+    });
+
+    Section_SpawnGroups section;
+    section.set_manifest_store(&store);
+    SectionSpawnGroupsTestAccess::set_rebuilding(section, true);
+
+    auto metadata = basic_asset_metadata();
+    metadata["spawn_groups"] = manifest["assets"]["TestAsset"]["spawn_groups"];
+    auto info = std::make_shared<AssetInfo>("TestAsset", metadata);
+    section.set_info(info);
+    SectionSpawnGroupsTestAccess::reload(section);
+
+    REQUIRE(section.groups().is_array());
+    auto payload = info->spawn_groups_payload();
+    REQUIRE(payload.is_array());
+    CHECK(payload == section.groups());
+
+    SectionSpawnGroupsTestAccess::add_spawn_group(section);
+    store.flush();
+
+    payload = info->spawn_groups_payload();
+    REQUIRE(payload.is_array());
+    CHECK(payload == section.groups());
+
+    REQUIRE(info->commit_manifest());
+    store.flush();
+
+    auto after_commit = read_json(manifest_path);
+    REQUIRE(after_commit.contains("assets"));
+    REQUIRE(after_commit["assets"].contains("TestAsset"));
+    const auto& persisted = after_commit["assets"]["TestAsset"];
+    REQUIRE(persisted.contains("spawn_groups"));
+    CHECK(persisted["spawn_groups"] == payload);
+
+    AssetInfo::set_manifest_store_provider({});
+    devmode::core::DevJsonStore::instance().flush_all();
+    fs::remove_all(manifest_path.parent_path());
+}
+
