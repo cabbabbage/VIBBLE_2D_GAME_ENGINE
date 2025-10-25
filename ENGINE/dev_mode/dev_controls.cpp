@@ -1988,6 +1988,13 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_assets", map_assets_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_edge", edge_open);
 
+    if (room_editor_) {
+        room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::AssetLibrary, library_open);
+        room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::Camera, camera_open);
+        room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::Lighting, lights_open);
+        room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::MapLayers, layers_open);
+    }
+
     for (const auto& type : devmode::area_mode::area_types()) {
         const std::string id = std::string("area_") + type;
         map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Area, id, active_area_type_filters_.count(type) > 0);

@@ -13841,12 +13841,12 @@
           ]
         },
         {
-          "bounding_extent": 2000.0,
+          "bounding_extent": 0.0,
           "level": 1,
-          "max_rooms": 1,
+          "max_rooms": 0,
           "min_rooms": 0,
           "name": "layer_1",
-          "ring_radius": 3034.0,
+          "ring_radius": 1034.0,
           "rooms": []
         }
       ],
@@ -14063,22 +14063,48 @@
           "name": "NewRoom",
           "spawn_groups": []
         },
-        "spawn": {
+        "base": {
           "curvyness": 2,
           "edge_smoothness": 2,
           "geometry": "Circle",
           "inherits_map_assets": false,
           "is_boss": false,
-          "is_spawn": false,
-          "max_height": 4000,
-          "max_radius": 2000,
-          "max_width": 4000,
-          "min_height": 1500,
-          "min_radius": 750,
-          "min_width": 1500,
-          "name": "test_2",
-          "radius": 834,
-          "spawn_groups": []
+          "is_spawn": true,
+          "max_height": 1800,
+          "max_radius": 900,
+          "max_width": 1800,
+          "min_height": 1800,
+          "min_radius": 900,
+          "min_width": 1800,
+          "name": "base",
+          "radius": 900,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "candle"
+                }
+              ],
+              "display_name": "candle",
+              "dx": -141,
+              "dy": -272,
+              "enforce_spacing": false,
+              "max_number": 25,
+              "min_number": 15,
+              "origional_height": 2448,
+              "origional_width": 2477,
+              "perimeter_radius": 566,
+              "position": "Perimeter",
+              "radius": 562,
+              "resolution": 4,
+              "spawn_id": "spn-cd2298321f6e"
+            }
+          ]
         }
       },
       "trails_data": {

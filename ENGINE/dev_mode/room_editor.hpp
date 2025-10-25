@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <string>
 #include <SDL.h>
@@ -109,6 +110,17 @@ protected:
     void handle_spawn_config_change(const nlohmann::json& entry);
 
 private:
+    enum class BlockingPanel {
+        Camera,
+        Lighting,
+        MapLayers,
+        AssetLibrary,
+        Count,
+    };
+
+    void set_blocking_panel_visible(BlockingPanel panel, bool visible);
+    bool any_blocking_panel_visible() const;
+
     enum class DragMode {
         None,
         Free,
@@ -229,6 +241,8 @@ private:
     std::function<void(bool)> header_visibility_callback_{};
     bool room_config_panel_visible_ = false;
     bool asset_info_panel_visible_ = false;
+
+    std::array<bool, static_cast<size_t>(BlockingPanel::Count)> blocking_panel_visible_{};
 
     bool last_area_editor_active_ = false;
     bool area_editor_override_active_ = false;

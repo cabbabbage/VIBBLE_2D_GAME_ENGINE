@@ -1578,12 +1578,13 @@ void MapModeUI::ensure_room_configurator() {
         }
     }
     if (room_config_container_) {
-        room_config_container_->set_close_button_enabled(false);
+        room_config_container_->set_close_button_enabled(true);
     }
     if (room_configurator_ && room_config_container_) {
         room_configurator_->attach_container(room_config_container_.get());
         apply_sliding_area_bounds();
     }
+    update_room_config_header_controls();
 }
 
 void MapModeUI::open_room_configuration(const std::string& room_key, SlidingPanel return_panel) {
@@ -1594,6 +1595,7 @@ void MapModeUI::open_room_configuration(const std::string& room_key, SlidingPane
     }
 
     room_config_return_panel_ = return_panel;
+    update_room_config_header_controls();
 
     nlohmann::json& map_info = *map_info_;
     nlohmann::json& rooms = map_info["rooms_data"];
@@ -1642,6 +1644,7 @@ void MapModeUI::close_room_configuration(bool show_rooms_list) {
         room_config_return_panel_ = SlidingPanel::None;
         show_sliding_panel(room_config_return_panel_);
     }
+    update_room_config_header_controls();
 }
 
 void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
@@ -1830,18 +1833,49 @@ std::string MapModeUI::rename_active_room(const std::string& old_name, const std
     nlohmann::json entry = rooms[current_key];
     entry["name"] = desired_name;
 
+    const bool renaming_active = !active_room_config_key_.empty();
+
+    auto refresh_room_binding = [&](const std::string& key) {
+        if (!renaming_active || !room_configurator_) {
+            return;
+        }
+        if (active_room_config_key_ != key) {
+            return;
+        }
+        auto it = rooms.find(key);
+        if (it == rooms.end() || !it->is_object()) {
+            return;
+        }
+        room_configurator_->refresh_spawn_groups(it.value());
+    };
+
     if (candidate == current_key || rooms.contains(candidate)) {
         rooms[current_key] = std::move(entry);
+        if (renaming_active) {
+            active_room_config_key_ = current_key;
+        }
         handle_rooms_data_mutated(true);
+        refresh_room_binding(current_key);
         return current_key;
     }
 
     rooms.erase(current_key);
     rooms[candidate] = std::move(entry);
     map_layers::rename_room_references_in_layers(map_info, current_key, candidate);
-    active_room_config_key_ = candidate;
+    if (renaming_active) {
+        active_room_config_key_ = candidate;
+    }
     handle_rooms_data_mutated(true);
+    refresh_room_binding(candidate);
     return candidate;
+}
+
+void MapModeUI::update_room_config_header_controls() {
+    if (!room_config_container_) {
+        return;
+    }
+    room_config_container_->set_close_button_enabled(true);
+    room_config_container_->clear_header_navigation_button();
 }
 
 void MapModeUI::delete_active_room_spawn_group(const std::string& spawn_id) {

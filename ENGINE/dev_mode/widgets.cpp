@@ -1727,10 +1727,19 @@ void DMDropdown::set_rect(const SDL_Rect& r) {
 }
 
 void DMDropdown::set_selected(int idx) {
-    index_ = clamp_index(idx);
+    const int clamped = clamp_index(idx);
+    const bool changed = clamped != index_;
+    index_ = clamped;
     pending_index_ = index_;
     has_pending_index_ = focused_;
     hovered_option_index_ = focused_ ? pending_index_ : -1;
+
+    if (changed && focused_ && active_ == this) {
+        focused_ = false;
+        has_pending_index_ = false;
+        hovered_option_index_ = -1;
+        if (active_ == this) active_ = nullptr;
+    }
 }
 
 bool DMDropdown::handle_event(const SDL_Event& e) {
@@ -1740,15 +1749,34 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
         hovered_ = inside_box;
 
         bool inside_options = false;
+        bool inside_options_area = false;
         int hovered_option = -1;
         std::vector<OptionEntry> entries;
         if (focused_ && active_ == this && build_option_entries(entries)) {
+            SDL_Rect options_bounds{0, 0, 0, 0};
+            bool have_bounds = false;
             for (const OptionEntry& entry : entries) {
-                if (SDL_PointInRect(&p, &entry.rect)) {
+                if (!have_bounds) {
+                    options_bounds = entry.rect;
+                    have_bounds = true;
+                } else {
+                    const int min_x = std::min(options_bounds.x, entry.rect.x);
+                    const int min_y = std::min(options_bounds.y, entry.rect.y);
+                    const int max_x = std::max(options_bounds.x + options_bounds.w, entry.rect.x + entry.rect.w);
+                    const int max_y = std::max(options_bounds.y + options_bounds.h, entry.rect.y + entry.rect.h);
+                    options_bounds.x = min_x;
+                    options_bounds.y = min_y;
+                    options_bounds.w = max_x - min_x;
+                    options_bounds.h = max_y - min_y;
+                }
+
+                if (!inside_options && SDL_PointInRect(&p, &entry.rect)) {
                     inside_options = true;
                     hovered_option = entry.index;
-                    break;
                 }
+            }
+            if (have_bounds) {
+                inside_options_area = SDL_PointInRect(&p, &options_bounds);
             }
         }
 
@@ -1760,7 +1788,7 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
             hovered_option_index_ = -1;
         }
 
-        if (focused_ && active_ == this && !inside_box && !inside_options) {
+        if (focused_ && active_ == this && !inside_box && !inside_options_area) {
             const bool applied = commit_pending_selection();
             focused_ = false;
             has_pending_index_ = false;

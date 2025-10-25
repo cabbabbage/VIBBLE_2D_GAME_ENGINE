@@ -1,5 +1,7 @@
 #include "room_editor.hpp"
 
+#include <algorithm>
+
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
@@ -357,6 +359,7 @@ void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {
     if (!enabled_) {
         active_modal_ = ActiveModal::None;
         mouse_controls_enabled_last_frame_ = false;
+        blocking_panel_visible_.fill(false);
     }
 
     camera* cam = assets_ ? &assets_->getView() : nullptr;
@@ -835,6 +838,7 @@ void RoomEditor::toggle_asset_library() {
         return;
     }
     library_ui_->toggle();
+    set_blocking_panel_visible(BlockingPanel::AssetLibrary, library_ui_ && library_ui_->is_visible());
 }
 
 void RoomEditor::open_asset_library() {
@@ -844,10 +848,12 @@ void RoomEditor::open_asset_library() {
         return;
     }
     library_ui_->open();
+    set_blocking_panel_visible(BlockingPanel::AssetLibrary, library_ui_ && library_ui_->is_visible());
 }
 
 void RoomEditor::close_asset_library() {
     if (library_ui_) library_ui_->close();
+    set_blocking_panel_visible(BlockingPanel::AssetLibrary, library_ui_ && library_ui_->is_visible());
     pending_spawn_world_pos_.reset();
 }
 
@@ -1193,6 +1199,20 @@ void RoomEditor::set_zoom_scale_factor(double factor) {
 
 bool RoomEditor::is_spawn_group_panel_visible() const {
     return spawn_group_panel_ && spawn_group_panel_->is_visible();
+}
+
+void RoomEditor::set_blocking_panel_visible(BlockingPanel panel, bool visible) {
+    const size_t index = static_cast<size_t>(panel);
+    if (index >= blocking_panel_visible_.size()) {
+        return;
+    }
+    blocking_panel_visible_[index] = visible;
+}
+
+bool RoomEditor::any_blocking_panel_visible() const {
+    return std::any_of(blocking_panel_visible_.begin(),
+                       blocking_panel_visible_.end(),
+                       [](bool state) { return state; });
 }
 
 void RoomEditor::handle_mouse_input(const Input& input) {
@@ -1603,6 +1623,10 @@ bool RoomEditor::should_enable_mouse_controls() const {
         return false;
     }
     if (area_editor_ && area_editor_->is_active()) {
+        return false;
+    }
+
+    if (any_blocking_panel_visible()) {
         return false;
     }
 
