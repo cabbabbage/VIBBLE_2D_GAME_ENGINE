@@ -397,27 +397,27 @@ bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
             return true;
         }
         bool slider_handled = false;
+        bool slider_changed = false;
         if (candidate.range_slider) {
             slider_handled = candidate.range_slider->handle_event(e);
-            if (slider_handled) {
-                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-                    begin_slider_dirty_suppression(candidate.range_slider.get());
-                }
-                if (handle_slider_change(candidate)) {
-                    notify_change();
-                }
+            if (slider_handled && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                begin_slider_dirty_suppression(candidate.range_slider.get());
+            }
+            slider_changed = handle_slider_change(candidate);
+            if (slider_changed) {
+                notify_change();
             }
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 end_slider_dirty_suppression(candidate.range_slider.get());
-            }
-            if (slider_handled) {
-                return true;
             }
         }
         if (candidate.add_child_button && candidate.add_child_button->handle_event(e)) {
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 open_child_selector(candidate.candidate_index);
             }
+            return true;
+        }
+        if (slider_handled) {
             return true;
         }
         for (auto& child : candidate.children) {
@@ -508,7 +508,7 @@ void MapLayerControlsDisplay::rebuild_content() const {
             row.max_instances = entry.value("max_instances", 0);
             row.remove_button = std::make_unique<DMButton>(std::string(DMIcons::Close()), &DMStyles::DeleteButton(), kRemoveButtonWidth, DMButton::height());
             row.range_slider = std::make_unique<DMRangeSlider>(0, map_layers::kCandidateRangeMax, row.min_instances, row.max_instances);
-            row.range_slider->set_defer_commit_until_unfocus(false);
+            row.range_slider->set_defer_commit_until_unfocus(true);
 
             const auto required_it = entry.find("required_children");
             if (required_it != entry.end() && required_it->is_array()) {
