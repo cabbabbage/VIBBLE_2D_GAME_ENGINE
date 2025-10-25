@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -54,6 +55,7 @@ private:
         double angle = 0.0;
         double extent = 0.0;
         SDL_FPoint position{0.0f, 0.0f};
+        SDL_Color color{255, 255, 255, 255};
     };
 
     struct LayerVisual {
@@ -73,11 +75,18 @@ private:
         std::vector<RoomVisual> rooms;
     };
 
+    struct RoomLegendEntry {
+        std::string key;
+        std::string display_name;
+        SDL_Color color{255, 255, 255, 255};
+    };
+
     void rebuild_visuals();
     void ensure_latest_visuals() const;
     void recalculate_preview_scale();
     double compute_preview_scale() const;
     SDL_Color layer_color(int index) const;
+    SDL_Color room_color(const std::string& key) const;
     std::string display_name_for_room(const std::string& key) const;
     const nlohmann::json& layers_array() const;
     const nlohmann::json* rooms_data() const;
@@ -92,6 +101,7 @@ private:
     void remove_listener();
 
     void render_preview(SDL_Renderer* renderer) const;
+    void render_room_legend(SDL_Renderer* renderer) const;
 
 private:
     nlohmann::json* map_info_ = nullptr;
@@ -101,10 +111,12 @@ private:
     SDL_Rect rect_{0, 0, 0, 0};
     SDL_Point preview_center_{0, 0};
     SDL_Rect preview_rect_{0, 0, 0, 0};
+    SDL_Rect legend_rect_{0, 0, 0, 0};
 
     mutable bool dirty_ = true;
 
     std::vector<LayerVisual> layer_visuals_;
+    std::vector<RoomLegendEntry> room_legend_entries_;
     double max_visual_radius_ = 1.0;
     mutable double preview_scale_ = 1.0;
     double min_edge_distance_ = static_cast<double>(map_layers::kDefaultMinEdgeDistance);

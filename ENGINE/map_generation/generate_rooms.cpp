@@ -1,6 +1,7 @@
 #include "generate_rooms.hpp"
 #include "generate_trails.hpp"
 #include "spawn/asset_spawner.hpp"
+#include "spawn/map_wide_asset_spawner.hpp"
 #include <cmath>
 #include <algorithm>
 #include <random>
@@ -71,7 +72,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                         const nlohmann::json& edge_data,
                                                         nlohmann::json& rooms_data,
                                                         nlohmann::json& trails_data,
-                                                        const nlohmann::json& map_assets_data,
+                                                        nlohmann::json& map_assets_data,
                                                         const MapGridSettings& grid_settings) {
         std::vector<std::unique_ptr<Room>> all_rooms;
         if (map_layers_.empty()) return all_rooms;
@@ -83,7 +84,10 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 if (!rooms_data.is_object()) return nullptr;
                 return &rooms_data[name];
 };
-        auto* map_assets_ptr = &map_assets_data;
+        if (!map_assets_data.is_object()) {
+                map_assets_data = nlohmann::json::object();
+        }
+        const nlohmann::json* map_assets_ptr = &map_assets_data;
         auto root = std::make_unique<Room>(
                                         Room::Point{ map_center_x_, map_center_y_ },
                                         "room",
@@ -264,9 +268,13 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                         all_rooms.push_back(std::move(t));
                 }
         }
-	if (testing) {
-		std::cout << "[GenerateRooms] Trail generation complete. Total rooms now: " << all_rooms.size() << "\n";
-	}
+        if (testing) {
+                std::cout << "[GenerateRooms] Trail generation complete. Total rooms now: " << all_rooms.size() << "\n";
+        }
+        {
+                MapWideAssetSpawner map_wide(asset_lib, grid_settings, map_id_, map_assets_data);
+                map_wide.spawn(all_rooms);
+        }
         if (!edge_data.is_null() && !edge_data.empty()) {
                 std::vector<Area> exclusion_zones;
                 for (const auto& r : all_rooms) {

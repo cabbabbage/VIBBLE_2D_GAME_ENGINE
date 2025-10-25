@@ -13841,12 +13841,12 @@
           ]
         },
         {
-          "bounding_extent": 1100.0,
+          "bounding_extent": 2000.0,
           "level": 1,
           "max_rooms": 1,
           "min_rooms": 0,
           "name": "layer_1",
-          "ring_radius": 2400.0,
+          "ring_radius": 3300.0,
           "rooms": [
             {
               "max_instances": 1,

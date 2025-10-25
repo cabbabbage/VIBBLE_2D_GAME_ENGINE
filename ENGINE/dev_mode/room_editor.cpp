@@ -12,6 +12,7 @@
 #include "map_layers_common.hpp"
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/core/manifest_store.hpp"
+#include "dev_mode/DockableCollapsible.hpp"
 #include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
@@ -112,6 +113,52 @@ std::string make_unique_room_key_excluding(const nlohmann::json& rooms_data,
         candidate = base + "_" + std::to_string(suffix++);
     }
     return candidate;
+}
+
+nlohmann::json* find_spawn_entry_in_array(nlohmann::json& array, const std::string& spawn_id) {
+    if (!array.is_array()) {
+        return nullptr;
+    }
+    for (auto& entry : array) {
+        if (!entry.is_object()) {
+            continue;
+        }
+        auto id_it = entry.find("spawn_id");
+        if (id_it != entry.end() && id_it->is_string() && id_it->get<std::string>() == spawn_id) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+nlohmann::json* find_spawn_entry_recursive(nlohmann::json& node,
+                                          const std::string& spawn_id,
+                                          nlohmann::json** owner_array) {
+    if (node.is_object()) {
+        for (auto it = node.begin(); it != node.end(); ++it) {
+            if (it.key() == "spawn_groups" && it->is_array()) {
+                if (nlohmann::json* entry = find_spawn_entry_in_array(*it, spawn_id)) {
+                    if (owner_array) {
+                        *owner_array = &(*it);
+                    }
+                    return entry;
+                }
+            }
+            if (it.key() == "spawn_groups") {
+                continue;
+            }
+            if (nlohmann::json* nested = find_spawn_entry_recursive(it.value(), spawn_id, owner_array)) {
+                return nested;
+            }
+        }
+    } else if (node.is_array()) {
+        for (auto& element : node) {
+            if (nlohmann::json* nested = find_spawn_entry_recursive(element, spawn_id, owner_array)) {
+                return nested;
+            }
+        }
+    }
+    return nullptr;
 }
 
 std::optional<double> ray_segment_distance(SDL_Point origin,
@@ -355,6 +402,13 @@ void RoomEditor::update(const Input& input) {
 
     handle_delete_shortcut(input);
 
+    if (!should_enable_mouse_controls()) {
+        if (assets_) {
+            pan_zoom_.cancel(assets_->getView());
+        }
+        return;
+    }
+
     const int mx = input.getX();
     const int my = input.getY();
 
@@ -441,7 +495,11 @@ void RoomEditor::update_ui(const Input& input) {
 
             if (assets_) {
                 camera& cam = assets_->getView();
-                pan_zoom_.handle_input(cam, input, true);
+                if (should_enable_mouse_controls()) {
+                    pan_zoom_.handle_input(cam, input, true);
+                } else {
+                    pan_zoom_.cancel(cam);
+                }
             }
         }
         if (was && !now) {
@@ -1468,6 +1526,45 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
     return false;
 }
 
+bool RoomEditor::should_enable_mouse_controls() const {
+    if (!enabled_) {
+        return false;
+    }
+
+    if (active_modal_ != ActiveModal::None) {
+        return false;
+    }
+
+    if (info_ui_ && info_ui_->is_visible()) {
+        return false;
+    }
+    if (library_ui_ && library_ui_->is_visible()) {
+        return false;
+    }
+    if (room_cfg_ui_ && room_cfg_ui_->visible()) {
+        return false;
+    }
+    if (area_editor_ && area_editor_->is_active()) {
+        return false;
+    }
+
+    auto floating = FloatingDockableManager::instance().open_panels();
+    for (DockableCollapsible* panel : floating) {
+        if (!panel) {
+            continue;
+        }
+        if (spawn_group_panel_ && panel == spawn_group_panel_.get()) {
+            continue;
+        }
+        if (!panel->is_visible()) {
+            continue;
+        }
+        return false;
+    }
+
+    return true;
+}
+
 void RoomEditor::handle_shortcuts(const Input& input) {
     const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (!ctrl) return;
@@ -2250,6 +2347,36 @@ nlohmann::json* RoomEditor::find_spawn_entry(const std::string& spawn_id) {
     return nullptr;
 }
 
+RoomEditor::SpawnEntryResolution RoomEditor::locate_spawn_entry(const std::string& spawn_id) {
+    SpawnEntryResolution result;
+    if (spawn_id.empty()) {
+        return result;
+    }
+
+    if (current_room_) {
+        auto& root = current_room_->assets_data();
+        nlohmann::json& arr = ensure_spawn_groups_array(root);
+        if (nlohmann::json* entry = find_spawn_entry(spawn_id)) {
+            result.entry = entry;
+            result.owner_array = &arr;
+            result.source = SpawnEntryResolution::Source::Room;
+            return result;
+        }
+    }
+
+    if (assets_) {
+        nlohmann::json& map_info = assets_->map_info_json();
+        nlohmann::json* owner = nullptr;
+        if (nlohmann::json* entry = find_spawn_entry_recursive(map_info, spawn_id, &owner)) {
+            result.entry = entry;
+            result.owner_array = owner;
+            result.source = SpawnEntryResolution::Source::Map;
+        }
+    }
+
+    return result;
+}
+
 const Area* RoomEditor::find_edge_area_for_entry(const nlohmann::json& entry) const {
     if (!current_room_) {
         return nullptr;
@@ -2367,15 +2494,51 @@ void RoomEditor::refresh_spawn_group_config_ui() {
         }
     };
 
-    nlohmann::json* active_entry = nullptr;
+    SpawnEntryResolution resolved;
     if (active_spawn_group_id_) {
-        active_entry = find_spawn_entry(*active_spawn_group_id_);
+        resolved = locate_spawn_entry(*active_spawn_group_id_);
+        if (resolved.source == SpawnEntryResolution::Source::Map && resolved.owner_array) {
+            if (sanitize_perimeter_spawn_groups(*resolved.owner_array)) {
+                if (assets_) {
+                    assets_->save_map_info_json();
+                }
+            }
+        }
     }
 
-    if (active_entry) {
-        spawn_group_panel_->bind_entry(*active_entry,
-                                       on_change,
-                                       on_entry_change,
+    auto map_on_change = [this]() {
+        if (!assets_) {
+            return;
+        }
+        assets_->save_map_info_json();
+    };
+
+    auto map_on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary& summary) {
+        if (!assets_) {
+            return;
+        }
+        bool sanitized = false;
+        if (entry.is_object()) {
+            const std::string id = entry.value("spawn_id", std::string{});
+            SpawnEntryResolution current = locate_spawn_entry(id);
+            if (current.owner_array) {
+                sanitized = sanitize_perimeter_spawn_groups(*current.owner_array);
+            }
+        }
+        assets_->save_map_info_json();
+        if (sanitized || summary.method_changed || summary.quantity_changed || summary.candidates_changed ||
+            summary.resolution_changed) {
+            assets_->notify_spawn_group_config_changed(entry);
+        }
+    };
+
+    if (resolved.valid()) {
+        auto on_change_cb = (resolved.source == SpawnEntryResolution::Source::Room) ? on_change : map_on_change;
+        auto on_entry_change_cb =
+            (resolved.source == SpawnEntryResolution::Source::Room) ? on_entry_change : map_on_entry_change;
+        spawn_group_panel_->bind_entry(*resolved.entry,
+                                       on_change_cb,
+                                       on_entry_change_cb,
                                        SpawnGroupConfig::EntryCallbacks{},
                                        configure_entry);
         spawn_group_panel_->set_scroll_enabled(false);

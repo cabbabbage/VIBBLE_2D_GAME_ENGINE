@@ -70,6 +70,7 @@ class Room {
     std::vector<std::unique_ptr<Asset>>&& get_room_assets();
     void set_layer(int value);
     const MapGridSettings& map_grid_settings() const { return map_grid_settings_; }
+    bool inherits_map_assets() const { return inherits_map_assets_; }
     Point map_origin;
     double scale_ = 1.0;
     std::string room_name;
@@ -113,7 +114,7 @@ class Room {
         private:
     nlohmann::json assets_json;
     nlohmann::json* room_data_ptr_ = nullptr;
-    const nlohmann::json* map_assets_data_ptr_ = nullptr;
+    bool inherits_map_assets_ = false;
     MapGridSettings map_grid_settings_{};
     std::string manifest_context_;
     std::string data_section_;

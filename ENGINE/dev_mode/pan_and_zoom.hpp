@@ -11,6 +11,8 @@ public:
 
     void handle_input(camera& cam, const Input& input, bool pan_blocked);
 
+    void cancel(camera& cam);
+
     bool is_panning() const { return panning_; }
 
 private:

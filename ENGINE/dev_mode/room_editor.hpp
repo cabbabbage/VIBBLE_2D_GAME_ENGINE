@@ -142,6 +142,7 @@ private:
     void handle_click(const Input& input);
     void update_highlighted_assets();
     bool is_ui_blocking_input(int mx, int my) const;
+    bool should_enable_mouse_controls() const;
     void handle_shortcuts(const Input& input);
     void handle_delete_shortcut(const Input& input);
     void update_area_editor_focus();
@@ -158,6 +159,18 @@ private:
     void finalize_drag_session();
     void reset_drag_state();
     nlohmann::json* find_spawn_entry(const std::string& spawn_id);
+    struct SpawnEntryResolution {
+        enum class Source {
+            None,
+            Room,
+            Map,
+        };
+        nlohmann::json* entry = nullptr;
+        nlohmann::json* owner_array = nullptr;
+        Source source = Source::None;
+        bool valid() const { return entry != nullptr; }
+    };
+    SpawnEntryResolution locate_spawn_entry(const std::string& spawn_id);
     SDL_Point get_room_center() const;
     std::pair<int, int> get_room_dimensions() const;
     void refresh_spawn_group_config_ui();

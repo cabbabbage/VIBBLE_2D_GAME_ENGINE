@@ -207,12 +207,12 @@ json_path((manifest_context.empty() ? data_section : manifest_context + "::" + d
 room_area(nullptr),
 type(type_),
 room_data_ptr_(room_data),
-map_assets_data_ptr_(map_assets_data),
 map_grid_settings_(grid_settings),
 manifest_context_(manifest_context),
 data_section_(data_section),
 manifest_writer_(std::move(manifest_writer))
 {
+        (void)map_assets_data;
         if (testing) {
                 std::cout << "[Room] Created room: " << room_name
                 << " at (" << origin.first << ", " << origin.second << ")"
@@ -234,6 +234,8 @@ manifest_writer_(std::move(manifest_writer))
         if (!assets_json.is_object()) {
                 assets_json = json::object();
         }
+
+        inherits_map_assets_ = assets_json.value("inherits_map_assets", false);
 
         load_named_areas_from_json();
         int map_radius_int = static_cast<int>(std::round(map_radius));
@@ -343,16 +345,6 @@ manifest_writer_(std::move(manifest_writer))
         };
         source_contexts.push_back(room_context);
 
-        if (assets_json.value("inherits_map_assets", false) && map_assets_data_ptr_) {
-                json_sources.push_back(*map_assets_data_ptr_);
-                AssetSpawnPlanner::SourceContext map_assets_context;
-                map_assets_context.persist = [this, push_payload](const nlohmann::json& updated) {
-                        push_payload([&](nlohmann::json& payload) {
-                                payload["map_assets_data"] = updated;
-                        });
-                };
-                source_contexts.push_back(map_assets_context);
-        }
         planner = std::make_unique<AssetSpawnPlanner>( json_sources, *room_area, *asset_lib, source_contexts );
         std::vector<Area> exclusion;
         AssetSpawner spawner(asset_lib, exclusion);

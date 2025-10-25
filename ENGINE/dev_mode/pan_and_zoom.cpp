@@ -51,3 +51,12 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
     cam.set_focus_override(new_center);
     cam.set_screen_center(new_center);
 }
+
+void PanAndZoom::cancel(camera& cam) {
+    if (!panning_) {
+        return;
+    }
+    panning_ = false;
+    cam.set_manual_zoom_override(false);
+    cam.clear_focus_override();
+}

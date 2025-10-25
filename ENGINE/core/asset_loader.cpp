@@ -240,13 +240,14 @@ void AssetLoader::loadRooms() {
         nlohmann::json empty_assets   = nlohmann::json::object();
         map_grid_settings_ = MapGridSettings::from_json(map_info_json_.contains("map_grid_settings") ? &map_info_json_["map_grid_settings"] : nullptr);
         MapGridSettings grid_settings = map_grid_settings_;
+        nlohmann::json& map_assets_json = map_assets_data_ ? *map_assets_data_ : empty_assets;
         auto room_ptrs = generator.build( asset_library_,
                                           map_radius_,
                                           layer_radii_,
                                           map_edge_data_ ? *map_edge_data_ : empty_edge,
                                           rooms_data_        ? *rooms_data_        : empty_rooms,
                                           trails_data_       ? *trails_data_       : empty_trails,
-                                          map_assets_data_   ? *map_assets_data_   : empty_assets,
+                                          map_assets_json,
                                           grid_settings);
         for (auto& up : room_ptrs) {
                 rooms_.push_back(up.get());
