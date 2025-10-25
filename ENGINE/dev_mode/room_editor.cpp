@@ -16,6 +16,7 @@
 #include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/DockableCollapsible.hpp"
 #include "dev_mode/draw_utils.hpp"
+#include "dev_mode_color_utils.hpp"
 #include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
@@ -67,12 +68,9 @@ namespace {
 
 constexpr int kLabelPadding = 6;
 constexpr int kLabelVerticalOffset = 32;
-const SDL_Color kLabelBg{0, 0, 0, 180};
-const SDL_Color kLabelBorder{255, 255, 255, 80};
+const SDL_Color kLabelBg{32, 32, 32, 200};
+const SDL_Color kLabelBorder{255, 255, 255, 96};
 const SDL_Color kLabelText{240, 240, 240, 255};
-const SDL_Color kTrailLabelBg{10, 70, 30, 200};
-const SDL_Color kTrailLabelBorder{60, 190, 110, 200};
-const SDL_Color kTrailLabelText{210, 255, 220, 255};
 constexpr int kClipboardNudge = 16;
 
 std::string trim_copy_room_editor(const std::string& input) {
@@ -85,6 +83,18 @@ std::string trim_copy_room_editor(const std::string& input) {
         return !is_space(ch);
     }).base(), result.end());
     return result;
+}
+
+float display_color_luminance(SDL_Color color) {
+    return static_cast<float>(0.2126 * static_cast<double>(color.r) /
+                              255.0 +
+                              0.7152 * static_cast<double>(color.g) / 255.0 +
+                              0.0722 * static_cast<double>(color.b) / 255.0);
+}
+
+SDL_Color with_alpha(SDL_Color color, Uint8 alpha) {
+    color.a = alpha;
+    return color;
 }
 
 std::string sanitize_room_key_local(const std::string& input) {
@@ -1164,15 +1174,11 @@ void RoomEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoin
     if (!label_font_) return;
 
     const std::string& name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
-    bool is_trail = false;
-    if (!room->type.empty()) {
-        std::string lowered = room->type;
-        std::transform(lowered.begin(), lowered.end(), lowered.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        is_trail = (lowered == "trail");
-    }
+    SDL_Color base_color = room->display_color();
+    SDL_Color text_color = display_color_luminance(base_color) > 0.55f
+                               ? SDL_Color{20, 20, 20, 255}
+                               : kLabelText;
 
-    const SDL_Color& text_color = is_trail ? kTrailLabelText : kLabelText;
     SDL_Surface* text_surface = TTF_RenderUTF8_Blended(label_font_, name.c_str(), text_color);
     if (!text_surface) return;
 
@@ -1181,8 +1187,8 @@ void RoomEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoin
 
     label_rects_.push_back(bg_rect);
 
-    const SDL_Color& bg_color = is_trail ? kTrailLabelBg : kLabelBg;
-    const SDL_Color& border_color = is_trail ? kTrailLabelBorder : kLabelBorder;
+    SDL_Color bg_color = with_alpha(lighten(base_color, 0.08f), 205);
+    SDL_Color border_color = with_alpha(darken(base_color, 0.3f), 235);
 
     const int radius = std::min(DMStyles::CornerRadius(), std::min(bg_rect.w, bg_rect.h) / 2);
     const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(bg_rect.w, bg_rect.h) / 2));
@@ -1509,7 +1515,7 @@ void RoomEditor::release_label_font() {
 void RoomEditor::render_overlays(SDL_Renderer* renderer) {
     if (renderer) {
         if (assets_ && current_room_ && current_room_->room_area) {
-            const auto& style = dm_draw::ResolveRoomBoundsOverlayStyle();
+            const auto style = dm_draw::ResolveRoomBoundsOverlayStyle(current_room_->display_color());
             dm_draw::RenderRoomBoundsOverlay(
                 renderer,
                 assets_->getView(),

@@ -7,6 +7,7 @@
 #include <vector>
 #include <memory>
 #include <random>
+#include <SDL.h>
 #include <nlohmann/json.hpp>
 
 namespace devmode::core {
@@ -39,4 +40,5 @@ class GenerateTrails {
     bool testing = false;
     std::vector<std::pair<Room*, Room*>> illegal_connections;
     nlohmann::json* trails_data_ = nullptr;
+    std::vector<SDL_Color> trail_colors_;
 };

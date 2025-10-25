@@ -17,6 +17,8 @@
 #include "dev_mode_color_utils.hpp"
 #include "map_layers_controller.hpp"
 #include "map_generation/map_layers_geometry.hpp"
+#include "utils/display_color.hpp"
+#include "utils/ranged_color.hpp"
 
 namespace {
 constexpr double kTau = 6.28318530717958647692;
@@ -298,7 +300,10 @@ void MapLayersPreviewWidget::create_new_room_entry() {
     while (rooms.contains(key)) {
         key = base + std::to_string(suffix++);
     }
-    rooms[key] = nlohmann::json{{"name", key}};
+    std::vector<SDL_Color> colors = utils::display_color::collect(rooms);
+    nlohmann::json& entry = rooms[key];
+    entry = nlohmann::json{{"name", key}};
+    utils::display_color::ensure(entry, colors);
     mark_dirty();
     if (on_change_) {
         on_change_();
@@ -448,6 +453,20 @@ SDL_Color MapLayersPreviewWidget::layer_color(int index) const {
 SDL_Color MapLayersPreviewWidget::room_color(const std::string& key) const {
     if (key.empty()) {
         return SDL_Color{200, 200, 200, 255};
+    }
+    const nlohmann::json* rooms_info = rooms_data();
+    if (rooms_info && rooms_info->is_object()) {
+        auto it = rooms_info->find(key);
+        if (it != rooms_info->end() && it->is_object()) {
+            auto color_it = it->find("display_color");
+            if (color_it != it->end()) {
+                if (auto parsed = utils::color::color_from_json(*color_it)) {
+                    SDL_Color color = *parsed;
+                    color.a = 255;
+                    return color;
+                }
+            }
+        }
     }
     std::size_t hash = std::hash<std::string>{}(key);
     const float golden_ratio = 0.61803398875f;

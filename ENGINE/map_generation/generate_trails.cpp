@@ -9,6 +9,7 @@
 #include <numeric>
 #include <cstdint>
 #include <limits>
+#include "utils/display_color.hpp"
 using json = nlohmann::json;
 
 namespace {
@@ -89,9 +90,17 @@ GenerateTrails::GenerateTrails(nlohmann::json& trail_data)
 : rng_(std::random_device{}()),
 trails_data_(&trail_data)
 {
+        if (!trail_data.is_object()) {
+                trail_data = nlohmann::json::object();
+        }
+        trail_colors_ = utils::display_color::collect(trail_data);
         if (trail_data.is_object()) {
                 for (auto it = trail_data.begin(); it != trail_data.end(); ++it) {
+                        if (!it->is_object()) {
+                                continue;
+                        }
                         available_assets_.push_back({ it.key(), &(*it) });
+                        utils::display_color::ensure(*available_assets_.back().data, trail_colors_);
                 }
         }
         if (testing) {

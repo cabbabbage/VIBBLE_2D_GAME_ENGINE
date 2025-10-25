@@ -91,6 +91,7 @@ class Room {
     nlohmann::json& assets_data();
     void save_assets_json() const;
     bool is_spawn_room() const;
+    SDL_Color display_color() const;
     void rename(const std::string& new_name, nlohmann::json& map_info_json);
     void set_manifest_store(devmode::core::ManifestStore* store,
                             std::string map_id,

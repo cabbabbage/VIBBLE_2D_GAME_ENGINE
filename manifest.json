@@ -6176,10 +6176,21 @@
       ],
       "min_distance_all": 0,
       "min_same_type_distance": 2000,
+      "neighbor_search_distance": 500,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
       "size_settings": {
-        "scale_percentage": 77
+        "scale_percentage": 83.0
       },
       "tags": [
         "healing",
@@ -13880,7 +13891,7 @@
           "max_rooms": 1,
           "min_rooms": 0,
           "name": "layer_1",
-          "ring_radius": 3700.0,
+          "ring_radius": 4820.0,
           "rooms": [
             {
               "max_instances": 1,
@@ -14122,7 +14133,7 @@
           "curvyness": 2,
           "edge_smoothness": 2,
           "geometry": "Circle",
-          "inherits_map_assets": false,
+          "inherits_map_assets": true,
           "is_boss": false,
           "is_spawn": false,
           "max_height": 4000,
@@ -14133,9 +14144,67 @@
           "min_width": 2000,
           "name": "fountain",
           "radius": 2000,
-          "spawn_groups": []
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Fountain"
+                }
+              ],
+              "display_name": "Fountain",
+              "dx": 281,
+              "dy": 70,
+              "enforce_spacing": false,
+              "link_to_area": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 3904,
+              "origional_width": 4058,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-29767eab5830"
+            }
+          ]
         },
         "spawn": {
+          "areas": [
+            {
+              "anchor": {
+                "x": 0,
+                "y": 0
+              },
+              "anchor_relative_to_center": true,
+              "kind": "Spawn",
+              "name": "spawning_area",
+              "points": [
+                {
+                  "x": 159,
+                  "y": -589
+                },
+                {
+                  "x": 594,
+                  "y": -598
+                },
+                {
+                  "x": 815,
+                  "y": -307
+                },
+                {
+                  "x": 471,
+                  "y": -414
+                }
+              ],
+              "resolution": 0,
+              "type": "spawning"
+            }
+          ],
           "curvyness": 2,
           "edge_smoothness": 2,
           "geometry": "Circle",
@@ -14203,6 +14272,34 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-e900ea94ff54"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "candle"
+                }
+              ],
+              "display_name": "candle",
+              "dx": 214,
+              "dy": -212,
+              "enforce_spacing": false,
+              "link_to_area": true,
+              "max_number": 20,
+              "min_number": 15,
+              "origional_height": 2043,
+              "origional_width": 1978,
+              "perimeter_radius": 679,
+              "position": "Perimeter",
+              "radius": 679,
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-0aa55037dab5"
             }
           ]
         }

@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <vector>
 
-#include "dm_styles.hpp"
 #include "draw_utils.hpp"
 #include "utils/area.hpp"
 #include "render/camera.hpp"
@@ -26,23 +25,19 @@ int compute_center_arm(const camera& cam) {
 
 namespace dm_draw {
 
-const RoomBoundsOverlayStyle& ResolveRoomBoundsOverlayStyle() {
-    static const RoomBoundsOverlayStyle kStyle = [] {
-        RoomBoundsOverlayStyle style{};
-        SDL_Color accent = DMStyles::AccentButton().bg;
-        SDL_Color outline = LightenColor(accent, 0.12f);
-        outline.a = 210;
-        SDL_Color fill = outline;
-        fill.a = 48;
-        SDL_Color center = DMStyles::AccentButton().hover_bg;
-        center = LightenColor(center, 0.08f);
-        center.a = 235;
-        style.outline = outline;
-        style.fill = fill;
-        style.center = center;
-        return style;
-    }();
-    return kStyle;
+RoomBoundsOverlayStyle ResolveRoomBoundsOverlayStyle(SDL_Color base_color) {
+    RoomBoundsOverlayStyle style{};
+    base_color.a = 255;
+    SDL_Color outline = LightenColor(base_color, 0.12f);
+    outline.a = 210;
+    SDL_Color fill = LightenColor(base_color, 0.02f);
+    fill.a = 56;
+    SDL_Color center = LightenColor(base_color, 0.2f);
+    center.a = 235;
+    style.outline = outline;
+    style.fill = fill;
+    style.center = center;
+    return style;
 }
 
 void RenderRoomBoundsOverlay(

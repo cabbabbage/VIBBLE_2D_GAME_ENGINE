@@ -4,6 +4,9 @@
 #include "map_generation/map_layers_geometry.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
+#include "utils/display_color.hpp"
+
+#include <SDL.h>
 
 #include <algorithm>
 #include <cctype>
@@ -506,6 +509,26 @@ void MapLayersController::ensure_initialized() {
         map_info_->erase(map_radius_it);
     }
     ensure_layer_indices();
+
+    auto rooms_it = map_info_->find("rooms_data");
+    if (rooms_it != map_info_->end()) {
+        if (!rooms_it->is_object()) {
+            *rooms_it = json::object();
+        }
+        std::vector<SDL_Color> colors = utils::display_color::collect(*rooms_it);
+        bool mutated = false;
+        for (auto entry_it = rooms_it->begin(); entry_it != rooms_it->end(); ++entry_it) {
+            if (!entry_it->is_object()) {
+                *entry_it = json::object();
+            }
+            bool entry_mutated = false;
+            utils::display_color::ensure(*entry_it, colors, &entry_mutated);
+            mutated = mutated || entry_mutated;
+        }
+        if (mutated) {
+            dirty_ = true;
+        }
+    }
 }
 
 void MapLayersController::ensure_map_settings() {

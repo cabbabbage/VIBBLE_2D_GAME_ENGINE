@@ -22,9 +22,11 @@
 
 namespace {
 
-    constexpr int kHeaderDragStartThreshold = 4;
-    constexpr Uint32 kPointerBlockOnShowMs = 50;
-    constexpr Uint32 kPointerBlockAfterDragMs = 500;
+    // Reduce the drag threshold and pointer blocking windows to make
+    // floating panels feel more responsive during click + drag moves.
+    constexpr int kHeaderDragStartThreshold = 2;
+    constexpr Uint32 kPointerBlockOnShowMs = 16;
+    constexpr Uint32 kPointerBlockAfterDragMs = 60;
 
     void draw_lock_icon(SDL_Renderer* r, const SDL_Rect& rect, bool locked) {
         if (rect.w <= 0 || rect.h <= 0) {

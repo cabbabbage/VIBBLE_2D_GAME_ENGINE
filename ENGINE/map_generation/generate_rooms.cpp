@@ -2,6 +2,7 @@
 #include "generate_trails.hpp"
 #include "spawn/asset_spawner.hpp"
 #include "spawn/map_wide_asset_spawner.hpp"
+#include "utils/display_color.hpp"
 #include <cmath>
 #include <algorithm>
 #include <random>
@@ -80,9 +81,19 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
         if (testing) {
                 std::cout << "[GenerateRooms] Creating root room: " << root_spec.name << "\n";
         }
+        if (!rooms_data.is_object()) {
+                rooms_data = nlohmann::json::object();
+        }
+
+        std::vector<SDL_Color> room_colors = utils::display_color::collect(rooms_data);
+
         auto get_room_data = [&](const std::string& name) -> nlohmann::json* {
                 if (!rooms_data.is_object()) return nullptr;
-                return &rooms_data[name];
+                nlohmann::json& entry = rooms_data[name];
+                bool mutated = false;
+                utils::display_color::ensure(entry, room_colors, &mutated);
+                (void)mutated;
+                return &entry;
 };
         if (!map_assets_data.is_object()) {
                 map_assets_data = nlohmann::json::object();

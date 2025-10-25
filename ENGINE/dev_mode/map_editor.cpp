@@ -4,6 +4,7 @@
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
+#include "dev_mode_color_utils.hpp"
 #include "room_overlay_renderer.hpp"
 #include "render/camera.hpp"
 #include "map_generation/room.hpp"
@@ -21,12 +22,20 @@ namespace {
 constexpr int kBoundsPadding = 256;
 constexpr int kLabelPadding = 6;
 constexpr int kLabelVerticalOffset = 32;
-const SDL_Color kLabelBg{0, 0, 0, 180};
-const SDL_Color kLabelBorder{255, 255, 255, 80};
+const SDL_Color kLabelBg{32, 32, 32, 200};
+const SDL_Color kLabelBorder{255, 255, 255, 96};
 const SDL_Color kLabelText{240, 240, 240, 255};
-const SDL_Color kTrailLabelBg{10, 70, 30, 200};
-const SDL_Color kTrailLabelBorder{60, 190, 110, 200};
-const SDL_Color kTrailLabelText{210, 255, 220, 255};
+
+float display_color_luminance(SDL_Color color) {
+    return static_cast<float>(0.2126 * static_cast<double>(color.r) / 255.0 +
+                              0.7152 * static_cast<double>(color.g) / 255.0 +
+                              0.0722 * static_cast<double>(color.b) / 255.0);
+}
+
+SDL_Color with_alpha(SDL_Color color, Uint8 alpha) {
+    color.a = alpha;
+    return color;
+}
 }
 
 MapEditor::MapEditor(Assets* owner)
@@ -162,16 +171,15 @@ void MapEditor::render(SDL_Renderer* renderer) {
 
     camera& view = assets_->getView();
 
-    const auto& overlay_style = dm_draw::ResolveRoomBoundsOverlayStyle();
-
     for (Room* room : *rooms_) {
         if (!room || !room->room_area) continue;
+        const auto style = dm_draw::ResolveRoomBoundsOverlayStyle(room->display_color());
 
         dm_draw::RenderRoomBoundsOverlay(
             renderer,
             view,
             *room->room_area,
-            overlay_style);
+            style);
 
         SDL_Point center = room->room_area->get_center();
         SDL_Point screen_pt = view.map_to_screen(center);
@@ -376,15 +384,11 @@ void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoint
     if (!label_font_) return;
 
     const std::string& name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
-    bool is_trail = false;
-    if (!room->type.empty()) {
-        std::string lowered = room->type;
-        std::transform(lowered.begin(), lowered.end(), lowered.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        is_trail = (lowered == "trail");
-    }
+    SDL_Color base_color = room->display_color();
+    SDL_Color text_color = display_color_luminance(base_color) > 0.55f
+                               ? SDL_Color{20, 20, 20, 255}
+                               : kLabelText;
 
-    const SDL_Color& text_color = is_trail ? kTrailLabelText : kLabelText;
     SDL_Surface* text_surface = TTF_RenderUTF8_Blended(label_font_, name.c_str(), text_color);
     if (!text_surface) return;
 
@@ -393,8 +397,8 @@ void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoint
 
     label_rects_.emplace_back(room, bg_rect);
 
-    const SDL_Color& bg_color = is_trail ? kTrailLabelBg : kLabelBg;
-    const SDL_Color& border_color = is_trail ? kTrailLabelBorder : kLabelBorder;
+    SDL_Color bg_color = with_alpha(lighten(base_color, 0.08f), 205);
+    SDL_Color border_color = with_alpha(darken(base_color, 0.3f), 235);
 
     const int radius = std::min(DMStyles::CornerRadius(), std::min(bg_rect.w, bg_rect.h) / 2);
     const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(bg_rect.w, bg_rect.h) / 2));

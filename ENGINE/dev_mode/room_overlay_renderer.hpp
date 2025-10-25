@@ -12,7 +12,7 @@ struct RoomBoundsOverlayStyle {
     SDL_Color center{};
 };
 
-const RoomBoundsOverlayStyle& ResolveRoomBoundsOverlayStyle();
+RoomBoundsOverlayStyle ResolveRoomBoundsOverlayStyle(SDL_Color base_color);
 
 void RenderRoomBoundsOverlay(
     SDL_Renderer* renderer,

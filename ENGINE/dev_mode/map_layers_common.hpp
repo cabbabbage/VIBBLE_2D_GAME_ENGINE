@@ -2,8 +2,12 @@
 
 #include <algorithm>
 #include <string>
+#include <vector>
+
+#include <SDL.h>
 
 #include <nlohmann/json.hpp>
+#include "utils/display_color.hpp"
 
 namespace map_layers {
 
@@ -32,7 +36,10 @@ inline std::string create_room_entry(nlohmann::json& map_info) {
     while (rooms.contains(key)) {
         key = base + std::to_string(suffix++);
     }
-    rooms[key] = nlohmann::json{{"name", key}};
+    std::vector<SDL_Color> colors = utils::display_color::collect(rooms);
+    nlohmann::json& entry = rooms[key];
+    entry = nlohmann::json{{"name", key}};
+    utils::display_color::ensure(entry, colors);
     return key;
 }
 

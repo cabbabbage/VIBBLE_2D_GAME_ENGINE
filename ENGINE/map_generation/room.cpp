@@ -13,6 +13,7 @@
 #include <string>
 #include "util/grid.hpp"
 #include "utils/string_utils.hpp"
+#include "utils/ranged_color.hpp"
 using json = nlohmann::json;
 
 namespace {
@@ -674,6 +675,23 @@ nlohmann::json& Room::assets_data() {
 
 bool Room::is_spawn_room() const {
         return assets_json.value("is_spawn", false);
+}
+
+SDL_Color Room::display_color() const {
+        static constexpr SDL_Color kFallback{120, 170, 235, 255};
+        if (!assets_json.is_object()) {
+                return kFallback;
+        }
+        auto it = assets_json.find("display_color");
+        if (it == assets_json.end()) {
+                return kFallback;
+        }
+        if (auto parsed = utils::color::color_from_json(*it)) {
+                SDL_Color color = *parsed;
+                color.a = 255;
+                return color;
+        }
+        return kFallback;
 }
 
 void Room::rename(const std::string& new_name, nlohmann::json& map_info_json) {

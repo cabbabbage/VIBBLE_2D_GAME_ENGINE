@@ -1367,7 +1367,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 };
 
             const camera& cam = assets_->getView();
-            const auto& overlay_style = dm_draw::ResolveRoomBoundsOverlayStyle();
+            SDL_Color overlay_base = current_room_ ? current_room_->display_color()
+                                                   : SDL_Color{120, 170, 235, 255};
+            const auto overlay_style = dm_draw::ResolveRoomBoundsOverlayStyle(overlay_base);
 
             if (current_room_ && current_room_->room_area) {
                 dm_draw::RenderRoomBoundsOverlay(
