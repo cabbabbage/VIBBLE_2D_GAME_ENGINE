@@ -436,14 +436,27 @@ Room* RoomEditor::resolve_room_for_clipboard_action() const {
 }
 
 void RoomEditor::select_spawn_group_assets(const std::string& spawn_id) {
+    const std::vector<Asset*> previous_selection = selected_assets_;
     selected_assets_.clear();
+    auto selection_changed = [&]() {
+        if (previous_selection.size() != selected_assets_.size()) {
+            return true;
+        }
+        return !std::equal(selected_assets_.begin(), selected_assets_.end(), previous_selection.begin());
+    };
     if (spawn_id.empty()) {
         sync_spawn_group_panel_with_selection();
+        if (selection_changed()) {
+            mark_highlight_dirty();
+        }
         update_highlighted_assets();
         return;
     }
     if (!assets_) {
         sync_spawn_group_panel_with_selection();
+        if (selection_changed()) {
+            mark_highlight_dirty();
+        }
         update_highlighted_assets();
         return;
     }
@@ -461,6 +474,9 @@ void RoomEditor::select_spawn_group_assets(const std::string& spawn_id) {
     }
 
     sync_spawn_group_panel_with_selection();
+    if (selection_changed()) {
+        mark_highlight_dirty();
+    }
     update_highlighted_assets();
 }
 
@@ -591,6 +607,10 @@ void RoomEditor::show_notice(const std::string& message) const {
     assets_->show_dev_notice(message);
 }
 
+void RoomEditor::mark_highlight_dirty() {
+    highlight_dirty_ = true;
+}
+
 void RoomEditor::set_input(Input* input) {
     input_ = input;
     ensure_area_editor();
@@ -602,6 +622,7 @@ void RoomEditor::set_player(Asset* player) {
 
 void RoomEditor::set_active_assets(std::vector<Asset*>& actives) {
     active_assets_ = &actives;
+    mark_highlight_dirty();
 }
 
 void RoomEditor::set_screen_dimensions(int width, int height) {
@@ -872,7 +893,10 @@ void RoomEditor::update_ui(const Input& input) {
                             finalize_asset_drag(spawned, selected);
                             selected_assets_.clear();
                             selected_assets_.push_back(spawned);
-                            hovered_asset_ = spawned;
+                            if (hovered_asset_ != spawned) {
+                                hovered_asset_ = spawned;
+                            }
+                            mark_highlight_dirty();
                             update_highlighted_assets();
                             sync_spawn_group_panel_with_selection();
                             spawned_asset = true;
@@ -1975,11 +1999,17 @@ void RoomEditor::reset_click_state() {
 }
 
 void RoomEditor::clear_selection() {
+    const bool had_selection = !selected_assets_.empty();
+    const bool had_highlight = !highlighted_assets_.empty();
+    const bool had_hover = hovered_asset_ != nullptr;
     selected_assets_.clear();
     highlighted_assets_.clear();
     hovered_asset_ = nullptr;
     reset_drag_state();
     sync_spawn_group_panel_with_selection();
+    if (had_selection || had_highlight || had_hover) {
+        mark_highlight_dirty();
+    }
     if (!active_assets_) return;
     for (Asset* asset : *active_assets_) {
         if (!asset) continue;
@@ -1989,10 +2019,16 @@ void RoomEditor::clear_selection() {
 }
 
 void RoomEditor::clear_highlighted_assets() {
+    const bool had_highlight = !highlighted_assets_.empty();
+    const size_t prev_selection_size = selected_assets_.size();
+    Asset* prev_hover = hovered_asset_;
     highlighted_assets_.clear();
     if (!active_assets_) {
         selected_assets_.clear();
         hovered_asset_ = nullptr;
+        if (had_highlight || prev_selection_size != selected_assets_.size() || hovered_asset_ != prev_hover) {
+            mark_highlight_dirty();
+        }
         return;
     }
     auto erase_if_inactive = [this](Asset* asset) {
@@ -2004,7 +2040,7 @@ void RoomEditor::clear_highlighted_assets() {
             return true;
         }
         return false;
-};
+    };
 
     selected_assets_.erase( std::remove_if(selected_assets_.begin(), selected_assets_.end(), erase_if_inactive), selected_assets_.end());
 
@@ -2022,13 +2058,24 @@ void RoomEditor::clear_highlighted_assets() {
         asset->set_selected(is_selected);
     }
     sync_spawn_group_panel_with_selection();
+    if (had_highlight || prev_selection_size != selected_assets_.size() || hovered_asset_ != prev_hover) {
+        mark_highlight_dirty();
+    }
 }
 
 void RoomEditor::purge_asset(Asset* asset) {
     if (!asset) return;
-    if (hovered_asset_ == asset) hovered_asset_ = nullptr;
-    auto erase_from = [asset](std::vector<Asset*>& vec) {
+    bool highlight_sources_changed = false;
+    if (hovered_asset_ == asset) {
+        hovered_asset_ = nullptr;
+        highlight_sources_changed = true;
+    }
+    auto erase_from = [asset, &highlight_sources_changed](std::vector<Asset*>& vec) {
+        const auto before = vec.size();
         vec.erase(std::remove(vec.begin(), vec.end(), asset), vec.end());
+        if (vec.size() != before) {
+            highlight_sources_changed = true;
+        }
 };
     erase_from(selected_assets_);
     erase_from(highlighted_assets_);
@@ -2043,6 +2090,9 @@ void RoomEditor::purge_asset(Asset* asset) {
         reset_drag_state();
     }
     sync_spawn_group_panel_with_selection();
+    if (highlight_sources_changed) {
+        mark_highlight_dirty();
+    }
 }
 
 void RoomEditor::set_zoom_scale_factor(double factor) {
@@ -2106,7 +2156,10 @@ void RoomEditor::handle_mouse_input(const Input& input) {
                 dragging_ = false;
             }
         }
-        hovered_asset_ = nullptr;
+        if (hovered_asset_ != nullptr) {
+            hovered_asset_ = nullptr;
+            mark_highlight_dirty();
+        }
         hover_miss_frames_ = 3;
     } else {
         update_hover_state(hit_asset);
@@ -2235,6 +2288,7 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
 }
 
 void RoomEditor::update_hover_state(Asset* hit) {
+    Asset* previous = hovered_asset_;
     if (hit) {
         hovered_asset_ = hit;
         hover_miss_frames_ = 0;
@@ -2243,6 +2297,9 @@ void RoomEditor::update_hover_state(Asset* hit) {
             hovered_asset_ = nullptr;
             hover_miss_frames_ = 3;
         }
+    }
+    if (hovered_asset_ != previous) {
+        mark_highlight_dirty();
     }
 }
 
@@ -2253,6 +2310,9 @@ void RoomEditor::handle_click(const Input& input) {
     if (assets_) {
         world_mouse = assets_->getView().screen_to_map(SDL_Point{input_->getX(), input_->getY()});
     }
+
+    bool selection_changed = false;
+    bool highlight_changed = false;
 
     if (suppress_next_left_click_) {
         if (input_->wasClicked(Input::LEFT)) {
@@ -2310,13 +2370,19 @@ void RoomEditor::handle_click(const Input& input) {
         const bool already_selected =
             std::find(selected_assets_.begin(), selected_assets_.end(), nearest) != selected_assets_.end();
         if (already_selected) {
+            if (!selected_assets_.empty()) selection_changed = true;
             selected_assets_.clear();
+            if (!highlighted_assets_.empty()) highlight_changed = true;
             highlighted_assets_.clear();
             last_click_asset_ = nullptr;
             last_click_time_ms_ = 0;
+            if (selection_changed || highlight_changed) {
+                mark_highlight_dirty();
+            }
             return;
         }
 
+        if (!selected_assets_.empty()) selection_changed = true;
         selected_assets_.clear();
         bool select_group = true;
         const std::string& method = nearest->spawn_method;
@@ -2327,17 +2393,21 @@ void RoomEditor::handle_click(const Input& input) {
             for (Asset* asset : *active_assets_) {
                 if (!asset_belongs_to_room(asset)) continue;
                 if (asset->spawn_id == nearest->spawn_id) {
+                    selection_changed = true;
                     selected_assets_.push_back(asset);
                 }
             }
         } else {
             if (asset_belongs_to_room(nearest)) {
+                selection_changed = true;
                 selected_assets_.push_back(nearest);
             }
         }
         sync_spawn_group_panel_with_selection();
     } else {
+        if (!selected_assets_.empty()) selection_changed = true;
         selected_assets_.clear();
+        if (!highlighted_assets_.empty()) highlight_changed = true;
         highlighted_assets_.clear();
         sync_spawn_group_panel_with_selection();
 
@@ -2372,9 +2442,16 @@ void RoomEditor::handle_click(const Input& input) {
             }
         }
     }
+    if (selection_changed || highlight_changed) {
+        mark_highlight_dirty();
+    }
 }
 
 void RoomEditor::update_highlighted_assets() {
+    if (!highlight_dirty_) {
+        return;
+    }
+    highlight_dirty_ = false;
     if (!active_assets_) return;
 
     highlighted_assets_ = selected_assets_;
@@ -3822,6 +3899,7 @@ bool RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
     reopen_room_configurator();
     if (assets_) {
         assets_->refresh_active_asset_lists();
+        mark_highlight_dirty();
     }
     return true;
 }
@@ -4030,6 +4108,7 @@ void RoomEditor::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& s
     assets_->initialize_active_assets(assets_->getView().get_screen_center());
     assets_->refresh_active_asset_lists();
     spawned.clear();
+    mark_highlight_dirty();
 }
 
 void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {

@@ -245,6 +245,7 @@ private:
     class Asset* find_asset_spawn_owner(const std::string& spawn_id) const;
     void respawn_asset_child_spawn_group(class Asset* owner, const nlohmann::json& entry);
     static bool asset_info_contains_spawn_group(const class AssetInfo* info, const std::string& spawn_id);
+    void mark_highlight_dirty();
 
 private:
     Assets* assets_ = nullptr;
@@ -286,6 +287,7 @@ private:
     Asset* hovered_asset_ = nullptr;
     std::vector<Asset*> selected_assets_;
     std::vector<Asset*> highlighted_assets_;
+    bool highlight_dirty_ = true;
 
     bool dragging_ = false;
     Asset* drag_anchor_asset_ = nullptr;
