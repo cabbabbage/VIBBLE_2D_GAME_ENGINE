@@ -74,18 +74,7 @@ struct Chunk {
         int step = 1;
         SDL_Rect world_bounds{0, 0, 0, 0};
 
-        struct ChunkShadowHistory {
-            static constexpr int kMaxHistoryLength = 256;
-
-            std::array<ChunkShadowParameters, kMaxHistoryLength> samples{};
-            int                                                  count  = 0;
-            int                                                  cursor = 0;
-            ChunkShadowParameters                                blended{};
-
-            void reset();
-            void push(const ChunkShadowParameters& sample, int fade_frames);
-            const ChunkShadowParameters& value() const { return blended; }
-        } shadow_history{};
+        ChunkShadowHistory shadow_history{};
 
         ChunkShadowParameters shadow{};
         ChunkLightingState    lighting{};
@@ -114,18 +103,7 @@ struct Chunk {
         void releaseLightingArtifacts();
     };
 
-    struct ChunkShadowHistory {
-        static constexpr int kMaxHistoryLength = LightingChunk::ChunkShadowHistory::kMaxHistoryLength;
-
-        std::array<ChunkShadowParameters, kMaxHistoryLength> samples{};
-        int                                                  count  = 0;
-        int                                                  cursor = 0;
-        ChunkShadowParameters                                blended{};
-
-        void reset();
-        void push(const ChunkShadowParameters& sample, int fade_frames);
-        const ChunkShadowParameters& value() const { return blended; }
-    } shadow_history{};
+    ChunkShadowHistory shadow_history{};
 
     ChunkLightingState lighting{};
     ChunkShadowParameters shadow{};
