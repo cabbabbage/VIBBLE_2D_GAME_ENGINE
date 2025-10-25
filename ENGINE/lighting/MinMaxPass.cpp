@@ -73,12 +73,7 @@ bool MinMaxPass::evaluate(PreloadInputs& inputs,
     }
 
     MeasureResult min_result = readRgba(renderer_, base_texture);
-    if (min_result.success()) {
-        chunk.lighting.min_static_avg_strength = computeAverageLuminance(min_result);
-    } else if (min_result.status == MeasureResult::Status::AllocationFailed ||
-               min_result.status == MeasureResult::Status::ReadbackFailed) {
-        chunk.needs_retry = true;
-    }
+    (void)chunk;
 
     SDL_Texture* refreshed_base = base_pass.drawBase(inputs, preview, "Max");
     if (!refreshed_base) {
@@ -86,12 +81,7 @@ bool MinMaxPass::evaluate(PreloadInputs& inputs,
     }
 
     MeasureResult max_result = readRgba(renderer_, refreshed_base);
-    if (max_result.success()) {
-        chunk.lighting.max_static_avg_strength = computeAverageLuminance(max_result);
-    } else if (max_result.status == MeasureResult::Status::AllocationFailed ||
-               max_result.status == MeasureResult::Status::ReadbackFailed) {
-        chunk.needs_retry = true;
-    }
+    (void)max_result;
 
     return true;
 }

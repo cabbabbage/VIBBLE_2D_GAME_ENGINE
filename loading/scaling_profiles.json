@@ -1124,25 +1124,6 @@
                 50
             ],
             "revision": 1
-        },
-        "vigil": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0
-            ],
-            "last_updated": "2025-10-17T07:08:06Z",
-            "recommended_percentages": [
-                50
-            ],
-            "revision": 1
         }
     },
     "new_values": false,

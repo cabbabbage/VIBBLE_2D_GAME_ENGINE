@@ -3,9 +3,6 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
 #include "world/chunk.hpp"
-#include "lighting/ChunkLightingPreloader.hpp"
-#include "lighting/chunk_lighting_state_utils.hpp"
-#include "persistence/LightingCache.hpp"
 #include "render/camera.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
@@ -25,7 +22,6 @@
 #include <utility>
 #include <vector>
 #include <cstdlib>
-#include <filesystem>
 
 static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
@@ -65,14 +61,6 @@ bool chunk_lighting_suspended_flag() {
         }
     }
     return false;
-}
-
-bool safe_loading_enabled() {
-    const char* value = std::getenv("VIBBLE_SAFE_LOADING");
-    if (!value) {
-        return false;
-    }
-    return value[0] == '1' || value[0] == 'y' || value[0] == 'Y' || value[0] == 't' || value[0] == 'T';
 }
 
 SDL_BlendMode darkness_cutout_blend_mode() {
@@ -150,96 +138,31 @@ const LightMap* SceneRenderer::light_map() const {
 
 bool SceneRenderer::initialize_static_light_chunks() {
     if (!assets_) {
-        vibble::log::debug("[SceneRenderer] Skipping static light initialization (assets unavailable).");
+        vibble::log::debug("[SceneRenderer] Skipping light initialization (assets unavailable).");
         return false;
     }
 
     world::Grid& grid = assets_->world_grid();
     std::vector<world::Chunk*> chunks = grid.all_chunks();
     if (chunks.empty()) {
-        vibble::log::info("[SceneRenderer] No map chunks detected; static light initialization skipped.");
+        vibble::log::info("[SceneRenderer] No map chunks detected; light initialization skipped.");
         return false;
     }
 
-    const bool safe_mode = safe_loading_enabled();
-    if (!renderer_ && !safe_mode) {
-        vibble::log::warn("[SceneRenderer] Renderer unavailable; static light masks will be generated lazily once a renderer is present.");
-    }
-
-    std::filesystem::path cache_root{"loading/chunk_lighting"};
-    if (assets_) {
-        cache_root /= assets_->map_id();
-    }
-
-    lighting::LightingCache cache(cache_root);
-    lighting::ChunkLightingPreloader preloader(renderer_, assets_, safe_mode ? nullptr : &cache);
-
     bool initialized_chunks = false;
-    std::vector<world::Chunk*> pending;
-    pending.reserve(chunks.size());
-
     for (world::Chunk* chunk : chunks) {
         if (!chunk) {
             continue;
         }
-
         chunk->releaseLightingArtifacts();
-        chunk->lighting.needs_update = true;
-        chunk->brightness_strength   = 1.0f;
-        chunk->opacity_strength      = 1.0f;
-        chunk->scale_strength        = 1.0f;
-        chunk->offset_x              = 0;
-        chunk->offset_y              = 0;
-        chunk->has_dynamic_overlay   = false;
-
-        bool loaded_from_cache = false;
-        if (!safe_mode && renderer_) {
-            loaded_from_cache = cache.loadChunk(renderer_, *chunk);
-            if (loaded_from_cache) {
-                chunk->static_clean       = true;
-                chunk->lighting_preloaded = true;
-                chunk->lighting_dirty     = false;
-                chunk->needs_retry        = false;
-                chunk->lighting.needs_update = true;
-            }
-        }
-
-        if (!loaded_from_cache) {
-            chunk->lighting_dirty     = true;
-            chunk->static_clean       = false;
-            chunk->lighting_preloaded = false;
-            chunk->needs_retry        = true;
-            pending.push_back(chunk);
-        }
-
-        initialized_chunks = true;
-    }
-
-    if (safe_mode || !renderer_) {
-        if (safe_mode) {
-            vibble::log::debug("[SceneRenderer] SAFE LOADING enabled; static light masks remain disabled until safe mode is cleared.");
-        }
-        return initialized_chunks;
-    }
-
-    constexpr int kMaxPreloadPasses = 3;
-    for (int attempt = 0; attempt < kMaxPreloadPasses && !pending.empty(); ++attempt) {
-        preloader.preloadChunks(pending);
-        pending.erase(std::remove_if(pending.begin(), pending.end(), [&](world::Chunk* chunk) {
-                            return chunk == nullptr || lighting::chunk_ready_for_static_preload(*chunk);
-                        }),
-                        pending.end());
-    }
-
-    if (!pending.empty()) {
-        vibble::log::warn("[SceneRenderer] Some chunks failed static lighting preload; runtime fallback will retry dynamically.");
-    } else {
-        vibble::log::info("[SceneRenderer] Static lighting masks preloaded successfully.");
+        chunk->lighting.current_strength        = 1.0f;
+        chunk->lighting.runtime_average_strength = 1.0f;
+        chunk->lighting.needs_update            = true;
+        initialized_chunks                      = true;
     }
 
     return initialized_chunks;
 }
-
 
 void SceneRenderer::set_low_quality_rendering(bool enabled){
     if (low_quality_rendering_==enabled) return;

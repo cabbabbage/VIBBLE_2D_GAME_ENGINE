@@ -22,22 +22,14 @@ public:
     using ShadowParameters = world::Chunk::ChunkShadowParameters;
 
     struct ChunkSnapshot {
-        int      index               = -1;
+        int      index                 = -1;
         SDL_Rect world_rect{0, 0, 0, 0};
-        bool     active              = false;
-        bool     dirty               = false;
-        float    combined_brightness = 0.0f;
-        float    static_min          = 0.0f;
-        float    static_max          = 0.0f;
-        float    static_average      = 0.0f;
-        bool     static_empty        = true;
-        float    shadow_opacity_min  = 0.0f;
-        float    shadow_opacity_max  = 0.0f;
-        float    brightness_strength = 1.0f;
-        float                 opacity_strength    = 1.0f;
-        float                 scale_strength      = 1.0f;
-        int                   offset_x            = 0;
-        int                   offset_y            = 0;
+        bool     active                = false;
+        bool     needs_update          = false;
+        bool     occupied_by_moving    = false;
+        bool     has_runtime_sample    = false;
+        float    brightness            = 1.0f;
+        float    runtime_sample        = 1.0f;
         world::Chunk::ChunkShadowParameters shadow{};
     };
 

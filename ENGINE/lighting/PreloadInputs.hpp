@@ -72,18 +72,13 @@ private:
     std::vector<TextureDraw> static_light_draws_{};
 
     struct LightingBackup {
-        bool  valid                        = false;
-        float brightness_strength          = 1.0f;
-        float opacity_strength             = 1.0f;
-        float scale_strength               = 1.0f;
-        int   offset_x                     = 0;
-        int   offset_y                     = 0;
-        bool  has_dynamic_overlay          = false;
-        bool  lighting_active              = false;
-        bool  moving_light_occupied        = false;
-        float current_strength             = 0.0f;
-        bool  runtime_average_valid        = false;
-        float runtime_average_strength     = 0.0f;
+        bool  valid                    = false;
+        bool  has_dynamic_overlay      = false;
+        bool  lighting_active          = false;
+        bool  moving_light_occupied    = false;
+        float current_strength         = 1.0f;
+        bool  runtime_average_valid    = false;
+        float runtime_average_strength = 1.0f;
     } backup_{};
 };
 

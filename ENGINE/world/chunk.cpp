@@ -24,7 +24,6 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "render/camera.hpp"
-#include "render/transparency_sampling.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/global_light_source.hpp"
 #include "world/grid.hpp"
@@ -36,63 +35,16 @@ Chunk::~Chunk() {
 }
 
 void Chunk::releaseLightingArtifacts() {
-    if (static_light_mask) {
-        SDL_DestroyTexture(static_light_mask);
-        static_light_mask = nullptr;
-    }
-    lighting_preloaded = false;
-    static_clean       = false;
-    needs_retry        = true;
-    lighting_dirty     = true;
-    lighting.needs_update = true;
-    lighting.current_strength = 0.0f;
-    lighting.runtime_average_strength = 0.0f;
-    lighting.has_runtime_average = false;
-    lighting.min_static_avg_strength = 0.0f;
-    lighting.max_static_avg_strength = 1.0f;
-}
-
-float static_brightness_for_opacity(const Chunk& chunk, float screen_opacity) {
-    const float t = std::clamp(screen_opacity, 0.0f, 1.0f);
-
-    float min_strength = chunk.lighting.min_static_avg_strength;
-    float max_strength = chunk.lighting.max_static_avg_strength;
-
-    const bool min_ready = std::isfinite(min_strength);
-    const bool max_ready = std::isfinite(max_strength);
-
-    auto log_fallback = [&](const char* reason) {
-        vibble::log::debug(std::string{"[Lighting] static brightness fallback for chunk("} +
-                           std::to_string(chunk.i) + "," + std::to_string(chunk.j) + "): " + reason);
-    };
-
-    if (!min_ready && !max_ready) {
-        log_fallback("missing min and max values");
-        Chunk& mutable_chunk = const_cast<Chunk&>(chunk);
-        mutable_chunk.lighting.needs_update = true;
-        mutable_chunk.needs_retry          = true;
-        mutable_chunk.static_clean         = false;
-        return 0.0f;
-    }
-
-    if (!min_ready) {
-        log_fallback("missing min value");
-        return std::clamp(max_strength, 0.0f, 1.0f);
-    }
-
-    if (!max_ready) {
-        log_fallback("missing max value");
-        return std::clamp(min_strength, 0.0f, 1.0f);
-    }
-
-    min_strength = std::clamp(min_strength, 0.0f, 1.0f);
-    max_strength = std::clamp(max_strength, 0.0f, 1.0f);
-    if (max_strength < min_strength) {
-        std::swap(min_strength, max_strength);
-    }
-
-    const float brightness = min_strength + (max_strength - min_strength) * t;
-    return std::clamp(brightness, 0.0f, 1.0f);
+    lighting_dirty                     = true;
+    has_dynamic_overlay                = false;
+    lighting                           = ChunkLightingState{};
+    lighting.current_strength          = 1.0f;
+    lighting.runtime_average_strength  = 1.0f;
+    lighting.has_runtime_average       = false;
+    lighting.is_active                 = false;
+    lighting.needs_update              = true;
+    lighting.is_occupied_by_moving_source = false;
+    shadow                             = ChunkShadowParameters{};
 }
 
 } // namespace world
@@ -235,21 +187,6 @@ bool intersects(const SDL_Rect& a, const SDL_Rect& b) {
     return SDL_HasIntersection(&a, &b) == SDL_TRUE;
 }
 
-void log_transparency_failure(const char* context,
-                              const world::Chunk& chunk,
-                              const vibble::render::TransparencySampleResult& sample) {
-    const auto stats = vibble::render::transparency_readback_stats();
-    std::string message = std::string(context) +
-                          " transparency readback failed for chunk(" + std::to_string(chunk.i) +
-                          "," + std::to_string(chunk.j) + "): " +
-                          (sample.error_message.empty() ? std::string("unknown error") : sample.error_message) +
-                          " [attempts=" + std::to_string(stats.attempts) +
-                          ", successes=" + std::to_string(stats.successes) +
-                          ", failures=" + std::to_string(stats.failures) +
-                          ", consecutive_failures=" + std::to_string(stats.consecutive_failures) + "] (using cached lighting)";
-    vibble::log::warn(message);
-}
-
 template <typename T>
 T lerp(T a, T b, float t) {
     return static_cast<T>(a + (b - a) * t);
@@ -309,10 +246,9 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
                                                     const world::Grid& grid,
                                                     int radius,
                                                     float falloff_x,
-                                                    float falloff_y,
-                                                    float map_light_opacity) {
+                                                    float falloff_y) {
     if (radius <= 0) return {0.0f, 0.0f};
-    const float cb = world::static_brightness_for_opacity(center, map_light_opacity);
+    const float cb = std::clamp(center.lighting.current_strength, 0.0f, 1.0f);
     float gx = 0.0f, gy = 0.0f;
     for (int dj = -radius; dj <= radius; ++dj) {
         for (int di = -radius; di <= radius; ++di) {
@@ -320,7 +256,7 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
             const int ni = center.i + di;
             const int nj = center.j + dj;
             const world::Chunk* n = grid.find_chunk_ij(ni, nj);
-            const float nb = n ? world::static_brightness_for_opacity(*n, map_light_opacity) : 0.0f;
+            const float nb = n ? std::clamp(n->lighting.current_strength, 0.0f, 1.0f) : cb;
             const float db = nb - cb;
             const float dx = static_cast<float>(di);
             const float dy = static_cast<float>(dj);
@@ -339,8 +275,7 @@ std::pair<float, float> compute_brightness_gradient(const world::Chunk& center,
 // Compute weighted averages of light strength in-front (negative j) and behind (positive j).
 static std::pair<float, float> compute_directional_average_strengths(const LightMap::ShadowSettings& settings,
                                                                      const world::Grid& grid,
-                                                                     const world::Chunk& center,
-                                                                     float map_light_opacity) {
+                                                                     const world::Chunk& center) {
     const int   R  = std::max(0, settings.search_radius_cells);
     const float fh = std::max(0.0f, settings.falloff_horizontal);
     const float fv = std::max(0.0f, settings.falloff_vertical);
@@ -359,9 +294,7 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
                 const float sx = std::abs(static_cast<float>(di));
                 const float sy = std::abs(static_cast<float>(dj));
                 const float w  = 1.0f / (1.0f + sx * fh + sy * fv);
-                const float s  = (n->lighting.is_active
-                                      ? n->lighting.current_strength
-                                      : world::static_brightness_for_opacity(*n, map_light_opacity));
+                const float s  = std::clamp(n->lighting.current_strength, 0.0f, 1.0f);
                 accum_w += static_cast<double>(w);
                 accum_v += static_cast<double>(w) * static_cast<double>(std::clamp(s, 0.0f, 1.0f));
             }
@@ -385,7 +318,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
                                               world::Chunk& chunk) {
     // Opacity: inverse of front average strength.
     const auto [front_avg, behind_avg] =
-        compute_directional_average_strengths(settings, grid, chunk, map_light_opacity);
+        compute_directional_average_strengths(settings, grid, chunk);
     chunk.shadow.opacity  = std::clamp(1.0f - front_avg, 0.0f, 1.0f);
 
     // Scale: grow with front dominance, shrink with behind dominance (nonlinear towards min).
@@ -499,63 +432,44 @@ void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
         if (!chunk) {
             continue;
         }
-        chunk->lighting.needs_update = true;
-        if (!chunk->static_light_mask) {
-            chunk->lighting_dirty     = true;
-            chunk->lighting_preloaded = false;
-            chunk->static_clean       = false;
-            chunk->needs_retry        = true;
-        }
+        chunk->releaseLightingArtifacts();
     }
 }
 
-void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
+void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
     std::scoped_lock lock(mutex_);
-    if (chunk_lighting_suspended_flag()) {
+    if (chunk_lighting_suspended_flag() || !assets_) {
         return;
     }
+
     const auto& chunks = active_chunks();
+    if (chunks.empty()) {
+        return;
+    }
+
     const ShadowSettings settings = shadow_settings();
-    for (world::Chunk* chunk : chunks) {
+
+    float map_light_opacity = 0.0f;
+    if (const Global_Light_Source* gl = assets_->map_light_source()) {
+        map_light_opacity = std::clamp(static_cast<float>(gl->get_current_color().a) / 255.0f, 0.0f, 1.0f);
+    }
+    const bool map_opacity_changed = (std::abs(map_light_opacity - last_map_light_opacity_) > 1e-4f);
+    last_map_light_opacity_        = map_light_opacity;
+
+    const world::Grid& grid = assets_->world_grid();
+
+    int min_i = INT32_MAX;
+    int max_i = INT32_MIN;
+    int min_j = INT32_MAX;
+    int max_j = INT32_MIN;
+    for (const world::Chunk* chunk : chunks) {
         if (!chunk) {
             continue;
         }
-        if (!chunk->static_light_mask) {
-            chunk->lighting_preloaded = false;
-            chunk->static_clean       = false;
-            chunk->lighting_dirty     = true;
-            chunk->needs_retry        = true;
-            continue;
-        }
-        if (!chunk->static_clean) {
-            chunk->lighting.needs_update = true;
-        }
-        if (!chunk->lighting_preloaded && chunk->static_clean) {
-            chunk->lighting_preloaded = true;
-            chunk->needs_retry        = false;
-        }
-    }
-
-    if (!assets_) {
-        return;
-    }
-
-    float map_light_opacity = 0.0f;
-    {
-        const Global_Light_Source* gl = assets_->map_light_source();
-        if (gl) {
-            map_light_opacity = std::clamp(static_cast<float>(gl->get_current_color().a) / 255.0f, 0.0f, 1.0f);
-        }
-    }
-
-    const bool map_opacity_changed = (std::abs(map_light_opacity - last_map_light_opacity_) > 1e-4f);
-    last_map_light_opacity_ = map_light_opacity;
-
-    int min_i = INT32_MAX, max_i = INT32_MIN, min_j = INT32_MAX, max_j = INT32_MIN;
-    for (const world::Chunk* c : chunks) {
-        if (!c) continue;
-        min_i = std::min(min_i, c->i); max_i = std::max(max_i, c->i);
-        min_j = std::min(min_j, c->j); max_j = std::max(max_j, c->j);
+        min_i = std::min(min_i, chunk->i);
+        max_i = std::max(max_i, chunk->i);
+        min_j = std::min(min_j, chunk->j);
+        max_j = std::max(max_j, chunk->j);
     }
 
     std::unordered_set<world::Chunk*> dedupe_set;
@@ -563,29 +477,33 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
     std::vector<world::Chunk*> border_candidates;
     border_candidates.reserve(chunks.size());
 
-    auto add_candidate = [&](world::Chunk* c) {
-        if (!c) {
+    auto enqueue_candidate = [&](world::Chunk* candidate) {
+        if (!candidate) {
             return;
         }
-        // Track chunk membership in O(1) so we avoid repeated linear scans when
-        // constructing the final update list.
-        dedupe_set.insert(c);
+        dedupe_set.insert(candidate);
     };
-    for (world::Chunk* c : chunks) {
-        add_candidate(c);
+
+    for (world::Chunk* chunk : chunks) {
+        enqueue_candidate(chunk);
     }
 
-    const world::Grid& grid = assets_->world_grid();
-    for (world::Chunk* c : chunks) {
-        if (!c) continue;
-        const bool is_edge = (c->i == min_i) || (c->i == max_i) || (c->j == min_j) || (c->j == max_j);
-        if (!is_edge) continue;
+    for (world::Chunk* chunk : chunks) {
+        if (!chunk) {
+            continue;
+        }
+        const bool is_edge = (chunk->i == min_i) || (chunk->i == max_i) || (chunk->j == min_j) || (chunk->j == max_j);
+        if (!is_edge) {
+            continue;
+        }
         for (int dj = -1; dj <= 1; ++dj) {
             for (int di = -1; di <= 1; ++di) {
-                if (di == 0 && dj == 0) continue;
-                if (world::Chunk* n = grid.find_chunk_ij(c->i + di, c->j + dj)) {
-                    border_candidates.push_back(n);
-                    add_candidate(n);
+                if (di == 0 && dj == 0) {
+                    continue;
+                }
+                if (world::Chunk* neighbor = grid.find_chunk_ij(chunk->i + di, chunk->j + dj)) {
+                    border_candidates.push_back(neighbor);
+                    enqueue_candidate(neighbor);
                 }
             }
         }
@@ -593,76 +511,83 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
 
     std::vector<world::Chunk*> update_set;
     update_set.reserve(dedupe_set.size());
-    // Revisit the deterministic input sequences so the final processing order
-    // matches the previous behaviour while still benefiting from O(1) deduping.
-    for (world::Chunk* c : chunks) {
-        if (dedupe_set.erase(c) > 0) {
-            update_set.push_back(c);
+    for (world::Chunk* chunk : chunks) {
+        if (dedupe_set.erase(chunk) > 0) {
+            update_set.push_back(chunk);
         }
     }
-    for (world::Chunk* c : border_candidates) {
-        if (dedupe_set.erase(c) > 0) {
-            update_set.push_back(c);
+    for (world::Chunk* chunk : border_candidates) {
+        if (dedupe_set.erase(chunk) > 0) {
+            update_set.push_back(chunk);
         }
     }
 
-    const auto& moving = assets_->getActiveMovingLightAssets();
+    std::optional<SDL_FPoint> map_light_direction;
+    if (const Global_Light_Source* gl = assets_->map_light_source()) {
+        const SDL_Point ref = gl->get_direction_reference();
+        const SDL_Point tgt = gl->get_direction_target();
+        const float dx      = static_cast<float>(tgt.x - ref.x);
+        const float dy      = static_cast<float>(tgt.y - ref.y);
+        const float len     = std::sqrt(dx * dx + dy * dy);
+        if (len > 1e-4f) {
+            map_light_direction = SDL_FPoint{dx / len, dy / len};
+        }
+    }
+
+    const auto& moving_assets = assets_->getActiveMovingLightAssets();
+
     for (world::Chunk* chunk : update_set) {
-        if (!chunk) continue;
+        if (!chunk) {
+            continue;
+        }
+
         chunk->lighting.is_active = true;
-        if (map_opacity_changed) chunk->lighting.needs_update = true;
+
+        if (chunk->lighting.has_runtime_average) {
+            chunk->lighting.current_strength =
+                std::clamp(chunk->lighting.runtime_average_strength, 0.0f, 1.0f);
+            chunk->lighting.runtime_average_strength = chunk->lighting.current_strength;
+            chunk->lighting.has_runtime_average      = false;
+            chunk->lighting.needs_update             = true;
+        }
+
+        if (map_opacity_changed) {
+            chunk->lighting.needs_update = true;
+        }
 
         bool occupied = false;
-        for (const Asset* a : moving) {
-            if (!a) continue;
-            SDL_Point p{a->pos.x, a->pos.y};
-            if (SDL_PointInRect(&p, &chunk->world_bounds)) { occupied = true; break; }
+        for (const Asset* asset : moving_assets) {
+            if (!asset) {
+                continue;
+            }
+            const SDL_Point asset_pos{asset->pos.x, asset->pos.y};
+            if (SDL_PointInRect(&asset_pos, &chunk->world_bounds)) {
+                occupied = true;
+                break;
+            }
         }
         if (occupied != chunk->lighting.is_occupied_by_moving_source) {
             chunk->lighting.needs_update = true;
         }
         chunk->lighting.is_occupied_by_moving_source = occupied;
 
-        if (!chunk->lighting.needs_update) continue;
-
-        if (chunk->lighting.has_runtime_average) {
-            chunk->lighting.current_strength = std::clamp(chunk->lighting.runtime_average_strength, 0.0f, 1.0f);
-            chunk->lighting.has_runtime_average = false;
-        } else if (chunk->lighting.is_occupied_by_moving_source) {
-            float static_avg = world::static_brightness_for_opacity(*chunk, map_light_opacity);
-            if (chunk->static_light_mask) {
-                const auto sample = vibble::render::sample_texture_transparency(renderer, chunk->static_light_mask);
-                if (sample.success) {
-                    static_avg = std::clamp(sample.average, 0.0f, 1.0f);
-                } else {
-                    log_transparency_failure("[LightMap] moving", *chunk, sample);
-                    chunk->needs_retry = true;
-                }
-            } else {
-                chunk->needs_retry = true;
-            }
-            chunk->lighting.current_strength = static_avg;
-        } else {
-            chunk->lighting.current_strength =
-                world::static_brightness_for_opacity(*chunk, map_light_opacity);
+        if (!chunk->lighting.needs_update) {
+            continue;
         }
+
+        chunk->lighting.current_strength = std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
 
         const int   radius = std::max(0, settings.search_radius_cells);
         const float fx     = std::max(0.0f, settings.falloff_horizontal);
         const float fy     = std::max(0.0f, settings.falloff_vertical);
-        const auto grad    = compute_brightness_gradient(*chunk, grid, radius, fx, fy, map_light_opacity);
-        std::optional<SDL_FPoint> map_light_direction;
-        if (const Global_Light_Source* gl = assets_->map_light_source()) {
-            const SDL_Point ref = gl->get_direction_reference();
-            const SDL_Point tgt = gl->get_direction_target();
-            const float dx = static_cast<float>(tgt.x - ref.x);
-            const float dy = static_cast<float>(tgt.y - ref.y);
-            const float len = std::sqrt(dx * dx + dy * dy);
-            if (len > 1e-4f) {
-                map_light_direction = SDL_FPoint{ dx / len, dy / len };
-            }
-        }
-        compute_use_shadow_data_for_chunk(settings, grid, grad, map_light_direction, map_light_opacity, *chunk);
+        const auto  grad   = compute_brightness_gradient(*chunk, grid, radius, fx, fy);
+
+        compute_use_shadow_data_for_chunk(settings,
+                                          grid,
+                                          grad,
+                                          map_light_direction,
+                                          map_light_opacity,
+                                          *chunk);
 
         chunk->lighting.needs_update = false;
     }
@@ -685,7 +610,7 @@ void LightMap::capture_runtime_brightness(SDL_Renderer* renderer) {
             continue;
         }
         chunk->lighting.has_runtime_average = false;
-        chunk->lighting.runtime_average_strength = 0.0f;
+        chunk->lighting.runtime_average_strength = chunk->lighting.current_strength;
     }
 
     const SDL_Rect screen_rect{0, 0, screen_width_, screen_height_};
@@ -759,8 +684,8 @@ float LightMap::sample_brightness(int world_x,
         return 1.0f;
     }
     const float weight           = std::clamp(static_weight, 0.0f, 1.0f);
-    const float static_component = world::static_brightness_for_opacity(*chunk, last_map_light_opacity_);
-    return std::clamp(static_component * weight, 0.0f, 1.0f);
+    const float brightness       = std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
+    return std::clamp(brightness * weight, 0.0f, 1.0f);
 }
 
 float LightMap::sample_brightness_bilinear(float world_x,
@@ -791,49 +716,37 @@ void LightMap::present_static_previews(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    constexpr int kColumns = 1;
     constexpr int kPadding = 8;
-    int column_x   = kPadding;
-    int column_y   = kPadding;
-    int column_max = 0;
+    int           x        = kPadding;
+    int           y        = kPadding;
+    int           column_w = 0;
 
     for (world::Chunk* chunk : chunks) {
         if (!chunk) {
             continue;
         }
-        SDL_Texture* previews[kColumns] = {
-            chunk->static_light_mask,
-        };
-        if (!previews[0]) {
-            continue;
-        }
 
         const int chunk_w = std::max(1, chunk->world_bounds.w);
         const int chunk_h = std::max(1, chunk->world_bounds.h);
-        const int required_width = kColumns * chunk_w + (kColumns - 1) * kPadding;
 
-        if (column_y + chunk_h > screen_height_) {
-            column_y   = kPadding;
-            column_x  += column_max + kPadding;
-            column_max = 0;
+        if (y + chunk_h > screen_height_) {
+            y         = kPadding;
+            x        += column_w + kPadding;
+            column_w  = 0;
         }
-
-        if (column_x + required_width > screen_width_) {
+        if (x + chunk_w > screen_width_) {
             break;
         }
 
-        column_max = std::max(column_max, required_width);
+        column_w = std::max(column_w, chunk_w);
 
-        for (int i = 0; i < kColumns; ++i) {
-            SDL_Texture* tex = previews[i];
-            if (!tex) {
-                continue;
-            }
-            SDL_Rect dst{column_x + i * (chunk_w + kPadding), column_y, chunk_w, chunk_h};
-            SDL_RenderCopy(renderer, tex, nullptr, &dst);
-        }
+        const float brightness = std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
+        const Uint8 alpha      = clamp_alpha(1.0f - brightness);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, alpha);
+        SDL_Rect rect{x, y, chunk_w, chunk_h};
+        SDL_RenderFillRect(renderer, &rect);
 
-        column_y += chunk_h + kPadding;
+        y += chunk_h + kPadding;
     }
 
     SDL_RenderPresent(renderer);
@@ -844,19 +757,20 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& vie
 }
 
 void LightMap::render_visible_chunks(SDL_Renderer* renderer,
-                                        const SDL_Rect& view_rect,
-                                        float alpha_multiplier,
-                                        const SDL_Color& color_mod) const {
+                                     const SDL_Rect& view_rect,
+                                     float alpha_multiplier,
+                                     const SDL_Color& color_mod) const {
     std::scoped_lock lock(mutex_);
     if (!renderer || !assets_) {
         return;
     }
+
     const camera& cam = assets_->getView();
+    SDL_Rect      world_view = world_rect_from_screen(cam, view_rect);
 
-    SDL_Rect world_view = world_rect_from_screen(cam, view_rect);
-
-    for (world::Chunk* chunk : active_chunks()) {
-        if (!chunk || !chunk->static_light_mask) {
+    const auto& chunks = active_chunks();
+    for (world::Chunk* chunk : chunks) {
+        if (!chunk) {
             continue;
         }
         if (!intersects(chunk->world_bounds, world_view)) {
@@ -864,8 +778,10 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
         }
 
         SDL_Point top_left     = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
-        SDL_Point bottom_right = cam.map_to_screen({chunk->world_bounds.x + chunk->world_bounds.w,
-                                                    chunk->world_bounds.y + chunk->world_bounds.h});
+        SDL_Point bottom_right =
+            cam.map_to_screen({chunk->world_bounds.x + chunk->world_bounds.w,
+                               chunk->world_bounds.y + chunk->world_bounds.h});
+
         SDL_Rect dst{};
         dst.x = std::min(top_left.x, bottom_right.x);
         dst.y = std::min(top_left.y, bottom_right.y);
@@ -875,32 +791,15 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
             continue;
         }
 
-        const float chunk_alpha_multiplier = std::clamp(chunk->opacity_strength, 0.0f, 1.0f);
-        const Uint8 chunk_alpha = clamp_alpha(alpha_multiplier * chunk_alpha_multiplier);
-
-        const float scale_strength = std::max(0.0f, chunk->scale_strength);
-        if (std::abs(scale_strength - 1.0f) > 1e-4f) {
-            const float center_x = static_cast<float>(dst.x) + static_cast<float>(dst.w) / 2.0f;
-            const float center_y = static_cast<float>(dst.y) + static_cast<float>(dst.h) / 2.0f;
-            const float scaled_w = static_cast<float>(dst.w) * scale_strength;
-            const float scaled_h = static_cast<float>(dst.h) * scale_strength;
-            dst.w = std::max(1, static_cast<int>(std::lround(scaled_w)));
-            dst.h = std::max(1, static_cast<int>(std::lround(scaled_h)));
-            dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(dst.w) / 2.0f));
-            dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(dst.h) / 2.0f));
+        const float brightness = std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
+        const float darkness   = std::clamp(1.0f - brightness, 0.0f, 1.0f);
+        const Uint8 alpha      = clamp_alpha(alpha_multiplier * darkness);
+        if (alpha == 0) {
+            continue;
         }
 
-        if (chunk->offset_x != 0 || chunk->offset_y != 0) {
-            SDL_Point origin_screen = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
-            SDL_Point offset_screen = cam.map_to_screen({chunk->world_bounds.x + chunk->offset_x,
-                                                         chunk->world_bounds.y + chunk->offset_y});
-            dst.x += offset_screen.x - origin_screen.x;
-            dst.y += offset_screen.y - origin_screen.y;
-        }
-
-        SDL_SetTextureAlphaMod(chunk->static_light_mask, chunk_alpha);
-        SDL_SetTextureColorMod(chunk->static_light_mask, color_mod.r, color_mod.g, color_mod.b);
-        SDL_RenderCopy(renderer, chunk->static_light_mask, nullptr, &dst);
+        SDL_SetRenderDrawColor(renderer, color_mod.r, color_mod.g, color_mod.b, alpha);
+        SDL_RenderFillRect(renderer, &dst);
     }
 }
 
@@ -1038,10 +937,8 @@ void LightMap::mark_static_cache_dirty() {
     }
     for (world::Chunk* chunk : active_chunks()) {
         if (chunk) {
-            chunk->lighting_dirty     = true;
-            chunk->lighting_preloaded = false;
-            chunk->static_clean       = false;
-            chunk->needs_retry        = true;
+            chunk->lighting_dirty = true;
+            chunk->lighting.needs_update = true;
         }
     }
 }

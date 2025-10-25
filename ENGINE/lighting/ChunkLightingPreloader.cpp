@@ -75,45 +75,13 @@ bool ChunkLightingPreloader::processChunk(world::Chunk& chunk,
                                           PreviewViewport& mask_preview,
                                           PreviewViewport& base_preview,
                                           PreviewViewport& minmax_preview) {
+    (void)mask_preview;
+    (void)base_preview;
+    (void)minmax_preview;
     if (!renderer_ || !assets_) {
         return false;
     }
-
-    PreloadInputs inputs(renderer_, assets_, chunk);
-
-    SDL_Texture* mask_texture = mask_pass_.buildMask(chunk, inputs, mask_preview);
-    if (!mask_texture) {
-        chunk.needs_retry = true;
-        return false;
-    }
-
-    SDL_Texture* unique_mask = cloneMaskTexture(mask_texture, inputs);
-    if (!unique_mask) {
-        chunk.needs_retry = true;
-        return false;
-    }
-
     chunk.releaseLightingArtifacts();
-    chunk.static_light_mask = unique_mask;
-
-    if (!base_pass_.drawBase(inputs, base_preview, "Base")) {
-        chunk.needs_retry = true;
-        return false;
-    }
-
-    if (!minmax_pass_.evaluate(inputs, base_pass_, mask_texture, minmax_preview, chunk)) {
-        return false;
-    }
-
-    chunk.lighting_preloaded = true;
-    chunk.static_clean       = true;
-    chunk.lighting_dirty     = false;
-    chunk.needs_retry        = false;
-
-    if (cache_) {
-        cache_->saveChunk(renderer_, chunk, chunk.static_light_mask);
-    }
-
     return true;
 }
 

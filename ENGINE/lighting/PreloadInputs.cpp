@@ -195,11 +195,6 @@ void PreloadInputs::disableScreenLightAndMovingLights() {
         return;
     }
 
-    backup_.brightness_strength   = chunk_->brightness_strength;
-    backup_.opacity_strength      = chunk_->opacity_strength;
-    backup_.scale_strength        = chunk_->scale_strength;
-    backup_.offset_x              = chunk_->offset_x;
-    backup_.offset_y              = chunk_->offset_y;
     backup_.has_dynamic_overlay   = chunk_->has_dynamic_overlay;
     backup_.lighting_active       = chunk_->lighting.is_active;
     backup_.moving_light_occupied = chunk_->lighting.is_occupied_by_moving_source;
@@ -208,17 +203,12 @@ void PreloadInputs::disableScreenLightAndMovingLights() {
     backup_.runtime_average_strength = chunk_->lighting.runtime_average_strength;
     backup_.valid                 = true;
 
-    chunk_->brightness_strength              = 0.0f;
-    chunk_->opacity_strength                 = 0.0f;
-    chunk_->scale_strength                   = 1.0f;
-    chunk_->offset_x                         = 0;
-    chunk_->offset_y                         = 0;
     chunk_->has_dynamic_overlay              = false;
     chunk_->lighting.is_active               = false;
     chunk_->lighting.is_occupied_by_moving_source = false;
-    chunk_->lighting.current_strength        = 0.0f;
+    chunk_->lighting.current_strength        = 1.0f;
     chunk_->lighting.has_runtime_average     = false;
-    chunk_->lighting.runtime_average_strength = 0.0f;
+    chunk_->lighting.runtime_average_strength = 1.0f;
 }
 
 void PreloadInputs::restoreRuntimeLighting() {
@@ -226,11 +216,6 @@ void PreloadInputs::restoreRuntimeLighting() {
         return;
     }
 
-    chunk_->brightness_strength              = backup_.brightness_strength;
-    chunk_->opacity_strength                 = backup_.opacity_strength;
-    chunk_->scale_strength                   = backup_.scale_strength;
-    chunk_->offset_x                         = backup_.offset_x;
-    chunk_->offset_y                         = backup_.offset_y;
     chunk_->has_dynamic_overlay              = backup_.has_dynamic_overlay;
     chunk_->lighting.is_active               = backup_.lighting_active;
     chunk_->lighting.is_occupied_by_moving_source = backup_.moving_light_occupied;

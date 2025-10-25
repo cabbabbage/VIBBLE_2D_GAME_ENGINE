@@ -22,19 +22,6 @@ struct Chunk {
 
     std::vector<Asset*> assets;
 
-    // Cached texture representing the accumulated static light mask for this chunk.
-    SDL_Texture* static_light_mask = nullptr;
-    bool  lighting_preloaded = false;
-    bool  static_clean       = false;
-    bool  needs_retry        = false;
-
-    // Runtime overlay control used by the existing light-map pass.
-    float brightness_strength = 1.0f;
-    float opacity_strength = 1.0f;
-    float scale_strength = 1.0f;
-    int offset_x = 0;
-    int offset_y = 0;
-
     struct ChunkLightingState {
         // Whether this chunk participates in lighting updates during the current frame.
         bool is_active = false;
@@ -43,15 +30,11 @@ struct Chunk {
         // True if a moving light currently overlaps this chunk, affecting runtime blending.
         bool is_occupied_by_moving_source = false;
         // Net light contribution applied to the chunk after static and dynamic blending [0,1].
-        float current_strength = 0.0f;
+        float current_strength = 1.0f;
         // Runtime measurement captured from the on-screen render output during this frame.
-        float runtime_average_strength = 0.0f;
+        float runtime_average_strength = 1.0f;
         // Marks whether runtime_average_strength contains a valid measurement for the current frame.
         bool  has_runtime_average = false;
-        // Lower bound of the static brightness samples observed for this chunk [0,1].
-        float min_static_avg_strength = 0.0f;
-        // Upper bound of the static brightness samples observed for this chunk [0,1].
-        float max_static_avg_strength = 1.0f;
     } lighting;
 
     struct ChunkShadowParameters {
@@ -83,10 +66,6 @@ struct Chunk {
 };
 
 } // namespace world
-
-namespace world {
-float static_brightness_for_opacity(const Chunk& chunk, float screen_opacity);
-}
 
 // Unified LightMap implementation co-located with Chunk.
 class LightMap {

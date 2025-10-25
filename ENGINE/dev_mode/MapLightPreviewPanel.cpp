@@ -127,7 +127,7 @@ SDL_Texture* texture_for_stage(const world::Chunk* chunk, PreviewStage stage) {
     }
     switch (stage) {
         case PreviewStage::Mask:
-            return chunk->static_light_mask;
+            return nullptr;
     }
     return nullptr;
 }
@@ -747,14 +747,14 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             return;
         }
         std::ostringstream stream;
-        stream << (snap->active ? "A" : "-") << ' ' << (snap->dirty ? "D" : "-") << '\n';
-        if (snap->static_empty) {
-            stream << "S:--" << '\n';
+        stream << (snap->active ? "A" : "-") << ' ' << (snap->needs_update ? "U" : "-") << ' '
+               << (snap->occupied_by_moving ? "M" : "-") << '\n';
+        stream << "B:" << format_float(snap->brightness, 2) << '\n';
+        if (snap->has_runtime_sample) {
+            stream << "R:" << format_float(snap->runtime_sample, 2);
         } else {
-            stream << "S:" << format_float(snap->static_min, 2) << '/' << format_float(snap->static_average, 2)
-                   << '/' << format_float(snap->static_max, 2) << '\n';
+            stream << "R:--";
         }
-        stream << "C:" << format_float(snap->combined_brightness, 2);
         const std::string text = stream.str();
 
         SDL_Surface* surface =
@@ -897,7 +897,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         }
     };
 
-    const SDL_Color dirty_color{200, 120, 40, 255};
+    const SDL_Color update_color{200, 120, 40, 255};
     const SDL_Color outline_color{249, 115, 22, 255};
 
     for (int gy = 0; gy < grid_h; ++gy) {
@@ -910,7 +910,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             }
 
             const LightMapManager::ChunkSnapshot* snap = snapshot_for_chunk(index);
-            float brightness = snap ? snap->combined_brightness : 0.0f;
+            float brightness = snap ? snap->brightness : 0.0f;
             if (!snap) {
                 if (const world::Chunk* chunk = map->chunk_at(index)) {
                     SDL_Rect world_rect = chunk->world_bounds;
@@ -930,8 +930,8 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                     const SDL_Color highlight = DMStyles::HighlightColor();
                     draw_indicator(cell_rect, highlight, false);
                 }
-                if (snap->dirty) {
-                    draw_indicator(cell_rect, dirty_color, true);
+                if (snap->needs_update) {
+                    draw_indicator(cell_rect, update_color, true);
                 }
                 render_tile_annotation(cell_rect, snap);
             }
@@ -967,7 +967,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         float current_brightness = 0.0f;
         bool  has_current        = false;
         if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
-            current_brightness = std::clamp(snap->combined_brightness, 0.0f, 1.0f);
+            current_brightness = std::clamp(snap->brightness, 0.0f, 1.0f);
             has_current        = true;
         } else if (const world::Chunk* chunk = map->chunk_at(detail_chunk)) {
             SDL_Rect world_rect = chunk->world_bounds;
@@ -986,27 +986,19 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             detail_lines.push_back("Current Brightness: " + format_float(current_brightness, 3));
         }
 
-        float base_brightness = 0.0f;
-        bool  has_base        = false;
-        if (const world::Chunk* chunk = map->chunk_at(detail_chunk)) {
-            if (const LightMapManager* manager = light_map_manager()) {
-                const float ui_opacity = std::clamp(manager->current_map_light_opacity(), 0.0f, 1.0f);
-                base_brightness = world::static_brightness_for_opacity(*chunk, ui_opacity);
-                has_base        = true;
+        if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
+            detail_lines.push_back(std::string("Needs Update: ") + (snap->needs_update ? "yes" : "no"));
+            detail_lines.push_back(std::string("Moving Light Overlap: ") +
+                                   (snap->occupied_by_moving ? "yes" : "no"));
+            if (snap->has_runtime_sample) {
+                detail_lines.push_back("Runtime Sample: " + format_float(snap->runtime_sample, 3));
+            } else {
+                detail_lines.push_back("Runtime Sample: --");
             }
-        }
-        if (!has_base) {
-            if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
-                if (!snap->static_empty) {
-                    base_brightness = std::clamp(snap->static_average, 0.0f, 1.0f);
-                    has_base        = true;
-                }
-            }
-        }
-        if (!has_base) {
-            detail_lines.push_back("Base Brightness: --");
         } else {
-            detail_lines.push_back("Base Brightness: " + format_float(base_brightness, 3));
+            detail_lines.push_back("Needs Update: --");
+            detail_lines.push_back("Moving Light Overlap: --");
+            detail_lines.push_back("Runtime Sample: --");
         }
 
         std::string stage_line = std::string("Preview Stage: ") + stage_label_text;
@@ -1028,8 +1020,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
                 detail_lines.push_back("Static Max: " + format_float(snap->static_max, 3));
             }
             detail_lines.push_back("Dynamic Lighting: disabled");
-            detail_lines.push_back("Shadow Strength: " + format_float(snap->shadow_opacity_min, 3) + " - " +
-                                   format_float(snap->shadow_opacity_max, 3));
+            detail_lines.push_back("Shadow Opacity: " + format_float(snap->shadow.opacity, 3));
         }
 
         detail_lines.push_back("");
