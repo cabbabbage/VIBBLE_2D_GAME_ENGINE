@@ -13857,6 +13857,8 @@
             "min_number": 100,
             "position": "Random",
             "resolution": 0,
+            "resolve_geometry_to_room_size": false,
+            "resolve_quantity_to_room_size": false,
             "spawn_id": "spn-88572bf1415f"
           }
         ]
@@ -14131,6 +14133,12 @@
       "rooms_data": {
         "fountain": {
           "curvyness": 2,
+          "display_color": [
+            36,
+            183,
+            242,
+            255
+          ],
           "edge_smoothness": 2,
           "geometry": "Circle",
           "inherits_map_assets": true,
@@ -14166,6 +14174,7 @@
               "origional_height": 3904,
               "origional_width": 4058,
               "position": "Exact",
+              "priority": 0,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -14206,6 +14215,12 @@
             }
           ],
           "curvyness": 2,
+          "display_color": [
+            90,
+            157,
+            224,
+            255
+          ],
           "edge_smoothness": 2,
           "geometry": "Circle",
           "inherits_map_assets": true,
@@ -14295,11 +14310,42 @@
               "origional_width": 1978,
               "perimeter_radius": 679,
               "position": "Perimeter",
+              "priority": 2,
               "radius": 679,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-0aa55037dab5"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Axe"
+                },
+                {
+                  "chance": 61.0,
+                  "name": "Tree_Dark"
+                }
+              ],
+              "display_name": "Axe",
+              "dx": 240,
+              "dy": -225,
+              "edge_inset_percent": 74,
+              "enforce_spacing": false,
+              "max_number": 100,
+              "min_number": 1,
+              "origional_height": 1656,
+              "origional_width": 1862,
+              "position": "Edge",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-1a94cd6d0d68"
             }
           ]
         }
@@ -14307,6 +14353,12 @@
       "trails_data": {
         "basic": {
           "curvyness": 4,
+          "display_color": [
+            167,
+            242,
+            36,
+            255
+          ],
           "edge_smoothness": 2,
           "geometry": "Square",
           "inherits_map_assets": true,
@@ -14345,6 +14397,12 @@
         },
         "brick": {
           "curvyness": 4,
+          "display_color": [
+            242,
+            36,
+            242,
+            255
+          ],
           "edge_smoothness": 101,
           "geometry": "Square",
           "inherits_map_assets": true,
