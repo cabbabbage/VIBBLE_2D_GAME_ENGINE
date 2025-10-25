@@ -28,6 +28,19 @@
 #include "render/global_light_source.hpp"
 #include "world/grid.hpp"
 
+namespace {
+
+SDL_BlendMode compute_runtime_light_blend_mode() {
+    // Darken the destination by modulating it against the runtime shadow mask's alpha.
+    // The mask is tinted black before rendering, so the default blend mode already
+    // produces the desired "multiply" style effect: dst = dst * (1 - srcAlpha).
+    // Cache the result so the SDL runtime only computes the blend mode once.
+    static const SDL_BlendMode kCachedBlend = SDL_BLENDMODE_BLEND;
+    return kCachedBlend;
+}
+
+} // namespace
+
 namespace world {
 int floor_div(int value, int step);
 }
@@ -1108,7 +1121,7 @@ SDL_Texture* LightMap::ensure_runtime_shadow_mask(SDL_Renderer* renderer) const 
     if (!runtime_shadow_mask_) {
         runtime_shadow_mask_renderer_ = renderer;
         constexpr int kMaskSize       = 256;
-        runtime_shadow_mask_blend_    = lighting::PreloadInputs::computeRuntimeLightBlendMode();
+        runtime_shadow_mask_blend_    = compute_runtime_light_blend_mode();
 
         SDL_Texture* mask = SDL_CreateTexture(renderer,
                                               SDL_PIXELFORMAT_RGBA32,
@@ -1158,7 +1171,7 @@ SDL_Texture* LightMap::ensure_runtime_shadow_mask(SDL_Renderer* renderer) const 
         runtime_shadow_mask_ = mask;
         SDL_SetTextureBlendMode(runtime_shadow_mask_, runtime_shadow_mask_blend_);
     } else {
-        runtime_shadow_mask_blend_ = lighting::PreloadInputs::computeRuntimeLightBlendMode();
+        runtime_shadow_mask_blend_ = compute_runtime_light_blend_mode();
         SDL_SetTextureBlendMode(runtime_shadow_mask_, runtime_shadow_mask_blend_);
     }
 
