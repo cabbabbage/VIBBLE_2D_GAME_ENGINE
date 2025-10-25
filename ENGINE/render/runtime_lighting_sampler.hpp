@@ -3,6 +3,7 @@
 #include <SDL.h>
 
 #include <vector>
+#include <cstddef>
 
 class Assets;
 class camera;
@@ -21,6 +22,7 @@ struct AssetLight {
 
 struct RuntimeLightingFrame {
     struct Sample {
+<<<<<<< ours
         int   chunk_i    = 0;
         int   chunk_j    = 0;
         int   global_i   = 0;
@@ -30,9 +32,27 @@ struct RuntimeLightingFrame {
         SDL_FPoint direction{0.0f, 0.0f};
         SDL_Color color{255, 255, 255, 255};
         bool      has_direction = false;
+=======
+        int        chunk_i        = 0;
+        int        chunk_j        = 0;
+        int        global_i       = 0;
+        int        global_j       = 0;
+        float      brightness     = 0.0f;
+        SDL_Color  color{255, 255, 255, 255};
+        SDL_FPoint world_position{0.0f, 0.0f};
+>>>>>>> theirs
     };
 
     std::vector<Sample> samples{};
+
+    SDL_FPoint brightest_centroid{0.0f, 0.0f};
+    SDL_FPoint brightest_direction{0.0f, 0.0f};
+    SDL_FPoint brightest_sample_position{0.0f, 0.0f};
+    float      brightest_sample_brightness = 0.0f;
+    std::size_t brightest_sample_count     = 0;
+    bool       has_brightest_centroid      = false;
+    bool       has_brightest_direction     = false;
+    bool       has_brightest_sample        = false;
 
     bool empty() const { return samples.empty(); }
 };

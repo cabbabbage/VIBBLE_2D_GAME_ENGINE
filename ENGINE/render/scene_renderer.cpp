@@ -15,6 +15,7 @@
 #include <limits>
 #include <memory>
 #include <random>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -119,7 +120,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
     runtime_lighting_sampler_ = std::make_unique<runtime_lighting::RuntimeLightingSampler>(assets_);
-    main_light_source_.update();
+    main_light_source_.update(std::nullopt, std::nullopt);
 }
 
 SceneRenderer::~SceneRenderer() {
@@ -254,14 +255,6 @@ void SceneRenderer::render(){
     bool should_update_light=true;
     if (assets_ && assets_->is_dev_mode()){
         should_update_light=devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true);
-    }
-    if (should_update_light){ main_light_source_.update(); }
-
-    if (camera_state) {
-        const SDL_Point world_target = camera_state->screen_to_map(main_light_source_.get_position());
-        main_light_source_.set_direction_target_world(world_target);
-    } else {
-        main_light_source_.set_direction_target_world(main_light_source_.get_direction_reference());
     }
 
     // Per-chunk shadow data is updated inside LightMap::update
@@ -495,11 +488,26 @@ void SceneRenderer::render(){
 
         render_commands(texture_commands_);
         render_dynamic_darkness_overlay(map_light_opacity);
-        if (light_map_ && !chunk_lighting_suspended_) {
-            runtime_lighting::RuntimeLightingFrame runtime_frame;
-            if (runtime_lighting_sampler_ && assets_) {
-                runtime_frame = runtime_lighting_sampler_->gather(light_overlay_sources_, assets_->getView());
+        runtime_lighting::RuntimeLightingFrame runtime_frame;
+        if (runtime_lighting_sampler_ && assets_) {
+            runtime_frame = runtime_lighting_sampler_->gather(light_overlay_sources_, assets_->getView());
+        }
+
+        if (should_update_light) {
+            std::optional<SDL_FPoint> aggregated_target;
+            std::optional<SDL_FPoint> aggregated_direction;
+            if (runtime_frame.has_brightest_centroid) {
+                aggregated_target = runtime_frame.brightest_centroid;
+            } else if (runtime_frame.has_brightest_sample) {
+                aggregated_target = runtime_frame.brightest_sample_position;
             }
+            if (runtime_frame.has_brightest_direction) {
+                aggregated_direction = runtime_frame.brightest_direction;
+            }
+            main_light_source_.update(aggregated_target, aggregated_direction);
+        }
+
+        if (light_map_ && !chunk_lighting_suspended_) {
             light_map_->ingest_runtime_samples(runtime_frame);
             light_map_->update(renderer_, 0u);
         }

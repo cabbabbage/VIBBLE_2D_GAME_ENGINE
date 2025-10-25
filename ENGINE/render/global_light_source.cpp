@@ -69,6 +69,11 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         map_reference_center_ = default_map_center_;
         direction_target_world_ = map_reference_center_;
         recalc_position();
+        smoothed_target_world_.x = static_cast<float>(map_reference_center_.x);
+        smoothed_target_world_.y = static_cast<float>(map_reference_center_.y);
+        smoothed_target_valid_   = false;
+        smoothed_direction_      = SDL_FPoint{1.0f, 0.0f};
+        smoothed_direction_valid_ = false;
 }
 
 bool Global_Light_Source::load_from_map_manifest(const json& map_info, std::string_view map_id) {
@@ -175,7 +180,6 @@ void Global_Light_Source::apply_config(const json& data) {
 
         center_ = default_center_;
         map_reference_center_ = default_map_center_;
-        direction_target_world_ = map_reference_center_;
         auto parse_point = [](const nlohmann::json& arr) -> std::optional<SDL_Point> {
                 if (!arr.is_array() || arr.size() < 2) {
                         return std::nullopt;
@@ -219,6 +223,11 @@ void Global_Light_Source::apply_config(const json& data) {
         }
 
         direction_target_world_ = map_reference_center_;
+        smoothed_target_world_.x = static_cast<float>(map_reference_center_.x);
+        smoothed_target_world_.y = static_cast<float>(map_reference_center_.y);
+        smoothed_target_valid_   = false;
+        smoothed_direction_      = SDL_FPoint{1.0f, 0.0f};
+        smoothed_direction_valid_ = false;
 
         current_color_ = clamp_color_alpha(base_color_);
         set_light_brightness();
@@ -254,21 +263,94 @@ void Global_Light_Source::update_active_segment(float degree) {
         active_segment_end_ = 0;
 }
 
-void Global_Light_Source::update() {
-	if (++frame_counter_ % update_interval_ != 0) {
-		return;
-	}
-	if (!initialized_) {
-		static thread_local std::mt19937 rng{std::random_device{}()};
-		std::uniform_real_distribution<float> dist(0.0f, 2.0f * float(M_PI));
-		angle_ = dist(rng);
-		initialized_ = true;
-	}
+void Global_Light_Source::update(const std::optional<SDL_FPoint>& target_world,
+                                 const std::optional<SDL_FPoint>& average_direction) {
+        if (++frame_counter_ % update_interval_ != 0) {
+                return;
+        }
 
-        angle_ -= 0.01f;
-	if (angle_ < 0.0f) angle_ += 2.0f * float(M_PI);
+        const auto lerp = [](float a, float b, float t) {
+                return a + (b - a) * t;
+        };
 
-	recalc_position();
+        const SDL_FPoint fallback_target{
+                static_cast<float>(map_reference_center_.x),
+                static_cast<float>(map_reference_center_.y)};
+        const SDL_FPoint desired_target = target_world.value_or(fallback_target);
+
+        if (!smoothed_target_valid_) {
+                smoothed_target_world_ = desired_target;
+                smoothed_target_valid_ = true;
+        } else {
+                constexpr float kTargetLerp = 0.15f;
+                smoothed_target_world_.x = lerp(smoothed_target_world_.x, desired_target.x, kTargetLerp);
+                smoothed_target_world_.y = lerp(smoothed_target_world_.y, desired_target.y, kTargetLerp);
+        }
+
+        direction_target_world_.x = static_cast<int>(std::lround(smoothed_target_world_.x));
+        direction_target_world_.y = static_cast<int>(std::lround(smoothed_target_world_.y));
+
+        SDL_FPoint desired_direction{0.0f, -1.0f};
+        bool       have_direction = false;
+        if (average_direction) {
+                desired_direction = *average_direction;
+                const float len = std::sqrt(desired_direction.x * desired_direction.x +
+                                            desired_direction.y * desired_direction.y);
+                if (len > 1e-4f) {
+                        desired_direction.x /= len;
+                        desired_direction.y /= len;
+                        have_direction = true;
+                }
+        }
+        if (!have_direction) {
+                desired_direction.x = smoothed_target_world_.x - static_cast<float>(map_reference_center_.x);
+                desired_direction.y = smoothed_target_world_.y - static_cast<float>(map_reference_center_.y);
+                const float len = std::sqrt(desired_direction.x * desired_direction.x +
+                                            desired_direction.y * desired_direction.y);
+                if (len > 1e-4f) {
+                        desired_direction.x /= len;
+                        desired_direction.y /= len;
+                        have_direction = true;
+                }
+        }
+        if (!have_direction) {
+                desired_direction = SDL_FPoint{0.0f, -1.0f};
+        }
+
+        if (!smoothed_direction_valid_) {
+                smoothed_direction_       = desired_direction;
+                smoothed_direction_valid_ = true;
+        } else {
+                constexpr float kDirectionLerp = 0.2f;
+                smoothed_direction_.x = lerp(smoothed_direction_.x, desired_direction.x, kDirectionLerp);
+                smoothed_direction_.y = lerp(smoothed_direction_.y, desired_direction.y, kDirectionLerp);
+                const float len = std::sqrt(smoothed_direction_.x * smoothed_direction_.x +
+                                            smoothed_direction_.y * smoothed_direction_.y);
+                if (len > 1e-4f) {
+                        smoothed_direction_.x /= len;
+                        smoothed_direction_.y /= len;
+                } else {
+                        smoothed_direction_ = desired_direction;
+                }
+        }
+
+        const auto wrap_angle = [](float angle) {
+                const float two_pi = 2.0f * float(M_PI);
+                while (angle > float(M_PI)) angle -= two_pi;
+                while (angle < -float(M_PI)) angle += two_pi;
+                return angle;
+        };
+
+        const float desired_angle = std::atan2(-smoothed_direction_.y, smoothed_direction_.x);
+        if (!initialized_) {
+                angle_       = desired_angle;
+                initialized_ = true;
+        } else {
+                const float delta = wrap_angle(desired_angle - angle_);
+                angle_ = wrap_angle(angle_ + delta * 0.2f);
+        }
+
+        recalc_position();
 
         float deg = std::fmod(angle_ * (180.0f/float(M_PI)) + 270.0f, 360.0f);
         if (deg < 0) deg += 360.0f;
@@ -398,4 +480,7 @@ void Global_Light_Source::set_direction_reference_world(SDL_Point world_point) {
 
 void Global_Light_Source::set_direction_target_world(SDL_Point world_point) {
         direction_target_world_ = world_point;
+        smoothed_target_world_.x = static_cast<float>(world_point.x);
+        smoothed_target_world_.y = static_cast<float>(world_point.y);
+        smoothed_target_valid_   = true;
 }

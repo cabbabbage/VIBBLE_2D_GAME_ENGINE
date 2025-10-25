@@ -610,15 +610,25 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     // lower.
     if (map_light_direction) {
         const SDL_FPoint dir = *map_light_direction;
-        const float vertical_influence   = std::clamp(std::abs(dir.y), 0.0f, 1.0f);
-        const float direction_factor     = std::clamp(settings.map_light_dir_offset_strength, 0.0f, 1.0f);
+        const float vertical_influence     = std::clamp(std::abs(dir.y), 0.0f, 1.0f);
+        const float horizontal_influence   = std::clamp(std::abs(dir.x), 0.0f, 1.0f);
+        const float direction_factor       = std::clamp(settings.map_light_dir_offset_strength, 0.0f, 1.0f);
         constexpr float kMinOpacityForDirection = 100.0f / 255.0f;
-        const float opacity_visibility         = smoothstep(kMinOpacityForDirection, 1.0f, map_light_opacity);
-        const float opacity_scale              = opacity_visibility * opacity_visibility;
-        const float dir_push = vertical_influence * direction_factor * opacity_scale * 100.0f;
+        const float opacity_visibility           = smoothstep(kMinOpacityForDirection, 1.0f, map_light_opacity);
+        const float opacity_scale                = opacity_visibility * opacity_visibility;
+        const float base_direction_strength      = std::max(vertical_influence, horizontal_influence);
+        const float dir_push = base_direction_strength * direction_factor * opacity_scale * 100.0f;
         if (dir_push > 1e-4f) {
-            px += -dir.x * dir_push;
-            py += -dir.y * dir_push;
+            float direction_weight = 1.0f;
+            if (mag > 1e-4f) {
+                const float alignment = std::clamp((-nx) * dir.x + (-ny) * dir.y, -1.0f, 1.0f);
+                direction_weight      = std::max(std::abs(alignment), 0.25f);
+            }
+            direction_weight = std::clamp(direction_weight, 0.0f, 1.0f);
+            const float offset_x = -dir.x * dir_push;
+            const float offset_y = -dir.y * dir_push;
+            px = lerp(px, offset_x, direction_weight);
+            py = lerp(py, offset_y, direction_weight);
         }
     }
 

@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include <optional>
 #include <nlohmann/json.hpp>
 
 #include "utils/ranged_color.hpp"
@@ -14,7 +15,8 @@ class Global_Light_Source {
     Global_Light_Source(SDL_Renderer* renderer, SDL_Point screen_center, int screen_width, SDL_Color fallback_base_color);
     void apply_config(const nlohmann::json& data);
     ~Global_Light_Source() = default;
-    void update();
+    void update(const std::optional<SDL_FPoint>& target_world,
+                const std::optional<SDL_FPoint>& average_direction);
     SDL_Point get_position() const;
     float     get_angle() const;
     SDL_Color get_current_color() const;
@@ -54,6 +56,10 @@ class Global_Light_Source {
     SDL_Point center_;
     SDL_Point map_reference_center_;
     SDL_Point direction_target_world_;
+    SDL_FPoint smoothed_target_world_{0.0f, 0.0f};
+    SDL_FPoint smoothed_direction_{1.0f, 0.0f};
+    bool smoothed_target_valid_    = false;
+    bool smoothed_direction_valid_ = false;
     SDL_Point pos_;
     float angle_;
     bool  initialized_;
