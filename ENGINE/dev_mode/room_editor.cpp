@@ -28,6 +28,7 @@
 #include "render/camera.hpp"
 #include "map_generation/room.hpp"
 #include "spawn/asset_spawn_planner.hpp"
+#include "spawn/asset_spawner.hpp"
 #include "spawn/check.hpp"
 #include "spawn/methods/center_spawner.hpp"
 #include "spawn/methods/exact_spawner.hpp"

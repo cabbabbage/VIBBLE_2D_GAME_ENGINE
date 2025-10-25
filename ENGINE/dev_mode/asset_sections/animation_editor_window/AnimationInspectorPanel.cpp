@@ -8,6 +8,7 @@
 #include <functional>
 #include <cctype>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "AnimationDocument.hpp"
@@ -19,6 +20,7 @@
 #include "SourceConfigPanel.hpp"
 #include "string_utils.hpp"
 #include "dm_styles.hpp"
+#include "dev_mode/dm_icons.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 
@@ -32,6 +34,7 @@ constexpr int kInspectorSectionGap = 10;
 
 constexpr int kPreviewHeight = 120;
 constexpr int kHeaderButtonWidth = 160;
+constexpr int kMinToggleButtonWidth = 120;
 
 int header_toggle_width() {
     return DMButton::height();
@@ -92,9 +95,13 @@ bool is_pointer_event(const SDL_Event& e) {
 }
 
 AnimationInspectorPanel::AnimationInspectorPanel() {
-    source_toggle_button_ = std::make_unique<DMButton>("[\xE2\x86\x93] Frame Sources", &DMStyles::HeaderButton(), 200, DMButton::height());
+    source_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
+    playback_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
+    movement_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
+    on_end_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
+    audio_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
     collapse_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), header_toggle_width(), DMButton::height());
-    update_source_toggle_label();
+    update_section_toggle_labels();
     update_collapse_toggle_label();
 }
 
@@ -166,84 +173,58 @@ void AnimationInspectorPanel::set_audio_file_picker(AudioFilePicker picker) {
 
 int AnimationInspectorPanel::height_for_width(int width) const {
     const int padding = kInspectorPadding;
-    const int gap = kInspectorSectionGap;
+    const int section_gap = kInspectorSectionGap;
+    const int item_gap = kInspectorItemGap;
     const int header_height = std::max(DMTextBox::height(), DMButton::height());
-    const int toggle_height = DMButton::height();
-
     const int content_width = std::max(0, width - padding * 2);
-
-    const bool collapsed = collapsed_;
-
-    int source_height = (!collapsed && !source_collapsed_ && source_config_) ? source_config_->preferred_height(content_width) : 0;
-    int playback_height = !collapsed && playback_settings_ ? playback_settings_->preferred_height(content_width) : 0;
-    int movement_height = !collapsed && movement_summary_ ? movement_summary_->preferred_height(content_width) : 0;
-    int on_end_height = !collapsed && on_end_selector_ ? on_end_selector_->preferred_height(content_width) : 0;
-    int audio_height = !collapsed && audio_panel_ ? audio_panel_->preferred_height(content_width) : 0;
-
-    auto has_following = [&](int index) {
-        switch (index) {
-            case 0:
-                return playback_height > 0 || movement_height > 0 || on_end_height > 0 || audio_height > 0;
-            case 1:
-                return movement_height > 0 || on_end_height > 0 || audio_height > 0;
-            case 2:
-                return on_end_height > 0 || audio_height > 0;
-            case 3:
-                return audio_height > 0;
-            default:
-                return false;
-        }
-};
 
     int total = padding;
     total += header_height;
-    total += kInspectorItemGap;
+    total += item_gap;
     total += kPreviewHeight;
 
-    if (collapsed) {
+    if (collapsed_) {
         total += padding;
         return total;
     }
 
-    const bool has_sections = (source_height > 0 || playback_height > 0 || movement_height > 0 || on_end_height > 0 || audio_height > 0);
-    if (has_sections) {
-        total += gap;
+    int toggle_height = layout_toggle_row(0, 0, content_width, false);
+    if (toggle_height > 0) {
+        total += section_gap;
+        total += toggle_height;
     }
 
-    total += toggle_height;
-    if (source_height <= 0 && (playback_height > 0 || movement_height > 0 || on_end_height > 0 || audio_height > 0)) {
-        total += gap;
-    }
-    if (source_height > 0) {
-        total += kInspectorItemGap;
-        total += source_height;
-        if (has_following(0)) {
-            total += gap;
+    auto visible_gap = false;
+    auto add_section_height = [&](int height) {
+        if (height <= 0) {
+            return;
         }
-    }
-    if (playback_height > 0) {
-        total += playback_height;
-        if (has_following(1)) {
-            total += gap;
+        if (!visible_gap) {
+            total += item_gap;
+            visible_gap = true;
+        } else {
+            total += section_gap;
         }
+        total += height;
+    };
+
+    if (!source_collapsed_ && source_config_) {
+        add_section_height(source_config_->preferred_height(content_width));
     }
-    if (movement_height > 0) {
-        total += movement_height;
-        if (has_following(2)) {
-            total += gap;
-        }
+    if (!playback_collapsed_ && playback_settings_) {
+        add_section_height(playback_settings_->preferred_height(content_width));
     }
-    if (on_end_height > 0) {
-        total += on_end_height;
-        if (has_following(3)) {
-            total += gap;
-        }
+    if (!movement_collapsed_ && movement_summary_) {
+        add_section_height(movement_summary_->preferred_height(content_width));
     }
-    if (audio_height > 0) {
-        total += audio_height;
+    if (!on_end_collapsed_ && on_end_selector_) {
+        add_section_height(on_end_selector_->preferred_height(content_width));
     }
+    if (!audio_collapsed_ && audio_panel_) {
+        add_section_height(audio_panel_->preferred_height(content_width));
+    }
+
     total += padding;
-
     return total;
 }
 
@@ -257,11 +238,11 @@ void AnimationInspectorPanel::update() {
     refresh_start_indicator();
 
     if (!collapsed_) {
-        if (source_config_) source_config_->update();
-        if (playback_settings_) playback_settings_->update();
-        if (movement_summary_) movement_summary_->update();
-        if (on_end_selector_) on_end_selector_->update();
-        if (audio_panel_) audio_panel_->update();
+        if (!source_collapsed_ && source_config_) source_config_->update();
+        if (!playback_collapsed_ && playback_settings_) playback_settings_->update();
+        if (!movement_collapsed_ && movement_summary_) movement_summary_->update();
+        if (!on_end_collapsed_ && on_end_selector_) on_end_selector_->update();
+        if (!audio_collapsed_ && audio_panel_) audio_panel_->update();
     }
 }
 
@@ -359,11 +340,16 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
 
     if (!collapsed_) {
         if (source_toggle_button_) source_toggle_button_->render(renderer);
+        if (playback_toggle_button_) playback_toggle_button_->render(renderer);
+        if (movement_toggle_button_) movement_toggle_button_->render(renderer);
+        if (on_end_toggle_button_) on_end_toggle_button_->render(renderer);
+        if (audio_toggle_button_) audio_toggle_button_->render(renderer);
+
         if (!source_collapsed_ && source_config_) source_config_->render(renderer);
-        if (playback_settings_) playback_settings_->render(renderer);
-        if (movement_summary_) movement_summary_->render(renderer);
-        if (on_end_selector_) on_end_selector_->render(renderer);
-        if (audio_panel_) audio_panel_->render(renderer);
+        if (!playback_collapsed_ && playback_settings_) playback_settings_->render(renderer);
+        if (!movement_collapsed_ && movement_summary_) movement_summary_->render(renderer);
+        if (!on_end_collapsed_ && on_end_selector_) on_end_selector_->render(renderer);
+        if (!audio_collapsed_ && audio_panel_) audio_panel_->render(renderer);
     }
 }
 
@@ -386,53 +372,133 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
 
     bool handled = false;
     bool was_editing = name_box_ && name_box_->is_editing();
+    auto handle_name_event = [&](const SDL_Event& ev) {
+        if (!name_box_) {
+            return;
+        }
+        if (name_box_->handle_event(ev)) {
+            rename_pending_ = true;
+            handled = true;
+        }
+    };
+
+    if (e.type == SDL_KEYDOWN) {
+        if (name_box_ && name_box_->is_editing()) {
+            handle_name_event(e);
+        }
+
+        if (e.key.keysym.sym == SDLK_TAB) {
+            auto order = focus_order();
+            if (!order.empty()) {
+                int direction = (e.key.keysym.mod & KMOD_SHIFT) ? -1 : 1;
+                int count = static_cast<int>(order.size());
+                int next = focus_index_;
+                if (next < 0 || next >= count) {
+                    next = (direction > 0) ? -1 : 0;
+                }
+                next += direction;
+                if (next < 0) {
+                    next = count - 1;
+                } else if (next >= count) {
+                    next = 0;
+                }
+                set_focus(order[next]);
+                handled = true;
+            }
+        } else {
+            auto order = focus_order();
+            if (focus_index_ >= 0 && focus_index_ < static_cast<int>(order.size())) {
+                FocusTarget target = order[focus_index_];
+                if ((e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER ||
+                     e.key.keysym.sym == SDLK_SPACE) &&
+                    !(target == FocusTarget::kName && name_box_ && name_box_->is_editing())) {
+                    activate_focus_target(target);
+                    handled = true;
+                }
+            }
+        }
+    } else if (e.type == SDL_TEXTINPUT) {
+        if (name_box_ && name_box_->is_editing()) {
+            handle_name_event(e);
+        }
+    }
+
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{e.button.x, e.button.y};
+        FocusTarget clicked = FocusTarget::kNone;
+        if (collapse_toggle_button_ && SDL_PointInRect(&p, &collapse_toggle_rect_)) {
+            clicked = FocusTarget::kCollapse;
+        } else if (name_box_ && SDL_PointInRect(&p, &name_box_->rect())) {
+            clicked = FocusTarget::kName;
+        } else if (start_button_ && SDL_PointInRect(&p, &start_button_->rect())) {
+            clicked = FocusTarget::kStart;
+        } else if (delete_button_ && SDL_PointInRect(&p, &delete_button_->rect())) {
+            clicked = FocusTarget::kDelete;
+        } else if (!collapsed_) {
+            if (source_toggle_button_ && SDL_PointInRect(&p, &source_toggle_button_->rect())) {
+                clicked = FocusTarget::kToggleSources;
+            } else if (playback_toggle_button_ && SDL_PointInRect(&p, &playback_toggle_button_->rect())) {
+                clicked = FocusTarget::kTogglePlayback;
+            } else if (movement_toggle_button_ && SDL_PointInRect(&p, &movement_toggle_button_->rect())) {
+                clicked = FocusTarget::kToggleMovement;
+            } else if (on_end_toggle_button_ && SDL_PointInRect(&p, &on_end_toggle_button_->rect())) {
+                clicked = FocusTarget::kToggleOnEnd;
+            } else if (audio_toggle_button_ && SDL_PointInRect(&p, &audio_toggle_button_->rect())) {
+                clicked = FocusTarget::kToggleAudio;
+            }
+        }
+        set_focus(clicked);
+    }
+
+    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        handle_name_event(e);
+    }
+
     if (collapse_toggle_button_ && collapse_toggle_button_->handle_event(e)) {
         handled = true;
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            collapsed_ = !collapsed_;
-            update_collapse_toggle_label();
-            layout_dirty_ = true;
+            activate_focus_target(FocusTarget::kCollapse);
         }
-    }
-
-    if (name_box_ && name_box_->handle_event(e)) {
-        rename_pending_ = true;
-        handled = true;
     }
 
     if (start_button_ && start_button_->handle_event(e)) {
-        if (document_) {
-            document_->set_start_animation(animation_id_);
-        }
-        refresh_start_indicator();
         handled = true;
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            activate_focus_target(FocusTarget::kStart);
+        }
     }
 
     if (delete_button_ && delete_button_->handle_event(e)) {
-        if (document_) {
-            document_->delete_animation(animation_id_);
-        }
         handled = true;
-    }
-
-    if (!collapsed_ && source_toggle_button_) {
-        bool consumed = source_toggle_button_->handle_event(e);
-        if (consumed) {
-            handled = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                source_collapsed_ = !source_collapsed_;
-                update_source_toggle_label();
-                layout_dirty_ = true;
-            }
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            activate_focus_target(FocusTarget::kDelete);
         }
     }
 
     if (!collapsed_) {
+        auto handle_toggle = [&](DMButton* button, FocusTarget target) {
+            if (!button) {
+                return;
+            }
+            if (button->handle_event(e)) {
+                handled = true;
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    activate_focus_target(target);
+                }
+            }
+        };
+
+        handle_toggle(source_toggle_button_.get(), FocusTarget::kToggleSources);
+        handle_toggle(playback_toggle_button_.get(), FocusTarget::kTogglePlayback);
+        handle_toggle(movement_toggle_button_.get(), FocusTarget::kToggleMovement);
+        handle_toggle(on_end_toggle_button_.get(), FocusTarget::kToggleOnEnd);
+        handle_toggle(audio_toggle_button_.get(), FocusTarget::kToggleAudio);
+
         if (!source_collapsed_ && source_config_ && source_config_->handle_event(e)) handled = true;
-        if (playback_settings_ && playback_settings_->handle_event(e)) handled = true;
-        if (movement_summary_ && movement_summary_->handle_event(e)) handled = true;
-        if (on_end_selector_ && on_end_selector_->handle_event(e)) handled = true;
-        if (audio_panel_ && audio_panel_->handle_event(e)) handled = true;
+        if (!playback_collapsed_ && playback_settings_ && playback_settings_->handle_event(e)) handled = true;
+        if (!movement_collapsed_ && movement_summary_ && movement_summary_->handle_event(e)) handled = true;
+        if (!on_end_collapsed_ && on_end_selector_ && on_end_selector_->handle_event(e)) handled = true;
+        if (!audio_collapsed_ && audio_panel_ && audio_panel_->handle_event(e)) handled = true;
     }
 
     if (was_editing && name_box_ && !name_box_->is_editing()) {
@@ -462,7 +528,29 @@ void AnimationInspectorPanel::rebuild_widgets() {
     }
 
     if (!source_toggle_button_) {
-        source_toggle_button_ = std::make_unique<DMButton>("[\xE2\x86\x93] Frame Sources", &DMStyles::HeaderButton(), 200, DMButton::height());
+        source_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
+    } else {
+        source_toggle_button_->set_style(&DMStyles::FooterToggleButton());
+    }
+    if (!playback_toggle_button_) {
+        playback_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
+    } else {
+        playback_toggle_button_->set_style(&DMStyles::FooterToggleButton());
+    }
+    if (!movement_toggle_button_) {
+        movement_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
+    } else {
+        movement_toggle_button_->set_style(&DMStyles::FooterToggleButton());
+    }
+    if (!on_end_toggle_button_) {
+        on_end_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
+    } else {
+        on_end_toggle_button_->set_style(&DMStyles::FooterToggleButton());
+    }
+    if (!audio_toggle_button_) {
+        audio_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::FooterToggleButton(), 200, DMButton::height());
+    } else {
+        audio_toggle_button_->set_style(&DMStyles::FooterToggleButton());
     }
     if (!collapse_toggle_button_) {
         collapse_toggle_button_ = std::make_unique<DMButton>("", &DMStyles::HeaderButton(), header_toggle_width(), DMButton::height());
@@ -502,7 +590,7 @@ void AnimationInspectorPanel::rebuild_widgets() {
     refresh_start_indicator();
     layout_dirty_ = true;
     apply_dependencies();
-    update_source_toggle_label();
+    update_section_toggle_labels();
     update_collapse_toggle_label();
 }
 
@@ -533,21 +621,196 @@ void AnimationInspectorPanel::apply_dependencies() {
     }
 }
 
-void AnimationInspectorPanel::update_source_toggle_label() {
-    if (!source_toggle_button_) {
-        return;
-    }
-
-    const char* label = source_collapsed_ ? "[\xE2\x86\x93] Frame Sources" : "[\xE2\x86\x91] Frame Sources";
-    source_toggle_button_->set_text(label);
-}
-
 void AnimationInspectorPanel::update_collapse_toggle_label() {
     if (!collapse_toggle_button_) {
         return;
     }
 
-    collapse_toggle_button_->set_text(collapsed_ ? ">" : "v");
+    const std::string label = collapsed_ ? std::string(DMIcons::CollapseCollapsed())
+                                         : std::string(DMIcons::CollapseExpanded());
+    collapse_toggle_button_->set_text(label);
+}
+
+void AnimationInspectorPanel::update_section_toggle_labels() {
+    auto make_label = [](bool collapsed, std::string_view name) {
+        std::string label = collapsed ? std::string(DMIcons::CollapseCollapsed())
+                                      : std::string(DMIcons::CollapseExpanded());
+        label.push_back(' ');
+        label.append(name.begin(), name.end());
+        return label;
+    };
+
+    if (source_toggle_button_) {
+        source_toggle_button_->set_text(make_label(source_collapsed_, "Frame Sources"));
+    }
+    if (playback_toggle_button_) {
+        playback_toggle_button_->set_text(make_label(playback_collapsed_, "Playback"));
+    }
+    if (movement_toggle_button_) {
+        movement_toggle_button_->set_text(make_label(movement_collapsed_, "Movement"));
+    }
+    if (on_end_toggle_button_) {
+        on_end_toggle_button_->set_text(make_label(on_end_collapsed_, "On End"));
+    }
+    if (audio_toggle_button_) {
+        audio_toggle_button_->set_text(make_label(audio_collapsed_, "Audio"));
+    }
+}
+
+void AnimationInspectorPanel::notify_section_visibility(const std::string& section_name, bool visible) {
+    if (!status_callback_) {
+        return;
+    }
+    if (visible) {
+        status_callback_(section_name + " section expanded.");
+    } else {
+        status_callback_(section_name + " section hidden. Use the section toggles to reveal it.");
+    }
+}
+
+std::vector<AnimationInspectorPanel::FocusTarget> AnimationInspectorPanel::focus_order() const {
+    std::vector<FocusTarget> order;
+    if (collapse_toggle_button_) order.push_back(FocusTarget::kCollapse);
+    if (name_box_) order.push_back(FocusTarget::kName);
+    if (start_button_) order.push_back(FocusTarget::kStart);
+    if (delete_button_) order.push_back(FocusTarget::kDelete);
+    if (!collapsed_) {
+        if (source_toggle_button_) order.push_back(FocusTarget::kToggleSources);
+        if (playback_toggle_button_) order.push_back(FocusTarget::kTogglePlayback);
+        if (movement_toggle_button_) order.push_back(FocusTarget::kToggleMovement);
+        if (on_end_toggle_button_) order.push_back(FocusTarget::kToggleOnEnd);
+        if (audio_toggle_button_) order.push_back(FocusTarget::kToggleAudio);
+    }
+    return order;
+}
+
+void AnimationInspectorPanel::set_focus(FocusTarget target) {
+    current_focus_target_ = target;
+    if (target == FocusTarget::kNone) {
+        focus_index_ = -1;
+        return;
+    }
+    auto order = focus_order();
+    focus_index_ = -1;
+    for (size_t i = 0; i < order.size(); ++i) {
+        if (order[i] == target) {
+            focus_index_ = static_cast<int>(i);
+            break;
+        }
+    }
+    if (focus_index_ >= 0) {
+        announce_focus(target);
+    } else {
+        current_focus_target_ = FocusTarget::kNone;
+    }
+}
+
+void AnimationInspectorPanel::announce_focus(FocusTarget target) const {
+    if (!status_callback_) {
+        return;
+    }
+
+    switch (target) {
+        case FocusTarget::kCollapse:
+            status_callback_("Focus: Collapse inspector toggle. Press Enter or Space to toggle.");
+            break;
+        case FocusTarget::kName:
+            status_callback_("Focus: Animation name. Press Enter to begin editing.");
+            break;
+        case FocusTarget::kStart:
+            status_callback_("Focus: Mark animation as start. Press Enter or Space to apply.");
+            break;
+        case FocusTarget::kDelete:
+            status_callback_("Focus: Delete animation. Press Enter or Space to remove.");
+            break;
+        case FocusTarget::kToggleSources:
+            status_callback_("Focus: Frame Sources toggle. Press Enter or Space to expand or collapse.");
+            break;
+        case FocusTarget::kTogglePlayback:
+            status_callback_("Focus: Playback settings toggle. Press Enter or Space to expand or collapse.");
+            break;
+        case FocusTarget::kToggleMovement:
+            status_callback_("Focus: Movement summary toggle. Press Enter or Space to expand or collapse.");
+            break;
+        case FocusTarget::kToggleOnEnd:
+            status_callback_("Focus: On End behavior toggle. Press Enter or Space to expand or collapse.");
+            break;
+        case FocusTarget::kToggleAudio:
+            status_callback_("Focus: Audio settings toggle. Press Enter or Space to expand or collapse.");
+            break;
+        case FocusTarget::kNone:
+        default:
+            break;
+    }
+}
+
+void AnimationInspectorPanel::activate_focus_target(FocusTarget target) {
+    switch (target) {
+        case FocusTarget::kCollapse:
+            collapsed_ = !collapsed_;
+            update_collapse_toggle_label();
+            layout_dirty_ = true;
+            if (status_callback_) {
+                status_callback_(collapsed_ ? "Inspector collapsed." : "Inspector expanded.");
+            }
+            break;
+        case FocusTarget::kName:
+            if (status_callback_) {
+                status_callback_("Press Enter inside the name field to begin editing.");
+            }
+            break;
+        case FocusTarget::kStart:
+            if (document_) {
+                document_->set_start_animation(animation_id_);
+            }
+            refresh_start_indicator();
+            if (status_callback_) {
+                status_callback_("Animation marked as start animation.");
+            }
+            break;
+        case FocusTarget::kDelete:
+            if (document_) {
+                document_->delete_animation(animation_id_);
+            }
+            if (status_callback_) {
+                status_callback_("Animation deleted from the document.");
+            }
+            break;
+        case FocusTarget::kToggleSources:
+            source_collapsed_ = !source_collapsed_;
+            update_section_toggle_labels();
+            layout_dirty_ = true;
+            notify_section_visibility("Frame Sources", !source_collapsed_);
+            break;
+        case FocusTarget::kTogglePlayback:
+            playback_collapsed_ = !playback_collapsed_;
+            update_section_toggle_labels();
+            layout_dirty_ = true;
+            notify_section_visibility("Playback", !playback_collapsed_);
+            break;
+        case FocusTarget::kToggleMovement:
+            movement_collapsed_ = !movement_collapsed_;
+            update_section_toggle_labels();
+            layout_dirty_ = true;
+            notify_section_visibility("Movement", !movement_collapsed_);
+            break;
+        case FocusTarget::kToggleOnEnd:
+            on_end_collapsed_ = !on_end_collapsed_;
+            update_section_toggle_labels();
+            layout_dirty_ = true;
+            notify_section_visibility("On End", !on_end_collapsed_);
+            break;
+        case FocusTarget::kToggleAudio:
+            audio_collapsed_ = !audio_collapsed_;
+            update_section_toggle_labels();
+            layout_dirty_ = true;
+            notify_section_visibility("Audio", !audio_collapsed_);
+            break;
+        case FocusTarget::kNone:
+        default:
+            break;
+    }
+    refresh_focus_index();
 }
 
 void AnimationInspectorPanel::layout_widgets() const {
@@ -559,53 +822,60 @@ void AnimationInspectorPanel::layout_widgets() const {
     self->layout_dirty_ = false;
 
     const int padding = kInspectorPadding;
-    const int gap = kInspectorSectionGap;
+    const int section_gap = kInspectorSectionGap;
     const int item_gap = kInspectorItemGap;
+    const int toolbar_gap = DMSpacing::small_gap();
+
     const int width = std::max(0, bounds_.w - padding * 2);
     const int content_width = width;
-    int x = bounds_.x + padding;
+    const int x = bounds_.x + padding;
     int y = bounds_.y + padding;
 
-    int toggle_width = collapse_toggle_button_ ? header_toggle_width() : 0;
-    int name_left = x + toggle_width;
-    if (toggle_width > 0) {
-        name_left += item_gap;
+    const int collapse_width = collapse_toggle_button_ ? header_toggle_width() : 0;
+    const int button_height = DMButton::height();
+
+    int toolbar_right = x + width;
+    int action_buttons = 0;
+    if (start_button_) ++action_buttons;
+    if (delete_button_) ++action_buttons;
+    int action_width = action_buttons * kHeaderButtonWidth + std::max(0, action_buttons - 1) * toolbar_gap;
+    int action_left = toolbar_right - action_width;
+
+    if (start_button_) {
+        SDL_Rect rect{action_left, y, kHeaderButtonWidth, button_height};
+        start_button_->set_rect(rect);
+        action_left += kHeaderButtonWidth + toolbar_gap;
+    }
+    if (delete_button_) {
+        SDL_Rect rect{action_left, y, kHeaderButtonWidth, button_height};
+        delete_button_->set_rect(rect);
     }
 
-    int right_edge = x + width;
-    int delete_x = std::max(name_left, right_edge - kHeaderButtonWidth);
-    int start_x = std::max(name_left, delete_x - item_gap - kHeaderButtonWidth);
-
-    int name_width = std::max(0, start_x - name_left - item_gap);
-    if (name_width <= 0) {
-        name_width = std::max(0, right_edge - name_left - item_gap);
+    int name_left = x + collapse_width;
+    if (collapse_width > 0) {
+        name_left += toolbar_gap;
     }
-
-    if (self->start_button_) {
-        SDL_Rect start_rect{start_x, y, kHeaderButtonWidth, DMButton::height()};
-        self->start_button_->set_rect(start_rect);
+    int name_right = toolbar_right - action_width;
+    if (action_width > 0) {
+        name_right -= toolbar_gap;
     }
+    int name_width = std::max(0, name_right - name_left);
 
-    if (self->delete_button_) {
-        SDL_Rect delete_rect{delete_x, y, kHeaderButtonWidth, DMButton::height()};
-        self->delete_button_->set_rect(delete_rect);
-    }
-
-    if (self->collapse_toggle_button_) {
-        self->collapse_toggle_rect_ = SDL_Rect{x, y, toggle_width, DMButton::height()};
-        self->collapse_toggle_button_->set_rect(self->collapse_toggle_rect_);
+    if (collapse_toggle_button_) {
+        collapse_toggle_rect_ = SDL_Rect{x, y, collapse_width, button_height};
+        collapse_toggle_button_->set_rect(collapse_toggle_rect_);
     } else {
-        self->collapse_toggle_rect_ = SDL_Rect{x, y, 0, 0};
+        collapse_toggle_rect_ = SDL_Rect{x, y, 0, 0};
     }
 
     int name_height = DMTextBox::height();
-    if (self->name_box_) {
-        name_height = self->name_box_->height_for_width(name_width);
-        SDL_Rect name_rect{name_left, y, name_width, name_height};
-        self->name_box_->set_rect(name_rect);
+    if (name_box_) {
+        name_height = name_box_->height_for_width(name_width);
+        SDL_Rect rect{name_left, y, name_width, name_height};
+        name_box_->set_rect(rect);
     }
 
-    int header_height = std::max(name_height, DMButton::height());
+    int header_height = std::max(name_height, button_height);
     y += header_height + item_gap;
     self->header_rect_ = SDL_Rect{bounds_.x, bounds_.y, bounds_.w, y - bounds_.y};
 
@@ -613,101 +883,78 @@ void AnimationInspectorPanel::layout_widgets() const {
     y += kPreviewHeight;
 
     if (collapsed_) {
-        self->source_toggle_rect_ = SDL_Rect{x, y, width, 0};
-        if (self->source_toggle_button_) self->source_toggle_button_->set_rect(self->source_toggle_rect_);
-        self->source_rect_ = SDL_Rect{x, y, width, 0};
-        if (self->source_config_) self->source_config_->set_bounds(self->source_rect_);
-        self->playback_rect_ = SDL_Rect{x, y, width, 0};
-        if (self->playback_settings_) self->playback_settings_->set_bounds(self->playback_rect_);
-        self->movement_rect_ = SDL_Rect{x, y, width, 0};
-        if (self->movement_summary_) self->movement_summary_->set_bounds(self->movement_rect_);
-        self->on_end_rect_ = SDL_Rect{x, y, width, 0};
-        if (self->on_end_selector_) self->on_end_selector_->set_bounds(self->on_end_rect_);
-        self->audio_rect_ = SDL_Rect{x, y, width, 0};
-        if (self->audio_panel_) self->audio_panel_->set_bounds(self->audio_rect_);
+        toggles_rect_ = SDL_Rect{x, y, width, 0};
+        if (source_toggle_button_) source_toggle_button_->set_rect(toggles_rect_);
+        if (playback_toggle_button_) playback_toggle_button_->set_rect(toggles_rect_);
+        if (movement_toggle_button_) movement_toggle_button_->set_rect(toggles_rect_);
+        if (on_end_toggle_button_) on_end_toggle_button_->set_rect(toggles_rect_);
+        if (audio_toggle_button_) audio_toggle_button_->set_rect(toggles_rect_);
+
+        source_rect_ = SDL_Rect{x, y, width, 0};
+        if (source_config_) source_config_->set_bounds(source_rect_);
+        playback_rect_ = SDL_Rect{x, y, width, 0};
+        if (playback_settings_) playback_settings_->set_bounds(playback_rect_);
+        movement_rect_ = SDL_Rect{x, y, width, 0};
+        if (movement_summary_) movement_summary_->set_bounds(movement_rect_);
+        on_end_rect_ = SDL_Rect{x, y, width, 0};
+        if (on_end_selector_) on_end_selector_->set_bounds(on_end_rect_);
+        audio_rect_ = SDL_Rect{x, y, width, 0};
+        if (audio_panel_) audio_panel_->set_bounds(audio_rect_);
+        refresh_focus_index();
         return;
     }
 
-    int expanded_source_height = (!source_collapsed_ && source_config_) ? source_config_->preferred_height(content_width) : 0;
+    y += section_gap;
+    int toggle_height = layout_toggle_row(x, y, width, true);
+    y += toggle_height;
 
-    if (expanded_source_height > 0 || playback_settings_ || movement_summary_ || on_end_selector_ || audio_panel_) {
-        y += gap;
-    }
+    bool placed_section = false;
 
-    self->source_toggle_rect_ = SDL_Rect{x, y, width, DMButton::height()};
-    if (self->source_toggle_button_) self->source_toggle_button_->set_rect(self->source_toggle_rect_);
-    y += DMButton::height();
-
-    if (!source_collapsed_) {
-        int source_height = expanded_source_height;
-        if (source_height > 0) {
+    auto assign_section = [&](bool collapsed, auto* widget, SDL_Rect& rect) {
+        if (!widget) {
+            rect = SDL_Rect{x, y, width, 0};
+            return;
+        }
+        int section_height = widget->preferred_height(content_width);
+        if (collapsed || section_height <= 0) {
+            rect = SDL_Rect{x, y, width, 0};
+            widget->set_bounds(rect);
+            return;
+        }
+        if (!placed_section) {
             y += item_gap;
-            self->source_rect_ = SDL_Rect{x, y, width, source_height};
-            if (self->source_config_) self->source_config_->set_bounds(self->source_rect_);
-            y += source_height;
-            y += gap;
+            placed_section = true;
         } else {
-            self->source_rect_ = SDL_Rect{x, y, width, 0};
-            if (self->source_config_) self->source_config_->set_bounds(self->source_rect_);
+            y += section_gap;
         }
-    } else {
-        self->source_rect_ = SDL_Rect{x, y, width, 0};
-        if (self->source_config_) self->source_config_->set_bounds(self->source_rect_);
+        rect = SDL_Rect{x, y, width, section_height};
+        widget->set_bounds(rect);
+        y += section_height;
+    };
+
+    assign_section(source_collapsed_ || !source_config_, source_config_.get(), source_rect_);
+    assign_section(playback_collapsed_ || !playback_settings_, playback_settings_.get(), playback_rect_);
+    assign_section(movement_collapsed_ || !movement_summary_, movement_summary_.get(), movement_rect_);
+    assign_section(on_end_collapsed_ || !on_end_selector_, on_end_selector_.get(), on_end_rect_);
+    assign_section(audio_collapsed_ || !audio_panel_, audio_panel_.get(), audio_rect_);
+
+    refresh_focus_index();
+}
+
+void AnimationInspectorPanel::refresh_focus_index() const {
+    auto* self = const_cast<AnimationInspectorPanel*>(this);
+    auto order = focus_order();
+    self->focus_index_ = -1;
+    if (self->current_focus_target_ == FocusTarget::kNone) {
+        return;
     }
-
-    int playback_height = playback_settings_ ? playback_settings_->preferred_height(content_width) : 0;
-    int movement_height = movement_summary_ ? movement_summary_->preferred_height(content_width) : 0;
-    int on_end_height = on_end_selector_ ? on_end_selector_->preferred_height(content_width) : 0;
-    int audio_height = audio_panel_ ? audio_panel_->preferred_height(content_width) : 0;
-
-    if ((playback_height > 0 || movement_height > 0 || on_end_height > 0 || audio_height > 0) && expanded_source_height <= 0) {
-        y += gap;
-    }
-
-    struct SectionInfo {
-        int height;
-        SDL_Rect* rect;
-        std::function<void(const SDL_Rect&)> apply_bounds;
-};
-
-    std::array<SectionInfo, 4> sections{{
-        {playback_height, &self->playback_rect_, [self](const SDL_Rect& r) {
-             if (self->playback_settings_) self->playback_settings_->set_bounds(r);
-         }},
-        {movement_height, &self->movement_rect_, [self](const SDL_Rect& r) {
-             if (self->movement_summary_) self->movement_summary_->set_bounds(r);
-         }},
-        {on_end_height, &self->on_end_rect_, [self](const SDL_Rect& r) {
-             if (self->on_end_selector_) self->on_end_selector_->set_bounds(r);
-         }},
-        {audio_height, &self->audio_rect_, [self](const SDL_Rect& r) {
-             if (self->audio_panel_) self->audio_panel_->set_bounds(r);
-         }},
-    }};
-
-    auto has_following_section = [&](size_t index) {
-        for (size_t i = index + 1; i < sections.size(); ++i) {
-            if (sections[i].height > 0) {
-                return true;
-            }
-        }
-        return false;
-};
-
-    for (size_t i = 0; i < sections.size(); ++i) {
-        const auto& sec = sections[i];
-        SDL_Rect rect{x, y, width, std::max(0, sec.height)};
-        *sec.rect = rect;
-        if (sec.apply_bounds) {
-            sec.apply_bounds(rect);
-        }
-        if (sec.height > 0) {
-            y += sec.height;
-            if (has_following_section(i)) {
-                y += gap;
-            }
+    for (size_t i = 0; i < order.size(); ++i) {
+        if (order[i] == self->current_focus_target_) {
+            self->focus_index_ = static_cast<int>(i);
+            return;
         }
     }
+    self->current_focus_target_ = FocusTarget::kNone;
 }
 
 void AnimationInspectorPanel::commit_rename() {
@@ -775,5 +1022,57 @@ void AnimationInspectorPanel::refresh_start_indicator() {
     }
 }
 
+}
+
+int AnimationInspectorPanel::layout_toggle_row(int origin_x, int origin_y, int width, bool apply) const {
+    auto* self = const_cast<AnimationInspectorPanel*>(this);
+    if (width <= 0) {
+        if (apply) {
+            self->toggles_rect_ = SDL_Rect{origin_x, origin_y, width, 0};
+            if (source_toggle_button_) source_toggle_button_->set_rect(self->toggles_rect_);
+            if (playback_toggle_button_) playback_toggle_button_->set_rect(self->toggles_rect_);
+            if (movement_toggle_button_) movement_toggle_button_->set_rect(self->toggles_rect_);
+            if (on_end_toggle_button_) on_end_toggle_button_->set_rect(self->toggles_rect_);
+            if (audio_toggle_button_) audio_toggle_button_->set_rect(self->toggles_rect_);
+        }
+        return 0;
+    }
+
+    const int button_height = DMButton::height();
+    const int gap = DMSpacing::small_gap();
+
+    int line_x = origin_x;
+    int line_y = origin_y;
+    int bottom = origin_y;
+
+    auto place_button = [&](DMButton* button) {
+        if (!button) {
+            return;
+        }
+        int button_width = button->preferred_width();
+        button_width = std::max(kMinToggleButtonWidth, std::min(button_width, width));
+        if (line_x > origin_x && line_x + button_width > origin_x + width) {
+            line_x = origin_x;
+            line_y += button_height + gap;
+        }
+        if (apply) {
+            SDL_Rect rect{line_x, line_y, button_width, button_height};
+            button->set_rect(rect);
+        }
+        line_x += button_width + gap;
+        bottom = std::max(bottom, line_y + button_height);
+    };
+
+    place_button(source_toggle_button_.get());
+    place_button(playback_toggle_button_.get());
+    place_button(movement_toggle_button_.get());
+    place_button(on_end_toggle_button_.get());
+    place_button(audio_toggle_button_.get());
+
+    int height = std::max(0, bottom - origin_y);
+    if (apply) {
+        self->toggles_rect_ = SDL_Rect{origin_x, origin_y, width, height};
+    }
+    return height;
 }
 
