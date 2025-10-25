@@ -22,9 +22,9 @@ public:
     };
 
     Occupancy() = default;
-    Occupancy(const Area& area, int resolution, Grid& grid);
+    Occupancy(const Area& area, int resolution, Grid& grid, bool allow_partial_overlap = false);
 
-    void rebuild(const Area& area, int resolution, Grid& grid);
+    void rebuild(const Area& area, int resolution, Grid& grid, bool allow_partial_overlap = false);
 
     Vertex* nearest_vertex(SDL_Point world);
     Vertex* random_vertex_in_area(const Area& area, std::mt19937& rng);
@@ -33,6 +33,7 @@ public:
     Vertex* vertex_at_index(SDL_Point index);
     void set_occupied(Vertex* vertex, bool occupied = true);
     void set_occupied_at(SDL_Point world, bool occupied = true);
+    bool cell_overlaps(const Area& area, SDL_Point world) const;
     int free_count() const { return free_count_; }
     int resolution() const { return resolution_; }
 
@@ -43,6 +44,7 @@ private:
 
     void populate_vertices(const Area& area, int resolution, Grid& grid);
 
+    bool allow_partial_overlap_ = false;
     std::vector<Vertex> vertices_;
     std::unordered_map<Key, std::size_t> lookup_;
     Grid* grid_ = nullptr;

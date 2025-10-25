@@ -371,7 +371,7 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
                 if (it == occupancy_cache.end()) {
                         AreaOccupancy entry;
                         entry.area = area;
-                        entry.occupancy = std::make_unique<vibble::grid::Occupancy>(*area, resolution, grid_service);
+                        entry.occupancy = std::make_unique<vibble::grid::Occupancy>(*area, resolution, grid_service, true);
                         occupancy_cache.push_back(std::move(entry));
                         return occupancy_cache.back().occupancy.get();
                 }
@@ -409,6 +409,8 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
                 ctx.set_spawn_resolution(resolution);
                 ctx.set_trail_areas({});
                 ctx.set_clip_area(target_area);
+                ctx.set_checks_enabled(false);
+                ctx.set_allow_partial_clip_overlap(true);
 
                 const std::string& pos = queue_item.position;
                 if (pos == "Exact" || pos == "Exact Position") {

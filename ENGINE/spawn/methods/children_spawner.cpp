@@ -17,7 +17,7 @@ void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContex
     while (slots_used < quantity && attempts < max_attempts) {
         ++attempts;
         SDL_Point pos = ctx.get_point_within_area(*area);
-        if (!area->contains_point(pos)) continue;
+        if (!ctx.position_allowed(*area, pos)) continue;
 
         const SpawnCandidate* candidate = item.select_candidate(ctx.rng());
         if (!candidate || candidate->is_null || !candidate->info) {
@@ -26,16 +26,16 @@ void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContex
         }
 
         const bool enforce_spacing = item.check_min_spacing;
-        bool violate = ctx.checker().check(candidate->info,
-                                           pos,
-                                           std::vector<Area>{},
-                                           ctx.all_assets(),
-                                           false,
-                                           enforce_spacing,
-                                           false,
-                                           false,
-                                           0);
-        if (violate) continue;
+        if (ctx.checks_enabled() &&
+            ctx.checker().check(candidate->info,
+                                 pos,
+                                 std::vector<Area>{},
+                                 ctx.all_assets(),
+                                 false,
+                                 enforce_spacing,
+                                 false,
+                                 false,
+                                 0)) continue;
 
         auto* result = ctx.spawnAsset(candidate->name, candidate->info, *area, pos, 0, nullptr, item.spawn_id, std::string("ChildRandom"));
         if (!result) {
@@ -43,7 +43,9 @@ void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContex
             continue;
         }
 
-        ctx.checker().register_asset(result, enforce_spacing, true);
+        if (ctx.checks_enabled()) {
+            ctx.checker().register_asset(result, enforce_spacing, true);
+        }
 
         ++slots_used;
     }

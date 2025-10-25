@@ -159,8 +159,13 @@ void EdgeSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& c
             continue;
         }
 
+        if (!ctx.position_allowed(*target_area, spawn_point)) {
+            continue;
+        }
+
         const bool enforce_spacing = item.check_min_spacing;
-        if (ctx.checker().check(candidate->info,
+        if (ctx.checks_enabled() &&
+            ctx.checker().check(candidate->info,
                                 spawn_point,
                                 ctx.exclusion_zones(),
                                 ctx.all_assets(),
@@ -180,7 +185,9 @@ void EdgeSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& c
                                            nullptr,
                                            item.spawn_id,
                                            item.position)) {
-            ctx.checker().register_asset(spawned, enforce_spacing, false);
+            if (ctx.checks_enabled()) {
+                ctx.checker().register_asset(spawned, enforce_spacing, false);
+            }
         }
     }
 }

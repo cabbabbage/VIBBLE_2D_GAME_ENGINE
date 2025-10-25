@@ -10,22 +10,26 @@ namespace {
 constexpr int kMaxSearchRadius = 4096;
 }
 
-Occupancy::Occupancy(const Area& area, int resolution, Grid& grid) {
-    rebuild(area, resolution, grid);
+Occupancy::Occupancy(const Area& area, int resolution, Grid& grid, bool allow_partial_overlap) {
+    rebuild(area, resolution, grid, allow_partial_overlap);
 }
 
-void Occupancy::rebuild(const Area& area, int resolution, Grid& grid) {
+void Occupancy::rebuild(const Area& area, int resolution, Grid& grid, bool allow_partial_overlap) {
     vertices_.clear();
     lookup_.clear();
     grid_ = &grid;
     resolution_ = clamp_resolution(resolution);
     free_count_ = 0;
+    allow_partial_overlap_ = allow_partial_overlap;
     populate_vertices(area, resolution_, grid);
 }
 
 void Occupancy::populate_vertices(const Area& area, int resolution, Grid& grid) {
     if (!grid_) {
         grid_ = &grid;
+    }
+    if (area.get_points().empty()) {
+        return;
     }
     auto [minx, miny, maxx, maxy] = area.get_bounds();
     SDL_Point min_world{minx, miny};
@@ -42,7 +46,18 @@ void Occupancy::populate_vertices(const Area& area, int resolution, Grid& grid) 
     for (int j = min_index.y; j <= max_index.y; ++j) {
         for (int i = min_index.x; i <= max_index.x; ++i) {
             SDL_Point world = grid.index_to_world(i, j, resolution);
-            if (!area.contains_point(world)) {
+            bool inside = area.contains_point(world);
+            bool overlaps = false;
+            if (!inside && allow_partial_overlap_) {
+                const int cell_size = delta(resolution);
+                const int cell_min_x = world.x;
+                const int cell_min_y = world.y;
+                const int cell_max_x = cell_min_x + cell_size;
+                const int cell_max_y = cell_min_y + cell_size;
+                overlaps = !(cell_max_x < minx || maxx < cell_min_x ||
+                             cell_max_y < miny || maxy < cell_min_y);
+            }
+            if (!inside && !overlaps) {
                 continue;
             }
             Vertex vertex;
@@ -174,6 +189,28 @@ void Occupancy::set_occupied_at(SDL_Point world, bool occupied) {
     if (Vertex* vertex = vertex_at_world(world)) {
         set_occupied(vertex, occupied);
     }
+}
+
+bool Occupancy::cell_overlaps(const Area& area, SDL_Point world) const {
+    if (!grid_) {
+        return area.contains_point(world);
+    }
+    if (!allow_partial_overlap_) {
+        return area.contains_point(world);
+    }
+    if (area.get_points().empty()) {
+        return false;
+    }
+    SDL_Point index = grid_->world_to_index(world, resolution_);
+    SDL_Point cell_min = grid_->index_to_world(index, resolution_);
+    const int cell_size = delta(resolution_);
+    const int cell_min_x = cell_min.x;
+    const int cell_min_y = cell_min.y;
+    const int cell_max_x = cell_min_x + cell_size;
+    const int cell_max_y = cell_min_y + cell_size;
+    auto [minx, miny, maxx, maxy] = area.get_bounds();
+    return !(cell_max_x < minx || maxx < cell_min_x ||
+             cell_max_y < miny || maxy < cell_min_y);
 }
 
 Occupancy::Key Occupancy::make_key(SDL_Point index) {

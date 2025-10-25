@@ -30,8 +30,13 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
 
         auto& info = candidate->info;
 
+        if (!ctx.position_allowed(*area, center)) {
+            continue;
+        }
+
         const bool enforce_spacing = item.check_min_spacing;
-        if (ctx.checker().check(info,
+        if (ctx.checks_enabled() &&
+            ctx.checker().check(info,
                                 center,
                                 ctx.exclusion_zones(),
                                 ctx.all_assets(),
@@ -44,7 +49,9 @@ void CenterSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
         }
 
         if (auto* spawned = ctx.spawnAsset(candidate->name, info, *area, center, 0, nullptr, item.spawn_id, item.position)) {
-            ctx.checker().register_asset(spawned, enforce_spacing, true);
+            if (ctx.checks_enabled()) {
+                ctx.checker().register_asset(spawned, enforce_spacing, true);
+            }
         }
     }
 

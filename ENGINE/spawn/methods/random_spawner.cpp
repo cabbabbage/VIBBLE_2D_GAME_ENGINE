@@ -19,7 +19,7 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
         ++attempts;
         if (!vertex) break;
         const SDL_Point pos = vertex->world;
-        if (!area->contains_point(pos)) continue;
+        if (!ctx.position_allowed(*area, pos)) continue;
 
         const SpawnCandidate* candidate = item.select_candidate(ctx.rng());
         if (!candidate) {
@@ -33,7 +33,8 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
 
         auto& info = candidate->info;
         const bool enforce_spacing = item.check_min_spacing;
-        if (ctx.checker().check(info,
+        if (ctx.checks_enabled() &&
+            ctx.checker().check(info,
                                 pos,
                                 ctx.exclusion_zones(),
                                 ctx.all_assets(),
@@ -51,7 +52,9 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
             continue;
         }
 
-        ctx.checker().register_asset(result, enforce_spacing, true);
+        if (ctx.checks_enabled()) {
+            ctx.checker().register_asset(result, enforce_spacing, true);
+        }
 
         if (occupancy) {
             occupancy->set_occupied(vertex, true);

@@ -57,7 +57,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 const std::string& spawn_method)
 {
 
-        if (clip_area_ && !clip_area_->contains_point(pos)) {
+        if (clip_area_ && !position_allowed(*clip_area_, pos)) {
                 return nullptr;
         }
         auto assetPtr = std::make_unique<Asset>(info, area, pos, depth, parent, spawn_id, spawn_method, spawn_resolution_);
@@ -184,4 +184,14 @@ void SpawnContext::set_map_grid_settings(const MapGridSettings& settings) {
         map_grid_settings_ = settings;
         map_grid_settings_.clamp();
         spawn_resolution_ = occupancy_ ? occupancy_->resolution() : vibble::grid::clamp_resolution(map_grid_settings_.resolution);
+}
+
+bool SpawnContext::position_allowed(const Area& area, SDL_Point pos) const {
+        if (area.contains_point(pos)) {
+                return true;
+        }
+        if (!allow_partial_clip_overlap_ || !occupancy_) {
+                return false;
+        }
+        return occupancy_->cell_overlaps(area, pos);
 }

@@ -54,6 +54,14 @@ class SpawnContext {
     int spawn_resolution() const { return spawn_resolution_; }
     void set_spawn_resolution(int resolution) { spawn_resolution_ = vibble::grid::clamp_resolution(resolution); }
 
+    bool checks_enabled() const { return checks_enabled_; }
+    void set_checks_enabled(bool enabled) { checks_enabled_ = enabled; }
+
+    bool allow_partial_clip_overlap() const { return allow_partial_clip_overlap_; }
+    void set_allow_partial_clip_overlap(bool allow) { allow_partial_clip_overlap_ = allow; }
+
+    bool position_allowed(const Area& area, SDL_Point pos) const;
+
     void set_map_grid_settings(const MapGridSettings& settings);
     const MapGridSettings& map_grid_settings() const { return map_grid_settings_; }
 
@@ -77,4 +85,6 @@ class SpawnContext {
     const Area* clip_area_ = nullptr;
     std::vector<const Area*> trail_areas_{};
     MapGridSettings map_grid_settings_ = MapGridSettings::defaults();
+    bool checks_enabled_ = true;
+    bool allow_partial_clip_overlap_ = false;
 };

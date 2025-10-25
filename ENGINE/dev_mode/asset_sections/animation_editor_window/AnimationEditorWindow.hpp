@@ -22,6 +22,7 @@ namespace animation_editor {
 
 class AnimationDocument;
 class AnimationListPanel;
+class AnimationInspectorPanel;
 class PreviewProvider;
 class CroppingService;
 class AsyncTaskQueue;
