@@ -220,8 +220,6 @@ bool Section_SpawnGroups::save_to_file() {
     groups_ = std::move(sanitized);
     if (info_) {
         info_->set_spawn_groups_payload(groups_);
-    groups_ = sanitized;
-    if (info_) {
         info_->set_spawn_groups(groups_);
     }
     return true;
