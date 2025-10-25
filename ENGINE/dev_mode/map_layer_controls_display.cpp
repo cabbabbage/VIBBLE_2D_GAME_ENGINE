@@ -84,6 +84,7 @@ void MapLayerControlsDisplay::detach_container() {
     if (!container_) {
         return;
     }
+    end_slider_dirty_suppression(nullptr);
     container_->clear_header_navigation_button();
     container_->set_header_navigation_alignment_right(false);
     clear_container_callbacks(*container_);
@@ -94,6 +95,7 @@ void MapLayerControlsDisplay::set_controller(std::shared_ptr<MapLayersController
     if (controller_ == controller) {
         return;
     }
+    end_slider_dirty_suppression(nullptr);
     if (controller_ && controller_listener_id_ != 0) {
         controller_->remove_listener(controller_listener_id_);
         controller_listener_id_ = 0;
@@ -111,6 +113,7 @@ void MapLayerControlsDisplay::set_selected_layer(int index) {
         mark_dirty();
         return;
     }
+    end_slider_dirty_suppression(nullptr);
     selected_layer_index_ = index;
     close_room_selector();
     close_child_selector();
@@ -393,11 +396,23 @@ bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
             }
             return true;
         }
-        if (candidate.range_slider && candidate.range_slider->handle_event(e)) {
-            if (handle_slider_change(candidate)) {
-                notify_change();
+        bool slider_handled = false;
+        if (candidate.range_slider) {
+            slider_handled = candidate.range_slider->handle_event(e);
+            if (slider_handled) {
+                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                    begin_slider_dirty_suppression(candidate.range_slider.get());
+                }
+                if (handle_slider_change(candidate)) {
+                    notify_change();
+                }
             }
-            return true;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                end_slider_dirty_suppression(candidate.range_slider.get());
+            }
+            if (slider_handled) {
+                return true;
+            }
         }
         if (candidate.add_child_button && candidate.add_child_button->handle_event(e)) {
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
@@ -551,6 +566,10 @@ void MapLayerControlsDisplay::rebuild_available_rooms() const {
 }
 
 void MapLayerControlsDisplay::mark_dirty() const {
+    if (suppress_slider_dirty_notifications_) {
+        pending_slider_dirty_refresh_ = true;
+        return;
+    }
     data_dirty_ = true;
     if (container_) {
         container_->request_layout();
@@ -681,7 +700,6 @@ bool MapLayerControlsDisplay::handle_slider_change(CandidateRow& row) {
     row.min_instances = new_min;
     row.max_instances = new_max;
     if (controller_->set_candidate_instance_range(selected_layer_index_, row.candidate_index, new_min, new_max)) {
-        mark_dirty();
         return true;
     }
     return false;
@@ -690,6 +708,32 @@ bool MapLayerControlsDisplay::handle_slider_change(CandidateRow& row) {
 void MapLayerControlsDisplay::notify_change() {
     if (on_change_) {
         on_change_();
+    }
+}
+
+void MapLayerControlsDisplay::begin_slider_dirty_suppression(const DMRangeSlider* slider) const {
+    if (active_slider_dirty_owner_ != slider) {
+        active_slider_dirty_owner_ = slider;
+    }
+    suppress_slider_dirty_notifications_ = true;
+}
+
+void MapLayerControlsDisplay::end_slider_dirty_suppression(const DMRangeSlider* slider) const {
+    if (!suppress_slider_dirty_notifications_) {
+        active_slider_dirty_owner_ = nullptr;
+        return;
+    }
+    if (active_slider_dirty_owner_ && slider && active_slider_dirty_owner_ != slider) {
+        return;
+    }
+    active_slider_dirty_owner_ = nullptr;
+    suppress_slider_dirty_notifications_ = false;
+    if (pending_slider_dirty_refresh_) {
+        pending_slider_dirty_refresh_ = false;
+        data_dirty_ = true;
+        if (container_) {
+            container_->request_layout();
+        }
     }
 }
 

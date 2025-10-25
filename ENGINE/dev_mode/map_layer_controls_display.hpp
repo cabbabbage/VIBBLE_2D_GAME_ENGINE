@@ -81,6 +81,8 @@ private:
     void notify_change();
     void handle_back_to_rooms();
     void handle_create_room();
+    void begin_slider_dirty_suppression(const DMRangeSlider* slider) const;
+    void end_slider_dirty_suppression(const DMRangeSlider* slider) const;
 
     SlidingWindowContainer* container_ = nullptr;
     std::shared_ptr<MapLayersController> controller_{};
@@ -109,5 +111,9 @@ private:
     std::function<void()> on_change_{};
     std::function<void()> on_show_rooms_list_{};
     std::function<void()> on_create_room_{};
+
+    mutable bool suppress_slider_dirty_notifications_ = false;
+    mutable bool pending_slider_dirty_refresh_ = false;
+    mutable const DMRangeSlider* active_slider_dirty_owner_ = nullptr;
 };
 
