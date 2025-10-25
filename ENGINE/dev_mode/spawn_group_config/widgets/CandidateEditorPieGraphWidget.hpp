@@ -84,6 +84,7 @@ private:
     std::function<void(const std::string&)> on_add_candidate_{};
     std::function<void()> on_request_layout_{};
     bool scroll_capture_active_ = false;
+    double wheel_scroll_accumulator_ = 0.0;
     mutable std::vector<SDL_Rect> legend_row_rects_{};
     mutable int legend_row_height_ = 0;
     std::unique_ptr<DMButton> regen_button_{};

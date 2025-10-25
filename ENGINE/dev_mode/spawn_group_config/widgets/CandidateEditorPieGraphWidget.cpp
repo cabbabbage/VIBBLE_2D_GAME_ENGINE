@@ -102,7 +102,9 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
             if (collapsed_) {
                 hovered_index_ = -1;
                 active_index_ = -1;
+                wheel_scroll_accumulator_ = 0.0;
                 hide_search();
+                release_scroll_capture();
             }
             update_internal_layout();
             notify_layout_change();
@@ -194,12 +196,14 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
 
             if (active_index_ != target_index) {
                 active_index_ = target_index;
+                wheel_scroll_accumulator_ = 0.0;
                 if (!scroll_capture_active_) {
                     DMWidgetsSetSliderScrollCapture(this, true);
                     scroll_capture_active_ = true;
                 }
             } else {
                 active_index_ = -1;
+                wheel_scroll_accumulator_ = 0.0;
                 release_scroll_capture();
             }
             return true;
@@ -207,15 +211,35 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
 
         if (active_index_ != -1) {
             active_index_ = -1;
+            wheel_scroll_accumulator_ = 0.0;
             release_scroll_capture();
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
         if (active_index_ >= 0 && on_adjust_) {
-            int delta = e.wheel.y; // positive up, negative down
-            if (delta != 0) {
-                on_adjust_(active_index_, delta);
+            double delta_value = static_cast<double>(e.wheel.y);
+            if (std::abs(delta_value) < 1e-6) {
+                delta_value = static_cast<double>(e.wheel.preciseY);
+            }
+            wheel_scroll_accumulator_ += delta_value;
+
+            int steps = 0;
+            while (wheel_scroll_accumulator_ >= 1.0) {
+                wheel_scroll_accumulator_ -= 1.0;
+                ++steps;
+            }
+            while (wheel_scroll_accumulator_ <= -1.0) {
+                wheel_scroll_accumulator_ += 1.0;
+                --steps;
+            }
+
+            if (steps != 0) {
+                on_adjust_(active_index_, steps);
                 return true; // prevent container scrolling while focused
+            }
+
+            if (delta_value != 0.0) {
+                return true; // absorb fractional scroll deltas while accumulating
             }
         }
     }
@@ -964,6 +988,7 @@ void CandidateEditorPieGraphWidget::release_scroll_capture() {
         DMWidgetsSetSliderScrollCapture(this, false);
         scroll_capture_active_ = false;
     }
+    wheel_scroll_accumulator_ = 0.0;
 }
 
 void CandidateEditorPieGraphWidget::position_search_within_bounds() {
