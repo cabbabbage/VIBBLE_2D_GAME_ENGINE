@@ -14143,9 +14143,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            189,
-            36,
             242,
+            36,
+            184,
             255
           ],
           "edge_smoothness": 2,
@@ -14221,9 +14221,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            123,
-            36,
-            242,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 101,

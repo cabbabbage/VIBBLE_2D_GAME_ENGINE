@@ -30,13 +30,18 @@
                 0,
                 0,
                 0,
-                0
+                131
             ],
-            "last_updated": "2025-10-17T07:04:46Z",
+            "last_requested_percent": 8,
+            "last_requested_scale": 0.0803108811378479,
+            "last_updated": "2025-10-25T08:58:21Z",
+            "last_used_texture_scale": 0.5,
             "recommended_percentages": [
-                50
+                100,
+                75,
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "Bench": {
             "histogram": [
@@ -438,7 +443,7 @@
                 0,
                 0,
                 0,
-                39609
+                91485
             ],
             "last_requested_percent": 3,
             "last_requested_scale": 0.02675585262477398,
@@ -462,12 +467,12 @@
                 0,
                 0,
                 0,
-                375
+                40482
             ],
-            "last_requested_percent": 2,
-            "last_requested_scale": 0.021447721868753433,
+            "last_requested_percent": 3,
+            "last_requested_scale": 0.026809651404619217,
             "last_updated": "2025-10-22T08:21:56Z",
-            "last_used_texture_scale": 0.5,
+            "last_used_texture_scale": 0.10000000149011612,
             "recommended_percentages": [
                 100,
                 75,
@@ -542,7 +547,7 @@
                 0,
                 0,
                 0,
-                81,
+                1391,
                 0
             ],
             "last_requested_percent": 19,
@@ -773,9 +778,9 @@
         "Tree_Dark": {
             "histogram": [
                 3711,
-                55404,
-                11745,
-                331,
+                57255,
+                14140,
+                949,
                 0,
                 0,
                 0,
@@ -784,9 +789,9 @@
                 0
             ],
             "last_requested_percent": 80,
-            "last_requested_scale": 0.8030303120613098,
+            "last_requested_scale": 0.7973484992980957,
             "last_updated": "2025-10-22T08:21:44Z",
-            "last_used_texture_scale": 0.8500000238418579,
+            "last_used_texture_scale": 0.75,
             "recommended_percentages": [
                 100,
                 85,
@@ -796,10 +801,10 @@
         },
         "Tree_Darker": {
             "histogram": [
-                42662,
-                16013,
-                478,
-                0,
+                43486,
+                17735,
+                1097,
+                35,
                 0,
                 0,
                 0,
@@ -807,8 +812,8 @@
                 0,
                 0
             ],
-            "last_requested_percent": 88,
-            "last_requested_scale": 0.8757061958312988,
+            "last_requested_percent": 87,
+            "last_requested_scale": 0.8700565099716187,
             "last_updated": "2025-10-22T08:21:44Z",
             "last_used_texture_scale": 0.8500000238418579,
             "recommended_percentages": [
@@ -828,11 +833,11 @@
                 0,
                 0,
                 2,
-                880,
+                1011,
                 0
             ],
-            "last_requested_percent": 16,
-            "last_requested_scale": 0.15606936812400818,
+            "last_requested_percent": 15,
+            "last_requested_scale": 0.15267175436019897,
             "last_updated": "2025-10-22T08:21:59Z",
             "last_used_texture_scale": 0.15000000596046448,
             "recommended_percentages": [
@@ -1034,13 +1039,18 @@
                 0,
                 0,
                 0,
-                0
+                1703
             ],
-            "last_updated": "2025-10-17T07:08:06Z",
+            "last_requested_percent": 5,
+            "last_requested_scale": 0.054054055362939835,
+            "last_updated": "2025-10-25T08:58:21Z",
+            "last_used_texture_scale": 0.5,
             "recommended_percentages": [
-                50
+                100,
+                75,
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "lantern": {
             "histogram": [

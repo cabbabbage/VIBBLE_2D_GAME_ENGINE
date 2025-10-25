@@ -15,6 +15,16 @@ std::filesystem::path project_root() {
 #endif
 }
 
+ManifestData make_empty_manifest() {
+    ManifestData data;
+    data.raw = nlohmann::json::object();
+    data.raw["assets"] = nlohmann::json::object();
+    data.raw["maps"] = nlohmann::json::object();
+    data.assets = data.raw["assets"];
+    data.maps = data.raw["maps"];
+    return data;
+}
+
 std::string build_missing_key_message(const std::string& key, const std::filesystem::path& path) {
     std::ostringstream oss;
     oss << "Manifest at '" << path.string() << "' is missing required top-level entry '" << key << "'.";
@@ -29,6 +39,10 @@ std::string manifest_path() {
 
 ManifestData load_manifest() {
     const std::filesystem::path path = project_root() / "manifest.json";
+
+    if (!std::filesystem::exists(path)) {
+        return make_empty_manifest();
+    }
 
     std::ifstream manifest_stream(path);
     if (!manifest_stream.is_open()) {
