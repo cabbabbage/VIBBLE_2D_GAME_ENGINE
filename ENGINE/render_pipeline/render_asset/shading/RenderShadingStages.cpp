@@ -214,8 +214,14 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
             const auto& shadow = *data;
             opacity = std::clamp(shadow.opacity, 0.0f, 1.0f);
             scale   = std::max(0.0f, shadow.scale);
-            offset_x = static_cast<float>(width) * (shadow.offset_x_percent / 100.0f);
-            offset_y = static_cast<float>(height) * (shadow.offset_y_percent / 100.0f);
+            offset_x = shadow.offset_x_px;
+            offset_y = shadow.offset_y_px;
+            if (std::abs(offset_x) <= 1e-4f && std::abs(shadow.offset_x_percent) > 1e-4f) {
+                offset_x = static_cast<float>(width) * (shadow.offset_x_percent / 100.0f);
+            }
+            if (std::abs(offset_y) <= 1e-4f && std::abs(shadow.offset_y_percent) > 1e-4f) {
+                offset_y = static_cast<float>(height) * (shadow.offset_y_percent / 100.0f);
+            }
             parallax_percent = shadow.parallax_intensity_percent;
         } else {
             // Fallback to base context values when no manager data is available.

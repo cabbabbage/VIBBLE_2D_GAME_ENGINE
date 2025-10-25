@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include <sstream>
 #include <unordered_map>
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
@@ -12,6 +13,7 @@
 #include "spawn/asset_spawner.hpp"
 #include "utils/area.hpp"
 #include "utils/area_helpers.hpp"
+#include "utils/log.hpp"
 #include "utils/map_grid_settings.hpp"
 namespace fs = std::filesystem;
 
@@ -66,6 +68,10 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
         Asset* raw = assetPtr.get();
         all_.push_back(std::move(assetPtr));
         if (raw->info && !raw->info->children.empty()) {
+                const std::string parent_name = raw->info ? raw->info->name : std::string{"<null>"};
+                vibble::log::debug(std::string{"[Spawn] Parent asset '"} + parent_name +
+                                   "' has " + std::to_string(raw->info->children.size()) +
+                                   " child spawn group(s)");
                 std::unordered_map<std::string, Area> resolved_child_areas;
                 for (const auto& named : raw->info->areas) {
                         if (!named.area) {
@@ -91,15 +97,23 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                 for (auto* childInfo : shuffled_children) {
                         Area childArea = raw->get_area(childInfo->area_name);
                         if (childArea.get_points().empty()) {
+                                vibble::log::debug(std::string{"[Spawn] Skipping child area '"} +
+                                                   childInfo->area_name + "' for parent '" + parent_name +
+                                                   "': resolved area has no points");
                                 continue;
                         }
                         nlohmann::json j;
                         bool have_inline = (childInfo->inline_assets.is_array() && !childInfo->inline_assets.empty());
                         if (have_inline) {
                                 j["spawn_groups"] = childInfo->inline_assets;
+                                vibble::log::debug(std::string{"[Spawn] Using inline spawn groups for child area '"} +
+                                                   childInfo->area_name + "' on parent '" + parent_name + "'");
                         } else {
                                 const auto& childJsonPath = childInfo->json_path;
                                 if (childJsonPath.empty()) {
+                                        vibble::log::debug(std::string{"[Spawn] No child JSON specified for area '"} +
+                                                           childInfo->area_name + "' on parent '" + parent_name +
+                                                           "'; skipping" );
                                         continue;
                                 }
                                 if (!fs::exists(childJsonPath)) {
@@ -109,6 +123,8 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 try {
                                         std::ifstream in(childJsonPath);
                                         in >> j;
+                                        vibble::log::debug(std::string{"[Spawn] Loaded child spawn groups from '"} +
+                                                           childJsonPath + "' for parent '" + parent_name + "'");
                                 } catch (const std::exception& e) {
                                         std::cerr << "[Spawn]  Failed to parse child JSON: "
                                                   << childJsonPath << " | " << e.what() << "\n";
@@ -123,6 +139,9 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                         childSpawner.set_map_grid_settings(map_grid_settings_);
                         childSpawner.spawn_children(childArea, resolved_child_areas, &childPlanner);
                         auto kids = childSpawner.extract_all_assets();
+                        vibble::log::debug(std::string{"[Spawn] Parent '"} + parent_name +
+                                           "' child area '" + childInfo->area_name + "' produced " +
+                                           std::to_string(kids.size()) + " asset(s)");
                         for (auto& uptr : kids) {
                                 if (!uptr || !uptr->info) continue;
                                 uptr->parent = raw;
@@ -136,6 +155,16 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
 
                                 raw->children.push_back(uptr.get());
                                 all_.push_back(std::move(uptr));
+                                if (!raw->children.empty()) {
+                                        Asset* child_ptr = raw->children.back();
+                                        if (child_ptr && child_ptr->info) {
+                                                std::ostringstream oss;
+                                                oss << "[Spawn] -> Child '" << child_ptr->info->name
+                                                    << "' placed at (" << child_ptr->pos.x << ", "
+                                                    << child_ptr->pos.y << ") with z_offset " << child_ptr->z_offset;
+                                                vibble::log::debug(oss.str());
+                                        }
+                                }
                         }
                 }
         }

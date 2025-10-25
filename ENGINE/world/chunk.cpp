@@ -88,6 +88,8 @@ void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fa
         accum.scale += entry.scale * weight;
         accum.offset_x_percent += entry.offset_x_percent * weight;
         accum.offset_y_percent += entry.offset_y_percent * weight;
+        accum.offset_x_px += entry.offset_x_px * weight;
+        accum.offset_y_px += entry.offset_y_px * weight;
         accum.parallax_intensity_percent += entry.parallax_intensity_percent * weight;
     }
 
@@ -101,6 +103,8 @@ void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fa
     blended.scale                      = accum.scale * inv_total;
     blended.offset_x_percent           = accum.offset_x_percent * inv_total;
     blended.offset_y_percent           = accum.offset_y_percent * inv_total;
+    blended.offset_x_px                = accum.offset_x_px * inv_total;
+    blended.offset_y_px                = accum.offset_y_px * inv_total;
     blended.parallax_intensity_percent = accum.parallax_intensity_percent * inv_total;
 }
 
@@ -627,6 +631,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
     const float chunk_w = static_cast<float>(std::max(1, chunk.world_bounds.w));
     const float chunk_h = static_cast<float>(std::max(1, chunk.world_bounds.h));
+    const float percent_to_px_x = (chunk_w > 1e-3f) ? (chunk_w / 100.0f) : 0.0f;
+    const float percent_to_px_y = (chunk_h > 1e-3f) ? (chunk_h / 100.0f) : 0.0f;
     const float raw_max_x_percent = (chunk_w > 1e-3f)
                                         ? (settings.max_offset_x_px / chunk_w) * 100.0f
                                         : 0.0f;
@@ -666,6 +672,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     const float clamped_py = std::clamp(py, -safe_max_y_percent, safe_max_y_percent);
     sample.offset_x_percent = std::clamp(clamped_px, -100.0f, 100.0f);
     sample.offset_y_percent = std::clamp(clamped_py, -100.0f, 100.0f);
+    sample.offset_x_px      = sample.offset_x_percent * percent_to_px_x;
+    sample.offset_y_px      = sample.offset_y_percent * percent_to_px_y;
 
     sample.parallax_intensity_percent = std::clamp(settings.parallax_percent, 0.0f, 100.0f);
 
@@ -681,6 +689,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     };
     blended.offset_x_percent = std::clamp(clamp_percent(blended.offset_x_percent, safe_max_x_percent), -100.0f, 100.0f);
     blended.offset_y_percent = std::clamp(clamp_percent(blended.offset_y_percent, safe_max_y_percent), -100.0f, 100.0f);
+    blended.offset_x_px      = blended.offset_x_percent * percent_to_px_x;
+    blended.offset_y_px      = blended.offset_y_percent * percent_to_px_y;
 
     chunk.shadow = blended;
 }

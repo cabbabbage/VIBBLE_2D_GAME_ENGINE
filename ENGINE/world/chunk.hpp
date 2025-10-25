@@ -33,6 +33,9 @@ struct Chunk {
         float offset_x_percent = 0.0f;
         // Vertical offset of the shadow mask expressed as a percent of chunk height [-100,100].
         float offset_y_percent = 0.0f;
+        // Pixel offset relative to the chunk's world dimensions.
+        float offset_x_px = 0.0f;
+        float offset_y_px = 0.0f;
         // Parallax offset intensity expressed as a percent [0,100].
         float parallax_intensity_percent = 0.0f;
     };
