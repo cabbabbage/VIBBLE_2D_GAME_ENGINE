@@ -227,6 +227,9 @@ public:
     SDL_Rect chunk_bounds(int index) const;
 
 private:
+    void invalidate_scene_light_cache();
+    void rebuild_scene_light_cache(const std::vector<world::Chunk*>& chunks);
+
     Assets* assets_ = nullptr;
     int     screen_width_  = 0;
     int     screen_height_ = 0;
@@ -235,6 +238,11 @@ private:
     mutable SDL_FPoint   last_map_light_direction_{0.0f, 0.0f};
     mutable bool         last_map_light_direction_valid_ = false;
     mutable std::recursive_mutex mutex_;
+
+    double scene_light_sum_        = 0.0;
+    int    scene_light_count_      = 0;
+    int    cached_chunk_count_     = 0;
+    bool   scene_light_cache_valid_ = false;
 };
 
 

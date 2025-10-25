@@ -566,35 +566,13 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
     return {front_avg, behind_avg};
 }
 
-static float compute_scene_average_strength(const world::Grid& grid) {
-    const std::vector<world::Chunk*> chunks = grid.all_chunks();
-    if (chunks.empty()) {
-        return 1.0f;
-    }
-    double accum = 0.0;
-    std::size_t count = 0;
-    for (const world::Chunk* chunk : chunks) {
-        if (!chunk) {
-            continue;
-        }
-        for (const auto& cell : chunk->lighting_chunks()) {
-            accum += static_cast<double>(std::clamp(cell.lighting.current_strength, 0.0f, 1.0f));
-            ++count;
-        }
-    }
-    if (count == 0) {
-        return 1.0f;
-    }
-    const double average = std::clamp(accum / static_cast<double>(count), 0.0, 1.0);
-    return static_cast<float>(average);
-}
-
 static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
                                               const world::Grid& grid,
                                               float scene_average_strength,
                                               const std::pair<float, float>& grad,
                                               const std::optional<SDL_FPoint>& map_light_direction,
                                               float map_light_opacity,
+                                              bool prefer_fast_blend,
                                               LightingChunk& chunk) {
     world::Chunk::ChunkShadowParameters sample{};
 
@@ -677,7 +655,19 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
     sample.parallax_intensity_percent = std::clamp(settings.parallax_percent, 0.0f, 100.0f);
 
-    chunk.shadow_history.push(sample, settings.frame_blend_falloff_frames);
+    const world::Chunk::ChunkShadowParameters previous = chunk.shadow_history.value();
+    const float delta_opacity = std::abs(sample.opacity - previous.opacity);
+    const float delta_scale   = std::abs(sample.scale - previous.scale);
+    const float delta_offset  = std::max(std::abs(sample.offset_x_percent - previous.offset_x_percent),
+                                         std::abs(sample.offset_y_percent - previous.offset_y_percent));
+
+    int blend_frames = std::clamp(settings.frame_blend_falloff_frames, 0, world::Chunk::ChunkShadowHistory::kMaxHistoryLength - 1);
+    const bool significant_change = (delta_opacity > 0.1f) || (delta_scale > 0.1f) || (delta_offset > 5.0f);
+    if (prefer_fast_blend || significant_change) {
+        blend_frames = std::min(blend_frames, 12);
+    }
+
+    chunk.shadow_history.push(sample, blend_frames);
 
     world::Chunk::ChunkShadowParameters blended = chunk.shadow_history.value();
     const auto clamp_percent = [](float value, float limit) {
@@ -731,11 +721,35 @@ LightMap::ShadowSettings LightMap::shadow_settings() const {
     return settings;
 }
 
+void LightMap::invalidate_scene_light_cache() {
+    scene_light_cache_valid_ = false;
+    scene_light_sum_         = 0.0;
+    scene_light_count_       = 0;
+    cached_chunk_count_      = 0;
+}
+
+void LightMap::rebuild_scene_light_cache(const std::vector<world::Chunk*>& chunks) {
+    scene_light_sum_        = 0.0;
+    scene_light_count_      = 0;
+    cached_chunk_count_     = static_cast<int>(chunks.size());
+    for (world::Chunk* chunk : chunks) {
+        if (!chunk) {
+            continue;
+        }
+        const int cell_count = static_cast<int>(chunk->lighting_chunks().size());
+        scene_light_count_ += cell_count;
+        scene_light_sum_ += static_cast<double>(std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f)) *
+                            static_cast<double>(cell_count);
+    }
+    scene_light_cache_valid_ = true;
+}
+
 void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
     std::scoped_lock lock(mutex_);
     if (!assets_) {
         return;
     }
+    invalidate_scene_light_cache();
     world::Grid& grid = assets_->world_grid();
     for (world::Chunk* chunk : grid.active_chunks()) {
         if (!chunk) {
@@ -771,6 +785,7 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
     int max_i = INT32_MIN;
     int min_j = INT32_MAX;
     int max_j = INT32_MIN;
+    int total_cells = 0;
     for (const world::Chunk* chunk : chunks) {
         if (!chunk) {
             continue;
@@ -779,6 +794,7 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         max_i = std::max(max_i, chunk->i);
         min_j = std::min(min_j, chunk->j);
         max_j = std::max(max_j, chunk->j);
+        total_cells += static_cast<int>(chunk->lighting_chunks().size());
     }
 
     std::unordered_set<world::Chunk*> dedupe_set;
@@ -831,8 +847,6 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         }
     }
 
-    const float scene_average_strength = compute_scene_average_strength(grid);
-
     std::optional<SDL_FPoint> map_light_direction;
     if (const Global_Light_Source* gl = assets_->map_light_source()) {
         const SDL_Point ref = gl->get_direction_reference();
@@ -861,36 +875,79 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         last_map_light_direction_        = SDL_FPoint{0.0f, 0.0f};
     }
 
+    if (!scene_light_cache_valid_ || cached_chunk_count_ != static_cast<int>(chunks.size()) ||
+        scene_light_count_ != total_cells) {
+        rebuild_scene_light_cache(chunks);
+    }
+
     const int   radius = std::max(0, settings.search_radius_cells);
     const float fx     = std::max(0.0f, settings.falloff_horizontal);
     const float fy     = std::max(0.0f, settings.falloff_vertical);
+
+    struct DirtyCellInfo {
+        world::Chunk::LightingChunk* cell            = nullptr;
+        bool                         runtime_changed = false;
+    };
+
+    std::vector<DirtyCellInfo> dirty_cells;
 
     for (world::Chunk* chunk : update_set) {
         if (!chunk) {
             continue;
         }
 
-        bool any_cell_active = false;
+        dirty_cells.clear();
+        dirty_cells.reserve(chunk->lighting_chunks().size());
+
+        double chunk_strength_delta = 0.0;
+
+        const bool chunk_dirty = chunk->lighting_dirty || chunk->lighting.needs_update || map_opacity_changed ||
+                                 map_direction_changed;
 
         for (auto& cell : chunk->lighting_chunks()) {
-            cell.lighting.is_active     = true;
-            cell.lighting.needs_update = true;
-            any_cell_active             = true;
+            const float prev_strength = std::clamp(cell.lighting.current_strength, 0.0f, 1.0f);
 
+            bool runtime_changed = false;
             if (cell.lighting.has_runtime_average) {
-                cell.lighting.current_strength =
+                const float updated_strength =
                     std::clamp(cell.lighting.runtime_average_strength, 0.0f, 1.0f);
-                cell.lighting.runtime_average_strength = cell.lighting.current_strength;
-                cell.lighting.has_runtime_average      = false;
-            }
-
-            if (map_opacity_changed || map_direction_changed) {
-                cell.lighting.needs_update = true;
+                runtime_changed                          = (std::abs(updated_strength - prev_strength) > 1e-4f);
+                cell.lighting.current_strength           = updated_strength;
+                cell.lighting.runtime_average_strength   = updated_strength;
+                cell.lighting.has_runtime_average        = false;
+                chunk_strength_delta += static_cast<double>(updated_strength - prev_strength);
             }
 
             cell.lighting.current_strength = std::clamp(cell.lighting.current_strength, 0.0f, 1.0f);
 
+            const bool cell_dirty = runtime_changed || chunk_dirty || cell.lighting.needs_update;
+            cell.lighting.is_active = cell_dirty;
+
+            if (cell_dirty) {
+                dirty_cells.push_back(DirtyCellInfo{&cell, runtime_changed});
+            }
+        }
+
+        if (dirty_cells.empty() && std::abs(chunk_strength_delta) <= 1e-6) {
+            chunk->lighting_dirty        = false;
+            chunk->lighting.needs_update = false;
+            chunk->lighting.is_active    = false;
+            continue;
+        }
+
+        const double scene_sum_with_chunk = scene_light_sum_ + chunk_strength_delta;
+        float        scene_average_strength = 1.0f;
+        if (scene_light_count_ > 0) {
+            scene_average_strength = static_cast<float>(scene_sum_with_chunk /
+                                                        static_cast<double>(scene_light_count_));
+        }
+
+        const bool chunk_prefers_fast_blend = chunk_dirty;
+
+        for (const DirtyCellInfo& info : dirty_cells) {
+            auto& cell = *info.cell;
             const auto grad = compute_brightness_gradient(cell, grid, radius, fx, fy);
+            const bool prefer_fast_blend = chunk_prefers_fast_blend || info.runtime_changed;
 
             compute_use_shadow_data_for_chunk(settings,
                                               grid,
@@ -898,14 +955,21 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
                                               grad,
                                               map_light_direction,
                                               map_light_opacity,
+                                              prefer_fast_blend,
                                               cell);
 
             cell.lighting.needs_update = false;
         }
 
-        if (any_cell_active) {
+        if (!dirty_cells.empty() || std::abs(chunk_strength_delta) > 1e-6) {
             chunk->update_aggregate_from_lighting_chunks();
         }
+
+        chunk->lighting_dirty      = false;
+        chunk->lighting.needs_update = false;
+
+        scene_light_sum_ = scene_sum_with_chunk;
+        scene_light_cache_valid_ = true;
     }
 }
 
