@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -47,7 +48,7 @@ struct Chunk {
         void reset();
         void push(const ChunkShadowParameters& sample, int fade_frames);
         const ChunkShadowParameters& value() const { return blended; }
-    } shadow_history{};
+    };
 
     struct ChunkLightingState {
         // Whether this chunk participates in lighting updates during the current frame.
@@ -60,15 +61,99 @@ struct Chunk {
         float runtime_average_strength = 1.0f;
         // Marks whether runtime_average_strength contains a valid measurement for the current frame.
         bool has_runtime_average = false;
-    } lighting;
+    };
 
+    struct LightingChunk {
+        Chunk* parent = nullptr;
+
+        int local_i = 0;
+        int local_j = 0;
+        int global_i = 0;
+        int global_j = 0;
+        int resolution = 0;
+        int step = 1;
+        SDL_Rect world_bounds{0, 0, 0, 0};
+
+        struct ChunkShadowHistory {
+            static constexpr int kMaxHistoryLength = 256;
+
+            std::array<ChunkShadowParameters, kMaxHistoryLength> samples{};
+            int                                                  count  = 0;
+            int                                                  cursor = 0;
+            ChunkShadowParameters                                blended{};
+
+            void reset();
+            void push(const ChunkShadowParameters& sample, int fade_frames);
+            const ChunkShadowParameters& value() const { return blended; }
+        } shadow_history{};
+
+        ChunkShadowParameters shadow{};
+        ChunkLightingState    lighting{};
+
+        bool lighting_dirty       = true;
+        bool has_dynamic_overlay  = false;
+
+        LightingChunk() = default;
+        LightingChunk(Chunk* parent_chunk,
+                      int    in_local_i,
+                      int    in_local_j,
+                      int    in_global_i,
+                      int    in_global_j,
+                      int    in_resolution,
+                      int    in_step,
+                      SDL_Rect bounds)
+            : parent(parent_chunk)
+            , local_i(in_local_i)
+            , local_j(in_local_j)
+            , global_i(in_global_i)
+            , global_j(in_global_j)
+            , resolution(in_resolution)
+            , step(in_step)
+            , world_bounds(bounds) {}
+
+        void releaseLightingArtifacts();
+    };
+
+    struct ChunkShadowHistory {
+        static constexpr int kMaxHistoryLength = LightingChunk::ChunkShadowHistory::kMaxHistoryLength;
+
+        std::array<ChunkShadowParameters, kMaxHistoryLength> samples{};
+        int                                                  count  = 0;
+        int                                                  cursor = 0;
+        ChunkShadowParameters                                blended{};
+
+        void reset();
+        void push(const ChunkShadowParameters& sample, int fade_frames);
+        const ChunkShadowParameters& value() const { return blended; }
+    } shadow_history{};
+
+    ChunkLightingState lighting{};
     ChunkShadowParameters shadow{};
 
-    bool lighting_dirty = true;
+    bool lighting_dirty      = true;
     bool has_dynamic_overlay = false;
 
+    int lighting_resolution() const { return lighting_resolution_; }
+    int lighting_step() const { return lighting_step_; }
+    int lighting_columns() const { return lighting_columns_; }
+    int lighting_rows() const { return lighting_rows_; }
+    const std::vector<LightingChunk>& lighting_chunks() const { return lighting_chunks_; }
+    std::vector<LightingChunk>& lighting_chunks() { return lighting_chunks_; }
+    LightingChunk* lighting_chunk_at(int local_i, int local_j);
+    const LightingChunk* lighting_chunk_at(int local_i, int local_j) const;
+    LightingChunk* lighting_chunk_from_world(SDL_Point world_px);
+    const LightingChunk* lighting_chunk_from_world(SDL_Point world_px) const;
+    void rebuild_lighting_chunks();
+    void update_aggregate_from_lighting_chunks();
+
     Chunk() = default;
-    Chunk(int in_i, int in_j, int r, SDL_Rect bounds) : i(in_i), j(in_j), r_chunk(r), world_bounds(bounds) {}
+    Chunk(int in_i, int in_j, int r, SDL_Rect bounds)
+        : i(in_i)
+        , j(in_j)
+        , r_chunk(r)
+        , world_bounds(bounds) {
+        rebuild_lighting_chunks();
+    }
     ~Chunk();
 
     void releaseLightingArtifacts();
@@ -77,6 +162,13 @@ struct Chunk {
     Chunk& operator=(const Chunk&) = delete;
     Chunk(Chunk&&) noexcept = default;
     Chunk& operator=(Chunk&&) noexcept = default;
+
+private:
+    int lighting_resolution_ = 0;
+    int lighting_step_       = 1;
+    int lighting_columns_    = 1;
+    int lighting_rows_       = 1;
+    std::vector<LightingChunk> lighting_chunks_{};
 };
 
 } // namespace world

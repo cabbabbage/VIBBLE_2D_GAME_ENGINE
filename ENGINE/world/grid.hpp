@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 
@@ -18,6 +19,8 @@ public:
     void set_chunk_resolution(int r);
     int  chunk_resolution() const { return r_chunk_; }
     SDL_Point origin() const { return origin_; }
+    int  lighting_chunk_resolution() const { return std::max(0, r_chunk_ - 2); }
+    int  lighting_subdivisions_per_chunk() const { return 1 << std::min(2, std::max(0, r_chunk_)); }
 
     // Residency API
     void register_asset(Asset* a);

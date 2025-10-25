@@ -207,6 +207,15 @@ void PreloadInputs::disableScreenLightAndMovingLights() {
     chunk_->lighting.current_strength        = 1.0f;
     chunk_->lighting.has_runtime_average     = false;
     chunk_->lighting.runtime_average_strength = 1.0f;
+    for (auto& cell : chunk_->lighting_chunks()) {
+        cell.has_dynamic_overlay                = false;
+        cell.lighting.is_active                 = false;
+        cell.lighting.current_strength          = 1.0f;
+        cell.lighting.has_runtime_average       = false;
+        cell.lighting.runtime_average_strength  = 1.0f;
+        cell.lighting.needs_update              = true;
+    }
+    chunk_->update_aggregate_from_lighting_chunks();
 }
 
 void PreloadInputs::restoreRuntimeLighting() {
@@ -219,6 +228,16 @@ void PreloadInputs::restoreRuntimeLighting() {
     chunk_->lighting.current_strength        = backup_.current_strength;
     chunk_->lighting.has_runtime_average     = backup_.runtime_average_valid;
     chunk_->lighting.runtime_average_strength = backup_.runtime_average_strength;
+
+    for (auto& cell : chunk_->lighting_chunks()) {
+        cell.has_dynamic_overlay                = chunk_->has_dynamic_overlay;
+        cell.lighting.is_active                 = backup_.lighting_active;
+        cell.lighting.current_strength          = backup_.current_strength;
+        cell.lighting.has_runtime_average       = backup_.runtime_average_valid;
+        cell.lighting.runtime_average_strength  = backup_.runtime_average_strength;
+        cell.lighting.needs_update              = true;
+    }
+    chunk_->update_aggregate_from_lighting_chunks();
 
     backup_.valid = false;
 }
