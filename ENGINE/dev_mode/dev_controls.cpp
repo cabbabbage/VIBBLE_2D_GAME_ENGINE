@@ -1239,6 +1239,20 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                             a->cached_w = fw; a->cached_h = fh;
                         }
                     }
+                    if ((fw == 0 || fh == 0)) {
+                        if (SDL_Texture* fr = a->get_current_frame()) {
+                            SDL_QueryTexture(fr, nullptr, nullptr, &fw, &fh);
+                            a->cached_w = fw; a->cached_h = fh;
+                        }
+                    }
+                    if ((fw <= 0 || fh <= 0) && a->info) {
+                        fw = a->info->original_canvas_width;
+                        fh = a->info->original_canvas_height;
+                        if (fw > 0 && fh > 0) {
+                            a->cached_w = fw;
+                            a->cached_h = fh;
+                        }
+                    }
                     if (fw <= 0 || fh <= 0) return zero;
                     const float base_scale = (a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor >= 0.0f)
                                                  ? a->info->scale_factor
