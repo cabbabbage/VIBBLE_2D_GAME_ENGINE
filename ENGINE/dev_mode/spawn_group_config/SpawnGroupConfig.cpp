@@ -649,9 +649,6 @@ struct SpawnGroupConfig::Entry {
         method_widget_ = std::make_unique<CallbackDropdownWidget>(
             "Spawn Method", method_options_, [this](int index) { on_method_changed(index); }, editable_);
 
-        area_widget_ = std::make_unique<CallbackDropdownWidget>(
-            "Area", std::vector<std::string>{"None"}, [this](int index) { on_area_changed(index); }, editable_);
-
         linked_area_widget_ = std::make_unique<CallbackDropdownWidget>(
             "Linked Area", std::vector<std::string>{"null"}, [this](int index) { on_linked_area_changed(index); }, editable_);
 
@@ -1105,14 +1102,9 @@ struct SpawnGroupConfig::Entry {
                 rows.push_back({graph});
             }
 
-            DockableCollapsible::Row area_row;
-            if (show_area_dropdown_) {
-                area_row.push_back(area_widget_.get());
-                if (open_area_widget_ && open_area_handler_ && !area_link_target_.empty()) {
-                    area_row.push_back(open_area_widget_.get());
-                }
+            if (open_area_widget_ && open_area_handler_ && !area_link_target_.empty()) {
+                rows.push_back({open_area_widget_.get()});
             }
-            if (!area_row.empty()) rows.push_back(area_row);
 
             if (linked_area_widget_) {
                 rows.push_back({linked_area_widget_.get()});
@@ -1225,32 +1217,7 @@ private:
         }
     }
 
-    void update_area_dropdown_from_provider() {
-        if (!area_widget_) return;
-        auto provider = area_names_provider();
-        std::vector<std::string> options = provider ? provider() : std::vector<std::string>{};
-        std::string current = safe_string(entry_view(), "area", std::string{});
-        if (!current.empty() && std::find(options.begin(), options.end(), current) == options.end()) {
-            options.push_back(current);
-        }
-        if (options.empty()) {
-            show_area_dropdown_ = false;
-            area_options_.clear();
-            update_area_link_target();
-            return;
-        }
-        show_area_dropdown_ = true;
-        area_options_ = options;
-        int index = 0;
-        for (size_t i = 0; i < area_options_.size(); ++i) {
-            if (area_options_[i] == current) {
-                index = static_cast<int>(i);
-                break;
-            }
-        }
-        area_widget_->set_options(area_options_, index);
-        update_area_link_target();
-    }
+    void update_area_dropdown_from_provider() { update_area_link_target(); }
 
     void update_area_link_target() {
         std::string previous_target = area_link_target_;
@@ -1510,16 +1477,6 @@ private:
         }
     }
 
-    void on_area_changed(int index) {
-        if (!editable_) return;
-        if (index < 0 || index >= static_cast<int>(area_options_.size())) return;
-        if (auto* entry = mutable_entry()) {
-            (*entry)["area"] = area_options_[index];
-            notify_change(false, false, false);
-        }
-        update_area_link_target();
-    }
-
     void refresh_linked_area_options() {
         linked_area_options_.clear();
         linked_area_option_labels_.clear();
@@ -1758,9 +1715,6 @@ private:
     std::vector<std::string> method_options_{};
     std::unique_ptr<CallbackDropdownWidget> method_widget_{};
 
-    bool show_area_dropdown_ = false;
-    std::vector<std::string> area_options_{};
-    std::unique_ptr<CallbackDropdownWidget> area_widget_{};
     std::unique_ptr<DMButton> open_area_button_{};
     std::unique_ptr<ButtonWidget> open_area_widget_{};
     std::function<void(const std::string&, const std::string&)> open_area_handler_{};

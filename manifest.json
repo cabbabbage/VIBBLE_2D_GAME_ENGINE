@@ -14298,6 +14298,24 @@
         }
       },
       "trails_data": {
+        "NewTrail": {
+          "display_color": [
+            242,
+            134,
+            36,
+            255
+          "edge_smoothness": 2,
+          "geometry": "",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 800,
+          "max_width": 800,
+          "min_height": 400,
+          "min_width": 400,
+          "name": "",
+          "spawn_groups": []
+        },
         "basic": {
           "curvyness": 4,
           "display_color": [
