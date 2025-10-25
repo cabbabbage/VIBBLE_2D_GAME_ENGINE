@@ -13802,6 +13802,8 @@
             "position": "Random",
             "priority": 2,
             "resolution": 0,
+            "resolve_geometry_to_room_size": false,
+            "resolve_quantity_to_room_size": false,
             "spawn_id": "spn-5200d51e3675"
           }
         ]
@@ -14146,10 +14148,12 @@
               "min_number": 8,
               "origional_height": 1816,
               "origional_width": 1954,
-              "position": "Exact",
+              "position": "Perimeter",
               "priority": 0,
               "quantity": 8,
               "resolution": 3,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-dcd209a9deb9"
             }
           ]
@@ -14188,6 +14192,8 @@
               "origional_width": 2666,
               "position": "Exact",
               "priority": 0,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-400a2bb2d100"
             }
           ]

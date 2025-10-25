@@ -1,6 +1,7 @@
 #include "spawn_group_utils.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <random>
 
@@ -236,6 +237,20 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
         changed = true;
     }
 
+    auto read_bool = [](const nlohmann::json& node, const char* key, bool fallback) {
+        if (!node.is_object() || !node.contains(key)) return fallback;
+        const auto& value = node.at(key);
+        if (value.is_boolean()) return value.get<bool>();
+        if (value.is_number_integer()) return value.get<int>() != 0;
+        if (value.is_string()) {
+            std::string text = value.get<std::string>();
+            std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (text == "true" || text == "1" || text == "yes") return true;
+            if (text == "false" || text == "0" || text == "no") return false;
+        }
+        return fallback;
+    };
+
     auto spawn_id_it = entry.find("spawn_id");
     if (spawn_id_it == entry.end() || !spawn_id_it->is_string() ||
         spawn_id_it->get<std::string>().empty()) {
@@ -277,6 +292,21 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
 
     if (!entry.contains("enforce_spacing") || !entry["enforce_spacing"].is_boolean()) {
         entry["enforce_spacing"] = false;
+        changed = true;
+    }
+
+    const bool geometry_method = (method == "Exact" || method == "Perimeter");
+    const bool geometry_flag = read_bool(entry, "resolve_geometry_to_room_size", geometry_method);
+    if (!entry.contains("resolve_geometry_to_room_size") || !entry["resolve_geometry_to_room_size"].is_boolean() ||
+        entry["resolve_geometry_to_room_size"].get<bool>() != geometry_flag) {
+        entry["resolve_geometry_to_room_size"] = geometry_flag;
+        changed = true;
+    }
+
+    const bool quantity_flag = read_bool(entry, "resolve_quantity_to_room_size", false);
+    if (!entry.contains("resolve_quantity_to_room_size") || !entry["resolve_quantity_to_room_size"].is_boolean() ||
+        entry["resolve_quantity_to_room_size"].get<bool>() != quantity_flag) {
+        entry["resolve_quantity_to_room_size"] = quantity_flag;
         changed = true;
     }
 

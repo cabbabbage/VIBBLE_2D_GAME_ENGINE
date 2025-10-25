@@ -231,6 +231,21 @@ double safe_double(const nlohmann::json& obj, const char* key, double fallback) 
     return fallback;
 }
 
+bool safe_bool(const nlohmann::json& obj, const char* key, bool fallback) {
+    if (!obj.is_object()) return fallback;
+    const auto it = obj.find(key);
+    if (it == obj.end()) return fallback;
+    if (it->is_boolean()) return it->get<bool>();
+    if (it->is_number_integer()) return it->get<int>() != 0;
+    if (it->is_string()) {
+        std::string text = it->get<std::string>();
+        std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (text == "true" || text == "1" || text == "yes") return true;
+        if (text == "false" || text == "0" || text == "no") return false;
+    }
+    return fallback;
+}
+
 std::string default_display_name_for(const nlohmann::json& entry) {
     if (entry.is_object()) {
         const auto it = entry.find("display_name");
@@ -641,6 +656,18 @@ struct SpawnGroupConfig::Entry {
             },
             editable_);
 
+        auto geometry_checkbox = std::make_unique<DMCheckbox>("Resolve geometry to room size", false);
+        resolve_geometry_widget_ = std::make_unique<CallbackCheckboxWidget>(
+            std::move(geometry_checkbox),
+            [this](bool value) { on_resolve_geometry_changed(value); },
+            editable_);
+
+        auto quantity_checkbox = std::make_unique<DMCheckbox>("Resolve quantity to room size", false);
+        resolve_quantity_widget_ = std::make_unique<CallbackCheckboxWidget>(
+            std::move(quantity_checkbox),
+            [this](bool value) { on_resolve_quantity_changed(value); },
+            editable_);
+
         auto min_box = std::make_unique<DMTextBox>("Min Number", "");
         min_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(min_box),
             [this](const std::string& text) { on_min_changed(text); }, false, editable_);
@@ -818,6 +845,20 @@ struct SpawnGroupConfig::Entry {
         bool previous_show_edge = show_edge_inset_widget_;
         show_perimeter_radius_widget_ = (method == "Perimeter");
         show_edge_inset_widget_ = (method == "Edge");
+        show_resolve_geometry_widget_ = (method == "Exact" || method == "Perimeter");
+        show_resolve_quantity_widget_ = !quantity_hidden();
+
+        const bool geometry_flag = safe_bool(entry, "resolve_geometry_to_room_size", show_resolve_geometry_widget_);
+        const bool quantity_flag = safe_bool(entry, "resolve_quantity_to_room_size", false);
+
+        if (resolve_geometry_widget_) {
+            resolve_geometry_widget_->set_value(geometry_flag);
+            resolve_geometry_widget_->set_editable(editable_ && show_resolve_geometry_widget_);
+        }
+        if (resolve_quantity_widget_) {
+            resolve_quantity_widget_->set_value(quantity_flag);
+            resolve_quantity_widget_->set_editable(editable_ && show_resolve_quantity_widget_);
+        }
 
         int resolution_value = vibble::grid::clamp_resolution(safe_int(entry, "resolution", owner_ ? owner_->default_resolution_ : current_resolution_));
         current_resolution_ = resolution_value;
@@ -906,6 +947,12 @@ struct SpawnGroupConfig::Entry {
         if (edge_inset_widget_) {
             edge_inset_widget_->set_editable(editable_ && show_edge_inset_widget_);
         }
+        if (resolve_geometry_widget_) {
+            resolve_geometry_widget_->set_editable(editable_ && show_resolve_geometry_widget_);
+        }
+        if (resolve_quantity_widget_) {
+            resolve_quantity_widget_->set_editable(editable_ && show_resolve_quantity_widget_);
+        }
         update_priority_button_states();
     }
 
@@ -934,11 +981,26 @@ struct SpawnGroupConfig::Entry {
 
             // Method-specific configuration rows
             const bool show_quantity_range = !quantity_hidden() && !use_exact_quantity_;
+            const bool show_exact_quantity = !quantity_hidden() && use_exact_quantity_ && exact_widget_;
             if (show_quantity_range) {
                 DockableCollapsible::Row qty_row;
                 qty_row.push_back(min_widget_.get());
                 qty_row.push_back(max_widget_.get());
+                if (show_resolve_quantity_widget_ && resolve_quantity_widget_) {
+                    qty_row.push_back(resolve_quantity_widget_.get());
+                }
                 rows.push_back(qty_row);
+            } else if (show_exact_quantity) {
+                DockableCollapsible::Row qty_row;
+                qty_row.push_back(exact_widget_.get());
+                if (show_resolve_quantity_widget_ && resolve_quantity_widget_) {
+                    qty_row.push_back(resolve_quantity_widget_.get());
+                }
+                rows.push_back(qty_row);
+            }
+
+            if (show_resolve_geometry_widget_ && resolve_geometry_widget_) {
+                rows.push_back({resolve_geometry_widget_.get()});
             }
 
             if (show_perimeter_radius_widget_ && perimeter_radius_widget_) {
@@ -1400,6 +1462,22 @@ private:
         }
     }
 
+    void on_resolve_geometry_changed(bool value) {
+        if (!editable_) return;
+        if (auto* entry = mutable_entry()) {
+            (*entry)["resolve_geometry_to_room_size"] = value;
+            notify_change(false, false, false);
+        }
+    }
+
+    void on_resolve_quantity_changed(bool value) {
+        if (!editable_) return;
+        if (auto* entry = mutable_entry()) {
+            (*entry)["resolve_quantity_to_room_size"] = value;
+            notify_change(false, true, false);
+        }
+    }
+
     void on_resolution_changed(int value) {
         if (!editable_) return;
         int clamped = vibble::grid::clamp_resolution(value);
@@ -1484,6 +1562,8 @@ private:
     std::function<void(const std::string&, const std::string&)> open_area_handler_{};
 
     std::unique_ptr<CallbackCheckboxWidget> enforce_widget_{};
+    std::unique_ptr<CallbackCheckboxWidget> resolve_geometry_widget_{};
+    std::unique_ptr<CallbackCheckboxWidget> resolve_quantity_widget_{};
 
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> min_widget_{};
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> max_widget_{};
@@ -1493,6 +1573,8 @@ private:
     std::unique_ptr<SpawnGroupCallbackSliderWidget> edge_inset_widget_{};
     bool show_perimeter_radius_widget_ = false;
     bool show_edge_inset_widget_ = false;
+    bool show_resolve_geometry_widget_ = false;
+    bool show_resolve_quantity_widget_ = false;
     int current_resolution_ = 0;
 
     std::optional<size_t> array_index_{};

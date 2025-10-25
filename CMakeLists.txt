@@ -374,6 +374,7 @@ add_executable(manifest_store_tests
     ENGINE/map_generation/map_layers_geometry.cpp
     ENGINE/asset/asset_library.cpp
     ENGINE/spawn/asset_spawn_planner.cpp
+    ENGINE/spawn/room_relative_size_resolver.cpp
 )
 target_include_directories(manifest_store_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/external

@@ -100,6 +100,12 @@ TEST_CASE("ensure_spawn_group_entry_defaults prunes edge inset for non-edge meth
     const bool changed = devmode::spawn::ensure_spawn_group_entry_defaults(entry, "Example");
     CHECK(changed);
     CHECK(entry.find("edge_inset_percent") == entry.end());
+    REQUIRE(entry.contains("resolve_geometry_to_room_size"));
+    CHECK(entry["resolve_geometry_to_room_size"].is_boolean());
+    CHECK_FALSE(entry["resolve_geometry_to_room_size"].get<bool>());
+    REQUIRE(entry.contains("resolve_quantity_to_room_size"));
+    CHECK(entry["resolve_quantity_to_room_size"].is_boolean());
+    CHECK_FALSE(entry["resolve_quantity_to_room_size"].get<bool>());
 }
 
 TEST_CASE("ensure_spawn_group_entry_defaults keeps clamped inset for edge method") {
@@ -121,5 +127,33 @@ TEST_CASE("ensure_spawn_group_entry_defaults keeps clamped inset for edge method
     CHECK(changed);
     REQUIRE(entry.contains("edge_inset_percent"));
     CHECK(entry["edge_inset_percent"].get<int>() == 200);
+    REQUIRE(entry.contains("resolve_geometry_to_room_size"));
+    CHECK_FALSE(entry["resolve_geometry_to_room_size"].get<bool>());
+    REQUIRE(entry.contains("resolve_quantity_to_room_size"));
+    CHECK_FALSE(entry["resolve_quantity_to_room_size"].get<bool>());
+}
+
+TEST_CASE("ensure_spawn_group_entry_defaults enables geometry resolution for perimeter") {
+    ensure_sdl();
+
+    using nlohmann::json;
+
+    json entry = json::object({
+        {"spawn_id", "test"},
+        {"display_name", "Perimeter"},
+        {"position", "Perimeter"},
+        {"min_number", 2},
+        {"max_number", 2},
+        {"radius", 64},
+        {"candidates", json::array({json{{"name", "null"}, {"chance", 0}}})}
+    });
+
+    const bool changed = devmode::spawn::ensure_spawn_group_entry_defaults(entry, "Perimeter");
+    CHECK(changed);
+    REQUIRE(entry.contains("resolve_geometry_to_room_size"));
+    CHECK(entry["resolve_geometry_to_room_size"].is_boolean());
+    CHECK(entry["resolve_geometry_to_room_size"].get<bool>());
+    REQUIRE(entry.contains("resolve_quantity_to_room_size"));
+    CHECK_FALSE(entry["resolve_quantity_to_room_size"].get<bool>());
 }
 

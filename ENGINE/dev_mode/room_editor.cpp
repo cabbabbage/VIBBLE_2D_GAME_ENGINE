@@ -2366,6 +2366,8 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         drag_mode_ = DragMode::Free;
     }
 
+    bool resolve_geometry = (method == "Exact" || method == "Exact Position" || method == "Perimeter");
+
     auto [room_w, room_h] = get_room_dimensions();
     drag_perimeter_curr_w_ = room_w;
     drag_perimeter_curr_h_ = room_h;
@@ -2375,8 +2377,16 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     drag_perimeter_circle_center_ = drag_room_center_;
 
     if (spawn_entry) {
-        drag_perimeter_orig_w_ = std::max(1, spawn_entry->value("origional_width", drag_perimeter_curr_w_));
-        drag_perimeter_orig_h_ = std::max(1, spawn_entry->value("origional_height", drag_perimeter_curr_h_));
+        resolve_geometry = spawn_entry->value(
+            "resolve_geometry_to_room_size",
+            resolve_geometry);
+        if (resolve_geometry) {
+            drag_perimeter_orig_w_ = std::max(1, spawn_entry->value("origional_width", drag_perimeter_curr_w_));
+            drag_perimeter_orig_h_ = std::max(1, spawn_entry->value("origional_height", drag_perimeter_curr_h_));
+        } else {
+            drag_perimeter_orig_w_ = std::max(1, drag_perimeter_curr_w_);
+            drag_perimeter_orig_h_ = std::max(1, drag_perimeter_curr_h_);
+        }
         const int stored_dx = spawn_entry->value("dx", 0);
         const int stored_dy = spawn_entry->value("dy", 0);
         RelativeRoomPosition relative(SDL_Point{stored_dx, stored_dy},
@@ -2387,6 +2397,14 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         drag_perimeter_circle_center_.y = drag_room_center_.y + drag_perimeter_center_offset_world_.y;
         if ((*spawn_entry).contains("radius") && (*spawn_entry)["radius"].is_number_integer()) {
             drag_perimeter_base_radius_ = std::max(0, (*spawn_entry)["radius"].get<int>());
+            if (resolve_geometry && drag_perimeter_base_radius_ > 0.0) {
+                const double width_ratio = static_cast<double>(std::max(1, drag_perimeter_curr_w_)) /
+                                           static_cast<double>(std::max(1, drag_perimeter_orig_w_));
+                const double height_ratio = static_cast<double>(std::max(1, drag_perimeter_curr_h_)) /
+                                            static_cast<double>(std::max(1, drag_perimeter_orig_h_));
+                const double ratio = (width_ratio + height_ratio) * 0.5;
+                drag_perimeter_base_radius_ = std::max(0.0, drag_perimeter_base_radius_ * ratio);
+            }
         }
     }
 
@@ -3162,15 +3180,28 @@ std::optional<RoomEditor::PerimeterOverlay> RoomEditor::compute_perimeter_overla
     PerimeterOverlay overlay;
     overlay.center = get_room_center();
     auto [room_w, room_h] = get_room_dimensions();
+    bool resolve_geometry = entry->value("resolve_geometry_to_room_size", true);
     int orig_w = std::max(1, entry->value("origional_width", room_w));
     int orig_h = std::max(1, entry->value("origional_height", room_h));
+    if (!resolve_geometry) {
+        orig_w = std::max(1, room_w);
+        orig_h = std::max(1, room_h);
+    }
     int stored_dx = entry->value("dx", 0);
     int stored_dy = entry->value("dy", 0);
     RelativeRoomPosition relative(SDL_Point{stored_dx, stored_dy}, orig_w, orig_h);
     SDL_Point scaled = relative.scaled_offset(room_w, room_h);
     overlay.center.x += scaled.x;
     overlay.center.y += scaled.y;
-    overlay.radius = entry->value("radius", 0.0);
+    int base_radius = entry->value("radius", 0);
+    if (resolve_geometry) {
+        const double width_ratio = static_cast<double>(std::max(1, room_w)) / static_cast<double>(std::max(1, orig_w));
+        const double height_ratio = static_cast<double>(std::max(1, room_h)) / static_cast<double>(std::max(1, orig_h));
+        const double ratio = (width_ratio + height_ratio) * 0.5;
+        overlay.radius = static_cast<double>(base_radius) * ratio;
+    } else {
+        overlay.radius = static_cast<double>(base_radius);
+    }
     if (overlay.radius <= 0.0 && active_assets_) {
         for (Asset* asset : *active_assets_) {
             if (!asset || asset->spawn_id != spawn_id) continue;

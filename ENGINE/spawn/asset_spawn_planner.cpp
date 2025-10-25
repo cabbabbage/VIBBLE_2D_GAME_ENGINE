@@ -4,7 +4,9 @@
 #include <unordered_set>
 #include <cctype>
 #include <iomanip>
+
 #include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
+#include "room_relative_size_resolver.hpp"
 AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
                                      const Area& area,
                                      AssetLibrary& asset_library,
@@ -103,38 +105,102 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 
         const bool force_single_quantity = (position == "Exact");
 
-        int min_num = asset.value("min_number", 1);
-        int max_num = asset.value("max_number", min_num);
-        if (min_num < 0) min_num = 0;
-        if (max_num < 0) max_num = 0;
-        if (max_num < min_num) std::swap(max_num, min_num);
-        int quantity = std::uniform_int_distribution<int>(min_num, max_num)(rng);
-        if (force_single_quantity) {
-            quantity = 1;
-        }
+        auto read_bool = [](const nlohmann::json& j, const char* key, bool fallback) {
+            if (!j.is_object() || !j.contains(key)) return fallback;
+            const auto& value = j.at(key);
+            if (value.is_boolean()) return value.get<bool>();
+            if (value.is_number_integer()) return value.get<int>() != 0;
+            if (value.is_string()) {
+                std::string text = value.get<std::string>();
+                std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (text == "true" || text == "1" || text == "yes") return true;
+                if (text == "false" || text == "0" || text == "no") return false;
+            }
+            return fallback;
+        };
 
-        const bool need_orig = (position == "Exact" || position == "Perimeter");
-        if (need_orig) {
-            auto [minx, miny, maxx, maxy] = area.get_bounds();
-            const int curr_w = std::max(1, maxx - minx);
-            const int curr_h = std::max(1, maxy - miny);
-            bool set_wh = false;
-            if (!asset.contains("origional_width") || !asset["origional_width"].is_number_integer()) {
-                entry["origional_width"] = curr_w; asset["origional_width"] = curr_w; set_wh = true;
+        auto ensure_bool_field = [&](const char* key, bool value) {
+            bool updated = false;
+            if (!entry.contains(key) || !entry[key].is_boolean() || entry[key].get<bool>() != value) {
+                entry[key] = value;
+                updated = true;
             }
-            if (!asset.contains("origional_height") || !asset["origional_height"].is_number_integer()) {
-                entry["origional_height"] = curr_h; asset["origional_height"] = curr_h; set_wh = true;
+            if (!asset.contains(key) || !asset[key].is_boolean() || asset[key].get<bool>() != value) {
+                asset[key] = value;
+                updated = true;
             }
-            if (set_wh && idx < assets_provenance_.size()) {
+            if (updated && idx < assets_provenance_.size()) {
                 const auto& ref = assets_provenance_[idx];
                 if (auto* src = get_source_entry(ref.source_index, ref.entry_index, ref.key)) {
-                    if (!src->contains("origional_width"))  (*src)["origional_width"]  = entry["origional_width"];
-                    if (!src->contains("origional_height")) (*src)["origional_height"] = entry["origional_height"];
+                    (*src)[key] = value;
                     if (ref.source_index >= 0 && static_cast<size_t>(ref.source_index) < source_changed_.size()) {
                         source_changed_[static_cast<size_t>(ref.source_index)] = true;
                     }
                 }
             }
+        };
+
+        const bool default_geometry = (position == "Exact" || position == "Perimeter");
+        const bool resolve_geometry = read_bool(asset, "resolve_geometry_to_room_size", default_geometry);
+        const bool resolve_quantity = read_bool(asset, "resolve_quantity_to_room_size", false);
+
+        ensure_bool_field("resolve_geometry_to_room_size", resolve_geometry);
+        ensure_bool_field("resolve_quantity_to_room_size", resolve_quantity);
+
+        auto [minx, miny, maxx, maxy] = area.get_bounds();
+        const int curr_w = std::max(1, maxx - minx);
+        const int curr_h = std::max(1, maxy - miny);
+
+        int min_num = asset.value("min_number", 1);
+        int max_num = asset.value("max_number", min_num);
+        if (min_num < 0) min_num = 0;
+        if (max_num < 0) max_num = 0;
+        if (max_num < min_num) std::swap(max_num, min_num);
+
+        int orig_w = asset.value("origional_width", curr_w);
+        int orig_h = asset.value("origional_height", curr_h);
+
+        const bool need_orig = default_geometry || resolve_geometry || resolve_quantity;
+        if (need_orig) {
+            bool set_wh = false;
+            if (!asset.contains("origional_width") || !asset["origional_width"].is_number_integer()) {
+                entry["origional_width"] = curr_w;
+                asset["origional_width"] = curr_w;
+                orig_w = curr_w;
+                set_wh = true;
+            } else {
+                orig_w = asset["origional_width"].get<int>();
+            }
+            if (!asset.contains("origional_height") || !asset["origional_height"].is_number_integer()) {
+                entry["origional_height"] = curr_h;
+                asset["origional_height"] = curr_h;
+                orig_h = curr_h;
+                set_wh = true;
+            } else {
+                orig_h = asset["origional_height"].get<int>();
+            }
+            if (set_wh && idx < assets_provenance_.size()) {
+                const auto& ref = assets_provenance_[idx];
+                if (auto* src = get_source_entry(ref.source_index, ref.entry_index, ref.key)) {
+                    (*src)["origional_width"] = entry["origional_width"];
+                    (*src)["origional_height"] = entry["origional_height"];
+                    if (ref.source_index >= 0 && static_cast<size_t>(ref.source_index) < source_changed_.size()) {
+                        source_changed_[static_cast<size_t>(ref.source_index)] = true;
+                    }
+                }
+            }
+        }
+
+        RoomRelativeSizeResolver scaler(orig_w, orig_h, curr_w, curr_h);
+        if (resolve_quantity && !force_single_quantity) {
+            auto scaled_range = scaler.scale_count_range(min_num, max_num);
+            min_num = scaled_range.first;
+            max_num = scaled_range.second;
+        }
+
+        int quantity = std::uniform_int_distribution<int>(min_num, max_num)(rng);
+        if (force_single_quantity) {
+            quantity = 1;
         }
 
         std::vector<nlohmann::json> cand_jsons;
@@ -361,13 +427,19 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 
         s.exact_offset.x = asset.value("dx", asset.value("exact_dx", 0));
         s.exact_offset.y = asset.value("dy", asset.value("exact_dy", 0));
-        s.exact_origin_w = asset.value("origional_width",  asset.value("exact_origin_width", 0));
-        s.exact_origin_h = asset.value("origional_height", asset.value("exact_origin_height", 0));
+        if (resolve_geometry) {
+            s.exact_origin_w = orig_w;
+            s.exact_origin_h = orig_h;
+        } else {
+            s.exact_origin_w = curr_w;
+            s.exact_origin_h = curr_h;
+        }
         s.exact_point.x  = asset.value("ep_x", average_range("ep_x_min", "ep_x_max", -1));
         s.exact_point.y  = asset.value("ep_y", average_range("ep_y_min", "ep_y_max", -1));
 
         if (position == "Perimeter") {
-            s.perimeter_radius = asset.value("radius", asset.value("perimeter_radius", 0));
+            int base_radius = asset.value("radius", asset.value("perimeter_radius", 0));
+            s.perimeter_radius = resolve_geometry ? scaler.scale_length(base_radius) : base_radius;
         } else if (position == "Edge") {
             int inset = asset.value("edge_inset_percent", asset.value("boundary_inset", 100));
             inset = std::clamp(inset, 0, 200);
