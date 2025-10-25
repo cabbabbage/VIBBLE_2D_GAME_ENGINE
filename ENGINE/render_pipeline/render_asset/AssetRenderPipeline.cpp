@@ -91,6 +91,8 @@ void StageContext::update_projection(Asset& asset) {
     static_light_strength   = 1.0f;
     dynamic_light_strength  = 1.0f;
     blended_light_strength  = 1.0f;
+    runtime_light_color     = SDL_Color{255, 255, 255, 255};
+    has_runtime_light_color = false;
 
     if (!lighting || width <= 0 || height <= 0) {
         return;
@@ -146,6 +148,10 @@ void StageContext::update_projection(Asset& asset) {
         static_light_strength  = sample.static_component;
         dynamic_light_strength = sample.dynamic_component;
         blended_light_strength = sample.blended;
+        if (sample.has_color) {
+            runtime_light_color     = sample.color;
+            has_runtime_light_color = true;
+        }
     }
 }
 

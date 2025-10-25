@@ -32,6 +32,8 @@ public:
         float    runtime_sample        = 1.0f;
         float    static_component      = 1.0f;
         float    dynamic_component     = 1.0f;
+        SDL_Color runtime_color{255, 255, 255, 255};
+        bool      has_runtime_color = false;
         world::Chunk::ChunkShadowParameters shadow{};
     };
 

@@ -43,6 +43,8 @@ struct StageContext {
     float         static_light_strength   = 1.0f;
     float         dynamic_light_strength  = 1.0f;
     float         blended_light_strength  = 1.0f;
+    SDL_Color     runtime_light_color{255, 255, 255, 255};
+    bool          has_runtime_light_color = false;
 
     SDL_Rect asset_bounds() const { return SDL_Rect{ 0, 0, width, height }; }
     SDL_Point anchor_bottom_center() const { return SDL_Point{ width / 2, height }; }

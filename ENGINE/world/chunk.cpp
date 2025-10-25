@@ -144,6 +144,7 @@ void Chunk::LightingChunk::releaseLightingArtifacts() {
     lighting.current_strength         = 1.0f;
     lighting.runtime_average_strength = 1.0f;
     lighting.has_runtime_average      = false;
+    lighting.runtime_average_color    = SDL_Color{255, 255, 255, 255};
     lighting.is_active                = false;
     lighting.needs_update             = true;
     shadow_history.reset();
@@ -159,6 +160,7 @@ void Chunk::releaseLightingArtifacts() {
     lighting.current_strength          = 1.0f;
     lighting.runtime_average_strength  = 1.0f;
     lighting.has_runtime_average       = false;
+    lighting.runtime_average_color     = SDL_Color{255, 255, 255, 255};
     lighting.is_active                 = false;
     lighting.needs_update              = true;
     shadow_history.reset();
@@ -258,6 +260,10 @@ void Chunk::update_aggregate_from_lighting_chunks() {
     double accum_runtime  = 0.0;
     double accum_static   = 0.0;
     double accum_dynamic  = 0.0;
+    double accum_color_r  = 0.0;
+    double accum_color_g  = 0.0;
+    double accum_color_b  = 0.0;
+    double color_weight   = 0.0;
     bool   any_active     = false;
     bool   any_needs      = false;
     bool   any_runtime    = false;
@@ -270,6 +276,15 @@ void Chunk::update_aggregate_from_lighting_chunks() {
         any_active     = any_active || cell.lighting.is_active;
         any_needs      = any_needs || cell.lighting.needs_update;
         any_runtime    = any_runtime || cell.lighting.has_runtime_average;
+        if (cell.lighting.has_runtime_average) {
+            const float weight = std::max(cell.lighting.runtime_average_strength, 0.0f);
+            if (weight > 1e-5f) {
+                accum_color_r += static_cast<double>(cell.lighting.runtime_average_color.r) * weight;
+                accum_color_g += static_cast<double>(cell.lighting.runtime_average_color.g) * weight;
+                accum_color_b += static_cast<double>(cell.lighting.runtime_average_color.b) * weight;
+                color_weight += static_cast<double>(weight);
+            }
+        }
     }
 
     const double inv = 1.0 / static_cast<double>(lighting_chunks_.size());
@@ -280,6 +295,17 @@ void Chunk::update_aggregate_from_lighting_chunks() {
     lighting.is_active                = any_active;
     lighting.needs_update             = any_needs;
     lighting.has_runtime_average      = any_runtime;
+    if (color_weight > 1e-5) {
+        const double inv_weight = 1.0 / color_weight;
+        const double avg_r      = std::clamp(accum_color_r * inv_weight, 0.0, 255.0);
+        const double avg_g      = std::clamp(accum_color_g * inv_weight, 0.0, 255.0);
+        const double avg_b      = std::clamp(accum_color_b * inv_weight, 0.0, 255.0);
+        lighting.runtime_average_color.r = static_cast<Uint8>(std::lround(avg_r));
+        lighting.runtime_average_color.g = static_cast<Uint8>(std::lround(avg_g));
+        lighting.runtime_average_color.b = static_cast<Uint8>(std::lround(avg_b));
+    } else {
+        lighting.runtime_average_color = SDL_Color{255, 255, 255, 255};
+    }
 
     // Use center cell's shadow parameters as representative aggregate.
     const int center_index = static_cast<int>(lighting_chunks_.size() / 2);
@@ -952,6 +978,7 @@ void LightMap::ingest_runtime_samples(const runtime_lighting::RuntimeLightingFra
         for (auto& cell : chunk->lighting_chunks()) {
             cell.lighting.has_runtime_average      = false;
             cell.lighting.runtime_average_strength = 0.0f;
+            cell.lighting.runtime_average_color    = SDL_Color{255, 255, 255, 255};
         }
     }
 
@@ -972,6 +999,7 @@ void LightMap::ingest_runtime_samples(const runtime_lighting::RuntimeLightingFra
 
         const float brightness = std::clamp(sample.brightness, 0.0f, 1.0f);
         cell->lighting.runtime_average_strength = brightness;
+        cell->lighting.runtime_average_color    = sample.color;
         cell->lighting.has_runtime_average      = true;
         cell->lighting.needs_update             = true;
         cell->lighting.is_active                = true;
@@ -1011,9 +1039,13 @@ LightMap::SampledBrightness LightMap::sample_lighting(int world_x,
     if (cell) {
         sample.static_component  = std::clamp(cell->lighting.static_strength, 0.0f, 1.0f);
         sample.dynamic_component = std::clamp(cell->lighting.dynamic_strength, 0.0f, 1.0f);
+        sample.has_color         = cell->lighting.has_runtime_average;
+        sample.color             = cell->lighting.runtime_average_color;
     } else {
         sample.static_component  = std::clamp(chunk->lighting.static_strength, 0.0f, 1.0f);
         sample.dynamic_component = std::clamp(chunk->lighting.dynamic_strength, 0.0f, 1.0f);
+        sample.has_color         = chunk->lighting.has_runtime_average;
+        sample.color             = chunk->lighting.runtime_average_color;
     }
 
     sample.blended = blend_light_components(sample.static_component,
@@ -1059,6 +1091,45 @@ LightMap::SampledBrightness LightMap::sample_lighting_bilinear(float world_x,
                                             result.dynamic_component,
                                             weights.first,
                                             weights.second);
+
+    const float w00 = (1.0f - tx) * (1.0f - ty);
+    const float w10 = tx * (1.0f - ty);
+    const float w01 = (1.0f - tx) * ty;
+    const float w11 = tx * ty;
+
+    float accum_r = 0.0f;
+    float accum_g = 0.0f;
+    float accum_b = 0.0f;
+    float color_weight = 0.0f;
+    auto accumulate_color = [&](const SampledBrightness& s, float weight) {
+        if (!s.has_color || weight <= 0.0f) {
+            return;
+        }
+        accum_r += static_cast<float>(s.color.r) * weight;
+        accum_g += static_cast<float>(s.color.g) * weight;
+        accum_b += static_cast<float>(s.color.b) * weight;
+        color_weight += weight;
+    };
+
+    accumulate_color(s00, w00);
+    accumulate_color(s10, w10);
+    accumulate_color(s01, w01);
+    accumulate_color(s11, w11);
+
+    if (color_weight > 1e-5f) {
+        const float inv = 1.0f / color_weight;
+        const float r   = std::clamp(accum_r * inv, 0.0f, 255.0f);
+        const float g   = std::clamp(accum_g * inv, 0.0f, 255.0f);
+        const float b   = std::clamp(accum_b * inv, 0.0f, 255.0f);
+        result.color.r  = static_cast<Uint8>(std::lround(r));
+        result.color.g  = static_cast<Uint8>(std::lround(g));
+        result.color.b  = static_cast<Uint8>(std::lround(b));
+        result.has_color = true;
+    } else {
+        result.color     = SDL_Color{255, 255, 255, 255};
+        result.has_color = false;
+    }
+
     return result;
 }
 
@@ -1265,6 +1336,13 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
     SDL_SetTextureColorMod(mask_texture, color_mod.r, color_mod.g, color_mod.b);
     SDL_SetTextureBlendMode(mask_texture, runtime_shadow_mask_blend_);
 
+    auto combine_color = [](Uint8 base, Uint8 tint) -> Uint8 {
+        const float base_norm = static_cast<float>(base) / 255.0f;
+        const float tint_norm = static_cast<float>(tint) / 255.0f;
+        const float value     = std::clamp(base_norm * tint_norm, 0.0f, 1.0f);
+        return static_cast<Uint8>(std::lround(value * 255.0f));
+    };
+
     for (world::Chunk* chunk : active_chunks()) {
         if (!chunk) {
             continue;
@@ -1288,19 +1366,47 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
             continue;
         }
 
-        float brightness = std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
-        double visible_sum = 0.0;
+        float  brightness    = std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
+        double visible_sum   = 0.0;
         int    visible_count = 0;
+        double color_r_sum   = 0.0;
+        double color_g_sum   = 0.0;
+        double color_b_sum   = 0.0;
+        double color_weight  = 0.0;
         for (const auto& cell : chunk->lighting_chunks()) {
             if (!intersects(cell.world_bounds, world_view)) {
                 continue;
             }
             visible_sum += static_cast<double>(std::clamp(cell.lighting.current_strength, 0.0f, 1.0f));
             ++visible_count;
+            if (cell.lighting.has_runtime_average) {
+                const float weight = std::clamp(cell.lighting.runtime_average_strength, 0.0f, 1.0f);
+                if (weight > 1e-5f) {
+                    color_r_sum += static_cast<double>(cell.lighting.runtime_average_color.r) * weight;
+                    color_g_sum += static_cast<double>(cell.lighting.runtime_average_color.g) * weight;
+                    color_b_sum += static_cast<double>(cell.lighting.runtime_average_color.b) * weight;
+                    color_weight += static_cast<double>(weight);
+                }
+            }
         }
         if (visible_count > 0) {
             brightness = static_cast<float>(visible_sum / static_cast<double>(visible_count));
         }
+
+        SDL_Color runtime_color = chunk->lighting.runtime_average_color;
+        if (color_weight > 1e-5) {
+            const double inv = 1.0 / color_weight;
+            runtime_color.r = static_cast<Uint8>(std::lround(std::clamp(color_r_sum * inv, 0.0, 255.0)));
+            runtime_color.g = static_cast<Uint8>(std::lround(std::clamp(color_g_sum * inv, 0.0, 255.0)));
+            runtime_color.b = static_cast<Uint8>(std::lround(std::clamp(color_b_sum * inv, 0.0, 255.0)));
+        } else if (!chunk->lighting.has_runtime_average) {
+            runtime_color = SDL_Color{255, 255, 255, 255};
+        }
+
+        SDL_Color applied_color{combine_color(color_mod.r, runtime_color.r),
+                                combine_color(color_mod.g, runtime_color.g),
+                                combine_color(color_mod.b, runtime_color.b),
+                                255};
 
         float alpha = (1.0f - brightness) * alpha_multiplier;
         alpha *= std::clamp(chunk->shadow.opacity, 0.0f, 1.0f);
@@ -1309,6 +1415,7 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
             continue;
         }
 
+        SDL_SetTextureColorMod(mask_texture, applied_color.r, applied_color.g, applied_color.b);
         SDL_SetTextureAlphaMod(mask_texture, clamp_alpha(alpha));
 
         const auto& shadow = chunk->shadow;

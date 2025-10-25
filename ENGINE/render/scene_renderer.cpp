@@ -159,6 +159,7 @@ bool SceneRenderer::initialize_static_light_chunks() {
         chunk->lighting.dynamic_strength         = 1.0f;
         chunk->lighting.current_strength         = 1.0f;
         chunk->lighting.runtime_average_strength = 1.0f;
+        chunk->lighting.runtime_average_color    = SDL_Color{255, 255, 255, 255};
         chunk->lighting.needs_update             = true;
         initialized_chunks                      = true;
     }

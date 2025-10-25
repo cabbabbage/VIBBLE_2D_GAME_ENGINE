@@ -70,6 +70,8 @@ struct Chunk {
         float runtime_average_strength = 1.0f;
         // Marks whether runtime_average_strength contains a valid measurement for the current frame.
         bool has_runtime_average = false;
+        // Averaged runtime light color captured during this frame.
+        SDL_Color runtime_average_color{255, 255, 255, 255};
     };
 
     struct LightingChunk {
@@ -189,6 +191,8 @@ public:
         float static_component  = 1.0f;
         float dynamic_component = 1.0f;
         float blended           = 1.0f;
+        SDL_Color color{255, 255, 255, 255};
+        bool      has_color = false;
     };
 
     LightMap(Assets* assets,

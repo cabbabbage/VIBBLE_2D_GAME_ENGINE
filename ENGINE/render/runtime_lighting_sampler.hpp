@@ -26,6 +26,7 @@ struct RuntimeLightingFrame {
         int   global_i   = 0;
         int   global_j   = 0;
         float brightness = 0.0f;
+        SDL_Color color{255, 255, 255, 255};
     };
 
     std::vector<Sample> samples{};
@@ -37,6 +38,7 @@ struct ExternalLightSample {
     SDL_FPoint position{0.0f, 0.0f};
     float      radius    = 0.0f;
     float      intensity = 0.0f; // normalized [0,1]
+    SDL_Color  color{255, 255, 255, 255};
 };
 
 class RuntimeLightingSampler {

@@ -18,6 +18,7 @@ struct RuntimeEmitter {
     float      radius          = 0.0f;
     float      radius_squared  = 0.0f;
     float      intensity       = 0.0f; // normalized [0,1]
+    SDL_Color  color{255, 255, 255, 255};
     SDL_FRect  influence_bounds_f{0.0f, 0.0f, 0.0f, 0.0f};
     SDL_Rect   influence_bounds{0, 0, 0, 0};
 };
@@ -65,6 +66,7 @@ RuntimeEmitter make_emitter_from_external(const ExternalLightSample& sample) {
     emitter.position = sample.position;
     emitter.radius   = std::max(0.0f, sample.radius);
     emitter.intensity = clamp01(sample.intensity);
+    emitter.color     = sample.color;
     finalize_emitter(emitter);
     return emitter;
 }
@@ -112,6 +114,7 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
 
     emitter.radius    = radius;
     emitter.intensity = clamp01(static_cast<float>(light.intensity) / 255.0f);
+    emitter.color     = light.color;
     finalize_emitter(emitter);
     return emitter;
 }
@@ -290,7 +293,10 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
                 static_cast<float>(bounds.x) + static_cast<float>(bounds.w) * 0.5f,
                 static_cast<float>(bounds.y) + static_cast<float>(bounds.h) * 0.5f};
 
-            float brightness = 0.0f;
+            float brightness_sum = 0.0f;
+            float accum_r        = 0.0f;
+            float accum_g        = 0.0f;
+            float accum_b        = 0.0f;
             const auto& emitter_indices = cell_emitters[cell_index];
             for (std::size_t emitter_index : emitter_indices) {
                 const RuntimeEmitter& emitter = emitters[emitter_index];
@@ -302,12 +308,17 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
                 }
                 const float dist    = std::sqrt(dist_squared);
                 const float falloff = 1.0f - (dist / std::max(emitter.radius, 1.0f));
-                brightness = clamp01(brightness + emitter.intensity * clamp01(falloff));
-                if (brightness >= 1.0f) {
-                    break;
+                const float contribution = emitter.intensity * clamp01(falloff);
+                if (contribution <= 0.0f) {
+                    continue;
                 }
+                brightness_sum += contribution;
+                accum_r += static_cast<float>(emitter.color.r) * contribution;
+                accum_g += static_cast<float>(emitter.color.g) * contribution;
+                accum_b += static_cast<float>(emitter.color.b) * contribution;
             }
 
+            const float brightness = clamp01(brightness_sum);
             if (brightness <= 0.0f) {
                 continue;
             }
@@ -318,6 +329,17 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
             sample.global_i   = cell.global_i;
             sample.global_j   = cell.global_j;
             sample.brightness = brightness;
+            if (brightness_sum > 1e-5f) {
+                const float inv = 1.0f / brightness_sum;
+                const float r   = std::clamp(accum_r * inv, 0.0f, 255.0f);
+                const float g   = std::clamp(accum_g * inv, 0.0f, 255.0f);
+                const float b   = std::clamp(accum_b * inv, 0.0f, 255.0f);
+                sample.color.r  = static_cast<Uint8>(std::lround(r));
+                sample.color.g  = static_cast<Uint8>(std::lround(g));
+                sample.color.b  = static_cast<Uint8>(std::lround(b));
+            } else {
+                sample.color = SDL_Color{255, 255, 255, 255};
+            }
             frame.samples.push_back(sample);
         }
     }
