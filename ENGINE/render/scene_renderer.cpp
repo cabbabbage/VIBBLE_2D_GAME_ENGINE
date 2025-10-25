@@ -317,11 +317,26 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float in
 void SceneRenderer::render(){
     static int render_call_count=0; ++render_call_count;
 
+    SDL_Point orbit_center{ screen_width_ / 2, screen_height_ / 2 };
+    main_light_source_.set_screen_orbit_center(orbit_center);
+
+    const camera* camera_state = assets_ ? &assets_->getView() : nullptr;
+    if (camera_state) {
+        main_light_source_.set_direction_reference_world(camera_state->get_screen_center());
+    }
+
     bool should_update_light=true;
     if (assets_ && assets_->is_dev_mode()){
         should_update_light=devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, false);
     }
     if (should_update_light){ main_light_source_.update(); }
+
+    if (camera_state) {
+        const SDL_Point world_target = camera_state->screen_to_map(main_light_source_.get_position());
+        main_light_source_.set_direction_target_world(world_target);
+    } else {
+        main_light_source_.set_direction_target_world(main_light_source_.get_direction_reference());
+    }
 
     // Per-chunk shadow data is updated inside LightMap::update
 

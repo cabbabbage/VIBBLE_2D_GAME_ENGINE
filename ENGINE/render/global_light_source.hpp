@@ -10,7 +10,7 @@
 
 class Global_Light_Source {
 
-	public:
+        public:
     Global_Light_Source(SDL_Renderer* renderer, SDL_Point screen_center, int screen_width, SDL_Color fallback_base_color);
     void apply_config(const nlohmann::json& data);
     ~Global_Light_Source() = default;
@@ -23,6 +23,9 @@ class Global_Light_Source {
     SDL_Point get_direction_reference() const { return map_reference_center_; }
     SDL_Point get_direction_target() const;
     bool      initialize_from_map_manifest(const nlohmann::json& map_info, std::string_view map_id);
+    void      set_screen_orbit_center(SDL_Point screen_center);
+    void      set_direction_reference_world(SDL_Point world_point);
+    void      set_direction_target_world(SDL_Point world_point);
 
         private:
     struct KeyEntry {
@@ -50,6 +53,7 @@ class Global_Light_Source {
     SDL_Point default_map_center_;
     SDL_Point center_;
     SDL_Point map_reference_center_;
+    SDL_Point direction_target_world_;
     SDL_Point pos_;
     float angle_;
     bool  initialized_;

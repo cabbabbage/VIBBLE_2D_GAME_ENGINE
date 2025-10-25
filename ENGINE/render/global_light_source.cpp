@@ -22,6 +22,7 @@ Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
         default_map_center_(screen_center),
         center_(screen_center),
         map_reference_center_(screen_center),
+        direction_target_world_(screen_center),
         angle_(0.0f),
         initialized_(false),
         pos_{screen_center.x, screen_center.y},
@@ -66,6 +67,7 @@ void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base
         center_ = default_center_;
         default_map_center_ = default_center_;
         map_reference_center_ = default_map_center_;
+        direction_target_world_ = map_reference_center_;
         recalc_position();
 }
 
@@ -173,6 +175,7 @@ void Global_Light_Source::apply_config(const json& data) {
 
         center_ = default_center_;
         map_reference_center_ = default_map_center_;
+        direction_target_world_ = map_reference_center_;
         auto parse_point = [](const nlohmann::json& arr) -> std::optional<SDL_Point> {
                 if (!arr.is_array() || arr.size() < 2) {
                         return std::nullopt;
@@ -214,6 +217,8 @@ void Global_Light_Source::apply_config(const json& data) {
                         } catch (...) {}
                 }
         }
+
+        direction_target_world_ = map_reference_center_;
 
         current_color_ = clamp_color_alpha(base_color_);
         set_light_brightness();
@@ -303,7 +308,7 @@ void Global_Light_Source::update() {
 }
 
 SDL_Point Global_Light_Source::get_position() const {
-	return pos_;
+        return pos_;
 }
 
 float Global_Light_Source::get_angle() const {
@@ -325,9 +330,7 @@ void Global_Light_Source::recalc_position() {
 }
 
 SDL_Point Global_Light_Source::get_direction_target() const {
-        const int offset_x = pos_.x - center_.x;
-        const int offset_y = pos_.y - center_.y;
-        return SDL_Point{ map_reference_center_.x + offset_x, map_reference_center_.y + offset_y };
+        return direction_target_world_;
 }
 
 SDL_Color Global_Light_Source::compute_color_from_horizon(float degree) const {
@@ -382,4 +385,17 @@ Uint8 Global_Light_Source::clamp_alpha(Uint8 value) const {
 SDL_Color Global_Light_Source::clamp_color_alpha(SDL_Color color) const {
         color.a = clamp_alpha(color.a);
         return color;
+}
+
+void Global_Light_Source::set_screen_orbit_center(SDL_Point screen_center) {
+        center_ = screen_center;
+        recalc_position();
+}
+
+void Global_Light_Source::set_direction_reference_world(SDL_Point world_point) {
+        map_reference_center_ = world_point;
+}
+
+void Global_Light_Source::set_direction_target_world(SDL_Point world_point) {
+        direction_target_world_ = world_point;
 }
