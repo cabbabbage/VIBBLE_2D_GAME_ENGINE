@@ -128,6 +128,15 @@ bool chunk_lighting_suspended_flag() {
     return false;
 }
 
+float smoothstep(float edge0, float edge1, float x) {
+    if (edge0 == edge1) {
+        return (x < edge0) ? 0.0f : 1.0f;
+    }
+    const float denom = edge1 - edge0;
+    const float t     = std::clamp((x - edge0) / denom, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 Uint8 clamp_alpha(float value) {
     return static_cast<Uint8>(std::clamp(value, 0.0f, 1.0f) * 255.0f + 0.5f);
 }
@@ -367,12 +376,17 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
     // Map-light directional adjustment: push away from map-light direction with
     // strength that peaks when the light is furthest left/right and fades to 0
-    // when directly above or below.
+    // when directly above or below. The influence also fades smoothly as the
+    // map-light opacity drops, hitting zero once the opacity is 100/255 or
+    // lower.
     if (map_light_direction) {
         const SDL_FPoint dir = *map_light_direction;
         const float horizontal_influence = std::clamp(std::abs(dir.x), 0.0f, 1.0f);
         const float direction_factor     = std::clamp(settings.map_light_dir_offset_strength, 0.0f, 1.0f);
-        const float dir_push             = horizontal_influence * direction_factor * 100.0f;
+        constexpr float kMinOpacityForDirection = 100.0f / 255.0f;
+        const float opacity_visibility         = smoothstep(kMinOpacityForDirection, 1.0f, map_light_opacity);
+        const float opacity_scale              = opacity_visibility * opacity_visibility;
+        const float dir_push = horizontal_influence * direction_factor * opacity_scale * 100.0f;
         if (dir_push > 1e-4f) {
             px += -dir.x * dir_push;
             py += -dir.y * dir_push;
