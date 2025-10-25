@@ -417,6 +417,16 @@ void MapLightPanel::OrbitKeyWidget::rebuild_pair_entries() {
         entry.widget->set_on_value_changed([this, idx = static_cast<int>(i)](const utils::color::RangedColor& value) {
             owner_.handle_pair_color_changed(idx, value);
         });
+        entry.widget->set_on_sample_requested(
+            [this](const utils::color::RangedColor& current,
+                   std::function<void(SDL_Color)> on_sample,
+                   std::function<void()> on_cancel) {
+                if (owner_.map_color_sample_callback_) {
+                    owner_.map_color_sample_callback_(current, std::move(on_sample), std::move(on_cancel));
+                } else if (on_cancel) {
+                    on_cancel();
+                }
+            });
     }
 }
 
