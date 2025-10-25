@@ -55,6 +55,8 @@ private:
         std::unique_ptr<DMButton> add_child_button;
         SDL_Rect children_header_rect{0, 0, 0, 0};
         SDL_Rect children_placeholder_rect{0, 0, 0, 0};
+        bool hovered = false;
+        bool slider_active = false;
     };
 
     void configure_container(SlidingWindowContainer& container);

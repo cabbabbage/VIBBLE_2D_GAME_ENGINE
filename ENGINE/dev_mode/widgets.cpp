@@ -1383,13 +1383,17 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         } else if (!dragging_min_ && !dragging_max_) {
             set_focus(false);
         }
-        if (e.button.clicks >= 2) {
-            if (inside && SDL_PointInRect(&p, &min_value_rect_)) {
+
+        if (inside) {
+            const bool on_min_value = SDL_PointInRect(&p, &min_value_rect_);
+            const bool on_max_value = SDL_PointInRect(&p, &max_value_rect_);
+            if (on_min_value) {
                 edit_min_ = std::make_unique<DMTextBox>("", std::to_string(display_min_value()));
                 edit_min_->set_rect(min_value_rect_);
                 edit_min_->handle_event(e);
                 return true;
-            } else if (inside && SDL_PointInRect(&p, &max_value_rect_)) {
+            }
+            if (on_max_value) {
                 edit_max_ = std::make_unique<DMTextBox>("", std::to_string(display_max_value()));
                 edit_max_->set_rect(max_value_rect_);
                 edit_max_->handle_event(e);
@@ -1448,6 +1452,8 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             set_focus(false);
         }
         if (was_dragging) {
+            bool committed = commit_pending_values();
+            (void)committed;
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {

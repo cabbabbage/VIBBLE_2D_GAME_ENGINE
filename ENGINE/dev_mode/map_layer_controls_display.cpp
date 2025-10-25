@@ -305,13 +305,25 @@ void MapLayerControlsDisplay::render(SDL_Renderer* renderer) const {
         DrawLabelText(renderer, info_lines_[i], rect.x, rect.y, style);
     }
 
-    const SDL_Color row_bg = DMStyles::ButtonBaseFill();
+    const SDL_Color base_row_bg = DMStyles::PanelBG();
+    const SDL_Color hover_row_bg = DMStyles::ButtonBaseFill();
+    const SDL_Color active_row_bg = DMStyles::ButtonHoverFill();
     const SDL_Color row_border = DMStyles::Border();
+    const SDL_Color active_border = DMStyles::HighlightColor();
     for (const auto& candidate : candidates_) {
         if (candidate.background_rect.w > 0 && candidate.background_rect.h > 0) {
-            SDL_SetRenderDrawColor(renderer, row_bg.r, row_bg.g, row_bg.b, row_bg.a);
+            SDL_Color fill = base_row_bg;
+            SDL_Color border = row_border;
+            if (candidate.hovered) {
+                fill = hover_row_bg;
+            }
+            if (candidate.slider_active) {
+                fill = active_row_bg;
+                border = active_border;
+            }
+            SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
             SDL_RenderFillRect(renderer, &candidate.background_rect);
-            SDL_SetRenderDrawColor(renderer, row_border.r, row_border.g, row_border.b, row_border.a);
+            SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
             SDL_RenderDrawRect(renderer, &candidate.background_rect);
         }
 
@@ -360,6 +372,31 @@ void MapLayerControlsDisplay::render(SDL_Renderer* renderer) const {
 bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
     ensure_data();
 
+    auto update_candidate_hover = [this](SDL_Point pointer) {
+        for (auto& candidate : candidates_) {
+            candidate.hovered = SDL_PointInRect(&pointer, &candidate.background_rect) == SDL_TRUE;
+        }
+    };
+
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point pointer{e.motion.x, e.motion.y};
+        update_candidate_hover(pointer);
+    } else if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        SDL_Point pointer{e.button.x, e.button.y};
+        update_candidate_hover(pointer);
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            for (auto& candidate : candidates_) {
+                if (!candidate.range_slider) {
+                    candidate.slider_active = false;
+                    continue;
+                }
+                if (SDL_PointInRect(&pointer, &candidate.range_slider->rect()) != SDL_TRUE) {
+                    candidate.slider_active = false;
+                }
+            }
+        }
+    }
+
     if (room_selector_ && room_selector_->visible() && room_selector_->handle_event(e)) {
         return true;
     }
@@ -400,15 +437,28 @@ bool MapLayerControlsDisplay::handle_event(const SDL_Event& e) {
         bool slider_changed = false;
         if (candidate.range_slider) {
             slider_handled = candidate.range_slider->handle_event(e);
-            if (slider_handled && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-                begin_slider_dirty_suppression(candidate.range_slider.get());
+            const bool mouse_down = e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT;
+            const bool mouse_up = e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT;
+            if (mouse_down) {
+                if (slider_handled) {
+                    candidate.slider_active = true;
+                    begin_slider_dirty_suppression(candidate.range_slider.get());
+                } else {
+                    candidate.slider_active = false;
+                }
             }
             slider_changed = handle_slider_change(candidate);
             if (slider_changed) {
                 notify_change();
             }
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                end_slider_dirty_suppression(candidate.range_slider.get());
+            if (mouse_up) {
+                if (!slider_handled && candidate.slider_active) {
+                    candidate.slider_active = false;
+                }
+                if (slider_handled || candidate.slider_active) {
+                    end_slider_dirty_suppression(candidate.range_slider.get());
+                }
+                candidate.slider_active = false;
             }
         }
         if (candidate.add_child_button && candidate.add_child_button->handle_event(e)) {

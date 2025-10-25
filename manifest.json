@@ -14134,9 +14134,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            71,
             242,
             36,
-            125,
             255
           ],
           "edge_smoothness": 2,
@@ -14183,42 +14183,12 @@
           ]
         },
         "spawn": {
-          "areas": [
-            {
-              "anchor": {
-                "x": 0,
-                "y": 0
-              },
-              "anchor_relative_to_center": true,
-              "kind": "Spawn",
-              "name": "spawning_area",
-              "points": [
-                {
-                  "x": 159,
-                  "y": -589
-                },
-                {
-                  "x": 594,
-                  "y": -598
-                },
-                {
-                  "x": 815,
-                  "y": -307
-                },
-                {
-                  "x": 471,
-                  "y": -414
-                }
-              ],
-              "resolution": 0,
-              "type": "spawning"
-            }
-          ],
+          "areas": [],
           "curvyness": 2,
           "display_color": [
+            36,
+            185,
             242,
-            242,
-            61,
             255
           ],
           "edge_smoothness": 101,
