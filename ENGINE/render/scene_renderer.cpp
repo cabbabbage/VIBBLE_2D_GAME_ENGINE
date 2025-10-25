@@ -27,7 +27,6 @@ static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
 namespace {
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
-constexpr std::string_view kRenderShadowsSettingKey  = "dev_ui.lighting.shadow_panel.render_shadows";
 
 constexpr const char* kEnableChunkLightingEnv  = "VIBBLE_ENABLE_CHUNK_LIGHTING";
 constexpr const char* kDisableChunkLightingEnv = "VIBBLE_DISABLE_CHUNK_LIGHTING";
@@ -270,11 +269,7 @@ void SceneRenderer::render(){
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
 
-    bool render_shadows = true;
-    if (assets_ && assets_->is_dev_mode()){
-        render_shadows = devmode::ui_settings::load_bool(kRenderShadowsSettingKey, true);
-    }
-    render_pipeline_.lighting().reactive_shadow_settings = render_shadows ? &reactive_shadow_settings_ : nullptr;
+    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
     const SDL_Color map_light_color = main_light_source_.get_current_color();
     const float map_light_opacity = std::clamp(static_cast<float>(map_light_color.a) / 255.0f, 0.0f, 1.0f);

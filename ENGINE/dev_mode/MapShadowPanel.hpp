@@ -43,8 +43,6 @@ protected:
     void layout_custom_content(int, int) const override {}
 
 private:
-    using LutEntry = ReactiveShadowSettings::ShadowResponseLutEntry;
-
     void build_ui();
     void rebuild_ui();
     void sync_ui_from_settings(const ReactiveShadowSettings& settings);
@@ -53,7 +51,6 @@ private:
     void apply_settings(const ReactiveShadowSettings& settings, bool persist);
     void request_save();
     nlohmann::json* ensure_reactive_shadow_json();
-    static int find_entry_index(const std::vector<LutEntry>& entries, const LutEntry& target);
     static float read_scaled_slider(const std::unique_ptr<DMSlider>& slider, int scale, float fallback);
 
     Assets* assets_ = nullptr;
@@ -65,12 +62,8 @@ private:
     bool applying_ui_ = false;
     bool pending_save_ = false;
     bool initialized_ = false;
-    int selected_entry_index_ = 0;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_{};
-
-    std::unique_ptr<DMCheckbox> render_shadows_checkbox_{};
-    bool render_shadows_enabled_ = true;
 
     std::unique_ptr<DMSlider> horizontal_falloff_{};
     std::unique_ptr<DMSlider> vertical_falloff_{};
@@ -82,13 +75,5 @@ private:
     std::unique_ptr<DMSlider> map_light_dir_strength_{};
     std::unique_ptr<DMSlider> parallax_percent_{};
     std::unique_ptr<DMSlider> search_radius_{};
-
-    std::unique_ptr<DMSlider> static_weight_{};
-
-    std::unique_ptr<DMSlider> lut_index_slider_{};
-    std::unique_ptr<DMSlider> lut_brightness_{};
-    std::unique_ptr<DMSlider> lut_opacity_{};
-    std::unique_ptr<DMSlider> lut_offset_{};
-    std::unique_ptr<DMSlider> lut_scale_{};
 
 };
