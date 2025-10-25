@@ -14061,7 +14061,10 @@
             "max_offset_x": 100.0,
             "max_offset_y": 100.0,
             "shadow_scale": 1.0,
-            "size_scale_factor": 1.0,
+            "min_scale_percent": 80,
+            "max_scale_percent": 120,
+            "map_light_dir_offset_strength": 0.5,
+            "parallax_percent": 0.0,
             "vertical_falloff": 3.5
           }
         },
@@ -14096,7 +14099,10 @@
           "max_offset_y": 0.0,
           "search_radius": 2,
           "shadow_scale": 1.0,
-          "size_scale_factor": 1.0,
+          "min_scale_percent": 80,
+          "max_scale_percent": 120,
+          "map_light_dir_offset_strength": 0.5,
+          "parallax_percent": 0.0,
           "vertical_falloff": 3.5
         }
       },

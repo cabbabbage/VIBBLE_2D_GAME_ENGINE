@@ -246,8 +246,28 @@ void MapShadowPanel::build_ui() {
                                        current_settings_.virtual_light_map.max_offset_y, 100, 2);
     shadow_scale_ = make_scaled_slider("Shadow Scale", 0.0f, 10.0f,
                                        current_settings_.virtual_light_map.shadow_scale, 100, 2);
-    size_scale_factor_ = make_scaled_slider("Size Scale Factor", 0.0f, 10.0f,
-                                            current_settings_.virtual_light_map.size_scale_factor, 100, 2);
+
+    const int min_scale_value =
+        std::clamp(current_settings_.virtual_light_map.min_scale_percent, 50, 200);
+    const int max_scale_value =
+        std::clamp(current_settings_.virtual_light_map.max_scale_percent, 50, 200);
+    min_scale_percent_ = std::make_unique<DMSlider>("Min Scale %", 50, 200, min_scale_value);
+    max_scale_percent_ = std::make_unique<DMSlider>("Max Scale %", 50, 200, max_scale_value);
+    if (min_scale_percent_) {
+        min_scale_percent_->set_defer_commit_until_unfocus(false);
+    }
+    if (max_scale_percent_) {
+        max_scale_percent_->set_defer_commit_until_unfocus(false);
+    }
+
+    map_light_dir_strength_ = make_scaled_slider("Directional Offset Strength", 0.0f, 1.0f,
+                                                 current_settings_.virtual_light_map.map_light_dir_offset_strength,
+                                                 100,
+                                                 2);
+    parallax_percent_ = make_scaled_slider("Parallax %", 0.0f, 100.0f,
+                                          current_settings_.virtual_light_map.parallax_percent,
+                                          100,
+                                          1);
 
     const int search_radius_value = std::clamp(current_settings_.virtual_light_map.search_radius, 0, 128);
     search_radius_ = std::make_unique<DMSlider>("Search Radius", 0, 128, search_radius_value);
@@ -293,7 +313,10 @@ void MapShadowPanel::build_ui() {
     add_slider_row(max_offset_x_);
     add_slider_row(max_offset_y_);
     add_slider_row(shadow_scale_);
-    add_slider_row(size_scale_factor_);
+    add_slider_row(min_scale_percent_);
+    add_slider_row(max_scale_percent_);
+    add_slider_row(map_light_dir_strength_);
+    add_slider_row(parallax_percent_);
     add_slider_row(search_radius_);
 
     add_slider_row(static_weight_);
@@ -320,7 +343,14 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
     if (max_offset_x_) max_offset_x_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_x * 100.0f)));
     if (max_offset_y_) max_offset_y_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_y * 100.0f)));
     if (shadow_scale_) shadow_scale_->set_value(static_cast<int>(std::round(settings.virtual_light_map.shadow_scale * 100.0f)));
-    if (size_scale_factor_) size_scale_factor_->set_value(static_cast<int>(std::round(settings.virtual_light_map.size_scale_factor * 100.0f)));
+    if (min_scale_percent_)
+        min_scale_percent_->set_value(std::clamp(settings.virtual_light_map.min_scale_percent, 50, 200));
+    if (max_scale_percent_)
+        max_scale_percent_->set_value(std::clamp(settings.virtual_light_map.max_scale_percent, 50, 200));
+    if (map_light_dir_strength_)
+        map_light_dir_strength_->set_value(static_cast<int>(std::round(settings.virtual_light_map.map_light_dir_offset_strength * 100.0f)));
+    if (parallax_percent_)
+        parallax_percent_->set_value(static_cast<int>(std::round(settings.virtual_light_map.parallax_percent * 100.0f)));
     if (search_radius_) search_radius_->set_value(std::clamp(settings.virtual_light_map.search_radius, 0, 128));
 
     if (static_weight_) static_weight_->set_value(static_cast<int>(std::round(settings.sampling_weights.static_weight * 100.0f)));
@@ -352,7 +382,18 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
     settings.virtual_light_map.max_offset_x       = read_scaled_slider(max_offset_x_, 100, settings.virtual_light_map.max_offset_x);
     settings.virtual_light_map.max_offset_y       = read_scaled_slider(max_offset_y_, 100, settings.virtual_light_map.max_offset_y);
     settings.virtual_light_map.shadow_scale       = read_scaled_slider(shadow_scale_, 100, settings.virtual_light_map.shadow_scale);
-    settings.virtual_light_map.size_scale_factor  = read_scaled_slider(size_scale_factor_, 100, settings.virtual_light_map.size_scale_factor);
+    if (min_scale_percent_) {
+        settings.virtual_light_map.min_scale_percent =
+            std::clamp(min_scale_percent_->displayed_value(), 50, 200);
+    }
+    if (max_scale_percent_) {
+        settings.virtual_light_map.max_scale_percent =
+            std::clamp(max_scale_percent_->displayed_value(), 50, 200);
+    }
+    settings.virtual_light_map.map_light_dir_offset_strength =
+        read_scaled_slider(map_light_dir_strength_, 100, settings.virtual_light_map.map_light_dir_offset_strength);
+    settings.virtual_light_map.parallax_percent =
+        read_scaled_slider(parallax_percent_, 100, settings.virtual_light_map.parallax_percent);
     if (search_radius_) {
         settings.virtual_light_map.search_radius = std::clamp(search_radius_->displayed_value(), 0, 128);
     }

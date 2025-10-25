@@ -145,7 +145,7 @@ public:
     world::Chunk* chunk_from_world(SDL_Point world_px) const;
 
     std::optional<world::Chunk::ChunkShadowParameters> get_shadow_data(SDL_FPoint world_or_screen_pos) const;
-    ShadowSettings shadow_settings() const { return ShadowSettings{}; }
+    ShadowSettings shadow_settings() const;
 
     int chunk_count() const;
     int chunk_columns() const;

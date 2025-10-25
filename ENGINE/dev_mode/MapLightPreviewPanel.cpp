@@ -1293,8 +1293,17 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reac
         load_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y));
     settings.virtual_light_map.shadow_scale = static_cast<float>(
         load_number(make_setting_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale));
-    settings.virtual_light_map.size_scale_factor = static_cast<float>(
-        load_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor));
+    settings.virtual_light_map.min_scale_percent = static_cast<int>(std::lround(load_number(
+        make_setting_key("virtual_light_map.min_scale_percent"),
+        static_cast<double>(settings.virtual_light_map.min_scale_percent))));
+    settings.virtual_light_map.max_scale_percent = static_cast<int>(std::lround(load_number(
+        make_setting_key("virtual_light_map.max_scale_percent"),
+        static_cast<double>(settings.virtual_light_map.max_scale_percent))));
+    settings.virtual_light_map.map_light_dir_offset_strength = static_cast<float>(load_number(
+        make_setting_key("virtual_light_map.map_light_dir_offset_strength"),
+        settings.virtual_light_map.map_light_dir_offset_strength));
+    settings.virtual_light_map.parallax_percent = static_cast<float>(load_number(
+        make_setting_key("virtual_light_map.parallax_percent"), settings.virtual_light_map.parallax_percent));
     settings.virtual_light_map.search_radius = static_cast<int>(
         std::lround(load_number(make_setting_key("virtual_light_map.search_radius"),
                                  static_cast<double>(settings.virtual_light_map.search_radius))));
@@ -1308,7 +1317,11 @@ void MapLightPreviewPanel::persist_reactive_settings_to_dev_settings(const rende
     save_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x);
     save_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y);
     save_number(make_setting_key("virtual_light_map.shadow_scale"), settings.virtual_light_map.shadow_scale);
-    save_number(make_setting_key("virtual_light_map.size_scale_factor"), settings.virtual_light_map.size_scale_factor);
+    save_number(make_setting_key("virtual_light_map.min_scale_percent"), settings.virtual_light_map.min_scale_percent);
+    save_number(make_setting_key("virtual_light_map.max_scale_percent"), settings.virtual_light_map.max_scale_percent);
+    save_number(make_setting_key("virtual_light_map.map_light_dir_offset_strength"),
+                settings.virtual_light_map.map_light_dir_offset_strength);
+    save_number(make_setting_key("virtual_light_map.parallax_percent"), settings.virtual_light_map.parallax_percent);
     save_number(make_setting_key("virtual_light_map.search_radius"), settings.virtual_light_map.search_radius);
 }
 

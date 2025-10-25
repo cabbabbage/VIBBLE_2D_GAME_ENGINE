@@ -72,8 +72,16 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
         read_float(json, "max_offset_y", settings.virtual_light_map.max_offset_y);
     settings.virtual_light_map.shadow_scale =
         read_float(json, "shadow_scale", settings.virtual_light_map.shadow_scale);
-    settings.virtual_light_map.size_scale_factor =
-        read_float(json, "size_scale_factor", settings.virtual_light_map.size_scale_factor);
+    settings.virtual_light_map.min_scale_percent =
+        read_int(json, "min_scale_percent", settings.virtual_light_map.min_scale_percent);
+    settings.virtual_light_map.max_scale_percent =
+        read_int(json, "max_scale_percent", settings.virtual_light_map.max_scale_percent);
+    settings.virtual_light_map.map_light_dir_offset_strength = read_float(
+        json,
+        "map_light_dir_offset_strength",
+        settings.virtual_light_map.map_light_dir_offset_strength);
+    settings.virtual_light_map.parallax_percent =
+        read_float(json, "parallax_percent", settings.virtual_light_map.parallax_percent);
     settings.virtual_light_map.search_radius =
         read_int(json, "search_radius", settings.virtual_light_map.search_radius);
     settings.opacity_strength = read_float(json, "opacity_strength", settings.opacity_strength);
@@ -148,7 +156,10 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
         { "max_offset_x", sanitized.virtual_light_map.max_offset_x },
         { "max_offset_y", sanitized.virtual_light_map.max_offset_y },
         { "shadow_scale", sanitized.virtual_light_map.shadow_scale },
-        { "size_scale_factor", sanitized.virtual_light_map.size_scale_factor },
+        { "min_scale_percent", sanitized.virtual_light_map.min_scale_percent },
+        { "max_scale_percent", sanitized.virtual_light_map.max_scale_percent },
+        { "map_light_dir_offset_strength", sanitized.virtual_light_map.map_light_dir_offset_strength },
+        { "parallax_percent", sanitized.virtual_light_map.parallax_percent },
         { "search_radius", sanitized.virtual_light_map.search_radius }
     });
     json["opacity_strength"]  = sanitized.opacity_strength;

@@ -23,6 +23,7 @@
 #include "dev_mode/font_cache.hpp"
 #include "render/camera.hpp"
 #include "render/transparency_sampling.hpp"
+#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/global_light_source.hpp"
 #include "world/grid.hpp"
 
@@ -340,7 +341,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
         scale_percent = base_p - ease_out * (base_p - static_cast<float>(min_p));
     }
     scale_percent = std::clamp(scale_percent, static_cast<float>(min_p), static_cast<float>(max_p));
-    chunk.shadow.scale = std::max(0.0f, scale_percent / 100.0f);
+    const float base_scale = std::max(0.0f, settings.base_shadow_scale);
+    chunk.shadow.scale = std::max(0.0f, base_scale * (scale_percent / 100.0f));
 
     // Base offset away from brightest direction (opposite brightness gradient)
     float gx = grad.first, gy = grad.second;
@@ -351,6 +353,17 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     // Move opposite the gradient (away from brighter areas)
     float px = -nx * 100.0f;
     float py = -ny * 100.0f;
+
+    const float chunk_w = static_cast<float>(std::max(1, chunk.world_bounds.w));
+    const float chunk_h = static_cast<float>(std::max(1, chunk.world_bounds.h));
+    const float raw_max_x_percent = (chunk_w > 1e-3f)
+                                        ? (settings.max_offset_x_px / chunk_w) * 100.0f
+                                        : 0.0f;
+    const float raw_max_y_percent = (chunk_h > 1e-3f)
+                                        ? (settings.max_offset_y_px / chunk_h) * 100.0f
+                                        : 0.0f;
+    const float safe_max_x_percent = std::clamp(raw_max_x_percent, 0.0f, 100.0f);
+    const float safe_max_y_percent = std::clamp(raw_max_y_percent, 0.0f, 100.0f);
 
     // Map-light directional adjustment: push away from map-light direction with
     // strength that peaks when the light is furthest left/right and fades to 0
@@ -366,8 +379,10 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
         }
     }
 
-    chunk.shadow.offset_x_percent = std::clamp(px, -100.0f, 100.0f);
-    chunk.shadow.offset_y_percent = std::clamp(py, -100.0f, 100.0f);
+    const float clamped_px = std::clamp(px, -safe_max_x_percent, safe_max_x_percent);
+    const float clamped_py = std::clamp(py, -safe_max_y_percent, safe_max_y_percent);
+    chunk.shadow.offset_x_percent = std::clamp(clamped_px, -100.0f, 100.0f);
+    chunk.shadow.offset_y_percent = std::clamp(clamped_py, -100.0f, 100.0f);
 
     chunk.shadow.parallax_intensity_percent = std::clamp(settings.parallax_percent, 0.0f, 100.0f);
 }
@@ -376,6 +391,35 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
 // LightMap implementation
 // ctor/dtor inlined in header
+
+LightMap::ShadowSettings LightMap::shadow_settings() const {
+    ShadowSettings settings{};
+    if (!assets_) {
+        return settings;
+    }
+
+    const auto* reactive = assets_->reactive_shadow_settings();
+    if (!reactive) {
+        return settings;
+    }
+
+    using render_pipeline::shading::sanitize_reactive_shadow_settings;
+    const auto sanitized = sanitize_reactive_shadow_settings(*reactive);
+
+    settings.search_radius_cells = std::max(0, sanitized.virtual_light_map.search_radius);
+    settings.falloff_horizontal  = std::max(0.0f, sanitized.virtual_light_map.horizontal_falloff);
+    settings.falloff_vertical    = std::max(0.0f, sanitized.virtual_light_map.vertical_falloff);
+    settings.max_offset_x_px     = std::max(0.0f, sanitized.virtual_light_map.max_offset_x);
+    settings.max_offset_y_px     = std::max(0.0f, sanitized.virtual_light_map.max_offset_y);
+    settings.base_shadow_scale   = std::max(0.0f, sanitized.virtual_light_map.shadow_scale);
+    settings.min_scale_percent   = sanitized.virtual_light_map.min_scale_percent;
+    settings.max_scale_percent   = sanitized.virtual_light_map.max_scale_percent;
+    settings.map_light_dir_offset_strength =
+        std::clamp(sanitized.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
+    settings.parallax_percent = std::clamp(sanitized.virtual_light_map.parallax_percent, 0.0f, 100.0f);
+
+    return settings;
+}
 
 void LightMap::rebuild(SDL_Renderer* /*renderer*/) {
     std::scoped_lock lock(mutex_);
@@ -403,6 +447,7 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
         return;
     }
     const auto& chunks = active_chunks();
+    const ShadowSettings settings = shadow_settings();
     for (world::Chunk* chunk : chunks) {
         if (!chunk) {
             continue;
@@ -531,7 +576,6 @@ void LightMap::update(SDL_Renderer* renderer, std::uint32_t /*delta_ms*/) {
                 world::static_brightness_for_opacity(*chunk, map_light_opacity);
         }
 
-        const ShadowSettings settings{};
         const int   radius = std::max(0, settings.search_radius_cells);
         const float fx     = std::max(0.0f, settings.falloff_horizontal);
         const float fy     = std::max(0.0f, settings.falloff_vertical);

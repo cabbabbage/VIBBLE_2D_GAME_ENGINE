@@ -13,7 +13,10 @@ struct ReactiveShadowSettings {
         float max_offset_x       = 0.0f;
         float max_offset_y       = 0.0f;
         float shadow_scale       = 1.0f;
-        float size_scale_factor  = 1.0f;
+        int   min_scale_percent  = 80;
+        int   max_scale_percent  = 120;
+        float map_light_dir_offset_strength = 0.5f;
+        float parallax_percent              = 0.0f;
         int   search_radius      = 2;
 
         bool operator==(const VirtualLightMapSettings& other) const {
@@ -22,7 +25,10 @@ struct ReactiveShadowSettings {
                    max_offset_x == other.max_offset_x &&
                    max_offset_y == other.max_offset_y &&
                    shadow_scale == other.shadow_scale &&
-                   size_scale_factor == other.size_scale_factor &&
+                   min_scale_percent == other.min_scale_percent &&
+                   max_scale_percent == other.max_scale_percent &&
+                   map_light_dir_offset_strength == other.map_light_dir_offset_strength &&
+                   parallax_percent == other.parallax_percent &&
                    search_radius == other.search_radius;
         }
         bool operator!=(const VirtualLightMapSettings& other) const { return !(*this == other); }
@@ -90,7 +96,14 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.virtual_light_map.max_offset_x       = clampf(out.virtual_light_map.max_offset_x, 0.0f, 500.0f);
     out.virtual_light_map.max_offset_y       = clampf(out.virtual_light_map.max_offset_y, 0.0f, 500.0f);
     out.virtual_light_map.shadow_scale       = clampf(out.virtual_light_map.shadow_scale, 0.0f, 10.0f);
-    out.virtual_light_map.size_scale_factor  = clampf(out.virtual_light_map.size_scale_factor, 0.0f, 10.0f);
+    out.virtual_light_map.min_scale_percent = clampi(out.virtual_light_map.min_scale_percent, 50, 200);
+    out.virtual_light_map.max_scale_percent = clampi(out.virtual_light_map.max_scale_percent, 50, 200);
+    if (out.virtual_light_map.min_scale_percent > out.virtual_light_map.max_scale_percent) {
+        std::swap(out.virtual_light_map.min_scale_percent, out.virtual_light_map.max_scale_percent);
+    }
+    out.virtual_light_map.map_light_dir_offset_strength =
+        clampf(out.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
+    out.virtual_light_map.parallax_percent = clampf(out.virtual_light_map.parallax_percent, 0.0f, 100.0f);
     out.virtual_light_map.search_radius      = clampi(out.virtual_light_map.search_radius, 0, 64);
     out.opacity_strength                     = clampf(out.opacity_strength, 0.0f, 10.0f);
     out.parallax_strength                    = clampf(out.parallax_strength, 0.0f, 10.0f);
