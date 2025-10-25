@@ -290,6 +290,8 @@ add_executable(map_layers_controller_tests
     ENGINE/dev_mode/map_layers_controller.cpp
     ENGINE/dev_mode/dev_controls_persistence.cpp
     ENGINE/core/manifest/manifest_loader.cpp
+    ENGINE/utils/display_color.cpp
+    ENGINE/utils/ranged_color.cpp
     ENGINE/map_generation/map_layers_geometry.cpp
 )
 target_include_directories(map_layers_controller_tests PRIVATE

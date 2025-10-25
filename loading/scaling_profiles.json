@@ -387,6 +387,27 @@
             ],
             "revision": 1
         },
+        "Fountain": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-25T07:13:19Z",
+            "recommended_percentages": [
+                100,
+                75,
+                50
+            ],
+            "revision": 1
+        },
         "Frog": {
             "histogram": [
                 0,
