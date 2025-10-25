@@ -23,6 +23,14 @@ const Global_Light_Source* Assets::map_light_source() const {
     return nullptr;
 }
 
+SDL_Color Global_Light_Source::get_current_color() const {
+    return SDL_Color{255, 255, 255, 255};
+}
+
+SDL_Point Global_Light_Source::get_direction_target() const {
+    return SDL_Point{0, 0};
+}
+
 render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_settings() {
     return nullptr;
 }
