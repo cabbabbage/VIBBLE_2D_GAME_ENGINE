@@ -848,6 +848,7 @@ void RoomEditor::update_ui(const Input& input) {
 
     if (library_ui_) {
         if (auto selected = library_ui_->consume_selection()) {
+            const bool had_pending_spawn = pending_spawn_world_pos_.has_value();
             bool spawned_asset = false;
             if (pending_spawn_world_pos_) {
                 SDL_Point world = *pending_spawn_world_pos_;
@@ -868,7 +869,7 @@ void RoomEditor::update_ui(const Input& input) {
                     }
                 }
             }
-            if (!spawned_asset) {
+            if (!spawned_asset && !had_pending_spawn) {
                 pending_spawn_world_pos_.reset();
                 open_asset_info_editor(selected);
             }

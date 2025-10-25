@@ -102,6 +102,27 @@
             ],
             "revision": 1
         },
+        "Bomb": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-25T17:14:19Z",
+            "recommended_percentages": [
+                100,
+                75,
+                50
+            ],
+            "revision": 1
+        },
         "Bone": {
             "histogram": [
                 0,

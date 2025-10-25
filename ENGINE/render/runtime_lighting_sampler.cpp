@@ -120,7 +120,8 @@ RuntimeEmitter make_emitter_from_external(const ExternalLightSample& sample) {
 RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
                                        const LightSource&             light,
                                        const SDL_Rect&                dst,
-                                       const camera&                  cam) {
+                                       const camera&                  cam,
+                                       const SDL_FPoint&              world_offset) {
     RuntimeEmitter emitter;
     if (!source.asset) {
         return emitter;
@@ -161,12 +162,10 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
     emitter.radius    = radius;
     emitter.intensity = clamp01(static_cast<float>(light.intensity) / 255.0f);
     emitter.color     = light.color;
-    const SDL_FPoint offset_dir{static_cast<float>(source.flipped ? -light.offset_x : light.offset_x),
-                                static_cast<float>(light.offset_y)};
-    const float offset_mag = std::sqrt(offset_dir.x * offset_dir.x + offset_dir.y * offset_dir.y);
+    const float offset_mag = std::sqrt(world_offset.x * world_offset.x + world_offset.y * world_offset.y);
     if (offset_mag > 1e-4f) {
-        emitter.default_direction.x = offset_dir.x / offset_mag;
-        emitter.default_direction.y = offset_dir.y / offset_mag;
+        emitter.default_direction.x = world_offset.x / offset_mag;
+        emitter.default_direction.y = world_offset.y / offset_mag;
         emitter.has_default_direction = true;
     }
     const float radius_safe = std::max(radius, 1.0f);
@@ -404,8 +403,13 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
             const float offset_x = static_cast<float>(source.flipped ? -light.offset_x : light.offset_x);
             const float offset_y = static_cast<float>(light.offset_y);
 
-            const float center_x = center_base_x + offset_x * scale_x;
-            const float center_y = center_base_y + offset_y * scale_y;
+            const SDL_FPoint world_offset{
+                offset_x * scale_x,
+                offset_y * scale_y,
+            };
+
+            const float center_x = center_base_x + world_offset.x;
+            const float center_y = center_base_y + world_offset.y;
 
             SDL_Rect dst{};
             dst.w = std::max(1, static_cast<int>(std::lround(scaled_w)));
@@ -417,7 +421,7 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
                 continue;
             }
 
-            RuntimeEmitter emitter = make_emitter_from_light(source, light, dst, cam);
+            RuntimeEmitter emitter = make_emitter_from_light(source, light, dst, cam, world_offset);
             if (emitter.radius <= 0.0f || emitter.intensity <= 0.0f) {
                 continue;
             }
