@@ -658,6 +658,14 @@ void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
     }
 }
 
+void RoomEditor::set_map_assets_panel_callback(std::function<void()> cb) {
+    open_map_assets_panel_callback_ = std::move(cb);
+}
+
+void RoomEditor::set_boundary_assets_panel_callback(std::function<void()> cb) {
+    open_boundary_assets_panel_callback_ = std::move(cb);
+}
+
 void RoomEditor::set_current_room(Room* room) {
     room_editor_trace("[RoomEditor] set_current_room begin");
     if (room) {
@@ -3515,6 +3523,58 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
             spawn_group_panel_->close();
         }
         clear_active_spawn_group_target();
+        return;
+    }
+
+    const bool boundary_asset = primary && primary->info && primary->info->type == asset_types::boundary;
+    SpawnEntryResolution resolved = locate_spawn_entry(spawn_id);
+    auto owner_matches_section = [&](const char* section_key) -> bool {
+        if (resolved.source != SpawnEntryResolution::Source::Map) {
+            return false;
+        }
+        if (!resolved.owner_array || !assets_) {
+            return false;
+        }
+        nlohmann::json& map_info = assets_->map_info_json();
+        if (!map_info.is_object()) {
+            return false;
+        }
+        auto section_it = map_info.find(section_key);
+        if (section_it == map_info.end() || !section_it->is_object()) {
+            return false;
+        }
+        auto groups_it = section_it->find("spawn_groups");
+        if (groups_it == section_it->end() || !groups_it->is_array()) {
+            return false;
+        }
+        return &(*groups_it) == resolved.owner_array;
+    };
+
+    const bool map_assets_entry = owner_matches_section("map_assets_data");
+    const bool boundary_entry = owner_matches_section("map_boundary_data");
+
+    auto close_spawn_group_panel = [&]() {
+        if (spawn_group_panel_) {
+            spawn_group_panel_->close();
+            spawn_group_panel_->set_visible(false);
+        }
+    };
+
+    if (boundary_entry || boundary_asset) {
+        close_spawn_group_panel();
+        clear_active_spawn_group_target();
+        if (open_boundary_assets_panel_callback_) {
+            open_boundary_assets_panel_callback_();
+        }
+        return;
+    }
+
+    if (map_assets_entry) {
+        close_spawn_group_panel();
+        clear_active_spawn_group_target();
+        if (open_map_assets_panel_callback_) {
+            open_map_assets_panel_callback_();
+        }
         return;
     }
 

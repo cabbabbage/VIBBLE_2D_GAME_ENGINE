@@ -149,6 +149,8 @@ private:
     void close_camera_panel();
     void toggle_map_assets_modal();
     void toggle_boundary_assets_modal();
+    void open_map_assets_modal();
+    void open_boundary_assets_modal();
     void configure_header_button_sets();
     void sync_header_button_states();
     Room* find_spawn_room() const;
@@ -177,6 +179,8 @@ private:
     void regenerate_map_spawn_group(const nlohmann::json& entry);
     void regenerate_boundary_spawn_group(const nlohmann::json& entry);
     void regenerate_map_grid_assets();
+    void ensure_map_assets_modal_open();
+    void ensure_boundary_assets_modal_open();
 
     bool persist_map_info_to_disk();
 

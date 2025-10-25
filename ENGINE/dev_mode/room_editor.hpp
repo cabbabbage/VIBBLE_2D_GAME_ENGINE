@@ -50,6 +50,8 @@ public:
     void set_room_config_visible(bool visible);
     void set_shared_footer_bar(DevFooterBar* footer);
     void set_header_visibility_callback(std::function<void(bool)> cb);
+    void set_map_assets_panel_callback(std::function<void()> cb);
+    void set_boundary_assets_panel_callback(std::function<void()> cb);
     void set_manifest_store(devmode::core::ManifestStore* store);
 
     void set_enabled(bool enabled, bool preserve_camera_state = false);
@@ -260,6 +262,8 @@ private:
     bool room_config_was_visible_ = false;
     ActiveModal active_modal_ = ActiveModal::None;
     std::function<void(bool)> header_visibility_callback_{};
+    std::function<void()> open_map_assets_panel_callback_{};
+    std::function<void()> open_boundary_assets_panel_callback_{};
     bool room_config_panel_visible_ = false;
     bool asset_info_panel_visible_ = false;
 

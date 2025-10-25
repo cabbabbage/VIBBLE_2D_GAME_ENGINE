@@ -378,6 +378,8 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
             sliding_headers_hidden_ = visible;
             apply_header_suppression();
         });
+        room_editor_->set_map_assets_panel_callback([this]() { this->open_map_assets_modal(); });
+        room_editor_->set_boundary_assets_panel_callback([this]() { this->open_boundary_assets_modal(); });
     }
     map_editor_ = std::make_unique<MapEditor>(assets_);
     map_mode_ui_ = std::make_unique<MapModeUI>(assets_);
@@ -2382,7 +2384,7 @@ void DevControls::regenerate_boundary_spawn_group(const nlohmann::json& entry) {
     integrate_spawned_assets(spawned);
 }
 
-void DevControls::toggle_map_assets_modal() {
+void DevControls::ensure_map_assets_modal_open() {
     if (!assets_) return;
     if (!map_assets_modal_) {
         map_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
@@ -2396,6 +2398,24 @@ void DevControls::toggle_map_assets_modal() {
     auto& map_json = assets_->map_info_json();
     SDL_Color color{200, 200, 255, 255};
     map_assets_modal_->open(map_json, "map_assets_data", "batch_map_assets", "Map-wide", color, save, regen);
+}
+
+void DevControls::open_map_assets_modal() {
+    if (map_assets_modal_ && map_assets_modal_->visible()) {
+        map_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+    } else {
+        ensure_map_assets_modal_open();
+    }
+    sync_header_button_states();
+}
+
+void DevControls::toggle_map_assets_modal() {
+    if (map_assets_modal_ && map_assets_modal_->visible()) {
+        map_assets_modal_->close();
+    } else {
+        ensure_map_assets_modal_open();
+    }
+    sync_header_button_states();
 }
 
 void DevControls::apply_camera_area_render_flag() {
@@ -2466,7 +2486,7 @@ void DevControls::restore_filter_hidden_assets() const {
     filter_hidden_assets_.clear();
 }
 
-void DevControls::toggle_boundary_assets_modal() {
+void DevControls::ensure_boundary_assets_modal_open() {
     if (!assets_) return;
     if (!boundary_assets_modal_) {
         boundary_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
@@ -2486,6 +2506,24 @@ void DevControls::toggle_boundary_assets_modal() {
                                  color,
                                  save,
                                  regen);
+}
+
+void DevControls::open_boundary_assets_modal() {
+    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
+        boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+    } else {
+        ensure_boundary_assets_modal_open();
+    }
+    sync_header_button_states();
+}
+
+void DevControls::toggle_boundary_assets_modal() {
+    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
+        boundary_assets_modal_->close();
+    } else {
+        ensure_boundary_assets_modal_open();
+    }
+    sync_header_button_states();
 }
 
 void DevControls::open_regenerate_room_popup() {
