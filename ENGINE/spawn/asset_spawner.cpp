@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <numeric>
 #include <sstream>
 #include <cctype>
@@ -352,6 +353,31 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
         EdgeSpawner edge;
         PercentSpawner percent;
 
+        struct AreaOccupancy {
+                const Area* area = nullptr;
+                std::unique_ptr<vibble::grid::Occupancy> occupancy;
+        };
+
+        std::vector<AreaOccupancy> occupancy_cache;
+        occupancy_cache.reserve(area_lookup.size() + 1);
+
+        auto get_or_create_occupancy = [&](const Area* area) -> vibble::grid::Occupancy* {
+                if (!area) {
+                        return nullptr;
+                }
+                auto it = std::find_if(occupancy_cache.begin(),
+                                       occupancy_cache.end(),
+                                       [&](const AreaOccupancy& entry) { return entry.area == area; });
+                if (it == occupancy_cache.end()) {
+                        AreaOccupancy entry;
+                        entry.area = area;
+                        entry.occupancy = std::make_unique<vibble::grid::Occupancy>(*area, resolution, grid_service);
+                        occupancy_cache.push_back(std::move(entry));
+                        return occupancy_cache.back().occupancy.get();
+                }
+                return it->occupancy.get();
+        };
+
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
 
@@ -366,7 +392,11 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
                         continue;
                 }
 
-                vibble::grid::Occupancy occupancy(*target_area, resolution, grid_service);
+                vibble::grid::Occupancy* occupancy = get_or_create_occupancy(target_area);
+                if (!occupancy) {
+                        continue;
+                }
+
                 SpawnContext ctx(rng_,
                                  checker_,
                                  exclusion_zones,
@@ -374,7 +404,7 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
                                  all_,
                                  asset_library_,
                                  grid_service,
-                                 &occupancy);
+                                 occupancy);
                 ctx.set_map_grid_settings(map_grid_settings_);
                 ctx.set_spawn_resolution(resolution);
                 ctx.set_trail_areas({});

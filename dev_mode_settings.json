@@ -39,7 +39,7 @@
                         "max_scale_percent": 132.0,
                         "min_scale_percent": 79.0,
                         "parallax_percent": 44.220001220703125,
-                        "search_radius": 4.0,
+                        "search_radius": 7.0,
                         "shadow_scale": 1.3600000143051147,
                         "vertical_falloff": 1.4500000476837158
                     }

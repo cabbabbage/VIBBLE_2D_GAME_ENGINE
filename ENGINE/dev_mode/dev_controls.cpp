@@ -813,6 +813,15 @@ void DevControls::set_enabled(bool enabled) {
         const char* msg = "[DevControls] preparing enable flow";
         dev_mode_trace(msg);
         std::cout << msg << "\n";
+        camera* camera_ptr = assets_ ? &assets_->getView() : nullptr;
+        SDL_Point preserved_center{0, 0};
+        float preserved_scale = 1.0f;
+        bool should_restore_camera = false;
+        if (camera_ptr) {
+            preserved_center = camera_ptr->get_screen_center();
+            preserved_scale = camera_ptr->get_scale();
+            should_restore_camera = true;
+        }
         const bool camera_was_visible = camera_panel_ && camera_panel_->is_visible();
         close_all_floating_panels();
         set_mode(Mode::RoomEditor);
@@ -829,12 +838,12 @@ void DevControls::set_enabled(bool enabled) {
                 panel->set_visible(false);
             }
         }
-        if (room_editor_ && target && target->room_area) {
-            room_editor_->focus_camera_on_room_center(false);
-        } else if (assets_ && target && target->room_area) {
-            camera& cam = assets_->getView();
-            cam.set_manual_zoom_override(true);
-            cam.set_focus_override(target->room_area->get_center());
+        if (should_restore_camera && camera_ptr) {
+            camera_ptr->set_manual_zoom_override(true);
+            camera_ptr->set_focus_override(preserved_center);
+            camera_ptr->set_screen_center(preserved_center);
+            camera_ptr->set_scale(preserved_scale);
+            camera_ptr->update();
         }
         if (camera_was_visible && camera_panel_) {
             camera_panel_->open();
