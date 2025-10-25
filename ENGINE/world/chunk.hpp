@@ -183,7 +183,7 @@ public:
         : assets_(assets)
         , screen_width_(screen_width)
         , screen_height_(screen_height) {}
-    ~LightMap() = default;
+    ~LightMap();
 
     void rebuild(SDL_Renderer* renderer);
     void update(SDL_Renderer* renderer, std::uint32_t delta_ms);
@@ -227,6 +227,9 @@ public:
     SDL_Rect chunk_bounds(int index) const;
 
 private:
+    SDL_Texture* ensure_runtime_shadow_mask(SDL_Renderer* renderer) const;
+    void         destroy_runtime_shadow_mask() const;
+
     void invalidate_scene_light_cache();
     void rebuild_scene_light_cache(const std::vector<world::Chunk*>& chunks);
 
@@ -238,6 +241,14 @@ private:
     mutable SDL_FPoint   last_map_light_direction_{0.0f, 0.0f};
     mutable bool         last_map_light_direction_valid_ = false;
     mutable std::recursive_mutex mutex_;
+
+    mutable SDL_Texture*   runtime_shadow_mask_          = nullptr;
+    mutable SDL_Renderer*  runtime_shadow_mask_renderer_ = nullptr;
+    mutable int            runtime_shadow_mask_w_        = 0;
+    mutable int            runtime_shadow_mask_h_        = 0;
+    mutable SDL_BlendMode  runtime_shadow_mask_blend_    = SDL_BLENDMODE_BLEND;
+    mutable Uint32         last_render_tick_             = 0;
+    mutable bool           rendered_in_current_tick_     = false;
 
     double scene_light_sum_        = 0.0;
     int    scene_light_count_      = 0;

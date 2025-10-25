@@ -25,6 +25,7 @@
 #include "dev_mode/font_cache.hpp"
 #include "render/camera.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
+#include "lighting/PreloadInputs.hpp"
 #include "render/global_light_source.hpp"
 #include "world/grid.hpp"
 
@@ -1092,6 +1093,92 @@ float LightMap::sample_brightness_bilinear(float world_x,
                              dynamic_weight);
 }
 
+LightMap::~LightMap() {
+    destroy_runtime_shadow_mask();
+}
+
+SDL_Texture* LightMap::ensure_runtime_shadow_mask(SDL_Renderer* renderer) const {
+    if (!renderer) {
+        return nullptr;
+    }
+
+    if (runtime_shadow_mask_renderer_ && runtime_shadow_mask_renderer_ != renderer) {
+        destroy_runtime_shadow_mask();
+    }
+
+    if (!runtime_shadow_mask_) {
+        runtime_shadow_mask_renderer_ = renderer;
+        constexpr int kMaskSize       = 256;
+        runtime_shadow_mask_blend_    = lighting::PreloadInputs::computeRuntimeLightBlendMode();
+
+        SDL_Texture* mask = SDL_CreateTexture(renderer,
+                                              SDL_PIXELFORMAT_RGBA32,
+                                              SDL_TEXTUREACCESS_STREAMING,
+                                              kMaskSize,
+                                              kMaskSize);
+        if (!mask) {
+            vibble::log::warn(std::string{"[LightMap] Failed to allocate runtime shadow mask: "} + SDL_GetError());
+            return nullptr;
+        }
+
+        void* pixels = nullptr;
+        int   pitch  = 0;
+        if (SDL_LockTexture(mask, nullptr, &pixels, &pitch) != 0) {
+            vibble::log::warn(std::string{"[LightMap] Failed to lock runtime shadow mask: "} + SDL_GetError());
+            SDL_DestroyTexture(mask);
+            return nullptr;
+        }
+
+        runtime_shadow_mask_w_ = kMaskSize;
+        runtime_shadow_mask_h_ = kMaskSize;
+
+        std::uint8_t* row      = static_cast<std::uint8_t*>(pixels);
+        const float    center_x = static_cast<float>(kMaskSize - 1) * 0.5f;
+        const float    center_y = static_cast<float>(kMaskSize - 1) * 0.5f;
+        const float    inv_rx   = (center_x <= 0.0f) ? 0.0f : 1.0f / center_x;
+        const float    inv_ry   = (center_y <= 0.0f) ? 0.0f : 1.0f / center_y;
+
+        for (int y = 0; y < kMaskSize; ++y) {
+            std::uint8_t* pixel = row + y * pitch;
+            for (int x = 0; x < kMaskSize; ++x) {
+                const float norm_x = (static_cast<float>(x) - center_x) * inv_rx;
+                const float norm_y = (static_cast<float>(y) - center_y) * inv_ry;
+                const float dist   = std::sqrt(norm_x * norm_x + norm_y * norm_y);
+                const float falloff = smoothstep(0.0f, 1.0f, std::clamp(1.0f - dist, 0.0f, 1.0f));
+                const Uint8 alpha   = clamp_alpha(falloff);
+
+                pixel[x * 4 + 0] = 255;
+                pixel[x * 4 + 1] = 255;
+                pixel[x * 4 + 2] = 255;
+                pixel[x * 4 + 3] = alpha;
+            }
+        }
+
+        SDL_UnlockTexture(mask);
+
+        runtime_shadow_mask_ = mask;
+        SDL_SetTextureBlendMode(runtime_shadow_mask_, runtime_shadow_mask_blend_);
+    } else {
+        runtime_shadow_mask_blend_ = lighting::PreloadInputs::computeRuntimeLightBlendMode();
+        SDL_SetTextureBlendMode(runtime_shadow_mask_, runtime_shadow_mask_blend_);
+    }
+
+    return runtime_shadow_mask_;
+}
+
+void LightMap::destroy_runtime_shadow_mask() const {
+    if (runtime_shadow_mask_) {
+        SDL_DestroyTexture(runtime_shadow_mask_);
+        runtime_shadow_mask_ = nullptr;
+    }
+    runtime_shadow_mask_renderer_ = nullptr;
+    runtime_shadow_mask_w_        = 0;
+    runtime_shadow_mask_h_        = 0;
+    runtime_shadow_mask_blend_    = SDL_BLENDMODE_BLEND;
+    rendered_in_current_tick_     = false;
+    last_render_tick_             = 0;
+}
+
 void LightMap::present_static_previews(SDL_Renderer* renderer) const {
     std::scoped_lock lock(mutex_);
     if (!renderer || !assets_) {
@@ -1146,8 +1233,8 @@ void LightMap::present_static_previews(SDL_Renderer* renderer) const {
 }
 
 void LightMap::render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {
-    (void)renderer;
-    (void)view_rect;
+    static constexpr SDL_Color kDefaultColor{0, 0, 0, 255};
+    render_visible_chunks(renderer, view_rect, 1.0f, kDefaultColor);
 }
 
 void LightMap::render_visible_chunks(SDL_Renderer* renderer,
@@ -1155,10 +1242,130 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
                                      float alpha_multiplier,
                                      const SDL_Color& color_mod) const {
     std::scoped_lock lock(mutex_);
-    (void)renderer;
-    (void)view_rect;
-    (void)alpha_multiplier;
-    (void)color_mod;
+    if (!renderer || !assets_) {
+        return;
+    }
+    if (view_rect.w <= 0 || view_rect.h <= 0) {
+        return;
+    }
+
+    alpha_multiplier = std::clamp(alpha_multiplier, 0.0f, 1.0f);
+    if (alpha_multiplier <= 1e-4f) {
+        return;
+    }
+
+    const Uint32 now_ticks = SDL_GetTicks();
+    if (now_ticks != last_render_tick_) {
+        last_render_tick_         = now_ticks;
+        rendered_in_current_tick_ = false;
+    } else if (rendered_in_current_tick_) {
+        return;
+    }
+
+    SDL_Texture* mask_texture = ensure_runtime_shadow_mask(renderer);
+    if (!mask_texture) {
+        return;
+    }
+
+    const camera& cam        = assets_->getView();
+    SDL_Rect      world_view = world_rect_from_screen(cam, view_rect);
+
+    Uint8 saved_r = 255;
+    Uint8 saved_g = 255;
+    Uint8 saved_b = 255;
+    Uint8 saved_a = 255;
+    SDL_GetTextureColorMod(mask_texture, &saved_r, &saved_g, &saved_b);
+    SDL_GetTextureAlphaMod(mask_texture, &saved_a);
+    SDL_BlendMode saved_blend = SDL_BLENDMODE_BLEND;
+    SDL_GetTextureBlendMode(mask_texture, &saved_blend);
+
+    SDL_SetTextureColorMod(mask_texture, color_mod.r, color_mod.g, color_mod.b);
+    SDL_SetTextureBlendMode(mask_texture, runtime_shadow_mask_blend_);
+
+    for (world::Chunk* chunk : active_chunks()) {
+        if (!chunk) {
+            continue;
+        }
+
+        SDL_Point top_left = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
+        SDL_Point bottom_right =
+            cam.map_to_screen({chunk->world_bounds.x + chunk->world_bounds.w,
+                               chunk->world_bounds.y + chunk->world_bounds.h});
+
+        SDL_Rect screen_rect{};
+        screen_rect.x = std::min(top_left.x, bottom_right.x);
+        screen_rect.y = std::min(top_left.y, bottom_right.y);
+        screen_rect.w = std::abs(bottom_right.x - top_left.x);
+        screen_rect.h = std::abs(bottom_right.y - top_left.y);
+
+        if (screen_rect.w <= 0 || screen_rect.h <= 0) {
+            continue;
+        }
+        if (SDL_HasIntersection(&screen_rect, &view_rect) != SDL_TRUE) {
+            continue;
+        }
+
+        float brightness = std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
+        double visible_sum = 0.0;
+        int    visible_count = 0;
+        for (const auto& cell : chunk->lighting_chunks()) {
+            if (!intersects(cell.world_bounds, world_view)) {
+                continue;
+            }
+            visible_sum += static_cast<double>(std::clamp(cell.lighting.current_strength, 0.0f, 1.0f));
+            ++visible_count;
+        }
+        if (visible_count > 0) {
+            brightness = static_cast<float>(visible_sum / static_cast<double>(visible_count));
+        }
+
+        float alpha = (1.0f - brightness) * alpha_multiplier;
+        alpha *= std::clamp(chunk->shadow.opacity, 0.0f, 1.0f);
+        alpha = std::clamp(alpha, 0.0f, 1.0f);
+        if (alpha <= 1e-4f) {
+            continue;
+        }
+
+        SDL_SetTextureAlphaMod(mask_texture, clamp_alpha(alpha));
+
+        const auto& shadow = chunk->shadow;
+        const float scale = (shadow.scale <= 1e-4f) ? 1.0f : shadow.scale;
+        const float base_center_x = static_cast<float>(screen_rect.x) +
+                                    static_cast<float>(screen_rect.w) * 0.5f;
+        const float base_center_y = static_cast<float>(screen_rect.y) +
+                                    static_cast<float>(screen_rect.h) * 0.5f;
+
+        const float dest_w_f = std::max(static_cast<float>(screen_rect.w) * scale, 1.0f);
+        const float dest_h_f = std::max(static_cast<float>(screen_rect.h) * scale, 1.0f);
+
+        float offset_x = shadow.offset_x_px;
+        float offset_y = shadow.offset_y_px;
+        if (std::abs(offset_x) <= 1e-4f && std::abs(shadow.offset_x_percent) > 1e-4f) {
+            offset_x = static_cast<float>(screen_rect.w) * (shadow.offset_x_percent / 100.0f);
+        }
+        if (std::abs(offset_y) <= 1e-4f && std::abs(shadow.offset_y_percent) > 1e-4f) {
+            offset_y = static_cast<float>(screen_rect.h) * (shadow.offset_y_percent / 100.0f);
+        }
+
+        const float dest_x_f = base_center_x - dest_w_f * 0.5f + offset_x;
+        const float dest_y_f = base_center_y - dest_h_f * 0.5f + offset_y;
+
+        SDL_Rect dest{};
+        dest.x = static_cast<int>(std::lround(dest_x_f));
+        dest.y = static_cast<int>(std::lround(dest_y_f));
+        dest.w = std::max(1, static_cast<int>(std::lround(dest_w_f)));
+        dest.h = std::max(1, static_cast<int>(std::lround(dest_h_f)));
+
+        if (SDL_RenderCopy(renderer, mask_texture, nullptr, &dest) != 0) {
+            vibble::log::warn(std::string{"[LightMap] Failed to render shadow mask: "} + SDL_GetError());
+        }
+    }
+
+    SDL_SetTextureColorMod(mask_texture, saved_r, saved_g, saved_b);
+    SDL_SetTextureAlphaMod(mask_texture, saved_a);
+    SDL_SetTextureBlendMode(mask_texture, saved_blend);
+
+    rendered_in_current_tick_ = true;
 }
 
 void LightMap::render_chunk_preview(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {
