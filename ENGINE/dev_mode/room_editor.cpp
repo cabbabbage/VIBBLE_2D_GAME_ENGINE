@@ -15,6 +15,7 @@
 #include "dev_mode/asset_library_ui.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/DockableCollapsible.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
@@ -62,6 +63,15 @@ using devmode::spawn::find_spawn_groups_array;
 using devmode::spawn::generate_spawn_id;
 
 namespace {
+
+constexpr int kLabelPadding = 6;
+constexpr int kLabelVerticalOffset = 32;
+const SDL_Color kLabelBg{0, 0, 0, 180};
+const SDL_Color kLabelBorder{255, 255, 255, 80};
+const SDL_Color kLabelText{240, 240, 240, 255};
+const SDL_Color kTrailLabelBg{10, 70, 30, 200};
+const SDL_Color kTrailLabelBorder{60, 190, 110, 200};
+const SDL_Color kTrailLabelText{210, 255, 220, 255};
 
 std::string trim_copy_room_editor(const std::string& input) {
     auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
@@ -206,7 +216,9 @@ RoomEditor::RoomEditor(Assets* owner, int screen_w, int screen_h)
     rebuild_room_spawn_id_cache();
 }
 
-RoomEditor::~RoomEditor() = default;
+RoomEditor::~RoomEditor() {
+    release_label_font();
+}
 
 void RoomEditor::set_room_assets_saved_callback(RoomAssetsSavedCallback cb) {
     room_assets_saved_callback_ = std::move(cb);
@@ -763,7 +775,413 @@ bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
     return false;
 }
 
+void RoomEditor::render_room_labels(SDL_Renderer* renderer) {
+    if (!enabled_) return;
+    if (!renderer || !assets_) return;
+
+    ensure_label_font();
+    if (!label_font_) return;
+
+    const std::vector<Room*>& rooms = assets_->rooms();
+    if (rooms.empty()) return;
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    label_rects_.clear();
+
+    struct LabelInfo {
+        Room* room = nullptr;
+        SDL_FPoint desired_center{0.0f, 0.0f};
+        float priority = 0.0f;
+    };
+
+    std::vector<LabelInfo> render_queue;
+    render_queue.reserve(rooms.size());
+
+    SDL_FPoint screen_center{static_cast<float>(screen_w_) * 0.5f,
+                             static_cast<float>(screen_h_) * 0.5f};
+
+    camera& view = assets_->getView();
+
+    for (Room* room : rooms) {
+        if (!room || !room->room_area) continue;
+
+        SDL_Point center = room->room_area->get_center();
+        SDL_Point screen_pt = view.map_to_screen(center);
+        SDL_FPoint desired_center{static_cast<float>(screen_pt.x),
+                                  static_cast<float>(screen_pt.y - kLabelVerticalOffset)};
+
+        float dx = desired_center.x - screen_center.x;
+        float dy = desired_center.y - screen_center.y;
+        float dist2 = dx * dx + dy * dy;
+
+        render_queue.push_back(LabelInfo{room, desired_center, dist2});
+    }
+
+    std::sort(render_queue.begin(), render_queue.end(), [](const LabelInfo& a, const LabelInfo& b) {
+        if (a.priority == b.priority) {
+            return a.room < b.room;
+        }
+        return a.priority < b.priority;
+    });
+
+    for (const auto& info : render_queue) {
+        if (!info.room) continue;
+        render_room_label(renderer, info.room, info.desired_center);
+    }
+}
+
+void RoomEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoint desired_center) {
+    if (!room || !room->room_area || !assets_) return;
+    if (!label_font_) return;
+
+    const std::string& name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
+    bool is_trail = false;
+    if (!room->type.empty()) {
+        std::string lowered = room->type;
+        std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        is_trail = (lowered == "trail");
+    }
+
+    const SDL_Color& text_color = is_trail ? kTrailLabelText : kLabelText;
+    SDL_Surface* text_surface = TTF_RenderUTF8_Blended(label_font_, name.c_str(), text_color);
+    if (!text_surface) return;
+
+    SDL_Rect bg_rect = label_background_rect(text_surface, desired_center);
+    bg_rect = resolve_edge_overlap(bg_rect, desired_center);
+
+    label_rects_.push_back(bg_rect);
+
+    const SDL_Color& bg_color = is_trail ? kTrailLabelBg : kLabelBg;
+    const SDL_Color& border_color = is_trail ? kTrailLabelBorder : kLabelBorder;
+
+    const int radius = std::min(DMStyles::CornerRadius(), std::min(bg_rect.w, bg_rect.h) / 2);
+    const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(bg_rect.w, bg_rect.h) / 2));
+    dm_draw::DrawBeveledRect(
+        renderer,
+        bg_rect,
+        radius,
+        bevel,
+        bg_color,
+        bg_color,
+        bg_color,
+        false,
+        0.0f,
+        0.0f);
+    dm_draw::DrawRoundedOutline(
+        renderer,
+        bg_rect,
+        radius,
+        1,
+        border_color);
+
+    SDL_Texture* text_tex = SDL_CreateTextureFromSurface(renderer, text_surface);
+    if (text_tex) {
+        SDL_Rect dst{bg_rect.x + kLabelPadding, bg_rect.y + kLabelPadding, text_surface->w, text_surface->h};
+        SDL_RenderCopy(renderer, text_tex, nullptr, &dst);
+        SDL_DestroyTexture(text_tex);
+    }
+    SDL_FreeSurface(text_surface);
+}
+
+SDL_Rect RoomEditor::label_background_rect(const SDL_Surface* surface, SDL_FPoint desired_center) const {
+    int text_w = surface ? surface->w : 0;
+    int text_h = surface ? surface->h : 0;
+    int rect_w = text_w + kLabelPadding * 2;
+    int rect_h = text_h + kLabelPadding * 2;
+
+    SDL_Rect rect{};
+    rect.w = rect_w;
+    rect.h = rect_h;
+
+    if (screen_w_ <= 0 || screen_h_ <= 0) {
+        rect.x = static_cast<int>(std::lround(desired_center.x - static_cast<float>(rect_w) * 0.5f));
+        rect.y = static_cast<int>(std::lround(desired_center.y - static_cast<float>(rect_h) * 0.5f));
+        return rect;
+    }
+
+    const float half_w = static_cast<float>(rect_w) * 0.5f;
+    const float half_h = static_cast<float>(rect_h) * 0.5f;
+    const float min_x = half_w;
+    const float max_x = static_cast<float>(screen_w_) - half_w;
+    const float min_y = half_h;
+    const float max_y = static_cast<float>(screen_h_) - half_h;
+
+    auto clamp_center = [&](const SDL_FPoint& point) {
+        SDL_FPoint clamped = point;
+        clamped.x = std::clamp(clamped.x, min_x, max_x);
+        clamped.y = std::clamp(clamped.y, min_y, max_y);
+        return clamped;
+    };
+
+    SDL_FPoint center = clamp_center(desired_center);
+
+    const bool inside = desired_center.x >= min_x && desired_center.x <= max_x &&
+                        desired_center.y >= min_y && desired_center.y <= max_y;
+
+    if (!inside) {
+        SDL_FPoint screen_center{static_cast<float>(screen_w_) * 0.5f,
+                                 static_cast<float>(screen_h_) * 0.5f};
+        const float dx = desired_center.x - screen_center.x;
+        const float dy = desired_center.y - screen_center.y;
+        const float epsilon = 0.0001f;
+
+        if (std::fabs(dx) > epsilon || std::fabs(dy) > epsilon) {
+            float t_min = 1.0f;
+
+            auto update_t = [&](float boundary, float origin, float delta) {
+                if (std::fabs(delta) < epsilon) return;
+                float t = (boundary - origin) / delta;
+                if (t >= 0.0f) {
+                    t_min = std::min(t_min, t);
+                }
+            };
+
+            if (dx > 0.0f) update_t(max_x, screen_center.x, dx);
+            else if (dx < 0.0f) update_t(min_x, screen_center.x, dx);
+
+            if (dy > 0.0f) update_t(max_y, screen_center.y, dy);
+            else if (dy < 0.0f) update_t(min_y, screen_center.y, dy);
+
+            center.x = screen_center.x + dx * t_min;
+            center.y = screen_center.y + dy * t_min;
+            center = clamp_center(center);
+        }
+    }
+
+    rect.x = static_cast<int>(std::lround(center.x - half_w));
+    rect.y = static_cast<int>(std::lround(center.y - half_h));
+    return rect;
+}
+
+SDL_Rect RoomEditor::resolve_edge_overlap(SDL_Rect rect, SDL_FPoint desired_center) {
+    if (screen_w_ <= 0 || screen_h_ <= 0) {
+        return rect;
+    }
+
+    const int tolerance = 1;
+    const bool touches_left = rect.x <= tolerance;
+    const bool touches_right = rect.x + rect.w >= screen_w_ - tolerance;
+    const bool touches_top = rect.y <= tolerance;
+    const bool touches_bottom = rect.y + rect.h >= screen_h_ - tolerance;
+
+    if (touches_top || touches_bottom) {
+        rect = resolve_horizontal_edge_overlap(rect, desired_center.x, touches_top);
+    }
+
+    if (touches_left || touches_right) {
+        rect = resolve_vertical_edge_overlap(rect, desired_center.y, touches_left);
+    }
+
+    return rect;
+}
+
+SDL_Rect RoomEditor::resolve_horizontal_edge_overlap(SDL_Rect rect, float desired_center_x, bool top_edge) {
+    if (screen_w_ <= 0) return rect;
+
+    const int min_x = 0;
+    const int max_x = std::max(0, screen_w_ - rect.w);
+    if (max_x <= min_x) {
+        rect.x = min_x;
+        return rect;
+    }
+
+    std::vector<SDL_Rect> same_edge_rects;
+    same_edge_rects.reserve(label_rects_.size());
+    const int tolerance = 1;
+
+    for (const SDL_Rect& other : label_rects_) {
+        bool other_on_edge = top_edge ? other.y <= tolerance
+                                      : other.y + other.h >= screen_h_ - tolerance;
+        if (other_on_edge) {
+            same_edge_rects.push_back(other);
+        }
+    }
+
+    if (same_edge_rects.empty()) {
+        rect.x = std::clamp(static_cast<int>(std::lround(desired_center_x - rect.w * 0.5f)), min_x, max_x);
+        return rect;
+    }
+
+    std::vector<int> to_process;
+    to_process.reserve(same_edge_rects.size() * 2 + 3);
+
+    int target_x = std::clamp(static_cast<int>(std::lround(desired_center_x - rect.w * 0.5f)), min_x, max_x);
+    to_process.push_back(target_x);
+    to_process.push_back(min_x);
+    to_process.push_back(max_x);
+
+    std::vector<int> visited;
+    visited.reserve(to_process.size());
+
+    float best_penalty = std::numeric_limits<float>::max();
+    int best_x = target_x;
+    bool found_position = false;
+
+    while (!to_process.empty()) {
+        int candidate_x = to_process.back();
+        to_process.pop_back();
+
+        if (std::find(visited.begin(), visited.end(), candidate_x) != visited.end()) {
+            continue;
+        }
+        visited.push_back(candidate_x);
+
+        SDL_Rect candidate = rect;
+        candidate.x = candidate_x;
+
+        std::vector<SDL_Rect> overlapping;
+        for (const SDL_Rect& other : same_edge_rects) {
+            if (rects_overlap(candidate, other)) {
+                overlapping.push_back(other);
+            }
+        }
+
+        if (overlapping.empty()) {
+            float center_x = static_cast<float>(candidate.x) + static_cast<float>(candidate.w) * 0.5f;
+            float penalty = std::fabs(center_x - desired_center_x);
+            if (penalty < best_penalty - 0.01f || (!found_position && penalty <= best_penalty + 0.01f)) {
+                best_penalty = penalty;
+                best_x = candidate_x;
+                found_position = true;
+                if (penalty <= 0.01f) {
+                    break;
+                }
+            }
+            continue;
+        }
+
+        for (const SDL_Rect& other : overlapping) {
+            int left = std::clamp(other.x - rect.w, min_x, max_x);
+            int right = std::clamp(other.x + other.w, min_x, max_x);
+
+            if (std::find(visited.begin(), visited.end(), left) == visited.end()) {
+                to_process.push_back(left);
+            }
+            if (std::find(visited.begin(), visited.end(), right) == visited.end()) {
+                to_process.push_back(right);
+            }
+        }
+    }
+
+    rect.x = found_position ? best_x : target_x;
+    return rect;
+}
+
+SDL_Rect RoomEditor::resolve_vertical_edge_overlap(SDL_Rect rect, float desired_center_y, bool left_edge) {
+    if (screen_h_ <= 0) return rect;
+
+    const int min_y = 0;
+    const int max_y = std::max(0, screen_h_ - rect.h);
+    if (max_y <= min_y) {
+        rect.y = min_y;
+        return rect;
+    }
+
+    std::vector<SDL_Rect> same_edge_rects;
+    same_edge_rects.reserve(label_rects_.size());
+    const int tolerance = 1;
+
+    for (const SDL_Rect& other : label_rects_) {
+        bool other_on_edge = left_edge ? other.x <= tolerance
+                                       : other.x + other.w >= screen_w_ - tolerance;
+        if (other_on_edge) {
+            same_edge_rects.push_back(other);
+        }
+    }
+
+    if (same_edge_rects.empty()) {
+        rect.y = std::clamp(static_cast<int>(std::lround(desired_center_y - rect.h * 0.5f)), min_y, max_y);
+        return rect;
+    }
+
+    std::vector<int> to_process;
+    to_process.reserve(same_edge_rects.size() * 2 + 3);
+
+    int target_y = std::clamp(static_cast<int>(std::lround(desired_center_y - rect.h * 0.5f)), min_y, max_y);
+    to_process.push_back(target_y);
+    to_process.push_back(min_y);
+    to_process.push_back(max_y);
+
+    std::vector<int> visited;
+    visited.reserve(to_process.size());
+
+    float best_penalty = std::numeric_limits<float>::max();
+    int best_y = target_y;
+    bool found_position = false;
+
+    while (!to_process.empty()) {
+        int candidate_y = to_process.back();
+        to_process.pop_back();
+
+        if (std::find(visited.begin(), visited.end(), candidate_y) != visited.end()) {
+            continue;
+        }
+        visited.push_back(candidate_y);
+
+        SDL_Rect candidate = rect;
+        candidate.y = candidate_y;
+
+        std::vector<SDL_Rect> overlapping;
+        for (const SDL_Rect& other : same_edge_rects) {
+            if (rects_overlap(candidate, other)) {
+                overlapping.push_back(other);
+            }
+        }
+
+        if (overlapping.empty()) {
+            float center_y = static_cast<float>(candidate.y) + static_cast<float>(candidate.h) * 0.5f;
+            float penalty = std::fabs(center_y - desired_center_y);
+            if (penalty < best_penalty - 0.01f || (!found_position && penalty <= best_penalty + 0.01f)) {
+                best_penalty = penalty;
+                best_y = candidate_y;
+                found_position = true;
+                if (penalty <= 0.01f) {
+                    break;
+                }
+            }
+            continue;
+        }
+
+        for (const SDL_Rect& other : overlapping) {
+            int up = std::clamp(other.y - rect.h, min_y, max_y);
+            int down = std::clamp(other.y + other.h, min_y, max_y);
+
+            if (std::find(visited.begin(), visited.end(), up) == visited.end()) {
+                to_process.push_back(up);
+            }
+            if (std::find(visited.begin(), visited.end(), down) == visited.end()) {
+                to_process.push_back(down);
+            }
+        }
+    }
+
+    rect.y = found_position ? best_y : target_y;
+    return rect;
+}
+
+bool RoomEditor::rects_overlap(const SDL_Rect& a, const SDL_Rect& b) {
+    return !(a.x + a.w <= b.x || b.x + b.w <= a.x ||
+             a.y + a.h <= b.y || b.y + b.h <= a.y);
+}
+
+void RoomEditor::ensure_label_font() {
+    if (label_font_) return;
+    label_font_ = TTF_OpenFont(dm::FONT_PATH, 18);
+}
+
+void RoomEditor::release_label_font() {
+    if (label_font_) {
+        TTF_CloseFont(label_font_);
+        label_font_ = nullptr;
+    }
+}
+
 void RoomEditor::render_overlays(SDL_Renderer* renderer) {
+    if (renderer) {
+        render_room_labels(renderer);
+    }
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->render(renderer, screen_w_, screen_h_);
     }

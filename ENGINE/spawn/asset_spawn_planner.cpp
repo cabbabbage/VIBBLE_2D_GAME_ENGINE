@@ -101,12 +101,17 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
 
         std::string link_name = get_opt_str(asset, "link");
 
+        const bool force_single_quantity = (position == "Exact");
+
         int min_num = asset.value("min_number", 1);
         int max_num = asset.value("max_number", min_num);
         if (min_num < 0) min_num = 0;
         if (max_num < 0) max_num = 0;
         if (max_num < min_num) std::swap(max_num, min_num);
         int quantity = std::uniform_int_distribution<int>(min_num, max_num)(rng);
+        if (force_single_quantity) {
+            quantity = 1;
+        }
 
         const bool need_orig = (position == "Exact" || position == "Perimeter");
         if (need_orig) {

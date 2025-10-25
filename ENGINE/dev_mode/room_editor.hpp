@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <string>
 #include <SDL.h>
+#include <SDL_ttf.h>
 #include <functional>
 #include <memory>
 #include <nlohmann/json_fwd.hpp>
@@ -198,6 +199,15 @@ private:
     double edge_length_along_direction(const Area& area, SDL_Point center, SDL_FPoint direction) const;
     void respawn_spawn_group(const nlohmann::json& entry);
     std::unique_ptr<vibble::grid::Occupancy> build_room_grid(const std::string& ignore_spawn_id) const;
+    void render_room_labels(SDL_Renderer* renderer);
+    void render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoint desired_center);
+    SDL_Rect label_background_rect(const SDL_Surface* surface, SDL_FPoint desired_center) const;
+    SDL_Rect resolve_edge_overlap(SDL_Rect rect, SDL_FPoint desired_center);
+    SDL_Rect resolve_horizontal_edge_overlap(SDL_Rect rect, float desired_center_x, bool top_edge);
+    SDL_Rect resolve_vertical_edge_overlap(SDL_Rect rect, float desired_center_y, bool left_edge);
+    static bool rects_overlap(const SDL_Rect& a, const SDL_Rect& b);
+    void ensure_label_font();
+    void release_label_font();
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
     void regenerate_current_room();
     void configure_shared_panel();
@@ -287,6 +297,9 @@ private:
     std::optional<std::string> active_spawn_group_id_{};
     bool suppress_spawn_group_close_clear_ = false;
     std::unique_ptr<SpawnGroupConfig> spawn_group_panel_{};
+
+    TTF_Font* label_font_ = nullptr;
+    std::vector<SDL_Rect> label_rects_;
 
     double zoom_scale_factor_ = 1.1;
     PanAndZoom pan_zoom_;

@@ -380,3 +380,38 @@ TEST_CASE("AssetSpawnPlanner persists spawn ids through manifest store") {
     fs::remove_all(manifest_path.parent_path());
 }
 
+TEST_CASE("AssetSpawnPlanner treats exact spawn method quantity as one") {
+    auto assert_single_quantity = [](const std::string& method) {
+        nlohmann::json group = {
+            {"display_name", "ExactSpawn"},
+            {"position", method},
+            {"min_number", 5},
+            {"max_number", 8},
+            {"candidates", nlohmann::json::array({
+                nlohmann::json{{"name", "ExampleAsset"}, {"chance", 100}}
+            })}
+        };
+
+        nlohmann::json source;
+        source["spawn_groups"] = nlohmann::json::array({group});
+
+        std::vector<nlohmann::json> sources{source};
+        std::vector<AssetSpawnPlanner::SourceContext> contexts;
+        Area area("ExactTest", SDL_Point{0, 0}, 10, 10, "Square", 1, 40, 40);
+        AssetLibrary library(false);
+        AssetSpawnPlanner planner(sources, area, library, contexts);
+
+        const auto& queue = planner.get_spawn_queue();
+        REQUIRE_EQ(queue.size(), 1);
+        CHECK_EQ(queue.front().quantity, 1);
+    };
+
+    SECTION("Exact method") {
+        assert_single_quantity("Exact");
+    }
+
+    SECTION("Exact position alias") {
+        assert_single_quantity("Exact Position");
+    }
+}
+
