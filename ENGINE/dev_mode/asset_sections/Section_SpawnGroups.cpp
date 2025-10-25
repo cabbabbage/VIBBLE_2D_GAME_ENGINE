@@ -143,9 +143,10 @@ void Section_SpawnGroups::update(const Input& input, int screen_w, int screen_h)
 }
 
 bool Section_SpawnGroups::handle_event(const SDL_Event& e) {
-    bool used = DockableCollapsible::handle_event(e);
-    if (list_ && list_->handle_event(e)) return true;
-    return used;
+    if (list_ && list_->handle_event(e)) {
+        return true;
+    }
+    return DockableCollapsible::handle_event(e);
 }
 
 void Section_SpawnGroups::render(SDL_Renderer* r) const {

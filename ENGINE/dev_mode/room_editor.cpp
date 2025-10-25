@@ -3952,6 +3952,11 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     std::string spawn_id = entry.value("spawn_id", std::string{});
     if (spawn_id.empty()) return;
 
+    if (Asset* owner = find_asset_spawn_owner(spawn_id)) {
+        respawn_asset_child_spawn_group(owner, entry);
+        return;
+    }
+
     std::vector<Asset*> to_remove;
     for (Asset* asset : assets_->all) {
         if (!asset || asset->dead) continue;
@@ -4038,6 +4043,189 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     }
     integrate_spawned_assets(spawned);
     checker.reset_session();
+}
+
+bool RoomEditor::asset_info_contains_spawn_group(const AssetInfo* info, const std::string& spawn_id) {
+    if (!info || spawn_id.empty()) {
+        return false;
+    }
+    nlohmann::json groups = info->spawn_groups_payload();
+    if (!groups.is_array()) {
+        return false;
+    }
+    for (const auto& group : groups) {
+        if (!group.is_object()) {
+            continue;
+        }
+        if (group.value("spawn_id", std::string{}) == spawn_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+Asset* RoomEditor::find_asset_spawn_owner(const std::string& spawn_id) const {
+    if (spawn_id.empty()) {
+        return nullptr;
+    }
+    auto match_candidate = [&](Asset* candidate) -> Asset* {
+        if (!candidate || !candidate->info) {
+            return nullptr;
+        }
+        if (!asset_info_contains_spawn_group(candidate->info.get(), spawn_id)) {
+            return nullptr;
+        }
+        return candidate;
+    };
+
+    if (info_ui_) {
+        if (Asset* target = info_ui_->get_target_asset()) {
+            if (Asset* matched = match_candidate(target)) {
+                return matched;
+            }
+        }
+    }
+
+    for (Asset* asset : selected_assets_) {
+        if (Asset* matched = match_candidate(asset)) {
+            return matched;
+        }
+    }
+
+    if (Asset* matched = match_candidate(hovered_asset_)) {
+        return matched;
+    }
+
+    if (!assets_) {
+        return nullptr;
+    }
+    for (Asset* asset : assets_->all) {
+        if (Asset* matched = match_candidate(asset)) {
+            return matched;
+        }
+    }
+    return nullptr;
+}
+
+void RoomEditor::respawn_asset_child_spawn_group(Asset* owner, const nlohmann::json& entry) {
+    if (!assets_ || !owner || !owner->info || !entry.is_object()) {
+        return;
+    }
+
+    const std::string spawn_id = entry.value("spawn_id", std::string{});
+    if (spawn_id.empty()) {
+        return;
+    }
+
+    const bool link_to_area = entry.value("link_to_area", false);
+    const std::string area_name = entry.value("linked_area", std::string{});
+    if (!link_to_area || area_name.empty()) {
+        return;
+    }
+
+    Area child_area = owner->get_area(area_name);
+    if (child_area.get_points().empty()) {
+        return;
+    }
+
+    std::unordered_map<std::string, Area> resolved_child_areas;
+    resolved_child_areas.reserve(owner->info->areas.size());
+    for (const auto& named : owner->info->areas) {
+        if (named.name.empty() || !named.area) {
+            continue;
+        }
+        try {
+            Area world_area = owner->get_area(named.name);
+            if (world_area.get_points().empty()) {
+                continue;
+            }
+            resolved_child_areas.insert_or_assign(named.name, std::move(world_area));
+        } catch (...) {
+            continue;
+        }
+    }
+
+    std::vector<Asset*> to_remove;
+    std::unordered_set<Asset*> unique;
+    auto queue_for_removal = [&](Asset* candidate) {
+        if (!candidate || candidate == owner) {
+            return;
+        }
+        if (unique.insert(candidate).second) {
+            to_remove.push_back(candidate);
+        }
+    };
+
+    for (Asset* child : owner->children) {
+        if (child && child->spawn_id == spawn_id) {
+            queue_for_removal(child);
+        }
+    }
+
+    for (Asset* asset : assets_->all) {
+        if (!asset || asset->dead) {
+            continue;
+        }
+        if (asset->spawn_id == spawn_id) {
+            queue_for_removal(asset);
+        }
+    }
+
+    for (Asset* asset : to_remove) {
+        if (asset->parent) {
+            auto& siblings = asset->parent->children;
+            siblings.erase(std::remove(siblings.begin(), siblings.end(), asset), siblings.end());
+            asset->parent = nullptr;
+        }
+        purge_asset(asset);
+        auto& all = assets_->all;
+        all.erase(std::remove(all.begin(), all.end(), asset), all.end());
+        asset->Delete();
+    }
+
+    nlohmann::json wrapper = nlohmann::json::object();
+    wrapper["spawn_groups"] = nlohmann::json::array();
+    wrapper["spawn_groups"].push_back(entry);
+    std::vector<nlohmann::json> sources;
+    sources.push_back(wrapper);
+
+    AssetSpawnPlanner planner(sources, child_area, assets_->library());
+    AssetSpawner spawner(&assets_->library(), {});
+    spawner.set_map_grid_settings(assets_->map_grid_settings());
+    spawner.spawn_children(child_area, resolved_child_areas, &planner);
+
+    auto spawned = spawner.extract_all_assets();
+    if (spawned.empty()) {
+        return;
+    }
+
+    const bool place_on_top = entry.value("placed_on_top_parent", false);
+    int z_offset = entry.value("z_offset", 0);
+    if (place_on_top && z_offset <= 0) {
+        z_offset = 1;
+    }
+
+    std::vector<Asset*> new_children;
+    new_children.reserve(spawned.size());
+    for (auto& uptr : spawned) {
+        if (!uptr) {
+            continue;
+        }
+        Asset* raw = uptr.get();
+        raw->parent = owner;
+        raw->set_z_offset(z_offset);
+        raw->set_hidden(false);
+        raw->set_owning_room_name(owner->owning_room_name());
+        new_children.push_back(raw);
+    }
+
+    integrate_spawned_assets(spawned);
+    for (Asset* child : new_children) {
+        if (!child) {
+            continue;
+        }
+        owner->children.push_back(child);
+    }
 }
 
 void RoomEditor::regenerate_current_room() {

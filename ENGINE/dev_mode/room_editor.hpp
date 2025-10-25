@@ -238,6 +238,9 @@ private:
     static std::string strip_copy_suffix(const std::string& name);
     std::string next_clipboard_display_name();
     void show_notice(const std::string& message) const;
+    class Asset* find_asset_spawn_owner(const std::string& spawn_id) const;
+    void respawn_asset_child_spawn_group(class Asset* owner, const nlohmann::json& entry);
+    static bool asset_info_contains_spawn_group(const class AssetInfo* info, const std::string& spawn_id);
 
 private:
     Assets* assets_ = nullptr;
