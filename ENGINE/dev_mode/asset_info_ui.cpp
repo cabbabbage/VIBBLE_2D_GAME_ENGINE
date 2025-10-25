@@ -554,6 +554,8 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     if (asset_selector_ && asset_selector_->visible())
         asset_selector_->render(r);
 
+    DMDropdown::render_active_options(r);
+
     last_renderer_ = r;
 }
 

@@ -138,25 +138,6 @@
             ],
             "revision": 1
         },
-        "Bone_1": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0
-            ],
-            "last_updated": "2025-10-17T07:04:45Z",
-            "recommended_percentages": [
-                50
-            ],
-            "revision": 1
-        },
         "Bone_Pile": {
             "histogram": [
                 0,

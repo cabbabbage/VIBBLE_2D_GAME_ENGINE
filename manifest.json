@@ -3280,11 +3280,22 @@
       "impassable_area": null,
       "min_distance_all": 0,
       "min_same_type_distance": 500,
+      "neighbor_search_distance": 500,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
       "size_settings": {
-        "scale_percentage": 20,
+        "scale_percentage": 24.0,
         "variability_percentage": 0
       },
       "tags": [
@@ -14038,16 +14049,16 @@
             "min": 255
           },
           "b": {
-            "max": 255,
-            "min": 0
+            "max": 74,
+            "min": 74
           },
           "g": {
-            "max": 235,
-            "min": 65
+            "max": 101,
+            "min": 101
           },
           "r": {
-            "max": 243,
-            "min": 32
+            "max": 69,
+            "min": 69
           }
         },
         "mult": 0.32,
@@ -14058,13 +14069,13 @@
         "reactive_shadows": {
           "virtual_light_map": {
             "horizontal_falloff": 1.6200000047683716,
+            "map_light_dir_offset_strength": 0.5,
             "max_offset_x": 100.0,
             "max_offset_y": 100.0,
-            "shadow_scale": 1.0,
-            "min_scale_percent": 80,
             "max_scale_percent": 120,
-            "map_light_dir_offset_strength": 0.5,
+            "min_scale_percent": 80,
             "parallax_percent": 0.0,
+            "shadow_scale": 1.0,
             "vertical_falloff": 3.5
           }
         },
@@ -14095,14 +14106,14 @@
         ],
         "virtual_light_map": {
           "horizontal_falloff": 2.4700000286102295,
-          "max_offset_x": 0.0,
-          "max_offset_y": 0.0,
+          "map_light_dir_offset_strength": 0.5,
+          "max_offset_x": 102.5999984741211,
+          "max_offset_y": 15.899999618530273,
+          "max_scale_percent": 120,
+          "min_scale_percent": 80,
+          "parallax_percent": 0.0,
           "search_radius": 2,
           "shadow_scale": 1.0,
-          "min_scale_percent": 80,
-          "max_scale_percent": 120,
-          "map_light_dir_offset_strength": 0.5,
-          "parallax_percent": 0.0,
           "vertical_falloff": 3.5
         }
       },
@@ -14173,153 +14184,22 @@
                 },
                 {
                   "chance": 100,
-                  "name": "Barrel"
+                  "name": "Bone_1"
                 }
               ],
-              "display_name": "Barrel",
-              "dx": 307,
-              "dy": 25,
+              "display_name": "Bone_1",
+              "dx": 18,
+              "dy": -342,
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
-              "origional_height": 1748,
-              "origional_width": 1672,
+              "origional_height": 1888,
+              "origional_width": 1668,
               "position": "Exact",
-              "priority": 1,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-08ed627c4b15"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Barrel"
-                }
-              ],
-              "display_name": "Barrel (Copy)",
-              "dx": -54,
-              "dy": -321,
-              "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 1748,
-              "origional_width": 1672,
-              "position": "Exact",
-              "priority": 2,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-ace9fcf5fc7f"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Barrel"
-                }
-              ],
-              "display_name": "Barrel (Copy 2)",
-              "dx": -54,
-              "dy": -321,
-              "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 1748,
-              "origional_width": 1672,
-              "position": "Exact",
-              "priority": 3,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-8afa00b740f3"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Barrel"
-                }
-              ],
-              "display_name": "Barrel (Copy 3)",
-              "dx": -54,
-              "dy": -321,
-              "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 1748,
-              "origional_width": 1672,
-              "position": "Exact",
-              "priority": 4,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-464496da68d4"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Barrel"
-                }
-              ],
-              "display_name": "Barrel (Copy 4)",
-              "dx": 83,
-              "dy": -295,
-              "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 1748,
-              "origional_width": 1672,
-              "position": "Exact",
-              "priority": 5,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-e8c9ee67361d"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Barrel"
-                }
-              ],
-              "display_name": "Barrel (Copy 5)",
-              "dx": -45,
-              "dy": -359,
-              "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 1748,
-              "origional_width": 1672,
-              "position": "Exact",
-              "priority": 6,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-a59e59e5b1f1"
+              "spawn_id": "spn-e356fc635dd8"
             }
           ]
         }

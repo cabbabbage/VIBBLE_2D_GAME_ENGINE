@@ -405,14 +405,22 @@ public:
     void set_rect(const SDL_Rect& r) override {
         rect_cache_ = r;
         if (!checkbox_) return;
-        checkbox_->set_rect(r);
-        SDL_Rect applied = checkbox_->rect();
-        int preferred = checkbox_->preferred_width();
-        int minimum = applied.h;
-        int desired = std::max(minimum, preferred);
-        applied.w = std::min(desired, r.w);
+        SDL_Rect applied = r;
+        const int checkbox_height = DMCheckbox::height();
+        if (applied.h > checkbox_height) {
+            applied.y += (applied.h - checkbox_height) / 2;
+            applied.h = checkbox_height;
+        } else {
+            applied.h = std::max(applied.h, checkbox_height);
+        }
         checkbox_->set_rect(applied);
-        rect_cache_ = applied;
+        SDL_Rect final_rect = checkbox_->rect();
+        int preferred = checkbox_->preferred_width();
+        int minimum = final_rect.h > 0 ? final_rect.h : checkbox_height;
+        int desired = std::max(minimum, preferred);
+        final_rect.w = std::min(desired, r.w);
+        checkbox_->set_rect(final_rect);
+        rect_cache_ = final_rect;
     }
 
     const SDL_Rect& rect() const override {
@@ -839,14 +847,25 @@ struct SpawnGroupConfig::Entry {
             }
         }
         method_widget_->set_options(method_options_, method_index);
+        const bool was_exact_method = (current_method_ == "Exact");
+        const bool previous_use_exact_quantity = use_exact_quantity_;
+        const bool previous_show_resolve_quantity = show_resolve_quantity_widget_;
+        const bool previous_hide_quantity_controls = quantity_hidden() || was_exact_method;
         current_method_ = method;
         use_exact_quantity_ = (method == "Exact" || method == "Exact Position");
         bool previous_show_radius = show_perimeter_radius_widget_;
         bool previous_show_edge = show_edge_inset_widget_;
+        const bool is_exact_method = (method == "Exact");
         show_perimeter_radius_widget_ = (method == "Perimeter");
         show_edge_inset_widget_ = (method == "Edge");
         show_resolve_geometry_widget_ = (method == "Exact" || method == "Perimeter");
-        show_resolve_quantity_widget_ = !quantity_hidden();
+        show_resolve_quantity_widget_ = !quantity_hidden() && !is_exact_method;
+        const bool hide_quantity_controls = quantity_hidden() || is_exact_method;
+        if (owner_ && (previous_use_exact_quantity != use_exact_quantity_ ||
+                       previous_show_resolve_quantity != show_resolve_quantity_widget_ ||
+                       previous_hide_quantity_controls != hide_quantity_controls)) {
+            owner_->mark_layout_dirty();
+        }
 
         const bool geometry_flag = safe_bool(entry, "resolve_geometry_to_room_size", show_resolve_geometry_widget_);
         const bool quantity_flag = safe_bool(entry, "resolve_quantity_to_room_size", false);
@@ -935,9 +954,16 @@ struct SpawnGroupConfig::Entry {
         }
         enforce_widget_->set_editable(editable_);
         name_widget_->set_editable(editable_);
-        min_widget_->set_editable(editable_);
-        max_widget_->set_editable(editable_);
-        exact_widget_->set_editable(editable_);
+        const bool allow_quantity_inputs = editable_ && !hide_quantity_controls;
+        if (min_widget_) {
+            min_widget_->set_editable(allow_quantity_inputs && !use_exact_quantity_);
+        }
+        if (max_widget_) {
+            max_widget_->set_editable(allow_quantity_inputs && !use_exact_quantity_);
+        }
+        if (exact_widget_) {
+            exact_widget_->set_editable(allow_quantity_inputs && use_exact_quantity_);
+        }
         if (resolution_widget_) {
             resolution_widget_->set_editable(editable_);
         }
@@ -980,8 +1006,9 @@ struct SpawnGroupConfig::Entry {
             rows.push_back({method_widget_.get()});
 
             // Method-specific configuration rows
-            const bool show_quantity_range = !quantity_hidden() && !use_exact_quantity_;
-            const bool show_exact_quantity = !quantity_hidden() && use_exact_quantity_ && exact_widget_;
+            const bool hide_quantity_controls = quantity_hidden() || current_method_ == "Exact";
+            const bool show_quantity_range = !hide_quantity_controls && !use_exact_quantity_;
+            const bool show_exact_quantity = !hide_quantity_controls && use_exact_quantity_ && exact_widget_;
             if (show_quantity_range) {
                 DockableCollapsible::Row qty_row;
                 qty_row.push_back(min_widget_.get());
