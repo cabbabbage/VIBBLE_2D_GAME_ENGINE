@@ -25,6 +25,7 @@
 #include <chrono>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -42,6 +43,9 @@
 namespace fs = std::filesystem;
 
 namespace {
+
+std::optional<fs::path> prepare_sky_background();
+nlohmann::json build_default_map_info(const std::string& map_name);
 
 std::optional<fs::path> prepare_sky_background() {
     try {
@@ -111,37 +115,98 @@ void MainApp::setup() {
         try {
                 nlohmann::json map_manifest_json = nlohmann::json::object();
                 std::string content_root;
-                const std::string map_identifier = map_path_;
+                const std::string map_identifier = map_descriptor_.id.empty() ? map_path_ : map_descriptor_.id;
 
                 manifest::ManifestData manifest_data = manifest::load_manifest();
-                auto map_it = manifest_data.maps.find(map_identifier);
-                if (map_it == manifest_data.maps.end() || !map_it.value().is_object()) {
-                        throw std::runtime_error("Map '" + map_identifier + "' not found in manifest.");
+                bool manifest_entry_found = false;
+                if (manifest_data.maps.is_object()) {
+                        auto map_it = manifest_data.maps.find(map_identifier);
+                        if (map_it != manifest_data.maps.end() && map_it.value().is_object()) {
+                                map_manifest_json = map_it.value();
+                                manifest_entry_found = true;
+                        }
                 }
 
-                map_manifest_json = map_it.value();
-
-                auto root_it = map_manifest_json.find("content_root");
-                if (root_it != map_manifest_json.end() && root_it->is_string()) {
-                        fs::path resolved_root = root_it->get<std::string>();
-                        if (resolved_root.is_relative()) {
-                                fs::path manifest_root = fs::path(manifest::manifest_path()).parent_path();
-                                resolved_root = manifest_root / resolved_root;
+                if (!manifest_entry_found) {
+                        if (map_descriptor_.data.is_object() && !map_descriptor_.data.empty()) {
+                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier +
+                                                  "' missing from manifest. Using descriptor payload.");
+                                map_manifest_json = map_descriptor_.data;
+                        } else {
+                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier +
+                                                  "' missing from manifest. Generating default map info.");
+                                map_manifest_json = build_default_map_info(map_identifier);
                         }
-                        content_root = resolved_root.lexically_normal().string();
                 }
 
                 if (!map_manifest_json.is_object()) {
                         map_manifest_json = nlohmann::json::object();
                 }
 
-                if (!content_root.empty()) {
-                        fs::path resolved_root = fs::path(content_root);
-                        if (resolved_root.is_relative()) {
-                                fs::path manifest_root = fs::path(manifest::manifest_path()).parent_path();
-                                resolved_root = manifest_root / resolved_root;
+                fs::path manifest_root = fs::path(manifest::manifest_path()).parent_path();
+                fs::path relative_content_root;
+                auto root_it = map_manifest_json.find("content_root");
+                if (root_it != map_manifest_json.end() && root_it->is_string()) {
+                        const std::string& value = root_it->get_ref<const std::string&>();
+                        if (!value.empty()) {
+                                relative_content_root = fs::path(value);
                         }
-                        content_root = resolved_root.lexically_normal().string();
+                }
+
+                bool manifest_updated = !manifest_entry_found;
+                if (relative_content_root.empty()) {
+                        relative_content_root = fs::path("MAPS") / map_identifier;
+                        map_manifest_json["content_root"] = relative_content_root.generic_string();
+                        manifest_updated = true;
+                        vibble::log::warn(std::string("[MainApp] No content_root for map '") + map_identifier +
+                                          "'. Using default '" + relative_content_root.generic_string() + "'.");
+                }
+
+                fs::path resolved_root = relative_content_root;
+                if (resolved_root.is_relative()) {
+                        resolved_root = manifest_root / resolved_root;
+                }
+                resolved_root = resolved_root.lexically_normal();
+
+                std::error_code dir_error;
+                fs::create_directories(resolved_root, dir_error);
+                if (dir_error) {
+                        std::ostringstream oss;
+                        oss << "Failed to prepare content root '" << resolved_root.string() << "': "
+                            << dir_error.message();
+                        throw std::runtime_error(oss.str());
+                }
+                content_root = resolved_root.string();
+
+                const fs::path map_info_path = resolved_root / "map_info.json";
+                if (!fs::exists(map_info_path)) {
+                        std::ofstream map_info_stream(map_info_path);
+                        if (map_info_stream.is_open()) {
+                                map_info_stream << map_manifest_json.dump(2);
+                                if (!map_info_stream.good()) {
+                                        vibble::log::warn(std::string("[MainApp] Failed to write map_info.json for '") +
+                                                          map_identifier + "'.");
+                                }
+                        } else {
+                                vibble::log::warn(std::string("[MainApp] Unable to create map_info.json for '") +
+                                                  map_identifier + "'.");
+                        }
+                }
+
+                if (manifest_updated) {
+                        try {
+                                devmode::core::ManifestStore store;
+                                store.reload();
+                                if (!store.update_map_entry(map_identifier, map_manifest_json)) {
+                                        vibble::log::warn(std::string("[MainApp] Failed to persist manifest entry for '") +
+                                                          map_identifier + "'.");
+                                } else {
+                                        store.flush();
+                                }
+                        } catch (const std::exception& ex) {
+                                vibble::log::warn(std::string("[MainApp] Unable to persist manifest entry for '") +
+                                                  map_identifier + "': " + ex.what());
+                        }
                 }
 
                 loader_ = std::make_unique<AssetLoader>(map_identifier,
@@ -408,7 +473,49 @@ std::optional<MapDescriptor> create_new_map_interactively() {
         }
 
         nlohmann::json map_info = build_default_map_info(*sanitized);
-        map_info["content_root"] = fs::path{"SRC"}.generic_string();
+
+        fs::path manifest_root;
+        try {
+            manifest_root = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
+        } catch (const std::exception& ex) {
+            std::string msg = std::string("Unable to determine project root: ") + ex.what();
+            tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
+            continue;
+        }
+
+        std::error_code dir_error;
+        fs::path maps_root = manifest_root / "MAPS";
+        fs::create_directories(maps_root, dir_error);
+        if (dir_error) {
+            std::string msg = std::string("Failed to prepare MAPS folder: ") + dir_error.message();
+            tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
+            continue;
+        }
+
+        fs::path map_dir = maps_root / *sanitized;
+        dir_error.clear();
+        fs::create_directories(map_dir, dir_error);
+        if (dir_error) {
+            std::string msg = std::string("Failed to create map folder: ") + dir_error.message();
+            tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
+            continue;
+        }
+
+        map_info["content_root"] = (fs::path("MAPS") / *sanitized).generic_string();
+
+        const fs::path map_info_path = map_dir / "map_info.json";
+        if (!fs::exists(map_info_path)) {
+            std::ofstream map_info_stream(map_info_path);
+            if (map_info_stream.is_open()) {
+                map_info_stream << map_info.dump(2);
+                if (!map_info_stream.good()) {
+                    std::string msg = std::string("Failed to write map_info.json for new map.");
+                    tinyfd_messageBox("Warning", msg.c_str(), "ok", "warning", 0);
+                }
+            } else {
+                tinyfd_messageBox("Warning", "Unable to create map_info.json for new map.", "ok", "warning", 0);
+            }
+        }
 
         if (!manifest_store.update_map_entry(*sanitized, map_info)) {
             tinyfd_messageBox("Error Creating Map", "Failed to update manifest for new map.", "ok", "error", 0);

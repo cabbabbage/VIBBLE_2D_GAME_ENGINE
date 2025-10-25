@@ -13920,12 +13920,12 @@
           ]
         },
         {
-          "bounding_extent": 1600.0,
+          "bounding_extent": 1626.3455967290593,
           "level": 1,
           "max_rooms": 5,
           "min_rooms": 5,
           "name": "layer_1",
-          "ring_radius": 2800.0,
+          "ring_radius": 4447.0,
           "rooms": [
             {
               "max_instances": 1,
@@ -13993,16 +13993,16 @@
                 "min": 255
               },
               "b": {
-                "max": 43,
-                "min": 43
+                "max": 240,
+                "min": 240
               },
               "g": {
-                "max": 86,
-                "min": 86
+                "max": 232,
+                "min": 232
               },
               "r": {
-                "max": 255,
-                "min": 53
+                "max": 226,
+                "min": 226
               }
             }
           ],
@@ -14014,37 +14014,16 @@
                 "min": 255
               },
               "b": {
-                "max": 43,
-                "min": 43
+                "max": 240,
+                "min": 240
               },
               "g": {
-                "max": 86,
-                "min": 86
+                "max": 232,
+                "min": 232
               },
               "r": {
-                "max": 255,
-                "min": 53
-              }
-            }
-          ],
-          [
-            183.0,
-            {
-              "a": {
-                "max": 255,
-                "min": 255
-              },
-              "b": {
-                "max": 188,
-                "min": 188
-              },
-              "g": {
-                "max": 57,
-                "min": 57
-              },
-              "r": {
-                "max": 38,
-                "min": 38
+                "max": 226,
+                "min": 226
               }
             }
           ],
@@ -14061,11 +14040,11 @@
               },
               "g": {
                 "max": 255,
-                "min": 255
+                "min": 57
               },
               "r": {
                 "max": 255,
-                "min": 254
+                "min": 38
               }
             }
           ],
@@ -14082,31 +14061,10 @@
               },
               "g": {
                 "max": 255,
-                "min": 255
-              },
-              "r": {
-                "max": 255,
-                "min": 254
-              }
-            }
-          ],
-          [
-            357.0,
-            {
-              "a": {
-                "max": 255,
-                "min": 255
-              },
-              "b": {
-                "max": 188,
-                "min": 188
-              },
-              "g": {
-                "max": 57,
                 "min": 57
               },
               "r": {
-                "max": 38,
+                "max": 255,
                 "min": 38
               }
             }
@@ -14190,9 +14148,9 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            242,
-            36,
-            242,
+            31,
+            32,
+            204,
             255
           ],
           "edge_smoothness": 5,
@@ -14263,9 +14221,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            242,
             36,
-            135,
+            96,
+            242,
             255
           ],
           "edge_smoothness": 4,
@@ -14339,9 +14297,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            36,
-            242,
-            129,
+            31,
+            204,
+            127,
             255
           ],
           "edge_smoothness": 4,
@@ -14419,9 +14377,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            85,
-            89,
-            242,
+            149,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 7,
@@ -14496,9 +14454,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            102,
+            181,
+            85,
             242,
-            36,
             255
           ],
           "edge_smoothness": 6,
@@ -14531,6 +14489,8 @@
               "enforce_spacing": false,
               "max_number": 6,
               "min_number": 3,
+              "origional_height": 1807,
+              "origional_width": 2662,
               "position": "Random",
               "priority": 0,
               "resolution": 5,
@@ -14557,6 +14517,8 @@
               "enforce_spacing": false,
               "max_number": 5,
               "min_number": 2,
+              "origional_height": 1807,
+              "origional_width": 2662,
               "position": "Random",
               "priority": 1,
               "resolution": 5,
@@ -14569,7 +14531,7 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            183,
+            229,
             242,
             36,
             255
@@ -14642,9 +14604,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            242,
-            36,
-            36,
+            204,
+            31,
+            177,
             255
           ],
           "edge_smoothness": 8,
@@ -14677,6 +14639,8 @@
               "enforce_spacing": false,
               "max_number": 10,
               "min_number": 6,
+              "origional_height": 1978,
+              "origional_width": 1730,
               "position": "Random",
               "priority": 0,
               "resolution": 5,
@@ -14699,6 +14663,8 @@
               "enforce_spacing": false,
               "max_number": 2,
               "min_number": 1,
+              "origional_height": 1978,
+              "origional_width": 1730,
               "position": "Random",
               "priority": 1,
               "resolution": 5,
@@ -14711,9 +14677,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            242,
-            85,
-            188,
+            75,
+            71,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -14782,7 +14748,7 @@
           "display_color": [
             36,
             242,
-            242,
+            208,
             255
           ],
           "edge_smoothness": 6,
@@ -14849,9 +14815,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            191,
-            85,
-            242,
+            77,
+            204,
+            71,
             255
           ],
           "edge_smoothness": 2,
@@ -14901,8 +14867,8 @@
           "curvyness": 3,
           "display_color": [
             242,
-            94,
-            85,
+            36,
+            77,
             255
           ],
           "edge_smoothness": 12,
@@ -14934,6 +14900,8 @@
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
+              "origional_height": 2649,
+              "origional_width": 2505,
               "position": "Random",
               "priority": 0,
               "resolution": 5,
@@ -14960,6 +14928,8 @@
               "enforce_spacing": false,
               "max_number": 6,
               "min_number": 3,
+              "origional_height": 2649,
+              "origional_width": 2505,
               "position": "Random",
               "priority": 1,
               "resolution": 5,
@@ -14972,9 +14942,9 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            242,
-            242,
             85,
+            186,
+            242,
             255
           ],
           "edge_smoothness": 9,
@@ -15044,9 +15014,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            36,
-            137,
             242,
+            36,
+            139,
             255
           ],
           "edge_smoothness": 7,
@@ -15120,8 +15090,8 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            130,
-            36,
+            85,
+            116,
             242,
             255
           ],
@@ -15158,6 +15128,8 @@
               "enforce_spacing": false,
               "max_number": 6,
               "min_number": 3,
+              "origional_height": 1747,
+              "origional_width": 1900,
               "position": "Random",
               "priority": 0,
               "resolution": 5,
@@ -15184,6 +15156,8 @@
               "enforce_spacing": false,
               "max_number": 8,
               "min_number": 4,
+              "origional_height": 1747,
+              "origional_width": 1900,
               "position": "Random",
               "priority": 1,
               "resolution": 5,
@@ -15196,9 +15170,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            85,
+            68,
+            36,
             242,
-            176,
             255
           ],
           "edge_smoothness": 10,
@@ -15238,6 +15212,8 @@
               "enforce_spacing": false,
               "max_number": 9,
               "min_number": 5,
+              "origional_height": 2154,
+              "origional_width": 2200,
               "position": "Random",
               "priority": 0,
               "resolution": 5,
@@ -15264,6 +15240,8 @@
               "enforce_spacing": false,
               "max_number": 6,
               "min_number": 3,
+              "origional_height": 2154,
+              "origional_width": 2200,
               "position": "Random",
               "priority": 1,
               "resolution": 5,
@@ -15276,9 +15254,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
+            41,
             204,
             31,
-            189,
             255
           ],
           "edge_smoothness": 5,
@@ -15348,9 +15326,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            71,
             204,
-            84,
+            132,
+            71,
             255
           ],
           "edge_smoothness": 6,
@@ -15417,9 +15395,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            204,
-            31,
-            87,
+            242,
+            235,
+            85,
             255
           ],
           "edge_smoothness": 10,
@@ -15493,9 +15471,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
-            31,
-            90,
-            204,
+            36,
+            242,
+            158,
             255
           ],
           "edge_smoothness": 5,
@@ -15596,9 +15574,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            172,
+            180,
+            242,
+            36,
             255
           ],
           "edge_smoothness": 101,
@@ -15727,9 +15705,9 @@
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            242,
-            213,
-            36,
+            103,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -15799,9 +15777,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            89,
-            31,
             204,
+            31,
+            105,
             255
           ],
           "edge_smoothness": 7,
@@ -15889,9 +15867,9 @@
         "basic": {
           "curvyness": 4,
           "display_color": [
-            242,
-            36,
-            242,
+            204,
+            80,
+            31,
             255
           ],
           "edge_smoothness": 2,

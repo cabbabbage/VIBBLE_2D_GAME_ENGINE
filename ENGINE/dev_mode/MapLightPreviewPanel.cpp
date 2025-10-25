@@ -1009,18 +1009,13 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         detail_lines.push_back(std::move(stage_line));
 
         if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
-            detail_lines.push_back(std::string("Active: ") + (snap->active ? "yes" : "no") +
-                                   " | Dirty: " + (snap->dirty ? "yes" : "no"));
-            detail_lines.push_back("Combined Brightness: " + format_float(snap->combined_brightness, 3));
-            if (snap->static_empty) {
-                detail_lines.push_back("Static Grid: (empty)");
-            } else {
-                detail_lines.push_back("Static Min: " + format_float(snap->static_min, 3));
-                detail_lines.push_back("Static Avg: " + format_float(snap->static_average, 3));
-                detail_lines.push_back("Static Max: " + format_float(snap->static_max, 3));
-            }
-            detail_lines.push_back("Dynamic Lighting: disabled");
+            detail_lines.push_back(std::string("Active: ") + (snap->active ? "yes" : "no"));
             detail_lines.push_back("Shadow Opacity: " + format_float(snap->shadow.opacity, 3));
+            detail_lines.push_back("Shadow Scale: " + format_float(snap->shadow.scale, 3));
+            detail_lines.push_back("Shadow Offset X%: " + format_float(snap->shadow.offset_x_percent, 3));
+            detail_lines.push_back("Shadow Offset Y%: " + format_float(snap->shadow.offset_y_percent, 3));
+            detail_lines.push_back("Shadow Parallax%: " +
+                                   format_float(snap->shadow.parallax_intensity_percent, 3));
         }
 
         detail_lines.push_back("");
