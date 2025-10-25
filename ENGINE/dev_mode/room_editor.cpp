@@ -73,6 +73,21 @@ const SDL_Color kLabelBg{32, 32, 32, 200};
 const SDL_Color kLabelBorder{255, 255, 255, 96};
 const SDL_Color kLabelText{240, 240, 240, 255};
 constexpr int kClipboardNudge = 16;
+constexpr float kCameraScaleEpsilon = 1e-4f;
+
+int floor_div(int value, int divisor) {
+    if (divisor == 0) {
+        return 0;
+    }
+    if (value >= 0) {
+        return value / divisor;
+    }
+    return (value - divisor + 1) / divisor;
+}
+
+int64_t make_cell_key(int cell_x, int cell_y) {
+    return (static_cast<int64_t>(cell_x) << 32) ^ static_cast<uint32_t>(cell_y);
+}
 
 std::string trim_copy_room_editor(const std::string& input) {
     auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
@@ -618,11 +633,13 @@ void RoomEditor::set_input(Input* input) {
 
 void RoomEditor::set_player(Asset* player) {
     player_ = player;
+    mark_spatial_index_dirty();
 }
 
 void RoomEditor::set_active_assets(std::vector<Asset*>& actives) {
     active_assets_ = &actives;
     mark_highlight_dirty();
+    mark_spatial_index_dirty();
 }
 
 void RoomEditor::set_screen_dimensions(int width, int height) {
@@ -729,6 +746,7 @@ void RoomEditor::set_current_room(Room* room) {
     rebuild_room_spawn_id_cache();
     room_editor_trace("[RoomEditor] refreshing spawn group config UI");
     refresh_spawn_group_config_ui();
+    mark_spatial_index_dirty();
 
     if (room_cfg_ui_) {
         room_editor_trace("[RoomEditor] opening room config UI");
@@ -1973,6 +1991,7 @@ void RoomEditor::focus_camera_on_asset(Asset* asset, double zoom_factor, int dur
     camera& cam = assets_->getView();
     cam.set_manual_zoom_override(true);
     cam.pan_and_zoom_to_asset(asset, zoom_factor, duration_steps);
+    mark_spatial_index_dirty();
 }
 
 void RoomEditor::focus_camera_on_room_center(bool reframe_zoom) {
@@ -1987,6 +2006,7 @@ void RoomEditor::focus_camera_on_room_center(bool reframe_zoom) {
     if (reframe_zoom) {
         cam.zoom_to_area(*current_room_->room_area, 0);
     }
+    mark_spatial_index_dirty();
 }
 
 void RoomEditor::reset_click_state() {
@@ -2072,6 +2092,9 @@ void RoomEditor::purge_asset(Asset* asset) {
     }
     auto erase_from = [asset, &highlight_sources_changed](std::vector<Asset*>& vec) {
         const auto before = vec.size();
+    remove_asset_from_spatial_index(asset);
+    if (hovered_asset_ == asset) hovered_asset_ = nullptr;
+    auto erase_from = [asset](std::vector<Asset*>& vec) {
         vec.erase(std::remove(vec.begin(), vec.end(), asset), vec.end());
         if (vec.size() != before) {
             highlight_sources_changed = true;
@@ -2120,6 +2143,8 @@ bool RoomEditor::any_blocking_panel_visible() const {
 
 void RoomEditor::handle_mouse_input(const Input& input) {
     camera& cam = assets_->getView();
+    const float prev_scale = cam.get_scale();
+    const SDL_Point prev_center = cam.get_screen_center();
 
     const bool asset_info_open =
         (active_modal_ == ActiveModal::AssetInfo) || (info_ui_ && info_ui_->is_visible());
@@ -2146,6 +2171,13 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     }
 
     pan_zoom_.handle_input(cam, input, true);
+    const float current_scale = cam.get_scale();
+    const SDL_Point current_center = cam.get_screen_center();
+    if (std::fabs(current_scale - prev_scale) > kCameraScaleEpsilon ||
+        current_center.x != prev_center.x ||
+        current_center.y != prev_center.y) {
+        mark_spatial_index_dirty();
+    }
 
     SDL_Point world_mouse = cam.screen_to_map(SDL_Point{mx, my});
 
@@ -2199,36 +2231,321 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
     if (!active_assets_ || !assets_) return nullptr;
 
     const camera& cam = assets_->getView();
-    const float scale = std::max(0.0001f, cam.get_scale());
-    const float inv_scale = 1.0f / scale;
+    if (!ensure_spatial_index(cam)) {
+        return hit_test_asset_fallback(cam, screen_point);
+    }
 
+    std::vector<Asset*> candidates = gather_candidate_assets_for_point(screen_point);
+    Asset* best = nullptr;
+    int best_screen_y = std::numeric_limits<int>::min();
+    int best_z_index = std::numeric_limits<int>::min();
+
+    for (Asset* asset : candidates) {
+        if (!asset) continue;
+        auto it = asset_bounds_cache_.find(asset);
+        if (it == asset_bounds_cache_.end()) continue;
+        const SDL_Rect& rect = it->second.bounds;
+        if (!SDL_PointInRect(&screen_point, &rect)) continue;
+
+        if (!best || it->second.screen_y > best_screen_y ||
+            (it->second.screen_y == best_screen_y && asset->z_index > best_z_index)) {
+            best = asset;
+            best_screen_y = it->second.screen_y;
+            best_z_index = asset->z_index;
+        }
+    }
+
+    if (best) {
+        return best;
+    }
+
+    return hit_test_asset_fallback(cam, screen_point);
+}
+
+void RoomEditor::mark_spatial_index_dirty() const {
+    spatial_index_dirty_ = true;
+    cached_camera_state_valid_ = false;
+    cached_reference_height_valid_ = false;
+    cached_reference_screen_height_ = 1.0f;
+    asset_bounds_cache_.clear();
+    spatial_grid_.clear();
+}
+
+bool RoomEditor::camera_state_changed(const camera& cam) const {
+    if (!cached_camera_state_valid_) {
+        return false;
+    }
+    const float scale = cam.get_scale();
+    if (std::fabs(scale - cached_camera_scale_) > kCameraScaleEpsilon) {
+        return true;
+    }
+    SDL_Point center = cam.get_screen_center();
+    if (center.x != cached_camera_center_.x || center.y != cached_camera_center_.y) {
+        return true;
+    }
+    if (cam.parallax_enabled() != cached_camera_parallax_enabled_) {
+        return true;
+    }
+    if (cam.realism_enabled() != cached_camera_realism_enabled_) {
+        return true;
+    }
+    return false;
+}
+
+bool RoomEditor::ensure_spatial_index(const camera& cam) const {
+    if (!active_assets_) {
+        return false;
+    }
+
+    if (camera_state_changed(cam)) {
+        mark_spatial_index_dirty();
+    }
+
+    if (spatial_index_dirty_) {
+        rebuild_spatial_index(cam);
+    }
+
+    return !spatial_index_dirty_;
+}
+
+float RoomEditor::compute_reference_screen_height(const camera& cam, float inv_scale) const {
     float reference_screen_height = 1.0f;
-    Asset* player_asset = assets_->player;
-    if (player_asset) {
-        SDL_Texture* player_final = player_asset->get_final_texture();
-        SDL_Texture* player_frame = player_asset->get_current_frame();
-        int pw = player_asset->cached_w;
-        int ph = player_asset->cached_h;
-        if ((pw == 0 || ph == 0) && player_final) {
-            SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
-        }
-        if ((pw == 0 || ph == 0) && player_frame) {
-            SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
-        }
-        if (pw != 0) player_asset->cached_w = pw;
-        if (ph != 0) player_asset->cached_h = ph;
+    Asset* player_asset = player_ ? player_ : (assets_ ? assets_->player : nullptr);
+    if (!player_asset) {
+        return reference_screen_height;
+    }
 
-        float player_scale = 1.0f;
-        if (player_asset->info && std::isfinite(player_asset->info->scale_factor) && player_asset->info->scale_factor >= 0.0f) {
-            player_scale = player_asset->info->scale_factor;
-        }
-        if (ph > 0) {
-            reference_screen_height = static_cast<float>(ph) * player_scale * inv_scale;
-        }
+    SDL_Texture* player_final = player_asset->get_final_texture();
+    SDL_Texture* player_frame = player_asset->get_current_frame();
+    int pw = player_asset->cached_w;
+    int ph = player_asset->cached_h;
+    if ((pw == 0 || ph == 0) && player_final) {
+        SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
+    }
+    if ((pw == 0 || ph == 0) && player_frame) {
+        SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+    }
+    if (pw != 0) player_asset->cached_w = pw;
+    if (ph != 0) player_asset->cached_h = ph;
+
+    float player_scale = 1.0f;
+    if (player_asset->info && std::isfinite(player_asset->info->scale_factor) && player_asset->info->scale_factor >= 0.0f) {
+        player_scale = player_asset->info->scale_factor;
+    }
+    if (ph > 0) {
+        reference_screen_height = static_cast<float>(ph) * player_scale * inv_scale;
     }
     if (reference_screen_height <= 0.0f) {
         reference_screen_height = 1.0f;
     }
+    return reference_screen_height;
+}
+
+bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
+                                             float reference_height,
+                                             float inv_scale,
+                                             Asset* asset,
+                                             SDL_Rect& out_rect,
+                                             int& out_screen_y) const {
+    if (!asset) {
+        return false;
+    }
+
+    SDL_Texture* tex = asset->get_final_texture();
+    if (!tex) {
+        tex = asset->get_current_frame();
+    }
+
+    int fw = asset->cached_w;
+    int fh = asset->cached_h;
+    if ((fw == 0 || fh == 0) && tex) {
+        SDL_QueryTexture(tex, nullptr, nullptr, &fw, &fh);
+        if (asset->cached_w == 0) asset->cached_w = fw;
+        if (asset->cached_h == 0) asset->cached_h = fh;
+    }
+    if (fw <= 0 || fh <= 0) return false;
+
+    float base_scale = 1.0f;
+    if (asset->info && std::isfinite(asset->info->scale_factor) && asset->info->scale_factor >= 0.0f) {
+        base_scale = asset->info->scale_factor;
+    }
+
+    const float scaled_fw = static_cast<float>(fw) * base_scale;
+    const float scaled_fh = static_cast<float>(fh) * base_scale;
+    const float base_sw = scaled_fw * inv_scale;
+    const float base_sh = scaled_fh * inv_scale;
+
+    const camera::RenderEffects effects =
+        cam.compute_render_effects(SDL_Point{asset->pos.x, asset->pos.y}, base_sh, reference_height);
+
+    const float scaled_sw = base_sw * effects.distance_scale;
+    const float scaled_sh = base_sh * effects.distance_scale;
+    const float final_visible_h = scaled_sh * effects.vertical_scale;
+
+    const int sw = std::max(1, static_cast<int>(std::lround(static_cast<double>(scaled_sw))));
+    const int sh = std::max(1, static_cast<int>(std::lround(static_cast<double>(final_visible_h))));
+    if (sw <= 0 || sh <= 0) return false;
+
+    const SDL_Point& center = effects.screen_position;
+    out_rect = SDL_Rect{center.x - sw / 2, center.y - sh, sw, sh};
+    out_screen_y = center.y;
+    return true;
+}
+
+void RoomEditor::rebuild_spatial_index(const camera& cam) const {
+    asset_bounds_cache_.clear();
+    spatial_grid_.clear();
+
+    const float scale = std::max(0.0001f, cam.get_scale());
+    const float inv_scale = 1.0f / scale;
+    const float reference_height = compute_reference_screen_height(cam, inv_scale);
+
+    if (active_assets_) {
+        for (Asset* asset : *active_assets_) {
+            if (!asset) continue;
+            SDL_Rect rect{0, 0, 0, 0};
+            int screen_y = 0;
+            if (!compute_asset_screen_bounds(cam, reference_height, inv_scale, asset, rect, screen_y)) {
+                continue;
+            }
+            insert_asset_entry(asset, rect, screen_y);
+        }
+    }
+
+    cached_camera_scale_ = cam.get_scale();
+    cached_camera_center_ = cam.get_screen_center();
+    cached_camera_parallax_enabled_ = cam.parallax_enabled();
+    cached_camera_realism_enabled_ = cam.realism_enabled();
+    cached_camera_state_valid_ = true;
+    cached_reference_screen_height_ = reference_height;
+    cached_reference_height_valid_ = true;
+    spatial_index_dirty_ = false;
+}
+
+void RoomEditor::insert_asset_entry(Asset* asset, const SDL_Rect& rect, int screen_y) const {
+    if (!asset || rect.w <= 0 || rect.h <= 0) {
+        return;
+    }
+
+    AssetSpatialEntry entry;
+    entry.bounds = rect;
+    entry.screen_y = screen_y;
+    entry.z_index = asset->z_index;
+
+    const int left = floor_div(rect.x, kSpatialCellSize);
+    const int right = floor_div(rect.x + rect.w - 1, kSpatialCellSize);
+    const int top = floor_div(rect.y, kSpatialCellSize);
+    const int bottom = floor_div(rect.y + rect.h - 1, kSpatialCellSize);
+
+    for (int cx = left; cx <= right; ++cx) {
+        for (int cy = top; cy <= bottom; ++cy) {
+            add_asset_to_cell(asset, cx, cy, entry.cells);
+        }
+    }
+
+    asset_bounds_cache_[asset] = std::move(entry);
+}
+
+void RoomEditor::add_asset_to_cell(Asset* asset, int cell_x, int cell_y, std::vector<int64_t>& cell_keys) const {
+    if (!asset) return;
+    const int64_t key = make_cell_key(cell_x, cell_y);
+    auto& bucket = spatial_grid_[key];
+    bucket.push_back(asset);
+    cell_keys.push_back(key);
+}
+
+void RoomEditor::remove_asset_from_spatial_index(Asset* asset) const {
+    if (!asset) return;
+    auto it = asset_bounds_cache_.find(asset);
+    if (it == asset_bounds_cache_.end()) {
+        return;
+    }
+    const std::vector<int64_t> cells = it->second.cells;
+    for (int64_t key : cells) {
+        auto grid_it = spatial_grid_.find(key);
+        if (grid_it == spatial_grid_.end()) {
+            continue;
+        }
+        auto& bucket = grid_it->second;
+        bucket.erase(std::remove(bucket.begin(), bucket.end(), asset), bucket.end());
+        if (bucket.empty()) {
+            spatial_grid_.erase(grid_it);
+        }
+    }
+    asset_bounds_cache_.erase(it);
+}
+
+void RoomEditor::refresh_asset_spatial_entry(const camera& cam, Asset* asset) const {
+    if (!asset) return;
+    if (spatial_index_dirty_ || !cached_camera_state_valid_ || !cached_reference_height_valid_) {
+        return;
+    }
+
+    remove_asset_from_spatial_index(asset);
+
+    const float scale = std::max(0.0001f, cam.get_scale());
+    const float inv_scale = 1.0f / scale;
+    SDL_Rect rect{0, 0, 0, 0};
+    int screen_y = 0;
+    if (!compute_asset_screen_bounds(cam, cached_reference_screen_height_, inv_scale, asset, rect, screen_y)) {
+        return;
+    }
+    insert_asset_entry(asset, rect, screen_y);
+}
+
+void RoomEditor::refresh_spatial_entries_for_dragged_assets() {
+    if (!assets_) {
+        return;
+    }
+    const camera& cam = assets_->getView();
+    if (spatial_index_dirty_ || !cached_camera_state_valid_ || !cached_reference_height_valid_) {
+        return;
+    }
+
+    for (const auto& state : drag_states_) {
+        if (!state.asset) continue;
+        refresh_asset_spatial_entry(cam, state.asset);
+    }
+}
+
+std::vector<Asset*> RoomEditor::gather_candidate_assets_for_point(SDL_Point screen_point) const {
+    std::vector<Asset*> result;
+    if (spatial_grid_.empty()) {
+        return result;
+    }
+
+    const int cell_x = floor_div(screen_point.x, kSpatialCellSize);
+    const int cell_y = floor_div(screen_point.y, kSpatialCellSize);
+    std::unordered_set<Asset*> unique;
+    unique.reserve(16);
+
+    for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            const int64_t key = make_cell_key(cell_x + dx, cell_y + dy);
+            auto it = spatial_grid_.find(key);
+            if (it == spatial_grid_.end()) {
+                continue;
+            }
+            for (Asset* asset : it->second) {
+                if (!asset) continue;
+                if (unique.insert(asset).second) {
+                    result.push_back(asset);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+Asset* RoomEditor::hit_test_asset_fallback(const camera& cam, SDL_Point screen_point) const {
+    if (!active_assets_) {
+        return nullptr;
+    }
+
+    const float scale = std::max(0.0001f, cam.get_scale());
+    const float inv_scale = 1.0f / scale;
+    const float reference_height = compute_reference_screen_height(cam, inv_scale);
 
     Asset* best = nullptr;
     int best_screen_y = std::numeric_limits<int>::min();
@@ -2236,50 +2553,17 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
 
     for (Asset* asset : *active_assets_) {
         if (!asset) continue;
-
-        SDL_Texture* tex = asset->get_final_texture();
-        if (!tex) {
-            tex = asset->get_current_frame();
+        SDL_Rect rect{0, 0, 0, 0};
+        int screen_y = 0;
+        if (!compute_asset_screen_bounds(cam, reference_height, inv_scale, asset, rect, screen_y)) {
+            continue;
         }
-
-        int fw = asset->cached_w;
-        int fh = asset->cached_h;
-        if ((fw == 0 || fh == 0) && tex) {
-            SDL_QueryTexture(tex, nullptr, nullptr, &fw, &fh);
-            if (asset->cached_w == 0) asset->cached_w = fw;
-            if (asset->cached_h == 0) asset->cached_h = fh;
+        if (!SDL_PointInRect(&screen_point, &rect)) {
+            continue;
         }
-        if (fw <= 0 || fh <= 0) continue;
-
-        float base_scale = 1.0f;
-        if (asset->info && std::isfinite(asset->info->scale_factor) && asset->info->scale_factor >= 0.0f) {
-            base_scale = asset->info->scale_factor;
-        }
-
-        const float scaled_fw = static_cast<float>(fw) * base_scale;
-        const float scaled_fh = static_cast<float>(fh) * base_scale;
-        const float base_sw = scaled_fw * inv_scale;
-        const float base_sh = scaled_fh * inv_scale;
-
-        const camera::RenderEffects effects =
-            cam.compute_render_effects(SDL_Point{asset->pos.x, asset->pos.y}, base_sh, reference_screen_height);
-
-        const float scaled_sw = base_sw * effects.distance_scale;
-        const float scaled_sh = base_sh * effects.distance_scale;
-        const float final_visible_h = scaled_sh * effects.vertical_scale;
-
-        const int sw = std::max(1, static_cast<int>(std::lround(static_cast<double>(scaled_sw))));
-        const int sh = std::max(1, static_cast<int>(std::lround(static_cast<double>(final_visible_h))));
-        if (sw <= 0 || sh <= 0) continue;
-
-        const SDL_Point& center = effects.screen_position;
-        SDL_Rect rect{center.x - sw / 2, center.y - sh, sw, sh};
-        if (!SDL_PointInRect(&screen_point, &rect)) continue;
-
-        if (!best || center.y > best_screen_y ||
-            (center.y == best_screen_y && asset->z_index > best_z_index)) {
+        if (!best || screen_y > best_screen_y || (screen_y == best_screen_y && asset->z_index > best_z_index)) {
             best = asset;
-            best_screen_y = center.y;
+            best_screen_y = screen_y;
             best_z_index = asset->z_index;
         }
     }
@@ -2439,6 +2723,7 @@ void RoomEditor::handle_click(const Input& input) {
                 camera& cam = assets_->getView();
 
                 cam.pan_and_zoom_to_point(world_mouse, 1.0, 0);
+                mark_spatial_index_dirty();
             }
         }
     }
@@ -3060,6 +3345,7 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
     snap_dragged_assets_to_grid();
     drag_last_world_ = world_mouse;
     drag_moved_ = true;
+    refresh_spatial_entries_for_dragged_assets();
 }
 
 void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
@@ -3128,7 +3414,10 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     if (changed) {
         drag_moved_ = true;
     }
-    snap_dragged_assets_to_grid();
+    const bool snapped = snap_dragged_assets_to_grid();
+    if (changed || snapped) {
+        refresh_spatial_entries_for_dragged_assets();
+    }
 }
 
 void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
@@ -3246,11 +3535,14 @@ void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
         drag_moved_ = true;
     }
 
-    snap_dragged_assets_to_grid();
+    const bool snapped = snap_dragged_assets_to_grid();
+    if (assets_changed || snapped) {
+        refresh_spatial_entries_for_dragged_assets();
+    }
 }
 
-void RoomEditor::snap_dragged_assets_to_grid() {
-    if (drag_states_.empty()) return;
+bool RoomEditor::snap_dragged_assets_to_grid() {
+    if (drag_states_.empty()) return false;
     const int resolution = vibble::grid::clamp_resolution(drag_resolution_);
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
     bool changed = false;
@@ -3286,6 +3578,7 @@ void RoomEditor::snap_dragged_assets_to_grid() {
     if (changed) {
         drag_moved_ = true;
     }
+    return changed;
 }
 
 void RoomEditor::finalize_drag_session() {
@@ -4107,6 +4400,7 @@ void RoomEditor::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& s
     }
     assets_->initialize_active_assets(assets_->getView().get_screen_center());
     assets_->refresh_active_asset_lists();
+    mark_spatial_index_dirty();
     spawned.clear();
     mark_highlight_dirty();
 }

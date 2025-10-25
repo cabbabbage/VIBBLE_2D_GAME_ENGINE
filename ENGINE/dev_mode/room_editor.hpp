@@ -2,6 +2,8 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <string>
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -171,7 +173,7 @@ private:
     void update_drag_session(const SDL_Point& world_mouse);
     void apply_perimeter_drag(const SDL_Point& world_mouse);
     void apply_edge_drag(const SDL_Point& world_mouse);
-    void snap_dragged_assets_to_grid();
+    bool snap_dragged_assets_to_grid();
     void finalize_drag_session();
     void reset_drag_state();
     nlohmann::json* find_spawn_entry(const std::string& spawn_id);
@@ -246,6 +248,32 @@ private:
     void respawn_asset_child_spawn_group(class Asset* owner, const nlohmann::json& entry);
     static bool asset_info_contains_spawn_group(const class AssetInfo* info, const std::string& spawn_id);
     void mark_highlight_dirty();
+
+    struct AssetSpatialEntry {
+        SDL_Rect bounds{0, 0, 0, 0};
+        int screen_y = std::numeric_limits<int>::min();
+        int z_index = std::numeric_limits<int>::min();
+        std::vector<int64_t> cells;
+    };
+
+    void mark_spatial_index_dirty() const;
+    bool ensure_spatial_index(const camera& cam) const;
+    bool camera_state_changed(const camera& cam) const;
+    float compute_reference_screen_height(const camera& cam, float inv_scale) const;
+    bool compute_asset_screen_bounds(const camera& cam,
+                                     float reference_height,
+                                     float inv_scale,
+                                     Asset* asset,
+                                     SDL_Rect& out_rect,
+                                     int& out_screen_y) const;
+    void rebuild_spatial_index(const camera& cam) const;
+    void insert_asset_entry(Asset* asset, const SDL_Rect& rect, int screen_y) const;
+    void add_asset_to_cell(Asset* asset, int cell_x, int cell_y, std::vector<int64_t>& cell_keys) const;
+    void remove_asset_from_spatial_index(Asset* asset) const;
+    void refresh_asset_spatial_entry(const camera& cam, Asset* asset) const;
+    void refresh_spatial_entries_for_dragged_assets();
+    std::vector<Asset*> gather_candidate_assets_for_point(SDL_Point screen_point) const;
+    Asset* hit_test_asset_fallback(const camera& cam, SDL_Point screen_point) const;
 
 private:
     Assets* assets_ = nullptr;
@@ -352,4 +380,17 @@ private:
     std::string rename_active_room(const std::string& old_name, const std::string& desired_name);
 
     friend class DevControls;
+
+    static constexpr int kSpatialCellSize = 256;
+
+    mutable bool spatial_index_dirty_ = true;
+    mutable bool cached_camera_state_valid_ = false;
+    mutable float cached_camera_scale_ = 0.0f;
+    mutable SDL_Point cached_camera_center_{0, 0};
+    mutable bool cached_camera_parallax_enabled_ = false;
+    mutable bool cached_camera_realism_enabled_ = false;
+    mutable float cached_reference_screen_height_ = 1.0f;
+    mutable bool cached_reference_height_valid_ = false;
+    mutable std::unordered_map<Asset*, AssetSpatialEntry> asset_bounds_cache_;
+    mutable std::unordered_map<int64_t, std::vector<Asset*>> spatial_grid_;
 };
