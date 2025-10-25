@@ -16,7 +16,7 @@
 
 Section_SpawnGroups::Section_SpawnGroups()
     : DockableCollapsible("Spawn Groups", false) {
-    set_scroll_enabled(true);
+    set_scroll_enabled(false);
     set_cell_width(260);
 }
 

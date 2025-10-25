@@ -3693,7 +3693,6 @@
         "brown",
         "child",
         "crime",
-        "SRC/assets/Booze_2/default",
         "drinking",
         "man-made",
         "passable",
@@ -10832,6 +10831,7 @@
       "size_settings": {
         "scale_percentage": 95.0
       },
+      "spawn_groups": [],
       "tags": [
         "boundary",
         "SRC/assets/Tree_Dark/default",
@@ -13921,7 +13921,7 @@
                 "min": 86
               },
               "r": {
-                "max": 53,
+                "max": 255,
                 "min": 53
               }
             }
@@ -13942,7 +13942,7 @@
                 "min": 86
               },
               "r": {
-                "max": 53,
+                "max": 255,
                 "min": 53
               }
             }
@@ -14038,15 +14038,15 @@
             "min": 255
           },
           "b": {
-            "max": 43,
-            "min": 43
+            "max": 255,
+            "min": 0
           },
           "g": {
-            "max": 107,
+            "max": 235,
             "min": 65
           },
           "r": {
-            "max": 75,
+            "max": 243,
             "min": 32
           }
         },
@@ -14092,8 +14092,8 @@
         ],
         "virtual_light_map": {
           "horizontal_falloff": 2.4700000286102295,
-          "max_offset_x": 100.0,
-          "max_offset_y": 24.56999969482422,
+          "max_offset_x": 0.0,
+          "max_offset_y": 0.0,
           "search_radius": 2,
           "shadow_scale": 1.0,
           "size_scale_factor": 1.0,
@@ -14122,7 +14122,7 @@
           "curvyness": 2,
           "edge_smoothness": 2,
           "geometry": "Circle",
-          "inherits_map_assets": false,
+          "inherits_map_assets": true,
           "is_boss": false,
           "is_spawn": true,
           "max_height": 1800,

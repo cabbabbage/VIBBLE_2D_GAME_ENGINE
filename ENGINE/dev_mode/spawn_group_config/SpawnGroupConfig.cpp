@@ -1730,6 +1730,7 @@ void SpawnGroupConfig::refresh_row_configuration() {
 void SpawnGroupConfig::set_embedded_mode(bool embedded) {
     embedded_mode_ = embedded;
     set_floatable(!embedded ? default_floatable_mode_ : false);
+    set_scroll_enabled(!embedded);
     if (embedded) {
         setLocked(false);
     }

@@ -2,7 +2,7 @@
     "dev": {
         "asset_filter": {
             "current_room": true,
-            "filters_expanded": false,
+            "filters_expanded": true,
             "initialized": true,
             "map_assets": true,
             "methods": {
@@ -31,8 +31,8 @@
                 "reactive": {
                     "virtual_light_map": {
                         "horizontal_falloff": 2.4700000286102295,
-                        "max_offset_x": 100.0,
-                        "max_offset_y": 24.56999969482422,
+                        "max_offset_x": 0.0,
+                        "max_offset_y": 0.0,
                         "search_radius": 2.0,
                         "shadow_scale": 1.0,
                         "size_scale_factor": 1.0,
@@ -40,6 +40,9 @@
                     }
                 },
                 "update_map_light": true
+            },
+            "shadow_panel": {
+                "render_shadows": true
             }
         },
         "lock": {

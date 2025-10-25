@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <random>
 
 namespace utils {
 namespace color {
@@ -85,6 +86,17 @@ ChannelRange make_range(int min_v, int max_v) {
     out.min = clamp_channel_value(std::min(min_v, max_v));
     out.max = clamp_channel_value(std::max(min_v, max_v));
     return out;
+}
+
+Uint8 random_channel_value(const ChannelRange& range) {
+    const ChannelRange clamped = clamp_channel_range(range);
+    static thread_local std::mt19937 rng([] {
+        std::random_device rd;
+        std::seed_seq seq{rd(), rd(), rd(), rd(), rd(), rd()};
+        return std::mt19937(seq);
+    }());
+    std::uniform_int_distribution<int> dist(clamped.min, clamped.max);
+    return static_cast<Uint8>(dist(rng));
 }
 
 } // namespace
@@ -194,14 +206,11 @@ nlohmann::json ranged_color_to_json(const RangedColor& color) {
 
 SDL_Color resolve_ranged_color(const RangedColor& color) {
     const RangedColor clamped = clamp_ranged_color(color);
-    auto midpoint = [](const ChannelRange& range) {
-        return static_cast<Uint8>((range.min + range.max) / 2);
-    };
     return SDL_Color{
-        midpoint(clamped.r),
-        midpoint(clamped.g),
-        midpoint(clamped.b),
-        midpoint(clamped.a)
+        random_channel_value(clamped.r),
+        random_channel_value(clamped.g),
+        random_channel_value(clamped.b),
+        random_channel_value(clamped.a)
     };
 }
 
