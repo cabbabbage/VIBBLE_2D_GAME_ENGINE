@@ -13843,7 +13843,7 @@
       },
       "map_layers": [
         {
-          "bounding_extent": 5000.0,
+          "bounding_extent": 900.0,
           "level": 0,
           "max_rooms": 1,
           "min_rooms": 1,
@@ -13864,7 +13864,7 @@
           "max_rooms": 0,
           "min_rooms": 0,
           "name": "layer_1",
-          "ring_radius": 5200.0,
+          "ring_radius": 1100.0,
           "rooms": []
         }
       ],
@@ -14020,12 +14020,24 @@
             }
           ]
         ],
-        "map_color": [
-          32,
-          65,
-          43,
-          255
-        ],
+        "map_color": {
+          "a": {
+            "max": 255,
+            "min": 255
+          },
+          "b": {
+            "max": 43,
+            "min": 43
+          },
+          "g": {
+            "max": 107,
+            "min": 65
+          },
+          "r": {
+            "max": 75,
+            "min": 32
+          }
+        },
         "mult": 0.32,
         "orbit_radius": 1561,
         "orbit_x": 1561,
@@ -14077,53 +14089,6 @@
         }
       },
       "rooms_data": {
-        "NewRoom": {
-          "name": "NewRoom",
-          "spawn_groups": []
-        },
-        "base": {
-          "curvyness": 2,
-          "edge_smoothness": 2,
-          "geometry": "Circle",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": true,
-          "max_height": 1800,
-          "max_radius": 900,
-          "max_width": 1800,
-          "min_height": 1800,
-          "min_radius": 900,
-          "min_width": 1800,
-          "name": "base",
-          "radius": 900,
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "candle"
-                }
-              ],
-              "display_name": "candle",
-              "dx": -141,
-              "dy": -272,
-              "enforce_spacing": false,
-              "max_number": 25,
-              "min_number": 15,
-              "origional_height": 2448,
-              "origional_width": 2477,
-              "perimeter_radius": 566,
-              "position": "Perimeter",
-              "radius": 562,
-              "resolution": 4,
-              "spawn_id": "spn-cd2298321f6e"
-            }
-          ]
-        },
         "spawn": {
           "curvyness": 2,
           "edge_smoothness": 2,
@@ -14137,7 +14102,7 @@
           "min_height": 1800,
           "min_radius": 900,
           "min_width": 1800,
-          "name": "",
+          "name": "spawn",
           "radius": 900,
           "spawn_groups": [
             {
@@ -14145,15 +14110,22 @@
                 {
                   "chance": 0,
                   "name": "null"
+                },
+                {
+                  "chance": 5.0,
+                  "name": "Vibble"
                 }
               ],
               "display_name": "New Spawn",
               "enforce_spacing": false,
               "max_number": 8,
               "min_number": 8,
-              "position": "Perimeter",
+              "origional_height": 1816,
+              "origional_width": 1954,
+              "position": "Exact",
               "priority": 0,
-              "resolution": 5,
+              "quantity": 8,
+              "resolution": 3,
               "spawn_id": "spn-dcd209a9deb9"
             }
           ]

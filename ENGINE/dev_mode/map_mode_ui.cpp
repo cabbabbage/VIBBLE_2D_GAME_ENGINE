@@ -590,18 +590,28 @@ void MapModeUI::ensure_panels() {
             this->open_room_configuration(key, SlidingPanel::LayerControls);
         });
         layers_panel_->set_side_panel_callback([this](MapLayersPanel::SidePanel panel) {
+            SlidingPanel desired_panel = SlidingPanel::RoomsList;
             switch (panel) {
-                case MapLayersPanel::SidePanel::RoomsList:
-                    this->show_sliding_panel(SlidingPanel::RoomsList);
-                    break;
                 case MapLayersPanel::SidePanel::LayerControls:
-                    this->show_sliding_panel(SlidingPanel::LayerControls);
+                    desired_panel = SlidingPanel::LayerControls;
                     break;
+                case MapLayersPanel::SidePanel::RoomsList:
                 case MapLayersPanel::SidePanel::None:
                 default:
-                    this->show_sliding_panel(SlidingPanel::RoomsList);
+                    desired_panel = SlidingPanel::RoomsList;
                     break;
             }
+
+            const bool room_config_open = room_configurator_ && room_configurator_->visible();
+            if (room_config_open) {
+                if (room_config_return_panel_ != desired_panel) {
+                    room_config_return_panel_ = desired_panel;
+                    update_room_config_header_controls();
+                }
+                return;
+            }
+
+            this->show_sliding_panel(desired_panel);
         });
         layers_panel_->set_on_close([this]() {
             this->close_room_configuration(false);

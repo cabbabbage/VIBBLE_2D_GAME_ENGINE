@@ -315,9 +315,6 @@ void FloatingPanelLayoutManager::layoutAll(const std::vector<PanelInfo>& panels)
 
         int x = locate_position(current, width, free_intervals, usable_rect_);
         int y = usable_rect_.y;
-        if (usable_rect_.h > height) {
-            y += (usable_rect_.h - height) / 2;
-        }
         int min_y = usable_rect_.y;
         int max_y = usable_rect_.y + std::max(0, usable_rect_.h - height);
         if (max_y < min_y) {
@@ -361,8 +358,6 @@ SDL_Point FloatingPanelLayoutManager::positionFor(const PanelInfo& panel, const 
             int parent_center = parent->bounds.y + parent->bounds.h / 2;
             y = parent_center - height / 2;
         }
-    } else if (usable_rect_.h > height) {
-        y += (usable_rect_.h - height) / 2;
     }
 
     int min_y = usable_rect_.y;

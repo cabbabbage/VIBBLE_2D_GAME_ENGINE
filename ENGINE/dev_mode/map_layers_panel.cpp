@@ -562,6 +562,7 @@ void MapLayersPanel::select_layer(int index) {
         return;
     }
 
+    const int previous_selection = selected_layer_index_;
     int resolved_index = index;
     const int count = static_cast<int>(layer_rows_.size());
     bool found = false;
@@ -598,7 +599,9 @@ void MapLayersPanel::select_layer(int index) {
         on_layer_selected_(selected_layer_index_);
     }
     recalculate_dependency_highlights();
-    notify_side_panel(SidePanel::LayerControls);
+    if (selected_layer_index_ != previous_selection) {
+        notify_side_panel(SidePanel::LayerControls);
+    }
 }
 
 void MapLayersPanel::mark_dirty(bool trigger_preview) {
