@@ -1,0 +1,2183 @@
+{
+  "audio": {
+    "music": {
+      "content_root": "MAPS/FORREST/music",
+      "tracks": []
+    }
+  },
+  "camera_settings": {
+    "distance_scale_strength": 0.07999999821186066,
+    "foreshorten_strength": 0.09999999403953552,
+    "height_at_zoom1": 517.0,
+    "min_visible_screen_ratio": 0.007000000216066837,
+    "parallax_strength": 28.0,
+    "realism_enabled": true,
+    "render_distance": 1380.0,
+    "render_quality_percent": 10,
+    "tripod_distance_y": -495.0
+  },
+  "content_root": "MAPS/FORREST",
+  "map_assets_data": {
+    "spawn_groups": [
+      {
+        "candidates": [
+          {
+            "chance": 352,
+            "name": "null"
+          },
+          {
+            "chance": 1,
+            "name": "#pretty"
+          },
+          {
+            "chance": 0.7275,
+            "name": "#pretty"
+          },
+          {
+            "chance": 0.7275,
+            "name": "Small_Rock"
+          },
+          {
+            "chance": 30.3,
+            "name": "Grass_1_FPS_2"
+          },
+          {
+            "chance": 24.3,
+            "name": "Grass_FPS_2"
+          }
+        ],
+        "display_name": "batch_map_assets",
+        "enforce_spacing": false,
+        "max_number": 100,
+        "min_number": 53,
+        "position": "Random",
+        "priority": 2,
+        "resolution": 0,
+        "resolve_geometry_to_room_size": false,
+        "resolve_quantity_to_room_size": false,
+        "spawn_id": "spn-5200d51e3675"
+      }
+    ]
+  },
+  "map_boundary_data": {
+    "inherits_map_assets": false,
+    "spawn_groups": [
+      {
+        "candidates": [
+          {
+            "chance": 0,
+            "name": "null"
+          },
+          {
+            "chance": 5,
+            "name": "Tree_Dark"
+          },
+          {
+            "chance": 4.25,
+            "name": "Tree_Darker"
+          },
+          {
+            "chance": 1,
+            "name": "Big_Rock"
+          }
+        ],
+        "display_name": "batch_map_boundary",
+        "enforce_spacing": false,
+        "max_number": 100,
+        "min_number": 100,
+        "position": "Random",
+        "resolution": 0,
+        "resolve_geometry_to_room_size": false,
+        "resolve_quantity_to_room_size": false,
+        "spawn_id": "spn-88572bf1415f"
+      }
+    ]
+  },
+  "map_grid_settings": {
+    "chunk_size": 512,
+    "jitter": 10,
+    "r_chunk": 9,
+    "resolution": 5,
+    "spacing": 32
+  },
+  "map_layers": [
+    {
+      "bounding_extent": 900.0,
+      "level": 0,
+      "max_rooms": 1,
+      "min_rooms": 1,
+      "name": "layer_0",
+      "ring_radius": 0.0,
+      "rooms": [
+        {
+          "max_instances": 1,
+          "min_instances": 1,
+          "name": "spawn",
+          "required_children": []
+        }
+      ]
+    },
+    {
+      "bounding_extent": 1626.3455967290593,
+      "level": 1,
+      "max_rooms": 5,
+      "min_rooms": 5,
+      "name": "layer_1",
+      "ring_radius": 4447.0,
+      "rooms": [
+        {
+          "max_instances": 1,
+          "min_instances": 1,
+          "name": "lantern_glade",
+          "required_children": []
+        },
+        {
+          "max_instances": 1,
+          "min_instances": 1,
+          "name": "mushroom_court",
+          "required_children": []
+        },
+        {
+          "max_instances": 1,
+          "min_instances": 1,
+          "name": "candle_vigil",
+          "required_children": []
+        },
+        {
+          "max_instances": 1,
+          "min_instances": 1,
+          "name": "booze_cache",
+          "required_children": []
+        },
+        {
+          "max_instances": 1,
+          "min_instances": 1,
+          "name": "fountain_plaza",
+          "required_children": []
+        }
+      ]
+    }
+  ],
+  "map_layers_settings": {
+    "min_edge_distance": 1920
+  },
+  "map_light_data": {
+    "base_color": {
+      "a": {
+        "max": 247,
+        "min": 247
+      },
+      "b": {
+        "max": 248,
+        "min": 248
+      },
+      "g": {
+        "max": 246,
+        "min": 246
+      },
+      "r": {
+        "max": 255,
+        "min": 255
+      }
+    },
+    "fall_off": 7,
+    "intensity": 180,
+    "keys": [
+      [
+        71.99583839408662,
+        {
+          "a": {
+            "max": 241,
+            "min": 180
+          },
+          "b": {
+            "max": 249,
+            "min": 234
+          },
+          "g": {
+            "max": 253,
+            "min": 237
+          },
+          "r": {
+            "max": 255,
+            "min": 226
+          }
+        }
+      ],
+      [
+        108.00416160591338,
+        {
+          "a": {
+            "max": 241,
+            "min": 180
+          },
+          "b": {
+            "max": 249,
+            "min": 234
+          },
+          "g": {
+            "max": 253,
+            "min": 237
+          },
+          "r": {
+            "max": 255,
+            "min": 226
+          }
+        }
+      ],
+      [
+        260.0362269401454,
+        {
+          "a": {
+            "max": 0,
+            "min": 0
+          },
+          "b": {
+            "max": 255,
+            "min": 58
+          },
+          "g": {
+            "max": 155,
+            "min": 57
+          },
+          "r": {
+            "max": 255,
+            "min": 38
+          }
+        }
+      ],
+      [
+        279.9637730598546,
+        {
+          "a": {
+            "max": 0,
+            "min": 0
+          },
+          "b": {
+            "max": 255,
+            "min": 58
+          },
+          "g": {
+            "max": 155,
+            "min": 57
+          },
+          "r": {
+            "max": 255,
+            "min": 38
+          }
+        }
+      ]
+    ],
+    "map_color": {
+      "a": {
+        "max": 255,
+        "min": 255
+      },
+      "b": {
+        "max": 74,
+        "min": 74
+      },
+      "g": {
+        "max": 101,
+        "min": 101
+      },
+      "r": {
+        "max": 69,
+        "min": 69
+      }
+    },
+    "mult": 0.32,
+    "orbit_radius": 2003,
+    "orbit_x": 1306,
+    "orbit_y": 2003,
+    "radius": 2759,
+    "reactive_shadows": {
+      "virtual_light_map": {
+        "horizontal_falloff": 1.6200000047683716,
+        "map_light_dir_offset_strength": 0.5,
+        "max_offset_x": 100.0,
+        "max_offset_y": 100.0,
+        "max_scale_percent": 120,
+        "min_scale_percent": 80,
+        "parallax_percent": 0.0,
+        "shadow_scale": 1.0,
+        "vertical_falloff": 3.5
+      }
+    },
+    "update_interval": 7
+  },
+  "map_name": "FORREST",
+  "reactive_shadows": {
+    "frame_blend_falloff_frames": 31,
+    "opacity_sensitivity_percent": 100.0,
+    "opacity_strength": 1.0,
+    "parallax_strength": 1.0,
+    "sampling_weights": {
+      "dynamic_weight": 1.940000057220459,
+      "static_weight": 0.05000000074505806
+    },
+    "scale_strength": 1.0,
+    "shadow_lut": [
+      {
+        "brightness": 0.0,
+        "offset": 0.0,
+        "opacity": 1.0,
+        "scale": 1.0
+      },
+      {
+        "brightness": 1.0,
+        "offset": 658.9600219726563,
+        "opacity": 7.659999847412109,
+        "scale": 6.590000152587891
+      }
+    ],
+    "virtual_light_map": {
+      "horizontal_falloff": 5.920000076293945,
+      "map_light_dir_offset_strength": 0.05000000074505806,
+      "max_offset_x": 241.3300018310547,
+      "max_offset_y": 0.6299999952316284,
+      "max_scale_percent": 150,
+      "min_scale_percent": 32,
+      "parallax_percent": 7.510000228881836,
+      "search_radius": 32,
+      "shadow_scale": 1.3600000143051147,
+      "vertical_falloff": 5.920000076293945
+    }
+  },
+  "rooms_data": {
+    "axe_range": {
+      "curvyness": 2,
+      "display_color": [
+        71,
+        31,
+        204,
+        255
+      ],
+      "edge_smoothness": 5,
+      "geometry": "Rectangle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2000,
+      "max_width": 2600,
+      "min_height": 1300,
+      "min_width": 1900,
+      "name": "axe_range",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Stump"
+            },
+            {
+              "chance": 40,
+              "name": "Bench"
+            }
+          ],
+          "display_name": "Target Logs",
+          "enforce_spacing": false,
+          "max_number": 5,
+          "min_number": 2,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-bbc3a859e3a6"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Axe"
+            },
+            {
+              "chance": 40,
+              "name": "marker"
+            }
+          ],
+          "display_name": "Training Gear",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-e08a5cc175fd"
+        }
+      ]
+    },
+    "bomb_crater": {
+      "curvyness": 3,
+      "display_color": [
+        36,
+        242,
+        226,
+        255
+      ],
+      "edge_smoothness": 4,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2200,
+      "max_radius": 1100,
+      "max_width": 2200,
+      "min_height": 1500,
+      "min_radius": 750,
+      "min_width": 1500,
+      "name": "bomb_crater",
+      "radius": 900,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 70,
+              "name": "Bomb"
+            },
+            {
+              "chance": 30,
+              "name": "Barrel"
+            }
+          ],
+          "display_name": "Smoldering Remains",
+          "enforce_spacing": false,
+          "max_number": 4,
+          "min_number": 2,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-e912d1b0814b"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Rock"
+            },
+            {
+              "chance": 40,
+              "name": "Stump"
+            }
+          ],
+          "display_name": "Debris",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-29bd93824188"
+        }
+      ]
+    },
+    "bone_pit": {
+      "curvyness": 2,
+      "display_color": [
+        85,
+        242,
+        120,
+        255
+      ],
+      "edge_smoothness": 4,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2300,
+      "max_radius": 1150,
+      "max_width": 2300,
+      "min_height": 1500,
+      "min_radius": 750,
+      "min_width": 1500,
+      "name": "bone_pit",
+      "radius": 950,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 40,
+              "name": "Bone"
+            },
+            {
+              "chance": 40,
+              "name": "Bone_1"
+            },
+            {
+              "chance": 20,
+              "name": "Bone_Pile"
+            }
+          ],
+          "display_name": "Bone Heap",
+          "enforce_spacing": false,
+          "max_number": 10,
+          "min_number": 6,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-553dba076b7b"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Skull_1"
+            },
+            {
+              "chance": 40,
+              "name": "Skull_Pile_1"
+            }
+          ],
+          "display_name": "Skull Scatter",
+          "enforce_spacing": false,
+          "max_number": 8,
+          "min_number": 4,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-b1016da675b4"
+        }
+      ]
+    },
+    "book_archive": {
+      "curvyness": 3,
+      "display_color": [
+        181,
+        85,
+        242,
+        255
+      ],
+      "edge_smoothness": 7,
+      "geometry": "Square",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2400,
+      "max_width": 2400,
+      "min_height": 1600,
+      "min_width": 1600,
+      "name": "book_archive",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 40,
+              "name": "Book"
+            },
+            {
+              "chance": 30,
+              "name": "Book_1"
+            },
+            {
+              "chance": 30,
+              "name": "Book_Pile"
+            }
+          ],
+          "display_name": "Stacks",
+          "enforce_spacing": false,
+          "max_number": 8,
+          "min_number": 4,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-54b55549b9e7"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 70,
+              "name": "Book_Pile_1"
+            },
+            {
+              "chance": 30,
+              "name": "Book_Pile"
+            }
+          ],
+          "display_name": "Overflow",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 2,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-e96adb33a4d6"
+        }
+      ]
+    },
+    "booze_cache": {
+      "curvyness": 2,
+      "display_color": [
+        71,
+        142,
+        204,
+        255
+      ],
+      "edge_smoothness": 6,
+      "geometry": "Square",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2300,
+      "max_width": 2300,
+      "min_height": 1500,
+      "min_width": 1500,
+      "name": "booze_cache",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Barrel"
+            },
+            {
+              "chance": 40,
+              "name": "Booze_1"
+            }
+          ],
+          "display_name": "Hidden Barrels",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "origional_height": 1807,
+          "origional_width": 2662,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-ae46dceec25a"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 70,
+              "name": "Booze_2"
+            },
+            {
+              "chance": 30,
+              "name": "Box"
+            }
+          ],
+          "display_name": "Smuggled Bottles",
+          "enforce_spacing": false,
+          "max_number": 5,
+          "min_number": 2,
+          "origional_height": 1807,
+          "origional_width": 2662,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-c5c872ebbec5"
+        }
+      ]
+    },
+    "bush_maze": {
+      "curvyness": 4,
+      "display_color": [
+        85,
+        242,
+        193,
+        255
+      ],
+      "edge_smoothness": 9,
+      "geometry": "Rectangle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2500,
+      "max_width": 3000,
+      "min_height": 1700,
+      "min_width": 2200,
+      "name": "bush_maze",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 50,
+              "name": "Bush_FPS_2"
+            },
+            {
+              "chance": 50,
+              "name": "Bush_1_FPS_2"
+            }
+          ],
+          "display_name": "Tall Walls",
+          "enforce_spacing": false,
+          "max_number": 9,
+          "min_number": 5,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-af4426dc8570"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 70,
+              "name": "Grass_FPS_2"
+            },
+            {
+              "chance": 30,
+              "name": "Grass_1_FPS_2"
+            }
+          ],
+          "display_name": "Ground Cover",
+          "enforce_spacing": false,
+          "max_number": 10,
+          "min_number": 6,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-a0a6a5223856"
+        }
+      ]
+    },
+    "candle_vigil": {
+      "curvyness": 2,
+      "display_color": [
+        242,
+        85,
+        108,
+        255
+      ],
+      "edge_smoothness": 8,
+      "geometry": "Square",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2100,
+      "max_width": 2100,
+      "min_height": 1400,
+      "min_width": 1400,
+      "name": "candle_vigil",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 50,
+              "name": "candle"
+            },
+            {
+              "chance": 50,
+              "name": "candle_3"
+            }
+          ],
+          "display_name": "Candle Cluster",
+          "enforce_spacing": false,
+          "max_number": 10,
+          "min_number": 6,
+          "origional_height": 1978,
+          "origional_width": 1730,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-dde1ad74099e"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "vigil"
+            }
+          ],
+          "display_name": "Vigil Centerpiece",
+          "enforce_spacing": false,
+          "max_number": 2,
+          "min_number": 1,
+          "origional_height": 1978,
+          "origional_width": 1730,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-7e4ceb5ae4cc"
+        }
+      ]
+    },
+    "caravan_stop": {
+      "curvyness": 2,
+      "display_color": [
+        204,
+        68,
+        31,
+        255
+      ],
+      "edge_smoothness": 6,
+      "geometry": "Rectangle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2500,
+      "max_width": 3100,
+      "min_height": 1700,
+      "min_width": 2200,
+      "name": "caravan_stop",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "car"
+            }
+          ],
+          "display_name": "Parked Caravan",
+          "enforce_spacing": false,
+          "max_number": 2,
+          "min_number": 1,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-8e2a40bb617d"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Bench"
+            },
+            {
+              "chance": 40,
+              "name": "Box"
+            }
+          ],
+          "display_name": "Camp Seating",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-e0628d637ab3"
+        }
+      ]
+    },
+    "chest_trove": {
+      "curvyness": 2,
+      "display_color": [
+        31,
+        204,
+        114,
+        255
+      ],
+      "edge_smoothness": 6,
+      "geometry": "Square",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2100,
+      "max_width": 2100,
+      "min_height": 1400,
+      "min_width": 1400,
+      "name": "chest_trove",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 70,
+              "name": "Chest"
+            },
+            {
+              "chance": 30,
+              "name": "Key"
+            }
+          ],
+          "display_name": "Treasure Chests",
+          "enforce_spacing": false,
+          "max_number": 4,
+          "min_number": 2,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-1508bdd71105"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Lantern"
+            }
+          ],
+          "display_name": "Guard Lanterns",
+          "enforce_spacing": false,
+          "max_number": 4,
+          "min_number": 2,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-8caae3a76668"
+        }
+      ]
+    },
+    "fountain": {
+      "curvyness": 2,
+      "display_color": [
+        36,
+        54,
+        242,
+        255
+      ],
+      "edge_smoothness": 2,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 4000,
+      "max_radius": 2000,
+      "max_width": 4000,
+      "min_height": 2000,
+      "min_radius": 1000,
+      "min_width": 2000,
+      "name": "fountain",
+      "radius": 2000,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Fountain"
+            }
+          ],
+          "display_name": "Fountain",
+          "dx": 281,
+          "dy": 70,
+          "enforce_spacing": false,
+          "link_to_area": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 3904,
+          "origional_width": 4058,
+          "position": "Exact",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-29767eab5830"
+        }
+      ]
+    },
+    "fountain_plaza": {
+      "curvyness": 3,
+      "display_color": [
+        128,
+        204,
+        71,
+        255
+      ],
+      "edge_smoothness": 12,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2600,
+      "max_radius": 1300,
+      "max_width": 2600,
+      "min_height": 2000,
+      "min_radius": 1000,
+      "min_width": 2000,
+      "name": "fountain_plaza",
+      "radius": 1200,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Fountain"
+            }
+          ],
+          "display_name": "Central Fountain",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 2649,
+          "origional_width": 2505,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-1aa2c4d7a6b0"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 70,
+              "name": "Bench"
+            },
+            {
+              "chance": 30,
+              "name": "Lantern"
+            }
+          ],
+          "display_name": "Rest Benches",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "origional_height": 2649,
+          "origional_width": 2505,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-bc0cdcdfd7a9"
+        }
+      ]
+    },
+    "frog_bog": {
+      "curvyness": 4,
+      "display_color": [
+        175,
+        31,
+        204,
+        255
+      ],
+      "edge_smoothness": 9,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2600,
+      "max_radius": 1300,
+      "max_width": 2600,
+      "min_height": 1800,
+      "min_radius": 900,
+      "min_width": 1800,
+      "name": "frog_bog",
+      "radius": 1150,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Frog"
+            }
+          ],
+          "display_name": "Bog Residents",
+          "enforce_spacing": false,
+          "max_number": 4,
+          "min_number": 2,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-59ccc184061e"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Grass_FPS_2"
+            },
+            {
+              "chance": 40,
+              "name": "Grass_1_FPS_2"
+            }
+          ],
+          "display_name": "Wetland Tufts",
+          "enforce_spacing": false,
+          "max_number": 10,
+          "min_number": 6,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-6fc865b70d9e"
+        }
+      ]
+    },
+    "gravestone_ring": {
+      "curvyness": 3,
+      "display_color": [
+        116,
+        36,
+        242,
+        255
+      ],
+      "edge_smoothness": 7,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2500,
+      "max_radius": 1250,
+      "max_width": 2500,
+      "min_height": 1800,
+      "min_radius": 900,
+      "min_width": 1800,
+      "name": "gravestone_ring",
+      "radius": 1100,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 50,
+              "name": "Grave_1"
+            },
+            {
+              "chance": 50,
+              "name": "Grave_2"
+            }
+          ],
+          "display_name": "Grave Markers",
+          "enforce_spacing": false,
+          "max_number": 8,
+          "min_number": 4,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-c61e591927c3"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Skull_Pile_1"
+            },
+            {
+              "chance": 40,
+              "name": "Skull_1"
+            }
+          ],
+          "display_name": "Skull Offerings",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-46ba6dded050"
+        }
+      ]
+    },
+    "lantern_glade": {
+      "curvyness": 3,
+      "display_color": [
+        204,
+        31,
+        100,
+        255
+      ],
+      "edge_smoothness": 6,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2200,
+      "max_radius": 1100,
+      "max_width": 2200,
+      "min_height": 1400,
+      "min_radius": 700,
+      "min_width": 1400,
+      "name": "lantern_glade",
+      "radius": 950,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Lantern"
+            },
+            {
+              "chance": 40,
+              "name": "Bench"
+            }
+          ],
+          "display_name": "Lantern Circle",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "origional_height": 1747,
+          "origional_width": 1900,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-f4eb66e5211f"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 55,
+              "name": "flower_4"
+            },
+            {
+              "chance": 45,
+              "name": "flower_5"
+            }
+          ],
+          "display_name": "Flower Border",
+          "enforce_spacing": false,
+          "max_number": 8,
+          "min_number": 4,
+          "origional_height": 1747,
+          "origional_width": 1900,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-0534f61960ff"
+        }
+      ]
+    },
+    "mushroom_court": {
+      "curvyness": 4,
+      "display_color": [
+        242,
+        124,
+        36,
+        255
+      ],
+      "edge_smoothness": 10,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2400,
+      "max_radius": 1200,
+      "max_width": 2400,
+      "min_height": 1600,
+      "min_radius": 800,
+      "min_width": 1600,
+      "name": "mushroom_court",
+      "radius": 1000,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 50,
+              "name": "Mushroom_1"
+            },
+            {
+              "chance": 30,
+              "name": "Mushroom_2"
+            },
+            {
+              "chance": 20,
+              "name": "Mushroom_3"
+            }
+          ],
+          "display_name": "Mushroom Ring",
+          "enforce_spacing": false,
+          "max_number": 9,
+          "min_number": 5,
+          "origional_height": 2154,
+          "origional_width": 2200,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-327011751ce2"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 70,
+              "name": "Grass_1_FPS_2"
+            },
+            {
+              "chance": 30,
+              "name": "Grass_FPS_2"
+            }
+          ],
+          "display_name": "Spore Scatter",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "origional_height": 2154,
+          "origional_width": 2200,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-fb1af2fe800c"
+        }
+      ]
+    },
+    "noose_clearing": {
+      "curvyness": 2,
+      "display_color": [
+        242,
+        147,
+        85,
+        255
+      ],
+      "edge_smoothness": 5,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2400,
+      "max_radius": 1200,
+      "max_width": 2400,
+      "min_height": 1600,
+      "min_radius": 800,
+      "min_width": 1600,
+      "name": "noose_clearing",
+      "radius": 1000,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "noose"
+            }
+          ],
+          "display_name": "Gallows",
+          "enforce_spacing": false,
+          "max_number": 3,
+          "min_number": 2,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-06b5ebfb5887"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 50,
+              "name": "Tree_Dark"
+            },
+            {
+              "chance": 50,
+              "name": "Tree_Darker"
+            }
+          ],
+          "display_name": "Watcher Trees",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-c7b02abce201"
+        }
+      ]
+    },
+    "rock_sentinels": {
+      "curvyness": 3,
+      "display_color": [
+        36,
+        242,
+        79,
+        255
+      ],
+      "edge_smoothness": 6,
+      "geometry": "Square",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2600,
+      "max_width": 2600,
+      "min_height": 1800,
+      "min_width": 1800,
+      "name": "rock_sentinels",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Big_Rock"
+            },
+            {
+              "chance": 40,
+              "name": "Big_Rock_Center"
+            }
+          ],
+          "display_name": "Standing Stones",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-61e7dfcba9b6"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Small_Rock"
+            }
+          ],
+          "display_name": "Scatter Pebbles",
+          "enforce_spacing": false,
+          "max_number": 10,
+          "min_number": 5,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-54fb96d917ad"
+        }
+      ]
+    },
+    "sigil_garden": {
+      "curvyness": 3,
+      "display_color": [
+        185,
+        204,
+        31,
+        255
+      ],
+      "edge_smoothness": 10,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2300,
+      "max_radius": 1150,
+      "max_width": 2300,
+      "min_height": 1500,
+      "min_radius": 750,
+      "min_width": 1500,
+      "name": "sigil_garden",
+      "radius": 950,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Sigil_Of_Fortune"
+            }
+          ],
+          "display_name": "Fortune Sigils",
+          "enforce_spacing": false,
+          "max_number": 5,
+          "min_number": 3,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-7a6a8a8b3cc7"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 40,
+              "name": "flower"
+            },
+            {
+              "chance": 30,
+              "name": "flower_3"
+            },
+            {
+              "chance": 30,
+              "name": "flower_1"
+            }
+          ],
+          "display_name": "Flower Bands",
+          "enforce_spacing": false,
+          "max_number": 9,
+          "min_number": 5,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-d1c12b24590c"
+        }
+      ]
+    },
+    "skull_hollow": {
+      "curvyness": 2,
+      "display_color": [
+        71,
+        204,
+        156,
+        255
+      ],
+      "edge_smoothness": 5,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2400,
+      "max_radius": 1200,
+      "max_width": 2400,
+      "min_height": 1600,
+      "min_radius": 800,
+      "min_width": 1600,
+      "name": "skull_hollow",
+      "radius": 1000,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 50,
+              "name": "Skull_1"
+            },
+            {
+              "chance": 50,
+              "name": "Skull_Pile_1"
+            }
+          ],
+          "display_name": "Skull Piles",
+          "enforce_spacing": false,
+          "max_number": 7,
+          "min_number": 3,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-184e5dbc4e22"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Bone"
+            },
+            {
+              "chance": 40,
+              "name": "Bone_Pile"
+            }
+          ],
+          "display_name": "Bone Scatter",
+          "enforce_spacing": false,
+          "max_number": 8,
+          "min_number": 4,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-c42281f835a8"
+        }
+      ]
+    },
+    "spawn": {
+      "areas": [
+        {
+          "anchor": {
+            "x": 0,
+            "y": 0
+          },
+          "anchor_relative_to_center": true,
+          "kind": "Spawn",
+          "name": "spawning_area_new",
+          "points": [
+            {
+              "x": 388,
+              "y": -241
+            },
+            {
+              "x": 530,
+              "y": 69
+            },
+            {
+              "x": 154,
+              "y": 108
+            }
+          ],
+          "resolution": 0,
+          "type": "spawning"
+        }
+      ],
+      "curvyness": 2,
+      "display_color": [
+        96,
+        204,
+        31,
+        255
+      ],
+      "edge_smoothness": 101,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": true,
+      "max_height": 1800,
+      "max_radius": 900,
+      "max_width": 1800,
+      "min_height": 1800,
+      "min_radius": 900,
+      "min_width": 1800,
+      "name": "spawn",
+      "radius": 900,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Vibble"
+            }
+          ],
+          "display_name": "Vibble",
+          "dx": 185,
+          "dy": 8,
+          "enforce_spacing": false,
+          "link_to_area": true,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1963,
+          "origional_width": 1944,
+          "position": "Exact",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-e900ea94ff54"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Barrel"
+            }
+          ],
+          "display_name": "Barrel",
+          "dx": -25,
+          "dy": -57,
+          "enforce_spacing": false,
+          "link_to_area": true,
+          "linked_area": "spawning_area_new",
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1800,
+          "origional_width": 1800,
+          "position": "Exact",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-7a9fb8aedbad"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "candle"
+            }
+          ],
+          "display_name": "candle",
+          "dx": -467,
+          "dy": -297,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1800,
+          "origional_width": 1800,
+          "position": "Exact",
+          "priority": 2,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-ce64c1af28ba"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Bomb"
+            }
+          ],
+          "display_name": "Bomb",
+          "dx": -264,
+          "dy": -52,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1800,
+          "origional_width": 1800,
+          "position": "Exact",
+          "priority": 3,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-08af5896c8e4"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Frog"
+            }
+          ],
+          "display_name": "Frog",
+          "dx": 132,
+          "dy": -144,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1800,
+          "origional_width": 1800,
+          "position": "Exact",
+          "priority": 4,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-0195862f38aa"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Grass_1_FPS_2"
+            }
+          ],
+          "display_name": "Grass_1_FPS_2",
+          "dx": -7,
+          "dy": -213,
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1800,
+          "origional_width": 1800,
+          "position": "Exact",
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-d65ed240a55d"
+        }
+      ]
+    },
+    "stump_circle": {
+      "curvyness": 3,
+      "display_color": [
+        31,
+        204,
+        191,
+        255
+      ],
+      "edge_smoothness": 6,
+      "geometry": "Circle",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2100,
+      "max_radius": 1050,
+      "max_width": 2100,
+      "min_height": 1400,
+      "min_radius": 700,
+      "min_width": 1400,
+      "name": "stump_circle",
+      "radius": 900,
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Stump"
+            }
+          ],
+          "display_name": "Stump Seats",
+          "enforce_spacing": false,
+          "max_number": 8,
+          "min_number": 4,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-c405bf27437b"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "Small_Rock"
+            },
+            {
+              "chance": 40,
+              "name": "Grass_1_FPS_2"
+            }
+          ],
+          "display_name": "Forest Floor",
+          "enforce_spacing": false,
+          "max_number": 10,
+          "min_number": 6,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-999b9d4b3e4f"
+        }
+      ]
+    },
+    "vibble_camp": {
+      "curvyness": 3,
+      "display_color": [
+        99,
+        204,
+        31,
+        255
+      ],
+      "edge_smoothness": 7,
+      "geometry": "Square",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 2200,
+      "max_width": 2200,
+      "min_height": 1500,
+      "min_width": 1500,
+      "name": "vibble_camp",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "Vibble"
+            }
+          ],
+          "display_name": "Campfire Crew",
+          "enforce_spacing": false,
+          "max_number": 3,
+          "min_number": 1,
+          "position": "Random",
+          "priority": 0,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-71977f0e419a"
+        },
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 60,
+              "name": "candle"
+            },
+            {
+              "chance": 40,
+              "name": "Lantern"
+            }
+          ],
+          "display_name": "Comfort Lights",
+          "enforce_spacing": false,
+          "max_number": 6,
+          "min_number": 3,
+          "position": "Random",
+          "priority": 1,
+          "resolution": 5,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-c26864fd3dd6"
+        }
+      ]
+    }
+  },
+  "trails_data": {
+    "NewTrail": {
+      "display_color": [
+        242,
+        85,
+        153,
+        255
+      ],
+      "edge_smoothness": 2,
+      "geometry": "",
+      "inherits_map_assets": false,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 800,
+      "max_width": 800,
+      "min_height": 400,
+      "min_width": 400,
+      "name": "",
+      "spawn_groups": []
+    },
+    "basic": {
+      "curvyness": 4,
+      "display_color": [
+        204,
+        80,
+        31,
+        255
+      ],
+      "edge_smoothness": 2,
+      "geometry": "Square",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 1221,
+      "max_width": 596,
+      "min_height": 100,
+      "min_width": 470,
+      "name": "basic",
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            },
+            {
+              "chance": 100,
+              "name": "candle"
+            }
+          ],
+          "display_name": "candle",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "origional_height": 1535,
+          "origional_width": 2666,
+          "position": "Exact",
+          "priority": 0,
+          "resolve_geometry_to_room_size": true,
+          "resolve_quantity_to_room_size": false,
+          "spawn_id": "spn-400a2bb2d100"
+        }
+      ]
+    },
+    "brick": {
+      "curvyness": 4,
+      "display_color": [
+        85,
+        242,
+        115,
+        255
+      ],
+      "edge_smoothness": 101,
+      "geometry": "Square",
+      "inherits_map_assets": true,
+      "is_boss": false,
+      "is_spawn": false,
+      "max_height": 1000,
+      "max_width": 600,
+      "min_height": 100,
+      "min_width": 500,
+      "name": "brick",
+      "spawn_groups": []
+    }
+  }
+}

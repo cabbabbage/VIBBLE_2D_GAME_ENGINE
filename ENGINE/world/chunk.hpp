@@ -67,6 +67,8 @@ struct Chunk {
         float dynamic_strength = 1.0f;
         // Net light contribution applied to the chunk after static and dynamic blending [0,1].
         float current_strength = 1.0f;
+        // Snapshot of the chunk's light level captured before shadow updates are applied each frame.
+        float pre_shadow_strength = 1.0f;
         // Runtime measurement captured from the on-screen render output during this frame.
         float runtime_average_strength = 1.0f;
         // Marks whether runtime_average_strength contains a valid measurement for the current frame.

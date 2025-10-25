@@ -13691,7 +13691,7 @@
         },
         {
           "behind": false,
-          "falloff": 0,
+          "falloff": 50,
           "flare": 1,
           "flicker": 0,
           "has_light_source": true,
@@ -13703,7 +13703,7 @@
           "light_intensity": 194,
           "offset_x": 0,
           "offset_y": 0,
-          "radius": 226
+          "radius": 502
         }
       ],
       "mappings": {},
@@ -13714,6 +13714,16 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
       "size_settings": {
         "scale_percentage": 17.0
       },

@@ -312,6 +312,7 @@ void Chunk::update_aggregate_from_lighting_chunks() {
     lighting.runtime_average_strength = static_cast<float>(accum_runtime * inv);
     lighting.static_strength          = static_cast<float>(accum_static * inv);
     lighting.dynamic_strength         = static_cast<float>(accum_dynamic * inv);
+    lighting.pre_shadow_strength      = lighting.current_strength;
     lighting.is_active                = any_active;
     lighting.needs_update             = any_needs;
     lighting.has_runtime_average      = any_runtime;
@@ -473,7 +474,7 @@ std::pair<float, float> compute_brightness_gradient(const LightingChunk& center,
         return {0.0f, 0.0f};
     }
 
-    const float cb = std::clamp(center.lighting.current_strength, 0.0f, 1.0f);
+    const float cb = std::clamp(center.lighting.pre_shadow_strength, 0.0f, 1.0f);
     float gx = 0.0f, gy = 0.0f;
     for (int dj = -effective_radius; dj <= effective_radius; ++dj) {
         for (int di = -effective_radius; di <= effective_radius; ++di) {
@@ -481,7 +482,7 @@ std::pair<float, float> compute_brightness_gradient(const LightingChunk& center,
             const int target_i = center.global_i + di;
             const int target_j = center.global_j + dj;
             const LightingChunk* n = find_lighting_chunk_from_global_const(grid, target_i, target_j);
-            const float nb = n ? std::clamp(n->lighting.current_strength, 0.0f, 1.0f) : cb;
+            const float nb = n ? std::clamp(n->lighting.pre_shadow_strength, 0.0f, 1.0f) : cb;
             const float db = nb - cb;
             const float dx_chunks = static_cast<float>(di) / static_cast<float>(subdivisions);
             const float dy_chunks = static_cast<float>(dj) / static_cast<float>(subdivisions);
@@ -506,7 +507,7 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
     const float fv = std::max(0.0f, settings.falloff_vertical);
     const int   subdivisions = grid.lighting_subdivisions_per_chunk();
     if (subdivisions <= 0) {
-        const float base = std::clamp(center.lighting.current_strength, 0.0f, 1.0f);
+        const float base = std::clamp(center.lighting.pre_shadow_strength, 0.0f, 1.0f);
         return {base, base};
     }
 
@@ -526,18 +527,18 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
                 const float sx = std::abs(static_cast<float>(di)) / static_cast<float>(subdivisions);
                 const float sy = std::abs(static_cast<float>(dj)) / static_cast<float>(subdivisions);
                 const float w  = 1.0f / (1.0f + sx * fh + sy * fv);
-                const float s  = std::clamp(n->lighting.current_strength, 0.0f, 1.0f);
+                const float s  = std::clamp(n->lighting.pre_shadow_strength, 0.0f, 1.0f);
                 accum_w += static_cast<double>(w);
                 accum_v += static_cast<double>(w) * static_cast<double>(std::clamp(s, 0.0f, 1.0f));
             }
         }
         if (accum_w <= 1e-8) {
-            return std::clamp(center.lighting.current_strength, 0.0f, 1.0f);
+            return std::clamp(center.lighting.pre_shadow_strength, 0.0f, 1.0f);
         }
         return static_cast<float>(std::clamp(accum_v / accum_w, 0.0, 1.0));
     };
 
-    const float base_strength = std::clamp(center.lighting.current_strength, 0.0f, 1.0f);
+    const float base_strength = std::clamp(center.lighting.pre_shadow_strength, 0.0f, 1.0f);
     const float front_avg  = (R > 0) ? sample_dir(-effective_radius, -1) : base_strength;
     const float behind_avg = (R > 0) ? sample_dir(1,  effective_radius)  : base_strength;
     return {front_avg, behind_avg};
@@ -751,10 +752,11 @@ void LightMap::rebuild_scene_light_cache(const std::vector<world::Chunk*>& chunk
         if (!chunk) {
             continue;
         }
-        const int cell_count = static_cast<int>(chunk->lighting_chunks().size());
-        scene_light_count_ += cell_count;
-        scene_light_sum_ += static_cast<double>(std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f)) *
-                            static_cast<double>(cell_count);
+        for (const auto& cell : chunk->lighting_chunks()) {
+            scene_light_sum_ +=
+                static_cast<double>(std::clamp(cell.lighting.pre_shadow_strength, 0.0f, 1.0f));
+            ++scene_light_count_;
+        }
     }
     scene_light_cache_valid_ = true;
 }
@@ -808,6 +810,27 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
     if (chunks.empty()) {
         return;
     }
+
+    double frame_pre_shadow_sum   = 0.0;
+    int    frame_pre_shadow_count = 0;
+    for (world::Chunk* chunk : chunks) {
+        if (!chunk) {
+            continue;
+        }
+        chunk->lighting.pre_shadow_strength =
+            std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
+        for (auto& cell : chunk->lighting_chunks()) {
+            const float snapshot = std::clamp(cell.lighting.current_strength, 0.0f, 1.0f);
+            cell.lighting.pre_shadow_strength = snapshot;
+            frame_pre_shadow_sum += static_cast<double>(snapshot);
+            ++frame_pre_shadow_count;
+        }
+    }
+
+    scene_light_sum_        = frame_pre_shadow_sum;
+    scene_light_count_      = frame_pre_shadow_count;
+    cached_chunk_count_     = static_cast<int>(chunks.size());
+    scene_light_cache_valid_ = true;
 
     const ShadowSettings settings = shadow_settings();
     const float          static_weight  = std::max(0.0f, settings.sampling_static_weight);
@@ -921,6 +944,13 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         rebuild_scene_light_cache(chunks);
     }
 
+    const double frame_scene_sum   = scene_light_sum_;
+    const int    frame_scene_count = scene_light_count_;
+    const float  frame_scene_average =
+        (frame_scene_count > 0)
+            ? static_cast<float>(frame_scene_sum / static_cast<double>(frame_scene_count))
+            : 1.0f;
+
     const int   radius = std::max(0, settings.search_radius_cells);
     const float fx     = std::max(0.0f, settings.falloff_horizontal);
     const float fy     = std::max(0.0f, settings.falloff_vertical);
@@ -990,12 +1020,7 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
             continue;
         }
 
-        const double scene_sum_with_chunk = scene_light_sum_ + chunk_strength_delta;
-        float        scene_average_strength = 1.0f;
-        if (scene_light_count_ > 0) {
-            scene_average_strength = static_cast<float>(scene_sum_with_chunk /
-                                                        static_cast<double>(scene_light_count_));
-        }
+        const float scene_average_strength = frame_scene_average;
 
         const bool chunk_prefers_fast_blend = chunk_dirty;
 
@@ -1026,7 +1051,6 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         chunk->lighting_dirty      = false;
         chunk->lighting.needs_update = false;
 
-        scene_light_sum_ = scene_sum_with_chunk;
         scene_light_cache_valid_ = true;
     }
 }

@@ -2088,18 +2088,17 @@ void RoomEditor::purge_asset(Asset* asset) {
     bool highlight_sources_changed = false;
     if (hovered_asset_ == asset) {
         hovered_asset_ = nullptr;
+        hover_miss_frames_ = 0;
         highlight_sources_changed = true;
     }
+    remove_asset_from_spatial_index(asset);
     auto erase_from = [asset, &highlight_sources_changed](std::vector<Asset*>& vec) {
         const auto before = vec.size();
-    remove_asset_from_spatial_index(asset);
-    if (hovered_asset_ == asset) hovered_asset_ = nullptr;
-    auto erase_from = [asset](std::vector<Asset*>& vec) {
         vec.erase(std::remove(vec.begin(), vec.end(), asset), vec.end());
         if (vec.size() != before) {
             highlight_sources_changed = true;
         }
-};
+    };
     erase_from(selected_assets_);
     erase_from(highlighted_assets_);
     if (drag_anchor_asset_ == asset) {
