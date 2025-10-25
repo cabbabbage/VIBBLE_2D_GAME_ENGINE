@@ -24,6 +24,7 @@ struct ChildInfo {
     std::string area_name;
     int z_offset;
     nlohmann::json inline_assets;
+    bool placed_on_top_parent = false;
 };
 
 struct MappingOption {

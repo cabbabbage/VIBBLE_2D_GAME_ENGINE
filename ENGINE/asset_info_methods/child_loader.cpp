@@ -21,6 +21,7 @@ void ChildLoader::load_children(AssetInfo& info,
         }
         ci.area_name = entry.value("area_name", std::string{});
         ci.z_offset  = entry.value("z_offset", 0);
+        ci.placed_on_top_parent = entry.value("placed_on_top_parent", false);
         try {
             if (entry.contains("spawn_groups") && entry["spawn_groups"].is_array()) {
                 ci.inline_assets = entry["spawn_groups"];

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_library.hpp"
@@ -63,6 +64,20 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
         Asset* raw = assetPtr.get();
         all_.push_back(std::move(assetPtr));
         if (raw->info && !raw->info->children.empty()) {
+                std::unordered_map<std::string, Area> resolved_child_areas;
+                for (const auto& named : raw->info->areas) {
+                        if (!named.area) {
+                                continue;
+                        }
+                        try {
+                                resolved_child_areas[named.name] = area_helpers::make_world_area(*raw->info,
+                                                                                               *named.area,
+                                                                                               raw->pos,
+                                                                                               raw->flipped);
+                        } catch (...) {
+                                continue;
+                        }
+                }
                 std::vector<ChildInfo*> shuffled_children;
                 for (auto& child : raw->info->children) {
                         shuffled_children.push_back(&child);
@@ -98,6 +113,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 }
                         }
                         Area childArea = area_helpers::make_world_area(*raw->info, *base_area, raw->pos, raw->flipped);
+                        resolved_child_areas[childInfo->area_name] = childArea;
                         AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
                                                        childArea,
                                                        *asset_library_);
@@ -106,12 +122,16 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                         child_settings.resolution = spawn_resolution_;
                         child_settings.clamp();
                         childSpawner.set_map_grid_settings(child_settings);
-                        childSpawner.spawn_children(childArea, &childPlanner);
+                        childSpawner.spawn_children(childArea, resolved_child_areas, &childPlanner);
                         auto kids = childSpawner.extract_all_assets();
                         for (auto& uptr : kids) {
                                 if (!uptr || !uptr->info) continue;
-                                uptr->set_z_offset(childInfo->z_offset);
                                 uptr->parent = raw;
+                                int z_offset = childInfo->z_offset;
+                                if (childInfo->placed_on_top_parent && z_offset <= 0) {
+                                        z_offset = 1;
+                                }
+                                uptr->set_z_offset(z_offset);
                                 uptr->set_hidden(false);
 
                                 raw->children.push_back(uptr.get());

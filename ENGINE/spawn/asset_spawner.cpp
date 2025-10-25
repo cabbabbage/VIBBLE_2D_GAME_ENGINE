@@ -6,7 +6,6 @@
 #include "methods/random_spawner.hpp"
 #include "methods/perimeter_spawner.hpp"
 #include "methods/edge_spawner.hpp"
-#include "methods/children_spawner.hpp"
 #include "methods/percent_spawner.hpp"
 #include "check.hpp"
 #include <algorithm>
@@ -52,12 +51,14 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const
         return extract_all_assets();
 }
 
-void AssetSpawner::spawn_children(const Area& spawn_area, AssetSpawnPlanner* planner) {
+void AssetSpawner::spawn_children(const Area& spawn_area,
+                                  const std::unordered_map<std::string, Area>& area_lookup,
+                                  AssetSpawnPlanner* planner) {
         if (!planner) {
-		std::cerr << "[AssetSpawner] Child planner is null — skipping.\n";
-		return;
-	}
-        run_child_spawning(planner, spawn_area);
+                std::cerr << "[AssetSpawner] Child planner is null — skipping.\n";
+                return;
+        }
+        run_child_spawning(planner, spawn_area, area_lookup);
 }
 
 std::vector<std::unique_ptr<Asset>> AssetSpawner::extract_all_assets() {
@@ -333,19 +334,63 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
         checker_.reset_session();
 }
 
-void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner, const Area& area) {
+void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
+                                      const Area& default_area,
+                                      const std::unordered_map<std::string, Area>& area_lookup) {
         asset_info_library_ = asset_library_->all();
         spawn_queue_ = planner->get_spawn_queue();
 
         vibble::grid::Grid& grid_service = vibble::grid::global_grid();
         const int resolution = std::max(0, map_grid_settings_.resolution);
         checker_.begin_session(grid_service, resolution);
-        SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, nullptr);
-        ctx.set_spawn_resolution(resolution);
-        ChildrenSpawner childMethod;
+        ExactSpawner exact;
+        CenterSpawner center;
+        RandomSpawner random;
+        PerimeterSpawner perimeter;
+        EdgeSpawner edge;
+        PercentSpawner percent;
+
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
-                childMethod.spawn(queue_item, &area, ctx);
+
+                const Area* target_area = &default_area;
+                if (!queue_item.link_area_name.empty()) {
+                        auto it = area_lookup.find(queue_item.link_area_name);
+                        if (it != area_lookup.end()) {
+                                target_area = &it->second;
+                        }
+                }
+                if (!target_area) {
+                        continue;
+                }
+
+                vibble::grid::Occupancy occupancy(*target_area, resolution, grid_service);
+                SpawnContext ctx(rng_,
+                                 checker_,
+                                 exclusion_zones,
+                                 asset_info_library_,
+                                 all_,
+                                 asset_library_,
+                                 grid_service,
+                                 &occupancy);
+                ctx.set_spawn_resolution(resolution);
+                ctx.set_trail_areas({});
+                ctx.set_clip_area(target_area);
+
+                const std::string& pos = queue_item.position;
+                if (pos == "Exact" || pos == "Exact Position") {
+                        exact.spawn(queue_item, target_area, ctx);
+                } else if (pos == "Center") {
+                        center.spawn(queue_item, target_area, ctx);
+                } else if (pos == "Perimeter") {
+                        perimeter.spawn(queue_item, target_area, ctx);
+                } else if (pos == "Edge") {
+                        edge.spawn(queue_item, target_area, ctx);
+                } else if (pos == "Percent") {
+                        percent.spawn(queue_item, target_area, ctx);
+                } else {
+                        random.spawn(queue_item, target_area, ctx);
+                }
         }
         checker_.reset_session();
 }

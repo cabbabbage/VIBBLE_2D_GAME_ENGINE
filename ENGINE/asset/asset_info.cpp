@@ -1059,6 +1059,7 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
         nlohmann::json entry;
         entry["area_name"] = c.area_name;
         entry["z_offset"] = c.z_offset;
+        entry["placed_on_top_parent"] = c.placed_on_top_parent;
 
         try {
             if (c.inline_assets.is_array() && !c.inline_assets.empty()) {
