@@ -638,9 +638,13 @@ void RoomConfigurator::ensure_base_panels() {
         }
     };
 
-    ensure_panel(geometry_panel_, "geometry", "Room Geometry");
-    ensure_panel(tags_panel_, "tags", "Room Tags");
-    ensure_panel(types_panel_, "types", "Room Types");
+    const std::string geometry_title = is_trail_context_ ? "Trail Geometry" : "Room Geometry";
+    const std::string tags_title = is_trail_context_ ? "Trail Tags" : "Room Tags";
+    const std::string types_title = is_trail_context_ ? "Trail Types" : "Room Types";
+
+    ensure_panel(geometry_panel_, "geometry", geometry_title);
+    ensure_panel(tags_panel_, "tags", tags_title);
+    ensure_panel(types_panel_, "types", types_title);
 }
 
 void RoomConfigurator::refresh_base_panel_rows() {
@@ -875,7 +879,7 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
 
     bool spawn_changed = (new_spawn_array != current_spawn_array);
 
-    const bool allow_height = !is_trail_context_ || kTrailsAllowIndependentDimensions;
+    const bool allow_height = !is_trail_context_ && kTrailsAllowIndependentDimensions;
 
     State new_state = state_ ? *state_ : State{};
     new_state.load_from_json(normalized_copy, geometry_options_, allow_height);
@@ -1398,11 +1402,11 @@ void RoomConfigurator::rebuild_rows_internal() {
     ensure_base_panels();
     ordered_base_panels_.clear();
 
-    name_box_ = std::make_unique<DMTextBox>("Room Name", state_->name);
+    name_box_ = std::make_unique<DMTextBox>(is_trail_context_ ? "Trail Name" : "Room Name", state_->name);
     name_widget_ = std::make_unique<TextBoxWidget>(name_box_.get());
 
     bool allow_geometry_choice = !is_trail_context_;
-    const bool allow_height = !is_trail_context_ || kTrailsAllowIndependentDimensions;
+    const bool allow_height = !is_trail_context_ && kTrailsAllowIndependentDimensions;
     if (allow_geometry_choice) {
         auto geom_it = std::find(geometry_options_.begin(), geometry_options_.end(), state_->geometry);
         int geom_index = 0;
@@ -1453,8 +1457,13 @@ void RoomConfigurator::rebuild_rows_internal() {
         }
     }
 
-    edge_slider_ = std::make_unique<DMSlider>("Edge Smoothness", 0, 101, state_->edge_smoothness);
-    edge_widget_ = std::make_unique<SliderWidget>(edge_slider_.get());
+    if (!is_trail_context_) {
+        edge_slider_ = std::make_unique<DMSlider>("Edge Smoothness", 0, 101, state_->edge_smoothness);
+        edge_widget_ = std::make_unique<SliderWidget>(edge_slider_.get());
+    } else {
+        edge_slider_.reset();
+        edge_widget_.reset();
+    }
 
     if (is_trail_context_) {
         curvy_slider_ = std::make_unique<DMSlider>("Curvyness", 0, 16, state_->curvyness);
@@ -1464,8 +1473,13 @@ void RoomConfigurator::rebuild_rows_internal() {
         curvy_widget_.reset();
     }
 
-    spawn_checkbox_ = std::make_unique<DMCheckbox>("Spawn", state_->is_spawn);
-    spawn_widget_ = std::make_unique<CheckboxWidget>(spawn_checkbox_.get());
+    if (!is_trail_context_) {
+        spawn_checkbox_ = std::make_unique<DMCheckbox>("Spawn", state_->is_spawn);
+        spawn_widget_ = std::make_unique<CheckboxWidget>(spawn_checkbox_.get());
+    } else {
+        spawn_checkbox_.reset();
+        spawn_widget_.reset();
+    }
 
     if (!is_trail_context_) {
         boss_checkbox_ = std::make_unique<DMCheckbox>("Boss", state_->is_boss);
@@ -1604,7 +1618,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
     bool changed = false;
     bool rebuild_required = false;
     bool tags_changed = false;
-    const bool allow_height = !is_trail_context_ || kTrailsAllowIndependentDimensions;
+    const bool allow_height = !is_trail_context_ && kTrailsAllowIndependentDimensions;
 
     if (tags_dirty_) {
         changed = true;
@@ -1864,7 +1878,7 @@ nlohmann::json RoomConfigurator::build_json() const {
     nlohmann::json result = loaded_json_.is_object() ? loaded_json_ : nlohmann::json::object();
     if (state_) {
         State copy = *state_;
-        const bool allow_height = !is_trail_context_ || kTrailsAllowIndependentDimensions;
+    const bool allow_height = !is_trail_context_ && kTrailsAllowIndependentDimensions;
         copy.ensure_valid(allow_height);
         copy.apply_to_json(result, allow_height);
     }

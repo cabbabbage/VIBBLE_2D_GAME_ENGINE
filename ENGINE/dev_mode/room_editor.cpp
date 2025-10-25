@@ -869,6 +869,7 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     save_current_room_assets_json();
     asset->spawn_id = spawn_id;
     asset->spawn_method = "Exact";
+    active_spawn_group_id_ = spawn_id;
     refresh_spawn_group_config_ui();
     rebuild_room_spawn_id_cache();
 }
@@ -1557,6 +1558,11 @@ void RoomEditor::ensure_room_configurator() {
                 add_spawn_group_internal();
             },
             [this](const std::string& spawn_id) {
+                if (spawn_id.empty()) {
+                    clear_active_spawn_group_target();
+                } else {
+                    active_spawn_group_id_ = spawn_id;
+                }
                 refresh_spawn_group_config_ui();
                 if (spawn_id.empty()) {
                     return;
@@ -2195,6 +2201,9 @@ void RoomEditor::finalize_drag_session() {
 
     if (json_modified) {
         save_current_room_assets_json();
+        if (!drag_spawn_id_.empty()) {
+            active_spawn_group_id_ = drag_spawn_id_;
+        }
         refresh_spawn_group_config_ui();
     }
 
@@ -2515,7 +2524,8 @@ void RoomEditor::add_spawn_group_internal() {
     auto& root = current_room_->assets_data();
     auto& arr = ensure_spawn_groups_array(root);
     nlohmann::json entry;
-    entry["spawn_id"] = generate_spawn_id();
+    const std::string new_spawn_id = generate_spawn_id();
+    entry["spawn_id"] = new_spawn_id;
     const int add_default_resolution = current_room_ ? current_room_->map_grid_settings().resolution
                                                      : MapGridSettings::defaults().resolution;
     devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn", add_default_resolution);
@@ -2527,9 +2537,10 @@ void RoomEditor::add_spawn_group_internal() {
     sanitize_perimeter_spawn_groups(arr);
     save_current_room_assets_json();
     rebuild_room_spawn_id_cache();
+    active_spawn_group_id_ = new_spawn_id;
     refresh_spawn_group_config_ui();
     reopen_room_configurator();
-    open_spawn_group_editor_by_id(entry["spawn_id"].get<std::string>());
+    open_spawn_group_editor_by_id(new_spawn_id);
 }
 
 void RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
@@ -2649,12 +2660,12 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
         return;
     }
 
-    active_spawn_group_id_ = spawn_id;
-
     ensure_spawn_group_config_ui();
     if (!spawn_group_panel_) {
         return;
     }
+
+    active_spawn_group_id_ = spawn_id;
 
     refresh_spawn_group_config_ui();
 
@@ -2678,7 +2689,6 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
     spawn_group_panel_->request_open_spawn_group(spawn_id, anchor.x, anchor.y);
     Input dummy;
     spawn_group_panel_->update(dummy, screen_w_, screen_h_);
-    active_spawn_group_id_ = spawn_id;
 }
 
 void RoomEditor::reopen_room_configurator() {

@@ -126,13 +126,15 @@ void TrailEditorSuite::ensure_ui() {
 }
 
 void TrailEditorSuite::update_bounds() {
-    const int margin = 48;
-    const int max_width = std::max(320, screen_w_ - 2 * margin);
+    const int side_margin = 0;
+    const int vertical_margin = 48;
+    const int min_width = 320;
+    const int available_width = std::max(1, screen_w_ - side_margin);
     const int desired_width = std::max(360, screen_w_ / 3);
-    const int width = std::min(max_width, desired_width);
-    const int height = std::max(240, screen_h_ - 2 * margin);
-    const int x = std::max(margin, screen_w_ - width - margin);
-    const int y = margin;
+    const int width = std::min(available_width, std::max(min_width, desired_width));
+    const int height = std::max(240, screen_h_ - 2 * vertical_margin);
+    const int x = std::max(0, screen_w_ - width - side_margin);
+    const int y = vertical_margin;
     config_bounds_ = SDL_Rect{x, y, width, height};
     if (configurator_) {
         configurator_->set_bounds(config_bounds_);
