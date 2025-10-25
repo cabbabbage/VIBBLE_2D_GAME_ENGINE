@@ -827,6 +827,27 @@
             ],
             "revision": 2
         },
+        "Vibble": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-25T18:08:43Z",
+            "recommended_percentages": [
+                100,
+                75,
+                50
+            ],
+            "revision": 1
+        },
         "bouncing": {
             "histogram": [
                 0,
@@ -1036,6 +1057,27 @@
                 10
             ],
             "revision": 2
+        },
+        "fog": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-25T18:17:18Z",
+            "recommended_percentages": [
+                100,
+                75,
+                50
+            ],
+            "revision": 1
         },
         "lantern": {
             "histogram": [

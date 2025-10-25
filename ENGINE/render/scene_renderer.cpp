@@ -279,25 +279,25 @@ void SceneRenderer::render(){
 
     bool rendered_light_map = false;
     auto render_light_map = [&]() {
+        if (!light_map_only_mode_) {
+            return;
+        }
         if (chunk_lighting_suspended_) {
             return;
         }
         if (!light_map_ || rendered_light_map) {
             return;
         }
-        // Compute the current screen-light color and derive a global alpha multiplier from its opacity.
-        // Higher map-light opacity values correspond to darker scenes, so the overlay should become
-        // more prominent as the opacity rises.
         const float alpha_mult = map_light_opacity;
 
-        SDL_Rect screen_view{0,0,screen_width_,screen_height_};
+        SDL_Rect screen_view{0, 0, screen_width_, screen_height_};
         SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
-        if (SDL_GetRenderDrawBlendMode(renderer_,&previous_mode) != 0) {
+        if (SDL_GetRenderDrawBlendMode(renderer_, &previous_mode) != 0) {
             previous_mode = SDL_BLENDMODE_BLEND;
         }
-        SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         light_map_->render_visible_chunks(renderer_, screen_view, alpha_mult, map_light_color);
-        SDL_SetRenderDrawBlendMode(renderer_,previous_mode);
+        SDL_SetRenderDrawBlendMode(renderer_, previous_mode);
         rendered_light_map = true;
     };
 
@@ -416,7 +416,9 @@ void SceneRenderer::render(){
             if (a->info && !a->info->light_sources.empty() && dst.w > 0 && dst.h > 0 && fw > 0 && fh > 0) {
                 const std::string canonical_type = asset_types::canonicalize(a->info->type);
                 const bool        punches_overlay =
-                    (canonical_type == asset_types::object || canonical_type == asset_types::texture);
+                    (canonical_type == asset_types::object ||
+                     canonical_type == asset_types::texture ||
+                     canonical_type == asset_types::player);
                 if (!punches_overlay) {
                     continue;
                 }
@@ -587,7 +589,7 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         return;
     }
 
-    const float overlay_alpha = std::clamp(1.0f - map_light_opacity, 0.0f, 1.0f);
+    const float overlay_alpha = std::clamp(map_light_opacity, 0.0f, 1.0f);
     if (!ensure_darkness_overlay()) {
         return;
     }

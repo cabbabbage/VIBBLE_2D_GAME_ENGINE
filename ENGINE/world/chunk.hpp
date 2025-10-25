@@ -238,6 +238,11 @@ public:
                                const SDL_Rect& view_rect,
                                float alpha_multiplier,
                                const SDL_Color& color_mod) const;
+    void subtract_runtime_shadow_from_texture(SDL_Renderer* renderer,
+                                              SDL_Texture* target_texture,
+                                              const SDL_Rect& target_rect,
+                                              const SDL_Rect& screen_rect,
+                                              float alpha_multiplier) const;
     void render_chunk_preview(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void present_static_previews(SDL_Renderer* renderer) const;
 
@@ -262,6 +267,17 @@ public:
     SDL_Rect chunk_bounds(int index) const;
 
 private:
+    struct RuntimeShadowMaskRender {
+        SDL_Rect  dest_rect{0, 0, 0, 0};
+        SDL_Color color{0, 0, 0, 0};
+        float     alpha = 0.0f;
+    };
+
+    void collect_runtime_shadow_masks(const SDL_Rect& view_rect,
+                                      float alpha_multiplier,
+                                      const SDL_Color& color_mod,
+                                      std::vector<RuntimeShadowMaskRender>& out) const;
+
     SDL_Texture* ensure_runtime_shadow_mask(SDL_Renderer* renderer) const;
     void         destroy_runtime_shadow_mask() const;
 

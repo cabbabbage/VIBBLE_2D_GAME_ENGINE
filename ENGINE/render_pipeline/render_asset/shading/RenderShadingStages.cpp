@@ -328,6 +328,20 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     }
 #endif
 
+    if (const LightMap* vmap = context.light_map()) {
+        const SDL_Color main_color      = context.main_light().get_current_color();
+        const float     alpha_multiplier =
+            std::clamp(static_cast<float>(main_color.a) / 255.0f, 0.0f, 1.0f);
+        SDL_Rect target_bounds{0, 0, width, height};
+        if (target_bounds.w > 0 && target_bounds.h > 0 && context.screen_rect.w > 0 && context.screen_rect.h > 0) {
+            vmap->subtract_runtime_shadow_from_texture(renderer,
+                                                       cache.texture,
+                                                       target_bounds,
+                                                       context.screen_rect,
+                                                       alpha_multiplier);
+        }
+    }
+
     SDL_SetRenderTarget(renderer, prev_target);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
