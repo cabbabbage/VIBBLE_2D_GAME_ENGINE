@@ -2,12 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-<<<<<<< ours
 #include <cstdint>
-#include <unordered_map>
-=======
 #include <numeric>
->>>>>>> theirs
+#include <unordered_map>
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
@@ -538,31 +535,23 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
             }
 
             RuntimeLightingFrame::Sample sample;
-<<<<<<< ours
-            sample.chunk_i    = chunk->i;
-            sample.chunk_j    = chunk->j;
-            sample.global_i   = cell.global_i;
-            sample.global_j   = cell.global_j;
-            sample.brightness = brightness;
-            sample.raw_intensity = brightness_sum;
+            sample.chunk_i        = chunk->i;
+            sample.chunk_j        = chunk->j;
+            sample.global_i       = cell.global_i;
+            sample.global_j       = cell.global_j;
+            sample.brightness     = brightness;
+            sample.raw_intensity  = brightness_sum;
+            sample.world_position = center;
             if (brightness_sum > 1e-5f) {
                 SDL_FPoint dir{accum_dir_x / brightness_sum, accum_dir_y / brightness_sum};
                 const float dir_mag = std::sqrt(dir.x * dir.x + dir.y * dir.y);
                 if (dir_mag > 1e-4f) {
                     dir.x /= dir_mag;
                     dir.y /= dir_mag;
-                    sample.direction      = dir;
+                    sample.direction   = dir;
                     sample.has_direction = true;
                 }
             }
-=======
-            sample.chunk_i        = chunk->i;
-            sample.chunk_j        = chunk->j;
-            sample.global_i       = cell.global_i;
-            sample.global_j       = cell.global_j;
-            sample.brightness     = brightness;
-            sample.world_position = center;
->>>>>>> theirs
             if (brightness_sum > 1e-5f) {
                 const float inv = 1.0f / brightness_sum;
                 const float r   = std::clamp(accum_r * inv, 0.0f, 255.0f);
@@ -592,54 +581,72 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
             float total_weight = 0.0f;
             SDL_FPoint centroid{0.0f, 0.0f};
             const RuntimeLightingFrame::Sample* brightest_sample = nullptr;
+            std::size_t contributing_samples                     = 0;
             for (std::size_t idx = 0; idx < take_count; ++idx) {
                 const RuntimeLightingFrame::Sample& sample = frame.samples[indices[idx]];
-                const float weight = std::max(0.0f, sample.brightness);
+                float weight = std::max(sample.raw_intensity, sample.brightness);
                 if (weight <= 0.0f) {
                     continue;
                 }
                 centroid.x += sample.world_position.x * weight;
                 centroid.y += sample.world_position.y * weight;
                 total_weight += weight;
+                ++contributing_samples;
                 if (!brightest_sample || sample.brightness > brightest_sample->brightness) {
                     brightest_sample = &sample;
                 }
             }
 
             if (brightest_sample) {
-                frame.has_brightest_sample         = true;
-                frame.brightest_sample_position    = brightest_sample->world_position;
-                frame.brightest_sample_brightness  = brightest_sample->brightness;
+                frame.has_brightest_sample        = true;
+                frame.brightest_sample_position   = brightest_sample->world_position;
+                frame.brightest_sample_brightness = brightest_sample->brightness;
             }
 
             if (total_weight > 1e-5f) {
                 const float inv_weight = 1.0f / total_weight;
                 centroid.x *= inv_weight;
                 centroid.y *= inv_weight;
-                frame.brightest_centroid  = centroid;
-                frame.has_brightest_centroid = true;
-                frame.brightest_sample_count = take_count;
+                frame.brightest_centroid       = centroid;
+                frame.has_brightest_centroid   = true;
+                frame.brightest_sample_count   = contributing_samples;
 
                 SDL_FPoint accum_dir{0.0f, 0.0f};
                 float direction_weight = 0.0f;
                 for (std::size_t idx = 0; idx < take_count; ++idx) {
                     const RuntimeLightingFrame::Sample& sample = frame.samples[indices[idx]];
-                    const float weight = std::max(0.0f, sample.brightness);
+                    float weight = std::max(sample.raw_intensity, sample.brightness);
                     if (weight <= 0.0f) {
                         continue;
                     }
-                    const float dx = sample.world_position.x - centroid.x;
-                    const float dy = sample.world_position.y - centroid.y;
-                    const float len = std::sqrt(dx * dx + dy * dy);
-                    if (len <= 1e-4f) {
-                        continue;
+                    if (sample.has_direction) {
+                        accum_dir.x += sample.direction.x * weight;
+                        accum_dir.y += sample.direction.y * weight;
+                        direction_weight += weight;
                     }
-                    const float nx = dx / len;
-                    const float ny = dy / len;
-                    accum_dir.x += nx * weight;
-                    accum_dir.y += ny * weight;
-                    direction_weight += weight;
                 }
+
+                if (direction_weight <= 1e-5f) {
+                    for (std::size_t idx = 0; idx < take_count; ++idx) {
+                        const RuntimeLightingFrame::Sample& sample = frame.samples[indices[idx]];
+                        float weight = std::max(sample.raw_intensity, sample.brightness);
+                        if (weight <= 0.0f) {
+                            continue;
+                        }
+                        const float dx = sample.world_position.x - centroid.x;
+                        const float dy = sample.world_position.y - centroid.y;
+                        const float len = std::sqrt(dx * dx + dy * dy);
+                        if (len <= 1e-4f) {
+                            continue;
+                        }
+                        const float nx = dx / len;
+                        const float ny = dy / len;
+                        accum_dir.x += nx * weight;
+                        accum_dir.y += ny * weight;
+                        direction_weight += weight;
+                    }
+                }
+
                 if (direction_weight > 1e-5f) {
                     const float len = std::sqrt(accum_dir.x * accum_dir.x + accum_dir.y * accum_dir.y);
                     if (len > 1e-4f) {

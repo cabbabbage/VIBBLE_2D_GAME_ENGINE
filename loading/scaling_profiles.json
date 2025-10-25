@@ -102,30 +102,6 @@
             ],
             "revision": 1
         },
-        "Bomb": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                32,
-                0
-            ],
-            "last_requested_percent": 14,
-            "last_requested_scale": 0.13645833730697632,
-            "last_updated": "2025-10-25T14:49:19Z",
-            "last_used_texture_scale": 0.5,
-            "recommended_percentages": [
-                100,
-                75,
-                15
-            ],
-            "revision": 2
-        },
         "Bone": {
             "histogram": [
                 0,

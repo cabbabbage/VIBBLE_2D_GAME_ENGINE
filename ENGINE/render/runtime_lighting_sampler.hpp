@@ -22,25 +22,16 @@ struct AssetLight {
 
 struct RuntimeLightingFrame {
     struct Sample {
-<<<<<<< ours
-        int   chunk_i    = 0;
-        int   chunk_j    = 0;
-        int   global_i   = 0;
-        int   global_j   = 0;
-        float brightness = 0.0f;
-        float raw_intensity = 0.0f;
-        SDL_FPoint direction{0.0f, 0.0f};
-        SDL_Color color{255, 255, 255, 255};
-        bool      has_direction = false;
-=======
         int        chunk_i        = 0;
         int        chunk_j        = 0;
         int        global_i       = 0;
         int        global_j       = 0;
         float      brightness     = 0.0f;
+        float      raw_intensity  = 0.0f;
         SDL_Color  color{255, 255, 255, 255};
         SDL_FPoint world_position{0.0f, 0.0f};
->>>>>>> theirs
+        SDL_FPoint direction{0.0f, 0.0f};
+        bool       has_direction = false;
     };
 
     std::vector<Sample> samples{};
