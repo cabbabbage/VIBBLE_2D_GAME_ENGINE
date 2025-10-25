@@ -244,6 +244,8 @@ class MapLayersPanel::MinEdgeWidget : public Widget {
 public:
     explicit MinEdgeWidget(MapLayersPanel* owner) : owner_(owner) {}
 
+    void mark_layout_dirty() { this->request_layout(); }
+
     void set_rect(const SDL_Rect& r) override {
         rect_ = r;
         if (owner_) {
@@ -333,7 +335,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     if (min_edge_textbox_) {
         min_edge_textbox_->set_on_height_changed([this]() {
             if (min_edge_widget_) {
-                min_edge_widget_->request_layout();
+                min_edge_widget_->mark_layout_dirty();
             }
         });
     }
@@ -1621,7 +1623,7 @@ void MapLayersPanel::sync_min_edge_textbox() {
         min_edge_textbox_->set_value(last_valid_min_edge_text_);
     }
     if (min_edge_widget_) {
-        min_edge_widget_->request_layout();
+        min_edge_widget_->mark_layout_dirty();
     }
 }
 
@@ -1674,7 +1676,7 @@ void MapLayersPanel::on_min_edge_text_changed() {
     }
     last_valid_min_edge_text_ = normalized;
     if (min_edge_widget_) {
-        min_edge_widget_->request_layout();
+        min_edge_widget_->mark_layout_dirty();
     }
 }
 
@@ -1687,7 +1689,7 @@ void MapLayersPanel::on_min_edge_edit_finished() {
         min_edge_textbox_->set_value(last_valid_min_edge_text_);
         show_min_edge_note("Enter a number between 0 and 10000.", error_color());
         if (min_edge_widget_) {
-            min_edge_widget_->request_layout();
+            min_edge_widget_->mark_layout_dirty();
         }
     }
 }
@@ -1718,7 +1720,7 @@ void MapLayersPanel::show_min_edge_note(const std::string& message, SDL_Color co
     min_edge_note_color_ = color;
     min_edge_note_expiration_ = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     if (min_edge_widget_) {
-        min_edge_widget_->request_layout();
+        min_edge_widget_->mark_layout_dirty();
     }
 }
 
@@ -1729,7 +1731,7 @@ void MapLayersPanel::clear_min_edge_note() {
     min_edge_note_.clear();
     min_edge_note_color_ = DMStyles::Label().color;
     if (min_edge_widget_) {
-        min_edge_widget_->request_layout();
+        min_edge_widget_->mark_layout_dirty();
     }
 }
 
