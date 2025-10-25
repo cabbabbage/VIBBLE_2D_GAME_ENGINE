@@ -23,6 +23,9 @@ void TrailEditorSuite::set_screen_dimensions(int width, int height) {
     screen_w_ = width;
     screen_h_ = height;
     update_bounds();
+    if (spawn_groups_) {
+        spawn_groups_->set_screen_dimensions(screen_w_, screen_h_);
+    }
 }
 
 void TrailEditorSuite::open(Room* trail) {
@@ -132,6 +135,9 @@ void TrailEditorSuite::ensure_ui() {
     }
     if (!spawn_groups_) {
         spawn_groups_ = std::make_unique<SpawnGroupConfig>();
+        if (spawn_groups_) {
+            spawn_groups_->set_screen_dimensions(screen_w_, screen_h_);
+        }
     }
     update_bounds();
     if (configurator_) {

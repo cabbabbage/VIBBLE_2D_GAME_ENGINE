@@ -10,6 +10,7 @@
 #include "utils/input.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -388,16 +389,66 @@ SDL_Rect MapEditor::label_background_rect(const SDL_Surface* surface, SDL_Point 
     SDL_Rect rect{};
     rect.w = rect_w;
     rect.h = rect_h;
-    rect.x = screen_pos.x - rect_w / 2;
-    rect.y = screen_pos.y - rect_h / 2 - kLabelVerticalOffset;
 
-    if (screen_w_ > 0) {
-        rect.x = std::max(rect.x, 0);
-        rect.x = std::min(rect.x, screen_w_ - rect.w);
+    if (screen_w_ <= 0 || screen_h_ <= 0) {
+        rect.x = screen_pos.x - rect_w / 2;
+        rect.y = screen_pos.y - rect_h / 2 - kLabelVerticalOffset;
+        return rect;
     }
-    if (screen_h_ > 0) {
-        rect.y = std::max(rect.y, 0);
-        rect.y = std::min(rect.y, screen_h_ - rect.h);
+
+    const float half_w = static_cast<float>(rect_w) * 0.5f;
+    const float half_h = static_cast<float>(rect_h) * 0.5f;
+    const float min_x = half_w;
+    const float max_x = static_cast<float>(screen_w_) - half_w;
+    const float min_y = half_h;
+    const float max_y = static_cast<float>(screen_h_) - half_h;
+
+    SDL_FPoint desired_center{static_cast<float>(screen_pos.x),
+                              static_cast<float>(screen_pos.y - kLabelVerticalOffset)};
+
+    auto clamp_center = [&](const SDL_FPoint& point) {
+        SDL_FPoint clamped = point;
+        clamped.x = std::clamp(clamped.x, min_x, max_x);
+        clamped.y = std::clamp(clamped.y, min_y, max_y);
+        return clamped;
+    };
+
+    SDL_FPoint center = clamp_center(desired_center);
+
+    const bool inside = desired_center.x >= min_x && desired_center.x <= max_x &&
+                        desired_center.y >= min_y && desired_center.y <= max_y;
+
+    if (!inside) {
+        SDL_FPoint screen_center{static_cast<float>(screen_w_) * 0.5f,
+                                 static_cast<float>(screen_h_) * 0.5f};
+        const float dx = desired_center.x - screen_center.x;
+        const float dy = desired_center.y - screen_center.y;
+        const float epsilon = 0.0001f;
+
+        if (std::fabs(dx) > epsilon || std::fabs(dy) > epsilon) {
+            float t_min = 1.0f;
+
+            auto update_t = [&](float boundary, float origin, float delta) {
+                if (std::fabs(delta) < epsilon) return;
+                float t = (boundary - origin) / delta;
+                if (t >= 0.0f) {
+                    t_min = std::min(t_min, t);
+                }
+            };
+
+            if (dx > 0.0f) update_t(max_x, screen_center.x, dx);
+            else if (dx < 0.0f) update_t(min_x, screen_center.x, dx);
+
+            if (dy > 0.0f) update_t(max_y, screen_center.y, dy);
+            else if (dy < 0.0f) update_t(min_y, screen_center.y, dy);
+
+            center.x = screen_center.x + dx * t_min;
+            center.y = screen_center.y + dy * t_min;
+            center = clamp_center(center);
+        }
     }
+
+    rect.x = static_cast<int>(std::lround(center.x - half_w));
+    rect.y = static_cast<int>(std::lround(center.y - half_h));
     return rect;
 }
