@@ -4,8 +4,10 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <cstdint>
 
 class Input;
 class AssetInfo;
@@ -16,6 +18,7 @@ class DockableCollapsible;
 class DMButton;
 class DMTextBox;
 class TextBoxWidget;
+class Widget;
 
 namespace devmode::core {
 class ManifestStore;
@@ -54,6 +57,7 @@ private:
     void rebuild_rows();
     void refresh_tiles(Assets& assets);
     bool matches_query(const AssetInfo& info, const std::string& query) const;
+    bool matches_tag_query(const std::string& tag, const std::string& query) const;
     SDL_Texture* get_default_frame_texture(const AssetInfo& info) const;
     void request_delete(const std::shared_ptr<AssetInfo>& info);
     void cancel_delete_request();
@@ -62,6 +66,10 @@ private:
     bool handle_delete_modal_event(const SDL_Event& e);
     void update_delete_modal_geometry(int screen_w, int screen_h);
     bool create_new_asset(const std::string& name);
+    bool refresh_tag_items();
+    void rebuild_tag_asset_lookup();
+    std::shared_ptr<AssetInfo> resolve_tag_to_asset(const std::string& tag) const;
+    int count_assets_for_tag(const std::string& tag) const;
 
 private:
     std::unique_ptr<DockableCollapsible> floating_;
@@ -71,11 +79,17 @@ private:
     std::unique_ptr<TextBoxWidget> search_widget_;
     std::vector<std::shared_ptr<AssetInfo>> items_;
     bool items_cached_ = false;
+    bool tag_items_initialized_ = false;
     std::string search_query_;
     bool filter_dirty_ = true;
 
     struct AssetTileWidget;
-    std::vector<std::unique_ptr<AssetTileWidget>> tiles_;
+    struct HashtagTileWidget;
+    std::vector<std::unique_ptr<Widget>> tiles_;
+    std::vector<std::string> tag_items_;
+    std::unordered_map<std::string, std::vector<std::shared_ptr<AssetInfo>>> tag_asset_lookup_;
+    std::uint64_t tag_version_token_ = 0;
+    bool tag_assets_dirty_ = true;
 
     struct PendingDeleteInfo {
         std::string name;

@@ -13861,11 +13861,18 @@
         {
           "bounding_extent": 0.0,
           "level": 1,
-          "max_rooms": 0,
+          "max_rooms": 1,
           "min_rooms": 0,
           "name": "layer_1",
           "ring_radius": 1100.0,
-          "rooms": []
+          "rooms": [
+            {
+              "max_instances": 1,
+              "min_instances": 0,
+              "name": "fountain",
+              "required_children": []
+            }
+          ]
         }
       ],
       "map_layers_settings": {
@@ -14089,6 +14096,23 @@
         }
       },
       "rooms_data": {
+        "fountain": {
+          "curvyness": 2,
+          "edge_smoothness": 2,
+          "geometry": "Circle",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 4000,
+          "max_radius": 2000,
+          "max_width": 4000,
+          "min_height": 2000,
+          "min_radius": 1000,
+          "min_width": 2000,
+          "name": "fountain",
+          "radius": 2000,
+          "spawn_groups": []
+        },
         "spawn": {
           "curvyness": 2,
           "edge_smoothness": 2,

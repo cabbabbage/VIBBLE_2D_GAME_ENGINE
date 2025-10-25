@@ -25,8 +25,12 @@
 #include "dev_mode/core/manifest_store.hpp"
 #include "core/manifest/manifest_loader.hpp"
 #include "dev_mode/manifest_spawn_group_utils.hpp"
+#include "tag_library.hpp"
+#include "tag_utils.hpp"
 
 #include <nlohmann/json.hpp>
+#include <unordered_set>
+#include <string_view>
 
 namespace {
     const SDL_Color kTileBG  = dm::rgba(24, 36, 56, 210);
@@ -65,6 +69,21 @@ namespace {
             end = prev;
         }
         return std::string(begin, end);
+    }
+
+    std::string to_lower_copy(std::string value) {
+        for (auto& c : value) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        return value;
+    }
+
+    std::string normalize_tag_value(std::string_view raw_value) {
+        std::string normalized = tag_utils::normalize(raw_value);
+        if (!normalized.empty() && normalized.front() == '#') {
+            normalized.erase(normalized.begin());
+        }
+        return normalized;
     }
 
     bool remove_directory_if_exists(const fs::path& path) {
@@ -323,6 +342,186 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
     }
 };
 
+struct AssetLibraryUI::HashtagTileWidget : public Widget {
+    static constexpr int kPad = 8;
+    AssetLibraryUI* owner = nullptr;
+    std::string tag;
+    int asset_count = 0;
+    std::shared_ptr<AssetInfo> preview_info;
+    SDL_Rect rect_{0,0,0,0};
+    bool hovered = false;
+    bool pressed = false;
+    std::function<void(const std::string&)> on_click;
+    bool resolvable = false;
+
+    HashtagTileWidget(AssetLibraryUI* owner_ptr,
+                      std::string tag_value,
+                      int count,
+                      std::shared_ptr<AssetInfo> preview,
+                      std::function<void(const std::string&)> click)
+        : owner(owner_ptr),
+          tag(std::move(tag_value)),
+          asset_count(count),
+          preview_info(std::move(preview)),
+          on_click(std::move(click)),
+          resolvable(count > 0) {}
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return 180; }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (e.type == SDL_MOUSEMOTION) {
+            SDL_Point p{ e.motion.x, e.motion.y };
+            hovered = SDL_PointInRect(&p, &rect_);
+        } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            SDL_Point p{ e.button.x, e.button.y };
+            if (SDL_PointInRect(&p, &rect_)) {
+                pressed = true;
+                return true;
+            }
+        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            SDL_Point p{ e.button.x, e.button.y };
+            bool inside = SDL_PointInRect(&p, &rect_);
+            bool was_pressed = pressed;
+            pressed = false;
+            if (inside && was_pressed) {
+                if (on_click && resolvable) {
+                    on_click(tag);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void render(SDL_Renderer* r) const override {
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, kTileBG.r, kTileBG.g, kTileBG.b, kTileBG.a);
+        SDL_RenderFillRect(r, &rect_);
+
+        const int pad = kPad;
+        const int label_h = 26;
+        const int footer_h = 24;
+
+        SDL_Rect label_rect{ rect_.x + pad, rect_.y + pad, std::max(0, rect_.w - 2 * pad), label_h };
+        SDL_Rect footer_rect{ rect_.x + pad,
+                              rect_.y + rect_.h - pad - footer_h,
+                              std::max(0, rect_.w - 2 * pad),
+                              footer_h };
+        int preview_top = label_rect.y + label_rect.h + pad;
+        int preview_bottom = footer_rect.y - pad;
+        if (preview_bottom < preview_top) preview_bottom = preview_top;
+        SDL_Rect preview_rect{ rect_.x + pad,
+                               preview_top,
+                               std::max(0, rect_.w - 2 * pad),
+                               std::max(0, preview_bottom - preview_top) };
+
+        TTF_Font* label_font = load_font(17);
+        std::string caption = "#" + tag;
+        if (label_font && label_rect.w > 0) {
+            std::string render_label = caption;
+            int tw = 0;
+            int th = 0;
+            if (TTF_SizeUTF8(label_font, render_label.c_str(), &tw, &th) == 0 && tw > label_rect.w) {
+                const std::string ellipsis = "...";
+                std::string base = caption;
+                while (!base.empty()) {
+                    base.pop_back();
+                    std::string candidate = base + ellipsis;
+                    if (TTF_SizeUTF8(label_font, candidate.c_str(), &tw, &th) == 0 && tw <= label_rect.w) {
+                        render_label = std::move(candidate);
+                        break;
+                    }
+                }
+                if (base.empty()) {
+                    render_label = ellipsis;
+                }
+            }
+            SDL_Color text_color = DMStyles::Label().color;
+            SDL_Surface* surf = TTF_RenderUTF8_Blended(label_font, render_label.c_str(), text_color);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                SDL_FreeSurface(surf);
+                if (tex) {
+                    int dw = 0;
+                    int dh = 0;
+                    SDL_QueryTexture(tex, nullptr, nullptr, &dw, &dh);
+                    SDL_Rect dst{ label_rect.x,
+                                  label_rect.y + std::max(0, (label_rect.h - dh) / 2),
+                                  std::min(dw, label_rect.w),
+                                  dh };
+                    SDL_RenderCopy(r, tex, nullptr, &dst);
+                    SDL_DestroyTexture(tex);
+                }
+            }
+        }
+
+        if (preview_info) {
+            SDL_Texture* tex = owner ? owner->get_default_frame_texture(*preview_info) : nullptr;
+            if (tex) {
+                int tw = 0;
+                int th = 0;
+                SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+                if (tw > 0 && th > 0 && preview_rect.w > 0 && preview_rect.h > 0) {
+                    float scale = std::min(preview_rect.w / float(tw), preview_rect.h / float(th));
+                    if (scale > 0.0f) {
+                        int dw = static_cast<int>(tw * scale);
+                        int dh = static_cast<int>(th * scale);
+                        SDL_Rect dst{ preview_rect.x + (preview_rect.w - dw) / 2,
+                                      preview_rect.y + (preview_rect.h - dh) / 2,
+                                      dw,
+                                      dh };
+                        SDL_RenderCopy(r, tex, nullptr, &dst);
+                    }
+                }
+            }
+        }
+
+        std::string footer_text;
+        if (asset_count <= 0) {
+            footer_text = "No matching assets";
+        } else if (asset_count == 1) {
+            footer_text = "1 matching asset";
+        } else {
+            footer_text = std::to_string(asset_count) + " matching assets";
+        }
+
+        TTF_Font* footer_font = load_font(14);
+        if (footer_font && footer_rect.w > 0) {
+            SDL_Color footer_color = DMStyles::Label().color;
+            if (!resolvable) {
+                footer_color = SDL_Color{160, 160, 160, footer_color.a};
+            }
+            SDL_Surface* surf = TTF_RenderUTF8_Blended(footer_font, footer_text.c_str(), footer_color);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                SDL_FreeSurface(surf);
+                if (tex) {
+                    int dw = 0;
+                    int dh = 0;
+                    SDL_QueryTexture(tex, nullptr, nullptr, &dw, &dh);
+                    SDL_Rect dst{ footer_rect.x,
+                                  footer_rect.y + std::max(0, (footer_rect.h - dh) / 2),
+                                  std::min(dw, footer_rect.w),
+                                  dh };
+                    SDL_RenderCopy(r, tex, nullptr, &dst);
+                    SDL_DestroyTexture(tex);
+                }
+            }
+        }
+
+        if (hovered) {
+            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_ADD);
+            SDL_SetRenderDrawColor(r, kTileHL.r, kTileHL.g, kTileHL.b, kTileHL.a);
+            SDL_RenderFillRect(r, &rect_);
+        }
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        const int tile_radius = std::min(DMStyles::CornerRadius(), std::min(rect_.w, rect_.h) / 2);
+        dm_draw::DrawRoundedOutline(r, rect_, tile_radius, 1, kTileBd);
+    }
+};
+
 AssetLibraryUI::AssetLibraryUI() {
     floating_ = std::make_unique<DockableCollapsible>("Asset Library", true, 10, 10);
     floating_->set_expanded(false);
@@ -367,16 +566,39 @@ bool AssetLibraryUI::is_locked() const {
 }
 
 void AssetLibraryUI::ensure_items(AssetLibrary& lib) {
-    if (items_cached_) return;
-    items_.clear();
-    for (const auto& kv : lib.all()) {
-        if (kv.second) items_.push_back(kv.second);
+    bool assets_changed = false;
+    if (!items_cached_) {
+        items_.clear();
+        for (const auto& kv : lib.all()) {
+            if (kv.second) items_.push_back(kv.second);
+        }
+        std::sort(items_.begin(), items_.end(), [](const auto& a, const auto& b){
+            return (a ? a->name : "") < (b ? b->name : "");
+        });
+        items_cached_ = true;
+        assets_changed = true;
+        filter_dirty_ = true;
     }
-    std::sort(items_.begin(), items_.end(), [](const auto& a, const auto& b){
-        return (a ? a->name : "") < (b ? b->name : "");
-    });
-    items_cached_ = true;
-    filter_dirty_ = true;
+
+    std::uint64_t current_tag_version = tag_utils::tag_version();
+    if (!tag_items_initialized_ || current_tag_version != tag_version_token_) {
+        tag_version_token_ = current_tag_version;
+        tag_items_initialized_ = true;
+        tag_assets_dirty_ = true;
+    }
+
+    if (assets_changed) {
+        tag_assets_dirty_ = true;
+    }
+
+    if (tag_assets_dirty_) {
+        bool tags_changed = refresh_tag_items();
+        rebuild_tag_asset_lookup();
+        tag_assets_dirty_ = false;
+        if (tags_changed) {
+            filter_dirty_ = true;
+        }
+    }
 }
 
 void AssetLibraryUI::rebuild_rows() {
@@ -405,13 +627,6 @@ void AssetLibraryUI::rebuild_rows() {
 
 bool AssetLibraryUI::matches_query(const AssetInfo& info, const std::string& query) const {
     if (query.empty()) return true;
-
-    auto to_lower_copy = [](std::string s) {
-        for (auto& c : s) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        }
-        return s;
-};
 
     std::istringstream ss(query);
     std::string token;
@@ -448,11 +663,175 @@ bool AssetLibraryUI::matches_query(const AssetInfo& info, const std::string& que
     return true;
 }
 
+bool AssetLibraryUI::matches_tag_query(const std::string& tag, const std::string& query) const {
+    if (query.empty()) return true;
+
+    std::istringstream ss(query);
+    std::string token;
+    std::string tag_lower = to_lower_copy(tag);
+
+    while (ss >> token) {
+        if (token.empty()) continue;
+
+        if (!token.empty() && token.front() == '#') {
+            token.erase(token.begin());
+        }
+
+        std::string needle = to_lower_copy(token);
+        if (needle.empty()) continue;
+
+        if (tag_lower.find(needle) == std::string::npos) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool AssetLibraryUI::refresh_tag_items() {
+    std::unordered_set<std::string> combined;
+    const auto& library_tags = TagLibrary::instance().tags();
+    combined.reserve(library_tags.size() + items_.size() * 2);
+
+    for (const auto& tag : library_tags) {
+        std::string normalized = normalize_tag_value(tag);
+        if (!normalized.empty()) {
+            combined.insert(std::move(normalized));
+        }
+    }
+
+    for (const auto& info : items_) {
+        if (!info) continue;
+        for (const auto& raw_tag : info->tags) {
+            std::string normalized = normalize_tag_value(raw_tag);
+            if (!normalized.empty()) {
+                combined.insert(std::move(normalized));
+            }
+        }
+    }
+
+    std::vector<std::string> merged;
+    merged.reserve(combined.size());
+    for (const auto& entry : combined) {
+        if (!entry.empty()) {
+            merged.push_back(entry);
+        }
+    }
+    std::sort(merged.begin(), merged.end());
+
+    if (merged != tag_items_) {
+        tag_items_ = std::move(merged);
+        return true;
+    }
+    return false;
+}
+
+void AssetLibraryUI::rebuild_tag_asset_lookup() {
+    tag_asset_lookup_.clear();
+    for (const auto& tag : tag_items_) {
+        tag_asset_lookup_.emplace(tag, std::vector<std::shared_ptr<AssetInfo>>{});
+    }
+
+    for (const auto& info : items_) {
+        if (!info) continue;
+        for (const auto& raw_tag : info->tags) {
+            std::string normalized = normalize_tag_value(raw_tag);
+            if (normalized.empty()) continue;
+            auto& bucket = tag_asset_lookup_[normalized];
+            bucket.push_back(info);
+        }
+    }
+
+    for (auto& [tag, bucket] : tag_asset_lookup_) {
+        bucket.erase(std::remove(bucket.begin(), bucket.end(), nullptr), bucket.end());
+        std::sort(bucket.begin(), bucket.end(), [](const auto& a, const auto& b) {
+            const std::string& an = a ? a->name : std::string{};
+            const std::string& bn = b ? b->name : std::string{};
+            return an < bn;
+        });
+        bucket.erase(std::unique(bucket.begin(), bucket.end()), bucket.end());
+    }
+}
+
+std::shared_ptr<AssetInfo> AssetLibraryUI::resolve_tag_to_asset(const std::string& tag) const {
+    std::string normalized = normalize_tag_value(tag);
+    if (normalized.empty()) {
+        return nullptr;
+    }
+
+    auto pick_first = [](const auto& vec) -> std::shared_ptr<AssetInfo> {
+        return vec.empty() ? nullptr : vec.front();
+    };
+
+    auto it = tag_asset_lookup_.find(normalized);
+    if (it != tag_asset_lookup_.end()) {
+        if (auto found = pick_first(it->second)) {
+            return found;
+        }
+    }
+
+    // Fall back to raw tag lookup if normalization changed the value.
+    if (auto raw_it = tag_asset_lookup_.find(tag); raw_it != tag_asset_lookup_.end()) {
+        if (auto found = pick_first(raw_it->second)) {
+            return found;
+        }
+    }
+
+    if (!library_owner_) {
+        return nullptr;
+    }
+
+    std::shared_ptr<AssetInfo> fallback;
+    const auto& all_assets = library_owner_->all();
+    for (const auto& [name, info] : all_assets) {
+        if (!info) continue;
+        for (const auto& raw_tag : info->tags) {
+            if (normalize_tag_value(raw_tag) == normalized) {
+                if (!fallback || info->name < fallback->name) {
+                    fallback = info;
+                }
+                break;
+            }
+        }
+    }
+    return fallback;
+}
+
+int AssetLibraryUI::count_assets_for_tag(const std::string& tag) const {
+    std::string normalized = normalize_tag_value(tag);
+    auto it = tag_asset_lookup_.find(normalized.empty() ? tag : normalized);
+    if (it != tag_asset_lookup_.end()) {
+        return static_cast<int>(it->second.size());
+    }
+    return 0;
+}
+
 void AssetLibraryUI::refresh_tiles(Assets& assets) {
     tiles_.clear();
-    tiles_.reserve(items_.size());
+    tiles_.reserve(items_.size() + tag_items_.size());
 
     Assets* assets_ptr = &assets;
+
+    for (const auto& tag : tag_items_) {
+        if (!matches_tag_query(tag, search_query_)) continue;
+        int count = count_assets_for_tag(tag);
+        std::shared_ptr<AssetInfo> preview = resolve_tag_to_asset(tag);
+        tiles_.push_back(std::make_unique<HashtagTileWidget>(
+            this,
+            tag,
+            count,
+            std::move(preview),
+            [this](const std::string& tag_value){
+                auto resolved = resolve_tag_to_asset(tag_value);
+                if (resolved) {
+                    pending_selection_ = resolved;
+                    close();
+                } else {
+                    std::cerr << "[AssetLibraryUI] No assets found for tag '" << tag_value << "'\n";
+                }
+            }
+        ));
+    }
 
     for (auto& inf : items_) {
         if (!inf) continue;

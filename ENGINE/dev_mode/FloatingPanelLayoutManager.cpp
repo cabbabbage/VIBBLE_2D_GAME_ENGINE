@@ -8,6 +8,7 @@
 
 namespace {
 constexpr int kPanelGap = 40;
+constexpr int kHeaderToPanelPadding = 30;
 
 struct Interval {
     int start = 0;
@@ -220,7 +221,7 @@ SDL_Rect FloatingPanelLayoutManager::computeUsableRect(const SDL_Rect& viewport,
 
     if (has_area(header_bounds_)) {
         int header_bottom = header_bounds_.y + header_bounds_.h;
-        top = std::max(top, header_bottom);
+        top = std::max(top, header_bottom + kHeaderToPanelPadding);
     }
 
     if (has_area(footer_bounds_)) {

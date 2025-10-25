@@ -406,11 +406,11 @@ TEST_CASE("AssetSpawnPlanner treats exact spawn method quantity as one") {
         CHECK_EQ(queue.front().quantity, 1);
     };
 
-    SECTION("Exact method") {
+    SUBCASE("Exact method") {
         assert_single_quantity("Exact");
     }
 
-    SECTION("Exact position alias") {
+    SUBCASE("Exact position alias") {
         assert_single_quantity("Exact Position");
     }
 }

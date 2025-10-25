@@ -139,25 +139,6 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
     return changed;
 }
 
-bool is_lighting_section(const DockableCollapsible* section) {
-    return dynamic_cast<const Section_Lighting*>(section) != nullptr;
-}
-
-bool is_shading_section(const DockableCollapsible* section) {
-    return dynamic_cast<const Section_Shading*>(section) != nullptr;
-}
-
-bool sections_allow_coexpansion(const DockableCollapsible* a, const DockableCollapsible* b) {
-    if (!a || !b) {
-        return false;
-    }
-    const bool a_is_lighting = is_lighting_section(a);
-    const bool b_is_lighting = is_lighting_section(b);
-    const bool a_is_shading = is_shading_section(a);
-    const bool b_is_shading = is_shading_section(b);
-    return (a_is_lighting && b_is_shading) || (a_is_shading && b_is_lighting);
-}
-
 }
 
 AssetInfoUI::AssetInfoUI() {
@@ -213,7 +194,7 @@ AssetInfoUI::AssetInfoUI() {
         return info_ ? info_->name : std::string();
     });
 
-    container_.set_scrollbar_visible(false);
+    container_.set_scrollbar_visible(true);
 
     container_.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
         int y = ctx.content_top;
@@ -248,24 +229,6 @@ AssetInfoUI::AssetInfoUI() {
 
         for (auto& section : sections_) {
             section->update(input, screen_w, screen_h);
-        }
-
-        for (size_t i = 0; i < sections_.size(); ++i) {
-            if (!sections_[i]->is_expanded()) {
-                continue;
-            }
-            for (size_t j = 0; j < sections_.size(); ++j) {
-                if (i == j) {
-                    continue;
-                }
-                if (sections_[j]->is_expanded()) {
-                    if (sections_allow_coexpansion(sections_[i].get(), sections_[j].get())) {
-                        continue;
-                    }
-                    sections_[j]->set_expanded(false);
-                }
-            }
-            break;
         }
 
         bool expansion_changed = false;

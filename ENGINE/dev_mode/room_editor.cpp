@@ -3046,7 +3046,6 @@ void RoomEditor::refresh_spawn_group_config_ui() {
                                            SpawnGroupConfig::EntryCallbacks{},
                                            configure_entry);
         }
-        spawn_group_panel_->set_scroll_enabled(false);
     } else {
         spawn_group_panel_->load(arr, on_change, on_entry_change, configure_entry);
         spawn_group_panel_->restore_expanded_groups(reopen);
