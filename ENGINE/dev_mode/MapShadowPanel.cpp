@@ -302,49 +302,6 @@ void MapShadowPanel::build_ui() {
         });
     }
 
-    auto configure_percent_slider = [](std::unique_ptr<DMSlider>& slider) {
-        if (!slider) {
-            return;
-        }
-        slider->set_defer_commit_until_unfocus(false);
-        slider->set_value_formatter([](int value, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
-                                        -> std::string_view {
-            const int clamped = std::clamp(value, 0, 1000);
-            const int written = std::snprintf(buffer.data(), buffer.size(), "%d%%", clamped);
-            if (written <= 0) {
-                return {};
-            }
-            return std::string_view(buffer.data(), static_cast<std::size_t>(written));
-        });
-        slider->set_value_parser([](const std::string& text) -> std::optional<int> {
-            try {
-                std::string cleaned = text;
-                const bool   has_percent = cleaned.find('%') != std::string::npos;
-                cleaned.erase(std::remove(cleaned.begin(), cleaned.end(), '%'), cleaned.end());
-                float parsed = std::stof(cleaned);
-                if (!has_percent && parsed <= 2.0f) {
-                    parsed *= 100.0f;
-                }
-                return static_cast<int>(std::lround(parsed));
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
-    };
-
-    const int static_weight_percent_value =
-        static_cast<int>(std::round(std::clamp(current_settings_.sampling_weights.static_weight, 0.0f, 10.0f) * 100.0f));
-    const int dynamic_weight_percent_value =
-        static_cast<int>(std::round(std::clamp(current_settings_.sampling_weights.dynamic_weight, 0.0f, 10.0f) * 100.0f));
-
-    sampling_static_weight_percent_ =
-        std::make_unique<DMSlider>("Static Sampling Weight %", 0, 200, std::clamp(static_weight_percent_value, 0, 200));
-    sampling_dynamic_weight_percent_ =
-        std::make_unique<DMSlider>("Dynamic Sampling Weight %", 0, 200, std::clamp(dynamic_weight_percent_value, 0, 200));
-
-    configure_percent_slider(sampling_static_weight_percent_);
-    configure_percent_slider(sampling_dynamic_weight_percent_);
-
     auto add_slider_row = [&](std::unique_ptr<DMSlider>& slider) {
         if (!slider) {
             return;
@@ -365,8 +322,6 @@ void MapShadowPanel::build_ui() {
     add_slider_row(map_light_dir_strength_);
     add_slider_row(parallax_percent_);
     add_slider_row(search_radius_);
-    add_slider_row(sampling_static_weight_percent_);
-    add_slider_row(sampling_dynamic_weight_percent_);
 
     set_rows(rows);
 }
@@ -397,13 +352,6 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
     if (parallax_percent_)
         parallax_percent_->set_value(static_cast<int>(std::round(settings.virtual_light_map.parallax_percent * 100.0f)));
     if (search_radius_) search_radius_->set_value(std::clamp(settings.virtual_light_map.search_radius, 0, 128));
-    if (sampling_static_weight_percent_)
-        sampling_static_weight_percent_->set_value(std::clamp(
-            static_cast<int>(std::round(std::clamp(settings.sampling_weights.static_weight, 0.0f, 10.0f) * 100.0f)), 0, 200));
-    if (sampling_dynamic_weight_percent_)
-        sampling_dynamic_weight_percent_->set_value(std::clamp(
-            static_cast<int>(std::round(std::clamp(settings.sampling_weights.dynamic_weight, 0.0f, 10.0f) * 100.0f)), 0, 200));
-
     applying_ui_ = false;
 }
 
@@ -437,11 +385,6 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
     if (search_radius_) {
         settings.virtual_light_map.search_radius = std::clamp(search_radius_->displayed_value(), 0, 128);
     }
-    settings.sampling_weights.static_weight =
-        read_scaled_slider(sampling_static_weight_percent_, 100, settings.sampling_weights.static_weight);
-    settings.sampling_weights.dynamic_weight =
-        read_scaled_slider(sampling_dynamic_weight_percent_, 100, settings.sampling_weights.dynamic_weight);
-
     return settings;
 }
 

@@ -585,8 +585,10 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     float nx = (mag > 1e-4f) ? (gx / mag) : 0.0f;
     float ny = (mag > 1e-4f) ? (gy / mag) : 0.0f;
 
-    // Move opposite the gradient (away from brighter areas)
-    float px = -nx * 100.0f;
+    // Move away from brighter areas. The lighting grid reports the horizontal gradient inverted,
+    // so keep the X push aligned with the reported direction while negating Y to counter bright
+    // spots vertically.
+    float px = nx * 100.0f;
     float py = -ny * 100.0f;
 
     const float chunk_w = static_cast<float>(std::max(1, chunk.world_bounds.w));

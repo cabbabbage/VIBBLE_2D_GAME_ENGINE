@@ -189,11 +189,11 @@ public:
         float map_light_dir_offset_strength = 0.5f;
         float parallax_percent        = 0.0f;
         int   frame_blend_falloff_frames = 100;
-        float sampling_static_weight  = 0.8f;
+        float sampling_static_weight  = 0.0f;
         float sampling_dynamic_weight = 1.0f;
     };
 
-    static constexpr float kDefaultStaticWeight  = 0.8f;
+    static constexpr float kDefaultStaticWeight  = 0.0f;
     static constexpr float kDefaultDynamicWeight = 1.0f;
 
     struct SampledBrightness {

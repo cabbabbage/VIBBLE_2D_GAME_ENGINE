@@ -15743,10 +15743,10 @@
             255,
             255
           ],
-          "light_intensity": 125,
+          "light_intensity": 93,
           "offset_x": 0,
           "offset_y": 0,
-          "radius": 1689
+          "radius": 770
         }
       ],
       "max_child_depth": 2,
@@ -17244,7 +17244,7 @@
           "horizontal_falloff": 3.5799999237060547,
           "map_light_dir_offset_strength": 0.0,
           "max_offset_x": 54.90999984741211,
-          "max_offset_y": 62.13999938964844,
+          "max_offset_y": 10.119999885559082,
           "max_scale_percent": 95,
           "min_scale_percent": 18,
           "parallax_percent": 7.510000228881836,
@@ -17258,7 +17258,7 @@
           "curvyness": 2,
           "display_color": [
             242,
-            232,
+            242,
             85,
             255
           ],
@@ -17330,9 +17330,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
+            132,
             242,
-            36,
-            200,
+            85,
             255
           ],
           "edge_smoothness": 4,
@@ -17406,9 +17406,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            163,
+            242,
+            175,
+            85,
             255
           ],
           "edge_smoothness": 4,
@@ -17486,9 +17486,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            118,
-            85,
-            242,
+            31,
+            204,
+            180,
             255
           ],
           "edge_smoothness": 7,
@@ -17563,9 +17563,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            122,
-            242,
             85,
+            151,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -17640,9 +17640,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            85,
-            154,
             242,
+            209,
+            36,
             255
           ],
           "edge_smoothness": 9,
@@ -17713,9 +17713,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            36,
             242,
-            208,
+            36,
+            220,
             255
           ],
           "edge_smoothness": 8,
@@ -17786,9 +17786,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            242,
-            172,
+            106,
             85,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -17855,9 +17855,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
-            130,
-            204,
-            31,
+            191,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -17924,9 +17924,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
-            108,
-            36,
+            44,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 2,
@@ -17975,9 +17975,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            31,
-            148,
-            204,
+            187,
+            242,
+            85,
             255
           ],
           "edge_smoothness": 12,
@@ -18051,7 +18051,7 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            44,
+            125,
             204,
             31,
             255
@@ -18123,9 +18123,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            189,
-            36,
-            242,
+            31,
+            146,
+            204,
             255
           ],
           "edge_smoothness": 7,
@@ -18199,9 +18199,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            85,
             242,
-            123,
+            36,
+            44,
             255
           ],
           "edge_smoothness": 6,
@@ -18279,9 +18279,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            71,
-            199,
-            204,
+            36,
+            242,
+            220,
             255
           ],
           "edge_smoothness": 10,
@@ -18364,7 +18364,7 @@
           "curvyness": 2,
           "display_color": [
             242,
-            213,
+            111,
             36,
             255
           ],
@@ -18504,9 +18504,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            242,
             36,
-            46,
+            242,
+            141,
             255
           ],
           "edge_smoothness": 10,
@@ -18582,7 +18582,7 @@
           "display_color": [
             242,
             85,
-            184,
+            193,
             255
           ],
           "edge_smoothness": 5,
@@ -18683,9 +18683,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            36,
-            242,
-            131,
+            71,
+            204,
+            78,
             255
           ],
           "edge_smoothness": 101,
@@ -18866,9 +18866,9 @@
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            94,
-            204,
             71,
+            184,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -18938,9 +18938,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            195,
-            242,
             85,
+            242,
+            105,
             255
           ],
           "edge_smoothness": 7,

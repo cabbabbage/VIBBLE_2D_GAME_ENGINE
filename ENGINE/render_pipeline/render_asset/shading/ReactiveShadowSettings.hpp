@@ -63,7 +63,7 @@ struct ReactiveShadowSettings {
     } response_lut;
 
     struct SamplingWeights {
-        float static_weight  = 0.8f;
+        float static_weight  = 0.0f;
         float dynamic_weight = 1.0f;
 
         bool operator==(const SamplingWeights& other) const {
@@ -172,8 +172,10 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
 
     out.response_lut.entries = std::move(sanitized_entries);
 
-    out.sampling_weights.static_weight  = clampf(out.sampling_weights.static_weight, 0.0f, 10.0f);
-    out.sampling_weights.dynamic_weight = clampf(out.sampling_weights.dynamic_weight, 0.0f, 10.0f);
+    // Sampling is now fully dynamic; force a zero static weight and unit dynamic weight so runtime
+    // data always drives the lighting blend regardless of serialized values.
+    out.sampling_weights.static_weight  = 0.0f;
+    out.sampling_weights.dynamic_weight = 1.0f;
     return out;
 }
 

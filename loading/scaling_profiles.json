@@ -878,18 +878,15 @@
                 0,
                 0,
                 0,
-                32
+                0
             ],
-            "last_requested_percent": 5,
-            "last_requested_scale": 0.05202312022447586,
-            "last_updated": "2025-10-25T14:49:19Z",
-            "last_used_texture_scale": 0.5,
+            "last_updated": "2025-10-25T19:16:53Z",
             "recommended_percentages": [
                 100,
                 75,
-                10
+                50
             ],
-            "revision": 2
+            "revision": 1
         },
         "candle_3": {
             "histogram": [
