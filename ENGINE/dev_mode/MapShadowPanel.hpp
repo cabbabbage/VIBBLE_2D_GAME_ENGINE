@@ -76,5 +76,7 @@ private:
     std::unique_ptr<DMSlider> map_light_dir_strength_{};
     std::unique_ptr<DMSlider> parallax_percent_{};
     std::unique_ptr<DMSlider> search_radius_{};
+    std::unique_ptr<DMSlider> sampling_static_weight_percent_{};
+    std::unique_ptr<DMSlider> sampling_dynamic_weight_percent_{};
 
 };
