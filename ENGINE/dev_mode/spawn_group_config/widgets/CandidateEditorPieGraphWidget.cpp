@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 
 #include "../../search_assets.hpp"
+#include "../../dm_icons.hpp"
 #include "../../dm_styles.hpp"
 #include "../../draw_utils.hpp"
 #include "../../../utils/input.hpp"
@@ -32,7 +33,11 @@ CandidateEditorPieGraphWidget::CandidateEditorPieGraphWidget() {
     rect_ = SDL_Rect{0, 0, 280, 180};
     content_rect_ = rect_;
     regen_button_ = std::make_unique<DMButton>("Regen", &DMStyles::AccentButton(), 0, DMButton::height());
-    add_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::ListButton(), 0, DMButton::height());
+    add_button_ = std::make_unique<DMButton>("Add Candidate", &DMStyles::CreateButton(), 0, DMButton::height());
+    collapse_button_ =
+        std::make_unique<DMButton>(std::string(DMIcons::CollapseExpanded()), &DMStyles::ListButton(),
+                                   DMButton::height(), DMButton::height());
+    update_collapse_button();
     update_internal_layout();
 }
 
@@ -48,7 +53,10 @@ const SDL_Rect& CandidateEditorPieGraphWidget::rect() const {
 int CandidateEditorPieGraphWidget::height_for_width(int w) const {
     int constrained = std::clamp(w, 160, 420);
     const int margin = DMSpacing::item_gap();
-    int min_height = 180 + margin * 2;
+    if (collapsed_) {
+        return DMButton::height() + margin * 2;
+    }
+    int min_height = DMButton::height() + margin * 2 + 180;
     if (should_show_regen_button()) {
         min_height += DMButton::height() + margin;
     }
@@ -85,6 +93,25 @@ bool CandidateEditorPieGraphWidget::handle_event(const SDL_Event& e) {
             e.type == SDL_MOUSEWHEEL) {
             return true;
         }
+    }
+
+    if (collapse_button_ && collapse_button_->handle_event(e)) {
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            collapsed_ = !collapsed_;
+            update_collapse_button();
+            if (collapsed_) {
+                hovered_index_ = -1;
+                active_index_ = -1;
+                hide_search();
+            }
+            update_internal_layout();
+            notify_layout_change();
+        }
+        return true;
+    }
+
+    if (collapsed_) {
+        return false;
     }
 
     if (should_show_regen_button() && regen_button_) {
@@ -259,6 +286,14 @@ void CandidateEditorPieGraphWidget::render(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     draw_background(renderer);
+
+    if (collapse_button_) {
+        collapse_button_->render(renderer);
+    }
+
+    if (collapsed_) {
+        return;
+    }
 
     if (should_show_regen_button() && regen_button_) {
         regen_button_->render(renderer);
@@ -560,12 +595,33 @@ void CandidateEditorPieGraphWidget::update_internal_layout() {
     if (rect_.w <= 0 || rect_.h <= 0) {
         if (regen_button_) regen_button_->set_rect(SDL_Rect{rect_.x, rect_.y, 0, 0});
         if (add_button_) add_button_->set_rect(SDL_Rect{rect_.x, rect_.y, 0, 0});
+        if (collapse_button_) collapse_button_->set_rect(SDL_Rect{rect_.x, rect_.y, 0, 0});
         return;
     }
 
     const int margin = DMSpacing::item_gap();
     int y = rect_.y + margin;
     int width = std::max(0, rect_.w - margin * 2);
+
+    if (collapse_button_) {
+        const int button_size = DMButton::height();
+        int button_x = rect_.x + rect_.w - margin - button_size;
+        int button_y = rect_.y + margin;
+        collapse_button_->set_rect(SDL_Rect{button_x, button_y, button_size, button_size});
+        y = button_y + button_size + margin;
+    }
+
+    if (collapsed_) {
+        if (regen_button_) {
+            regen_button_->set_rect(SDL_Rect{rect_.x + margin, y, 0, 0});
+        }
+        if (add_button_) {
+            add_button_->set_rect(SDL_Rect{rect_.x + margin, y, 0, 0});
+        }
+        search_rect_ = SDL_Rect{rect_.x + margin, y, 0, 0};
+        content_rect_ = SDL_Rect{rect_.x, y, rect_.w, 0};
+        return;
+    }
 
     if (regen_button_) {
         if (should_show_regen_button()) {
@@ -821,6 +877,14 @@ void CandidateEditorPieGraphWidget::render_legend(SDL_Renderer* renderer, const 
         draw_text(renderer, font, summary.str(), rect_.x + DMSpacing::item_gap(), rect_.y + DMSpacing::item_gap(), DMStyles::Label().color, false);
         cache_legend_rows(layout, 0);
     }
+}
+
+void CandidateEditorPieGraphWidget::update_collapse_button() {
+    if (!collapse_button_) {
+        return;
+    }
+    collapse_button_->set_text(collapsed_ ? std::string(DMIcons::CollapseCollapsed())
+                                          : std::string(DMIcons::CollapseExpanded()));
 }
 
 SDL_Rect CandidateEditorPieGraphWidget::draw_text(SDL_Renderer* renderer, TTF_Font* font, const std::string& text,

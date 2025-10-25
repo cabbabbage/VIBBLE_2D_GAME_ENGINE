@@ -59,6 +59,7 @@ private:
     void render_slices(SDL_Renderer* renderer, const Layout& layout, double total) const;
     void render_outline(SDL_Renderer* renderer, const Layout& layout) const;
     void render_legend(SDL_Renderer* renderer, const Layout& layout, double total, TTF_Font* font) const;
+    void update_collapse_button();
     SDL_Rect draw_text(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y, SDL_Color color, bool center) const;
     int hit_test_candidate(const Layout& layout, SDL_Point point, double total) const;
     void cache_legend_rows(const Layout& layout, int row_height = -1) const;
@@ -87,6 +88,8 @@ private:
     mutable int legend_row_height_ = 0;
     std::unique_ptr<DMButton> regen_button_{};
     std::unique_ptr<DMButton> add_button_{};
+    std::unique_ptr<DMButton> collapse_button_{};
+    bool collapsed_ = false;
     SDL_Rect content_rect_{0, 0, 0, 0};
     std::unique_ptr<SearchAssets> search_assets_{};
     SDL_Rect search_rect_{0, 0, 0, 0};
