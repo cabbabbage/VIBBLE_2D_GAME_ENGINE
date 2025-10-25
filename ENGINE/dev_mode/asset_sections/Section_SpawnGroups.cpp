@@ -66,6 +66,7 @@ void Section_SpawnGroups::build() {
                 std::vector<SpawnGroupLinkableAreaDescriptor> result;
                 if (auto locked = weak_info.lock()) {
                     for (const auto& area : locked->areas) {
+                        if (area.type != "child") continue;
                         if (!area.name.empty()) {
                             result.push_back({area.name, area.name, true});
                         }

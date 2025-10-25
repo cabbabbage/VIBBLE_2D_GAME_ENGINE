@@ -3400,6 +3400,9 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             if (data.contains("areas") && data["areas"].is_array()) {
                 for (const auto& area_entry : data["areas"]) {
                     if (!area_entry.is_object()) continue;
+                    auto type_it = area_entry.find("type");
+                    if (type_it == area_entry.end() || !type_it->is_string()) continue;
+                    if (type_it->get<std::string>() != "spawning") continue;
                     auto name_it = area_entry.find("name");
                     if (name_it != area_entry.end() && name_it->is_string()) {
                         std::string name = name_it->get<std::string>();
@@ -3415,6 +3418,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             std::vector<SpawnGroupLinkableAreaDescriptor> result;
             if (!current_room_) return result;
             for (const auto& named : current_room_->areas) {
+                if (named.type != "spawning") continue;
                 if (!named.name.empty()) {
                     result.push_back({named.name, named.name, false});
                 }

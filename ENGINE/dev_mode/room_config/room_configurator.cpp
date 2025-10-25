@@ -1334,6 +1334,9 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                 if (data.contains("areas") && data["areas"].is_array()) {
                     for (const auto& area_entry : data["areas"]) {
                         if (!area_entry.is_object()) continue;
+                        auto type_it = area_entry.find("type");
+                        if (type_it == area_entry.end() || !type_it->is_string()) continue;
+                        if (type_it->get<std::string>() != "spawning") continue;
                         auto name_it = area_entry.find("name");
                         if (name_it != area_entry.end() && name_it->is_string()) {
                             std::string name = name_it->get<std::string>();
@@ -1349,6 +1352,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                 std::vector<SpawnGroupLinkableAreaDescriptor> result;
                 if (!room_) return result;
                 for (const auto& named : room_->areas) {
+                    if (named.type != "spawning") continue;
                     if (!named.name.empty()) {
                         result.push_back({named.name, named.name, false});
                     }
