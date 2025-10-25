@@ -6,6 +6,7 @@
 #include "widgets.hpp"
 
 #include <algorithm>
+#include <iterator>
 
 RoomSelectorPopup::RoomSelectorPopup() {
     geometry_dirty_ = true;
@@ -47,6 +48,8 @@ void RoomSelectorPopup::open(const std::vector<std::string>& rooms, RoomCallback
     callback_ = std::move(cb);
     scroll_offset_ = 0;
     geometry_dirty_ = true;
+    pressed_index_ = -1;
+    pressed_room_.clear();
     set_rooms(rooms);
     position_from_anchor();
     visible_ = true;
@@ -57,6 +60,19 @@ void RoomSelectorPopup::set_rooms(const std::vector<std::string>& rooms) {
     rooms_ = rooms;
     rebuild_room_buttons();
     geometry_dirty_ = true;
+    if (!pressed_room_.empty()) {
+        auto it = std::find(rooms_.begin(), rooms_.end(), pressed_room_);
+        if (it != rooms_.end()) {
+            pressed_index_ = static_cast<int>(std::distance(rooms_.begin(), it));
+        } else {
+            pressed_index_ = -1;
+            pressed_room_.clear();
+        }
+    } else if (pressed_index_ >= 0 && pressed_index_ < static_cast<int>(rooms_.size())) {
+        pressed_room_ = rooms_[pressed_index_];
+    } else {
+        pressed_index_ = -1;
+    }
 }
 
 void RoomSelectorPopup::close() {
@@ -64,6 +80,8 @@ void RoomSelectorPopup::close() {
     callback_ = nullptr;
     scroll_offset_ = 0;
     geometry_dirty_ = true;
+    pressed_index_ = -1;
+    pressed_room_.clear();
 }
 
 void RoomSelectorPopup::update(const Input&) {
@@ -86,6 +104,18 @@ bool RoomSelectorPopup::handle_event(const SDL_Event& e) {
         }
     }
 
+    SDL_Point pointer{0, 0};
+    const bool pointer_event =
+        (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+    if (pointer_event) {
+        pointer.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
+        pointer.y = (e.type == SDL_MOUSEMOTION) ? e.motion.y : e.button.y;
+    }
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        pressed_index_ = -1;
+        pressed_room_.clear();
+    }
+
     bool used = false;
     if (e.type == SDL_MOUSEWHEEL) {
         SDL_Point mouse_pos{0, 0};
@@ -104,12 +134,35 @@ bool RoomSelectorPopup::handle_event(const SDL_Event& e) {
         if (!btn) continue;
         if (btn->handle_event(e)) {
             used = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                if (callback_) callback_(rooms_[i]);
+        }
+        const bool pointer_inside_button = pointer_event ? SDL_PointInRect(&pointer, &btn->rect()) == SDL_TRUE : false;
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && pointer_inside_button) {
+            pressed_index_ = static_cast<int>(i);
+            if (i < rooms_.size()) {
+                pressed_room_ = rooms_[i];
+            } else {
+                pressed_room_.clear();
+            }
+            used = true;
+        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            bool matches = (pressed_index_ == static_cast<int>(i));
+            if (!matches && i < rooms_.size()) {
+                matches = (rooms_[i] == pressed_room_);
+            }
+            if (pointer_inside_button && matches) {
+                pressed_index_ = -1;
+                if (i < rooms_.size()) {
+                    if (callback_) callback_(rooms_[i]);
+                }
+                pressed_room_.clear();
                 close();
                 return true;
             }
         }
+    }
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        pressed_index_ = -1;
+        pressed_room_.clear();
     }
     return used;
 }

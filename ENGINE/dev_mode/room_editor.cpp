@@ -2366,8 +2366,21 @@ void RoomEditor::refresh_spawn_group_config_ui() {
         }
     };
 
-    spawn_group_panel_->load(arr, on_change, on_entry_change, std::move(configure_entry));
-    spawn_group_panel_->restore_expanded_groups(reopen);
+    nlohmann::json* active_entry = nullptr;
+    if (active_spawn_group_id_) {
+        active_entry = find_spawn_entry(*active_spawn_group_id_);
+    }
+
+    if (active_entry) {
+        spawn_group_panel_->bind_entry(*active_entry,
+                                       on_change,
+                                       on_entry_change,
+                                       SpawnGroupConfig::EntryCallbacks{},
+                                       configure_entry);
+    } else {
+        spawn_group_panel_->load(arr, on_change, on_entry_change, configure_entry);
+        spawn_group_panel_->restore_expanded_groups(reopen);
+    }
     update_spawn_group_config_anchor();
 }
 
@@ -2694,6 +2707,8 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
     if (!current_room_) {
         return;
     }
+
+    active_spawn_group_id_ = spawn_id;
 
     ensure_spawn_group_config_ui();
     if (!spawn_group_panel_) {

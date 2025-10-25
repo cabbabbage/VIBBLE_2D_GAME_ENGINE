@@ -60,5 +60,8 @@ private:
 
     SuggestRoomFn suggest_room_fn_{};
     CreateRoomFn create_room_fn_{};
+
+    int pressed_index_ = -1;
+    std::string pressed_room_{};
 };
 
