@@ -14,6 +14,7 @@ class Assets;
 class Asset;
 class camera;
 namespace world { class Grid; }
+namespace runtime_lighting { struct RuntimeLightingFrame; }
 namespace world {
 
 struct Chunk {
@@ -187,7 +188,7 @@ public:
 
     void rebuild(SDL_Renderer* renderer);
     void update(SDL_Renderer* renderer, std::uint32_t delta_ms);
-    void capture_runtime_brightness(SDL_Renderer* renderer);
+    void ingest_runtime_samples(const runtime_lighting::RuntimeLightingFrame& frame);
 
     float sample_brightness(int world_x,
                             int world_y,

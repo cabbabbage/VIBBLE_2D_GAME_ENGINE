@@ -118,6 +118,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
+    runtime_lighting_sampler_ = std::make_unique<runtime_lighting::RuntimeLightingSampler>(assets_);
     main_light_source_.update();
 }
 
@@ -304,6 +305,11 @@ void SceneRenderer::render(){
         rendered_light_map = true;
     };
 
+    if (runtime_lighting_sampler_) {
+        runtime_lighting_sampler_->set_assets(assets_);
+        runtime_lighting_sampler_->begin_frame();
+    }
+
     light_overlay_sources_.clear();
 
     if (!light_map_only_mode_){
@@ -481,7 +487,11 @@ void SceneRenderer::render(){
         render_commands(texture_commands_);
         render_dynamic_darkness_overlay(map_light_opacity);
         if (light_map_ && !chunk_lighting_suspended_) {
-            light_map_->capture_runtime_brightness(renderer_);
+            runtime_lighting::RuntimeLightingFrame runtime_frame;
+            if (runtime_lighting_sampler_ && assets_) {
+                runtime_frame = runtime_lighting_sampler_->gather(light_overlay_sources_, assets_->getView());
+            }
+            light_map_->ingest_runtime_samples(runtime_frame);
             light_map_->update(renderer_, 0u);
         }
         render_light_map();

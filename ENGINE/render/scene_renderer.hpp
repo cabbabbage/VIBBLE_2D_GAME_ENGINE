@@ -11,6 +11,7 @@
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
+#include "render/runtime_lighting_sampler.hpp"
 
 class Assets;
 class Asset;
@@ -49,6 +50,8 @@ private:
     bool initialize_static_light_chunks();
 
 private:
+    using LightOverlaySource = runtime_lighting::AssetLight;
+
     struct AssetRenderCommand {
         SDL_Texture* source_texture      = nullptr;
         SDL_Texture* final_texture       = nullptr;
@@ -57,15 +60,6 @@ private:
         bool         highlighted         = false;
         bool         selected            = false;
         bool         flipped             = false;
-    };
-
-    struct LightOverlaySource {
-        Asset*   asset         = nullptr;
-        SDL_Rect asset_rect    { 0, 0, 0, 0 };
-        int      base_width    = 0;
-        int      base_height   = 0;
-        bool     flipped       = false;
-        float    asset_base_scale = 1.0f;
     };
 
     bool ensure_darkness_overlay();
@@ -92,6 +86,7 @@ private:
     std::vector<AssetRenderCommand> texture_commands_;
     std::vector<AssetRenderCommand> remaining_commands_;
     std::vector<LightOverlaySource> light_overlay_sources_;
+    std::unique_ptr<runtime_lighting::RuntimeLightingSampler> runtime_lighting_sampler_;
     SDL_Texture* darkness_overlay_texture_ = nullptr;
     int          darkness_overlay_width_   = 0;
     int          darkness_overlay_height_  = 0;

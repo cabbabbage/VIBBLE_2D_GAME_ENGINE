@@ -26,6 +26,7 @@
 #include "render/camera.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/global_light_source.hpp"
+#include "render/runtime_lighting_sampler.hpp"
 #include "world/grid.hpp"
 
 namespace {
@@ -366,56 +367,6 @@ bool intersects(const SDL_Rect& a, const SDL_Rect& b) {
 template <typename T>
 T lerp(T a, T b, float t) {
     return static_cast<T>(a + (b - a) * t);
-}
-
-float average_luminance_for_region(const std::vector<std::uint8_t>& pixels,
-                                   int buffer_width,
-                                   int buffer_height,
-                                   const SDL_Rect& region) {
-    if (buffer_width <= 0 || buffer_height <= 0 || pixels.empty()) {
-        return 0.0f;
-    }
-
-    const int start_x = std::clamp(region.x, 0, buffer_width);
-    const int start_y = std::clamp(region.y, 0, buffer_height);
-    const int end_x   = std::clamp(region.x + region.w, 0, buffer_width);
-    const int end_y   = std::clamp(region.y + region.h, 0, buffer_height);
-
-    if (end_x <= start_x || end_y <= start_y) {
-        return 0.0f;
-    }
-
-    double       accum = 0.0;
-    std::size_t  count = 0;
-    const double rw    = 0.2126;
-    const double gw    = 0.7152;
-    const double bw    = 0.0722;
-
-    for (int y = start_y; y < end_y; ++y) {
-        for (int x = start_x; x < end_x; ++x) {
-            const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(buffer_width) +
-                                       static_cast<std::size_t>(x)) *
-                                      4u;
-            if (index + 3 >= pixels.size()) {
-                continue;
-            }
-
-            const double r = static_cast<double>(pixels[index + 0]) / 255.0;
-            const double g = static_cast<double>(pixels[index + 1]) / 255.0;
-            const double b = static_cast<double>(pixels[index + 2]) / 255.0;
-            const double a = static_cast<double>(pixels[index + 3]) / 255.0;
-
-            const double luminance = (r * rw) + (g * gw) + (b * bw);
-            accum += luminance * a;
-            ++count;
-        }
-    }
-
-    if (count == 0) {
-        return 0.0f;
-    }
-
-    return static_cast<float>(accum / static_cast<double>(count));
 }
 
 std::pair<float, float> compute_brightness_gradient(const LightingChunk& center,
@@ -911,15 +862,12 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
     }
 }
 
-void LightMap::capture_runtime_brightness(SDL_Renderer* renderer) {
+void LightMap::ingest_runtime_samples(const runtime_lighting::RuntimeLightingFrame& frame) {
     std::scoped_lock lock(mutex_);
     if (chunk_lighting_suspended_flag()) {
         return;
     }
-    if (!renderer || !assets_) {
-        return;
-    }
-    if (screen_width_ <= 0 || screen_height_ <= 0) {
+    if (!assets_) {
         return;
     }
 
@@ -933,69 +881,37 @@ void LightMap::capture_runtime_brightness(SDL_Renderer* renderer) {
         }
     }
 
-    const SDL_Rect screen_rect{0, 0, screen_width_, screen_height_};
-    const int      pitch       = screen_rect.w * 4;
-
-    std::vector<std::uint8_t> pixels;
-    try {
-        pixels.resize(static_cast<std::size_t>(pitch) * static_cast<std::size_t>(screen_rect.h));
-    } catch (const std::bad_alloc&) {
-        vibble::log::warn("[LightMap] Unable to allocate runtime brightness buffer");
+    if (frame.empty()) {
         return;
     }
 
-    if (SDL_RenderReadPixels(renderer,
-                              &screen_rect,
-                              SDL_PIXELFORMAT_RGBA32,
-                              pixels.data(),
-                              pitch) != 0) {
-        vibble::log::warn(std::string{"[LightMap] Failed to capture runtime brightness: "} + SDL_GetError());
-        return;
+    world::Grid& grid = assets_->world_grid();
+    std::unordered_set<world::Chunk*> updated_chunks;
+    updated_chunks.reserve(frame.samples.size());
+
+    for (const auto& sample : frame.samples) {
+        world::Chunk::LightingChunk* cell =
+            find_lighting_chunk_from_global(grid, sample.global_i, sample.global_j);
+        if (!cell) {
+            continue;
+        }
+
+        const float brightness = std::clamp(sample.brightness, 0.0f, 1.0f);
+        cell->lighting.runtime_average_strength = brightness;
+        cell->lighting.has_runtime_average      = true;
+        cell->lighting.needs_update             = true;
+        cell->lighting.is_active                = true;
+
+        if (cell->parent) {
+            updated_chunks.insert(cell->parent);
+        }
     }
 
-    const camera& cam = assets_->getView();
-    SDL_Rect      world_view = world_rect_from_screen(cam, screen_rect);
-
-    for (world::Chunk* chunk : active_chunks()) {
+    for (world::Chunk* chunk : updated_chunks) {
         if (!chunk) {
             continue;
         }
-        bool any_cell_updated = false;
-        for (auto& cell : chunk->lighting_chunks()) {
-            if (!intersects(cell.world_bounds, world_view)) {
-                continue;
-            }
-
-            SDL_Point top_left =
-                cam.map_to_screen({cell.world_bounds.x, cell.world_bounds.y});
-            SDL_Point bottom_right = cam.map_to_screen({cell.world_bounds.x + cell.world_bounds.w,
-                                                        cell.world_bounds.y + cell.world_bounds.h});
-
-            SDL_Rect screen_cell{};
-            screen_cell.x = std::min(top_left.x, bottom_right.x);
-            screen_cell.y = std::min(top_left.y, bottom_right.y);
-            screen_cell.w = std::abs(bottom_right.x - top_left.x);
-            screen_cell.h = std::abs(bottom_right.y - top_left.y);
-
-            SDL_Rect overlap{};
-            if (SDL_IntersectRect(&screen_cell, &screen_rect, &overlap) == SDL_FALSE) {
-                continue;
-            }
-            if (overlap.w <= 0 || overlap.h <= 0) {
-                continue;
-            }
-
-            const float luminance = average_luminance_for_region(pixels, screen_rect.w, screen_rect.h, overlap);
-            cell.lighting.runtime_average_strength = std::clamp(luminance, 0.0f, 1.0f);
-            cell.lighting.has_runtime_average      = true;
-            cell.lighting.needs_update             = true;
-            cell.lighting.is_active                = true;
-            any_cell_updated                       = true;
-        }
-
-        if (any_cell_updated) {
-            chunk->update_aggregate_from_lighting_chunks();
-        }
+        chunk->update_aggregate_from_lighting_chunks();
     }
 }
 
