@@ -25,6 +25,7 @@ private:
     State state_ = State::Idle;
     int idle_ratio_ = 5;
     Asset* current_target_ = nullptr;
+    int    orbit_radius_   = 0;
 };
 
 #endif

@@ -134,7 +134,7 @@ void FrogController::perform_idle_hop() {
 
     std::vector<SDL_Point> path;
     path.push_back(SDL_Point{ destination.x - self_->pos.x, destination.y - self_->pos.y });
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
     schedule_next_idle_hop();
 }
 
@@ -157,9 +157,9 @@ void FrogController::perform_run_hop(Asset* threat) {
 
     if (path.empty()) {
         const auto fallback = controller_paths::flee_path(self_, threat);
-        self_->anim_->move(fallback, controller_utils::controller_visit_threshold(self_));
+        self_->anim_->move(fallback, controller_utils::controller_visit_threshold(self_, fallback));
     } else {
-        self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
+        self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
     }
 
     schedule_next_run_hop();

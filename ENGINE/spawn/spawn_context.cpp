@@ -70,10 +70,11 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 continue;
                         }
                         try {
-                                resolved_child_areas[named.name] = area_helpers::make_world_area(*raw->info,
-                                                                                               *named.area,
-                                                                                               raw->pos,
-                                                                                               raw->flipped);
+                                resolved_child_areas.insert_or_assign(named.name,
+                                                                      area_helpers::make_world_area(*raw->info,
+                                                                                                    *named.area,
+                                                                                                    raw->pos,
+                                                                                                    raw->flipped));
                         } catch (...) {
                                 continue;
                         }
@@ -113,7 +114,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 }
                         }
                         Area childArea = area_helpers::make_world_area(*raw->info, *base_area, raw->pos, raw->flipped);
-                        resolved_child_areas[childInfo->area_name] = childArea;
+                        resolved_child_areas.insert_or_assign(childInfo->area_name, childArea);
                         AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
                                                        childArea,
                                                        *asset_library_);

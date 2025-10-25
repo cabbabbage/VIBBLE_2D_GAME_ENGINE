@@ -149,7 +149,7 @@ manifest_store_(manifest_store)
         vibble::log::info(std::string("[AssetLoader] Asset library ready in ") + std::to_string(library_ms) + "ms");
         vibble::log::info(std::string("[AssetLoader] Rooms built in ") + std::to_string(rooms_ms) + "ms");
         vibble::log::info(std::string("[AssetLoader] Initialization completed in ") + std::to_string(total_ms) + "ms");
-        auto distant_boundary = collectDistantAssets(150, 400);
+        auto distant_boundary = collectDistantAssets(150, 800);
         for (auto* asset : distant_boundary) {
                 asset->set_hidden(true);
         }

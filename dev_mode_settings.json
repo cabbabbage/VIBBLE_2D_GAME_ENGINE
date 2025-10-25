@@ -29,6 +29,7 @@
         "lighting": {
             "map_panel": {
                 "reactive": {
+                    "frame_blend_falloff_frames": 100.0,
                     "opacity_sensitivity_percent": 100.0,
                     "virtual_light_map": {
                         "horizontal_falloff": 1.6200000047683716,

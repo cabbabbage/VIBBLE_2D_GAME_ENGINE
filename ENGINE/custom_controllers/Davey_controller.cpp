@@ -11,11 +11,6 @@ namespace {
 
 constexpr int kOrbitSteps = 8;
 
-int orbit_visit_threshold(const Asset* asset, int radius) {
-    const int limit = std::max(1, std::min(radius, controller_paths::neighbor_radius(asset)));
-    return std::max(2, limit / 4);
-}
-
 }
 
 DaveyController::DaveyController(Assets* assets, Asset* self)
@@ -31,11 +26,12 @@ void DaveyController::enter_idle(int rest_ratio) {
     }
 
     idle_ratio_ = std::clamp(rest_ratio, 0, 100);
-    state_ = State::Idle;
-    current_target_ = nullptr;
+    state_           = State::Idle;
+    current_target_  = nullptr;
+    orbit_radius_    = 0;
 
     const auto path = controller_paths::idle_path(self_, idle_ratio_);
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void DaveyController::enter_pursue(Asset* target) {
@@ -47,11 +43,12 @@ void DaveyController::enter_pursue(Asset* target) {
         return;
     }
 
-    state_ = State::Pursuing;
-    current_target_ = target;
+    state_           = State::Pursuing;
+    current_target_  = target;
+    orbit_radius_    = 0;
 
     const auto path = controller_paths::pursue_path(self_, target);
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void DaveyController::enter_orbit(Asset* center, int radius) {
@@ -63,8 +60,9 @@ void DaveyController::enter_orbit(Asset* center, int radius) {
         return;
     }
 
-    state_ = State::Orbiting;
-    current_target_ = center;
+    state_           = State::Orbiting;
+    current_target_  = center;
+    orbit_radius_    = std::max(0, radius);
 
     const auto path = controller_paths::orbit_path(self_, center, radius, kOrbitSteps);
     if (path.empty()) {
@@ -72,12 +70,40 @@ void DaveyController::enter_orbit(Asset* center, int radius) {
         return;
     }
 
-    self_->anim_->move(path, orbit_visit_threshold(self_, radius));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void DaveyController::update(const Input&) {
     if (!self_ || !self_->anim_) {
         return;
+    }
+
+    auto target_active = [](Asset* asset) {
+        return asset && !asset->dead && asset->active;
+    };
+
+    if (self_->anim_->path_requested) {
+        switch (state_) {
+        case State::Idle:
+            enter_idle(idle_ratio_);
+            break;
+        case State::Pursuing:
+            if (target_active(current_target_)) {
+                enter_pursue(current_target_);
+            } else {
+                enter_idle(idle_ratio_);
+            }
+            break;
+        case State::Orbiting:
+            if (target_active(current_target_) && orbit_radius_ > 0) {
+                enter_orbit(current_target_, orbit_radius_);
+            } else if (target_active(current_target_)) {
+                enter_pursue(current_target_);
+            } else {
+                enter_idle(idle_ratio_);
+            }
+            break;
+        }
     }
 
     if (!assets_ || !self_->info) {
@@ -87,7 +113,7 @@ void DaveyController::update(const Input&) {
 
     try {
         Asset* player = assets_->player;
-        if (!player || player == self_) {
+        if (!target_active(player) || player == self_) {
             enter_idle(10);
             return;
         }

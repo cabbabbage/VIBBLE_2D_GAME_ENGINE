@@ -25,10 +25,11 @@ void BombController::enter_idle(int rest_ratio) {
 
     idle_ratio_ = std::clamp(rest_ratio, 0, 100);
     state_       = State::Idle;
-    current_target_ = nullptr;
+    current_target_  = nullptr;
+    pursuit_locked_  = false;
 
     const auto path = controller_paths::idle_path(self_, idle_ratio_);
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void BombController::enter_pursue(Asset* target) {
@@ -40,12 +41,12 @@ void BombController::enter_pursue(Asset* target) {
         return;
     }
 
-    state_ = State::Pursuing;
+    state_          = State::Pursuing;
     current_target_ = target;
     pursuit_locked_ = true;
 
     const auto path = controller_paths::pursue_path(self_, target);
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_));
+    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void BombController::trigger_explosion() {
@@ -56,8 +57,9 @@ void BombController::trigger_explosion() {
         return;
     }
 
-    state_ = State::Detonating;
-    current_target_ = nullptr;
+    state_           = State::Detonating;
+    current_target_  = nullptr;
+    pursuit_locked_  = false;
 
     bool animation_started = false;
     if (!self_->info) {
@@ -93,6 +95,28 @@ void BombController::update(const Input&) {
         return;
     }
 
+    auto target_active = [](Asset* asset) {
+        return asset && !asset->dead && asset->active;
+    };
+
+    if (self_->anim_->path_requested) {
+        switch (state_) {
+        case State::Idle:
+            enter_idle(idle_ratio_);
+            break;
+        case State::Pursuing:
+            if (target_active(current_target_)) {
+                enter_pursue(current_target_);
+            } else {
+                pursuit_locked_ = false;
+                enter_idle(idle_ratio_);
+            }
+            break;
+        case State::Detonating:
+            break;
+        }
+    }
+
     if (!assets_ || !self_->info) {
         enter_idle(5);
         return;
@@ -100,7 +124,7 @@ void BombController::update(const Input&) {
 
     try {
         Asset* player = assets_->player;
-        if (!player || player == self_) {
+        if (!target_active(player) || player == self_) {
             if (!pursuit_locked_) {
                 enter_idle(35);
             }
