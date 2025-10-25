@@ -178,17 +178,11 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
     return emitter;
 }
 
-struct ChunkOcclusionData {
-    SDL_Rect                     bounds{0, 0, 0, 0};
-    int                          width  = 0;
-    int                          height = 0;
-    std::vector<std::uint8_t>    mask{};
-};
-
 class OcclusionSampler {
 public:
-    explicit OcclusionSampler(world::Grid& grid)
-        : grid_(grid) {}
+    OcclusionSampler(world::Grid& grid, RuntimeLightingSampler::OcclusionCache& cache)
+        : grid_(grid)
+        , cache_(cache) {}
 
     float visibility(const SDL_FPoint& from, const SDL_FPoint& to) {
         const float dx     = to.x - from.x;
@@ -233,7 +227,7 @@ private:
             return false;
         }
 
-        ChunkOcclusionData& data = ensure_chunk(chunk);
+        RuntimeLightingSampler::CachedOcclusion& data = ensure_chunk(chunk);
         if (data.width <= 0 || data.height <= 0) {
             return false;
         }
@@ -254,52 +248,58 @@ private:
         return data.mask[index] != 0;
     }
 
-    ChunkOcclusionData& ensure_chunk(world::Chunk* chunk) {
-        auto it = cache_.find(chunk);
-        if (it != cache_.end()) {
-            return it->second;
+    RuntimeLightingSampler::CachedOcclusion& ensure_chunk(world::Chunk* chunk) {
+        auto [it, inserted] = cache_.try_emplace(chunk);
+        RuntimeLightingSampler::CachedOcclusion& entry = it->second;
+        if (!inserted && entry.revision == chunk->occlusion_revision) {
+            return entry;
         }
 
-        ChunkOcclusionData data;
-        data.bounds = chunk->world_bounds;
-        data.width  = std::max(0, data.bounds.w);
-        data.height = std::max(0, data.bounds.h);
-        if (data.width > 0 && data.height > 0) {
-            data.mask.assign(static_cast<std::size_t>(data.width * data.height), 0);
-            for (Asset* asset : chunk->assets) {
-                if (!asset) {
+        entry.revision = chunk->occlusion_revision;
+        entry.bounds    = chunk->world_bounds;
+        entry.width     = std::max(0, entry.bounds.w);
+        entry.height    = std::max(0, entry.bounds.h);
+
+        if (entry.width <= 0 || entry.height <= 0) {
+            entry.mask.clear();
+            return entry;
+        }
+
+        const std::size_t total = static_cast<std::size_t>(entry.width) * static_cast<std::size_t>(entry.height);
+        entry.mask.assign(total, 0);
+
+        for (Asset* asset : chunk->assets) {
+            if (!asset) {
+                continue;
+            }
+            Area area = asset->get_area("impassable");
+            if (area.get_points().empty()) {
+                area = asset->get_area("collision_area");
+            }
+            for (const SDL_Point& pt : area.get_points()) {
+                if (!SDL_PointInRect(&pt, &entry.bounds)) {
                     continue;
                 }
-                Area area = asset->get_area("impassable");
-                if (area.get_points().empty()) {
-                    area = asset->get_area("collision_area");
+                const int local_x = pt.x - entry.bounds.x;
+                const int local_y = pt.y - entry.bounds.y;
+                if (local_x < 0 || local_y < 0 || local_x >= entry.width || local_y >= entry.height) {
+                    continue;
                 }
-                for (const SDL_Point& pt : area.get_points()) {
-                    if (!SDL_PointInRect(&pt, &data.bounds)) {
-                        continue;
-                    }
-                    const int local_x = pt.x - data.bounds.x;
-                    const int local_y = pt.y - data.bounds.y;
-                    if (local_x < 0 || local_y < 0 || local_x >= data.width || local_y >= data.height) {
-                        continue;
-                    }
-                    const std::size_t index = static_cast<std::size_t>(local_y) *
-                                              static_cast<std::size_t>(data.width) +
-                                              static_cast<std::size_t>(local_x);
-                    if (index < data.mask.size()) {
-                        data.mask[index] = 1;
-                    }
+                const std::size_t index = static_cast<std::size_t>(local_y) *
+                                          static_cast<std::size_t>(entry.width) +
+                                          static_cast<std::size_t>(local_x);
+                if (index < entry.mask.size()) {
+                    entry.mask[index] = 1;
                 }
             }
         }
 
-        auto [inserted_it, _] = cache_.emplace(chunk, std::move(data));
-        return inserted_it->second;
+        return entry;
     }
 
 private:
-    world::Grid&                                      grid_;
-    std::unordered_map<world::Chunk*, ChunkOcclusionData> cache_{};
+    world::Grid&                              grid_;
+    RuntimeLightingSampler::OcclusionCache&   cache_;
 };
 
 } // namespace
@@ -309,6 +309,23 @@ RuntimeLightingSampler::RuntimeLightingSampler(Assets* assets)
 
 void RuntimeLightingSampler::begin_frame() {
     external_samples_.clear();
+
+    if (!assets_) {
+        occlusion_cache_.clear();
+        return;
+    }
+
+    world::Grid& grid = assets_->world_grid();
+    const auto&  active_chunks = grid.active_chunks();
+
+    for (auto it = occlusion_cache_.begin(); it != occlusion_cache_.end();) {
+        world::Chunk* chunk = it->first;
+        if (std::find(active_chunks.begin(), active_chunks.end(), chunk) == active_chunks.end()) {
+            it = occlusion_cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void RuntimeLightingSampler::add_external_sample(const ExternalLightSample& sample) {
@@ -446,7 +463,7 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
 
     frame.samples.reserve(emitters.size() * 4);
 
-    OcclusionSampler occlusion_sampler(grid);
+    OcclusionSampler occlusion_sampler(grid, occlusion_cache_);
 
     for (world::Chunk* chunk : active_chunks) {
         if (!chunk) {

@@ -48,6 +48,7 @@ void Grid::register_asset(Asset* a) {
     Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_);
     if (std::find(c.assets.begin(), c.assets.end(), a) == c.assets.end()) {
         c.assets.push_back(a);
+        ++c.occlusion_revision;
     }
     residency_[a] = &c;
 }
@@ -89,6 +90,7 @@ void Grid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
     }
     Chunk& dest = chunks_.ensure(new_i, new_j, r_chunk_, origin_);
     dest.assets.push_back(a);
+    ++dest.occlusion_revision;
     residency_[a] = &dest;
 }
 
@@ -141,7 +143,11 @@ void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
 void Grid::remove_from_chunk(Asset* a, Chunk* c) {
     if (!c) return;
     auto& v = c->assets;
+    const auto old_size = v.size();
     v.erase(std::remove(v.begin(), v.end(), a), v.end());
+    if (v.size() != old_size) {
+        ++c->occlusion_revision;
+    }
 }
 
 } // namespace world

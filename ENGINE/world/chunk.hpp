@@ -25,6 +25,7 @@ struct Chunk {
     SDL_Rect world_bounds{0, 0, 0, 0};
 
     std::vector<Asset*> assets;
+    std::uint64_t       occlusion_revision = 0;
 
     struct ChunkShadowParameters {
         // Scalar applied to the shadow mask relative to its authored size.

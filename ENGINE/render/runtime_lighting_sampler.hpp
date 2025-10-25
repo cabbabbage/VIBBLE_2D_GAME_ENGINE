@@ -2,12 +2,18 @@
 
 #include <SDL.h>
 
-#include <vector>
 #include <cstddef>
+#include <cstdint>
+#include <unordered_map>
+#include <vector>
 
 class Assets;
 class camera;
 class Asset;
+
+namespace world {
+    struct Chunk;
+}
 
 namespace runtime_lighting {
 
@@ -75,8 +81,18 @@ public:
                                 const camera&                  cam);
 
 private:
+    struct CachedOcclusion {
+        SDL_Rect                  bounds{0, 0, 0, 0};
+        int                       width  = 0;
+        int                       height = 0;
+        std::vector<std::uint8_t> mask{};
+        std::uint64_t             revision = 0;
+    };
+    using OcclusionCache = std::unordered_map<world::Chunk*, CachedOcclusion>;
+
     Assets* assets_ = nullptr;
     std::vector<ExternalLightSample> external_samples_{};
+    OcclusionCache                    occlusion_cache_{};
 };
 
 } // namespace runtime_lighting
