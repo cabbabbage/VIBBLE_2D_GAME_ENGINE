@@ -23,6 +23,7 @@ public:
     const std::string& active_name() const { return current_.name; }
 
     std::vector<DockableCollapsible*> open_panels() const;
+    void bring_to_front(DockableCollapsible* panel);
 
 private:
     FloatingDockableManager() = default;

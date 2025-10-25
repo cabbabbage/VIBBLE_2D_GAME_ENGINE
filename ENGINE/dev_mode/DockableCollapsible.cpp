@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <SDL_log.h>
+#include <SDL_timer.h>
 
 #include "utils/input.hpp"
 
@@ -21,30 +22,9 @@
 
 namespace {
 
-    void draw_grip(SDL_Renderer* r, const SDL_Rect& area, SDL_Color col) {
-        if (!r || area.w <= 0 || area.h <= 0) {
-            return;
-        }
-
-        const float margin = 3.0f;
-        const float usable = std::min(static_cast<float>(area.w), static_cast<float>(area.h)) - margin * 2.0f;
-        if (usable <= 0.0f) {
-            return;
-        }
-
-        const float radius = usable * 0.5f;
-        const float cx = static_cast<float>(area.x) + static_cast<float>(area.w) * 0.5f;
-        const float cy = static_cast<float>(area.y) + static_cast<float>(area.h) * 0.5f;
-
-        SDL_SetRenderDrawColor(r, col.r, col.g, col.b, col.a);
-        for (const auto& seg : DMIcons::CollapsibleHandleSegments()) {
-            int x0 = static_cast<int>(std::lround(cx + seg.x0 * radius));
-            int y0 = static_cast<int>(std::lround(cy + seg.y0 * radius));
-            int x1 = static_cast<int>(std::lround(cx + seg.x1 * radius));
-            int y1 = static_cast<int>(std::lround(cy + seg.y1 * radius));
-            SDL_RenderDrawLine(r, x0, y0, x1, y1);
-        }
-    }
+    constexpr int kHeaderDragStartThreshold = 4;
+    constexpr Uint32 kPointerBlockOnShowMs = 50;
+    constexpr Uint32 kPointerBlockAfterDragMs = 500;
 
     void draw_lock_icon(SDL_Renderer* r, const SDL_Rect& rect, bool locked) {
         if (rect.w <= 0 || rect.h <= 0) {
@@ -175,12 +155,14 @@ void DockableCollapsible::set_visible(bool v) {
     }
     visible_ = v;
     if (visible_) {
-        pointer_block_frames_ = 2;
+        block_pointer_for(kPointerBlockOnShowMs);
     } else {
-        pointer_block_frames_ = 0;
+        block_pointer_for(0);
     }
     if (!visible_) {
         dragging_ = false;
+        drag_exceeded_threshold_ = false;
+        header_dragging_via_button_ = false;
         FloatingDockableManager::instance().notify_panel_closed(this);
         if (on_close_) on_close_();
     }
@@ -337,8 +319,8 @@ void DockableCollapsible::set_floatable(bool floatable) {
     floatable_ = floatable;
     dragging_ = false;
     header_dragging_via_button_ = false;
-    header_btn_drag_moved_ = false;
-    pointer_block_frames_ = 0;
+    drag_exceeded_threshold_ = false;
+    block_pointer_for(0);
     update_layout_manager_registration();
     notify_layout_manager_geometry_changed();
     invalidate_layout();
@@ -470,6 +452,26 @@ void DockableCollapsible::notify_layout_manager_content_changed() const {
     FloatingPanelLayoutManager::instance().notifyPanelContentChanged(const_cast<DockableCollapsible*>(this));
 }
 
+void DockableCollapsible::block_pointer_for(Uint32 ms) const {
+    if (ms == 0) {
+        pointer_block_until_ms_ = 0;
+        return;
+    }
+    pointer_block_until_ms_ = SDL_GetTicks() + ms;
+}
+
+bool DockableCollapsible::pointer_block_active() const {
+    if (pointer_block_until_ms_ == 0) {
+        return false;
+    }
+    Uint32 now = SDL_GetTicks();
+    if (SDL_TICKS_PASSED(now, pointer_block_until_ms_)) {
+        pointer_block_until_ms_ = 0;
+        return false;
+    }
+    return true;
+}
+
 void DockableCollapsible::reset_scroll() const {
     if (locked_) {
         log_locked_mutation("reset_scroll");
@@ -480,7 +482,7 @@ void DockableCollapsible::reset_scroll() const {
 }
 
 void DockableCollapsible::force_pointer_ready() {
-    pointer_block_frames_ = 0;
+    block_pointer_for(0);
 }
 
 void DockableCollapsible::invalidate_layout(bool geometry_only) const {
@@ -495,9 +497,7 @@ void DockableCollapsible::invalidate_layout(bool geometry_only) const {
 
 void DockableCollapsible::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_) return;
-    if (pointer_block_frames_ > 0) {
-        --pointer_block_frames_;
-    }
+    pointer_block_active();
 
 #if DM_FORCE_LAYOUT
     LayoutTimingScope timing_scope(title_, true, true, false, true);
@@ -558,27 +558,39 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
     const bool slider_capture_active = DMWidgetsSliderScrollCaptured();
     SDL_Point pointer_pos{0, 0};
+    bool pointer_blocked = pointer_block_active();
     if (pointer_event) {
+        if (pointer_blocked) {
+            return true;
+        }
         if (e.type == SDL_MOUSEMOTION) {
             pointer_pos = SDL_Point{e.motion.x, e.motion.y};
         } else {
             pointer_pos = SDL_Point{e.button.x, e.button.y};
         }
-        if ((e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) && pointer_block_frames_ > 0) {
-            return false;
+    } else {
+        if (wheel_event && pointer_blocked) {
+            return true;
         }
     }
 
     if (show_header_ && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{e.button.x, e.button.y};
         const bool on_header_button = header_btn_ && SDL_PointInRect(&p, &header_rect_);
-        const bool on_handle = SDL_PointInRect(&p, &handle_rect_);
-        if (floatable_ && (on_header_button || on_handle)) {
+        const bool on_close = close_btn_ && SDL_PointInRect(&p, &close_rect_);
+        const bool on_lock = lock_btn_ && SDL_PointInRect(&p, &lock_rect_);
+        SDL_Rect drag_rect{ rect_.x + padding_, rect_.y + padding_, std::max(0, rect_.w - 2 * padding_), header_rect_.h };
+        if (drag_rect.h <= 0) {
+            drag_rect.h = DMButton::height();
+        }
+        const bool on_header_area = SDL_PointInRect(&p, &drag_rect);
+        if (floatable_ && on_header_area && !on_close && !on_lock) {
             dragging_ = true;
+            header_dragging_via_button_ = on_header_button;
+            drag_exceeded_threshold_ = false;
             drag_offset_.x = p.x - rect_.x;
             drag_offset_.y = p.y - rect_.y;
-            header_dragging_via_button_ = on_header_button;
-            header_btn_drag_moved_ = false;
+            drag_start_pointer_ = p;
             if (on_header_button && header_btn_) {
                 header_btn_->handle_event(e);
             }
@@ -588,21 +600,35 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
 
     if (show_header_ && dragging_) {
         if (e.type == SDL_MOUSEMOTION) {
-            rect_.x = e.motion.x - drag_offset_.x;
-            rect_.y = e.motion.y - drag_offset_.y;
-            clamp_to_bounds(last_screen_w_, last_screen_h_);
-            if (header_dragging_via_button_) {
-                header_btn_drag_moved_ = true;
+            SDL_Point current{e.motion.x, e.motion.y};
+            if (!drag_exceeded_threshold_) {
+                int dx = current.x - drag_start_pointer_.x;
+                int dy = current.y - drag_start_pointer_.y;
+                if (std::abs(dx) > kHeaderDragStartThreshold || std::abs(dy) > kHeaderDragStartThreshold) {
+                    drag_exceeded_threshold_ = true;
+                    FloatingDockableManager::instance().bring_to_front(this);
+                }
             }
-            invalidate_layout(true);
+            if (drag_exceeded_threshold_) {
+                rect_.x = current.x - drag_offset_.x;
+                rect_.y = current.y - drag_offset_.y;
+                clamp_to_bounds(last_screen_w_, last_screen_h_);
+                invalidate_layout(true);
+            }
             return true;
         }
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             bool dragged_via_button = header_dragging_via_button_;
-            bool drag_moved = header_btn_drag_moved_;
+            bool drag_moved = drag_exceeded_threshold_;
             dragging_ = false;
             header_dragging_via_button_ = false;
-            header_btn_drag_moved_ = false;
+            drag_exceeded_threshold_ = false;
+            if (drag_moved) {
+                notify_layout_manager_geometry_changed();
+                FloatingPanelLayoutManager::instance().notifyPanelUserMoved(this);
+                block_pointer_for(kPointerBlockAfterDragMs);
+                invalidate_layout(true);
+            }
             if (dragged_via_button && header_btn_) {
                 header_btn_->handle_event(e);
                 SDL_Point p{e.button.x, e.button.y};
@@ -613,7 +639,6 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
                 }
                 return true;
             }
-            invalidate_layout(true);
             return true;
         }
     }
@@ -779,10 +804,6 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
         draw_lock_icon(r, lock_rect_, locked_);
     }
     if (close_btn_ && (floatable_ || close_button_enabled_)) close_btn_->render(r);
-
-    if (show_header_) {
-        draw_grip(r, handle_rect_, DMStyles::Border());
-    }
 
     if (!expanded_) return;
 
@@ -960,18 +981,7 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
     update_header_button();
     update_lock_button();
 
-    if (show_header_) {
-        int available_for_handle = header_rect_.w;
-        if (available_for_handle > 0) {
-            int grip_w = std::max(32, std::min(80, std::max(1, available_for_handle) / 3));
-            grip_w = std::min(grip_w, available_for_handle);
-            handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, grip_w, header_rect_.h };
-        } else {
-            handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, 0, header_rect_.h };
-        }
-    } else {
-        handle_rect_ = SDL_Rect{ 0, 0, 0, 0 };
-    }
+    handle_rect_ = SDL_Rect{0, 0, 0, 0};
 
     int content_w = header_total_w;
     int header_gap = show_header_ ? DMSpacing::header_gap() : 0;
@@ -1172,12 +1182,7 @@ void DockableCollapsible::update_geometry_after_move() const {
     if (close_btn_ && show_close) close_btn_->set_rect(close_rect_);
     if (lock_btn_ && show_lock) lock_btn_->set_rect(lock_rect_);
 
-    if (show_header_) {
-        int grip_w = std::max(32, std::min(80, std::max(1, header_rect_.w) / 3));
-        handle_rect_ = SDL_Rect{ header_rect_.x, header_rect_.y, grip_w, header_rect_.h };
-    } else {
-        handle_rect_ = SDL_Rect{0,0,0,0};
-    }
+    handle_rect_ = SDL_Rect{0,0,0,0};
 
     body_viewport_.x = rect_.x + padding_;
     body_viewport_.y = rect_.y + padding_ + header_rect_.h + (show_header_ ? DMSpacing::header_gap() : 0);

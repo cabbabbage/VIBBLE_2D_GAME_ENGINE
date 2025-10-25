@@ -13840,7 +13840,7 @@
         },
         {
           "level": 1,
-          "max_rooms": 1,
+          "max_rooms": 2,
           "min_rooms": 0,
           "name": "layer_1",
           "rooms": [
@@ -13848,6 +13848,12 @@
               "max_instances": 1,
               "min_instances": 0,
               "name": "spawn",
+              "required_children": []
+            },
+            {
+              "max_instances": 1,
+              "min_instances": 0,
+              "name": "test_2",
               "required_children": []
             }
           ]
@@ -14053,9 +14059,6 @@
         }
       },
       "rooms_data": {
-        "NewRoom": {
-          "name": "NewRoom"
-        },
         "spawn": {
           "areas": [
             {
@@ -14183,6 +14186,10 @@
               "spawn_id": "spn-7fa417fa562d"
             }
           ]
+        },
+        "test_2": {
+          "name": "test_2",
+          "spawn_groups": []
         }
       },
       "trails_data": {

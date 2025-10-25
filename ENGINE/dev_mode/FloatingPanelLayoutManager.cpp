@@ -268,6 +268,9 @@ void FloatingPanelLayoutManager::layoutAll(const std::vector<PanelInfo>& panels)
         if (!info.force_layout && !info.panel->is_visible()) {
             continue;
         }
+        if (user_placed_.count(info.panel) > 0) {
+            continue;
+        }
         targets.push_back(&info);
     }
 
@@ -392,6 +395,7 @@ void FloatingPanelLayoutManager::unregisterPanel(const DockableCollapsible* pane
         return;
     }
     tracked_panels_.erase(it, tracked_panels_.end());
+    user_placed_.erase(panel);
     layoutTrackedPanels();
 }
 
@@ -409,6 +413,13 @@ void FloatingPanelLayoutManager::notifyPanelContentChanged(DockableCollapsible* 
     layoutTrackedPanels();
 }
 
+void FloatingPanelLayoutManager::notifyPanelUserMoved(DockableCollapsible* panel) {
+    if (!panel) {
+        return;
+    }
+    user_placed_.insert(panel);
+}
+
 void FloatingPanelLayoutManager::layoutTrackedPanels() {
     if (applying_layout_ || tracked_panels_.empty()) {
         return;
@@ -421,6 +432,9 @@ void FloatingPanelLayoutManager::layoutTrackedPanels() {
             continue;
         }
         if (!panel->is_visible() || !panel->is_floatable()) {
+            continue;
+        }
+        if (user_placed_.count(panel) > 0) {
             continue;
         }
         PanelInfo info;

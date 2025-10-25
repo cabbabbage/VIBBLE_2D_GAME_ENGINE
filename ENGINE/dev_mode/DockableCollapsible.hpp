@@ -108,6 +108,8 @@ private:
     void update_layout_manager_registration();
     void notify_layout_manager_geometry_changed() const;
     void notify_layout_manager_content_changed() const;
+    void block_pointer_for(Uint32 ms) const;
+    bool pointer_block_active() const;
 
 protected:
     virtual void layout();
@@ -142,10 +144,11 @@ protected:
     bool close_button_enabled_ = false;
     bool close_button_on_left_ = false;
     bool dragging_ = false;
-    int pointer_block_frames_ = 0;
     bool header_dragging_via_button_ = false;
-    bool header_btn_drag_moved_ = false;
+    bool drag_exceeded_threshold_ = false;
     SDL_Point drag_offset_{0,0};
+    SDL_Point drag_start_pointer_{0,0};
+    mutable Uint32 pointer_block_until_ms_ = 0;
     mutable int scroll_ = 0;
     mutable int max_scroll_ = 0;
     std::shared_ptr<AssetInfo> info_{};

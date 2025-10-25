@@ -106,3 +106,23 @@ std::vector<DockableCollapsible*> FloatingDockableManager::open_panels() const {
     }
     return panels;
 }
+
+void FloatingDockableManager::bring_to_front(DockableCollapsible* panel) {
+    if (!panel) {
+        return;
+    }
+    if (current_.panel == panel) {
+        return;
+    }
+    auto it = std::find_if(stack_.begin(), stack_.end(),
+                           [panel](const ActiveEntry& entry) { return entry.panel == panel; });
+    if (it == stack_.end()) {
+        return;
+    }
+    ActiveEntry entry = std::move(*it);
+    stack_.erase(it);
+    if (current_.panel) {
+        stack_.push_back(std::move(current_));
+    }
+    current_ = std::move(entry);
+}

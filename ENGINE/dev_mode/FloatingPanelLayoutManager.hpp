@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 
+#include <unordered_set>
 #include <vector>
 
 class DockableCollapsible;
@@ -43,6 +44,7 @@ public:
     void unregisterPanel(const DockableCollapsible* panel);
     void notifyPanelGeometryChanged(DockableCollapsible* panel);
     void notifyPanelContentChanged(DockableCollapsible* panel);
+    void notifyPanelUserMoved(DockableCollapsible* panel);
 
 private:
     FloatingPanelLayoutManager() = default;
@@ -57,5 +59,6 @@ private:
     std::vector<SDL_Rect> sliding_rects_{};
     std::vector<DockableCollapsible*> tracked_panels_{};
     bool applying_layout_ = false;
+    std::unordered_set<const DockableCollapsible*> user_placed_{};
 };
 
