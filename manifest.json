@@ -13890,13 +13890,13 @@
         {
           "bounding_extent": 2000.0,
           "level": 1,
-          "max_rooms": 1,
+          "max_rooms": 6,
           "min_rooms": 0,
           "name": "layer_1",
           "ring_radius": 4820.0,
           "rooms": [
             {
-              "max_instances": 1,
+              "max_instances": 6,
               "min_instances": 0,
               "name": "fountain",
               "required_children": []
@@ -14134,9 +14134,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            207,
             242,
             36,
+            125,
             255
           ],
           "edge_smoothness": 2,
@@ -14217,11 +14217,11 @@
           "curvyness": 2,
           "display_color": [
             242,
-            36,
-            36,
+            242,
+            61,
             255
           ],
-          "edge_smoothness": 2,
+          "edge_smoothness": 101,
           "geometry": "Circle",
           "inherits_map_assets": true,
           "is_boss": false,
@@ -14261,66 +14261,6 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-e900ea94ff54"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "candle"
-                }
-              ],
-              "display_name": "candle",
-              "dx": 214,
-              "dy": -212,
-              "enforce_spacing": false,
-              "link_to_area": true,
-              "max_number": 20,
-              "min_number": 15,
-              "origional_height": 2043,
-              "origional_width": 1978,
-              "perimeter_radius": 679,
-              "position": "Perimeter",
-              "priority": 1,
-              "radius": 679,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-0aa55037dab5"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Axe"
-                },
-                {
-                  "chance": 61.0,
-                  "name": "Tree_Dark"
-                }
-              ],
-              "display_name": "Axe",
-              "dx": 240,
-              "dy": -225,
-              "edge_inset_percent": 74,
-              "enforce_spacing": false,
-              "max_number": 100,
-              "min_number": 1,
-              "origional_height": 1656,
-              "origional_width": 1862,
-              "position": "Edge",
-              "priority": 2,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-1a94cd6d0d68"
             }
           ]
         }

@@ -1984,6 +1984,61 @@ void RoomConfigurator::set_spawn_group_callbacks(std::function<void(const std::s
     on_spawn_regenerate_ = std::move(on_regenerate);
 }
 
+bool RoomConfigurator::focus_spawn_group(const std::string& spawn_id) {
+    if (spawn_id.empty()) {
+        return false;
+    }
+    ensure_base_panels();
+    if (!container_) {
+        return false;
+    }
+
+    SpawnGroupConfig* target = nullptr;
+    for (size_t i = 0; i < spawn_group_config_ids_.size(); ++i) {
+        if (spawn_group_config_ids_[i] == spawn_id && i < spawn_group_configs_.size() && spawn_group_configs_[i]) {
+            target = spawn_group_configs_[i].get();
+            break;
+        }
+    }
+    if (!target) {
+        return false;
+    }
+
+    target->set_expanded(true);
+    target->request_open_spawn_group(spawn_id, 0, 0);
+
+    prepare_for_event(last_screen_w_, last_screen_h_);
+    container_->prepare_layout(last_screen_w_, last_screen_h_);
+
+    SDL_Rect view = container_->scroll_region();
+    if (view.h <= 0) {
+        return true;
+    }
+
+    SDL_Rect rect = target->rect();
+    int current_scroll = container_->scroll_value();
+    int new_scroll = current_scroll;
+
+    const int actual_top = rect.y + current_scroll;
+    int actual_bottom = rect.y + rect.h + current_scroll;
+    if (rect.h <= 0) {
+        actual_bottom = actual_top + cached_collapsible_height(target);
+    }
+
+    if (rect.y < view.y) {
+        new_scroll = std::max(0, actual_top - view.y);
+    } else if (rect.y + rect.h > view.y + view.h) {
+        new_scroll = std::max(0, actual_bottom - (view.y + view.h));
+    }
+
+    if (new_scroll != current_scroll) {
+        container_->set_scroll_value(new_scroll);
+        container_->prepare_layout(last_screen_w_, last_screen_h_);
+    }
+
+    return true;
+}
+
 void RoomConfigurator::set_spawn_area_open_callback(
     std::function<void(const std::string&, const std::string&)> cb,
     std::string stack_key) {

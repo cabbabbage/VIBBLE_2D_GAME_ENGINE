@@ -2379,9 +2379,6 @@ bool RoomEditor::should_enable_mouse_controls() const {
     if (library_ui_ && library_ui_->is_visible()) {
         return false;
     }
-    if (room_cfg_ui_ && room_cfg_ui_->visible()) {
-        return false;
-    }
     if (area_editor_ && area_editor_->is_active()) {
         return false;
     }
@@ -3521,12 +3518,16 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
         return;
     }
 
-    if (active_spawn_group_id_ && *active_spawn_group_id_ == spawn_id &&
-        spawn_group_panel_ && spawn_group_panel_->is_visible()) {
-        return;
+    active_spawn_group_id_ = spawn_id;
+    set_room_config_visible(true);
+    bool focused = false;
+    if (room_cfg_ui_) {
+        focused = room_cfg_ui_->focus_spawn_group(spawn_id);
     }
-
-    open_spawn_group_editor_by_id(spawn_id);
+    if (focused && spawn_group_panel_) {
+        spawn_group_panel_->close();
+        spawn_group_panel_->set_visible(false);
+    }
 }
 
 void RoomEditor::sanitize_perimeter_spawn_groups() {

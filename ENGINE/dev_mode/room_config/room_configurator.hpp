@@ -80,6 +80,7 @@ public:
                                    std::function<void(const std::string&, size_t)> on_reorder,
                                    std::function<void()> on_add,
                                    std::function<void(const std::string&)> on_regenerate = {});
+    bool focus_spawn_group(const std::string& spawn_id);
     void set_spawn_area_open_callback(std::function<void(const std::string&, const std::string&)> cb,
                                       std::string stack_key = {});
 
