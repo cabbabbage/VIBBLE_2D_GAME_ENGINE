@@ -46,6 +46,7 @@ public:
     void clear_header_highlight_color();
 
     void set_close_button_enabled(bool enabled);
+    void set_close_button_on_left(bool on_left);
 
     void setLocked(bool locked);
     bool isLocked() const { return locked_; }
@@ -139,6 +140,7 @@ protected:
     bool expanded_ = false;
     bool floatable_ = true;
     bool close_button_enabled_ = false;
+    bool close_button_on_left_ = false;
     bool dragging_ = false;
     int pointer_block_frames_ = 0;
     bool header_dragging_via_button_ = false;

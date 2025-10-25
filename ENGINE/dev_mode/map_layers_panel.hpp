@@ -117,6 +117,7 @@ private:
     void update_preview_state();
     void recalculate_dependency_highlights();
     void rebuild_layer_rows_from_json(const nlohmann::json& layers);
+    void update_embedded_layout_constraints();
 
     const nlohmann::json& layers_array() const;
     nlohmann::json& layers_array();
@@ -139,6 +140,8 @@ private:
 
     bool embedded_mode_ = false;
     SDL_Rect embedded_bounds_{0, 0, 0, 0};
+    int target_body_height_ = 0;
+    int default_visible_height_ = 400;
 
     std::unique_ptr<DMButton> add_layer_button_;
     std::unique_ptr<DMButton> reload_button_;

@@ -59,6 +59,7 @@ private:
         int index = -1;
         std::string name;
         double radius = 0.0;
+        double inner_radius = 0.0;
         SDL_Color color{255, 255, 255, 255};
         int min_rooms = 0;
         int max_rooms = 0;

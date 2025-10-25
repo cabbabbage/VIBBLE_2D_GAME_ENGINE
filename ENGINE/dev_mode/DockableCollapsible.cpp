@@ -289,6 +289,14 @@ void DockableCollapsible::set_close_button_enabled(bool enabled) {
     invalidate_layout();
 }
 
+void DockableCollapsible::set_close_button_on_left(bool on_left) {
+    if (close_button_on_left_ == on_left) {
+        return;
+    }
+    close_button_on_left_ = on_left;
+    invalidate_layout(true);
+}
+
 void DockableCollapsible::setLocked(bool locked) {
     apply_lock_state(locked, true, true);
 }
@@ -897,6 +905,13 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
             if (show_close) available -= button_width;
             if (show_lock) available -= button_width;
             header_rect_.w = std::max(0, available);
+            int header_x = header_rect_.x;
+            if (show_close && close_button_on_left_) {
+                close_rect_ = SDL_Rect{ header_x, header_rect_.y, button_width, button_width };
+                header_rect_.x = header_x + button_width;
+            } else {
+                close_rect_ = SDL_Rect{0,0,0,0};
+            }
             int next_x = header_rect_.x + header_rect_.w;
             if (show_lock) {
                 lock_rect_ = SDL_Rect{ next_x, header_rect_.y, button_width, button_width };
@@ -904,10 +919,8 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
             } else {
                 lock_rect_ = SDL_Rect{0,0,0,0};
             }
-            if (show_close) {
+            if (show_close && !close_button_on_left_) {
                 close_rect_ = SDL_Rect{ next_x, header_rect_.y, button_width, button_width };
-            } else {
-                close_rect_ = SDL_Rect{0,0,0,0};
             }
         } else {
             header_rect_.w = header_total_w;
@@ -920,14 +933,21 @@ void DockableCollapsible::layout(int screen_w, int screen_h) const {
         lock_rect_ = SDL_Rect{0,0,0,0};
         close_rect_ = SDL_Rect{0,0,0,0};
         if (show_header_) {
+            const int header_y = rect_.y + padding_;
             int next_x = rect_.x + rect_.w - padding_;
-            if (show_close) {
-                close_rect_ = SDL_Rect{ next_x - button_width, rect_.y + padding_, button_width, button_width };
-                next_x -= button_width;
+            header_rect_.x = rect_.x + padding_;
+            if (show_close && close_button_on_left_) {
+                close_rect_ = SDL_Rect{ header_rect_.x, header_y, button_width, button_width };
+                header_rect_.x += button_width;
                 header_rect_.w = std::max(0, header_rect_.w - button_width);
             }
             if (show_lock) {
-                lock_rect_ = SDL_Rect{ next_x - button_width, rect_.y + padding_, button_width, button_width };
+                lock_rect_ = SDL_Rect{ next_x - button_width, header_y, button_width, button_width };
+                next_x -= button_width;
+                header_rect_.w = std::max(0, header_rect_.w - button_width);
+            }
+            if (show_close && !close_button_on_left_) {
+                close_rect_ = SDL_Rect{ next_x - button_width, header_y, button_width, button_width };
                 next_x -= button_width;
                 header_rect_.w = std::max(0, header_rect_.w - button_width);
             }

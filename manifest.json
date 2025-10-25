@@ -13835,12 +13835,6 @@
               "min_instances": 1,
               "name": "spawn",
               "required_children": []
-            },
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "NewRoom",
-              "required_children": []
             }
           ]
         },
@@ -14052,12 +14046,6 @@
         }
       },
       "rooms_data": {
-        "NewRoom": {
-          "name": "NewRoom"
-        },
-        "NewRoom1": {
-          "name": "NewRoom1"
-        },
         "spawn": {
           "areas": [
             {

@@ -299,6 +299,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     rows.push_back(Row{validation_widget_});
     set_rows(rows);
 
+    set_close_button_on_left(true);
     set_close_button_enabled(true);
     set_expanded(true);
     set_visible(false);
@@ -407,8 +408,15 @@ void MapLayersPanel::set_embedded_mode(bool embedded) {
     }
     embedded_mode_ = embedded;
     set_floatable(!embedded_mode_);
-    if (embedded_mode_ && embedded_bounds_.w > 0 && embedded_bounds_.h > 0) {
-        set_rect(embedded_bounds_);
+    if (embedded_mode_) {
+        if (embedded_bounds_.w > 0 && embedded_bounds_.h > 0) {
+            set_rect(embedded_bounds_);
+        }
+        update_embedded_layout_constraints();
+    } else {
+        target_body_height_ = 0;
+        set_available_height_override(-1);
+        set_visible_height(default_visible_height_);
     }
 }
 
@@ -416,7 +424,33 @@ void MapLayersPanel::set_embedded_bounds(const SDL_Rect& bounds) {
     embedded_bounds_ = bounds;
     if (embedded_mode_) {
         set_rect(bounds);
+        update_embedded_layout_constraints();
     }
+}
+
+void MapLayersPanel::update_embedded_layout_constraints() {
+    if (!embedded_mode_) {
+        target_body_height_ = 0;
+        set_available_height_override(-1);
+        set_visible_height(default_visible_height_);
+        return;
+    }
+    if (embedded_bounds_.w <= 0 || embedded_bounds_.h <= 0) {
+        target_body_height_ = 0;
+        set_available_height_override(-1);
+        set_visible_height(default_visible_height_);
+        return;
+    }
+    const int padding = DMSpacing::panel_padding();
+    const int header_h = show_header() ? DMButton::height() : 0;
+    const int header_gap = show_header() ? DMSpacing::header_gap() : 0;
+    int available = embedded_bounds_.h - (padding * 2 + header_h + header_gap);
+    if (available < 0) {
+        available = 0;
+    }
+    target_body_height_ = available;
+    set_visible_height(available);
+    set_available_height_override(available);
 }
 
 void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
@@ -642,18 +676,49 @@ void MapLayersPanel::update_layer_row_geometry() {
     }
 }
 
-int MapLayersPanel::list_height_for_width(int) const {
+int MapLayersPanel::list_height_for_width(int w) const {
     const int padding = DMSpacing::small_gap();
     const int gap = DMSpacing::small_gap();
-    if (layer_rows_.empty()) {
-        return kMinimumListHeight;
+    int base_total = padding * 2;
+    if (!layer_rows_.empty()) {
+        base_total += static_cast<int>(layer_rows_.size()) * kRowHeight;
+        if (layer_rows_.size() > 1) {
+            base_total += static_cast<int>(layer_rows_.size() - 1) * gap;
+        }
+    } else {
+        base_total = kMinimumListHeight;
     }
-    int total = padding * 2;
-    total += static_cast<int>(layer_rows_.size()) * kRowHeight;
-    if (layer_rows_.size() > 1) {
-        total += static_cast<int>(layer_rows_.size() - 1) * gap;
+
+    int required = base_total;
+    if (target_body_height_ > 0) {
+        const int row_gap = DMSpacing::item_gap();
+        int rows_present = 0;
+        int other_heights = 0;
+
+        // Row containing the add/reload buttons.
+        rows_present += 1;
+        other_heights += DMButton::height();
+
+        // Layers list row itself.
+        rows_present += 1;
+
+        if (preview_widget_) {
+            rows_present += 1;
+            other_heights += preview_widget_->height_for_width(w);
+        }
+        if (validation_widget_) {
+            rows_present += 1;
+            other_heights += validation_summary_height(w);
+        }
+
+        const int gap_total = std::max(0, rows_present - 1) * row_gap;
+        const int needed = target_body_height_ - (other_heights + gap_total);
+        if (needed > required) {
+            required = needed;
+        }
     }
-    return std::max(kMinimumListHeight, total);
+
+    return std::max(kMinimumListHeight, required);
 }
 
 void MapLayersPanel::render_layers_list(SDL_Renderer* renderer) const {
