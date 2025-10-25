@@ -103,9 +103,18 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 continue;
                         }
                         nlohmann::json j;
-                        bool have_inline = (childInfo->inline_assets.is_array() && !childInfo->inline_assets.empty());
-                        if (have_inline) {
+                        bool have_inline = false;
+                        if (childInfo->inline_assets.is_array()) {
                                 j["spawn_groups"] = childInfo->inline_assets;
+                                have_inline = true;
+                        } else if (childInfo->inline_assets.is_object()) {
+                                j = childInfo->inline_assets;
+                                if (!j.contains("spawn_groups") || !j["spawn_groups"].is_array()) {
+                                        j["spawn_groups"] = nlohmann::json::array();
+                                }
+                                have_inline = true;
+                        }
+                        if (have_inline) {
                                 vibble::log::debug(std::string{"[Spawn] Using inline spawn groups for child area '"} +
                                                    childInfo->area_name + "' on parent '" + parent_name + "'");
                         } else {

@@ -23,8 +23,13 @@ void ChildLoader::load_children(AssetInfo& info,
         ci.z_offset  = entry.value("z_offset", 0);
         ci.placed_on_top_parent = entry.value("placed_on_top_parent", false);
         try {
-            if (entry.contains("spawn_groups") && entry["spawn_groups"].is_array()) {
-                ci.inline_assets = entry["spawn_groups"];
+            if (entry.contains("spawn_groups")) {
+                const auto& inline_data = entry["spawn_groups"];
+                if (inline_data.is_array() || inline_data.is_object()) {
+                    ci.inline_assets = inline_data;
+                } else {
+                    ci.inline_assets = json::array();
+                }
             } else {
                 ci.inline_assets = json::array();
             }
