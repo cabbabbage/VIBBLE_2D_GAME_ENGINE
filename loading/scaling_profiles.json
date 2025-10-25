@@ -19,30 +19,6 @@
             ],
             "revision": 1
         },
-        "Barrel": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                163
-            ],
-            "last_requested_percent": 8,
-            "last_requested_scale": 0.08163265138864517,
-            "last_updated": "2025-10-25T08:58:21Z",
-            "last_used_texture_scale": 0.10000000149011612,
-            "recommended_percentages": [
-                100,
-                75,
-                10
-            ],
-            "revision": 2
-        },
         "Bench": {
             "histogram": [
                 0,
