@@ -73,7 +73,10 @@ void Chunk::ChunkShadowHistory::reset() {
 }
 
 void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fade_frames) {
-    samples[static_cast<std::size_t>(cursor)] = sample;
+    ChunkShadowParameters normalized = sample;
+    normalized.scale                 = 1.0f;
+
+    samples[static_cast<std::size_t>(cursor)] = normalized;
     cursor = (cursor + 1) % kMaxHistoryLength;
     if (count < kMaxHistoryLength) {
         ++count;
@@ -87,7 +90,7 @@ void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fa
     }
 
     if (fade_frames <= 0 || count == 1) {
-        blended = sample;
+        blended = normalized;
         return;
     }
 
@@ -112,7 +115,6 @@ void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fa
 
         total_weight += weight;
         accum.opacity += entry.opacity * weight;
-        accum.scale += entry.scale * weight;
         accum.offset_x_percent += entry.offset_x_percent * weight;
         accum.offset_y_percent += entry.offset_y_percent * weight;
         accum.offset_x_px += entry.offset_x_px * weight;
@@ -127,7 +129,7 @@ void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fa
 
     const float inv_total = 1.0f / total_weight;
     blended.opacity                    = accum.opacity * inv_total;
-    blended.scale                      = accum.scale * inv_total;
+    blended.scale                      = 1.0f;
     blended.offset_x_percent           = accum.offset_x_percent * inv_total;
     blended.offset_y_percent           = accum.offset_y_percent * inv_total;
     blended.offset_x_px                = accum.offset_x_px * inv_total;
@@ -458,96 +460,97 @@ T lerp(T a, T b, float t) {
     return static_cast<T>(a + (b - a) * t);
 }
 
-std::pair<float, float> compute_brightness_gradient(const LightingChunk& center,
-                                                    const world::Grid& grid,
-                                                    int radius,
-                                                    float falloff_x,
-                                                    float falloff_y) {
-    if (radius <= 0) return {0.0f, 0.0f};
+namespace {
+
+struct LightInfluence {
+    float push_x = 0.0f;
+    float push_y = 0.0f;
+    float average_brightness = 0.0f;
+};
+
+LightInfluence compute_light_influence(const LightingChunk& center,
+                                       const world::Grid& grid,
+                                       int radius,
+                                       float falloff_x,
+                                       float falloff_y) {
+    LightInfluence result{};
+
+    const float center_brightness = std::clamp(center.lighting.pre_shadow_strength, 0.0f, 1.0f);
+    result.average_brightness     = center_brightness;
+
+    if (radius <= 0) {
+        return result;
+    }
+
     const int subdivisions = grid.lighting_subdivisions_per_chunk();
     if (subdivisions <= 0) {
-        return {0.0f, 0.0f};
+        return result;
     }
 
     const int effective_radius = radius * subdivisions;
     if (effective_radius <= 0) {
-        return {0.0f, 0.0f};
+        return result;
     }
 
-    const float cb = std::clamp(center.lighting.pre_shadow_strength, 0.0f, 1.0f);
-    float gx = 0.0f, gy = 0.0f;
+    double accum_push_x          = 0.0;
+    double accum_push_y          = 0.0;
+    double accum_brightness      = 0.0;
+    double brightness_weight_sum = 0.0;
+
     for (int dj = -effective_radius; dj <= effective_radius; ++dj) {
         for (int di = -effective_radius; di <= effective_radius; ++di) {
-            if (di == 0 && dj == 0) continue;
+            if (di == 0 && dj == 0) {
+                continue;
+            }
+
             const int target_i = center.global_i + di;
             const int target_j = center.global_j + dj;
             const LightingChunk* n = find_lighting_chunk_from_global_const(grid, target_i, target_j);
-            const float nb = n ? std::clamp(n->lighting.pre_shadow_strength, 0.0f, 1.0f) : cb;
-            const float db = nb - cb;
+            const float neighbor_brightness =
+                n ? std::clamp(n->lighting.pre_shadow_strength, 0.0f, 1.0f) : center_brightness;
+
             const float dx_chunks = static_cast<float>(di) / static_cast<float>(subdivisions);
             const float dy_chunks = static_cast<float>(dj) / static_cast<float>(subdivisions);
-            const float dist = std::max(1e-3f, std::sqrt(dx_chunks * dx_chunks + dy_chunks * dy_chunks));
-            const float wx = falloff_x / dist;
-            const float wy = falloff_y / dist;
-            gx += db * (dx_chunks / dist) * wx;
-            gy += db * (dy_chunks / dist) * wy;
-        }
-    }
-    return {gx, gy};
-}
+            const float dist      = std::max(1e-3f, std::sqrt(dx_chunks * dx_chunks + dy_chunks * dy_chunks));
+            const float inv_dist  = 1.0f / dist;
 
-// Compute average brightness in front of the chunk (negative j direction),
-// adjusted by anisotropic horizontal/vertical falloff. Returns [0,1].
-// Compute weighted averages of light strength in-front (negative j) and behind (positive j).
-static std::pair<float, float> compute_directional_average_strengths(const LightMap::ShadowSettings& settings,
-                                                                     const world::Grid& grid,
-                                                                     const LightingChunk& center) {
-    const int   R  = std::max(0, settings.search_radius_cells);
-    const float fh = std::max(0.0f, settings.falloff_horizontal);
-    const float fv = std::max(0.0f, settings.falloff_vertical);
-    const int   subdivisions = grid.lighting_subdivisions_per_chunk();
-    if (subdivisions <= 0) {
-        const float base = std::clamp(center.lighting.pre_shadow_strength, 0.0f, 1.0f);
-        return {base, base};
-    }
+            const double brightness_weight = static_cast<double>(inv_dist);
+            accum_brightness += static_cast<double>(neighbor_brightness) * brightness_weight;
+            brightness_weight_sum += brightness_weight;
 
-    const int effective_radius = R * subdivisions;
-
-    auto sample_dir = [&](int j_begin, int j_end) -> float {
-        double accum_w = 0.0;
-        double accum_v = 0.0;
-        const int step = (j_begin <= j_end) ? 1 : -1;
-        for (int dj = j_begin; dj != j_end + step; dj += step) {
-            for (int di = -effective_radius; di <= effective_radius; ++di) {
-                if (dj == 0) continue;
-                const int target_i = center.global_i + di;
-                const int target_j = center.global_j + dj;
-                const LightingChunk* n = find_lighting_chunk_from_global_const(grid, target_i, target_j);
-                if (!n) continue;
-                const float sx = std::abs(static_cast<float>(di)) / static_cast<float>(subdivisions);
-                const float sy = std::abs(static_cast<float>(dj)) / static_cast<float>(subdivisions);
-                const float w  = 1.0f / (1.0f + sx * fh + sy * fv);
-                const float s  = std::clamp(n->lighting.pre_shadow_strength, 0.0f, 1.0f);
-                accum_w += static_cast<double>(w);
-                accum_v += static_cast<double>(w) * static_cast<double>(std::clamp(s, 0.0f, 1.0f));
+            const float brightness_delta = std::max(neighbor_brightness - center_brightness, 0.0f);
+            if (brightness_delta <= 1e-4f) {
+                continue;
             }
-        }
-        if (accum_w <= 1e-8) {
-            return std::clamp(center.lighting.pre_shadow_strength, 0.0f, 1.0f);
-        }
-        return static_cast<float>(std::clamp(accum_v / accum_w, 0.0, 1.0));
-    };
 
-    const float base_strength = std::clamp(center.lighting.pre_shadow_strength, 0.0f, 1.0f);
-    const float front_avg  = (R > 0) ? sample_dir(-effective_radius, -1) : base_strength;
-    const float behind_avg = (R > 0) ? sample_dir(1,  effective_radius)  : base_strength;
-    return {front_avg, behind_avg};
+            const float push_weight = brightness_delta * inv_dist * inv_dist;
+            const double scaled_dx  = static_cast<double>(dx_chunks * falloff_x);
+            const double scaled_dy  = static_cast<double>(dy_chunks * falloff_y);
+            accum_push_x += -scaled_dx * static_cast<double>(push_weight);
+            accum_push_y += -scaled_dy * static_cast<double>(push_weight);
+        }
+    }
+
+    if (brightness_weight_sum > 1e-5) {
+        result.average_brightness = static_cast<float>(accum_brightness / brightness_weight_sum);
+        result.average_brightness = std::clamp(result.average_brightness, 0.0f, 1.0f);
+    }
+
+    const double magnitude = std::sqrt(accum_push_x * accum_push_x + accum_push_y * accum_push_y);
+    if (magnitude > 1e-4) {
+        const double capped = std::min(magnitude, 1.0);
+        result.push_x        = static_cast<float>((accum_push_x / magnitude) * capped);
+        result.push_y        = static_cast<float>((accum_push_y / magnitude) * capped);
+    }
+
+    return result;
 }
+
+} // namespace
 
 static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
-                                              const world::Grid& grid,
                                               float scene_average_strength,
-                                              const std::pair<float, float>& grad,
+                                              const LightInfluence& influence,
                                               bool prefer_fast_blend,
                                               float static_strength,
                                               float dynamic_strength,
@@ -558,38 +561,13 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     chunk.has_dynamic_overlay = (std::abs(dynamic_strength - static_strength) > 1e-3f);
     chunk.lighting.current_strength = std::clamp(blended_strength, 0.0f, 1.0f);
 
-    const auto [front_avg, behind_avg] =
-        compute_directional_average_strengths(settings, grid, chunk);
-
     const float sensitivity = std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f) / 100.0f;
+    const float local_avg = std::clamp(influence.average_brightness, 0.0f, 1.0f);
     const float blended_avg =
-        std::clamp(front_avg * (1.0f - sensitivity) + scene_average_strength * sensitivity, 0.0f, 1.0f);
+        std::clamp(local_avg * (1.0f - sensitivity) + scene_average_strength * sensitivity, 0.0f, 1.0f);
     sample.opacity = std::clamp(1.0f - blended_avg, 0.0f, 1.0f);
 
-    const float total_light = front_avg + behind_avg;
-    float       front_balance = 0.5f;
-    if (total_light > 1e-5f) {
-        front_balance = std::clamp(front_avg / total_light, 0.0f, 1.0f);
-    }
-    const int min_p = std::clamp(settings.min_scale_percent, 10, 500);
-    const int max_p = std::clamp(settings.max_scale_percent, 10, 500);
-    const float scale_percent = std::clamp(static_cast<float>(min_p) +
-                                               (static_cast<float>(max_p - min_p) * front_balance),
-                                           static_cast<float>(min_p),
-                                           static_cast<float>(max_p));
-    sample.scale = std::max(0.0f, scale_percent / 100.0f);
-
-    // Base offset away from brightest direction (opposite brightness gradient)
-    float gx = grad.first, gy = grad.second;
-    float mag = std::sqrt(gx*gx + gy*gy);
-    float nx = (mag > 1e-4f) ? (gx / mag) : 0.0f;
-    float ny = (mag > 1e-4f) ? (gy / mag) : 0.0f;
-
-    // Move away from brighter areas. The lighting grid reports the horizontal gradient inverted,
-    // so keep the X push aligned with the reported direction while negating Y to counter bright
-    // spots vertically.
-    float px = nx * 100.0f;
-    float py = -ny * 100.0f;
+    sample.scale = 1.0f;
 
     const float chunk_w = static_cast<float>(std::max(1, chunk.world_bounds.w));
     const float chunk_h = static_cast<float>(std::max(1, chunk.world_bounds.h));
@@ -604,37 +582,18 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     const float safe_max_x_percent = std::clamp(raw_max_x_percent, 0.0f, 100.0f);
     const float safe_max_y_percent = std::clamp(raw_max_y_percent, 0.0f, 100.0f);
 
-    if (chunk.lighting.has_runtime_average && chunk.lighting.has_runtime_direction) {
-        SDL_FPoint runtime_dir = chunk.lighting.runtime_average_direction;
-        const float dir_mag = std::sqrt(runtime_dir.x * runtime_dir.x + runtime_dir.y * runtime_dir.y);
-        if (dir_mag > 1e-4f) {
-            runtime_dir.x /= dir_mag;
-            runtime_dir.y /= dir_mag;
-            const float raw_intensity = std::max(chunk.lighting.runtime_average_raw_intensity, 0.0f);
-            const float strength      = std::clamp(chunk.lighting.runtime_average_strength, 0.0f, 1.0f);
-            const float runtime_push  = std::clamp(raw_intensity, 0.0f, 4.0f) * strength * 50.0f;
-            if (runtime_push > 1e-3f) {
-                px += -runtime_dir.x * runtime_push;
-                py += -runtime_dir.y * runtime_push;
-            }
-            if (raw_intensity > 0.0f) {
-                const float runtime_opacity_scale = 1.0f / (1.0f + raw_intensity);
-                sample.opacity *= runtime_opacity_scale;
-            }
-        }
-    }
+    float px_percent = influence.push_x * safe_max_x_percent;
+    float py_percent = influence.push_y * safe_max_y_percent;
 
     if (safe_max_x_percent <= 0.0f) {
-        px = 0.0f;
+        px_percent = 0.0f;
     }
     if (safe_max_y_percent <= 0.0f) {
-        py = 0.0f;
+        py_percent = 0.0f;
     }
 
-    const float clamped_px = std::clamp(px, -safe_max_x_percent, safe_max_x_percent);
-    const float clamped_py = std::clamp(py, -safe_max_y_percent, safe_max_y_percent);
-    sample.offset_x_percent = std::clamp(clamped_px, -100.0f, 100.0f);
-    sample.offset_y_percent = std::clamp(clamped_py, -100.0f, 100.0f);
+    sample.offset_x_percent = std::clamp(px_percent, -100.0f, 100.0f);
+    sample.offset_y_percent = std::clamp(py_percent, -100.0f, 100.0f);
     sample.offset_x_px      = sample.offset_x_percent * percent_to_px_x;
     sample.offset_y_px      = sample.offset_y_percent * percent_to_px_y;
 
@@ -642,12 +601,11 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
     const world::Chunk::ChunkShadowParameters previous = chunk.shadow_history.value();
     const float delta_opacity = std::abs(sample.opacity - previous.opacity);
-    const float delta_scale   = std::abs(sample.scale - previous.scale);
     const float delta_offset  = std::max(std::abs(sample.offset_x_percent - previous.offset_x_percent),
                                          std::abs(sample.offset_y_percent - previous.offset_y_percent));
 
     int blend_frames = std::clamp(settings.frame_blend_falloff_frames, 0, world::Chunk::ChunkShadowHistory::kMaxHistoryLength - 1);
-    const bool significant_change = (delta_opacity > 0.1f) || (delta_scale > 0.1f) || (delta_offset > 5.0f);
+    const bool significant_change = (delta_opacity > 0.1f) || (delta_offset > 5.0f);
     if (prefer_fast_blend || significant_change) {
         blend_frames = std::min(blend_frames, 12);
     }
@@ -666,6 +624,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     blended.offset_y_percent = std::clamp(clamp_percent(blended.offset_y_percent, safe_max_y_percent), -100.0f, 100.0f);
     blended.offset_x_px      = blended.offset_x_percent * percent_to_px_x;
     blended.offset_y_px      = blended.offset_y_percent * percent_to_px_y;
+    blended.scale            = 1.0f;
 
     chunk.shadow = blended;
 }
@@ -696,10 +655,6 @@ LightMap::ShadowSettings LightMap::shadow_settings() const {
     settings.max_offset_y_px     = std::max(0.0f, sanitized.virtual_light_map.max_offset_y);
     settings.opacity_sensitivity_percent =
         std::clamp(sanitized.opacity_sensitivity_percent, 0.0f, 100.0f);
-    settings.min_scale_percent   = sanitized.virtual_light_map.min_scale_percent;
-    settings.max_scale_percent   = sanitized.virtual_light_map.max_scale_percent;
-    settings.map_light_dir_offset_strength =
-        std::clamp(sanitized.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
     settings.parallax_percent = std::clamp(sanitized.virtual_light_map.parallax_percent, 0.0f, 100.0f);
     settings.frame_blend_falloff_frames = sanitized.frame_blend_falloff_frames;
     settings.sampling_static_weight  = std::max(0.0f, sanitized.sampling_weights.static_weight);
@@ -997,13 +952,12 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
 
         for (const DirtyCellInfo& info : dirty_cells) {
             auto& cell = *info.cell;
-            const auto grad = compute_brightness_gradient(cell, grid, radius, fx, fy);
+            const auto influence = compute_light_influence(cell, grid, radius, fx, fy);
             const bool prefer_fast_blend = chunk_prefers_fast_blend || info.runtime_changed;
 
             compute_use_shadow_data_for_chunk(settings,
-                                              grid,
                                               scene_average_strength,
-                                              grad,
+                                              influence,
                                               prefer_fast_blend,
                                               cell.lighting.static_strength,
                                               cell.lighting.dynamic_strength,

@@ -182,11 +182,6 @@ public:
         float max_offset_y_px         = 48.0f;
         // Controls how strongly global scene brightness influences opacity (0..100).
         float opacity_sensitivity_percent = 50.0f;
-        // New: min/max shadow scale as integer percents (10..500)
-        int   min_scale_percent       = 80;   // 80% default
-        int   max_scale_percent       = 120;  // 120% default
-        // Strength (0..1) of map-light directional offset contribution
-        float map_light_dir_offset_strength = 0.5f;
         float parallax_percent        = 0.0f;
         int   frame_blend_falloff_frames = 100;
         float sampling_static_weight  = 0.0f;
