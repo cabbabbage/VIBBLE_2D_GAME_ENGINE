@@ -96,7 +96,6 @@ private:
     std::unique_ptr<DMButton> btn_mask_;
     std::unique_ptr<DMButton> btn_geom_;
     std::unique_ptr<DMButton> btn_save_;
-    std::unique_ptr<DMButton> btn_rename_;
     std::unique_ptr<DMButton> btn_delete_;
     std::unique_ptr<DMSlider> crop_left_slider_;
     std::unique_ptr<DMSlider> crop_right_slider_;

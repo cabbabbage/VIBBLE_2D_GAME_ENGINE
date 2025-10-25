@@ -249,7 +249,7 @@ void SceneRenderer::render(){
 
     bool should_update_light=true;
     if (assets_ && assets_->is_dev_mode()){
-        should_update_light=devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, false);
+        should_update_light=devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true);
     }
     if (should_update_light){ main_light_source_.update(); }
 

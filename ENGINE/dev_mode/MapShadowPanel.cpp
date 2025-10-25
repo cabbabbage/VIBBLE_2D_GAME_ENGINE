@@ -7,6 +7,7 @@
 #include <optional>
 #include <string_view>
 
+#include "core/AssetsManager.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "dev_mode/shared/formatting.hpp"
 #include "utils/input.hpp"
@@ -376,11 +377,23 @@ void MapShadowPanel::apply_settings(const ReactiveShadowSettings& settings, bool
     last_applied_settings_ = settings;
 
     ReactiveShadowSettings* shared = reactive_settings_accessor_ ? reactive_settings_accessor_() : nullptr;
+    bool                      shared_changed = false;
+    if (shared) {
+        if (*shared != settings) {
+            *shared = settings;
+            shared_changed = true;
+        } else {
+            *shared = settings;
+        }
+    }
+
+    if (shared_changed && assets_) {
+        assets_->force_shaded_assets_rerender();
+    }
+
     if (!shared) {
         return;
     }
-
-    *shared = settings;
 
     if (map_info_) {
         if (nlohmann::json* json = ensure_reactive_shadow_json()) {

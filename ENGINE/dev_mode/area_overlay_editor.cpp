@@ -733,7 +733,6 @@ void AreaOverlayEditor::ensure_toolbox() {
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_geom_  = std::make_unique<DMButton>("Geometry",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
-    btn_rename_ = std::make_unique<DMButton>("Rename", &DMStyles::CreateButton(), 180, DMButton::height());
     btn_delete_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 180, DMButton::height());
     update_toolbox_title();
     rebuild_toolbox_rows();
@@ -797,23 +796,12 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
         rows.push_back({ owned_widgets_.back().get() });
     }
 
-    std::vector<Widget*> manage_row;
-    if (btn_rename_) {
-        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_rename_.get(), [this]() {
-            if (!name_box_) return;
-            if (!rename_current_area(name_box_->value())) {
-                name_box_->set_value(area_name_);
-            }
-        }));
-        manage_row.push_back(owned_widgets_.back().get());
-    }
     if (btn_delete_) {
+        std::vector<Widget*> manage_row;
         owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_delete_.get(), [this]() {
             delete_current_area();
         }));
         manage_row.push_back(owned_widgets_.back().get());
-    }
-    if (!manage_row.empty()) {
         rows.push_back(manage_row);
     }
 
@@ -1467,6 +1455,14 @@ std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
 }
 
 void AreaOverlayEditor::save_area() {
+    if (name_box_) {
+        const std::string desired_name = name_box_->value();
+        if (!rename_current_area(desired_name)) {
+            name_box_->set_value(area_name_);
+            return;
+        }
+    }
+
     if (!info_ && !room_) {
         cancel();
         return;
