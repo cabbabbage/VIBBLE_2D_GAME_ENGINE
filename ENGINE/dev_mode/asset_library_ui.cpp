@@ -343,7 +343,6 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
     AssetLibraryUI* owner = nullptr;
     std::string tag;
     int asset_count = 0;
-    std::shared_ptr<AssetInfo> preview_info;
     SDL_Rect rect_{0,0,0,0};
     bool hovered = false;
     bool pressed = false;
@@ -353,12 +352,10 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
     HashtagTileWidget(AssetLibraryUI* owner_ptr,
                       std::string tag_value,
                       int count,
-                      std::shared_ptr<AssetInfo> preview,
                       std::function<void(const std::string&)> click)
         : owner(owner_ptr),
           tag(std::move(tag_value)),
           asset_count(count),
-          preview_info(std::move(preview)),
           on_click(std::move(click)),
           resolvable(count > 0) {}
 
@@ -453,22 +450,41 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
             }
         }
 
-        if (preview_info) {
-            SDL_Texture* tex = owner ? owner->get_default_frame_texture(*preview_info) : nullptr;
-            if (tex) {
+        if (preview_rect.w > 0 && preview_rect.h > 0) {
+            const std::string icon_text = "#";
+            const SDL_Color icon_color{255, 255, 255, 255};
+            TTF_Font* icon_font = nullptr;
+            int icon_w = 0;
+            int icon_h = 0;
+            const int font_sizes[] = { 112, 104, 96, 88, 80, 72, 64, 56, 48, 40, 32, 24 };
+            for (int size : font_sizes) {
+                TTF_Font* candidate = load_font(size);
+                if (!candidate) continue;
                 int tw = 0;
                 int th = 0;
-                SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
-                if (tw > 0 && th > 0 && preview_rect.w > 0 && preview_rect.h > 0) {
-                    float scale = std::min(preview_rect.w / float(tw), preview_rect.h / float(th));
-                    if (scale > 0.0f) {
-                        int dw = static_cast<int>(tw * scale);
-                        int dh = static_cast<int>(th * scale);
+                if (TTF_SizeUTF8(candidate, icon_text.c_str(), &tw, &th) != 0) continue;
+                icon_font = candidate;
+                icon_w = tw;
+                icon_h = th;
+                if (tw <= preview_rect.w && th <= preview_rect.h) {
+                    break;
+                }
+            }
+
+            if (icon_font && icon_w > 0 && icon_h > 0) {
+                SDL_Surface* surf = TTF_RenderUTF8_Blended(icon_font, icon_text.c_str(), icon_color);
+                if (surf) {
+                    SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                    SDL_FreeSurface(surf);
+                    if (tex) {
+                        int dw = std::min(icon_w, preview_rect.w);
+                        int dh = std::min(icon_h, preview_rect.h);
                         SDL_Rect dst{ preview_rect.x + (preview_rect.w - dw) / 2,
                                       preview_rect.y + (preview_rect.h - dh) / 2,
                                       dw,
                                       dh };
                         SDL_RenderCopy(r, tex, nullptr, &dst);
+                        SDL_DestroyTexture(tex);
                     }
                 }
             }
@@ -808,27 +824,6 @@ void AssetLibraryUI::refresh_tiles(Assets& assets) {
 
     Assets* assets_ptr = &assets;
 
-    for (const auto& tag : tag_items_) {
-        if (!matches_tag_query(tag, search_query_)) continue;
-        int count = count_assets_for_tag(tag);
-        std::shared_ptr<AssetInfo> preview = resolve_tag_to_asset(tag);
-        tiles_.push_back(std::make_unique<HashtagTileWidget>(
-            this,
-            tag,
-            count,
-            std::move(preview),
-            [this](const std::string& tag_value){
-                auto resolved = resolve_tag_to_asset(tag_value);
-                if (resolved) {
-                    pending_selection_ = resolved;
-                    close();
-                } else {
-                    std::cerr << "[AssetLibraryUI] No assets found for tag '" << tag_value << "'\n";
-                }
-            }
-        ));
-    }
-
     for (auto& inf : items_) {
         if (!inf) continue;
         if (!matches_query(*inf, search_query_)) continue;
@@ -849,6 +844,25 @@ void AssetLibraryUI::refresh_tiles(Assets& assets) {
             },
             [this](const std::shared_ptr<AssetInfo>& info){
                 request_delete(info);
+            }
+        ));
+    }
+
+    for (const auto& tag : tag_items_) {
+        if (!matches_tag_query(tag, search_query_)) continue;
+        int count = count_assets_for_tag(tag);
+        tiles_.push_back(std::make_unique<HashtagTileWidget>(
+            this,
+            tag,
+            count,
+            [this](const std::string& tag_value){
+                auto resolved = resolve_tag_to_asset(tag_value);
+                if (resolved) {
+                    pending_selection_ = resolved;
+                    close();
+                } else {
+                    std::cerr << "[AssetLibraryUI] No assets found for tag '" << tag_value << "'\n";
+                }
             }
         ));
     }
