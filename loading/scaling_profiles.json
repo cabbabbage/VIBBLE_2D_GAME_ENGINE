@@ -19,6 +19,27 @@
             ],
             "revision": 1
         },
+        "Barrel": {
+            "histogram": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "last_updated": "2025-10-25T15:21:23Z",
+            "recommended_percentages": [
+                100,
+                75,
+                50
+            ],
+            "revision": 1
+        },
         "Bench": {
             "histogram": [
                 0,

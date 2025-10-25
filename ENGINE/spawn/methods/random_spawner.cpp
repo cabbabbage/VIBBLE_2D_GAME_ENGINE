@@ -13,13 +13,26 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
     const int max_attempts = std::max(1, desired_attempts * 20);
 
     auto* occupancy = ctx.occupancy();
+    const Area* sample_area = ctx.clip_area();
+    if (!sample_area) {
+        sample_area = area;
+    }
+    const Area* spawn_area = sample_area ? sample_area : area;
+
+    if (!spawn_area || spawn_area->get_points().empty()) {
+        return;
+    }
 
     while (attempt_slots_used < desired_attempts && attempts < max_attempts) {
-        vibble::grid::Occupancy::Vertex* vertex = occupancy ? occupancy->random_vertex_in_area(*area, ctx.rng()) : nullptr;
+        vibble::grid::Occupancy::Vertex* vertex = occupancy ? occupancy->random_vertex_in_area(*spawn_area, ctx.rng()) : nullptr;
         ++attempts;
         if (!vertex) break;
-        const SDL_Point pos = vertex->world;
-        if (!ctx.position_allowed(*area, pos)) continue;
+        SDL_Point pos = vertex->world;
+
+        if (spawn_area && !spawn_area->get_points().empty()) {
+            pos = ctx.get_point_within_area(*spawn_area);
+        }
+        if (!ctx.position_allowed(*spawn_area, pos)) continue;
 
         const SpawnCandidate* candidate = item.select_candidate(ctx.rng());
         if (!candidate) {
@@ -46,7 +59,7 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
             continue;
         }
 
-        auto* result = ctx.spawnAsset(candidate->name, info, *area, pos, 0, nullptr, item.spawn_id, item.position);
+        auto* result = ctx.spawnAsset(candidate->name, info, *spawn_area, pos, 0, nullptr, item.spawn_id, item.position);
         if (!result) {
             ++attempt_slots_used;
             continue;

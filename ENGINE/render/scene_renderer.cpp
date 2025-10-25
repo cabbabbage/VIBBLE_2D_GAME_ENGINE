@@ -420,6 +420,12 @@ void SceneRenderer::render(){
             enqueue_command(a, final_tex, draw_tex, dst);
 
             if (a->info && !a->info->light_sources.empty() && dst.w > 0 && dst.h > 0 && fw > 0 && fh > 0) {
+                const std::string canonical_type = asset_types::canonicalize(a->info->type);
+                const bool        punches_overlay =
+                    (canonical_type == asset_types::object || canonical_type == asset_types::texture);
+                if (!punches_overlay) {
+                    continue;
+                }
                 LightOverlaySource source;
                 source.asset       = a;
                 source.asset_rect  = dst;
@@ -587,12 +593,11 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         previous_draw_blend = SDL_BLENDMODE_BLEND;
     }
 
+    const SDL_BlendMode cutout_blend = darkness_cutout_blend_mode();
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
-    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-
-    const SDL_BlendMode cutout_blend = darkness_cutout_blend_mode();
+    SDL_SetRenderDrawBlendMode(renderer_, cutout_blend);
     std::vector<SDL_Vertex> light_vertices;
     std::vector<int>        light_indices;
 
@@ -633,6 +638,9 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
 
         for (const LightSource& light : lights) {
+            if (light.behind) {
+                continue;
+            }
             const int raw_radius = light.radius;
             if (raw_radius <= 0) {
                 continue;
@@ -717,12 +725,8 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
             if (SDL_RenderGeometry(renderer_, nullptr,
                                    light_vertices.data(), static_cast<int>(light_vertices.size()),
                                    light_indices.data(), static_cast<int>(light_indices.size())) != 0) {
-                SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
-                SDL_GetRenderDrawBlendMode(renderer_, &previous_mode);
-                SDL_SetRenderDrawBlendMode(renderer_, cutout_blend);
                 SDL_SetRenderDrawColor(renderer_, 0, 0, 0, intensity);
                 SDL_RenderFillRect(renderer_, &dst);
-                SDL_SetRenderDrawBlendMode(renderer_, previous_mode);
             }
         }
     }
