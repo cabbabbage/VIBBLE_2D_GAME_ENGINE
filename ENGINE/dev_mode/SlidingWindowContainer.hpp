@@ -7,6 +7,7 @@
 
 class Input;
 class DMButton;
+struct DMButtonStyle;
 
 class SlidingWindowContainer {
 public:
@@ -36,7 +37,9 @@ public:
     void set_header_visible(bool visible);
     void set_close_button_enabled(bool enabled);
     void set_scrollbar_visible(bool visible);
-    void set_header_navigation_button(const std::string& label, std::function<void()> on_click);
+    void set_header_navigation_button(const std::string& label,
+                                      std::function<void()> on_click,
+                                      const DMButtonStyle* style = nullptr);
     void clear_header_navigation_button();
     void set_header_navigation_alignment_right(bool align_right);
 

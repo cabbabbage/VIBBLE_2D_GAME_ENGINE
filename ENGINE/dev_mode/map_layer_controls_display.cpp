@@ -16,14 +16,14 @@
 
 namespace {
 constexpr int kAddButtonWidth = 180;
-constexpr int kNewButtonWidth = 160;
-constexpr int kRemoveButtonWidth = 120;
+constexpr int kNewButtonWidth = 180;
+constexpr int kRemoveButtonWidth = 48;
 constexpr int kAddChildButtonWidth = 220;
 constexpr int kChildRemoveButtonWidth = 36;
 constexpr const char* kChildSectionLabel = "Required child rooms";
 constexpr const char* kNoChildMessage = "No required child rooms configured.";
 constexpr const char* kEmptySelectionMessage = "Select a layer to configure.";
-constexpr const char* kNewRoomLabel = "New Room";
+constexpr const char* kNewRoomLabel = "Create Room";
 constexpr const char* kCloseButtonLabel = "X";
 
 const DMLabelStyle& label_style() {
@@ -47,7 +47,7 @@ MapLayerControlsDisplay::MapLayerControlsDisplay()
     : room_selector_(std::make_unique<RoomSelectorPopup>()),
       child_selector_(std::make_unique<RoomSelectorPopup>()) {
     add_room_button_ = std::make_unique<DMButton>("Add Room", &DMStyles::CreateButton(), kAddButtonWidth, DMButton::height());
-    new_room_button_ = std::make_unique<DMButton>(kNewRoomLabel, &DMStyles::AccentButton(), kNewButtonWidth, DMButton::height());
+    new_room_button_ = std::make_unique<DMButton>(kNewRoomLabel, &DMStyles::CreateButton(), kNewButtonWidth, DMButton::height());
 }
 
 MapLayerControlsDisplay::~MapLayerControlsDisplay() {
@@ -159,7 +159,10 @@ void MapLayerControlsDisplay::update_header_navigation_button() {
         return;
     }
     if (on_show_rooms_list_) {
-        container_->set_header_navigation_button(kCloseButtonLabel, [this]() { this->handle_back_to_rooms(); });
+        container_->set_header_navigation_button(
+            kCloseButtonLabel,
+            [this]() { this->handle_back_to_rooms(); },
+            &DMStyles::DeleteButton());
     } else {
         container_->clear_header_navigation_button();
     }
@@ -606,6 +609,7 @@ void MapLayerControlsDisplay::open_child_selector(int candidate_index) {
     if (!child_selector_ || !container_ || candidate_index < 0) {
         return;
     }
+    rebuild_available_rooms();
     auto it = std::find_if(candidates_.begin(), candidates_.end(),
                            [candidate_index](const CandidateRow& row) { return row.candidate_index == candidate_index; });
     if (it == candidates_.end()) {

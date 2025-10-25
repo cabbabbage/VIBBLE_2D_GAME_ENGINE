@@ -136,8 +136,9 @@ private:
     bool ensure_panel_unlocked(DockableCollapsible* panel, const char* panel_name) const;
     void ensure_light_and_shading_positions();
     void ensure_room_configurator();
-    void open_room_configuration(const std::string& room_key);
+    void open_room_configuration(const std::string& room_key, SlidingPanel return_panel = SlidingPanel::RoomsList);
     void close_room_configuration(bool show_rooms_list = false);
+    void create_room_from_panel(SlidingPanel return_panel);
     SDL_Rect room_config_bounds() const;
     void show_sliding_panel(SlidingPanel panel, bool preserve_layers_panel = false);
     SDL_Rect sanitize_sliding_area(const SDL_Rect& bounds) const;
@@ -199,5 +200,6 @@ private:
     std::unique_ptr<RoomConfigurator> room_configurator_;
     std::string active_room_config_key_;
     SlidingPanel active_sliding_panel_ = SlidingPanel::None;
+    SlidingPanel room_config_return_panel_ = SlidingPanel::RoomsList;
 };
 

@@ -31,6 +31,7 @@ public:
     void set_header_text(const std::string& text);
     void refresh();
     void set_on_rooms_changed(std::function<void()> cb);
+    void set_on_create_room(std::function<void()> cb);
 
 private:
     struct RoomRow {
@@ -64,5 +65,6 @@ private:
     std::string header_text_ = "Map Rooms";
     std::unique_ptr<DMButton> create_room_button_;
     std::function<void()> on_rooms_changed_{};
+    std::function<void()> on_create_room_{};
 };
 

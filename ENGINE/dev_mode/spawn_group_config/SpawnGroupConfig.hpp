@@ -181,6 +181,7 @@ private:
     SDL_Rect slot_rect_for_index(size_t index, int fallback_height) const;
     void reorder_json(size_t from, size_t to);
     void restore_order_from_snapshot(const std::vector<std::string>& order);
+    void nudge_priority(Entry& entry, int delta);
 
     friend class SpawnGroupConfigTestAccessor;
 

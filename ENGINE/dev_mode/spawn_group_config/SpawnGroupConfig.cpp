@@ -29,16 +29,37 @@ public:
     void set_text(const std::string& text) { text_ = text; }
     void set_color(SDL_Color color) { color_ = color; }
     void set_subtle(bool subtle) { subtle_ = subtle; }
+    void set_font_size(int size) {
+        if (size > 0) font_override_ = size;
+        else font_override_.reset();
+    }
 
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
     const SDL_Rect& rect() const override { return rect_; }
-    int height_for_width(int) const override { return DMCheckbox::height(); }
+    int height_for_width(int) const override {
+        int base = DMCheckbox::height();
+        if (text_.empty()) return base;
+        int font_size = font_override_.value_or(DMStyles::Label().font_size);
+        TTF_Font* font = TTF_OpenFont(DMStyles::Label().font_path.c_str(), font_size);
+        if (!font) return base;
+        int text_w = 0;
+        int text_h = 0;
+        if (TTF_SizeUTF8(font, text_.c_str(), &text_w, &text_h) != 0) {
+            TTF_CloseFont(font);
+            return base;
+        }
+        TTF_CloseFont(font);
+        return std::max(base, text_h);
+    }
 
     bool handle_event(const SDL_Event&) override { return false; }
 
     void render(SDL_Renderer* renderer) const override {
         if (!renderer) return;
         DMLabelStyle style = DMStyles::Label();
+        if (auto size = font_override_) {
+            style.font_size = *size;
+        }
         SDL_Color color = subtle_ ? SDL_Color{static_cast<Uint8>(style.color.r / 2),
                                               static_cast<Uint8>(style.color.g / 2), static_cast<Uint8>(style.color.b / 2), style.color.a} : style.color;
         if (color_.a != 0) color = color_;
@@ -64,6 +85,7 @@ private:
     SDL_Color color_{0, 0, 0, 0};
     bool subtle_ = false;
     SDL_Rect rect_{0, 0, 0, 0};
+    std::optional<int> font_override_{};
 };
 
 namespace {
@@ -81,6 +103,77 @@ constexpr int kEdgeInsetDefault = 100;
 std::function<std::vector<std::string>()> empty_provider() {
     return []() { return std::vector<std::string>{}; };
 }
+
+SDL_Color dim_color(SDL_Color color, float factor) {
+    factor = std::clamp(factor, 0.0f, 1.0f);
+    auto apply = [factor](Uint8 channel) {
+        return static_cast<Uint8>(std::clamp(static_cast<int>(std::lround(channel * factor)), 0, 255));
+    };
+    return SDL_Color{apply(color.r), apply(color.g), apply(color.b), color.a};
+}
+
+const DMButtonStyle& disabled_priority_button_style() {
+    static const DMButtonStyle style = [] {
+        const DMButtonStyle& base = DMStyles::ListButton();
+        DMButtonStyle disabled{
+            {base.label.font_path, base.label.font_size, dim_color(base.label.color, 0.55f)},
+            dim_color(base.bg, 0.45f),
+            dim_color(base.hover_bg, 0.45f),
+            dim_color(base.press_bg, 0.45f),
+            dim_color(base.border, 0.55f),
+            dim_color(base.text, 0.55f)};
+        return disabled;
+    }();
+    return style;
+}
+
+class PriorityButtonWidget : public Widget {
+public:
+    PriorityButtonWidget(DMButton* button, std::function<void()> on_click)
+        : button_(button), on_click_(std::move(on_click)) {}
+
+    void set_rect(const SDL_Rect& r) override {
+        if (button_) button_->set_rect(r);
+    }
+
+    const SDL_Rect& rect() const override {
+        static SDL_Rect empty{0, 0, 0, 0};
+        return button_ ? button_->rect() : empty;
+    }
+
+    int height_for_width(int) const override { return DMButton::height(); }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (!button_ || !enabled_) return false;
+        bool used = button_->handle_event(e);
+        if (used && on_click_ && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            on_click_();
+        }
+        return used;
+    }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (button_) button_->render(renderer);
+    }
+
+    void set_enabled(bool enabled) {
+        if (enabled_ == enabled) return;
+        enabled_ = enabled;
+        if (!button_) return;
+        if (enabled_) {
+            button_->set_style(&DMStyles::ListButton());
+        } else {
+            button_->set_style(&disabled_priority_button_style());
+        }
+    }
+
+    bool enabled() const { return enabled_; }
+
+private:
+    DMButton* button_ = nullptr;
+    std::function<void()> on_click_{};
+    bool enabled_ = true;
+};
 
 int parse_int_or(const std::string& text, int fallback) {
     if (text.empty()) return fallback;
@@ -474,17 +567,8 @@ struct SpawnGroupConfig::Entry {
         });
 
         ownership_label_widget_ = std::make_unique<SpawnGroupLabelWidget>();
+        ownership_label_widget_->set_font_size(DMStyles::Label().font_size + 2);
         ownership_label_widget_->set_subtle(true);
-
-        regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::AccentButton(), 200, DMButton::height());
-        regenerate_widget_ = std::make_unique<ButtonWidget>(regenerate_button_.get(), [this]() {
-            if (!owner_) return;
-            std::string id = spawn_id();
-            owner_->enqueue_notification([owner = owner_, id]() {
-                if (!owner) return;
-                if (owner->callbacks_.on_regenerate) owner->callbacks_.on_regenerate(id);
-            });
-        });
 
         delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 200, DMButton::height());
         delete_widget_ = std::make_unique<ButtonWidget>(delete_button_.get(), [this]() {
@@ -496,7 +580,19 @@ struct SpawnGroupConfig::Entry {
             });
         });
 
-        auto name_box = std::make_unique<DMTextBox>("Display Name", "");
+        priority_up_button_ = std::make_unique<DMButton>("▲", &DMStyles::ListButton(), DMButton::height(), DMButton::height());
+        priority_up_widget_ = std::make_unique<PriorityButtonWidget>(priority_up_button_.get(), [this]() {
+            if (!owner_) return;
+            owner_->nudge_priority(*this, -1);
+        });
+
+        priority_down_button_ = std::make_unique<DMButton>("▼", &DMStyles::ListButton(), DMButton::height(), DMButton::height());
+        priority_down_widget_ = std::make_unique<PriorityButtonWidget>(priority_down_button_.get(), [this]() {
+            if (!owner_) return;
+            owner_->nudge_priority(*this, 1);
+        });
+
+        auto name_box = std::make_unique<DMTextBox>("", "");
         name_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(name_box),
             [this](const std::string& value) {
                 if (!editable_) return;
@@ -804,6 +900,7 @@ struct SpawnGroupConfig::Entry {
         if (edge_inset_widget_) {
             edge_inset_widget_->set_editable(editable_ && show_edge_inset_widget_);
         }
+        update_priority_button_states();
     }
 
     void set_expanded(bool expanded) {
@@ -822,10 +919,10 @@ struct SpawnGroupConfig::Entry {
             }
             rows.push_back(header_row);
 
-            DockableCollapsible::Row actions_row;
-            if (regenerate_widget_) actions_row.push_back(regenerate_widget_.get());
-            if (delete_widget_) actions_row.push_back(delete_widget_.get());
-            if (!actions_row.empty()) rows.push_back(actions_row);
+            DockableCollapsible::Row priority_row;
+            if (priority_up_widget_) priority_row.push_back(priority_up_widget_.get());
+            if (priority_down_widget_) priority_row.push_back(priority_down_widget_.get());
+            if (!priority_row.empty()) rows.push_back(priority_row);
 
             rows.push_back({method_widget_.get()});
 
@@ -866,10 +963,15 @@ struct SpawnGroupConfig::Entry {
                     area_row.push_back(open_area_widget_.get());
                 }
             }
-            if (enforce_widget_) {
-                area_row.push_back(enforce_widget_.get());
-            }
             if (!area_row.empty()) rows.push_back(area_row);
+
+            if (enforce_widget_) {
+                rows.push_back({enforce_widget_.get()});
+            }
+
+            if (delete_widget_) {
+                rows.push_back({delete_widget_.get()});
+            }
 
             return;
         }
@@ -957,12 +1059,15 @@ private:
         if (!ownership_label_widget_) return;
         const std::string& label = ownership_label_text_;
         if (label.empty()) {
-            ownership_label_widget_->set_text("");
+            ownership_label_widget_->set_color(SDL_Color{0, 0, 0, 0});
+            ownership_label_widget_->set_text("Room Owner: None");
             ownership_label_widget_->set_subtle(true);
         } else {
-            ownership_label_widget_->set_text(label);
+            ownership_label_widget_->set_text("Room Owner: " + label);
             if (auto color = ownership_color_) {
                 ownership_label_widget_->set_color(*color);
+            } else {
+                ownership_label_widget_->set_color(SDL_Color{0, 0, 0, 0});
             }
             ownership_label_widget_->set_subtle(false);
         }
@@ -1046,6 +1151,19 @@ private:
                 graph->set_on_add_candidate({});
             }
         }
+    }
+
+    void set_priority_position(size_t index, size_t total) {
+        priority_index_ = index;
+        priority_count_ = total;
+        update_priority_button_states();
+    }
+
+    void update_priority_button_states() {
+        bool can_move_up = editable_ && priority_index_ > 0;
+        bool can_move_down = editable_ && (priority_count_ == 0 ? false : priority_index_ + 1 < priority_count_);
+        if (priority_up_widget_) priority_up_widget_->set_enabled(can_move_up);
+        if (priority_down_widget_) priority_down_widget_->set_enabled(can_move_down);
     }
 
     void update_embedded_search(const Input& input, int screen_w, int screen_h) {
@@ -1321,9 +1439,10 @@ private:
     std::unique_ptr<DMButton> toggle_button_{};
     std::unique_ptr<ButtonWidget> toggle_widget_{};
     std::unique_ptr<SpawnGroupLabelWidget> ownership_label_widget_{};
-
-    std::unique_ptr<DMButton> regenerate_button_{};
-    std::unique_ptr<ButtonWidget> regenerate_widget_{};
+    std::unique_ptr<DMButton> priority_up_button_{};
+    std::unique_ptr<PriorityButtonWidget> priority_up_widget_{};
+    std::unique_ptr<DMButton> priority_down_button_{};
+    std::unique_ptr<PriorityButtonWidget> priority_down_widget_{};
     std::unique_ptr<DMButton> delete_button_{};
     std::unique_ptr<ButtonWidget> delete_widget_{};
 
@@ -1357,6 +1476,8 @@ private:
     std::vector<CandidateWidgets> candidate_entries_{};
     std::unique_ptr<SpawnGroupLabelWidget> candidate_header_{};
     std::unique_ptr<SpawnGroupLabelWidget> empty_candidates_label_{};
+    size_t priority_index_ = 0;
+    size_t priority_count_ = 0;
 };
 
 SpawnGroupConfig::SpawnGroupConfig(bool floatable)
@@ -1952,6 +2073,56 @@ void SpawnGroupConfig::restore_order_from_snapshot(const std::vector<std::string
     }
 }
 
+void SpawnGroupConfig::nudge_priority(Entry& entry, int delta) {
+    if (delta == 0) return;
+    if (entries_.size() <= 1) {
+        entry.set_priority_position(0, entries_.size());
+        return;
+    }
+
+    size_t source_index = 0;
+    bool found = false;
+    for (size_t i = 0; i < entries_.size(); ++i) {
+        if (entries_[i].get() == &entry) {
+            source_index = i;
+            found = true;
+            break;
+        }
+    }
+    if (!found) return;
+
+    int target_index = static_cast<int>(source_index) + delta;
+    if (target_index < 0 || target_index >= static_cast<int>(entries_.size())) {
+        entry.set_priority_position(source_index, entries_.size());
+        return;
+    }
+
+    std::vector<std::string> expansions = expanded_groups();
+    reorder_json(source_index, static_cast<size_t>(target_index));
+    expanded_.clear();
+    for (const auto& id : expansions) {
+        if (!id.empty()) expanded_.insert(id);
+    }
+
+    rebuild_rows();
+
+    if (target_index < 0 || entries_.empty()) return;
+    size_t resolved_target = static_cast<size_t>(std::min(target_index, static_cast<int>(entries_.size() - 1)));
+    Entry* moved_entry = entries_[resolved_target].get();
+    std::string moved_id = moved_entry ? moved_entry->spawn_id() : std::string{};
+    if (moved_id.empty()) {
+        moved_id = entry.spawn_id();
+    }
+    nlohmann::json entry_snapshot = moved_entry ? moved_entry->entry_view() : nlohmann::json::object();
+    enqueue_notification([this, entry_data = std::move(entry_snapshot), moved_id, dest = resolved_target]() mutable {
+        ChangeSummary summary{};
+        if (on_change_) on_change_();
+        if (on_entry_change_) on_entry_change_(entry_data, summary);
+        fire_entry_callbacks(entry_data, summary);
+        if (callbacks_.on_reorder) callbacks_.on_reorder(moved_id, dest);
+    });
+}
+
 void SpawnGroupConfig::rebuild_rows() {
     if (bound_entry_) {
         if (!single_entry_shadow_.is_array()) {
@@ -2035,9 +2206,11 @@ void SpawnGroupConfig::mark_layout_dirty() {
 DockableCollapsible::Rows SpawnGroupConfig::build_layout_rows() {
     DockableCollapsible::Rows result;
     bool have_rows = false;
-    for (auto& entry : entries_) {
+    for (size_t index = 0; index < entries_.size(); ++index) {
+        auto& entry = entries_[index];
         have_rows = true;
         entry->set_expanded(is_expanded(entry->spawn_id()));
+        entry->set_priority_position(index, entries_.size());
         entry->append_layout_rows(result);
     }
 

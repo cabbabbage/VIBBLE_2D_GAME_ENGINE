@@ -102,6 +102,10 @@ void MapRoomsDisplay::set_on_rooms_changed(std::function<void()> cb) {
     on_rooms_changed_ = std::move(cb);
 }
 
+void MapRoomsDisplay::set_on_create_room(std::function<void()> cb) {
+    on_create_room_ = std::move(cb);
+}
+
 void MapRoomsDisplay::set_header_text(const std::string& text) {
     header_text_ = text;
     if (container_) {
@@ -380,6 +384,10 @@ void MapRoomsDisplay::clear_hover() {
 }
 
 void MapRoomsDisplay::create_room_entry() {
+    if (on_create_room_) {
+        on_create_room_();
+        return;
+    }
     if (!map_info_ || !map_info_->is_object()) {
         return;
     }

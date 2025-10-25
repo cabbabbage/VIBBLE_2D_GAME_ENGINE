@@ -13826,13 +13826,13 @@
       "map_layers": [
         {
           "level": 0,
-          "max_rooms": 2,
-          "min_rooms": 1,
+          "max_rooms": 1,
+          "min_rooms": 0,
           "name": "layer_0",
           "rooms": [
             {
               "max_instances": 1,
-              "min_instances": 1,
+              "min_instances": 0,
               "name": "spawn",
               "required_children": []
             }
@@ -13840,10 +13840,17 @@
         },
         {
           "level": 1,
-          "max_rooms": 0,
+          "max_rooms": 1,
           "min_rooms": 0,
           "name": "layer_1",
-          "rooms": []
+          "rooms": [
+            {
+              "max_instances": 1,
+              "min_instances": 0,
+              "name": "spawn",
+              "required_children": []
+            }
+          ]
         }
       ],
       "map_light_data": {
@@ -14046,6 +14053,9 @@
         }
       },
       "rooms_data": {
+        "NewRoom": {
+          "name": "NewRoom"
+        },
         "spawn": {
           "areas": [
             {

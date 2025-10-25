@@ -68,16 +68,19 @@ void SlidingWindowContainer::set_scrollbar_visible(bool visible) {
     layout(last_screen_w_, last_screen_h_);
 }
 
-void SlidingWindowContainer::set_header_navigation_button(const std::string& label, std::function<void()> on_click) {
+void SlidingWindowContainer::set_header_navigation_button(const std::string& label,
+                                                           std::function<void()> on_click,
+                                                           const DMButtonStyle* style) {
     if (label.empty() || !on_click) {
         clear_header_navigation_button();
         return;
     }
     header_nav_callback_ = std::move(on_click);
+    const DMButtonStyle* button_style = style ? style : &DMStyles::HeaderButton();
     if (!header_nav_button_) {
-        header_nav_button_ = std::make_unique<DMButton>(label, &DMStyles::HeaderButton(), DMButton::height(), DMButton::height());
+        header_nav_button_ = std::make_unique<DMButton>(label, button_style, DMButton::height(), DMButton::height());
     } else {
-        header_nav_button_->set_style(&DMStyles::HeaderButton());
+        header_nav_button_->set_style(button_style);
         header_nav_button_->set_text(label);
     }
     layout_dirty_ = true;

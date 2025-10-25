@@ -575,7 +575,7 @@ void MapModeUI::ensure_panels() {
         layers_panel_ = std::make_unique<MapLayersPanel>();
         layers_panel_->set_embedded_mode(true);
         layers_panel_->set_on_configure_room([this](const std::string& key) {
-            this->open_room_configuration(key);
+            this->open_room_configuration(key, SlidingPanel::LayerControls);
         });
         layers_panel_->set_side_panel_callback([this](MapLayersPanel::SidePanel panel) {
             switch (panel) {
@@ -626,7 +626,7 @@ void MapModeUI::ensure_panels() {
         rooms_display_ = std::make_unique<MapRoomsDisplay>();
         rooms_display_->set_header_text("Room List");
         rooms_display_->set_on_select_room([this](const std::string& key) {
-            this->open_room_configuration(key);
+            this->open_room_configuration(key, SlidingPanel::RoomsList);
         });
         rooms_display_->set_on_rooms_changed([this]() {
             this->auto_save_layers_data();
@@ -637,6 +637,9 @@ void MapModeUI::ensure_panels() {
         rooms_display_->set_map_info(map_info_);
         rooms_display_->set_on_rooms_changed([this]() {
             this->auto_save_layers_data();
+        });
+        rooms_display_->set_on_create_room([this]() {
+            this->create_room_from_panel(SlidingPanel::RoomsList);
         });
     }
     if (!layer_controls_container_) {
@@ -1463,7 +1466,7 @@ void MapModeUI::ensure_room_configurator() {
             if (rooms_display_) {
                 rooms_display_->refresh();
             }
-            this->show_sliding_panel(SlidingPanel::RoomsList);
+            this->show_sliding_panel(room_config_return_panel_);
         });
         room_configurator_->set_spawn_group_callbacks(
             {},
@@ -1497,12 +1500,14 @@ void MapModeUI::ensure_room_configurator() {
     }
 }
 
-void MapModeUI::open_room_configuration(const std::string& room_key) {
+void MapModeUI::open_room_configuration(const std::string& room_key, SlidingPanel return_panel) {
     ensure_panels();
     ensure_room_configurator();
     if (!room_configurator_ || !map_info_) {
         return;
     }
+
+    room_config_return_panel_ = return_panel;
 
     nlohmann::json& map_info = *map_info_;
     nlohmann::json& rooms = map_info["rooms_data"];
@@ -1545,9 +1550,11 @@ void MapModeUI::close_room_configuration(bool show_rooms_list) {
     }
     active_room_config_key_.clear();
     if (show_rooms_list) {
-        show_sliding_panel(SlidingPanel::RoomsList);
+        room_config_return_panel_ = SlidingPanel::RoomsList;
+        show_sliding_panel(room_config_return_panel_);
     } else {
-        show_sliding_panel(SlidingPanel::None);
+        room_config_return_panel_ = SlidingPanel::None;
+        show_sliding_panel(room_config_return_panel_);
     }
 }
 
@@ -1834,6 +1841,10 @@ void MapModeUI::handle_rooms_data_mutated(bool refresh_rooms_list) {
 }
 
 void MapModeUI::create_room_from_layers_controls() {
+    create_room_from_panel(SlidingPanel::LayerControls);
+}
+
+void MapModeUI::create_room_from_panel(SlidingPanel return_panel) {
     if (!map_info_ || !map_info_->is_object()) {
         return;
     }
@@ -1841,6 +1852,8 @@ void MapModeUI::create_room_from_layers_controls() {
     if (new_key.empty()) {
         return;
     }
+    handle_rooms_data_mutated(true);
+    open_room_configuration(new_key, return_panel);
     auto_save_layers_data();
 }
 
