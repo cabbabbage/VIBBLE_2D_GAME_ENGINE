@@ -765,6 +765,16 @@ void MapLightPanel::rebuild_rows() {
     map_color_widget_->set_on_value_changed([this](const utils::color::RangedColor& value) {
         handle_map_color_changed(value);
     });
+    map_color_widget_->set_on_sample_requested(
+        [this](const utils::color::RangedColor& current,
+               std::function<void(SDL_Color)> on_sample,
+               std::function<void()> on_cancel) {
+            if (map_color_sample_callback_) {
+                map_color_sample_callback_(current, std::move(on_sample), std::move(on_cancel));
+            } else if (on_cancel) {
+                on_cancel();
+            }
+        });
     rows.push_back({ add_widget(std::move(map_color_widget)) });
     set_map_color_widget_value(map_color_);
 
@@ -1210,6 +1220,22 @@ void MapLightPanel::set_map_color_widget_value(SDL_Color color) {
     suppress_map_color_callback_ = true;
     map_color_widget_->set_value(solid_ranged_color(utils::color::clamp_color(color)));
     suppress_map_color_callback_ = false;
+}
+
+void MapLightPanel::set_map_color_sample_callback(ColorSampleRequestCallback cb) {
+    map_color_sample_callback_ = std::move(cb);
+    if (map_color_widget_) {
+        map_color_widget_->set_on_sample_requested(
+            [this](const utils::color::RangedColor& current,
+                   std::function<void(SDL_Color)> on_sample,
+                   std::function<void()> on_cancel) {
+                if (map_color_sample_callback_) {
+                    map_color_sample_callback_(current, std::move(on_sample), std::move(on_cancel));
+                } else if (on_cancel) {
+                    on_cancel();
+                }
+            });
+    }
 }
 
 int MapLightPanel::find_pair_containing_angle(double angle_degrees) const {

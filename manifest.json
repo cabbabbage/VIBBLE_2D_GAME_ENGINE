@@ -13825,7 +13825,7 @@
       },
       "map_layers": [
         {
-          "bounding_extent": 1100.0,
+          "bounding_extent": 834.0,
           "level": 0,
           "max_rooms": 1,
           "min_rooms": 1,
@@ -13846,15 +13846,8 @@
           "max_rooms": 1,
           "min_rooms": 0,
           "name": "layer_1",
-          "ring_radius": 3300.0,
-          "rooms": [
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "test_2",
-              "required_children": []
-            }
-          ]
+          "ring_radius": 3034.0,
+          "rooms": []
         }
       ],
       "map_layers_settings": {
@@ -14009,6 +14002,12 @@
             }
           ]
         ],
+        "map_color": [
+          87,
+          28,
+          0,
+          255
+        ],
         "mult": 0.32,
         "orbit_radius": 1561,
         "orbit_x": 1561,
@@ -14060,135 +14059,11 @@
         }
       },
       "rooms_data": {
-        "spawn": {
-          "areas": [
-            {
-              "anchor": {
-                "x": 0,
-                "y": 0
-              },
-              "anchor_relative_to_center": true,
-              "kind": "Spawn",
-              "name": "test",
-              "points": [
-                {
-                  "x": 275,
-                  "y": -500
-                },
-                {
-                  "x": 336,
-                  "y": -318
-                },
-                {
-                  "x": 45,
-                  "y": -148
-                },
-                {
-                  "x": -63,
-                  "y": -416
-                },
-                {
-                  "x": 8,
-                  "y": -556
-                },
-                {
-                  "x": 148,
-                  "y": -656
-                }
-              ],
-              "resolution": 0,
-              "type": "spawning"
-            }
-          ],
-          "curvyness": 1,
-          "edge_smoothness": 0,
-          "geometry": "Circle",
-          "inherits_map_assets": true,
-          "is_boss": false,
-          "is_spawn": true,
-          "max_height": 2200,
-          "max_radius": 1100,
-          "max_width": 2200,
-          "min_height": 1400,
-          "min_radius": 700,
-          "min_width": 1400,
-          "name": "spawn",
-          "radius": 1100,
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Vibble"
-                }
-              ],
-              "display_name": "Vibble",
-              "dx": -64,
-              "dy": -166,
-              "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 1807,
-              "origional_width": 1805,
-              "position": "Exact",
-              "priority": 0,
-              "resolution": 5,
-              "spawn_id": "spn-a2c03bfe7161"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 14.0,
-                  "name": "#candle"
-                }
-              ],
-              "display_name": "Candles",
-              "dx": -32,
-              "dy": -631,
-              "enforce_spacing": false,
-              "max_number": 20,
-              "min_number": 12,
-              "origional_height": 9038,
-              "origional_width": 9017,
-              "perimeter_radius": 377,
-              "position": "Perimeter",
-              "priority": 1,
-              "radius": 648,
-              "resolution": 3,
-              "spawn_id": "spn-dbc1671870c3"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Axe"
-                }
-              ],
-              "display_name": "Axe",
-              "dx": -114,
-              "dy": 14,
-              "edge_inset_percent": 93,
-              "enforce_spacing": false,
-              "max_number": 50,
-              "min_number": 1,
-              "origional_height": 1878,
-              "origional_width": 1808,
-              "position": "Edge",
-              "priority": 2,
-              "resolution": 5,
-              "spawn_id": "spn-7fa417fa562d"
-            }
-          ]
+        "NewRoom": {
+          "name": "NewRoom",
+          "spawn_groups": []
         },
-        "test_2": {
+        "spawn": {
           "curvyness": 2,
           "edge_smoothness": 2,
           "geometry": "Circle",
@@ -14202,7 +14077,7 @@
           "min_radius": 750,
           "min_width": 1500,
           "name": "test_2",
-          "radius": 2000,
+          "radius": 834,
           "spawn_groups": []
         }
       },

@@ -10,6 +10,8 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include "utils/ranged_color.hpp"
+
 class Assets;
 namespace devmode::core {
 class ManifestStore;
@@ -149,6 +151,11 @@ private:
     void delete_active_room_spawn_group(const std::string& spawn_id);
     void reorder_active_room_spawn_group(const std::string& spawn_id, size_t index);
     void handle_rooms_data_mutated(bool refresh_rooms_list);
+    void begin_map_color_sampling(const utils::color::RangedColor& current,
+                                  std::function<void(SDL_Color)> on_sample,
+                                  std::function<void()> on_cancel);
+    void cancel_map_color_sampling(bool silent = false);
+    void complete_map_color_sampling(SDL_Color color);
 
 private:
     Assets* assets_ = nullptr;
@@ -201,5 +208,14 @@ private:
     std::string active_room_config_key_;
     SlidingPanel active_sliding_panel_ = SlidingPanel::None;
     SlidingPanel room_config_return_panel_ = SlidingPanel::RoomsList;
+
+    bool map_color_sampling_active_ = false;
+    mutable bool map_color_sampling_preview_valid_ = false;
+    SDL_Point map_color_sampling_cursor_{0, 0};
+    mutable SDL_Color map_color_sampling_preview_{0, 0, 0, 255};
+    SDL_Cursor* map_color_sampling_cursor_handle_ = nullptr;
+    SDL_Cursor* map_color_sampling_prev_cursor_ = nullptr;
+    std::function<void(SDL_Color)> map_color_sampling_apply_{};
+    std::function<void()> map_color_sampling_cancel_{};
 };
 

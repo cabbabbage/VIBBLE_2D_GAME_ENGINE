@@ -27,6 +27,12 @@ public:
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
     void set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings);
 
+    using ColorSampleRequestCallback = std::function<void(
+        const utils::color::RangedColor&,
+        std::function<void(SDL_Color)>,
+        std::function<void()>)>;
+    void set_map_color_sample_callback(ColorSampleRequestCallback cb);
+
     void open();
     void close();
     void toggle();
@@ -128,6 +134,7 @@ private:
     DMColorRangeWidget* map_color_widget_ = nullptr;
     SDL_Color map_color_{0, 0, 0, 255};
     bool suppress_map_color_callback_ = false;
+    ColorSampleRequestCallback map_color_sample_callback_{};
     mutable std::string persistence_warning_text_;
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_;

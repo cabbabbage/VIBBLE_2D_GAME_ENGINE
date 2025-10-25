@@ -94,7 +94,13 @@ std::string sanitize_room_key(const std::string& input) {
 MapModeUI::MapModeUI(Assets* assets)
     : assets_(assets) {}
 
-MapModeUI::~MapModeUI() = default;
+MapModeUI::~MapModeUI() {
+    cancel_map_color_sampling(true);
+    if (map_color_sampling_cursor_handle_) {
+        SDL_FreeCursor(map_color_sampling_cursor_handle_);
+        map_color_sampling_cursor_handle_ = nullptr;
+    }
+}
 
 void MapModeUI::set_manifest_store(devmode::core::ManifestStore* store) {
     SDL_assert(store != nullptr);
@@ -534,6 +540,12 @@ void MapModeUI::ensure_panels() {
     }
     if (light_panel_) {
         light_panel_->set_reactive_settings(assets_ ? assets_->reactive_shadow_settings() : nullptr);
+        light_panel_->set_map_color_sample_callback(
+            [this](const utils::color::RangedColor& current,
+                   std::function<void(SDL_Color)> on_sample,
+                   std::function<void()> on_cancel) {
+                this->begin_map_color_sampling(current, std::move(on_sample), std::move(on_cancel));
+            });
     }
     if (!shadow_panel_) {
         shadow_panel_ = std::make_unique<MapShadowPanel>(assets_, kDefaultPanelX + 280, kDefaultPanelY);
@@ -937,6 +949,10 @@ void MapModeUI::sync_panel_map_info() {
 
 void MapModeUI::update(const Input& input) {
     ensure_panels();
+    if (map_color_sampling_active_) {
+        map_color_sampling_cursor_.x = input.getX();
+        map_color_sampling_cursor_.y = input.getY();
+    }
     if (footer_bar_ && footer_bar_->visible()) {
         footer_bar_->update(input);
     }
@@ -1013,6 +1029,32 @@ void MapModeUI::update(const Input& input) {
 
 bool MapModeUI::handle_event(const SDL_Event& e) {
     ensure_panels();
+    if (map_color_sampling_active_) {
+        if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+            map_color_sampling_cursor_ = event_point(e);
+        }
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            SDL_Color chosen = map_color_sampling_preview_valid_ ? map_color_sampling_preview_ : SDL_Color{0, 0, 0, 255};
+            complete_map_color_sampling(chosen);
+            return true;
+        }
+        if ((e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) ||
+            (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)) {
+            cancel_map_color_sampling();
+            return true;
+        }
+        switch (e.type) {
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+            case SDL_MOUSEMOTION:
+            case SDL_MOUSEWHEEL:
+            case SDL_KEYDOWN:
+            case SDL_KEYUP:
+                return true;
+            default:
+                break;
+        }
+    }
     if (room_config_container_ && room_config_container_->is_visible() && room_config_container_->handle_event(e)) {
         return true;
     }
@@ -1089,6 +1131,45 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
     }
     if (footer_bar_ && footer_bar_->visible()) {
         footer_bar_->render(renderer);
+    }
+    if (map_color_sampling_active_ && renderer) {
+        SDL_Rect sample_rect{map_color_sampling_cursor_.x, map_color_sampling_cursor_.y, 1, 1};
+        Uint32 pixel = 0;
+        if (SDL_RenderReadPixels(renderer, &sample_rect, SDL_PIXELFORMAT_ARGB8888, &pixel, sizeof(pixel)) == 0) {
+            Uint8 r = 0, g = 0, b = 0, a = 0;
+            SDL_GetRGBA(pixel, SDL_PIXELFORMAT_ARGB8888, &r, &g, &b, &a);
+            map_color_sampling_preview_ = SDL_Color{r, g, b, a};
+            map_color_sampling_preview_valid_ = true;
+        } else {
+            map_color_sampling_preview_valid_ = false;
+        }
+        const int preview_size = 48;
+        SDL_Rect preview_rect{map_color_sampling_cursor_.x + 18,
+                              map_color_sampling_cursor_.y + 18,
+                              preview_size,
+                              preview_size};
+        SDL_Rect inner_rect{preview_rect.x + 4,
+                            preview_rect.y + 4,
+                            std::max(0, preview_rect.w - 8),
+                            std::max(0, preview_rect.h - 8)};
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 170);
+        SDL_RenderFillRect(renderer, &preview_rect);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 220);
+        SDL_RenderDrawRect(renderer, &preview_rect);
+        if (map_color_sampling_preview_valid_) {
+            SDL_SetRenderDrawColor(renderer,
+                                   map_color_sampling_preview_.r,
+                                   map_color_sampling_preview_.g,
+                                   map_color_sampling_preview_.b,
+                                   255);
+            SDL_RenderFillRect(renderer, &inner_rect);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 220);
+            SDL_RenderDrawRect(renderer, &inner_rect);
+        } else {
+            SDL_SetRenderDrawColor(renderer, 120, 120, 120, 220);
+            SDL_RenderDrawRect(renderer, &inner_rect);
+        }
     }
 }
 
@@ -1855,5 +1936,59 @@ void MapModeUI::create_room_from_panel(SlidingPanel return_panel) {
     handle_rooms_data_mutated(true);
     open_room_configuration(new_key, return_panel);
     auto_save_layers_data();
+}
+
+void MapModeUI::begin_map_color_sampling(const utils::color::RangedColor&,
+                                         std::function<void(SDL_Color)> on_sample,
+                                         std::function<void()> on_cancel) {
+    if (!on_sample) {
+        if (on_cancel) {
+            on_cancel();
+        }
+        return;
+    }
+    cancel_map_color_sampling(true);
+    map_color_sampling_active_ = true;
+    map_color_sampling_preview_valid_ = false;
+    map_color_sampling_apply_ = std::move(on_sample);
+    map_color_sampling_cancel_ = std::move(on_cancel);
+    int mx = 0;
+    int my = 0;
+    SDL_GetMouseState(&mx, &my);
+    map_color_sampling_cursor_.x = mx;
+    map_color_sampling_cursor_.y = my;
+    if (!map_color_sampling_cursor_handle_) {
+        map_color_sampling_cursor_handle_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
+    }
+    map_color_sampling_prev_cursor_ = SDL_GetCursor();
+    if (map_color_sampling_cursor_handle_) {
+        SDL_SetCursor(map_color_sampling_cursor_handle_);
+    }
+}
+
+void MapModeUI::cancel_map_color_sampling(bool silent) {
+    if (!map_color_sampling_active_) {
+        return;
+    }
+    map_color_sampling_active_ = false;
+    map_color_sampling_preview_valid_ = false;
+    if (map_color_sampling_prev_cursor_) {
+        SDL_SetCursor(map_color_sampling_prev_cursor_);
+        map_color_sampling_prev_cursor_ = nullptr;
+    }
+    auto cancel_cb = std::move(map_color_sampling_cancel_);
+    map_color_sampling_apply_ = nullptr;
+    map_color_sampling_cancel_ = nullptr;
+    if (!silent && cancel_cb) {
+        cancel_cb();
+    }
+}
+
+void MapModeUI::complete_map_color_sampling(SDL_Color color) {
+    auto apply_cb = std::move(map_color_sampling_apply_);
+    cancel_map_color_sampling(true);
+    if (apply_cb) {
+        apply_cb(color);
+    }
 }
 

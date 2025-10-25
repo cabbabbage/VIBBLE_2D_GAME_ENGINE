@@ -97,6 +97,16 @@ public:
         : DockableCollapsible(owner.label() + " Picker", true, 48, 48),
           owner_(owner) {
         initialize_channels();
+
+        sample_button_ = std::make_unique<DMButton>(
+            "Select color from map",
+            &DMStyles::AccentButton(),
+            0,
+            DMButton::height());
+        sample_button_widget_ = std::make_unique<ButtonWidget>(
+            sample_button_.get(),
+            [this]() { this->handle_sample_button(); });
+
         rebuild_rows();
 
         set_close_button_enabled(true);
@@ -185,6 +195,9 @@ private:
         for (auto& channel : channels_) {
             rows.push_back({ channel.widget.get() });
         }
+        if (sample_button_widget_) {
+            rows.push_back({ sample_button_widget_.get() });
+        }
         set_rows(rows);
     }
 
@@ -193,12 +206,15 @@ private:
         const int gap = DMSpacing::small_gap();
         const int slider_height = DMRangeSlider::height();
         const int slider_count = static_cast<int>(channels_.size());
-        if (slider_count <= 0) {
-            return pad * 2;
+        int content_height = 0;
+        if (slider_count > 0) {
+            const int row_height = pad * 2 + slider_height;
+            const int slider_area_height = slider_count * row_height + (slider_count - 1) * gap;
+            content_height += slider_area_height;
+            content_height += gap;
         }
-        const int row_height = pad * 2 + slider_height;
-        const int slider_area_height = slider_count * row_height + (slider_count - 1) * gap;
-        return pad + slider_area_height + pad;
+        content_height += DMButton::height();
+        return pad + content_height + pad;
     }
 
     int resolve_panel_width() const {
@@ -253,6 +269,12 @@ private:
         owner_.on_picker_value_changed(value_);
     }
 
+    void handle_sample_button() {
+        if (!owner_.request_sample_from_map()) {
+            return;
+        }
+    }
+
     void sync_sliders_from_value() {
         auto set_slider = [](DMRangeSlider* slider, const utils::color::ChannelRange& channel) {
             if (!slider) return;
@@ -296,6 +318,8 @@ private:
         std::unique_ptr<ChannelWidget> widget;
     };
     std::array<ChannelEntry, 4> channels_{};
+    std::unique_ptr<DMButton> sample_button_;
+    std::unique_ptr<ButtonWidget> sample_button_widget_;
 };
 
 
@@ -389,6 +413,10 @@ void DMColorRangeWidget::set_on_value_changed(ValueChangedCallback cb) {
     on_value_changed_ = std::move(cb);
 }
 
+void DMColorRangeWidget::set_on_sample_requested(SampleRequestCallback cb) {
+    on_sample_requested_ = std::move(cb);
+}
+
 void DMColorRangeWidget::set_label(std::string label) {
     label_ = std::move(label);
     update_layout();
@@ -451,5 +479,50 @@ void DMColorRangeWidget::on_picker_value_changed(const RangedColor& value) {
     if (on_value_changed_) {
         on_value_changed_(value_);
     }
+}
+
+bool DMColorRangeWidget::request_sample_from_map() {
+    if (!on_sample_requested_) {
+        return false;
+    }
+    const bool was_open = overlay_visible();
+    if (was_open) {
+        close_overlay();
+    }
+    reopen_picker_after_sample_ = was_open;
+
+    auto apply = [this](SDL_Color color) {
+        this->apply_sampled_color(color);
+        if (reopen_picker_after_sample_) {
+            reopen_picker_after_sample_ = false;
+            this->open_picker();
+        }
+    };
+
+    auto cancel = [this]() {
+        if (reopen_picker_after_sample_) {
+            reopen_picker_after_sample_ = false;
+            this->open_picker();
+        }
+    };
+
+    on_sample_requested_(value_, std::move(apply), std::move(cancel));
+    return true;
+}
+
+void DMColorRangeWidget::apply_sampled_color(SDL_Color color) {
+    SDL_Color clamped = utils::color::clamp_color(color);
+    auto make_channel = [](Uint8 component) {
+        utils::color::ChannelRange range{};
+        range.min = range.max = static_cast<int>(component);
+        return range;
+    };
+
+    RangedColor ranged{};
+    ranged.r = make_channel(clamped.r);
+    ranged.g = make_channel(clamped.g);
+    ranged.b = make_channel(clamped.b);
+    ranged.a = make_channel(clamped.a);
+    set_value(ranged);
 }
 

@@ -728,26 +728,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
         return SDL_Rect{left, top, std::max(1, right - left), std::max(1, bottom - top)};
     };
 
-    auto rect_from_world = [&](const SDL_Rect& world_rect) -> SDL_Rect {
-        if (map_screen_width <= 0 || map_screen_height <= 0) {
-            return SDL_Rect{0, 0, 0, 0};
-        }
-        const float left_ratio =
-            std::clamp(static_cast<float>(world_rect.x) / static_cast<float>(map_screen_width), 0.0f, 1.0f);
-        const float right_ratio =
-            std::clamp(static_cast<float>(world_rect.x + world_rect.w) / static_cast<float>(map_screen_width), 0.0f, 1.0f);
-        const float top_ratio =
-            std::clamp(static_cast<float>(world_rect.y) / static_cast<float>(map_screen_height), 0.0f, 1.0f);
-        const float bottom_ratio =
-            std::clamp(static_cast<float>(world_rect.y + world_rect.h) / static_cast<float>(map_screen_height), 0.0f, 1.0f);
-
-        const int left = preview_grid_rect_.x + static_cast<int>(std::lround(left_ratio * preview_grid_rect_.w));
-        const int right = preview_grid_rect_.x + static_cast<int>(std::lround(right_ratio * preview_grid_rect_.w));
-        const int top = preview_grid_rect_.y + static_cast<int>(std::lround(top_ratio * preview_grid_rect_.h));
-        const int bottom = preview_grid_rect_.y + static_cast<int>(std::lround(bottom_ratio * preview_grid_rect_.h));
-        return SDL_Rect{left, top, std::max(1, right - left), std::max(1, bottom - top)};
-    };
-
     auto draw_indicator = [&](const SDL_Rect& rect, const SDL_Color& color, bool top_right) {
         if (rect.w <= 4 || rect.h <= 4) {
             return;
@@ -918,24 +898,12 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     };
 
     const SDL_Color dirty_color{200, 120, 40, 255};
-    const SDL_Color outline_color{70, 70, 70, 255};
+    const SDL_Color outline_color{249, 115, 22, 255};
 
     for (int gy = 0; gy < grid_h; ++gy) {
         for (int gx = 0; gx < grid_w; ++gx) {
             const int index = gy * grid_w + gx;
             SDL_Rect cell_rect = fallback_cell_rect(gx, gy);
-
-            if (const auto* snap = snapshot_for_chunk(index)) {
-                SDL_Rect world_rect = rect_from_world(snap->world_rect);
-                if (world_rect.w > 0 && world_rect.h > 0) {
-                    cell_rect = world_rect;
-                }
-            } else if (const world::Chunk* chunk = map->chunk_at(index)) {
-                SDL_Rect world_rect = rect_from_world(chunk->world_bounds);
-                if (world_rect.w > 0 && world_rect.h > 0) {
-                    cell_rect = world_rect;
-                }
-            }
 
             if (static_cast<std::size_t>(index) < chunk_preview_rects_.size()) {
                 chunk_preview_rects_[static_cast<std::size_t>(index)] = cell_rect;
@@ -993,8 +961,53 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
     if (detail_chunk >= 0) {
         const int gx = detail_chunk % grid_w;
         const int gy = detail_chunk / grid_w;
-        detail_lines.push_back("Tile [" + std::to_string(gx) + ", " + std::to_string(gy) + "] #" +
+        detail_lines.push_back("Chunk(" + std::to_string(gx) + ", " + std::to_string(gy) + ") #" +
                                std::to_string(detail_chunk));
+
+        float current_brightness = 0.0f;
+        bool  has_current        = false;
+        if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
+            current_brightness = std::clamp(snap->combined_brightness, 0.0f, 1.0f);
+            has_current        = true;
+        } else if (const world::Chunk* chunk = map->chunk_at(detail_chunk)) {
+            SDL_Rect world_rect = chunk->world_bounds;
+            if (world_rect.w > 0 && world_rect.h > 0) {
+                const float cx = static_cast<float>(world_rect.x) + static_cast<float>(world_rect.w) * 0.5f;
+                const float cy = static_cast<float>(world_rect.y) + static_cast<float>(world_rect.h) * 0.5f;
+                current_brightness = map->sample_brightness(static_cast<int>(std::round(cx)),
+                                                            static_cast<int>(std::round(cy)));
+                current_brightness = std::clamp(current_brightness, 0.0f, 1.0f);
+                has_current        = true;
+            }
+        }
+        if (!has_current) {
+            detail_lines.push_back("Current Brightness: --");
+        } else {
+            detail_lines.push_back("Current Brightness: " + format_float(current_brightness, 3));
+        }
+
+        float base_brightness = 0.0f;
+        bool  has_base        = false;
+        if (const world::Chunk* chunk = map->chunk_at(detail_chunk)) {
+            if (const LightMapManager* manager = light_map_manager()) {
+                const float ui_opacity = std::clamp(manager->current_map_light_opacity(), 0.0f, 1.0f);
+                base_brightness = world::static_brightness_for_opacity(*chunk, ui_opacity);
+                has_base        = true;
+            }
+        }
+        if (!has_base) {
+            if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
+                if (!snap->static_empty) {
+                    base_brightness = std::clamp(snap->static_average, 0.0f, 1.0f);
+                    has_base        = true;
+                }
+            }
+        }
+        if (!has_base) {
+            detail_lines.push_back("Base Brightness: --");
+        } else {
+            detail_lines.push_back("Base Brightness: " + format_float(base_brightness, 3));
+        }
 
         std::string stage_line = std::string("Preview Stage: ") + stage_label_text;
         if (!stage_available) {
@@ -1017,18 +1030,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             detail_lines.push_back("Dynamic Lighting: disabled");
             detail_lines.push_back("Shadow Strength: " + format_float(snap->shadow_opacity_min, 3) + " - " +
                                    format_float(snap->shadow_opacity_max, 3));
-        }
-
-        if (const world::Chunk* chunk = map->chunk_at(detail_chunk)) {
-            if (const LightMapManager* manager = light_map_manager()) {
-                const float ui_opacity = std::clamp(manager->current_map_light_opacity(), 0.0f, 1.0f);
-                const float static_brightness = world::static_brightness_for_opacity(*chunk, ui_opacity);
-                detail_lines.push_back("Static Brightness: " + format_float(static_brightness, 3));
-            }
-            detail_lines.push_back("Chunk Bounds: " + std::to_string(chunk->world_bounds.x) + ", " +
-                                   std::to_string(chunk->world_bounds.y) + " " +
-                                   std::to_string(chunk->world_bounds.w) + "x" +
-                                   std::to_string(chunk->world_bounds.h));
         }
 
         detail_lines.push_back("");
