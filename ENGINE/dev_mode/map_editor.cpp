@@ -4,6 +4,7 @@
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
+#include "room_overlay_renderer.hpp"
 #include "render/camera.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
@@ -161,8 +162,17 @@ void MapEditor::render(SDL_Renderer* renderer) {
 
     camera& view = assets_->getView();
 
+    const auto& overlay_style = dm_draw::ResolveRoomBoundsOverlayStyle();
+
     for (Room* room : *rooms_) {
         if (!room || !room->room_area) continue;
+
+        dm_draw::RenderRoomBoundsOverlay(
+            renderer,
+            view,
+            room->room_area->get_bounds(),
+            room->room_area->get_center(),
+            overlay_style);
 
         SDL_Point center = room->room_area->get_center();
         SDL_Point screen_pt = view.map_to_screen(center);

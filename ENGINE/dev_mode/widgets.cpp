@@ -1832,6 +1832,14 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
         SDL_Point p{ e.button.x, e.button.y };
         const bool inside = SDL_PointInRect(&p, &box_rect_);
         if (inside) {
+            if (focused_ && active_ == this) {
+                commit_pending_selection();
+                focused_ = false;
+                has_pending_index_ = false;
+                hovered_option_index_ = -1;
+                if (active_ == this) active_ = nullptr;
+                return true;
+            }
             begin_focus();
             return true;
         }

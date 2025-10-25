@@ -20,6 +20,7 @@
 #include "asset/asset_info.hpp"
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
+#include "room_overlay_renderer.hpp"
 #include "widgets.hpp"
 #include "dev_controls_persistence.hpp"
 #include "render/global_light_source.hpp"
@@ -1365,12 +1366,22 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 return SDL_Color{255, 140, 0, 96};
 };
 
+            const camera& cam = assets_->getView();
+            const auto& overlay_style = dm_draw::ResolveRoomBoundsOverlayStyle();
+
+            if (current_room_ && current_room_->room_area) {
+                dm_draw::RenderRoomBoundsOverlay(
+                    renderer,
+                    cam,
+                    current_room_->room_area->get_bounds(),
+                    current_room_->room_area->get_center(),
+                    overlay_style);
+            }
+
             SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
             SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
             Uint8 pr=0,pg=0,pb=0,pa=0; SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
-
-            const camera& cam = assets_->getView();
 
             auto draw_anchor = [&](SDL_Point world, SDL_Color color) {
                 SDL_Point screen = cam.map_to_screen(world);
@@ -1407,7 +1418,16 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                             SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
                             SDL_RenderDrawLines(renderer, pts.data(), (int)pts.size());
                             if (!room_areas[i].points.empty()) {
-                                draw_anchor(room_areas[i].anchor, SDL_Color{outline.r, outline.g, outline.b, 220});
+                                SDL_Color anchor_color = overlay_style.center;
+                                if (i == hovered_area_index_) {
+                                    anchor_color = dm_draw::LightenColor(anchor_color, 0.12f);
+                                    anchor_color.a = std::min<Uint8>(255, static_cast<Uint8>(anchor_color.a + 20));
+                                }
+                                if (i == selected_area_index_) {
+                                    anchor_color = dm_draw::LightenColor(anchor_color, 0.22f);
+                                    anchor_color.a = std::min<Uint8>(255, static_cast<Uint8>(anchor_color.a + 40));
+                                }
+                                draw_anchor(room_areas[i].anchor, anchor_color);
                             }
                         }
                     }

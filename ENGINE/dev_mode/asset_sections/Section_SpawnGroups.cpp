@@ -58,8 +58,24 @@ void Section_SpawnGroups::build() {
     };
     list_->set_callbacks(std::move(cb));
     const auto expanded = list_->expanded_groups();
+    SpawnGroupConfig::ConfigureEntryCallback configure_entry;
     if (info_) {
-        list_->load(groups_, on_change, std::move(on_entry_change));
+        std::weak_ptr<AssetInfo> weak_info = info_;
+        configure_entry = [weak_info](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
+            entry.set_linkable_asset_areas_provider([weak_info]() {
+                std::vector<SpawnGroupLinkableAreaDescriptor> result;
+                if (auto locked = weak_info.lock()) {
+                    for (const auto& area : locked->areas) {
+                        if (!area.name.empty()) {
+                            result.push_back({area.name, area.name});
+                        }
+                    }
+                }
+                return result;
+            });
+            entry.set_linkable_room_areas_provider({});
+        };
+        list_->load(groups_, on_change, std::move(on_entry_change), std::move(configure_entry));
     } else {
         const nlohmann::json& readonly = groups_;
         list_->load(readonly);

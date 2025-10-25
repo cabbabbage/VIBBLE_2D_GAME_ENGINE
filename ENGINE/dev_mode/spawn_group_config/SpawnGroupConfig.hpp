@@ -17,6 +17,11 @@
 class Input;
 class SpawnGroupLabelWidget;
 
+struct SpawnGroupLinkableAreaDescriptor {
+    std::string id;
+    std::string label;
+};
+
 class SpawnGroupConfig : public DockableCollapsible {
     struct Entry;
 public:
@@ -41,6 +46,10 @@ public:
         void set_ownership_label(const std::string& label, SDL_Color color);
         void clear_ownership_label();
         void set_area_names_provider(std::function<std::vector<std::string>()> provider);
+        void set_linkable_asset_areas_provider(
+            std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider);
+        void set_linkable_room_areas_provider(
+            std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider);
         void set_open_area_handler(std::function<void(const std::string&, const std::string&)> handler,
                                    std::optional<std::string> stack_key = std::nullopt);
         void set_stack_key(std::string key);

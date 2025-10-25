@@ -13892,7 +13892,7 @@
         }
       ],
       "map_layers_settings": {
-        "min_edge_distance": 200
+        "min_edge_distance": 800
       },
       "map_light_data": {
         "base_color": {
@@ -14158,31 +14158,6 @@
                   "name": "null"
                 },
                 {
-                  "chance": 5.0,
-                  "name": "Vibble"
-                }
-              ],
-              "display_name": "New Spawn",
-              "enforce_spacing": false,
-              "max_number": 8,
-              "min_number": 8,
-              "origional_height": 1816,
-              "origional_width": 1954,
-              "position": "Perimeter",
-              "priority": 0,
-              "quantity": 8,
-              "resolution": 3,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-dcd209a9deb9"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
                   "chance": 100,
                   "name": "Bone_1"
                 }
@@ -14196,6 +14171,7 @@
               "origional_height": 1888,
               "origional_width": 1668,
               "position": "Exact",
+              "priority": 0,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,

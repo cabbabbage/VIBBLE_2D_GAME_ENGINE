@@ -104,6 +104,10 @@ std::function<std::vector<std::string>()> empty_provider() {
     return []() { return std::vector<std::string>{}; };
 }
 
+std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> empty_link_provider() {
+    return []() { return std::vector<SpawnGroupLinkableAreaDescriptor>{}; };
+}
+
 SDL_Color dim_color(SDL_Color color, float factor) {
     factor = std::clamp(factor, 0.0f, 1.0f);
     auto apply = [factor](Uint8 channel) {
@@ -173,6 +177,78 @@ private:
     DMButton* button_ = nullptr;
     std::function<void()> on_click_{};
     bool enabled_ = true;
+};
+
+class LinkAreaButtonWidget : public Widget {
+public:
+    LinkAreaButtonWidget(DMButton* button, std::function<void()> on_click)
+        : button_(button), on_click_(std::move(on_click)) {}
+
+    void set_rect(const SDL_Rect& r) override {
+        if (button_) button_->set_rect(r);
+    }
+
+    const SDL_Rect& rect() const override {
+        static SDL_Rect empty{0, 0, 0, 0};
+        return button_ ? button_->rect() : empty;
+    }
+
+    int height_for_width(int) const override { return DMButton::height(); }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (!button_ || !enabled_) return false;
+        bool used = button_->handle_event(e);
+        if (used && on_click_ && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            on_click_();
+        }
+        return used;
+    }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (button_) button_->render(renderer);
+    }
+
+    void set_styles(const DMButtonStyle* normal, const DMButtonStyle* selected, const DMButtonStyle* disabled) {
+        normal_style_ = normal ? normal : &DMStyles::ListButton();
+        selected_style_ = selected ? selected : normal_style_;
+        disabled_style_ = disabled;
+        update_style();
+    }
+
+    void set_enabled(bool enabled) {
+        if (enabled_ == enabled) return;
+        enabled_ = enabled;
+        update_style();
+    }
+
+    void set_selected(bool selected) {
+        if (selected_ == selected) return;
+        selected_ = selected;
+        update_style();
+    }
+
+private:
+    void update_style() {
+        if (!button_) return;
+        if (!enabled_) {
+            if (disabled_style_) button_->set_style(disabled_style_);
+            else button_->set_style(normal_style_);
+            return;
+        }
+        if (selected_ && selected_style_) {
+            button_->set_style(selected_style_);
+        } else {
+            button_->set_style(normal_style_);
+        }
+    }
+
+    DMButton* button_ = nullptr;
+    std::function<void()> on_click_{};
+    bool enabled_ = true;
+    bool selected_ = false;
+    const DMButtonStyle* normal_style_ = &DMStyles::ListButton();
+    const DMButtonStyle* selected_style_ = &DMStyles::AccentButton();
+    const DMButtonStyle* disabled_style_ = nullptr;
 };
 
 int parse_int_or(const std::string& text, int fallback) {
@@ -560,6 +636,15 @@ std::string trim(const std::string& value) {
 struct SpawnGroupConfig::Entry {
     friend class SpawnGroupConfig;
 
+    using LinkableAreaDescriptor = SpawnGroupLinkableAreaDescriptor;
+    using LinkableAreaProvider = std::function<std::vector<LinkableAreaDescriptor>()>;
+
+    struct LinkableAreaOption {
+        std::string id;
+        std::string label;
+        bool asset_child = false;
+    };
+
     struct CandidateWidgets {
         std::unique_ptr<DMTextBox> name_box;
         std::unique_ptr<SpawnGroupCallbackTextBoxWidget> name_widget;
@@ -609,13 +694,13 @@ struct SpawnGroupConfig::Entry {
             });
         });
 
-        priority_up_button_ = std::make_unique<DMButton>("▲", &DMStyles::ListButton(), DMButton::height(), DMButton::height());
+        priority_up_button_ = std::make_unique<DMButton>(u8"↑", &DMStyles::ListButton(), DMButton::height(), DMButton::height());
         priority_up_widget_ = std::make_unique<PriorityButtonWidget>(priority_up_button_.get(), [this]() {
             if (!owner_) return;
             owner_->nudge_priority(*this, -1);
         });
 
-        priority_down_button_ = std::make_unique<DMButton>("▼", &DMStyles::ListButton(), DMButton::height(), DMButton::height());
+        priority_down_button_ = std::make_unique<DMButton>(u8"↓", &DMStyles::ListButton(), DMButton::height(), DMButton::height());
         priority_down_widget_ = std::make_unique<PriorityButtonWidget>(priority_down_button_.get(), [this]() {
             if (!owner_) return;
             owner_->nudge_priority(*this, 1);
@@ -652,6 +737,26 @@ struct SpawnGroupConfig::Entry {
                 area_link_button_->open_area();
             }
         });
+
+        auto link_checkbox = std::make_unique<DMCheckbox>("Link to Area", false);
+        link_to_area_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(link_checkbox),
+            [this](bool value) { on_link_to_area_changed(value); },
+            editable_);
+
+        auto terminate_checkbox = std::make_unique<DMCheckbox>("Terminate with parent", false);
+        terminate_with_parent_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(terminate_checkbox),
+            [this](bool value) { on_terminate_with_parent_changed(value); },
+            editable_);
+
+        auto place_checkbox = std::make_unique<DMCheckbox>("Placed on top parent", false);
+        placed_on_top_parent_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(place_checkbox),
+            [this](bool value) { on_place_on_top_parent_changed(value); },
+            editable_);
+
+        asset_link_area_label_ = std::make_unique<SpawnGroupLabelWidget>("Asset Child Areas");
+        asset_link_area_label_->set_subtle(true);
+        room_link_area_label_ = std::make_unique<SpawnGroupLabelWidget>("Room Spawning Areas");
+        room_link_area_label_->set_subtle(true);
 
         auto enforce_checkbox = std::make_unique<DMCheckbox>("Enforce Spacing", false);
         enforce_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(enforce_checkbox),
@@ -715,9 +820,6 @@ struct SpawnGroupConfig::Entry {
             std::move(inset_slider),
             [this](int value) { on_edge_inset_changed(value); },
             editable_);
-
-        candidate_header_ = std::make_unique<SpawnGroupLabelWidget>("Candidates");
-        candidate_header_->set_subtle(true);
 
         empty_candidates_label_ = std::make_unique<SpawnGroupLabelWidget>("No candidates", DMStyles::Label().color, true);
 
@@ -790,6 +892,16 @@ struct SpawnGroupConfig::Entry {
 
     void set_area_names_provider(std::function<std::vector<std::string>()> provider) {
         area_provider_ = provider ? std::move(provider) : empty_provider();
+    }
+
+    void set_linkable_asset_areas_provider(LinkableAreaProvider provider) {
+        asset_link_area_provider_ = provider ? std::move(provider) : empty_link_provider();
+        refresh_linkable_area_sources();
+    }
+
+    void set_linkable_room_areas_provider(LinkableAreaProvider provider) {
+        room_link_area_provider_ = provider ? std::move(provider) : empty_link_provider();
+        refresh_linkable_area_sources();
     }
 
     void set_open_area_handler(std::function<void(const std::string&, const std::string&)> handler,
@@ -918,7 +1030,33 @@ struct SpawnGroupConfig::Entry {
         bool enforce_spacing = entry.is_object() ? entry.value("enforce_spacing", false) : false;
         enforce_widget_->set_value(enforce_spacing);
 
+        refresh_linkable_area_sources();
+
+        link_to_area_enabled_ = entry.is_object() ? entry.value("link_to_area", false) : false;
+        if (link_to_area_widget_) {
+            link_to_area_widget_->set_value(link_to_area_enabled_);
+            link_to_area_widget_->set_editable(editable_);
+        }
+
+        linked_area_id_ = link_to_area_enabled_ ? safe_string(entry, "linked_area", std::string{}) : std::string{};
+        bool terminate_with_parent = link_to_area_enabled_ ? safe_bool(entry, "terminate_with_parent", false) : false;
+        bool place_on_top_parent = link_to_area_enabled_ ? safe_bool(entry, "placed_on_top_parent", false) : false;
+
+        update_linked_area_selection_metadata();
+
+        if (terminate_with_parent_widget_) {
+            terminate_with_parent_widget_->set_value(terminate_with_parent && linked_area_is_asset_child_);
+            terminate_with_parent_widget_->set_editable(editable_ && link_to_area_enabled_ && linked_area_is_asset_child_);
+        }
+        if (placed_on_top_parent_widget_) {
+            placed_on_top_parent_widget_->set_value(place_on_top_parent && linked_area_is_asset_child_);
+            placed_on_top_parent_widget_->set_editable(editable_ && link_to_area_enabled_ && linked_area_is_asset_child_);
+        }
+
+        update_link_area_button_states();
+
         update_area_dropdown_from_provider();
+        update_area_link_target();
         update_candidate_graph();
         rebuild_candidate_widgets();
         update_ownership_label();
@@ -980,6 +1118,18 @@ struct SpawnGroupConfig::Entry {
         if (resolve_quantity_widget_) {
             resolve_quantity_widget_->set_editable(editable_ && show_resolve_quantity_widget_);
         }
+        if (link_to_area_widget_) {
+            link_to_area_widget_->set_editable(editable_);
+        }
+        refresh_linkable_area_sources();
+        update_linked_area_selection_metadata();
+        update_link_area_button_states();
+        if (terminate_with_parent_widget_) {
+            terminate_with_parent_widget_->set_editable(editable_ && link_to_area_enabled_ && linked_area_is_asset_child_);
+        }
+        if (placed_on_top_parent_widget_) {
+            placed_on_top_parent_widget_->set_editable(editable_ && link_to_area_enabled_ && linked_area_is_asset_child_);
+        }
         update_priority_button_states();
     }
 
@@ -999,10 +1149,12 @@ struct SpawnGroupConfig::Entry {
             }
             rows.push_back(header_row);
 
-            DockableCollapsible::Row priority_row;
-            if (priority_up_widget_) priority_row.push_back(priority_up_widget_.get());
-            if (priority_down_widget_) priority_row.push_back(priority_down_widget_.get());
-            if (!priority_row.empty()) rows.push_back(priority_row);
+            if (priority_count_ > 1) {
+                DockableCollapsible::Row priority_row;
+                if (priority_up_widget_) priority_row.push_back(priority_up_widget_.get());
+                if (priority_down_widget_) priority_row.push_back(priority_down_widget_.get());
+                if (!priority_row.empty()) rows.push_back(priority_row);
+            }
 
             rows.push_back({method_widget_.get()});
 
@@ -1043,8 +1195,7 @@ struct SpawnGroupConfig::Entry {
                 rows.push_back({resolution_widget_.get()});
             }
 
-            // Candidates: header, optional empty label, and pie widget (with internal controls)
-            rows.push_back({candidate_header_.get()});
+            // Candidates: optional empty label and pie widget (with internal controls)
             if (candidate_entries_.empty()) {
                 rows.push_back({empty_candidates_label_.get()});
             }
@@ -1060,6 +1211,32 @@ struct SpawnGroupConfig::Entry {
                 }
             }
             if (!area_row.empty()) rows.push_back(area_row);
+
+            if (link_to_area_widget_) {
+                rows.push_back({link_to_area_widget_.get()});
+                if (link_to_area_enabled_) {
+                    if (!asset_linkable_areas_.empty() && asset_link_area_label_) {
+                        rows.push_back({asset_link_area_label_.get()});
+                        for (auto& widget : asset_link_area_widgets_) {
+                            rows.push_back({widget.get()});
+                        }
+                    }
+                    if (linked_area_is_asset_child_) {
+                        if (terminate_with_parent_widget_) {
+                            rows.push_back({terminate_with_parent_widget_.get()});
+                        }
+                        if (placed_on_top_parent_widget_) {
+                            rows.push_back({placed_on_top_parent_widget_.get()});
+                        }
+                    }
+                    if (!room_linkable_areas_.empty() && room_link_area_label_) {
+                        rows.push_back({room_link_area_label_.get()});
+                        for (auto& widget : room_link_area_widgets_) {
+                            rows.push_back({widget.get()});
+                        }
+                    }
+                }
+            }
 
             if (enforce_widget_) {
                 rows.push_back({enforce_widget_.get()});
@@ -1093,9 +1270,6 @@ struct SpawnGroupConfig::Entry {
                 }
             }
         }
-        if ((rect.w <= 0 || rect.h <= 0) && candidate_header_) {
-            rect = candidate_header_->rect();
-        }
         return rect;
     }
 
@@ -1114,12 +1288,6 @@ struct SpawnGroupConfig::Entry {
                 }
             }
             return true;
-        }
-        if (candidate_header_) {
-            SDL_Rect candidate_rect = candidate_header_->rect();
-            if (candidate_rect.w > 0 && candidate_rect.h > 0 && SDL_PointInRect(&point, &candidate_rect)) {
-                return true;
-            }
         }
         return false;
     }
@@ -1180,7 +1348,7 @@ private:
         if (options.empty()) {
             show_area_dropdown_ = false;
             area_options_.clear();
-            update_area_link_target_from_widget();
+            update_area_link_target();
             return;
         }
         show_area_dropdown_ = true;
@@ -1193,11 +1361,15 @@ private:
             }
         }
         area_widget_->set_options(area_options_, index);
-        update_area_link_target_from_widget();
+        update_area_link_target();
     }
 
-    void update_area_link_target_from_widget() {
+    void update_area_link_target() {
         if (!area_link_button_) return;
+        if (link_to_area_enabled_ && !linked_area_id_.empty()) {
+            area_link_button_->set_target_area(linked_area_id_);
+            return;
+        }
         if (!show_area_dropdown_ || !area_widget_) {
             area_link_button_->set_target_area({});
             return;
@@ -1205,6 +1377,190 @@ private:
         int selected_index = area_widget_->selected();
         std::string value = area_widget_->option_value(selected_index);
         area_link_button_->set_target_area(std::move(value));
+    }
+
+    bool rebuild_link_area_group(const std::vector<LinkableAreaDescriptor>& descriptors,
+                                 bool asset_group,
+                                 std::vector<LinkableAreaOption>& options,
+                                 std::vector<std::unique_ptr<DMButton>>& buttons,
+                                 std::vector<std::unique_ptr<LinkAreaButtonWidget>>& widgets) {
+        bool changed = options.size() != descriptors.size();
+        if (!changed) {
+            for (size_t i = 0; i < descriptors.size(); ++i) {
+                std::string label = descriptors[i].label.empty() ? descriptors[i].id : descriptors[i].label;
+                if (options[i].id != descriptors[i].id || options[i].label != label || options[i].asset_child != asset_group) {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        if (!changed && buttons.size() == descriptors.size() && widgets.size() == descriptors.size()) {
+            return false;
+        }
+
+        options.clear();
+        buttons.clear();
+        widgets.clear();
+        options.reserve(descriptors.size());
+        buttons.reserve(descriptors.size());
+        widgets.reserve(descriptors.size());
+
+        for (size_t i = 0; i < descriptors.size(); ++i) {
+            std::string label = descriptors[i].label.empty() ? descriptors[i].id : descriptors[i].label;
+            LinkableAreaOption option{descriptors[i].id, label, asset_group};
+            options.push_back(option);
+            auto button = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 0, DMButton::height());
+            auto widget = std::make_unique<LinkAreaButtonWidget>(button.get(), [this, asset_group, i]() {
+                this->handle_link_area_selection(asset_group, i);
+            });
+            widget->set_styles(&DMStyles::ListButton(), &DMStyles::AccentButton(), &disabled_priority_button_style());
+            buttons.push_back(std::move(button));
+            widgets.push_back(std::move(widget));
+        }
+        return true;
+    }
+
+    void refresh_linkable_area_sources() {
+        auto asset_descriptors = asset_link_area_provider_ ? asset_link_area_provider_() : std::vector<LinkableAreaDescriptor>{};
+        auto room_descriptors = room_link_area_provider_ ? room_link_area_provider_() : std::vector<LinkableAreaDescriptor>{};
+        bool changed = false;
+        changed = rebuild_link_area_group(asset_descriptors,
+                                          true,
+                                          asset_linkable_areas_,
+                                          asset_link_area_buttons_,
+                                          asset_link_area_widgets_) || changed;
+        changed = rebuild_link_area_group(room_descriptors,
+                                          false,
+                                          room_linkable_areas_,
+                                          room_link_area_buttons_,
+                                          room_link_area_widgets_) || changed;
+        if (changed && owner_) {
+            owner_->mark_layout_dirty();
+        }
+    }
+
+    void handle_link_area_selection(bool asset_group, size_t index) {
+        auto& source = asset_group ? asset_linkable_areas_ : room_linkable_areas_;
+        if (index >= source.size()) return;
+        select_linked_area(source[index]);
+    }
+
+    void select_linked_area(const LinkableAreaOption& option) {
+        if (!editable_) return;
+        link_to_area_enabled_ = true;
+        linked_area_id_ = option.id;
+        linked_area_is_asset_child_ = option.asset_child;
+        if (link_to_area_widget_) {
+            link_to_area_widget_->set_value(true);
+        }
+        if (!option.asset_child) {
+            if (terminate_with_parent_widget_) {
+                terminate_with_parent_widget_->set_value(false);
+            }
+            if (placed_on_top_parent_widget_) {
+                placed_on_top_parent_widget_->set_value(false);
+            }
+        }
+
+        if (auto* entry = mutable_entry()) {
+            (*entry)["link_to_area"] = true;
+            (*entry)["linked_area"] = option.id;
+            if (!option.asset_child) {
+                (*entry).erase("terminate_with_parent");
+                (*entry).erase("placed_on_top_parent");
+            }
+            notify_change(false, false, false);
+        }
+
+        update_link_area_button_states();
+        update_area_link_target();
+        if (owner_) owner_->mark_layout_dirty();
+    }
+
+    void update_linked_area_selection_metadata() {
+        bool found_asset = false;
+        bool found_room = false;
+        if (!linked_area_id_.empty()) {
+            for (const auto& option : asset_linkable_areas_) {
+                if (option.id == linked_area_id_) {
+                    found_asset = true;
+                    break;
+                }
+            }
+            if (!found_asset) {
+                for (const auto& option : room_linkable_areas_) {
+                    if (option.id == linked_area_id_) {
+                        found_room = true;
+                        break;
+                    }
+                }
+            }
+        }
+        linked_area_is_asset_child_ = found_asset;
+        if (!found_asset && !found_room) {
+            linked_area_id_.clear();
+        }
+    }
+
+    void update_link_area_button_states() {
+        const bool allow_selection = editable_ && link_to_area_enabled_;
+        auto update_group = [&](std::vector<LinkableAreaOption>& options,
+                                std::vector<std::unique_ptr<LinkAreaButtonWidget>>& widgets) {
+            for (size_t i = 0; i < widgets.size(); ++i) {
+                bool selected = allow_selection && i < options.size() && options[i].id == linked_area_id_;
+                widgets[i]->set_enabled(allow_selection);
+                widgets[i]->set_selected(selected);
+            }
+        };
+        update_group(asset_linkable_areas_, asset_link_area_widgets_);
+        update_group(room_linkable_areas_, room_link_area_widgets_);
+    }
+
+    void on_link_to_area_changed(bool value) {
+        if (!editable_) {
+            link_to_area_enabled_ = value;
+            update_link_area_button_states();
+            return;
+        }
+        link_to_area_enabled_ = value;
+        if (!value) {
+            linked_area_id_.clear();
+            linked_area_is_asset_child_ = false;
+            if (terminate_with_parent_widget_) {
+                terminate_with_parent_widget_->set_value(false);
+            }
+            if (placed_on_top_parent_widget_) {
+                placed_on_top_parent_widget_->set_value(false);
+            }
+        }
+        if (auto* entry = mutable_entry()) {
+            (*entry)["link_to_area"] = value;
+            if (!value) {
+                (*entry).erase("linked_area");
+                (*entry).erase("terminate_with_parent");
+                (*entry).erase("placed_on_top_parent");
+            }
+            notify_change(false, false, false);
+        }
+        update_link_area_button_states();
+        update_area_link_target();
+        if (owner_) owner_->mark_layout_dirty();
+    }
+
+    void on_terminate_with_parent_changed(bool value) {
+        if (!editable_ || !link_to_area_enabled_ || !linked_area_is_asset_child_) return;
+        if (auto* entry = mutable_entry()) {
+            (*entry)["terminate_with_parent"] = value;
+            notify_change(false, false, false);
+        }
+    }
+
+    void on_place_on_top_parent_changed(bool value) {
+        if (!editable_ || !link_to_area_enabled_ || !linked_area_is_asset_child_) return;
+        if (auto* entry = mutable_entry()) {
+            (*entry)["placed_on_top_parent"] = value;
+            notify_change(false, false, false);
+        }
     }
 
     void update_candidate_graph() {
@@ -1439,7 +1795,7 @@ private:
             (*entry)["area"] = area_options_[index];
             notify_change(false, false, false);
         }
-        update_area_link_target_from_widget();
+        update_area_link_target();
     }
 
     void on_min_changed(const std::string& text) {
@@ -1557,6 +1913,8 @@ private:
     std::string ownership_label_text_{};
     std::optional<SDL_Color> ownership_color_{};
     std::function<std::vector<std::string>()> area_provider_{};
+    LinkableAreaProvider asset_link_area_provider_ = empty_link_provider();
+    LinkableAreaProvider room_link_area_provider_ = empty_link_provider();
     std::optional<std::string> stack_key_{};
     std::optional<std::string> method_lock_{};
     bool quantity_hidden_ = false;
@@ -1588,6 +1946,20 @@ private:
     std::unique_ptr<DMButton> open_area_button_{};
     std::unique_ptr<ButtonWidget> open_area_widget_{};
     std::function<void(const std::string&, const std::string&)> open_area_handler_{};
+    std::unique_ptr<CallbackCheckboxWidget> link_to_area_widget_{};
+    std::unique_ptr<CallbackCheckboxWidget> terminate_with_parent_widget_{};
+    std::unique_ptr<CallbackCheckboxWidget> placed_on_top_parent_widget_{};
+    std::unique_ptr<SpawnGroupLabelWidget> asset_link_area_label_{};
+    std::unique_ptr<SpawnGroupLabelWidget> room_link_area_label_{};
+    std::vector<LinkableAreaOption> asset_linkable_areas_{};
+    std::vector<LinkableAreaOption> room_linkable_areas_{};
+    std::vector<std::unique_ptr<DMButton>> asset_link_area_buttons_{};
+    std::vector<std::unique_ptr<LinkAreaButtonWidget>> asset_link_area_widgets_{};
+    std::vector<std::unique_ptr<DMButton>> room_link_area_buttons_{};
+    std::vector<std::unique_ptr<LinkAreaButtonWidget>> room_link_area_widgets_{};
+    bool link_to_area_enabled_ = false;
+    std::string linked_area_id_{};
+    bool linked_area_is_asset_child_ = false;
 
     std::unique_ptr<CallbackCheckboxWidget> enforce_widget_{};
     std::unique_ptr<CallbackCheckboxWidget> resolve_geometry_widget_{};
@@ -1608,7 +1980,6 @@ private:
     std::optional<size_t> array_index_{};
 
     std::vector<CandidateWidgets> candidate_entries_{};
-    std::unique_ptr<SpawnGroupLabelWidget> candidate_header_{};
     std::unique_ptr<SpawnGroupLabelWidget> empty_candidates_label_{};
     size_t priority_index_ = 0;
     size_t priority_count_ = 0;
@@ -2452,6 +2823,18 @@ void SpawnGroupConfig::EntryController::clear_ownership_label() {
 void SpawnGroupConfig::EntryController::set_area_names_provider(std::function<std::vector<std::string>()> provider) {
     if (!entry_) return;
     entry_->set_area_names_provider(std::move(provider));
+}
+
+void SpawnGroupConfig::EntryController::set_linkable_asset_areas_provider(
+    std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider) {
+    if (!entry_) return;
+    entry_->set_linkable_asset_areas_provider(std::move(provider));
+}
+
+void SpawnGroupConfig::EntryController::set_linkable_room_areas_provider(
+    std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider) {
+    if (!entry_) return;
+    entry_->set_linkable_room_areas_provider(std::move(provider));
 }
 
 void SpawnGroupConfig::EntryController::set_stack_key(std::string key) {

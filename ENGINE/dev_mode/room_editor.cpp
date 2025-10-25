@@ -23,6 +23,7 @@
 #include "dev_mode/FloatingDockableManager.hpp"
 #include "dev_mode/widgets.hpp"
 #include "dm_styles.hpp"
+#include "room_overlay_renderer.hpp"
 #include "render/camera.hpp"
 #include "map_generation/room.hpp"
 #include "spawn/asset_spawn_planner.hpp"
@@ -1507,6 +1508,15 @@ void RoomEditor::release_label_font() {
 
 void RoomEditor::render_overlays(SDL_Renderer* renderer) {
     if (renderer) {
+        if (assets_ && current_room_ && current_room_->room_area) {
+            const auto& style = dm_draw::ResolveRoomBoundsOverlayStyle();
+            dm_draw::RenderRoomBoundsOverlay(
+                renderer,
+                assets_->getView(),
+                current_room_->room_area->get_bounds(),
+                current_room_->room_area->get_center(),
+                style);
+        }
         render_room_labels(renderer);
     }
     if (library_ui_ && library_ui_->is_visible()) {
@@ -3374,6 +3384,34 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             const std::string label = current_room_->room_name.empty() ? std::string("Room") : current_room_->room_name;
             entry.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
         }
+        entry.set_linkable_asset_areas_provider([this]() {
+            std::vector<SpawnGroupLinkableAreaDescriptor> result;
+            if (!current_room_) return result;
+            auto& data = current_room_->assets_data();
+            if (data.contains("areas") && data["areas"].is_array()) {
+                for (const auto& area_entry : data["areas"]) {
+                    if (!area_entry.is_object()) continue;
+                    auto name_it = area_entry.find("name");
+                    if (name_it != area_entry.end() && name_it->is_string()) {
+                        std::string name = name_it->get<std::string>();
+                        if (!name.empty()) {
+                            result.push_back({name, name});
+                        }
+                    }
+                }
+            }
+            return result;
+        });
+        entry.set_linkable_room_areas_provider([this]() {
+            std::vector<SpawnGroupLinkableAreaDescriptor> result;
+            if (!current_room_) return result;
+            for (const auto& named : current_room_->areas) {
+                if (!named.name.empty()) {
+                    result.push_back({named.name, named.name});
+                }
+            }
+            return result;
+        });
     };
 
     SpawnEntryResolution resolved;
