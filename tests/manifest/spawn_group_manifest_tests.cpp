@@ -18,9 +18,6 @@ struct SectionSpawnGroupsTestAccess {
     static void reload(Section_SpawnGroups& section) { section.reload_from_file(); }
     static void set_rebuilding(Section_SpawnGroups& section, bool value) { section.rebuilding_ = value; }
     static void add_spawn_group(Section_SpawnGroups& section) { section.add_spawn_group(); }
-    static void duplicate_spawn_group(Section_SpawnGroups& section, const std::string& id) {
-        section.duplicate_spawn_group(id);
-    }
     static void reorder_spawn_group(Section_SpawnGroups& section, const std::string& id, size_t new_index) {
         section.reorder_spawn_group(id, new_index);
     }
@@ -137,17 +134,6 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
     CHECK(removed_ids.empty());
 
     notifications.clear();
-    SectionSpawnGroupsTestAccess::duplicate_spawn_group(section, "spn-one");
-    store.flush();
-    auto after_duplicate = read_json(manifest_path);
-    auto dup_groups = after_duplicate["assets"]["TestAsset"]["spawn_groups"];
-    CHECK(dup_groups.size() == 4);
-    REQUIRE_FALSE(notifications.empty());
-    const std::string dup_id = notifications.back().value("spawn_id", std::string{});
-    CHECK_FALSE(dup_id.empty());
-    CHECK(dup_id != "spn-one");
-
-    notifications.clear();
     removed_ids.clear();
     SectionSpawnGroupsTestAccess::reorder_spawn_group(section, "spn-two", 0);
     store.flush();
@@ -169,7 +155,7 @@ TEST_CASE("Section_SpawnGroups mutates manifest spawn_groups") {
     store.flush();
     auto after_delete = read_json(manifest_path);
     auto deleted = after_delete["assets"]["TestAsset"]["spawn_groups"];
-    CHECK(deleted.size() == 3);
+    CHECK(deleted.size() == 2);
     CHECK_FALSE(std::any_of(deleted.begin(), deleted.end(), [&](const nlohmann::json& entry) {
         return entry.is_object() && entry.value("spawn_id", std::string{}) == added_id;
     }));

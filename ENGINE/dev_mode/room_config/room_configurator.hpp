@@ -74,7 +74,6 @@ public:
     bool is_point_inside(int x, int y) const;
 
     void set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
-                                   std::function<void(const std::string&)> on_duplicate,
                                    std::function<void(const std::string&)> on_delete,
                                    std::function<void(const std::string&, size_t)> on_reorder,
                                    std::function<void()> on_add,
@@ -192,7 +191,6 @@ private:
     bool reset_expanded_state_pending_ = false;
 
     std::function<void(const std::string&)> on_spawn_edit_;
-    std::function<void(const std::string&)> on_spawn_duplicate_;
     std::function<void(const std::string&)> on_spawn_delete_;
     std::function<void(const std::string&, size_t)> on_spawn_reorder_;
     std::function<void()> on_spawn_add_;

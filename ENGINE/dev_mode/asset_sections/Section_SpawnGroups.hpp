@@ -43,7 +43,6 @@ private:
     void renumber_priorities();
 
     void add_spawn_group();
-    void duplicate_spawn_group(const std::string& id);
     void delete_spawn_group(const std::string& id);
     void reorder_spawn_group(const std::string& id, size_t new_index);
 

@@ -145,7 +145,6 @@ private:
     void apply_sliding_area_bounds();
     nlohmann::json* active_room_entry();
     std::string rename_active_room(const std::string& old_name, const std::string& desired_name);
-    void duplicate_active_room_spawn_group(const std::string& spawn_id);
     void delete_active_room_spawn_group(const std::string& spawn_id);
     void reorder_active_room_spawn_group(const std::string& spawn_id, size_t index);
     void handle_rooms_data_mutated(bool refresh_rooms_list);

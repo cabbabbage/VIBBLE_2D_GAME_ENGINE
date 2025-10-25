@@ -1150,17 +1150,6 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
         callbacks.on_regenerate = [this](const std::string& value) {
             if (on_spawn_regenerate_) on_spawn_regenerate_(value);
         };
-        callbacks.on_duplicate = [this](const std::string& value) {
-            if (on_spawn_duplicate_) on_spawn_duplicate_(value);
-            if (room_) {
-                this->refresh_spawn_groups(room_);
-            } else if (external_room_json_) {
-                this->refresh_spawn_groups(*external_room_json_);
-            } else {
-                this->request_rebuild();
-            }
-            this->persist_spawn_group_changes();
-        };
         callbacks.on_delete = [this](const std::string& value) {
             if (on_spawn_delete_) on_spawn_delete_(value);
             if (room_) {
@@ -1929,13 +1918,11 @@ void RoomConfigurator::write_tags_to_json(nlohmann::json& object) const {
 }
 
 void RoomConfigurator::set_spawn_group_callbacks(std::function<void(const std::string&)> on_edit,
-                                                 std::function<void(const std::string&)> on_duplicate,
                                                  std::function<void(const std::string&)> on_delete,
                                                  std::function<void(const std::string&, size_t)> on_reorder,
                                                  std::function<void()> on_add,
                                                  std::function<void(const std::string&)> on_regenerate) {
     on_spawn_edit_ = std::move(on_edit);
-    on_spawn_duplicate_ = std::move(on_duplicate);
     on_spawn_delete_ = std::move(on_delete);
     on_spawn_reorder_ = std::move(on_reorder);
     on_spawn_add_ = std::move(on_add);

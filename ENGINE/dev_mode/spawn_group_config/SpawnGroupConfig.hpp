@@ -31,7 +31,6 @@ public:
 
     struct Callbacks {
         std::function<void(const std::string&)> on_regenerate;
-        std::function<void(const std::string&)> on_duplicate;
         std::function<void(const std::string&)> on_delete;
         std::function<void(const std::string&, size_t)> on_reorder;
         std::function<void()> on_add;
@@ -169,10 +168,6 @@ private:
 
     std::deque<std::function<void()>> pending_notifications_{};
     bool processing_notifications_ = false;
-
-    // Header actions (moved from internal row): delete
-    std::unique_ptr<DMButton> header_delete_btn_{};
-    std::unique_ptr<ButtonWidget> header_delete_widget_{};
 
     DragState drag_state_{};
     Entry* current_entry_ = nullptr;

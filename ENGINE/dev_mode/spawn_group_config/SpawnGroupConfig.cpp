@@ -12,7 +12,6 @@
 #include <nlohmann/json.hpp>
 
 #include "spawn_group_utils.hpp"
-#include "dm_icons.hpp"
 #include "dm_styles.hpp"
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
@@ -474,11 +473,10 @@ struct SpawnGroupConfig::Entry {
             owner_->mark_layout_dirty();
         });
 
-        spawn_id_label_ = std::make_unique<SpawnGroupLabelWidget>();
         ownership_label_widget_ = std::make_unique<SpawnGroupLabelWidget>();
         ownership_label_widget_->set_subtle(true);
 
-        regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::ListButton(), 0, DMButton::height());
+        regenerate_button_ = std::make_unique<DMButton>("Regenerate", &DMStyles::AccentButton(), 200, DMButton::height());
         regenerate_widget_ = std::make_unique<ButtonWidget>(regenerate_button_.get(), [this]() {
             if (!owner_) return;
             std::string id = spawn_id();
@@ -488,17 +486,7 @@ struct SpawnGroupConfig::Entry {
             });
         });
 
-        duplicate_button_ = std::make_unique<DMButton>("Duplicate", &DMStyles::ListButton(), 0, DMButton::height());
-        duplicate_widget_ = std::make_unique<ButtonWidget>(duplicate_button_.get(), [this]() {
-            if (!owner_) return;
-            std::string id = spawn_id();
-            owner_->enqueue_notification([owner = owner_, id]() {
-                if (!owner) return;
-                if (owner->callbacks_.on_duplicate) owner->callbacks_.on_duplicate(id);
-            });
-        });
-
-        delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 0, DMButton::height());
+        delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 200, DMButton::height());
         delete_widget_ = std::make_unique<ButtonWidget>(delete_button_.get(), [this]() {
             if (!owner_) return;
             std::string id = spawn_id();
@@ -707,8 +695,6 @@ struct SpawnGroupConfig::Entry {
     void sync_from_json() {
         const auto& entry = entry_view();
         const std::string id = spawn_id();
-        spawn_id_label_->set_text(id.empty() ? std::string("<no id>") : id);
-
         std::string display = safe_string(entry, "display_name", {});
         name_widget_->set_value(display);
 
@@ -828,49 +814,28 @@ struct SpawnGroupConfig::Entry {
     bool expanded() const { return expanded_state_; }
 
     void append_layout_rows(DockableCollapsible::Rows& rows) {
-        // Outer dockable header shows group name and header actions; keep body minimal here
-        if (spawn_id_label_) {
-            rows.push_back({spawn_id_label_.get()});
-        }
         if (!owner_ || owner_->should_render_entry_body(*this)) {
+            DockableCollapsible::Row header_row;
+            header_row.push_back(name_widget_.get());
             if (ownership_label_widget_) {
-                rows.push_back({ownership_label_widget_.get()});
+                header_row.push_back(ownership_label_widget_.get());
             }
+            rows.push_back(header_row);
 
-            DockableCollapsible::Row primary_actions;
-            if (regenerate_widget_) primary_actions.push_back(regenerate_widget_.get());
-            if (duplicate_widget_) primary_actions.push_back(duplicate_widget_.get());
-            if (!primary_actions.empty()) rows.push_back(primary_actions);
+            DockableCollapsible::Row actions_row;
+            if (regenerate_widget_) actions_row.push_back(regenerate_widget_.get());
+            if (delete_widget_) actions_row.push_back(delete_widget_.get());
+            if (!actions_row.empty()) rows.push_back(actions_row);
 
-            // Display name field
-            rows.push_back({name_widget_.get()});
+            rows.push_back({method_widget_.get()});
 
-            // Position + area + enforce spacing
-            DockableCollapsible::Row method_row;
-            method_row.push_back(method_widget_.get());
-            if (show_area_dropdown_) {
-                method_row.push_back(area_widget_.get());
-                if (open_area_widget_ && open_area_handler_) {
-                    method_row.push_back(open_area_widget_.get());
-                }
-            }
-            method_row.push_back(enforce_widget_.get());
-            rows.push_back(method_row);
-
-            // Quantity controls
-            if (!quantity_hidden()) {
-                if (use_exact_quantity_) {
-                    rows.push_back({exact_widget_.get()});
-                } else {
-                    DockableCollapsible::Row qty_row;
-                    qty_row.push_back(min_widget_.get());
-                    qty_row.push_back(max_widget_.get());
-                    rows.push_back(qty_row);
-                }
-            }
-
-            if (resolution_widget_) {
-                rows.push_back({resolution_widget_.get()});
+            // Method-specific configuration rows
+            const bool show_quantity_range = !quantity_hidden() && !use_exact_quantity_;
+            if (show_quantity_range) {
+                DockableCollapsible::Row qty_row;
+                qty_row.push_back(min_widget_.get());
+                qty_row.push_back(max_widget_.get());
+                rows.push_back(qty_row);
             }
 
             if (show_perimeter_radius_widget_ && perimeter_radius_widget_) {
@@ -879,6 +844,10 @@ struct SpawnGroupConfig::Entry {
 
             if (show_edge_inset_widget_ && edge_inset_widget_) {
                 rows.push_back({edge_inset_widget_.get()});
+            }
+
+            if (resolution_widget_) {
+                rows.push_back({resolution_widget_.get()});
             }
 
             // Candidates: header, optional empty label, and pie widget (with internal controls)
@@ -890,15 +859,71 @@ struct SpawnGroupConfig::Entry {
                 rows.push_back({graph});
             }
 
+            DockableCollapsible::Row area_row;
+            if (show_area_dropdown_) {
+                area_row.push_back(area_widget_.get());
+                if (open_area_widget_ && open_area_handler_) {
+                    area_row.push_back(open_area_widget_.get());
+                }
+            }
+            if (enforce_widget_) {
+                area_row.push_back(enforce_widget_.get());
+            }
+            if (!area_row.empty()) rows.push_back(area_row);
+
             return;
         }
 
     }
 
-    const SDL_Rect& header_rect() const {
-        static SDL_Rect empty{0, 0, 0, 0};
-        if (!spawn_id_label_) return empty;
-        return spawn_id_label_->rect();
+    SDL_Rect header_rect() const {
+        SDL_Rect rect{0, 0, 0, 0};
+        if (name_widget_) {
+            rect = name_widget_->rect();
+        }
+        if (ownership_label_widget_) {
+            const SDL_Rect& owner_rect = ownership_label_widget_->rect();
+            if (owner_rect.w > 0 && owner_rect.h > 0) {
+                if (rect.w <= 0 || rect.h <= 0) {
+                    rect = owner_rect;
+                } else {
+                    int x = std::min(rect.x, owner_rect.x);
+                    int y = std::min(rect.y, owner_rect.y);
+                    int right = std::max(rect.x + rect.w, owner_rect.x + owner_rect.w);
+                    int bottom = std::max(rect.y + rect.h, owner_rect.y + owner_rect.h);
+                    rect = SDL_Rect{x, y, right - x, bottom - y};
+                }
+            }
+        }
+        if ((rect.w <= 0 || rect.h <= 0) && candidate_header_) {
+            rect = candidate_header_->rect();
+        }
+        return rect;
+    }
+
+    bool can_begin_drag_at(const SDL_Point& point) const {
+        SDL_Rect rect = header_rect();
+        if (rect.w <= 0 || rect.h <= 0) return false;
+        if (SDL_PointInRect(&point, &rect)) {
+            if (name_widget_) {
+                const SDL_Rect& name_rect = name_widget_->rect();
+                if (name_rect.w > 0 && name_rect.h > 0 && SDL_PointInRect(&point, &name_rect)) {
+                    // Allow dragging if there is horizontal space to the right of the textbox
+                    int right_edge = name_rect.x + name_rect.w;
+                    if (point.x <= right_edge) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        if (candidate_header_) {
+            SDL_Rect candidate_rect = candidate_header_->rect();
+            if (candidate_rect.w > 0 && candidate_rect.h > 0 && SDL_PointInRect(&point, &candidate_rect)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 private:
@@ -1295,13 +1320,10 @@ private:
 
     std::unique_ptr<DMButton> toggle_button_{};
     std::unique_ptr<ButtonWidget> toggle_widget_{};
-    std::unique_ptr<SpawnGroupLabelWidget> spawn_id_label_{};
     std::unique_ptr<SpawnGroupLabelWidget> ownership_label_widget_{};
 
     std::unique_ptr<DMButton> regenerate_button_{};
     std::unique_ptr<ButtonWidget> regenerate_widget_{};
-    std::unique_ptr<DMButton> duplicate_button_{};
-    std::unique_ptr<ButtonWidget> duplicate_widget_{};
     std::unique_ptr<DMButton> delete_button_{};
     std::unique_ptr<ButtonWidget> delete_widget_{};
 
@@ -1346,12 +1368,6 @@ SpawnGroupConfig::SpawnGroupConfig(bool floatable)
     set_row_gap(8);
     set_col_gap(12);
     set_padding(12);
-    // Header action buttons
-    header_delete_btn_ = std::make_unique<DMButton>(std::string(DMIcons::Close()),
-                                                    &DMStyles::DeleteButton(),
-                                                    DMButton::height(),
-                                                    DMButton::height());
-    header_delete_widget_ = std::make_unique<ButtonWidget>(header_delete_btn_.get(), [](){});
 }
 
 SpawnGroupConfig::~SpawnGroupConfig() = default;
@@ -1543,13 +1559,6 @@ void SpawnGroupConfig::update(const Input& input, int screen_w, int screen_h) {
     if (drag_state_.active) {
         update_drag_visuals(input);
     }
-    if (bound_entry_) {
-        const int padding = DMSpacing::panel_padding();
-        const int btn = DMButton::height();
-        int right = rect_.x + rect_.w - padding;
-        SDL_Rect del{right - btn, header_rect_.y, btn, btn};
-        if (header_delete_btn_) header_delete_btn_->set_rect(del);
-    }
     for (auto& entry : entries_) {
         if (!entry) continue;
         entry->update_embedded_search(input, screen_w, screen_h);
@@ -1613,9 +1622,7 @@ bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
         SDL_Point pointer{e.button.x, e.button.y};
         for (size_t i = 0; i < entries_.size(); ++i) {
             if (!entries_[i]) continue;
-            const SDL_Rect& header = entries_[i]->header_rect();
-            if (header.w <= 0 || header.h <= 0) continue;
-            if (SDL_PointInRect(&pointer, &header)) {
+            if (entries_[i]->can_begin_drag_at(pointer)) {
                 begin_drag(i, pointer.y);
                 process_pending_notifications();
                 return true;
@@ -1623,25 +1630,6 @@ bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (bound_entry_) {
-        auto spawn_id_for_actions = [this]() -> std::string {
-            if (entries_.empty() || !entries_[0]) return std::string{};
-            return entries_[0]->spawn_id();
-        };
-        bool consumed = false;
-        if (header_delete_btn_ && header_delete_widget_ && header_delete_widget_->handle_event(e)) {
-            consumed = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                std::string id = spawn_id_for_actions();
-                if (!id.empty()) {
-                    enqueue_notification([this, id]() {
-                        if (callbacks_.on_delete) callbacks_.on_delete(id);
-                    });
-                }
-            }
-        }
-        if (consumed) return true;
-    }
     bool handled = DockableCollapsible::handle_event(e);
     process_pending_notifications();
     return handled;
@@ -1649,10 +1637,6 @@ bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
 
 void SpawnGroupConfig::render(SDL_Renderer* r) const {
     DockableCollapsible::render(r);
-    if (!r) return;
-    if (bound_entry_) {
-        if (header_delete_btn_) header_delete_btn_->render(r);
-    }
 }
 
 void SpawnGroupConfig::render_content(SDL_Renderer* r) const {
@@ -1845,7 +1829,7 @@ void SpawnGroupConfig::update_drag_visuals(const Input& input) {
     for (size_t i = 0; i < entries_.size(); ++i) {
         const auto& entry = entries_[i];
         if (!entry) continue;
-        const SDL_Rect& header = entry->header_rect();
+        SDL_Rect header = entry->header_rect();
         int height = header.h > 0 ? header.h : fallback_height;
         drag_state_.entry_heights[i] = height;
         if (drag_state_.source_index == i) {
@@ -1867,7 +1851,7 @@ void SpawnGroupConfig::update_drag_visuals(const Input& input) {
     }
 
     if (drag_state_.source_index < entries_.size() && entries_[drag_state_.source_index]) {
-        const SDL_Rect& header = entries_[drag_state_.source_index]->header_rect();
+        SDL_Rect header = entries_[drag_state_.source_index]->header_rect();
         int height = drag_state_.entry_heights[drag_state_.source_index];
         if (height <= 0) height = fallback_height;
         drag_state_.source_rect = SDL_Rect{body_viewport_.x, header.y, body_viewport_.w, height};
@@ -1886,7 +1870,7 @@ SDL_Rect SpawnGroupConfig::slot_rect_for_index(size_t index, int fallback_height
     if (index >= entries_.size()) {
         const auto& last_entry = entries_.back();
         if (!last_entry) return rect;
-        const SDL_Rect& header = last_entry->header_rect();
+        SDL_Rect header = last_entry->header_rect();
         int height = fallback_height;
         if (!drag_state_.entry_heights.empty()) {
             height = drag_state_.entry_heights.back();
@@ -1903,7 +1887,7 @@ SDL_Rect SpawnGroupConfig::slot_rect_for_index(size_t index, int fallback_height
 
     const auto& entry = entries_[index];
     if (!entry) return rect;
-    const SDL_Rect& header = entry->header_rect();
+    SDL_Rect header = entry->header_rect();
     int height = fallback_height;
     if (index < drag_state_.entry_heights.size() && drag_state_.entry_heights[index] > 0) {
         height = drag_state_.entry_heights[index];

@@ -47,7 +47,6 @@ void Section_SpawnGroups::build() {
         notify_spawn_config_listeners(entry);
     };
     SpawnGroupConfig::Callbacks cb{};
-    cb.on_duplicate = [this](const std::string& id){ duplicate_spawn_group(id); };
     cb.on_delete    = [this](const std::string& id){ delete_spawn_group(id); };
     cb.on_reorder   = [this](const std::string& id, size_t index){ reorder_spawn_group(id, index); };
     cb.on_add       = [this](){ add_spawn_group(); };
@@ -201,28 +200,6 @@ void Section_SpawnGroups::add_spawn_group() {
         list_->request_open_spawn_group(new_id, anchor.x, anchor.y);
     }
     notify_spawn_config_listeners(groups_.back());
-}
-
-void Section_SpawnGroups::duplicate_spawn_group(const std::string& id) {
-    const int idx = index_of(id);
-    if (idx < 0) return;
-    nlohmann::json duplicate = groups_[idx];
-    duplicate["spawn_id"] = devmode::spawn::generate_spawn_id();
-    if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
-        duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
-    }
-    devmode::spawn::ensure_spawn_group_entry_defaults(
-        duplicate,
-        duplicate.contains("display_name") && duplicate["display_name"].is_string()
-            ? duplicate["display_name"].get<std::string>()
-            : std::string{"New Spawn"});
-    groups_.push_back(std::move(duplicate));
-    renumber_priorities();
-    (void)save_to_file();
-    schedule_rebuild();
-    if (!groups_.empty()) {
-        notify_spawn_config_listeners(groups_.back());
-    }
 }
 
 void Section_SpawnGroups::delete_spawn_group(const std::string& id) {

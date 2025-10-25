@@ -1544,13 +1544,6 @@ void RoomEditor::ensure_room_configurator() {
                 open_spawn_group_editor_by_id(spawn_id);
             },
             [this](const std::string& spawn_id) {
-                if (active_modal_ == ActiveModal::AssetInfo) {
-                    pulse_active_modal_header();
-                    return;
-                }
-                duplicate_spawn_group_internal(spawn_id);
-            },
-            [this](const std::string& spawn_id) {
                 delete_spawn_group_internal(spawn_id);
             },
             [this](const std::string& spawn_id, size_t index) {
@@ -1648,7 +1641,6 @@ void RoomEditor::ensure_spawn_group_config_ui() {
 
     SpawnGroupConfig::Callbacks callbacks{};
     callbacks.on_add = [this]() { add_spawn_group_internal(); };
-    callbacks.on_duplicate = [this](const std::string& id) { duplicate_spawn_group_internal(id); };
     callbacks.on_delete = [this](const std::string& id) { delete_spawn_group_internal(id); };
     callbacks.on_reorder = [this](const std::string& id, size_t index) {
         reorder_spawn_group_internal(id, index);
@@ -2536,59 +2528,6 @@ void RoomEditor::add_spawn_group_internal() {
     refresh_spawn_group_config_ui();
     reopen_room_configurator();
     open_spawn_group_editor_by_id(entry["spawn_id"].get<std::string>());
-}
-
-void RoomEditor::duplicate_spawn_group_internal(const std::string& spawn_id) {
-    if (!current_room_ || spawn_id.empty()) return;
-    auto& root = current_room_->assets_data();
-    auto& arr = ensure_spawn_groups_array(root);
-    nlohmann::json* original = nullptr;
-    for (auto& item : arr) {
-        if (!item.is_object()) continue;
-        if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"].get<std::string>() == spawn_id) {
-            original = &item;
-            break;
-        }
-    }
-    if (!original) return;
-    nlohmann::json duplicate = *original;
-    std::string new_id = generate_spawn_id();
-    duplicate["spawn_id"] = new_id;
-    if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
-        std::string name = duplicate["display_name"].get<std::string>();
-        duplicate["display_name"] = name + " Copy";
-    }
-    const int duplicate_default_resolution = current_room_ ? current_room_->map_grid_settings().resolution
-                                                           : MapGridSettings::defaults().resolution;
-    devmode::spawn::ensure_spawn_group_entry_defaults(
-        duplicate,
-        duplicate.contains("display_name") && duplicate["display_name"].is_string()
-            ? duplicate["display_name"].get<std::string>()
-            : std::string{"New Spawn"},
-        duplicate_default_resolution);
-    arr.push_back(duplicate);
-
-    for (size_t i = 0; i < arr.size(); ++i) {
-        if (arr[i].is_object()) arr[i]["priority"] = static_cast<int>(i);
-    }
-    if (sanitize_perimeter_spawn_groups(arr)) {
-
-        for (auto& item : arr) {
-            if (!item.is_object()) continue;
-            if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"].get<std::string>() == new_id) {
-                duplicate = item;
-                break;
-            }
-        }
-    }
-    save_current_room_assets_json();
-    rebuild_room_spawn_id_cache();
-    refresh_spawn_group_config_ui();
-    if (nlohmann::json* fresh = find_spawn_entry(new_id)) {
-        respawn_spawn_group(*fresh);
-    }
-    reopen_room_configurator();
-    open_spawn_group_editor_by_id(new_id);
 }
 
 void RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {

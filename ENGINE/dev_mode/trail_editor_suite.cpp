@@ -124,7 +124,6 @@ void TrailEditorSuite::ensure_ui() {
             configurator_->set_on_close([this]() { this->close(); });
             configurator_->set_spawn_group_callbacks(
                 [this](const std::string& id) { open_spawn_group_editor(id); },
-                [this](const std::string& id) { duplicate_spawn_group(id); },
                 [this](const std::string& id) { delete_spawn_group(id); },
                 [this](const std::string& id, size_t index) { reorder_spawn_group(id, index); },
                 [this]() { add_spawn_group(); });
@@ -223,7 +222,6 @@ void TrailEditorSuite::rebuild_spawn_groups_ui() {
     {
         SpawnGroupConfig::Callbacks cb{};
         cb.on_add       = [this]() { add_spawn_group(); };
-        cb.on_duplicate = [this](const std::string& id) { duplicate_spawn_group(id); };
         cb.on_delete    = [this](const std::string& id) { delete_spawn_group(id); };
         cb.on_reorder   = [this](const std::string& id, size_t index) { reorder_spawn_group(id, index); };
         spawn_groups_->set_callbacks(std::move(cb));
@@ -241,34 +239,6 @@ void TrailEditorSuite::open_spawn_group_editor(const std::string& id) {
     SDL_Point anchor{config_bounds_.x + config_bounds_.w + 16, config_bounds_.y};
     spawn_groups_->set_anchor(anchor.x, anchor.y);
     spawn_groups_->request_open_spawn_group(id, anchor.x, anchor.y);
-}
-
-void TrailEditorSuite::duplicate_spawn_group(const std::string& id) {
-    if (id.empty() || !active_trail_) {
-        return;
-    }
-    auto& root = active_trail_->assets_data();
-    auto& groups = ensure_spawn_groups_array(root);
-    nlohmann::json* original = find_spawn_entry(id);
-    if (!original) {
-        return;
-    }
-    nlohmann::json duplicate = *original;
-    const std::string new_id = generate_spawn_id();
-    duplicate["spawn_id"] = new_id;
-    if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
-        duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
-    }
-    devmode::spawn::ensure_spawn_group_entry_defaults(
-        duplicate,
-        duplicate.contains("display_name") && duplicate["display_name"].is_string()
-            ? duplicate["display_name"].get<std::string>()
-            : std::string{"New Spawn"});
-    groups.push_back(duplicate);
-    sanitize_perimeter_spawn_groups(groups);
-    active_trail_->save_assets_json();
-    rebuild_spawn_groups_ui();
-    open_spawn_group_editor(new_id);
 }
 
 void TrailEditorSuite::delete_spawn_group(const std::string& id) {

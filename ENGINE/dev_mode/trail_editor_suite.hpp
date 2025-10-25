@@ -41,7 +41,6 @@ private:
     void update_bounds();
     void rebuild_spawn_groups_ui();
     void open_spawn_group_editor(const std::string& id);
-    void duplicate_spawn_group(const std::string& id);
     void delete_spawn_group(const std::string& id);
     void add_spawn_group();
     void reorder_spawn_group(const std::string& id, size_t new_index);

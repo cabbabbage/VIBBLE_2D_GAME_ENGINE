@@ -1467,7 +1467,6 @@ void MapModeUI::ensure_room_configurator() {
         });
         room_configurator_->set_spawn_group_callbacks(
             {},
-            [this](const std::string& spawn_id) { this->duplicate_active_room_spawn_group(spawn_id); },
             [this](const std::string& spawn_id) { this->delete_active_room_spawn_group(spawn_id); },
             [this](const std::string& spawn_id, size_t index) {
                 this->reorder_active_room_spawn_group(spawn_id, index);
@@ -1750,50 +1749,6 @@ std::string MapModeUI::rename_active_room(const std::string& old_name, const std
     active_room_config_key_ = candidate;
     handle_rooms_data_mutated(true);
     return candidate;
-}
-
-void MapModeUI::duplicate_active_room_spawn_group(const std::string& spawn_id) {
-    if (spawn_id.empty()) {
-        return;
-    }
-    nlohmann::json* room_entry = active_room_entry();
-    if (!room_entry) {
-        return;
-    }
-    nlohmann::json& groups = ensure_spawn_groups_array(*room_entry);
-    nlohmann::json* original = nullptr;
-    for (auto& item : groups) {
-        if (!item.is_object()) continue;
-        if (item.contains("spawn_id") && item["spawn_id"].is_string() && item["spawn_id"] == spawn_id) {
-            original = &item;
-            break;
-        }
-    }
-    if (!original) {
-        return;
-    }
-
-    nlohmann::json duplicate = *original;
-    std::string new_id = generate_spawn_id();
-    duplicate["spawn_id"] = new_id;
-    if (duplicate.contains("display_name") && duplicate["display_name"].is_string()) {
-        duplicate["display_name"] = duplicate["display_name"].get<std::string>() + " Copy";
-    }
-    std::string display_name = duplicate.value("display_name", std::string{"New Spawn"});
-    const int default_resolution = MapGridSettings::defaults().resolution;
-    ensure_spawn_group_entry_defaults(duplicate, display_name, default_resolution);
-    groups.push_back(std::move(duplicate));
-
-    for (size_t i = 0; i < groups.size(); ++i) {
-        if (groups[i].is_object()) {
-            groups[i]["priority"] = static_cast<int>(i);
-        }
-    }
-
-    sanitize_perimeter_spawn_groups(groups);
-    room_configurator_->refresh_spawn_groups(*room_entry);
-    handle_rooms_data_mutated(true);
-    room_configurator_->notify_spawn_groups_mutated();
 }
 
 void MapModeUI::delete_active_room_spawn_group(const std::string& spawn_id) {
