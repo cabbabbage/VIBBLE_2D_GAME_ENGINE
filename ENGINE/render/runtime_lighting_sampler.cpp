@@ -15,9 +15,40 @@ namespace {
 
 struct RuntimeEmitter {
     SDL_FPoint position{0.0f, 0.0f};
-    float      radius    = 0.0f;
-    float      intensity = 0.0f; // normalized [0,1]
+    float      radius          = 0.0f;
+    float      radius_squared  = 0.0f;
+    float      intensity       = 0.0f; // normalized [0,1]
+    SDL_FRect  influence_bounds_f{0.0f, 0.0f, 0.0f, 0.0f};
+    SDL_Rect   influence_bounds{0, 0, 0, 0};
 };
+
+void finalize_emitter(RuntimeEmitter& emitter) {
+    if (emitter.radius > 0.0f && emitter.intensity > 0.0f) {
+        const float min_x = emitter.position.x - emitter.radius;
+        const float min_y = emitter.position.y - emitter.radius;
+        const float max_x = emitter.position.x + emitter.radius;
+        const float max_y = emitter.position.y + emitter.radius;
+
+        emitter.radius_squared       = emitter.radius * emitter.radius;
+        emitter.influence_bounds_f.x = min_x;
+        emitter.influence_bounds_f.y = min_y;
+        emitter.influence_bounds_f.w = max_x - min_x;
+        emitter.influence_bounds_f.h = max_y - min_y;
+
+        emitter.influence_bounds.x = static_cast<int>(std::floor(min_x));
+        emitter.influence_bounds.y = static_cast<int>(std::floor(min_y));
+        const int ceil_max_x       = static_cast<int>(std::ceil(max_x));
+        const int ceil_max_y       = static_cast<int>(std::ceil(max_y));
+        emitter.influence_bounds.w = std::max(0, ceil_max_x - emitter.influence_bounds.x);
+        emitter.influence_bounds.h = std::max(0, ceil_max_y - emitter.influence_bounds.y);
+    } else {
+        emitter.radius          = std::max(0.0f, emitter.radius);
+        emitter.radius_squared  = 0.0f;
+        emitter.intensity       = std::max(0.0f, emitter.intensity);
+        emitter.influence_bounds_f = SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+        emitter.influence_bounds   = SDL_Rect{0, 0, 0, 0};
+    }
+}
 
 float distance(SDL_FPoint a, SDL_FPoint b) {
     const float dx = a.x - b.x;
@@ -34,6 +65,7 @@ RuntimeEmitter make_emitter_from_external(const ExternalLightSample& sample) {
     emitter.position = sample.position;
     emitter.radius   = std::max(0.0f, sample.radius);
     emitter.intensity = clamp01(sample.intensity);
+    finalize_emitter(emitter);
     return emitter;
 }
 
@@ -80,6 +112,7 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
 
     emitter.radius    = radius;
     emitter.intensity = clamp01(static_cast<float>(light.intensity) / 255.0f);
+    finalize_emitter(emitter);
     return emitter;
 }
 
@@ -226,21 +259,48 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
         if (!chunk) {
             continue;
         }
-        for (auto& cell : chunk->lighting_chunks()) {
+        const auto& lighting_cells = chunk->lighting_chunks();
+        if (lighting_cells.empty()) {
+            continue;
+        }
+
+        std::vector<std::vector<std::size_t>> cell_emitters(lighting_cells.size());
+        for (std::size_t emitter_index = 0; emitter_index < emitters.size(); ++emitter_index) {
+            const RuntimeEmitter& emitter = emitters[emitter_index];
+            if (emitter.radius_squared <= 0.0f || emitter.intensity <= 0.0f) {
+                continue;
+            }
+
+            if (!SDL_HasIntersection(&emitter.influence_bounds, &chunk->world_bounds)) {
+                continue;
+            }
+
+            for (std::size_t cell_index = 0; cell_index < lighting_cells.size(); ++cell_index) {
+                const SDL_Rect& cell_bounds = lighting_cells[cell_index].world_bounds;
+                if (SDL_HasIntersection(&emitter.influence_bounds, &cell_bounds)) {
+                    cell_emitters[cell_index].push_back(emitter_index);
+                }
+            }
+        }
+
+        for (std::size_t cell_index = 0; cell_index < lighting_cells.size(); ++cell_index) {
+            const auto&       cell   = lighting_cells[cell_index];
             const SDL_Rect& bounds = cell.world_bounds;
             const SDL_FPoint center{
                 static_cast<float>(bounds.x) + static_cast<float>(bounds.w) * 0.5f,
                 static_cast<float>(bounds.y) + static_cast<float>(bounds.h) * 0.5f};
 
             float brightness = 0.0f;
-            for (const RuntimeEmitter& emitter : emitters) {
-                if (emitter.radius <= 0.0f || emitter.intensity <= 0.0f) {
+            const auto& emitter_indices = cell_emitters[cell_index];
+            for (std::size_t emitter_index : emitter_indices) {
+                const RuntimeEmitter& emitter = emitters[emitter_index];
+                const float dx               = center.x - emitter.position.x;
+                const float dy               = center.y - emitter.position.y;
+                const float dist_squared     = dx * dx + dy * dy;
+                if (dist_squared > emitter.radius_squared) {
                     continue;
                 }
-                const float dist = distance(center, emitter.position);
-                if (dist > emitter.radius) {
-                    continue;
-                }
+                const float dist    = std::sqrt(dist_squared);
                 const float falloff = 1.0f - (dist / std::max(emitter.radius, 1.0f));
                 brightness = clamp01(brightness + emitter.intensity * clamp01(falloff));
                 if (brightness >= 1.0f) {

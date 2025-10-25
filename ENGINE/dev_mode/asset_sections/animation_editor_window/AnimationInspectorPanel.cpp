@@ -1022,8 +1022,6 @@ void AnimationInspectorPanel::refresh_start_indicator() {
     }
 }
 
-}
-
 int AnimationInspectorPanel::layout_toggle_row(int origin_x, int origin_y, int width, bool apply) const {
     auto* self = const_cast<AnimationInspectorPanel*>(this);
     if (width <= 0) {
@@ -1076,3 +1074,4 @@ int AnimationInspectorPanel::layout_toggle_row(int origin_x, int origin_y, int w
     return height;
 }
 
+}  // namespace animation_editor
