@@ -9,6 +9,7 @@
 #include <numeric>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include "utils/display_color.hpp"
 using json = nlohmann::json;
 
@@ -86,14 +87,14 @@ std::pair<double, double> room_center(Room* room) {
 }
 
 }
-GenerateTrails::GenerateTrails(nlohmann::json& trail_data)
+GenerateTrails::GenerateTrails(nlohmann::json& trail_data, std::vector<SDL_Color> reserved_colors)
 : rng_(std::random_device{}()),
-trails_data_(&trail_data)
+trails_data_(&trail_data),
+trail_colors_(std::move(reserved_colors))
 {
         if (!trail_data.is_object()) {
                 trail_data = nlohmann::json::object();
         }
-        trail_colors_ = utils::display_color::collect(trail_data);
         if (trail_data.is_object()) {
                 for (auto it = trail_data.begin(); it != trail_data.end(); ++it) {
                         if (!it->is_object()) {

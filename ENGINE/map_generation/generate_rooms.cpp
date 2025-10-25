@@ -259,7 +259,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 		std::cout << "[GenerateRooms] Beginning trail generation...\n";
 	}
         if (all_rooms.size() > 1) {
-                GenerateTrails trailgen(trails_data);
+                GenerateTrails trailgen(trails_data, room_colors);
                 std::vector<Room*> room_refs;
                 room_refs.reserve(all_rooms.size());
                 for (auto& room_ptr : all_rooms) {

@@ -17,7 +17,7 @@ class ManifestStore;
 class GenerateTrails {
 
 	public:
-    explicit GenerateTrails(nlohmann::json& trail_data);
+    explicit GenerateTrails(nlohmann::json& trail_data, std::vector<SDL_Color> reserved_colors = {});
     void set_all_rooms_reference(const std::vector<Room*>& rooms);
     std::vector<std::unique_ptr<Room>> generate_trails( const std::vector<std::pair<Room*, Room*>>& room_pairs, const std::vector<Area>& existing_areas, const std::string& manifest_context, AssetLibrary* asset_lib, const nlohmann::json* map_assets_data, double map_radius, nlohmann::json* map_manifest, devmode::core::ManifestStore* manifest_store, Room::ManifestWriter manifest_writer );
     void find_and_connect_isolated( const std::string& manifest_context, AssetLibrary* asset_lib, std::vector<Area>& existing_areas, std::vector<std::unique_ptr<Room>>& trail_rooms, const nlohmann::json* map_assets_data, double map_radius, nlohmann::json* map_manifest, devmode::core::ManifestStore* manifest_store, Room::ManifestWriter manifest_writer );

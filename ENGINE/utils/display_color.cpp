@@ -141,16 +141,22 @@ SDL_Color ensure(nlohmann::json& entry, std::vector<SDL_Color>& used_colors, boo
     if (!entry.is_object()) {
         entry = nlohmann::json::object();
     }
+
+    auto colors_match = [](const SDL_Color& lhs, const SDL_Color& rhs) {
+        return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b;
+    };
+
     if (auto existing = read(entry)) {
         SDL_Color color = clamp_color(*existing);
         auto already_present = std::find_if(used_colors.begin(), used_colors.end(), [&](const SDL_Color& other) {
-            return other.r == color.r && other.g == color.g && other.b == color.b;
+            return colors_match(other, color);
         });
         if (already_present == used_colors.end()) {
             used_colors.push_back(color);
+            return color;
         }
-        return color;
     }
+
     SDL_Color generated = generate_distinct_color(used_colors);
     write(entry, generated);
     used_colors.push_back(generated);
