@@ -13825,7 +13825,7 @@
       },
       "map_layers": [
         {
-          "bounding_extent": 834.0,
+          "bounding_extent": 0.0,
           "level": 0,
           "max_rooms": 1,
           "min_rooms": 1,
@@ -13846,7 +13846,7 @@
           "max_rooms": 0,
           "min_rooms": 0,
           "name": "layer_1",
-          "ring_radius": 1034.0,
+          "ring_radius": 200.0,
           "rooms": []
         }
       ],
@@ -13880,7 +13880,7 @@
             {
               "a": {
                 "max": 255,
-                "min": 255
+                "min": 249
               },
               "b": {
                 "max": 255,
@@ -13901,7 +13901,7 @@
             {
               "a": {
                 "max": 255,
-                "min": 255
+                "min": 249
               },
               "b": {
                 "max": 255,
@@ -14003,9 +14003,9 @@
           ]
         ],
         "map_color": [
-          87,
-          28,
-          0,
+          32,
+          65,
+          43,
           255
         ],
         "mult": 0.32,
@@ -14105,7 +14105,8 @@
               "spawn_id": "spn-cd2298321f6e"
             }
           ]
-        }
+        },
+        "spawn": {}
       },
       "trails_data": {
         "basic": {
