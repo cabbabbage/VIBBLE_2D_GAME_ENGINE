@@ -13825,24 +13825,28 @@
       },
       "map_layers": [
         {
+          "bounding_extent": 1100.0,
           "level": 0,
           "max_rooms": 1,
-          "min_rooms": 0,
+          "min_rooms": 1,
           "name": "layer_0",
+          "ring_radius": 0.0,
           "rooms": [
             {
               "max_instances": 1,
-              "min_instances": 0,
+              "min_instances": 1,
               "name": "spawn",
               "required_children": []
             }
           ]
         },
         {
+          "bounding_extent": 1100.0,
           "level": 1,
           "max_rooms": 2,
           "min_rooms": 0,
           "name": "layer_1",
+          "ring_radius": 2400.0,
           "rooms": [
             {
               "max_instances": 1,
@@ -13859,6 +13863,9 @@
           ]
         }
       ],
+      "map_layers_settings": {
+        "min_edge_distance": 200
+      },
       "map_light_data": {
         "base_color": {
           "a": {
@@ -14241,25 +14248,7 @@
           "min_height": 100,
           "min_width": 500,
           "name": "brick",
-          "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                }
-              ],
-              "display_name": "New Spawn",
-              "enforce_spacing": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 2021,
-              "origional_width": 3270,
-              "position": "Exact",
-              "priority": 0,
-              "spawn_id": "spn-468fbf18908b"
-            }
-          ]
+          "spawn_groups": []
         }
       }
     },

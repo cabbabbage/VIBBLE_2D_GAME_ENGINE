@@ -13,8 +13,6 @@ class Room;
 class SDL_Renderer;
 
 class RoomConfigurator;
-class SpawnGroupConfig;
-
 class TrailEditorSuite {
 public:
     TrailEditorSuite();
@@ -39,8 +37,6 @@ public:
 private:
     void ensure_ui();
     void update_bounds();
-    void rebuild_spawn_groups_ui();
-    void open_spawn_group_editor(const std::string& id);
     void delete_spawn_group(const std::string& id);
     void add_spawn_group();
     void reorder_spawn_group(const std::string& id, size_t new_index);
@@ -52,7 +48,6 @@ private:
 
     Room* active_trail_ = nullptr;
     std::unique_ptr<RoomConfigurator> configurator_;
-    std::unique_ptr<SpawnGroupConfig> spawn_groups_;
     std::function<void(const std::string&, const std::string&)> on_open_area_{};
     std::string open_area_stack_key_{};
 };

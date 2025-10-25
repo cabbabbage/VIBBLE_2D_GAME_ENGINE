@@ -42,6 +42,8 @@ public:
     void set_header_visibility_controller(std::function<void(bool)> cb);
     void attach_container(SlidingWindowContainer* container);
     void detach_container();
+    SlidingWindowContainer* container();
+    const SlidingWindowContainer* container() const;
 
     void open(const nlohmann::json& room_data);
     void open(nlohmann::json& room_data,

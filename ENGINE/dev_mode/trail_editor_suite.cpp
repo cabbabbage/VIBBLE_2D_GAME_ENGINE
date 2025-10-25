@@ -1,7 +1,6 @@
 #include "trail_editor_suite.hpp"
 
 #include "room_config/room_configurator.hpp"
-#include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "spawn_group_config/spawn_group_utils.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 
@@ -23,9 +22,6 @@ void TrailEditorSuite::set_screen_dimensions(int width, int height) {
     screen_w_ = width;
     screen_h_ = height;
     update_bounds();
-    if (spawn_groups_) {
-        spawn_groups_->set_screen_dimensions(screen_w_, screen_h_);
-    }
 }
 
 void TrailEditorSuite::open(Room* trail) {
@@ -39,14 +35,10 @@ void TrailEditorSuite::open(Room* trail) {
         configurator_->open(trail);
         configurator_->set_bounds(config_bounds_);
     }
-    rebuild_spawn_groups_ui();
 }
 
 void TrailEditorSuite::close() {
     active_trail_ = nullptr;
-    if (spawn_groups_) {
-        spawn_groups_->close();
-    }
     if (configurator_) {
         configurator_->close();
     }
@@ -60,16 +52,10 @@ void TrailEditorSuite::update(const Input& input) {
     if (configurator_ && configurator_->visible()) {
         configurator_->update(input, screen_w_, screen_h_);
     }
-    if (spawn_groups_) {
-        spawn_groups_->update(input, screen_w_, screen_h_);
-    }
 }
 
 bool TrailEditorSuite::handle_event(const SDL_Event& event) {
     bool used = false;
-    if (spawn_groups_ && spawn_groups_->handle_event(event)) {
-        used = true;
-    }
     if (configurator_) {
         if (configurator_->visible()) {
             configurator_->prepare_for_event(screen_w_, screen_h_);
@@ -92,16 +78,10 @@ void TrailEditorSuite::render(SDL_Renderer* renderer) const {
     if (configurator_) {
         configurator_->render(renderer);
     }
-    if (spawn_groups_) {
-        spawn_groups_->render(renderer);
-    }
 }
 
 bool TrailEditorSuite::contains_point(int x, int y) const {
     if (configurator_ && configurator_->is_point_inside(x, y)) {
-        return true;
-    }
-    if (spawn_groups_ && spawn_groups_->is_point_inside(x, y)) {
         return true;
     }
     return false;
@@ -115,38 +95,33 @@ void TrailEditorSuite::set_on_open_area(
     if (configurator_) {
         configurator_->set_spawn_area_open_callback(on_open_area_, open_area_stack_key_);
     }
-    if (spawn_groups_) {
-        spawn_groups_->refresh_row_configuration();
-    }
 }
 
 void TrailEditorSuite::ensure_ui() {
     if (!configurator_) {
         configurator_ = std::make_unique<RoomConfigurator>();
         if (configurator_) {
+            configurator_->detach_container();
+            if (auto* container = configurator_->container()) {
+                container->set_header_visible(true);
+                container->set_scrollbar_visible(true);
+                container->set_close_button_enabled(true);
+                container->set_blocks_editor_interactions(true);
+            }
+            configurator_->set_show_header(true);
             configurator_->set_on_close([this]() { this->close(); });
             configurator_->set_spawn_group_callbacks(
-                [this](const std::string& id) { open_spawn_group_editor(id); },
+                {},
                 [this](const std::string& id) { delete_spawn_group(id); },
                 [this](const std::string& id, size_t index) { reorder_spawn_group(id, index); },
                 [this]() { add_spawn_group(); });
             configurator_->set_spawn_area_open_callback(on_open_area_, open_area_stack_key_);
         }
     }
-    if (!spawn_groups_) {
-        spawn_groups_ = std::make_unique<SpawnGroupConfig>();
-        if (spawn_groups_) {
-            spawn_groups_->set_screen_dimensions(screen_w_, screen_h_);
-        }
-    }
     update_bounds();
     if (configurator_) {
         configurator_->set_bounds(config_bounds_);
         configurator_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-    }
-    if (spawn_groups_) {
-        SDL_Point anchor{config_bounds_.x + config_bounds_.w + 16, config_bounds_.y};
-        spawn_groups_->set_anchor(anchor.x, anchor.y);
     }
 }
 
@@ -163,88 +138,6 @@ void TrailEditorSuite::update_bounds() {
         configurator_->set_bounds(config_bounds_);
         configurator_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
     }
-    if (spawn_groups_) {
-        SDL_Point anchor{x + width + 16, y};
-        spawn_groups_->set_anchor(anchor.x, anchor.y);
-    }
-}
-
-void TrailEditorSuite::rebuild_spawn_groups_ui() {
-    if (!active_trail_ || !spawn_groups_) {
-        return;
-    }
-    ensure_ui();
-    auto& root = active_trail_->assets_data();
-    auto reopen = spawn_groups_->expanded_groups();
-    auto& groups = ensure_spawn_groups_array(root);
-    sanitize_perimeter_spawn_groups(groups);
-
-    auto on_change = [this]() {
-        if (!active_trail_) {
-            return;
-        }
-        active_trail_->save_assets_json();
-        if (configurator_) {
-            configurator_->refresh_spawn_groups(active_trail_);
-        }
-};
-
-    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary& summary) {
-        if (!active_trail_) {
-            return;
-        }
-        auto& root = active_trail_->assets_data();
-        auto& arr = ensure_spawn_groups_array(root);
-        const bool sanitized = sanitize_perimeter_spawn_groups(arr);
-        active_trail_->save_assets_json();
-        if (configurator_) {
-            configurator_->refresh_spawn_groups(active_trail_);
-        }
-        if (sanitized || summary.method_changed || summary.quantity_changed) {
-            rebuild_spawn_groups_ui();
-        }
-};
-
-    spawn_groups_->load(groups, on_change, on_entry_change,
-        [this](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
-            entry.set_area_names_provider([this]() {
-                std::vector<std::string> names;
-                if (!this->active_trail_) return names;
-                auto& data = this->active_trail_->assets_data();
-                if (data.contains("areas") && data["areas"].is_array()) {
-                    for (const auto& a : data["areas"]) {
-                        if (a.is_object() && a.contains("name") && a["name"].is_string()) {
-                            names.push_back(a["name"].get<std::string>());
-                        }
-                    }
-                }
-                return names;
-            });
-            entry.set_open_area_handler(on_open_area_, open_area_stack_key_);
-        });
-    spawn_groups_->set_on_layout_changed([this]() {
-        this->rebuild_spawn_groups_ui();
-    });
-    {
-        SpawnGroupConfig::Callbacks cb{};
-        cb.on_add       = [this]() { add_spawn_group(); };
-        cb.on_delete    = [this](const std::string& id) { delete_spawn_group(id); };
-        cb.on_reorder   = [this](const std::string& id, size_t index) { reorder_spawn_group(id, index); };
-        spawn_groups_->set_callbacks(std::move(cb));
-    }
-    if (configurator_) {
-        configurator_->refresh_spawn_groups(active_trail_);
-    }
-    spawn_groups_->restore_expanded_groups(reopen);
-}
-
-void TrailEditorSuite::open_spawn_group_editor(const std::string& id) {
-    if (!spawn_groups_) {
-        return;
-    }
-    SDL_Point anchor{config_bounds_.x + config_bounds_.w + 16, config_bounds_.y};
-    spawn_groups_->set_anchor(anchor.x, anchor.y);
-    spawn_groups_->request_open_spawn_group(id, anchor.x, anchor.y);
 }
 
 void TrailEditorSuite::delete_spawn_group(const std::string& id) {
@@ -269,7 +162,10 @@ void TrailEditorSuite::delete_spawn_group(const std::string& id) {
     sanitize_perimeter_spawn_groups(groups);
     active_trail_->save_assets_json();
 
-    rebuild_spawn_groups_ui();
+    if (configurator_) {
+        configurator_->refresh_spawn_groups(active_trail_);
+        configurator_->notify_spawn_groups_mutated();
+    }
 }
 
 void TrailEditorSuite::reorder_spawn_group(const std::string& id, size_t new_index) {
@@ -317,7 +213,10 @@ void TrailEditorSuite::reorder_spawn_group(const std::string& id, size_t new_ind
     }
 
     active_trail_->save_assets_json();
-    rebuild_spawn_groups_ui();
+    if (configurator_) {
+        configurator_->refresh_spawn_groups(active_trail_);
+        configurator_->notify_spawn_groups_mutated();
+    }
 }
 
 void TrailEditorSuite::add_spawn_group() {
@@ -333,9 +232,9 @@ void TrailEditorSuite::add_spawn_group() {
     groups.push_back(entry);
     sanitize_perimeter_spawn_groups(groups);
     active_trail_->save_assets_json();
-    rebuild_spawn_groups_ui();
-    if (entry.contains("spawn_id") && entry["spawn_id"].is_string()) {
-        open_spawn_group_editor(entry["spawn_id"].get<std::string>());
+    if (configurator_) {
+        configurator_->refresh_spawn_groups(active_trail_);
+        configurator_->notify_spawn_groups_mutated();
     }
 }
 

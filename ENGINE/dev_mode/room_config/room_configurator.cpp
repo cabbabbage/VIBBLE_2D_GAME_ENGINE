@@ -25,6 +25,7 @@
 
 namespace {
 constexpr int kRoomConfigPanelMinWidth = 260;
+constexpr bool kTrailsAllowIndependentDimensions = true;
 
 const nlohmann::json& empty_object() {
     static const nlohmann::json kEmpty = nlohmann::json::object();
@@ -485,6 +486,10 @@ void RoomConfigurator::detach_container() {
     }
 }
 
+SlidingWindowContainer* RoomConfigurator::container() { return container_; }
+
+const SlidingWindowContainer* RoomConfigurator::container() const { return container_; }
+
 void RoomConfigurator::configure_container(SlidingWindowContainer& container) {
     container.set_header_text_provider([this]() { return this->current_header_text(); });
     container.set_on_close([this]() { handle_container_closed(); });
@@ -870,8 +875,10 @@ bool RoomConfigurator::apply_room_data(const nlohmann::json& data) {
 
     bool spawn_changed = (new_spawn_array != current_spawn_array);
 
+    const bool allow_height = !is_trail_context_ || kTrailsAllowIndependentDimensions;
+
     State new_state = state_ ? *state_ : State{};
-    new_state.load_from_json(normalized_copy, geometry_options_, !is_trail_context_);
+    new_state.load_from_json(normalized_copy, geometry_options_, allow_height);
 
     bool geometry_added = append_unique(geometry_options_, new_state.geometry);
 
@@ -1395,6 +1402,7 @@ void RoomConfigurator::rebuild_rows_internal() {
     name_widget_ = std::make_unique<TextBoxWidget>(name_box_.get());
 
     bool allow_geometry_choice = !is_trail_context_;
+    const bool allow_height = !is_trail_context_ || kTrailsAllowIndependentDimensions;
     if (allow_geometry_choice) {
         auto geom_it = std::find(geometry_options_.begin(), geometry_options_.end(), state_->geometry);
         int geom_index = 0;
@@ -1432,7 +1440,7 @@ void RoomConfigurator::rebuild_rows_internal() {
         width_max_box_ = std::make_unique<DMTextBox>("Max Width", std::to_string(state_->width_max));
         width_max_widget_ = std::make_unique<TextBoxWidget>(width_max_box_.get());
 
-        if (!is_trail_context_) {
+        if (allow_height) {
             height_min_box_ = std::make_unique<DMTextBox>("Min Height", std::to_string(state_->height_min));
             height_min_widget_ = std::make_unique<TextBoxWidget>(height_min_box_.get());
             height_max_box_ = std::make_unique<DMTextBox>("Max Height", std::to_string(state_->height_max));
@@ -1596,6 +1604,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
     bool changed = false;
     bool rebuild_required = false;
     bool tags_changed = false;
+    const bool allow_height = !is_trail_context_ || kTrailsAllowIndependentDimensions;
 
     if (tags_dirty_) {
         changed = true;
@@ -1756,7 +1765,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
         (radius_min_box_ && radius_min_box_->is_editing()) ||
         (radius_max_box_ && radius_max_box_->is_editing());
 
-    if (state_->ensure_valid(!is_trail_context_, !editing_size_box)) {
+    if (state_->ensure_valid(allow_height, !editing_size_box)) {
         changed = true;
     }
 
@@ -1773,11 +1782,11 @@ bool RoomConfigurator::sync_state_from_widgets() {
     sync_text_box_with_value(radius_max_box_.get(), state_->radius_max);
 
     if (changed) {
-        state_->apply_to_json(loaded_json_, !is_trail_context_);
+        state_->apply_to_json(loaded_json_, allow_height);
         write_tags_to_json(loaded_json_);
         if (room_) {
             auto& root = live_room_json();
-            state_->apply_to_json(root, !is_trail_context_);
+            state_->apply_to_json(root, allow_height);
             write_tags_to_json(root);
             room_->save_assets_json();
             if (tags_changed) {
@@ -1785,7 +1794,7 @@ bool RoomConfigurator::sync_state_from_widgets() {
             }
         } else if (external_room_json_) {
             auto& root = live_room_json();
-            state_->apply_to_json(root, !is_trail_context_);
+            state_->apply_to_json(root, allow_height);
             write_tags_to_json(root);
         }
         if (on_external_spawn_change_) {
@@ -1820,9 +1829,12 @@ const SDL_Rect& RoomConfigurator::panel_rect() const {
 
 std::string RoomConfigurator::current_header_text() const {
     if (state_ && !state_->name.empty()) {
+        if (is_trail_context_) {
+            return std::string{"Trail: "} + state_->name;
+        }
         return std::string{"Room: "} + state_->name;
     }
-    return std::string{"Room Config"};
+    return is_trail_context_ ? std::string{"Trail Config"} : std::string{"Room Config"};
 }
 
 const nlohmann::json& RoomConfigurator::live_room_json() const {
@@ -1852,8 +1864,9 @@ nlohmann::json RoomConfigurator::build_json() const {
     nlohmann::json result = loaded_json_.is_object() ? loaded_json_ : nlohmann::json::object();
     if (state_) {
         State copy = *state_;
-        copy.ensure_valid(!is_trail_context_);
-        copy.apply_to_json(result, !is_trail_context_);
+        const bool allow_height = !is_trail_context_ || kTrailsAllowIndependentDimensions;
+        copy.ensure_valid(allow_height);
+        copy.apply_to_json(result, allow_height);
     }
     return result;
 }
