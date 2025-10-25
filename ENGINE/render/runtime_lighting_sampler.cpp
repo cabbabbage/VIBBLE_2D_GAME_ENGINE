@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "asset/Asset.hpp"
+#include "asset/asset_types.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
 #include "utils/area.hpp"
@@ -27,6 +28,7 @@ struct RuntimeEmitter {
     SDL_Color  color{255, 255, 255, 255};
     SDL_FRect  influence_bounds_f{0.0f, 0.0f, 0.0f, 0.0f};
     SDL_Rect   influence_bounds{0, 0, 0, 0};
+    bool       is_player_light = false;
     struct Attenuation {
         float constant  = 1.0f;
         float linear    = 0.0f;
@@ -125,6 +127,11 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
     RuntimeEmitter emitter;
     if (!source.asset) {
         return emitter;
+    }
+
+    if (source.asset->info) {
+        const std::string canonical_type = asset_types::canonicalize(source.asset->info->type);
+        emitter.is_player_light          = (canonical_type == asset_types::player);
     }
 
     const float center_x = static_cast<float>(dst.x) + static_cast<float>(dst.w) * 0.5f;
@@ -544,6 +551,17 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
                 float contribution = emitter.intensity * emitter.attenuation.evaluate(dist, emitter.radius);
                 if (contribution <= 0.0f) {
                     continue;
+                }
+                if (emitter.is_player_light) {
+                    constexpr float kPlayerBaseBoost      = 1.35f;
+                    constexpr float kPlayerProximityBoost = 0.9f;
+                    float           normalized_distance   = 0.0f;
+                    if (emitter.radius > 1e-4f) {
+                        normalized_distance = std::clamp(dist / emitter.radius, 0.0f, 1.0f);
+                    }
+                    const float proximity_factor = kPlayerBaseBoost +
+                                                   kPlayerProximityBoost * (1.0f - normalized_distance);
+                    contribution *= std::max(proximity_factor, 0.0f);
                 }
                 const float visibility = occlusion_sampler.visibility(emitter.position, center);
                 if (visibility <= 0.0f) {
