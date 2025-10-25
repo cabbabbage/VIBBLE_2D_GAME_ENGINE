@@ -564,29 +564,8 @@ void Animation::load(const std::string& trigger,
                                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                                           << " metadata steps " << format_percent_steps(stored_steps)
                                                           << " differ from profile " << format_percent_steps(expected_steps)
-                                                          << (prefer_cached ? " -> adopting cached ordering" : " -> rebuild required")
-                                                          << "\n";
-                                                if (prefer_cached) {
-                                                        std::vector<float> adopted_steps;
-                                                        adopted_steps.reserve(stored_steps.size());
-                                                        for (int percent : stored_steps) {
-                                                                const float scale = std::clamp(percent / 100.0f, 0.05f, 2.0f);
-                                                                adopted_steps.push_back(scale);
-                                                        }
-                                                        variant_steps_ = std::move(adopted_steps);
-                                                        render_pipeline::ScalingLogic::NormalizeVariantSteps(variant_steps_);
-                                                        if (variant_steps_.empty()) {
-                                                                meta_ok = false;
-                                                        } else {
-                                                                info.scale_variants = variant_steps_;
-                                                                expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
-                                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                                          << " updated runtime scale variants to cached ordering: "
-                                                                          << format_steps(variant_steps_) << "\n";
-                                                        }
-                                                } else {
-                                                        meta_ok = false;
-                                                }
+                                                          << " -> rebuild required\n";
+                                                meta_ok = false;
                                         }
                                 } else {
                                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger

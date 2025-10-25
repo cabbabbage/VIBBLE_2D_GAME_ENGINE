@@ -475,20 +475,45 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
         }
 
         std::vector<std::vector<std::size_t>> cell_emitters(lighting_cells.size());
+        const int                           step    = std::max(1, chunk->lighting_step());
+        const int                           columns = chunk->lighting_columns();
+        const int                           rows    = chunk->lighting_rows();
+        if (columns <= 0 || rows <= 0) {
+            continue;
+        }
+
         for (std::size_t emitter_index = 0; emitter_index < emitters.size(); ++emitter_index) {
             const RuntimeEmitter& emitter = emitters[emitter_index];
             if (emitter.radius_squared <= 0.0f || emitter.intensity <= 0.0f) {
                 continue;
             }
 
-            if (!SDL_HasIntersection(&emitter.influence_bounds, &chunk->world_bounds)) {
+            SDL_Rect overlap{};
+            if (!SDL_IntersectRect(&emitter.influence_bounds, &chunk->world_bounds, &overlap)) {
                 continue;
             }
 
-            for (std::size_t cell_index = 0; cell_index < lighting_cells.size(); ++cell_index) {
-                const SDL_Rect& cell_bounds = lighting_cells[cell_index].world_bounds;
-                if (SDL_HasIntersection(&emitter.influence_bounds, &cell_bounds)) {
-                    cell_emitters[cell_index].push_back(emitter_index);
+            const int chunk_x = chunk->world_bounds.x;
+            const int chunk_y = chunk->world_bounds.y;
+
+            const int min_col = std::clamp((overlap.x - chunk_x) / step, 0, columns - 1);
+            const int max_col = std::clamp((overlap.x + overlap.w - 1 - chunk_x) / step, 0, columns - 1);
+            const int min_row = std::clamp((overlap.y - chunk_y) / step, 0, rows - 1);
+            const int max_row = std::clamp((overlap.y + overlap.h - 1 - chunk_y) / step, 0, rows - 1);
+
+            for (int row = min_row; row <= max_row; ++row) {
+                for (int col = min_col; col <= max_col; ++col) {
+                    const std::size_t cell_index = static_cast<std::size_t>(row) *
+                                                   static_cast<std::size_t>(columns) +
+                                                   static_cast<std::size_t>(col);
+                    if (cell_index >= lighting_cells.size()) {
+                        continue;
+                    }
+
+                    const SDL_Rect& cell_bounds = lighting_cells[cell_index].world_bounds;
+                    if (SDL_HasIntersection(&emitter.influence_bounds, &cell_bounds)) {
+                        cell_emitters[cell_index].push_back(emitter_index);
+                    }
                 }
             }
         }
