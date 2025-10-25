@@ -72,6 +72,12 @@ struct Chunk {
         bool has_runtime_average = false;
         // Averaged runtime light color captured during this frame.
         SDL_Color runtime_average_color{255, 255, 255, 255};
+        // Accumulated raw (unclamped) runtime intensity.
+        float runtime_average_raw_intensity = 0.0f;
+        // Averaged runtime light direction.
+        SDL_FPoint runtime_average_direction{0.0f, 0.0f};
+        // Tracks whether runtime_average_direction holds a normalized vector.
+        bool has_runtime_direction = false;
     };
 
     struct LightingChunk {

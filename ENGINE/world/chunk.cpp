@@ -145,6 +145,9 @@ void Chunk::LightingChunk::releaseLightingArtifacts() {
     lighting.runtime_average_strength = 1.0f;
     lighting.has_runtime_average      = false;
     lighting.runtime_average_color    = SDL_Color{255, 255, 255, 255};
+    lighting.runtime_average_raw_intensity = 0.0f;
+    lighting.runtime_average_direction     = SDL_FPoint{0.0f, 0.0f};
+    lighting.has_runtime_direction         = false;
     lighting.is_active                = false;
     lighting.needs_update             = true;
     shadow_history.reset();
@@ -161,6 +164,9 @@ void Chunk::releaseLightingArtifacts() {
     lighting.runtime_average_strength  = 1.0f;
     lighting.has_runtime_average       = false;
     lighting.runtime_average_color     = SDL_Color{255, 255, 255, 255};
+    lighting.runtime_average_raw_intensity = 0.0f;
+    lighting.runtime_average_direction     = SDL_FPoint{0.0f, 0.0f};
+    lighting.has_runtime_direction         = false;
     lighting.is_active                 = false;
     lighting.needs_update              = true;
     shadow_history.reset();
@@ -256,26 +262,31 @@ void Chunk::update_aggregate_from_lighting_chunks() {
         return;
     }
 
-    double accum_strength = 0.0;
-    double accum_runtime  = 0.0;
-    double accum_static   = 0.0;
-    double accum_dynamic  = 0.0;
-    double accum_color_r  = 0.0;
-    double accum_color_g  = 0.0;
-    double accum_color_b  = 0.0;
-    double color_weight   = 0.0;
-    bool   any_active     = false;
-    bool   any_needs      = false;
-    bool   any_runtime    = false;
+    double accum_strength   = 0.0;
+    double accum_runtime    = 0.0;
+    double accum_static     = 0.0;
+    double accum_dynamic    = 0.0;
+    double accum_color_r    = 0.0;
+    double accum_color_g    = 0.0;
+    double accum_color_b    = 0.0;
+    double color_weight     = 0.0;
+    double accum_raw_int    = 0.0;
+    double accum_dir_x      = 0.0;
+    double accum_dir_y      = 0.0;
+    double accum_dir_weight = 0.0;
+    bool   any_active       = false;
+    bool   any_needs        = false;
+    bool   any_runtime      = false;
 
     for (auto& cell : lighting_chunks_) {
         accum_strength += static_cast<double>(cell.lighting.current_strength);
         accum_runtime  += static_cast<double>(cell.lighting.runtime_average_strength);
         accum_static   += static_cast<double>(cell.lighting.static_strength);
         accum_dynamic  += static_cast<double>(cell.lighting.dynamic_strength);
-        any_active     = any_active || cell.lighting.is_active;
-        any_needs      = any_needs || cell.lighting.needs_update;
-        any_runtime    = any_runtime || cell.lighting.has_runtime_average;
+        accum_raw_int  += static_cast<double>(cell.lighting.runtime_average_raw_intensity);
+        any_active       = any_active || cell.lighting.is_active;
+        any_needs        = any_needs || cell.lighting.needs_update;
+        any_runtime      = any_runtime || cell.lighting.has_runtime_average;
         if (cell.lighting.has_runtime_average) {
             const float weight = std::max(cell.lighting.runtime_average_strength, 0.0f);
             if (weight > 1e-5f) {
@@ -283,6 +294,15 @@ void Chunk::update_aggregate_from_lighting_chunks() {
                 accum_color_g += static_cast<double>(cell.lighting.runtime_average_color.g) * weight;
                 accum_color_b += static_cast<double>(cell.lighting.runtime_average_color.b) * weight;
                 color_weight += static_cast<double>(weight);
+            }
+        }
+        if (cell.lighting.has_runtime_direction) {
+            const float dir_weight = std::max(cell.lighting.runtime_average_raw_intensity,
+                                              cell.lighting.runtime_average_strength);
+            if (dir_weight > 1e-5f) {
+                accum_dir_x += static_cast<double>(cell.lighting.runtime_average_direction.x) * dir_weight;
+                accum_dir_y += static_cast<double>(cell.lighting.runtime_average_direction.y) * dir_weight;
+                accum_dir_weight += static_cast<double>(dir_weight);
             }
         }
     }
@@ -295,6 +315,7 @@ void Chunk::update_aggregate_from_lighting_chunks() {
     lighting.is_active                = any_active;
     lighting.needs_update             = any_needs;
     lighting.has_runtime_average      = any_runtime;
+    lighting.runtime_average_raw_intensity = static_cast<float>(accum_raw_int * inv);
     if (color_weight > 1e-5) {
         const double inv_weight = 1.0 / color_weight;
         const double avg_r      = std::clamp(accum_color_r * inv_weight, 0.0, 255.0);
@@ -305,6 +326,24 @@ void Chunk::update_aggregate_from_lighting_chunks() {
         lighting.runtime_average_color.b = static_cast<Uint8>(std::lround(avg_b));
     } else {
         lighting.runtime_average_color = SDL_Color{255, 255, 255, 255};
+    }
+    if (accum_dir_weight > 1e-5) {
+        const double inv_dir = 1.0 / accum_dir_weight;
+        float dir_x = static_cast<float>(accum_dir_x * inv_dir);
+        float dir_y = static_cast<float>(accum_dir_y * inv_dir);
+        const float mag = std::sqrt(dir_x * dir_x + dir_y * dir_y);
+        if (mag > 1e-4f) {
+            dir_x /= mag;
+            dir_y /= mag;
+            lighting.runtime_average_direction = SDL_FPoint{dir_x, dir_y};
+            lighting.has_runtime_direction     = true;
+        } else {
+            lighting.runtime_average_direction = SDL_FPoint{0.0f, 0.0f};
+            lighting.has_runtime_direction     = false;
+        }
+    } else {
+        lighting.runtime_average_direction = SDL_FPoint{0.0f, 0.0f};
+        lighting.has_runtime_direction     = false;
     }
 
     // Use center cell's shadow parameters as representative aggregate.
@@ -580,6 +619,26 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
         if (dir_push > 1e-4f) {
             px += -dir.x * dir_push;
             py += -dir.y * dir_push;
+        }
+    }
+
+    if (chunk.lighting.has_runtime_average && chunk.lighting.has_runtime_direction) {
+        SDL_FPoint runtime_dir = chunk.lighting.runtime_average_direction;
+        const float dir_mag = std::sqrt(runtime_dir.x * runtime_dir.x + runtime_dir.y * runtime_dir.y);
+        if (dir_mag > 1e-4f) {
+            runtime_dir.x /= dir_mag;
+            runtime_dir.y /= dir_mag;
+            const float raw_intensity = std::max(chunk.lighting.runtime_average_raw_intensity, 0.0f);
+            const float strength      = std::clamp(chunk.lighting.runtime_average_strength, 0.0f, 1.0f);
+            const float runtime_push  = std::clamp(raw_intensity, 0.0f, 4.0f) * strength * 50.0f;
+            if (runtime_push > 1e-3f) {
+                px += -runtime_dir.x * runtime_push;
+                py += -runtime_dir.y * runtime_push;
+            }
+            if (raw_intensity > 0.0f) {
+                const float runtime_opacity_scale = 1.0f / (1.0f + raw_intensity);
+                sample.opacity *= runtime_opacity_scale;
+            }
         }
     }
 
@@ -979,6 +1038,9 @@ void LightMap::ingest_runtime_samples(const runtime_lighting::RuntimeLightingFra
             cell.lighting.has_runtime_average      = false;
             cell.lighting.runtime_average_strength = 0.0f;
             cell.lighting.runtime_average_color    = SDL_Color{255, 255, 255, 255};
+            cell.lighting.runtime_average_raw_intensity = 0.0f;
+            cell.lighting.runtime_average_direction     = SDL_FPoint{0.0f, 0.0f};
+            cell.lighting.has_runtime_direction         = false;
         }
     }
 
@@ -1003,6 +1065,17 @@ void LightMap::ingest_runtime_samples(const runtime_lighting::RuntimeLightingFra
         cell->lighting.has_runtime_average      = true;
         cell->lighting.needs_update             = true;
         cell->lighting.is_active                = true;
+        cell->lighting.runtime_average_raw_intensity = std::max(sample.raw_intensity, 0.0f);
+        if (sample.has_direction) {
+            SDL_FPoint dir = sample.direction;
+            const float mag = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+            if (mag > 1e-4f) {
+                dir.x /= mag;
+                dir.y /= mag;
+                cell->lighting.runtime_average_direction = dir;
+                cell->lighting.has_runtime_direction     = true;
+            }
+        }
 
         if (cell->parent) {
             updated_chunks.insert(cell->parent);

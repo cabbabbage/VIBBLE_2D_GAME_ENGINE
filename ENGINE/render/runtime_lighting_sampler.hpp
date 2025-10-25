@@ -26,7 +26,10 @@ struct RuntimeLightingFrame {
         int   global_i   = 0;
         int   global_j   = 0;
         float brightness = 0.0f;
+        float raw_intensity = 0.0f;
+        SDL_FPoint direction{0.0f, 0.0f};
         SDL_Color color{255, 255, 255, 255};
+        bool      has_direction = false;
     };
 
     std::vector<Sample> samples{};
@@ -39,6 +42,14 @@ struct ExternalLightSample {
     float      radius    = 0.0f;
     float      intensity = 0.0f; // normalized [0,1]
     SDL_Color  color{255, 255, 255, 255};
+    SDL_FPoint direction{0.0f, -1.0f};
+    bool       has_direction = false;
+    struct Attenuation {
+        float constant  = 1.0f;
+        float linear    = 0.0f;
+        float quadratic = 0.0f;
+        bool  enabled   = false;
+    } attenuation{};
 };
 
 class RuntimeLightingSampler {

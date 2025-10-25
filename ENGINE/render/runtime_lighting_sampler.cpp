@@ -2,10 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <unordered_map>
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
+#include "utils/area.hpp"
 #include "utils/light_source.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
@@ -15,12 +18,40 @@ namespace {
 
 struct RuntimeEmitter {
     SDL_FPoint position{0.0f, 0.0f};
+    SDL_FPoint default_direction{0.0f, -1.0f};
+    bool       has_default_direction = false;
     float      radius          = 0.0f;
     float      radius_squared  = 0.0f;
     float      intensity       = 0.0f; // normalized [0,1]
     SDL_Color  color{255, 255, 255, 255};
     SDL_FRect  influence_bounds_f{0.0f, 0.0f, 0.0f, 0.0f};
     SDL_Rect   influence_bounds{0, 0, 0, 0};
+    struct Attenuation {
+        float constant  = 1.0f;
+        float linear    = 0.0f;
+        float quadratic = 0.0f;
+        bool  enabled   = false;
+
+        float evaluate(float distance, float radius) const {
+            if (!enabled) {
+                if (radius <= 1e-4f) {
+                    return 1.0f;
+                }
+                const float falloff = 1.0f - (distance / std::max(radius, 1.0f));
+                return std::clamp(falloff, 0.0f, 1.0f);
+            }
+
+            const float denom = constant + linear * distance + quadratic * distance * distance;
+            if (denom <= 1e-5f) {
+                return 1.0f;
+            }
+            const float attenuation = 1.0f / denom;
+            if (!std::isfinite(attenuation)) {
+                return 0.0f;
+            }
+            return std::clamp(attenuation, 0.0f, 1.0f);
+        }
+    } attenuation{};
 };
 
 void finalize_emitter(RuntimeEmitter& emitter) {
@@ -67,6 +98,20 @@ RuntimeEmitter make_emitter_from_external(const ExternalLightSample& sample) {
     emitter.radius   = std::max(0.0f, sample.radius);
     emitter.intensity = clamp01(sample.intensity);
     emitter.color     = sample.color;
+    if (sample.has_direction) {
+        emitter.default_direction      = sample.direction;
+        const float mag                = std::sqrt(sample.direction.x * sample.direction.x +
+                                     sample.direction.y * sample.direction.y);
+        if (mag > 1e-4f) {
+            emitter.default_direction.x = sample.direction.x / mag;
+            emitter.default_direction.y = sample.direction.y / mag;
+            emitter.has_default_direction = true;
+        }
+    }
+    emitter.attenuation.constant  = sample.attenuation.constant;
+    emitter.attenuation.linear    = sample.attenuation.linear;
+    emitter.attenuation.quadratic = sample.attenuation.quadratic;
+    emitter.attenuation.enabled   = sample.attenuation.enabled;
     finalize_emitter(emitter);
     return emitter;
 }
@@ -115,9 +160,147 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
     emitter.radius    = radius;
     emitter.intensity = clamp01(static_cast<float>(light.intensity) / 255.0f);
     emitter.color     = light.color;
+    const SDL_FPoint offset_dir{static_cast<float>(source.flipped ? -light.offset_x : light.offset_x),
+                                static_cast<float>(light.offset_y)};
+    const float offset_mag = std::sqrt(offset_dir.x * offset_dir.x + offset_dir.y * offset_dir.y);
+    if (offset_mag > 1e-4f) {
+        emitter.default_direction.x = offset_dir.x / offset_mag;
+        emitter.default_direction.y = offset_dir.y / offset_mag;
+        emitter.has_default_direction = true;
+    }
+    const float radius_safe = std::max(radius, 1.0f);
+    const float falloff_pct = std::clamp(static_cast<float>(light.fall_off) / 100.0f, 0.0f, 1.0f);
+    emitter.attenuation.enabled   = true;
+    emitter.attenuation.constant  = 1.0f;
+    emitter.attenuation.linear    = falloff_pct / radius_safe;
+    emitter.attenuation.quadratic = (1.0f - falloff_pct) / (radius_safe * radius_safe);
     finalize_emitter(emitter);
     return emitter;
 }
+
+struct ChunkOcclusionData {
+    SDL_Rect                     bounds{0, 0, 0, 0};
+    int                          width  = 0;
+    int                          height = 0;
+    std::vector<std::uint8_t>    mask{};
+};
+
+class OcclusionSampler {
+public:
+    explicit OcclusionSampler(world::Grid& grid)
+        : grid_(grid) {}
+
+    float visibility(const SDL_FPoint& from, const SDL_FPoint& to) {
+        const float dx     = to.x - from.x;
+        const float dy     = to.y - from.y;
+        const float length = std::sqrt(dx * dx + dy * dy);
+        if (length <= 1e-4f) {
+            return 1.0f;
+        }
+
+        const float step_length = 4.0f;
+        const int   steps       = std::max(1, static_cast<int>(std::ceil(length / step_length)));
+        int         occluded    = 0;
+        int         total       = 0;
+
+        for (int step = 1; step <= steps; ++step) {
+            const float t = static_cast<float>(step) / static_cast<float>(steps);
+            if (t >= 1.0f) {
+                break;
+            }
+            const float sample_x = from.x + dx * t;
+            const float sample_y = from.y + dy * t;
+            const SDL_Point probe{static_cast<int>(std::lround(sample_x)),
+                                  static_cast<int>(std::lround(sample_y))};
+            if (is_blocked(probe)) {
+                ++occluded;
+            }
+            ++total;
+        }
+
+        if (total <= 0) {
+            return 1.0f;
+        }
+
+        const float visibility = 1.0f - static_cast<float>(occluded) / static_cast<float>(total);
+        return std::clamp(visibility, 0.0f, 1.0f);
+    }
+
+private:
+    bool is_blocked(const SDL_Point& point) {
+        world::Chunk* chunk = grid_.chunk_from_world(point);
+        if (!chunk) {
+            return false;
+        }
+
+        ChunkOcclusionData& data = ensure_chunk(chunk);
+        if (data.width <= 0 || data.height <= 0) {
+            return false;
+        }
+        if (!SDL_PointInRect(&point, &data.bounds)) {
+            return false;
+        }
+
+        const int local_x = point.x - data.bounds.x;
+        const int local_y = point.y - data.bounds.y;
+        if (local_x < 0 || local_y < 0 || local_x >= data.width || local_y >= data.height) {
+            return false;
+        }
+        const std::size_t index = static_cast<std::size_t>(local_y) * static_cast<std::size_t>(data.width) +
+                                  static_cast<std::size_t>(local_x);
+        if (index >= data.mask.size()) {
+            return false;
+        }
+        return data.mask[index] != 0;
+    }
+
+    ChunkOcclusionData& ensure_chunk(world::Chunk* chunk) {
+        auto it = cache_.find(chunk);
+        if (it != cache_.end()) {
+            return it->second;
+        }
+
+        ChunkOcclusionData data;
+        data.bounds = chunk->world_bounds;
+        data.width  = std::max(0, data.bounds.w);
+        data.height = std::max(0, data.bounds.h);
+        if (data.width > 0 && data.height > 0) {
+            data.mask.assign(static_cast<std::size_t>(data.width * data.height), 0);
+            for (Asset* asset : chunk->assets) {
+                if (!asset) {
+                    continue;
+                }
+                Area area = asset->get_area("impassable");
+                if (area.get_points().empty()) {
+                    area = asset->get_area("collision_area");
+                }
+                for (const SDL_Point& pt : area.get_points()) {
+                    if (!SDL_PointInRect(&pt, &data.bounds)) {
+                        continue;
+                    }
+                    const int local_x = pt.x - data.bounds.x;
+                    const int local_y = pt.y - data.bounds.y;
+                    if (local_x < 0 || local_y < 0 || local_x >= data.width || local_y >= data.height) {
+                        continue;
+                    }
+                    const std::size_t index = static_cast<std::size_t>(local_y) *
+                                              static_cast<std::size_t>(data.width) +
+                                              static_cast<std::size_t>(local_x);
+                    if (index < data.mask.size()) {
+                        data.mask[index] = 1;
+                    }
+                }
+            }
+        }
+
+        auto [inserted_it, _] = cache_.emplace(chunk, std::move(data));
+        return inserted_it->second;
+    }
+
+private:
+    world::Grid&                                      grid_;
+    std::unordered_map<world::Chunk*, ChunkOcclusionData> cache_{};
+};
 
 } // namespace
 
@@ -258,6 +441,8 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
 
     frame.samples.reserve(emitters.size() * 4);
 
+    OcclusionSampler occlusion_sampler(grid);
+
     for (world::Chunk* chunk : active_chunks) {
         if (!chunk) {
             continue;
@@ -297,6 +482,8 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
             float accum_r        = 0.0f;
             float accum_g        = 0.0f;
             float accum_b        = 0.0f;
+            float accum_dir_x    = 0.0f;
+            float accum_dir_y    = 0.0f;
             const auto& emitter_indices = cell_emitters[cell_index];
             for (std::size_t emitter_index : emitter_indices) {
                 const RuntimeEmitter& emitter = emitters[emitter_index];
@@ -307,10 +494,33 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
                     continue;
                 }
                 const float dist    = std::sqrt(dist_squared);
-                const float falloff = 1.0f - (dist / std::max(emitter.radius, 1.0f));
-                const float contribution = emitter.intensity * clamp01(falloff);
+                float contribution = emitter.intensity * emitter.attenuation.evaluate(dist, emitter.radius);
                 if (contribution <= 0.0f) {
                     continue;
+                }
+                const float visibility = occlusion_sampler.visibility(emitter.position, center);
+                if (visibility <= 0.0f) {
+                    continue;
+                }
+                contribution *= visibility;
+                if (contribution <= 0.0f) {
+                    continue;
+                }
+                SDL_FPoint contribution_dir{0.0f, 0.0f};
+                if (dist > 1e-4f) {
+                    const float inv = 1.0f / dist;
+                    contribution_dir.x = dx * inv;
+                    contribution_dir.y = dy * inv;
+                } else if (emitter.has_default_direction) {
+                    contribution_dir = emitter.default_direction;
+                }
+                const float dir_mag = std::sqrt(contribution_dir.x * contribution_dir.x +
+                                                contribution_dir.y * contribution_dir.y);
+                if (dir_mag > 1e-4f) {
+                    contribution_dir.x /= dir_mag;
+                    contribution_dir.y /= dir_mag;
+                    accum_dir_x += contribution_dir.x * contribution;
+                    accum_dir_y += contribution_dir.y * contribution;
                 }
                 brightness_sum += contribution;
                 accum_r += static_cast<float>(emitter.color.r) * contribution;
@@ -329,6 +539,17 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
             sample.global_i   = cell.global_i;
             sample.global_j   = cell.global_j;
             sample.brightness = brightness;
+            sample.raw_intensity = brightness_sum;
+            if (brightness_sum > 1e-5f) {
+                SDL_FPoint dir{accum_dir_x / brightness_sum, accum_dir_y / brightness_sum};
+                const float dir_mag = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+                if (dir_mag > 1e-4f) {
+                    dir.x /= dir_mag;
+                    dir.y /= dir_mag;
+                    sample.direction      = dir;
+                    sample.has_direction = true;
+                }
+            }
             if (brightness_sum > 1e-5f) {
                 const float inv = 1.0f / brightness_sum;
                 const float r   = std::clamp(accum_r * inv, 0.0f, 255.0f);
