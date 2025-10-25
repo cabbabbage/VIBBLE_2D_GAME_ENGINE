@@ -8,10 +8,10 @@
 #include <SDL.h>
 #include <nlohmann/json_fwd.hpp>
 
+#include "utils/map_grid_settings.hpp"
+
 class AssetLibrary;
 class Room;
-struct MapGridSettings;
-
 class MapWideAssetSpawner {
 public:
     MapWideAssetSpawner(AssetLibrary* asset_library,

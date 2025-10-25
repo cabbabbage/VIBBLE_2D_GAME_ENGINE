@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -10,7 +11,6 @@
 namespace animation_editor {
 
 class AnimationDocument;
-class AnimationInspectorPanel;
 class PreviewProvider;
 
 class AnimationListPanel {
@@ -20,7 +20,9 @@ class AnimationListPanel {
     void set_document(std::shared_ptr<AnimationDocument> document);
     void set_bounds(const SDL_Rect& bounds);
     void set_preview_provider(std::shared_ptr<PreviewProvider> provider);
-    void set_inspector_configurator(std::function<void(AnimationInspectorPanel&)> configurator);
+    void set_selected_animation_id(const std::optional<std::string>& animation_id);
+    void set_on_selection_changed(std::function<void(const std::optional<std::string>&)> callback);
+    void set_on_context_menu(std::function<void(const std::string&, const SDL_Point&)> callback);
 
     void update();
     void render(SDL_Renderer* renderer) const;
@@ -28,16 +30,21 @@ class AnimationListPanel {
 
   private:
     void rebuild_children();
-    void layout_inspectors();
+    void layout_rows();
     void clamp_scroll();
+    void scroll_selection_into_view();
+    std::optional<size_t> row_index_at_point(const SDL_Point& p) const;
 
   private:
     std::shared_ptr<AnimationDocument> document_;
-    std::vector<std::unique_ptr<AnimationInspectorPanel>> inspectors_;
-    std::vector<SDL_Rect> inspector_bounds_;
+    std::vector<SDL_Rect> row_bounds_;
     std::vector<std::string> cached_animation_ids_;
+    std::optional<std::string> start_animation_id_;
     std::shared_ptr<PreviewProvider> preview_provider_;
-    std::function<void(AnimationInspectorPanel&)> inspector_configurator_;
+    std::function<void(const std::optional<std::string>&)> on_selection_changed_;
+    std::function<void(const std::string&, const SDL_Point&)> on_context_menu_;
+    std::optional<std::string> selected_animation_id_;
+    std::optional<size_t> hovered_row_;
     SDL_Rect bounds_{0, 0, 0, 0};
     int scroll_offset_ = 0;
     int content_height_ = 0;

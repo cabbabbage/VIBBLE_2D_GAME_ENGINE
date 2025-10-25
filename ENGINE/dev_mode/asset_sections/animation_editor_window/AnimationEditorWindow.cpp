@@ -97,6 +97,10 @@ AnimationEditorWindow::AnimationEditorWindow() {
     list_panel_->set_document(document_);
     list_panel_->set_preview_provider(preview_provider_);
     configure_list_panel();
+    inspector_panel_ = std::make_unique<AnimationInspectorPanel>();
+    inspector_panel_->set_document(document_);
+    inspector_panel_->set_preview_provider(preview_provider_);
+    configure_inspector_panel();
 
     header_corner_button_ =
         std::make_unique<DMButton>(std::string(DMIcons::Close()),
@@ -191,13 +195,17 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     document_->consume_dirty_flag();
     preview_provider_->set_document(document_);
     configure_list_panel();
+    configure_inspector_panel();
     if (list_panel_) list_panel_->set_preview_provider(preview_provider_);
+    if (inspector_panel_) inspector_panel_->set_preview_provider(preview_provider_);
     if (audio_importer_) {
         std::filesystem::path audio_root = asset_root_path_.empty() ? std::filesystem::path{}
                                                                    : asset_root_path_ / default_audio_subdir();
         audio_importer_->set_asset_root(audio_root);
     }
     if (list_panel_) list_panel_->set_document(document_);
+    if (inspector_panel_) inspector_panel_->set_document(document_);
+    ensure_selection_valid();
     std::string asset_label = info->name.empty() ? std::string("asset") : info->name;
     set_status_message("Loaded " + asset_label, 240);
     auto_save_pending_ = false;
@@ -216,6 +224,11 @@ void AnimationEditorWindow::clear_info() {
     preview_provider_->invalidate_all();
     if (list_panel_) list_panel_->set_preview_provider(preview_provider_);
     if (list_panel_) list_panel_->set_document(document_);
+    if (inspector_panel_) inspector_panel_->set_preview_provider(preview_provider_);
+    if (inspector_panel_) inspector_panel_->set_document(document_);
+    configure_list_panel();
+    configure_inspector_panel();
+    select_animation(std::nullopt, false);
     set_status_message("Select an asset to configure animations.", 240);
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;
@@ -260,8 +273,18 @@ void AnimationEditorWindow::layout_children() {
 
     int list_y = header_rect_.y + header_rect_.h + header_gap;
     int list_height = std::max(0, status_rect_.y - list_y - header_gap);
-    list_rect_ = SDL_Rect{bounds_.x + padding, list_y, std::max(0, bounds_.w - padding * 2), list_height};
+    int available_width = std::max(0, bounds_.w - padding * 2);
+    int sidebar_width = std::min(320, available_width);
+    int inspector_gap = DMSpacing::panel_padding();
+    if (available_width < sidebar_width + inspector_gap) {
+        inspector_gap = DMSpacing::small_gap();
+    }
+    list_rect_ = SDL_Rect{bounds_.x + padding, list_y, sidebar_width, list_height};
+    int inspector_x = list_rect_.x + list_rect_.w + inspector_gap;
+    int inspector_w = std::max(0, bounds_.x + bounds_.w - padding - inspector_x);
+    inspector_rect_ = SDL_Rect{inspector_x, list_y, inspector_w, list_height};
     if (list_panel_) list_panel_->set_bounds(list_rect_);
+    if (inspector_panel_) inspector_panel_->set_bounds(inspector_rect_);
 
     // Default editor rect spans the window padding; if overlay is visible, compute a centered modal
     frame_editor_rect_ = SDL_Rect{bounds_.x + padding, bounds_.y + padding,
@@ -306,18 +329,99 @@ void AnimationEditorWindow::layout_children() {
 
 void AnimationEditorWindow::configure_list_panel() {
     if (!list_panel_) return;
-    list_panel_->set_inspector_configurator([this](AnimationInspectorPanel& inspector) {
-        inspector.set_preview_provider(preview_provider_);
-        inspector.set_source_services(cropping_service_, task_queue_);
-        inspector.set_source_folder_picker([this]() { return this->pick_folder(); });
-        inspector.set_source_animation_picker([this]() { return this->pick_animation_reference(); });
-        inspector.set_source_gif_picker([this]() { return this->pick_gif(); });
-        inspector.set_source_png_sequence_picker([this]() { return this->pick_png_sequence(); });
-        inspector.set_source_status_callback([this](const std::string& message) { this->set_status_message(message); });
-        inspector.set_frame_edit_callback([this](const std::string& id) { this->open_frame_editor(id); });
-        inspector.set_audio_importer(audio_importer_);
-        inspector.set_audio_file_picker([this]() { return this->pick_audio_file(); });
+    list_panel_->set_document(document_);
+    list_panel_->set_preview_provider(preview_provider_);
+    list_panel_->set_on_selection_changed([this](const std::optional<std::string>& animation_id) {
+        this->select_animation(animation_id, true);
     });
+    list_panel_->set_on_context_menu([this](const std::string& animation_id, const SDL_Point& location) {
+        this->handle_list_context_menu(animation_id, location);
+    });
+    list_panel_->set_selected_animation_id(selected_animation_id_);
+}
+
+void AnimationEditorWindow::configure_inspector_panel() {
+    if (!inspector_panel_) return;
+    inspector_panel_->set_document(document_);
+    inspector_panel_->set_preview_provider(preview_provider_);
+    inspector_panel_->set_source_services(cropping_service_, task_queue_);
+    inspector_panel_->set_source_folder_picker([this]() { return this->pick_folder(); });
+    inspector_panel_->set_source_animation_picker([this]() { return this->pick_animation_reference(); });
+    inspector_panel_->set_source_gif_picker([this]() { return this->pick_gif(); });
+    inspector_panel_->set_source_png_sequence_picker([this]() { return this->pick_png_sequence(); });
+    inspector_panel_->set_source_status_callback([this](const std::string& message) { this->set_status_message(message); });
+    inspector_panel_->set_frame_edit_callback([this](const std::string& id) { this->open_frame_editor(id); });
+    inspector_panel_->set_audio_importer(audio_importer_);
+    inspector_panel_->set_audio_file_picker([this]() { return this->pick_audio_file(); });
+    if (selected_animation_id_) {
+        inspector_panel_->set_animation_id(*selected_animation_id_);
+    }
+}
+
+void AnimationEditorWindow::select_animation(const std::optional<std::string>& animation_id, bool from_user) {
+    if (selected_animation_id_ == animation_id) {
+        if (list_panel_) {
+            list_panel_->set_selected_animation_id(selected_animation_id_);
+        }
+        return;
+    }
+
+    selected_animation_id_ = animation_id;
+    if (list_panel_) {
+        list_panel_->set_selected_animation_id(selected_animation_id_);
+    }
+    if (inspector_panel_ && selected_animation_id_) {
+        inspector_panel_->set_animation_id(*selected_animation_id_);
+    }
+
+    if (from_user) {
+        if (selected_animation_id_) {
+            set_status_message("Selected animation '" + *selected_animation_id_ + "'.", 150);
+        } else {
+            set_status_message("No animation selected.", 120);
+        }
+    }
+}
+
+void AnimationEditorWindow::ensure_selection_valid() {
+    if (!document_) {
+        if (selected_animation_id_) {
+            select_animation(std::nullopt, false);
+        }
+        return;
+    }
+
+    auto ids = document_->animation_ids();
+    if (ids.empty()) {
+        select_animation(std::nullopt, false);
+        return;
+    }
+
+    if (selected_animation_id_) {
+        if (std::find(ids.begin(), ids.end(), *selected_animation_id_) != ids.end()) {
+            if (list_panel_) {
+                list_panel_->set_selected_animation_id(selected_animation_id_);
+            }
+            return;
+        }
+    }
+
+    std::optional<std::string> candidate;
+    if (auto start = document_->start_animation()) {
+        if (std::find(ids.begin(), ids.end(), *start) != ids.end()) {
+            candidate = *start;
+        }
+    }
+    if (!candidate) {
+        candidate = ids.front();
+    }
+    select_animation(candidate, false);
+}
+
+void AnimationEditorWindow::handle_list_context_menu(const std::string& animation_id, const SDL_Point& location) {
+    (void)location; // unused
+    select_animation(std::make_optional(animation_id), false);
+    set_status_message("Context menu requested for '" + animation_id + "'.", 120);
 }
 
 void AnimationEditorWindow::update(const Input& input, int, int) {
@@ -332,6 +436,13 @@ void AnimationEditorWindow::update(const Input& input, int, int) {
 
     if (task_queue_) task_queue_->update();
     if (list_panel_) list_panel_->update();
+    ensure_selection_valid();
+    if (inspector_panel_) {
+        inspector_panel_->set_bounds(inspector_rect_);
+        if (selected_animation_id_) {
+            inspector_panel_->update();
+        }
+    }
     if (frame_editor_visible_ && frame_editor_) {
         frame_editor_->set_bounds(frame_editor_rect_);
         frame_editor_->update();
@@ -360,6 +471,7 @@ void AnimationEditorWindow::render(SDL_Renderer* renderer) const {
     render_background(renderer);
     render_header(renderer);
     if (list_panel_) list_panel_->render(renderer);
+    render_inspector(renderer);
     render_status(renderer);
     if (frame_editor_visible_) {
         render_frame_editor_overlay(renderer);
@@ -385,6 +497,10 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     }
 
     if (list_panel_ && list_panel_->handle_event(e)) {
+        return true;
+    }
+
+    if (inspector_panel_ && selected_animation_id_ && inspector_panel_->handle_event(e)) {
         return true;
     }
 
@@ -527,6 +643,35 @@ void AnimationEditorWindow::render_status(SDL_Renderer* renderer) const {
     render_label(renderer, status_message_, status_rect_.x + DMSpacing::panel_padding(), status_rect_.y + DMSpacing::panel_padding());
 }
 
+void AnimationEditorWindow::render_inspector(SDL_Renderer* renderer) const {
+    if (!renderer) return;
+    if (inspector_rect_.w <= 0 || inspector_rect_.h <= 0) {
+        return;
+    }
+
+    if (inspector_panel_ && selected_animation_id_) {
+        inspector_panel_->render(renderer);
+        return;
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    dm_draw::DrawBeveledRect(renderer,
+                             inspector_rect_,
+                             DMStyles::CornerRadius(),
+                             DMStyles::BevelDepth(),
+                             DMStyles::PanelBG(),
+                             DMStyles::HighlightColor(),
+                             DMStyles::ShadowColor(),
+                             false,
+                             DMStyles::HighlightIntensity(),
+                             DMStyles::ShadowIntensity());
+
+    std::string message = "Select an animation to edit.";
+    int text_x = inspector_rect_.x + DMSpacing::panel_padding();
+    int text_y = inspector_rect_.y + DMSpacing::panel_padding();
+    render_label(renderer, message, text_x, text_y);
+}
+
 void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     // Dim the background
@@ -667,6 +812,7 @@ void AnimationEditorWindow::create_animation_via_prompt() {
     }
     document_->create_animation(name);
     preview_provider_->invalidate_all();
+    select_animation(std::make_optional(name), false);
     set_status_message("Created animation '" + name + "'.", 240);
 }
 
@@ -706,6 +852,10 @@ void AnimationEditorWindow::reload_document() {
     document_->consume_dirty_flag();
     preview_provider_->invalidate_all();
     if (list_panel_) list_panel_->set_document(document_);
+    if (inspector_panel_) inspector_panel_->set_document(document_);
+    configure_list_panel();
+    configure_inspector_panel();
+    ensure_selection_valid();
     set_status_message("Reloaded animations.", 240);
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;

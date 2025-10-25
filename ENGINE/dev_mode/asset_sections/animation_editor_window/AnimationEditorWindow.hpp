@@ -56,9 +56,14 @@ class AnimationEditorWindow {
     void layout_children();
     void ensure_layout() const;
     void configure_list_panel();
+    void configure_inspector_panel();
+    void select_animation(const std::optional<std::string>& animation_id, bool from_user);
+    void ensure_selection_valid();
+    void handle_list_context_menu(const std::string& animation_id, const SDL_Point& location);
     void render_background(SDL_Renderer* renderer) const;
     void render_header(SDL_Renderer* renderer) const;
     void render_status(SDL_Renderer* renderer) const;
+    void render_inspector(SDL_Renderer* renderer) const;
     void render_frame_editor_overlay(SDL_Renderer* renderer) const;
     bool handle_header_event(const SDL_Event& e);
     void set_status_message(const std::string& message, int frames = 300);
@@ -89,6 +94,7 @@ class AnimationEditorWindow {
     std::shared_ptr<AsyncTaskQueue> task_queue_;
     std::shared_ptr<AudioImporter> audio_importer_;
     std::unique_ptr<AnimationListPanel> list_panel_;
+    std::unique_ptr<AnimationInspectorPanel> inspector_panel_;
     std::unique_ptr<FrameEditor> frame_editor_;
     std::unique_ptr<DMButton> header_corner_button_;
     std::unique_ptr<DMButton> add_button_;
@@ -96,6 +102,7 @@ class AnimationEditorWindow {
     std::unique_ptr<DMButton> close_button_;
     SDL_Rect header_rect_{0, 0, 0, 0};
     SDL_Rect list_rect_{0, 0, 0, 0};
+    SDL_Rect inspector_rect_{0, 0, 0, 0};
     SDL_Rect status_rect_{0, 0, 0, 0};
     SDL_Rect frame_editor_rect_{0, 0, 0, 0};
     // Modal container for the frame editor overlay
@@ -105,6 +112,7 @@ class AnimationEditorWindow {
     int status_timer_frames_ = 0;
     bool frame_editor_visible_ = false;
     std::string frame_editor_animation_id_;
+    std::optional<std::string> selected_animation_id_;
     mutable bool layout_dirty_ = true;
     bool auto_save_pending_ = false;
     int auto_save_timer_frames_ = 0;
