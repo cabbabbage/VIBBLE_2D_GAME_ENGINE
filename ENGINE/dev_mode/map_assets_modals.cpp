@@ -414,6 +414,15 @@ public:
 SingleSpawnGroupModal::SingleSpawnGroupModal() = default;
 SingleSpawnGroupModal::~SingleSpawnGroupModal() = default;
 
+void SingleSpawnGroupModal::set_on_close(std::function<void()> cb) {
+    on_close_ = std::move(cb);
+    if (panel_) {
+        panel_->set_on_close([this]() {
+            if (on_close_) on_close_();
+        });
+    }
+}
+
 void SingleSpawnGroupModal::ensure_single_group(json& section,
                                                 const std::string& default_display_name) {
     if (!section.is_object()) {
@@ -462,6 +471,12 @@ void SingleSpawnGroupModal::open(json& map_info,
                  [this](const json& updated_entry) {
                      if (on_regen_) on_regen_(updated_entry);
                  });
+
+    if (panel_) {
+        panel_->set_on_close([this]() {
+            if (on_close_) on_close_();
+        });
+    }
 
     panel_->open();
     panel_->force_pointer_ready();

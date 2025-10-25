@@ -75,6 +75,16 @@ bool safe_loading_enabled() {
     return value[0] == '1' || value[0] == 'y' || value[0] == 'Y' || value[0] == 't' || value[0] == 'T';
 }
 
+SDL_BlendMode darkness_cutout_blend_mode() {
+    static SDL_BlendMode cached = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO,
+                                                             SDL_BLENDFACTOR_ONE,
+                                                             SDL_BLENDOPERATION_ADD,
+                                                             SDL_BLENDFACTOR_ZERO,
+                                                             SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                                                             SDL_BLENDOPERATION_ADD);
+    return cached;
+}
+
 } // namespace
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
@@ -124,7 +134,9 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     main_light_source_.update();
 }
 
-SceneRenderer::~SceneRenderer() = default;
+SceneRenderer::~SceneRenderer() {
+    destroy_darkness_overlay();
+}
 
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
 
@@ -328,6 +340,9 @@ void SceneRenderer::render(){
     }
     render_pipeline_.lighting().reactive_shadow_settings = render_shadows ? &reactive_shadow_settings_ : nullptr;
 
+    const SDL_Color map_light_color = main_light_source_.get_current_color();
+    const float map_light_opacity = std::clamp(static_cast<float>(map_light_color.a) / 255.0f, 0.0f, 1.0f);
+
     SDL_SetRenderTarget(renderer_,nullptr);
     SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
     const SDL_Color clear_color = light_map_only_mode_ ? SDL_Color{0,0,0,255} : map_clear_color_;
@@ -345,10 +360,7 @@ void SceneRenderer::render(){
         // Compute the current screen-light color and derive a global alpha multiplier from its opacity.
         // Higher map-light opacity values correspond to darker scenes, so the overlay should become
         // more prominent as the opacity rises.
-        const SDL_Color current_color = main_light_source_.get_current_color();
-        const float normalized =
-            std::clamp(static_cast<float>(current_color.a) / 255.0f, 0.0f, 1.0f);
-        const float alpha_mult = normalized;
+        const float alpha_mult = map_light_opacity;
 
         SDL_Rect screen_view{0,0,screen_width_,screen_height_};
         SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
@@ -356,10 +368,12 @@ void SceneRenderer::render(){
             previous_mode = SDL_BLENDMODE_BLEND;
         }
         SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
-        light_map_->render_visible_chunks(renderer_, screen_view, alpha_mult, current_color);
+        light_map_->render_visible_chunks(renderer_, screen_view, alpha_mult, map_light_color);
         SDL_SetRenderDrawBlendMode(renderer_,previous_mode);
         rendered_light_map = true;
     };
+
+    light_overlay_sources_.clear();
 
     if (!light_map_only_mode_){
         const auto& camera_state=assets_->getView();
@@ -403,6 +417,7 @@ void SceneRenderer::render(){
         texture_commands_.reserve(active.size());
         remaining_commands_.clear();
         remaining_commands_.reserve(active.size());
+        light_overlay_sources_.reserve(active.size());
 
         auto enqueue_command = [&](Asset* asset,
                                    SDL_Texture* final_tex,
@@ -465,6 +480,16 @@ void SceneRenderer::render(){
             SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(a, final_tex, fw, fh, dst.w, dst.h);
             enqueue_command(a, final_tex, draw_tex, dst);
 
+            if (a->info && !a->info->light_sources.empty() && dst.w > 0 && dst.h > 0 && fw > 0 && fh > 0) {
+                LightOverlaySource source;
+                source.asset       = a;
+                source.asset_rect  = dst;
+                source.base_width  = fw;
+                source.base_height = fh;
+                source.flipped     = a->flipped;
+                light_overlay_sources_.push_back(source);
+            }
+
             if (a->current_frame) {
                 last_rendered_frames_[a] = a->current_frame;
             } else {
@@ -518,6 +543,7 @@ void SceneRenderer::render(){
         };
 
         render_commands(texture_commands_);
+        render_dynamic_darkness_overlay(map_light_opacity);
         render_light_map();
 
         render_commands(remaining_commands_);
@@ -550,4 +576,186 @@ void SceneRenderer::render(){
 }
 
 
+
+bool SceneRenderer::ensure_darkness_overlay() {
+    if (!renderer_ || screen_width_ <= 0 || screen_height_ <= 0) {
+        return false;
+    }
+
+    if (darkness_overlay_texture_ &&
+        (darkness_overlay_width_ != screen_width_ || darkness_overlay_height_ != screen_height_)) {
+        destroy_darkness_overlay();
+    }
+
+    if (!darkness_overlay_texture_) {
+        SDL_Texture* texture = SDL_CreateTexture(renderer_,
+                                                 SDL_PIXELFORMAT_RGBA8888,
+                                                 SDL_TEXTUREACCESS_TARGET,
+                                                 screen_width_,
+                                                 screen_height_);
+        if (!texture) {
+            vibble::log::warn("[SceneRenderer] Failed to allocate darkness overlay: {}", SDL_GetError());
+            return false;
+        }
+        darkness_overlay_texture_ = texture;
+        darkness_overlay_width_   = screen_width_;
+        darkness_overlay_height_  = screen_height_;
+        SDL_SetTextureBlendMode(darkness_overlay_texture_, SDL_BLENDMODE_BLEND);
+    }
+
+    return darkness_overlay_texture_ != nullptr;
+}
+
+void SceneRenderer::destroy_darkness_overlay() {
+    if (darkness_overlay_texture_) {
+        SDL_DestroyTexture(darkness_overlay_texture_);
+        darkness_overlay_texture_ = nullptr;
+        darkness_overlay_width_   = 0;
+        darkness_overlay_height_  = 0;
+    }
+}
+
+void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
+    if (!renderer_) {
+        return;
+    }
+
+    const float overlay_alpha = std::clamp(1.0f - map_light_opacity, 0.0f, 1.0f);
+    if (!ensure_darkness_overlay()) {
+        return;
+    }
+
+    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
+    SDL_SetRenderTarget(renderer_, darkness_overlay_texture_);
+    SDL_SetTextureAlphaMod(darkness_overlay_texture_, 255);
+    SDL_SetTextureColorMod(darkness_overlay_texture_, 255, 255, 255);
+
+    SDL_BlendMode previous_draw_blend = SDL_BLENDMODE_BLEND;
+    if (SDL_GetRenderDrawBlendMode(renderer_, &previous_draw_blend) != 0) {
+        previous_draw_blend = SDL_BLENDMODE_BLEND;
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+    SDL_RenderClear(renderer_);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+
+    const SDL_BlendMode cutout_blend = darkness_cutout_blend_mode();
+
+    for (const LightOverlaySource& source : light_overlay_sources_) {
+        Asset* asset = source.asset;
+        if (!asset || !asset->info) {
+            continue;
+        }
+
+        const auto& lights = asset->info->light_sources;
+        if (lights.empty()) {
+            continue;
+        }
+
+        const float base_width  = static_cast<float>(std::max(1, source.base_width));
+        const float base_height = static_cast<float>(std::max(1, source.base_height));
+        const float scale_x     = std::isfinite(static_cast<float>(source.asset_rect.w) / base_width)
+                                      ? static_cast<float>(source.asset_rect.w) / base_width
+                                      : 1.0f;
+        const float scale_y_base = std::isfinite(static_cast<float>(source.asset_rect.h) / base_height)
+                                        ? static_cast<float>(source.asset_rect.h) / base_height
+                                        : scale_x;
+        const float scale_y = (source.base_height > 0) ? scale_y_base : scale_x;
+        if (!std::isfinite(scale_x) || !std::isfinite(scale_y)) {
+            continue;
+        }
+
+        const float center_base_x = static_cast<float>(source.asset_rect.x) +
+                                    static_cast<float>(source.asset_rect.w) * 0.5f;
+        const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
+
+        for (const LightSource& light : lights) {
+            SDL_Texture* light_texture = nullptr;
+            if (light.texture) {
+                const float selection_scale = std::max(scale_x, scale_y);
+                light_texture = light.texture_for_scale(selection_scale);
+            }
+
+            int tex_w = light.cached_w;
+            int tex_h = light.cached_h;
+            if (light_texture) {
+                if (tex_w <= 0 || tex_h <= 0) {
+                    SDL_QueryTexture(light_texture, nullptr, nullptr, &tex_w, &tex_h);
+                }
+            } else {
+                if (tex_w <= 0) {
+                    tex_w = light.radius > 0 ? light.radius * 2 : 0;
+                }
+                if (tex_h <= 0) {
+                    tex_h = light.radius > 0 ? light.radius * 2 : 0;
+                }
+            }
+
+            if (tex_w <= 0 || tex_h <= 0) {
+                continue;
+            }
+
+            const float scaled_w = std::max(1.0f, static_cast<float>(tex_w) * scale_x);
+            const float scaled_h = std::max(1.0f, static_cast<float>(tex_h) * scale_y);
+
+            const float offset_x = static_cast<float>(source.flipped ? -light.offset_x : light.offset_x);
+            const float offset_y = static_cast<float>(light.offset_y);
+
+            const float center_x = center_base_x + offset_x * scale_x;
+            const float center_y = center_base_y + offset_y * scale_y;
+
+            SDL_Rect dst;
+            dst.w = std::max(1, static_cast<int>(std::lround(scaled_w)));
+            dst.h = std::max(1, static_cast<int>(std::lround(scaled_h)));
+            dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(dst.w) * 0.5f));
+            dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(dst.h) * 0.5f));
+
+            const Uint8 intensity = static_cast<Uint8>(std::clamp(light.intensity, 0, 255));
+            if (intensity == 0) {
+                continue;
+            }
+
+            if (light_texture) {
+                SDL_BlendMode previous_texture_blend = SDL_BLENDMODE_BLEND;
+                SDL_GetTextureBlendMode(light_texture, &previous_texture_blend);
+
+                Uint8 prev_r = 255, prev_g = 255, prev_b = 255, prev_a = 255;
+                SDL_GetTextureColorMod(light_texture, &prev_r, &prev_g, &prev_b);
+                SDL_GetTextureAlphaMod(light_texture, &prev_a);
+
+                SDL_SetTextureBlendMode(light_texture, cutout_blend);
+                SDL_SetTextureColorMod(light_texture, 0, 0, 0);
+                SDL_SetTextureAlphaMod(light_texture, intensity);
+
+                SDL_RenderCopy(renderer_, light_texture, nullptr, &dst);
+
+                SDL_SetTextureBlendMode(light_texture, previous_texture_blend);
+                SDL_SetTextureColorMod(light_texture, prev_r, prev_g, prev_b);
+                SDL_SetTextureAlphaMod(light_texture, prev_a);
+            } else {
+                SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
+                SDL_GetRenderDrawBlendMode(renderer_, &previous_mode);
+                SDL_SetRenderDrawBlendMode(renderer_, cutout_blend);
+                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, intensity);
+                SDL_RenderFillRect(renderer_, &dst);
+                SDL_SetRenderDrawBlendMode(renderer_, previous_mode);
+            }
+        }
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer_, previous_draw_blend);
+    SDL_SetRenderTarget(renderer_, previous_target);
+
+    if (overlay_alpha <= 0.0f) {
+        return;
+    }
+
+    SDL_SetTextureAlphaMod(darkness_overlay_texture_,
+                           static_cast<Uint8>(std::clamp(std::lround(overlay_alpha * 255.0f), 0L, 255L)));
+    SDL_SetTextureColorMod(darkness_overlay_texture_, 0, 0, 0);
+
+    SDL_Rect screen_dst{0, 0, screen_width_, screen_height_};
+    SDL_RenderCopy(renderer_, darkness_overlay_texture_, nullptr, &screen_dst);
+}
 

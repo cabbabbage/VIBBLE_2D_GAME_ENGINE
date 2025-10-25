@@ -1,6 +1,7 @@
 ﻿#include "SpawnGroupConfig.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <deque>
@@ -645,6 +646,18 @@ struct SpawnGroupConfig::Entry {
         bool asset_child = false;
     };
 
+    struct LinkAreaGroup {
+        bool asset_child = false;
+        LinkableAreaProvider provider;
+        std::unique_ptr<SpawnGroupLabelWidget> label;
+        std::vector<LinkableAreaOption> options;
+        std::vector<std::unique_ptr<DMButton>> buttons;
+        std::vector<std::unique_ptr<LinkAreaButtonWidget>> widgets;
+    };
+
+    static constexpr size_t kAssetLinkAreaGroupIndex = 0;
+    static constexpr size_t kRoomLinkAreaGroupIndex = 1;
+
     struct CandidateWidgets {
         std::unique_ptr<DMTextBox> name_box;
         std::unique_ptr<SpawnGroupCallbackTextBoxWidget> name_widget;
@@ -753,10 +766,17 @@ struct SpawnGroupConfig::Entry {
             [this](bool value) { on_place_on_top_parent_changed(value); },
             editable_);
 
-        asset_link_area_label_ = std::make_unique<SpawnGroupLabelWidget>("Asset Child Areas");
-        asset_link_area_label_->set_subtle(true);
-        room_link_area_label_ = std::make_unique<SpawnGroupLabelWidget>("Room Spawning Areas");
-        room_link_area_label_->set_subtle(true);
+        auto& asset_group = link_area_groups_[kAssetLinkAreaGroupIndex];
+        asset_group.asset_child = true;
+        asset_group.provider = empty_link_provider();
+        asset_group.label = std::make_unique<SpawnGroupLabelWidget>("Asset Child Areas");
+        if (asset_group.label) asset_group.label->set_subtle(true);
+
+        auto& room_group = link_area_groups_[kRoomLinkAreaGroupIndex];
+        room_group.asset_child = false;
+        room_group.provider = empty_link_provider();
+        room_group.label = std::make_unique<SpawnGroupLabelWidget>("Room Spawning Areas");
+        if (room_group.label) room_group.label->set_subtle(true);
 
         auto enforce_checkbox = std::make_unique<DMCheckbox>("Enforce Spacing", false);
         enforce_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(enforce_checkbox),
@@ -895,13 +915,11 @@ struct SpawnGroupConfig::Entry {
     }
 
     void set_linkable_asset_areas_provider(LinkableAreaProvider provider) {
-        asset_link_area_provider_ = provider ? std::move(provider) : empty_link_provider();
-        refresh_linkable_area_sources();
+        set_linkable_area_provider(kAssetLinkAreaGroupIndex, std::move(provider));
     }
 
     void set_linkable_room_areas_provider(LinkableAreaProvider provider) {
-        room_link_area_provider_ = provider ? std::move(provider) : empty_link_provider();
-        refresh_linkable_area_sources();
+        set_linkable_area_provider(kRoomLinkAreaGroupIndex, std::move(provider));
     }
 
     void set_open_area_handler(std::function<void(const std::string&, const std::string&)> handler,
@@ -1209,12 +1227,7 @@ struct SpawnGroupConfig::Entry {
             if (link_to_area_widget_) {
                 rows.push_back({link_to_area_widget_.get()});
                 if (link_to_area_enabled_) {
-                    if (!asset_linkable_areas_.empty() && asset_link_area_label_) {
-                        rows.push_back({asset_link_area_label_.get()});
-                        for (auto& widget : asset_link_area_widgets_) {
-                            rows.push_back({widget.get()});
-                        }
-                    }
+                    append_link_area_group_rows(link_area_groups_[kAssetLinkAreaGroupIndex], rows);
                     if (linked_area_is_asset_child_) {
                         if (terminate_with_parent_widget_) {
                             rows.push_back({terminate_with_parent_widget_.get()});
@@ -1223,12 +1236,7 @@ struct SpawnGroupConfig::Entry {
                             rows.push_back({placed_on_top_parent_widget_.get()});
                         }
                     }
-                    if (!room_linkable_areas_.empty() && room_link_area_label_) {
-                        rows.push_back({room_link_area_label_.get()});
-                        for (auto& widget : room_link_area_widgets_) {
-                            rows.push_back({widget.get()});
-                        }
-                    }
+                    append_link_area_group_rows(link_area_groups_[kRoomLinkAreaGroupIndex], rows);
                 }
             }
 
@@ -1373,61 +1381,53 @@ private:
         area_link_button_->set_target_area(std::move(value));
     }
 
-    bool rebuild_link_area_group(const std::vector<LinkableAreaDescriptor>& descriptors,
-                                 bool asset_group,
-                                 std::vector<LinkableAreaOption>& options,
-                                 std::vector<std::unique_ptr<DMButton>>& buttons,
-                                 std::vector<std::unique_ptr<LinkAreaButtonWidget>>& widgets) {
-        bool changed = options.size() != descriptors.size();
+    bool rebuild_link_area_group(size_t group_index,
+                                 LinkAreaGroup& group,
+                                 const std::vector<LinkableAreaDescriptor>& descriptors) {
+        bool changed = group.options.size() != descriptors.size();
         if (!changed) {
             for (size_t i = 0; i < descriptors.size(); ++i) {
                 std::string label = descriptors[i].label.empty() ? descriptors[i].id : descriptors[i].label;
-                if (options[i].id != descriptors[i].id || options[i].label != label || options[i].asset_child != asset_group) {
+                if (group.options[i].id != descriptors[i].id || group.options[i].label != label ||
+                    group.options[i].asset_child != group.asset_child) {
                     changed = true;
                     break;
                 }
             }
         }
-        if (!changed && buttons.size() == descriptors.size() && widgets.size() == descriptors.size()) {
+        if (!changed && group.buttons.size() == descriptors.size() && group.widgets.size() == descriptors.size()) {
             return false;
         }
 
-        options.clear();
-        buttons.clear();
-        widgets.clear();
-        options.reserve(descriptors.size());
-        buttons.reserve(descriptors.size());
-        widgets.reserve(descriptors.size());
+        group.options.clear();
+        group.buttons.clear();
+        group.widgets.clear();
+        group.options.reserve(descriptors.size());
+        group.buttons.reserve(descriptors.size());
+        group.widgets.reserve(descriptors.size());
 
         for (size_t i = 0; i < descriptors.size(); ++i) {
             std::string label = descriptors[i].label.empty() ? descriptors[i].id : descriptors[i].label;
-            LinkableAreaOption option{descriptors[i].id, label, asset_group};
-            options.push_back(option);
+            LinkableAreaOption option{descriptors[i].id, label, group.asset_child};
+            group.options.push_back(option);
             auto button = std::make_unique<DMButton>(label, &DMStyles::ListButton(), 0, DMButton::height());
-            auto widget = std::make_unique<LinkAreaButtonWidget>(button.get(), [this, asset_group, i]() {
-                this->handle_link_area_selection(asset_group, i);
+            auto widget = std::make_unique<LinkAreaButtonWidget>(button.get(), [this, group_index, i]() {
+                this->handle_link_area_selection(group_index, i);
             });
             widget->set_styles(&DMStyles::ListButton(), &DMStyles::AccentButton(), &disabled_priority_button_style());
-            buttons.push_back(std::move(button));
-            widgets.push_back(std::move(widget));
+            group.buttons.push_back(std::move(button));
+            group.widgets.push_back(std::move(widget));
         }
         return true;
     }
 
     void refresh_linkable_area_sources() {
-        auto asset_descriptors = asset_link_area_provider_ ? asset_link_area_provider_() : std::vector<LinkableAreaDescriptor>{};
-        auto room_descriptors = room_link_area_provider_ ? room_link_area_provider_() : std::vector<LinkableAreaDescriptor>{};
         bool changed = false;
-        changed = rebuild_link_area_group(asset_descriptors,
-                                          true,
-                                          asset_linkable_areas_,
-                                          asset_link_area_buttons_,
-                                          asset_link_area_widgets_) || changed;
-        changed = rebuild_link_area_group(room_descriptors,
-                                          false,
-                                          room_linkable_areas_,
-                                          room_link_area_buttons_,
-                                          room_link_area_widgets_) || changed;
+        for (size_t i = 0; i < link_area_groups_.size(); ++i) {
+            auto descriptors = link_area_groups_[i].provider ? link_area_groups_[i].provider()
+                                                             : std::vector<LinkableAreaDescriptor>{};
+            changed = rebuild_link_area_group(i, link_area_groups_[i], descriptors) || changed;
+        }
         if (changed) {
             update_linked_area_selection_metadata();
             update_link_area_button_states();
@@ -1436,10 +1436,11 @@ private:
         }
     }
 
-    void handle_link_area_selection(bool asset_group, size_t index) {
-        auto& source = asset_group ? asset_linkable_areas_ : room_linkable_areas_;
-        if (index >= source.size()) return;
-        select_linked_area(source[index]);
+    void handle_link_area_selection(size_t group_index, size_t index) {
+        if (group_index >= link_area_groups_.size()) return;
+        auto& group = link_area_groups_[group_index];
+        if (index >= group.options.size()) return;
+        select_linked_area(group.options[index]);
     }
 
     void select_linked_area(const LinkableAreaOption& option) {
@@ -1478,26 +1479,22 @@ private:
 
     void update_linked_area_selection_metadata() {
         bool previous_asset_child = linked_area_is_asset_child_;
-        bool found_asset = false;
-        bool found_room = false;
+        bool found = false;
+        bool asset_child = false;
         if (!linked_area_id_.empty()) {
-            for (const auto& option : asset_linkable_areas_) {
-                if (option.id == linked_area_id_) {
-                    found_asset = true;
-                    break;
-                }
-            }
-            if (!found_asset) {
-                for (const auto& option : room_linkable_areas_) {
+            for (const auto& group : link_area_groups_) {
+                for (const auto& option : group.options) {
                     if (option.id == linked_area_id_) {
-                        found_room = true;
+                        found = true;
+                        asset_child = group.asset_child;
                         break;
                     }
                 }
+                if (found) break;
             }
         }
-        linked_area_is_asset_child_ = found_asset;
-        if (!found_asset && !found_room) {
+        linked_area_is_asset_child_ = found && asset_child;
+        if (!found) {
             linked_area_id_.clear();
         }
         if (previous_asset_child != linked_area_is_asset_child_ && owner_) {
@@ -1508,16 +1505,13 @@ private:
 
     void update_link_area_button_states() {
         const bool allow_selection = editable_ && link_to_area_enabled_;
-        auto update_group = [&](std::vector<LinkableAreaOption>& options,
-                                std::vector<std::unique_ptr<LinkAreaButtonWidget>>& widgets) {
-            for (size_t i = 0; i < widgets.size(); ++i) {
-                bool selected = allow_selection && i < options.size() && options[i].id == linked_area_id_;
-                widgets[i]->set_enabled(allow_selection);
-                widgets[i]->set_selected(selected);
+        for (auto& group : link_area_groups_) {
+            for (size_t i = 0; i < group.widgets.size(); ++i) {
+                bool selected = allow_selection && i < group.options.size() && group.options[i].id == linked_area_id_;
+                group.widgets[i]->set_enabled(allow_selection);
+                group.widgets[i]->set_selected(selected);
             }
-        };
-        update_group(asset_linkable_areas_, asset_link_area_widgets_);
-        update_group(room_linkable_areas_, room_link_area_widgets_);
+        }
     }
 
     void on_link_to_area_changed(bool value) {
@@ -1577,6 +1571,22 @@ private:
         if (placed_on_top_parent_widget_) {
             placed_on_top_parent_widget_->set_editable(allow_asset_options);
         }
+    }
+
+    void append_link_area_group_rows(LinkAreaGroup& group, DockableCollapsible::Rows& rows) {
+        if (group.options.empty()) return;
+        if (group.label) {
+            rows.push_back({group.label.get()});
+        }
+        for (auto& widget : group.widgets) {
+            rows.push_back({widget.get()});
+        }
+    }
+
+    void set_linkable_area_provider(size_t group_index, LinkableAreaProvider provider) {
+        if (group_index >= link_area_groups_.size()) return;
+        link_area_groups_[group_index].provider = provider ? std::move(provider) : empty_link_provider();
+        refresh_linkable_area_sources();
     }
 
     void update_candidate_graph() {
@@ -1929,8 +1939,6 @@ private:
     std::string ownership_label_text_{};
     std::optional<SDL_Color> ownership_color_{};
     std::function<std::vector<std::string>()> area_provider_{};
-    LinkableAreaProvider asset_link_area_provider_ = empty_link_provider();
-    LinkableAreaProvider room_link_area_provider_ = empty_link_provider();
     std::optional<std::string> stack_key_{};
     std::optional<std::string> method_lock_{};
     bool quantity_hidden_ = false;
@@ -1965,14 +1973,7 @@ private:
     std::unique_ptr<CallbackCheckboxWidget> link_to_area_widget_{};
     std::unique_ptr<CallbackCheckboxWidget> terminate_with_parent_widget_{};
     std::unique_ptr<CallbackCheckboxWidget> placed_on_top_parent_widget_{};
-    std::unique_ptr<SpawnGroupLabelWidget> asset_link_area_label_{};
-    std::unique_ptr<SpawnGroupLabelWidget> room_link_area_label_{};
-    std::vector<LinkableAreaOption> asset_linkable_areas_{};
-    std::vector<LinkableAreaOption> room_linkable_areas_{};
-    std::vector<std::unique_ptr<DMButton>> asset_link_area_buttons_{};
-    std::vector<std::unique_ptr<LinkAreaButtonWidget>> asset_link_area_widgets_{};
-    std::vector<std::unique_ptr<DMButton>> room_link_area_buttons_{};
-    std::vector<std::unique_ptr<LinkAreaButtonWidget>> room_link_area_widgets_{};
+    std::array<LinkAreaGroup, 2> link_area_groups_{};
     bool link_to_area_enabled_ = false;
     std::string linked_area_id_{};
     bool linked_area_is_asset_child_ = false;

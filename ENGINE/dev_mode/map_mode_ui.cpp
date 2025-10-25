@@ -1565,6 +1565,7 @@ void MapModeUI::ensure_room_configurator() {
             }
             this->show_sliding_panel(room_config_return_panel_);
         });
+        room_configurator_->set_blocks_editor_interactions(false);
         room_configurator_->set_spawn_group_callbacks(
             {},
             [this](const std::string& spawn_id) { this->delete_active_room_spawn_group(spawn_id); },
@@ -1585,7 +1586,7 @@ void MapModeUI::ensure_room_configurator() {
             room_config_container_->set_header_visibility_controller([this](bool visible) {
                 this->set_sliding_headers_hidden(visible);
             });
-            room_config_container_->set_blocks_editor_interactions(true);
+            room_config_container_->set_blocks_editor_interactions(false);
         }
     }
     if (room_config_container_) {

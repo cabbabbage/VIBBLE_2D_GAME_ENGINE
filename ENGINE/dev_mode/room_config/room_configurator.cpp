@@ -441,6 +441,19 @@ void RoomConfigurator::set_header_visibility_controller(std::function<void(bool)
     }
 }
 
+void RoomConfigurator::set_blocks_editor_interactions(bool block) {
+    if (blocks_editor_interactions_ == block) {
+        return;
+    }
+    blocks_editor_interactions_ = block;
+    if (container_) {
+        container_->set_blocks_editor_interactions(blocks_editor_interactions_);
+    }
+    if (default_container_ && default_container_.get() != container_) {
+        default_container_->set_blocks_editor_interactions(blocks_editor_interactions_);
+    }
+}
+
 void RoomConfigurator::reset_scroll() {
     if (container_) {
         container_->reset_scroll();
@@ -543,7 +556,7 @@ void RoomConfigurator::configure_container(SlidingWindowContainer& container) {
             if (cfg) cfg->update(input, screen_w, screen_h);
         }
     });
-    container.set_blocks_editor_interactions(true);
+    container.set_blocks_editor_interactions(blocks_editor_interactions_);
     container.set_scrollbar_visible(false);
     container.set_header_visible(show_header_);
     container.set_header_visibility_controller(header_visibility_controller_);

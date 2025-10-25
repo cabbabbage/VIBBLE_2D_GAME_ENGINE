@@ -40,6 +40,7 @@ public:
     void set_show_header(bool show);
     void set_on_close(std::function<void()> cb);
     void set_header_visibility_controller(std::function<void(bool)> cb);
+    void set_blocks_editor_interactions(bool block);
     void attach_container(SlidingWindowContainer* container);
     void detach_container();
     SlidingWindowContainer* container();
@@ -128,6 +129,7 @@ private:
     std::unique_ptr<State> state_;
     std::unique_ptr<SlidingWindowContainer> default_container_;
     SlidingWindowContainer* container_ = nullptr;
+    bool blocks_editor_interactions_ = true;
     bool show_header_ = true;
     SDL_Rect bounds_override_{0, 0, 0, 0};
     SDL_Rect work_area_{0, 0, 0, 0};

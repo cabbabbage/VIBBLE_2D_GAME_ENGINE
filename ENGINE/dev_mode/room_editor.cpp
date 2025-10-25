@@ -2002,8 +2002,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const bool library_modal_block =
         library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking();
 
-    const bool config_open = room_cfg_ui_ && room_cfg_ui_->visible();
-    const bool suppress_hover_and_drag = library_modal_block || asset_info_open || config_open;
+    const bool suppress_hover_and_drag = library_modal_block || asset_info_open;
     const bool suppress_clicks = library_modal_block || asset_info_open;
 
     Asset* hit_asset = nullptr;
@@ -2020,11 +2019,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
             if (library_modal_block) {
                 finalize_drag_session();
                 dragging_ = false;
-            } else if (config_open) {
-                reset_drag_state();
             }
-        } else if (config_open) {
-            reset_drag_state();
         }
         hovered_asset_ = nullptr;
         hover_miss_frames_ = 3;
@@ -2483,7 +2478,11 @@ void RoomEditor::ensure_room_configurator() {
         });
         room_cfg_ui_->set_bounds(room_config_bounds_);
         room_cfg_ui_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        room_cfg_ui_->set_blocks_editor_interactions(false);
         room_cfg_ui_->set_on_close([this]() {
+            if (!suppress_room_config_selection_clear_) {
+                clear_selection();
+            }
             room_config_dock_open_ = false;
             update_spawn_group_config_anchor();
         });
@@ -3560,9 +3559,19 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
         }
     };
 
+    auto close_room_config_preserving_selection = [this]() {
+        if (!room_config_dock_open_) {
+            return;
+        }
+        suppress_room_config_selection_clear_ = true;
+        set_room_config_visible(false);
+        suppress_room_config_selection_clear_ = false;
+    };
+
     if (boundary_entry || boundary_asset) {
         close_spawn_group_panel();
         clear_active_spawn_group_target();
+        close_room_config_preserving_selection();
         if (open_boundary_assets_panel_callback_) {
             open_boundary_assets_panel_callback_();
         }
@@ -3572,6 +3581,7 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
     if (map_assets_entry) {
         close_spawn_group_panel();
         clear_active_spawn_group_target();
+        close_room_config_preserving_selection();
         if (open_map_assets_panel_callback_) {
             open_map_assets_panel_callback_();
         }

@@ -13890,18 +13890,27 @@
         {
           "bounding_extent": 2000.0,
           "level": 1,
-          "max_rooms": 6,
-          "min_rooms": 0,
+          "max_rooms": 7,
+          "min_rooms": 2,
           "name": "layer_1",
           "ring_radius": 4820.0,
           "rooms": [
             {
-              "max_instances": 6,
-              "min_instances": 0,
+              "max_instances": 7,
+              "min_instances": 2,
               "name": "fountain",
               "required_children": []
             }
           ]
+        },
+        {
+          "bounding_extent": 900.0,
+          "level": 2,
+          "max_rooms": 0,
+          "min_rooms": 0,
+          "name": "layer_2",
+          "ring_radius": 9640.0,
+          "rooms": []
         }
       ],
       "map_layers_settings": {
@@ -14134,9 +14143,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            71,
             242,
             36,
+            184,
             255
           ],
           "edge_smoothness": 2,
@@ -14183,12 +14192,38 @@
           ]
         },
         "spawn": {
-          "areas": [],
+          "areas": [
+            {
+              "anchor": {
+                "x": 0,
+                "y": 0
+              },
+              "anchor_relative_to_center": true,
+              "kind": "Spawn",
+              "name": "spawning_area",
+              "points": [
+                {
+                  "x": 388,
+                  "y": -241
+                },
+                {
+                  "x": 530,
+                  "y": 69
+                },
+                {
+                  "x": 154,
+                  "y": 108
+                }
+              ],
+              "resolution": 0,
+              "type": "spawning"
+            }
+          ],
           "curvyness": 2,
           "display_color": [
-            36,
-            185,
+            122,
             242,
+            36,
             255
           ],
           "edge_smoothness": 101,
@@ -14231,6 +14266,33 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-e900ea94ff54"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Barrel"
+                }
+              ],
+              "display_name": "Barrel",
+              "dx": 19,
+              "dy": -44,
+              "enforce_spacing": false,
+              "link_to_area": true,
+              "linked_area": "spawning_area",
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 1800,
+              "origional_width": 1800,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-7a9fb8aedbad"
             }
           ]
         }

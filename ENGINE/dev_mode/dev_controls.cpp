@@ -1882,6 +1882,7 @@ void DevControls::configure_header_button_sets() {
             if (active) {
                 toggle_map_assets_modal();
             } else {
+                if (room_editor_) room_editor_->clear_selection();
                 if (map_assets_modal_) map_assets_modal_->close();
             }
             sync_header_button_states();
@@ -1898,6 +1899,7 @@ void DevControls::configure_header_button_sets() {
             if (active) {
                 toggle_boundary_assets_modal();
             } else {
+                if (room_editor_) room_editor_->clear_selection();
                 if (boundary_assets_modal_) boundary_assets_modal_->close();
             }
             sync_header_button_states();
@@ -2037,8 +2039,14 @@ void DevControls::close_all_floating_panels() {
     if (map_mode_ui_) {
         map_mode_ui_->close_all_panels();
     }
-    if (map_assets_modal_) map_assets_modal_->close();
-    if (boundary_assets_modal_) boundary_assets_modal_->close();
+    if (map_assets_modal_) {
+        if (room_editor_) room_editor_->clear_selection();
+        map_assets_modal_->close();
+    }
+    if (boundary_assets_modal_) {
+        if (room_editor_) room_editor_->clear_selection();
+        boundary_assets_modal_->close();
+    }
     if (trail_suite_) {
         trail_suite_->close();
     }
@@ -2393,6 +2401,10 @@ void DevControls::ensure_map_assets_modal_open() {
     } else {
         map_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
+    map_assets_modal_->set_on_close([this]() {
+        if (room_editor_) room_editor_->clear_selection();
+        this->sync_header_button_states();
+    });
     auto save = [this]() { return persist_map_info_to_disk(); };
     auto regen = [this](const nlohmann::json& entry) { this->regenerate_map_spawn_group(entry); };
     auto& map_json = assets_->map_info_json();
@@ -2411,6 +2423,7 @@ void DevControls::open_map_assets_modal() {
 
 void DevControls::toggle_map_assets_modal() {
     if (map_assets_modal_ && map_assets_modal_->visible()) {
+        if (room_editor_) room_editor_->clear_selection();
         map_assets_modal_->close();
     } else {
         ensure_map_assets_modal_open();
@@ -2495,6 +2508,10 @@ void DevControls::ensure_boundary_assets_modal_open() {
     } else {
         boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
+    boundary_assets_modal_->set_on_close([this]() {
+        if (room_editor_) room_editor_->clear_selection();
+        this->sync_header_button_states();
+    });
     auto save = [this]() { return persist_map_info_to_disk(); };
     auto regen = [this](const nlohmann::json& entry) { this->regenerate_boundary_spawn_group(entry); };
     auto& map_json = assets_->map_info_json();
@@ -2519,6 +2536,7 @@ void DevControls::open_boundary_assets_modal() {
 
 void DevControls::toggle_boundary_assets_modal() {
     if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
+        if (room_editor_) room_editor_->clear_selection();
         boundary_assets_modal_->close();
     } else {
         ensure_boundary_assets_modal_open();

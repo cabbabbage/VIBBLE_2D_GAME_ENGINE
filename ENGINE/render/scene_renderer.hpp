@@ -59,6 +59,18 @@ private:
         bool         flipped             = false;
     };
 
+    struct LightOverlaySource {
+        Asset*   asset         = nullptr;
+        SDL_Rect asset_rect    { 0, 0, 0, 0 };
+        int      base_width    = 0;
+        int      base_height   = 0;
+        bool     flipped       = false;
+    };
+
+    bool ensure_darkness_overlay();
+    void destroy_darkness_overlay();
+    void render_dynamic_darkness_overlay(float map_light_opacity);
+
     SDL_Renderer*  renderer_;
     Assets*        assets_;
     int            screen_width_;
@@ -78,6 +90,10 @@ private:
     std::unordered_set<Asset*> current_active_assets_;
     std::vector<AssetRenderCommand> texture_commands_;
     std::vector<AssetRenderCommand> remaining_commands_;
+    std::vector<LightOverlaySource> light_overlay_sources_;
+    SDL_Texture* darkness_overlay_texture_ = nullptr;
+    int          darkness_overlay_width_   = 0;
+    int          darkness_overlay_height_  = 0;
     SDL_Color    map_clear_color_{0, 0, 0, 255};
 };
 

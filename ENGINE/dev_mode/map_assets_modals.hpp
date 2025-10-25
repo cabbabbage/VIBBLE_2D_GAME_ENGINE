@@ -38,6 +38,7 @@ class SingleSpawnGroupModal {
     void set_screen_dimensions(int width, int height);
     void set_floating_stack_key(std::string key);
     void set_on_open_area(std::function<void(const std::string&, const std::string&)> cb);
+    void set_on_close(std::function<void()> cb);
 
  private:
     void ensure_single_group(nlohmann::json& section, const std::string& default_display_name);
@@ -56,4 +57,5 @@ class SingleSpawnGroupModal {
     bool position_initialized_ = false;
     std::string stack_key_;
     std::function<void(const std::string&, const std::string&)> on_open_area_{};
+    std::function<void()> on_close_{};
 };
