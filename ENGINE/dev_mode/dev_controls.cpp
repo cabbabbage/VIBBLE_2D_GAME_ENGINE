@@ -1987,17 +1987,33 @@ void DevControls::configure_header_button_sets() {
         cfg.active = (active_area_type_filters_.count(type) > 0);
         cfg.active_style_override = &DMStyles::AccentButton();
         cfg.on_toggle = [this, type](bool active) {
+            auto ensure_default_selection = [this]() {
+                if (active_area_type_filters_.empty()) {
+                    active_area_type_filters_.insert("all");
+                }
+            };
+
             if (active) {
                 if (type == "all") {
                     active_area_type_filters_.clear();
                     active_area_type_filters_.insert("all");
                 } else {
                     active_area_type_filters_.erase("all");
+                    const bool is_room_type = (type == "trigger" || type == "spawning");
+                    if (is_room_type) {
+                        active_area_type_filters_.erase("impassable");
+                        active_area_type_filters_.erase("child");
+                    } else {
+                        active_area_type_filters_.erase("trigger");
+                        active_area_type_filters_.erase("spawning");
+                    }
                     active_area_type_filters_.insert(type);
                 }
             } else {
                 active_area_type_filters_.erase(type);
+                ensure_default_selection();
             }
+
             sync_header_button_states();
 };
         area_buttons.push_back(std::move(cfg));
