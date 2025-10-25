@@ -11,6 +11,7 @@
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/log.hpp"
+#include "utils/ranged_color.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -26,7 +27,6 @@
 #include <cstdlib>
 #include <filesystem>
 
-static constexpr SDL_Color SLATE_COLOR = {69, 101, 74, 255};
 static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
 namespace {
@@ -96,6 +96,13 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   nullptr,
                                   &reactive_shadow_settings_ })
 {
+    if (map_manifest.is_object()) {
+        auto it = map_manifest.find("map_light_data");
+        if (it != map_manifest.end() && it->is_object()) {
+            map_clear_color_ = utils::color::color_from_json(it->value("map_color", nlohmann::json{}))
+                                   .value_or(SDL_Color{0, 0, 0, 255});
+        }
+    }
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
     chunk_lighting_suspended_ = chunk_lighting_suspended_flag();
     light_map_ = std::make_unique<LightMap>(assets_,
@@ -228,6 +235,8 @@ void SceneRenderer::set_low_quality_rendering(bool enabled){
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data){
     main_light_source_.apply_config(data);
+    map_clear_color_ = utils::color::color_from_json(data.value("map_color", nlohmann::json{}))
+                           .value_or(SDL_Color{0, 0, 0, 255});
 
     using namespace render_pipeline::shading;
     auto reactive_it = data.find("reactive_shadows");
@@ -313,7 +322,7 @@ void SceneRenderer::render(){
 
     SDL_SetRenderTarget(renderer_,nullptr);
     SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
-    const SDL_Color clear_color = light_map_only_mode_ ? SDL_Color{0,0,0,255} : SLATE_COLOR;
+    const SDL_Color clear_color = light_map_only_mode_ ? SDL_Color{0,0,0,255} : map_clear_color_;
     SDL_SetRenderDrawColor(renderer_,clear_color.r,clear_color.g,clear_color.b,clear_color.a);
     SDL_RenderClear(renderer_);
 

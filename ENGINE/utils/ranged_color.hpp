@@ -35,6 +35,10 @@ SDL_Color resolve_ranged_color(const RangedColor& color);
 SDL_Color resolve_ranged_color(const nlohmann::json& value,
                                SDL_Color fallback = SDL_Color{255, 255, 255, 255});
 
+SDL_Color clamp_color(SDL_Color color);
+std::optional<SDL_Color> color_from_json(const nlohmann::json& value);
+nlohmann::json color_to_json(SDL_Color color);
+
 } // namespace color
 } // namespace utils
 

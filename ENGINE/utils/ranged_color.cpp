@@ -12,6 +12,74 @@ int clamp_channel_value(int v) {
     return std::max(0, std::min(255, v));
 }
 
+std::optional<int> parse_channel_component(const nlohmann::json& value) {
+    try {
+        if (value.is_number_integer()) {
+            return value.get<int>();
+        }
+        if (value.is_number_float()) {
+            return static_cast<int>(std::lround(value.get<double>()));
+        }
+        if (value.is_string()) {
+            const std::string text = value.get<std::string>();
+            if (!text.empty() && text[0] == '#') {
+                // Let the caller interpret packed color strings.
+                return std::nullopt;
+            }
+            size_t idx = 0;
+            int parsed = std::stoi(text, &idx);
+            if (idx == text.size()) {
+                return parsed;
+            }
+        }
+    } catch (...) {
+    }
+    return std::nullopt;
+}
+
+std::optional<SDL_Color> parse_hex_color_string(const std::string& text) {
+    if (text.empty() || text[0] != '#') {
+        return std::nullopt;
+    }
+    auto parse_pair = [&](size_t offset) -> std::optional<int> {
+        if (offset + 2 > text.size()) {
+            return std::nullopt;
+        }
+        int value = 0;
+        for (size_t i = offset; i < offset + 2; ++i) {
+            char c = text[i];
+            int digit = 0;
+            if (c >= '0' && c <= '9') {
+                digit = c - '0';
+            } else if (c >= 'a' && c <= 'f') {
+                digit = 10 + (c - 'a');
+            } else if (c >= 'A' && c <= 'F') {
+                digit = 10 + (c - 'A');
+            } else {
+                return std::nullopt;
+            }
+            value = (value << 4) | digit;
+        }
+        return value;
+    };
+
+    if (text.size() != 7 && text.size() != 9) {
+        return std::nullopt;
+    }
+    auto r = parse_pair(1);
+    auto g = parse_pair(3);
+    auto b = parse_pair(5);
+    auto a = text.size() == 9 ? parse_pair(7) : std::optional<int>{255};
+    if (!r || !g || !b || !a) {
+        return std::nullopt;
+    }
+    SDL_Color color{static_cast<Uint8>(clamp_channel_value(*r)),
+                    static_cast<Uint8>(clamp_channel_value(*g)),
+                    static_cast<Uint8>(clamp_channel_value(*b)),
+                    static_cast<Uint8>(clamp_channel_value(*a))};
+    return color;
+}
+
 ChannelRange make_range(int min_v, int max_v) {
     ChannelRange out;
     out.min = clamp_channel_value(std::min(min_v, max_v));
@@ -142,6 +210,71 @@ SDL_Color resolve_ranged_color(const nlohmann::json& value, SDL_Color fallback) 
         return resolve_ranged_color(*parsed);
     }
     return fallback;
+}
+
+SDL_Color clamp_color(SDL_Color color) {
+    color.r = static_cast<Uint8>(clamp_channel_value(color.r));
+    color.g = static_cast<Uint8>(clamp_channel_value(color.g));
+    color.b = static_cast<Uint8>(clamp_channel_value(color.b));
+    color.a = static_cast<Uint8>(clamp_channel_value(color.a));
+    return color;
+}
+
+std::optional<SDL_Color> color_from_json(const nlohmann::json& value) {
+    if (value.is_string()) {
+        if (auto parsed = parse_hex_color_string(value.get<std::string>())) {
+            return clamp_color(*parsed);
+        }
+    }
+
+    if (value.is_array()) {
+        std::optional<int> components[4];
+        const size_t count = std::min<size_t>(value.size(), 4);
+        for (size_t i = 0; i < count; ++i) {
+            components[i] = parse_channel_component(value[i]);
+        }
+        if (components[0] && components[1] && components[2]) {
+            const int alpha = components[3].value_or(255);
+            SDL_Color color{static_cast<Uint8>(clamp_channel_value(*components[0])),
+                            static_cast<Uint8>(clamp_channel_value(*components[1])),
+                            static_cast<Uint8>(clamp_channel_value(*components[2])),
+                            static_cast<Uint8>(clamp_channel_value(alpha))};
+            return clamp_color(color);
+        }
+    }
+
+    if (value.is_object()) {
+        auto read_component = [&](const char* key) -> std::optional<int> {
+            auto it = value.find(key);
+            if (it == value.end()) {
+                return std::nullopt;
+            }
+            return parse_channel_component(*it);
+        };
+        auto r = read_component("r");
+        auto g = read_component("g");
+        auto b = read_component("b");
+        if (r && g && b) {
+            const int alpha = read_component("a").value_or(255);
+            SDL_Color color{static_cast<Uint8>(clamp_channel_value(*r)),
+                            static_cast<Uint8>(clamp_channel_value(*g)),
+                            static_cast<Uint8>(clamp_channel_value(*b)),
+                            static_cast<Uint8>(clamp_channel_value(alpha))};
+            return clamp_color(color);
+        }
+    }
+
+    return std::nullopt;
+}
+
+nlohmann::json color_to_json(SDL_Color color) {
+    SDL_Color clamped = clamp_color(color);
+    return nlohmann::json::array({
+        static_cast<int>(clamped.r),
+        static_cast<int>(clamped.g),
+        static_cast<int>(clamped.b),
+        static_cast<int>(clamped.a)
+    });
 }
 
 } // namespace color

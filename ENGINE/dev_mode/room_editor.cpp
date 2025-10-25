@@ -356,6 +356,7 @@ void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {
     if (!assets_) return;
     if (!enabled_) {
         active_modal_ = ActiveModal::None;
+        mouse_controls_enabled_last_frame_ = false;
     }
 
     camera* cam = assets_ ? &assets_->getView() : nullptr;
@@ -397,17 +398,62 @@ void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {
 void RoomEditor::update(const Input& input) {
     handle_shortcuts(input);
 
-    if (!enabled_) return;
-    if (!input_ || !active_assets_) return;
+    auto enforce_mouse_controls_disabled = [this]() {
+        const bool panel_visible = spawn_group_panel_ && spawn_group_panel_->is_visible();
+        const bool has_spawn_target = active_spawn_group_id_.has_value();
+        const bool has_selection = !selected_assets_.empty();
+        const bool has_highlight = !highlighted_assets_.empty();
+        const bool has_hover = hovered_asset_ != nullptr;
+
+        if (!panel_visible && !has_spawn_target && !has_selection && !has_highlight && !has_hover) {
+            return;
+        }
+
+        if (spawn_group_panel_) {
+            if (panel_visible) {
+                spawn_group_panel_->close();
+            }
+            spawn_group_panel_->set_visible(false);
+        }
+
+        if (has_spawn_target) {
+            clear_active_spawn_group_target();
+        }
+
+        if (has_selection || has_highlight || has_hover) {
+            clear_selection();
+            clear_highlighted_assets();
+        }
+    };
+
+    if (!enabled_) {
+        if (mouse_controls_enabled_last_frame_) {
+            enforce_mouse_controls_disabled();
+        }
+        mouse_controls_enabled_last_frame_ = false;
+        return;
+    }
+
+    if (!input_ || !active_assets_) {
+        if (mouse_controls_enabled_last_frame_) {
+            enforce_mouse_controls_disabled();
+        }
+        mouse_controls_enabled_last_frame_ = false;
+        return;
+    }
 
     handle_delete_shortcut(input);
 
     if (!should_enable_mouse_controls()) {
+        enforce_mouse_controls_disabled();
         if (assets_) {
             pan_zoom_.cancel(assets_->getView());
         }
+        mouse_controls_enabled_last_frame_ = false;
         return;
     }
+
+    mouse_controls_enabled_last_frame_ = true;
 
     const int mx = input.getX();
     const int my = input.getY();

@@ -214,6 +214,7 @@ private:
     int screen_w_ = 0;
     int screen_h_ = 0;
     bool enabled_ = false;
+    bool mouse_controls_enabled_last_frame_ = false;
 
     std::unique_ptr<AssetLibraryUI> library_ui_;
     std::unique_ptr<AssetInfoUI> info_ui_;

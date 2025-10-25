@@ -23,6 +23,22 @@ using nlohmann::json;
 namespace {
 
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
+constexpr SDL_Color kDefaultMapColor{0, 0, 0, 255};
+
+utils::color::RangedColor solid_ranged_color(SDL_Color color) {
+    auto make_channel = [](Uint8 component) {
+        utils::color::ChannelRange range{};
+        range.min = range.max = static_cast<int>(component);
+        return range;
+    };
+
+    utils::color::RangedColor ranged{};
+    ranged.r = make_channel(color.r);
+    ranged.g = make_channel(color.g);
+    ranged.b = make_channel(color.b);
+    ranged.a = make_channel(color.a);
+    return utils::color::clamp_ranged_color(ranged);
+}
 
 } // namespace
 
@@ -622,6 +638,8 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     map_info_ = map_info;
     on_save_ = std::move(on_save);
     editing_light_ = json::object();
+    map_color_ = kDefaultMapColor;
+    suppress_map_color_callback_ = false;
     orbit_key_pairs_.clear();
     focused_pair_index_ = -1;
     next_pair_id_ = 1;
@@ -701,6 +719,7 @@ void MapLightPanel::rebuild_rows() {
     widget_wrappers_.clear();
     widget_wrappers_.reserve(128);
     orbit_key_widget_ = nullptr;
+    map_color_widget_ = nullptr;
 
     auto add_widget = [this](std::unique_ptr<Widget> w) -> Widget* {
         Widget* raw = w.get();
@@ -740,6 +759,14 @@ void MapLightPanel::rebuild_rows() {
         orbit_key_widget_ = orbit_widget.get();
         rows.push_back({ add_widget(std::move(orbit_widget)) });
     }
+
+    auto map_color_widget = std::make_unique<DMColorRangeWidget>("Map Color");
+    map_color_widget_ = map_color_widget.get();
+    map_color_widget_->set_on_value_changed([this](const utils::color::RangedColor& value) {
+        handle_map_color_changed(value);
+    });
+    rows.push_back({ add_widget(std::move(map_color_widget)) });
+    set_map_color_widget_value(map_color_);
 
     set_rows(rows);
 }
@@ -878,6 +905,9 @@ nlohmann::json& MapLightPanel::ensure_light() {
             }
         }
     }
+    SDL_Color sanitized_map_color = utils::color::color_from_json(L.value("map_color", nlohmann::json{}))
+                                      .value_or(kDefaultMapColor);
+    L["map_color"] = utils::color::color_to_json(sanitized_map_color);
     return L;
 }
 
@@ -945,6 +975,10 @@ void MapLightPanel::sync_ui_from_json() {
     rebuild_orbit_key_pairs_from_json();
     refresh_orbit_widget();
 
+    map_color_ = utils::color::color_from_json(L.value("map_color", nlohmann::json{})).value_or(kDefaultMapColor);
+    map_color_ = utils::color::clamp_color(map_color_);
+    set_map_color_widget_value(map_color_);
+
     needs_sync_to_json_ = false;
     sync_reactive_settings_shared();
 }
@@ -959,6 +993,7 @@ void MapLightPanel::sync_json_from_ui() {
 
     ensure_keys_array();
     write_orbit_pairs_to_json();
+    write_map_color_to_json();
 
     if (update_map_light_enabled_) {
         if (commit_light_changes()) {
@@ -1150,6 +1185,33 @@ void MapLightPanel::handle_pair_color_changed(int index, const utils::color::Ran
     needs_sync_to_json_ = true;
 }
 
+void MapLightPanel::handle_map_color_changed(const utils::color::RangedColor& color) {
+    if (suppress_map_color_callback_) {
+        return;
+    }
+    map_color_ = utils::color::resolve_ranged_color(color);
+    map_color_ = utils::color::clamp_color(map_color_);
+    suppress_map_color_callback_ = true;
+    set_map_color_widget_value(map_color_);
+    suppress_map_color_callback_ = false;
+    write_map_color_to_json();
+    needs_sync_to_json_ = true;
+}
+
+void MapLightPanel::write_map_color_to_json() {
+    json& L = ensure_light();
+    L["map_color"] = utils::color::color_to_json(map_color_);
+}
+
+void MapLightPanel::set_map_color_widget_value(SDL_Color color) {
+    if (!map_color_widget_) {
+        return;
+    }
+    suppress_map_color_callback_ = true;
+    map_color_widget_->set_value(solid_ranged_color(utils::color::clamp_color(color)));
+    suppress_map_color_callback_ = false;
+}
+
 int MapLightPanel::find_pair_containing_angle(double angle_degrees) const {
     if (orbit_key_pairs_.empty()) {
         return -1;
@@ -1332,6 +1394,9 @@ void MapLightPanel::update(const Input& input, int screen_w, int screen_h) {
     if (orbit_key_widget_) {
         orbit_key_widget_->update_overlays(input, screen_w, screen_h);
     }
+    if (map_color_widget_) {
+        map_color_widget_->update_overlay(input, screen_w, screen_h);
+    }
 
     apply_immediate_settings();
 
@@ -1343,6 +1408,10 @@ bool MapLightPanel::handle_event(const SDL_Event& e) {
     bool overlay_used = false;
     bool used = false;
     if (orbit_key_widget_ && orbit_key_widget_->handle_overlay_event(e)) {
+        overlay_used = true;
+        used = true;
+    }
+    if (!overlay_used && map_color_widget_ && map_color_widget_->handle_overlay_event(e)) {
         overlay_used = true;
         used = true;
     }
@@ -1375,6 +1444,9 @@ void MapLightPanel::render(SDL_Renderer* r) const {
     DockableCollapsible::render(r);
     if (orbit_key_widget_) {
         orbit_key_widget_->render_overlay(r);
+    }
+    if (map_color_widget_) {
+        map_color_widget_->render_overlay(r);
     }
 }
 

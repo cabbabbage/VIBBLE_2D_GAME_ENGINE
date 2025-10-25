@@ -229,10 +229,28 @@ public:
         const int total_buttons = static_cast<int>(rooms_.size());
         const int content_height = total_buttons * button_height + std::max(0, total_buttons - 1) * spacing;
         rect_.h = margin * 2 + content_height;
-        const int max_height = std::max(240, screen_h - DMSpacing::panel_padding() * 2);
+        const int padding = DMSpacing::panel_padding();
+        const int max_height = std::max(240, screen_h - padding * 2);
         rect_.h = std::min(rect_.h, max_height);
-        rect_.x = std::max(16, screen_w - rect_.w - DMSpacing::panel_padding());
-        rect_.y = DMSpacing::panel_padding();
+
+        const int centered_x = screen_w / 2 - rect_.w / 2;
+        const int centered_y = screen_h / 2 - rect_.h / 2;
+        const int min_x = padding;
+        const int max_x = screen_w - rect_.w - padding;
+        const int min_y = padding;
+        const int max_y = screen_h - rect_.h - padding;
+
+        if (max_x < min_x) {
+            rect_.x = min_x;
+        } else {
+            rect_.x = std::clamp(centered_x, min_x, max_x);
+        }
+
+        if (max_y < min_y) {
+            rect_.y = min_y;
+        } else {
+            rect_.y = std::clamp(centered_y, min_y, max_y);
+        }
 
         buttons_.reserve(rooms_.size());
         for (const auto& entry : rooms_) {

@@ -300,6 +300,9 @@ void Assets::hydrate_map_info_sections() {
                 }
             }
         }
+        SDL_Color default_map_color{0, 0, 0, 255};
+        SDL_Color map_color = utils::color::color_from_json(D.value("map_color", nlohmann::json{})).value_or(default_map_color);
+        D["map_color"] = utils::color::color_to_json(map_color);
         D.erase("min_opacity");
         D.erase("max_opacity");
         D.erase("screen_light");

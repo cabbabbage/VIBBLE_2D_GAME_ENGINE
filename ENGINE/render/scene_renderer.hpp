@@ -78,6 +78,7 @@ private:
     std::unordered_set<Asset*> current_active_assets_;
     std::vector<AssetRenderCommand> texture_commands_;
     std::vector<AssetRenderCommand> remaining_commands_;
+    SDL_Color    map_clear_color_{0, 0, 0, 255};
 };
 
 
