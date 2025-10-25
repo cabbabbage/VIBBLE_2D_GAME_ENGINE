@@ -655,6 +655,13 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
         }
     }
 
+    if (safe_max_x_percent <= 0.0f) {
+        px = 0.0f;
+    }
+    if (safe_max_y_percent <= 0.0f) {
+        py = 0.0f;
+    }
+
     const float clamped_px = std::clamp(px, -safe_max_x_percent, safe_max_x_percent);
     const float clamped_py = std::clamp(py, -safe_max_y_percent, safe_max_y_percent);
     sample.offset_x_percent = std::clamp(clamped_px, -100.0f, 100.0f);
@@ -663,7 +670,19 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     sample.parallax_intensity_percent = std::clamp(settings.parallax_percent, 0.0f, 100.0f);
 
     chunk.shadow_history.push(sample, settings.frame_blend_falloff_frames);
-    chunk.shadow = chunk.shadow_history.value();
+
+    world::Chunk::ChunkShadowParameters blended = chunk.shadow_history.value();
+    const auto clamp_percent = [](float value, float limit) {
+        const float clamped_limit = std::max(0.0f, limit);
+        if (clamped_limit <= 0.0f) {
+            return 0.0f;
+        }
+        return std::clamp(value, -clamped_limit, clamped_limit);
+    };
+    blended.offset_x_percent = std::clamp(clamp_percent(blended.offset_x_percent, safe_max_x_percent), -100.0f, 100.0f);
+    blended.offset_y_percent = std::clamp(clamp_percent(blended.offset_y_percent, safe_max_y_percent), -100.0f, 100.0f);
+
+    chunk.shadow = blended;
 }
 
 } // namespace
