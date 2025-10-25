@@ -162,6 +162,8 @@ private:
     bool is_modal_blocking_panels() const;
     void pulse_modal_header();
     void apply_header_suppression();
+    void clear_area_mode_selection();
+    void set_area_mode_selection(Asset* asset, const std::string& area_name);
 
     void create_trail_template();
 
@@ -235,6 +237,8 @@ private:
 
     class Asset* area_hovered_asset_with_area_ = nullptr;
     std::string area_hovered_area_name_;
+    class Asset* area_selected_asset_ = nullptr;
+    std::string area_selected_area_name_;
 
     std::unordered_set<std::string> active_area_type_filters_;
 

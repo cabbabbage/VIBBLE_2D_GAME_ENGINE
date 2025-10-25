@@ -114,6 +114,60 @@ bool consume_modal_event(Modal* modal,
     return false;
 }
 
+std::string normalize_area_name_base(const std::string& raw) {
+    if (raw.empty()) {
+        return std::string{"area"};
+    }
+
+    std::string result;
+    result.reserve(raw.size());
+    bool last_was_separator = false;
+    for (char ch : raw) {
+        unsigned char uch = static_cast<unsigned char>(ch);
+        if (std::isalnum(uch) != 0) {
+            result.push_back(static_cast<char>(std::tolower(uch)));
+            last_was_separator = false;
+        } else if (ch == '_' || ch == '-' || std::isspace(uch)) {
+            if (!last_was_separator && !result.empty()) {
+                result.push_back('_');
+                last_was_separator = true;
+            }
+        }
+    }
+
+    while (!result.empty() && result.back() == '_') {
+        result.pop_back();
+    }
+
+    if (result.empty()) {
+        return std::string{"area"};
+    }
+
+    return result;
+}
+
+std::string make_unique_asset_area_name(const AssetInfo& info, const std::string& preferred) {
+    std::unordered_set<std::string> used_names;
+    for (const auto& entry : info.areas) {
+        if (!entry.name.empty()) {
+            used_names.insert(entry.name);
+        }
+    }
+
+    std::string base = normalize_area_name_base(preferred);
+    if (base.size() < 5 || base.substr(base.size() - 5) != "_area") {
+        base += "_area";
+    }
+
+    std::string candidate = base;
+    int suffix = 1;
+    while (used_names.count(candidate) > 0) {
+        candidate = base + "_" + std::to_string(suffix++);
+    }
+
+    return candidate;
+}
+
 }
 
 void DevControls::RoomAreaCache::set_listener(Listener listener) {
@@ -588,6 +642,12 @@ void DevControls::set_current_room(Room* room, bool force_refresh) {
     current_room_ = room;
 
     dev_selected_room_ = room;
+    clear_area_mode_selection();
+    area_hovered_asset_ = nullptr;
+    area_hovered_asset_with_area_ = nullptr;
+    area_hovered_area_name_.clear();
+    hovered_area_index_ = -1;
+    selected_area_index_ = -1;
     if (regenerate_popup_) regenerate_popup_->close();
     if (room_editor_) {
         dev_mode_trace("[DevControls] set_current_room -> room_editor set_current_room");
@@ -836,6 +896,11 @@ void DevControls::update(const Input& input) {
         }
         if (asset_area_editor_ && asset_area_editor_->is_active()) {
             asset_area_editor_->update(input, screen_w_, screen_h_);
+        } else if (asset_area_editor_) {
+            clear_area_mode_selection();
+        }
+        if (area_selected_asset_) {
+            area_selected_asset_->set_highlighted(true);
         }
     }
 
@@ -1193,6 +1258,9 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     for (Asset* a : assets_->getFilteredActiveAssets()) {
                         if (a) a->set_highlighted(false);
                     }
+                    if (area_selected_asset_) {
+                        area_selected_asset_->set_highlighted(true);
+                    }
                 }
 
                 const auto& list = assets_->getFilteredActiveAssets();
@@ -1275,6 +1343,33 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 
         if (event.type == SDL_MOUSEBUTTONDOWN &&
             (event.button.button == SDL_BUTTON_LEFT || event.button.button == SDL_BUTTON_RIGHT)) {
+            auto begin_asset_area_session = [&](Asset* target_asset, const std::string& area_name) -> bool {
+                if (!target_asset || !target_asset->info) {
+                    return false;
+                }
+                if (!asset_area_editor_) {
+                    asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
+                }
+                if (!asset_area_editor_) {
+                    return false;
+                }
+                asset_area_editor_->attach_assets(assets_);
+                asset_area_editor_->set_on_saved(nullptr);
+                if (asset_area_editor_->begin(target_asset->info.get(), target_asset, area_name)) {
+                    if (map_mode_ui_) {
+                        if (auto* footer = map_mode_ui_->get_footer_bar()) {
+                            std::string label = std::string("Editing ") + target_asset->info->name +
+                                                std::string(" — Area: ") + area_name;
+                            footer->set_title(label);
+                        }
+                    }
+                    set_area_mode_selection(target_asset, area_name);
+                    consume(true);
+                    return true;
+                }
+                return false;
+            };
+
             if (!first_selected_type.empty() && (first_selected_type == "trigger" || first_selected_type == "spawning")) {
                 if (assets_ && current_room_) {
                     SDL_Point sp{event.button.x, event.button.y};
@@ -1307,33 +1402,37 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         }
                     }
                 }
-            } else if (!first_selected_type.empty() && first_selected_type != "all") {
-                if (asset_area_editor_) asset_area_editor_->set_on_saved(nullptr);
+            } else {
                 Asset* target_asset = area_hovered_asset_with_area_ ? area_hovered_asset_with_area_ : area_hovered_asset_;
                 if (target_asset && target_asset->info) {
-                    std::string area_name = first_selected_type;
-                    bool removed_existing = false;
-                    for (const auto& na : target_asset->info->areas) {
-                        const std::string normalized = !na.type.empty() ? na.type : na.name;
-                        if (normalized == first_selected_type) {
-                            area_name = na.name;
-                            removed_existing = target_asset->info->remove_area(na.name);
-                            if (removed_existing) {
-                                (void)target_asset->info->commit_manifest();
+                    std::string selected_type = first_selected_type;
+                    const bool specific_type = !selected_type.empty() && selected_type != "all";
+                    std::string area_name;
+
+                    if (specific_type) {
+                        area_name = selected_type;
+                        for (const auto& na : target_asset->info->areas) {
+                            const std::string normalized = !na.type.empty() ? na.type : na.name;
+                            if (normalized == selected_type) {
+                                area_name = na.name;
+                                if (target_asset->info->remove_area(na.name)) {
+                                    (void)target_asset->info->commit_manifest();
+                                }
+                                break;
                             }
-                            break;
                         }
+                    } else if (target_asset == area_hovered_asset_with_area_ && !area_hovered_area_name_.empty()) {
+                        area_name = area_hovered_area_name_;
+                    } else if (!target_asset->info->areas.empty()) {
+                        area_name = target_asset->info->areas.front().name;
                     }
-                    if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
-                    if (asset_area_editor_) asset_area_editor_->attach_assets(assets_);
-                    if (asset_area_editor_ && asset_area_editor_->begin(target_asset->info.get(), target_asset, area_name)) {
-                        if (map_mode_ui_) {
-                            if (auto* footer = map_mode_ui_->get_footer_bar()) {
-                                std::string label = std::string("Editing ") + target_asset->info->name + std::string(" — Area: ") + area_name;
-                                footer->set_title(label);
-                            }
-                        }
-                        consume(true);
+
+                    if (area_name.empty()) {
+                        std::string preferred = specific_type ? selected_type : target_asset->info->name;
+                        area_name = make_unique_asset_area_name(*target_asset->info, preferred);
+                    }
+
+                    if (begin_asset_area_session(target_asset, area_name)) {
                         return;
                     }
                 }
@@ -2114,6 +2213,34 @@ void DevControls::apply_header_suppression() {
     }
 }
 
+void DevControls::clear_area_mode_selection() {
+    if (area_selected_asset_) {
+        area_selected_asset_->set_highlighted(false);
+    }
+    area_selected_asset_ = nullptr;
+    area_selected_area_name_.clear();
+}
+
+void DevControls::set_area_mode_selection(Asset* asset, const std::string& area_name) {
+    if (area_selected_asset_ == asset && area_selected_area_name_ == area_name) {
+        if (area_selected_asset_) {
+            area_selected_asset_->set_highlighted(true);
+        }
+        return;
+    }
+
+    if (area_selected_asset_ && area_selected_asset_ != asset) {
+        area_selected_asset_->set_highlighted(false);
+    }
+
+    area_selected_asset_ = asset;
+    area_selected_area_name_ = area_name;
+
+    if (area_selected_asset_) {
+        area_selected_asset_->set_highlighted(true);
+    }
+}
+
 int DevControls::map_radius_or_default() const {
     if (!assets_) {
         return 1000;
@@ -2492,7 +2619,16 @@ void DevControls::set_mode(Mode new_mode) {
     if (mode_ == new_mode) {
         return;
     }
+    const Mode previous = mode_;
     mode_ = new_mode;
+    if (previous == Mode::AreaMode && mode_ != Mode::AreaMode) {
+        clear_area_mode_selection();
+        area_hovered_asset_ = nullptr;
+        area_hovered_asset_with_area_ = nullptr;
+        area_hovered_area_name_.clear();
+        hovered_area_index_ = -1;
+        selected_area_index_ = -1;
+    }
     switch (mode_) {
     case Mode::RoomEditor:
         asset_filter_.set_active_mode(kModeIdRoom);
