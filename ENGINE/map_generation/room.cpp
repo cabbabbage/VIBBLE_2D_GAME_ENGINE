@@ -12,16 +12,12 @@
 #include <optional>
 #include <string>
 #include "util/grid.hpp"
+#include "utils/string_utils.hpp"
 using json = nlohmann::json;
 
 namespace {
 
-std::string to_lower_copy(std::string value) {
-        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-        });
-        return value;
-}
+using vibble::strings::to_lower_copy;
 
 RoomAreaSerialization::Kind parse_kind_value(const std::string& value) {
         if (value.empty()) return RoomAreaSerialization::Kind::Unknown;

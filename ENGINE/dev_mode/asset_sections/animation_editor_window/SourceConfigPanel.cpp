@@ -26,6 +26,7 @@
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 #include "string_utils.hpp"
+#include "utils/string_utils.hpp"
 
 namespace animation_editor {
 
@@ -41,12 +42,7 @@ bool case_insensitive_equals(std::string_view a, std::string_view b) {
     return true;
 }
 
-std::string to_lower_copy(std::string text) {
-    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return text;
-}
+using vibble::strings::to_lower_copy;
 
 bool has_extension_ci(const std::filesystem::path& path, std::string_view ext) {
     return case_insensitive_equals(path.extension().string(), std::string(ext));

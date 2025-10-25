@@ -10,6 +10,7 @@
 #include <cctype>
 #include <system_error>
 #include "utils/input.hpp"
+#include "utils/string_utils.hpp"
 #include "asset/asset_library.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/animation.hpp"
@@ -71,12 +72,7 @@ namespace {
         return std::string(begin, end);
     }
 
-    std::string to_lower_copy(std::string value) {
-        for (auto& c : value) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        }
-        return value;
-    }
+    using vibble::strings::to_lower_copy;
 
     std::string normalize_tag_value(std::string_view raw_value) {
         std::string normalized = tag_utils::normalize(raw_value);

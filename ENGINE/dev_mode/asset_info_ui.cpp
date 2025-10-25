@@ -16,6 +16,7 @@
 #include "asset/asset_info.hpp"
 #include "utils/input.hpp"
 #include "utils/area.hpp"
+#include "utils/string_utils.hpp"
 #include "widgets.hpp"
 #include "tag_utils.hpp"
 
@@ -40,12 +41,7 @@
 
 namespace {
 
-std::string to_lower_copy(std::string s) {
-    for (auto& c : s) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return s;
-}
+using vibble::strings::to_lower_copy;
 
 std::string resolve_asset_manifest_key(devmode::core::ManifestStore* store, const std::string& selection) {
     if (!store) return {};

@@ -46,6 +46,7 @@
 #include "util/grid.hpp"
 #include "util/grid_occupancy.hpp"
 #include "utils/input.hpp"
+#include "utils/string_utils.hpp"
 
 #include <algorithm>
 #include <unordered_map>
@@ -64,11 +65,7 @@ using devmode::sdl::is_pointer_event;
 
 namespace {
 
-std::string to_lower_copy(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return value;
-}
+using vibble::strings::to_lower_copy;
 
 void dev_mode_trace(const std::string& message) {
     try {

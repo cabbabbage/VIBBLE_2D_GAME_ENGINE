@@ -21,6 +21,7 @@
 #include "util/grid_occupancy.hpp"
 #include "utils/area.hpp"
 #include "utils/map_grid_settings.hpp"
+#include "utils/string_utils.hpp"
 
 namespace {
 constexpr std::uint64_t kGoldenRatio = 0x9e3779b97f4a7c15ULL;
@@ -30,12 +31,7 @@ std::uint64_t mix_value(std::uint64_t seed, std::uint64_t value) {
     return seed;
 }
 
-std::string to_lower_copy(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return value;
-}
+using vibble::strings::to_lower_copy;
 } // namespace
 
 MapWideAssetSpawner::MapWideAssetSpawner(AssetLibrary* asset_library,
