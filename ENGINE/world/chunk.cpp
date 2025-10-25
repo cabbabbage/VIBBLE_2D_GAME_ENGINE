@@ -150,6 +150,9 @@ void Chunk::LightingChunk::releaseLightingArtifacts() {
     lighting.runtime_average_raw_intensity = 0.0f;
     lighting.runtime_average_direction     = SDL_FPoint{0.0f, 0.0f};
     lighting.has_runtime_direction         = false;
+    lighting.runtime_light_offset          = SDL_FPoint{0.0f, 0.0f};
+    lighting.runtime_light_offset_weight   = 0.0f;
+    lighting.has_runtime_light_offset      = false;
     lighting.is_active                = false;
     lighting.needs_update             = true;
     shadow_history.reset();
@@ -169,6 +172,9 @@ void Chunk::releaseLightingArtifacts() {
     lighting.runtime_average_raw_intensity = 0.0f;
     lighting.runtime_average_direction     = SDL_FPoint{0.0f, 0.0f};
     lighting.has_runtime_direction         = false;
+    lighting.runtime_light_offset          = SDL_FPoint{0.0f, 0.0f};
+    lighting.runtime_light_offset_weight   = 0.0f;
+    lighting.has_runtime_light_offset      = false;
     lighting.is_active                 = false;
     lighting.needs_update              = true;
     shadow_history.reset();
@@ -264,18 +270,21 @@ void Chunk::update_aggregate_from_lighting_chunks() {
         return;
     }
 
-    double accum_strength   = 0.0;
-    double accum_runtime    = 0.0;
-    double accum_static     = 0.0;
-    double accum_dynamic    = 0.0;
-    double accum_color_r    = 0.0;
-    double accum_color_g    = 0.0;
-    double accum_color_b    = 0.0;
-    double color_weight     = 0.0;
-    double accum_raw_int    = 0.0;
-    double accum_dir_x      = 0.0;
-    double accum_dir_y      = 0.0;
-    double accum_dir_weight = 0.0;
+    double accum_strength      = 0.0;
+    double accum_runtime       = 0.0;
+    double accum_static        = 0.0;
+    double accum_dynamic       = 0.0;
+    double accum_color_r       = 0.0;
+    double accum_color_g       = 0.0;
+    double accum_color_b       = 0.0;
+    double color_weight        = 0.0;
+    double accum_raw_int       = 0.0;
+    double accum_dir_x         = 0.0;
+    double accum_dir_y         = 0.0;
+    double accum_dir_weight    = 0.0;
+    double accum_offset_x      = 0.0;
+    double accum_offset_y      = 0.0;
+    double accum_offset_weight = 0.0;
     bool   any_active       = false;
     bool   any_needs        = false;
     bool   any_runtime      = false;
@@ -305,6 +314,14 @@ void Chunk::update_aggregate_from_lighting_chunks() {
                 accum_dir_x += static_cast<double>(cell.lighting.runtime_average_direction.x) * dir_weight;
                 accum_dir_y += static_cast<double>(cell.lighting.runtime_average_direction.y) * dir_weight;
                 accum_dir_weight += static_cast<double>(dir_weight);
+            }
+        }
+        if (cell.lighting.has_runtime_light_offset) {
+            const float offset_weight = std::max(cell.lighting.runtime_light_offset_weight, 0.0f);
+            if (offset_weight > 1e-5f) {
+                accum_offset_x += static_cast<double>(cell.lighting.runtime_light_offset.x) * offset_weight;
+                accum_offset_y += static_cast<double>(cell.lighting.runtime_light_offset.y) * offset_weight;
+                accum_offset_weight += static_cast<double>(offset_weight);
             }
         }
     }
@@ -347,6 +364,29 @@ void Chunk::update_aggregate_from_lighting_chunks() {
     } else {
         lighting.runtime_average_direction = SDL_FPoint{0.0f, 0.0f};
         lighting.has_runtime_direction     = false;
+    }
+
+    if (accum_offset_weight > 1e-5) {
+        const double inv_offset = 1.0 / accum_offset_weight;
+        float off_x             = static_cast<float>(accum_offset_x * inv_offset);
+        float off_y             = static_cast<float>(accum_offset_y * inv_offset);
+        const float mag         = std::sqrt(off_x * off_x + off_y * off_y);
+        if (mag > 1e-4f) {
+            off_x /= mag;
+            off_y /= mag;
+            lighting.runtime_light_offset        = SDL_FPoint{off_x, off_y};
+            lighting.runtime_light_offset_weight =
+                static_cast<float>(std::clamp(accum_offset_weight, 0.0, 10.0));
+            lighting.has_runtime_light_offset = true;
+        } else {
+            lighting.runtime_light_offset        = SDL_FPoint{0.0f, 0.0f};
+            lighting.runtime_light_offset_weight = 0.0f;
+            lighting.has_runtime_light_offset    = false;
+        }
+    } else {
+        lighting.runtime_light_offset        = SDL_FPoint{0.0f, 0.0f};
+        lighting.runtime_light_offset_weight = 0.0f;
+        lighting.has_runtime_light_offset    = false;
     }
 
     // Use center cell's shadow parameters as representative aggregate.
@@ -534,6 +574,15 @@ LightInfluence compute_light_influence(const LightingChunk& center,
     if (brightness_weight_sum > 1e-5) {
         result.average_brightness = static_cast<float>(accum_brightness / brightness_weight_sum);
         result.average_brightness = std::clamp(result.average_brightness, 0.0f, 1.0f);
+    }
+
+    if (center.lighting.has_runtime_light_offset) {
+        const double runtime_weight =
+            std::clamp(static_cast<double>(center.lighting.runtime_light_offset_weight), 0.0, 10.0);
+        const double priority_weight = std::max(runtime_weight, 1.0);
+        const double emphasis        = 4.0;
+        accum_push_x += static_cast<double>(center.lighting.runtime_light_offset.x) * priority_weight * emphasis;
+        accum_push_y += static_cast<double>(center.lighting.runtime_light_offset.y) * priority_weight * emphasis;
     }
 
     const double magnitude = std::sqrt(accum_push_x * accum_push_x + accum_push_y * accum_push_y);
@@ -998,6 +1047,9 @@ void LightMap::ingest_runtime_samples(const runtime_lighting::RuntimeLightingFra
             cell.lighting.runtime_average_raw_intensity = 0.0f;
             cell.lighting.runtime_average_direction     = SDL_FPoint{0.0f, 0.0f};
             cell.lighting.has_runtime_direction         = false;
+            cell.lighting.runtime_light_offset          = SDL_FPoint{0.0f, 0.0f};
+            cell.lighting.runtime_light_offset_weight   = 0.0f;
+            cell.lighting.has_runtime_light_offset      = false;
         }
     }
 
@@ -1032,6 +1084,23 @@ void LightMap::ingest_runtime_samples(const runtime_lighting::RuntimeLightingFra
                 cell->lighting.runtime_average_direction = dir;
                 cell->lighting.has_runtime_direction     = true;
             }
+        }
+
+        const SDL_Rect& bounds = cell->world_bounds;
+        const float     center_x = static_cast<float>(bounds.x) + static_cast<float>(bounds.w) * 0.5f;
+        const float     center_y = static_cast<float>(bounds.y) + static_cast<float>(bounds.h) * 0.5f;
+        float           offset_x = center_x - sample.world_position.x;
+        float           offset_y = center_y - sample.world_position.y;
+        const float     offset_sq = offset_x * offset_x + offset_y * offset_y;
+        const float     weight = std::max(std::max(sample.raw_intensity, 0.0f), sample.brightness);
+        const float     clamped_weight = std::clamp(weight, 0.0f, 10.0f);
+        if (offset_sq > 1e-6f && clamped_weight >= cell->lighting.runtime_light_offset_weight - 1e-4f) {
+            const float offset_len = std::sqrt(offset_sq);
+            offset_x /= offset_len;
+            offset_y /= offset_len;
+            cell->lighting.runtime_light_offset        = SDL_FPoint{offset_x, offset_y};
+            cell->lighting.runtime_light_offset_weight = clamped_weight;
+            cell->lighting.has_runtime_light_offset    = true;
         }
 
         if (cell->parent) {

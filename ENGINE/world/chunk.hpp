@@ -81,6 +81,12 @@ struct Chunk {
         SDL_FPoint runtime_average_direction{0.0f, 0.0f};
         // Tracks whether runtime_average_direction holds a normalized vector.
         bool has_runtime_direction = false;
+        // Normalized vector pointing away from the brightest runtime light inside the chunk.
+        SDL_FPoint runtime_light_offset{0.0f, 0.0f};
+        // Strength of the runtime light offset measurement.
+        float runtime_light_offset_weight = 0.0f;
+        // Marks whether runtime_light_offset holds a valid measurement.
+        bool has_runtime_light_offset = false;
     };
 
     struct LightingChunk {
