@@ -145,6 +145,7 @@ Asset::Asset(const Asset& o)
 , last_scaled_h_(0)
 , last_scaled_camera_scale_(-1.0f)
 , last_scale_usage_()
+, final_texture_revision_(o.final_texture_revision_)
 {
         clear_downscale_cache();
         clear_render_caches();
@@ -185,6 +186,7 @@ Asset& Asset::operator=(const Asset& o) {
 	shading_group        = o.shading_group;
 	shading_group_set    = o.shading_group_set;
         final_texture        = o.final_texture;
+        final_texture_revision_ = o.final_texture_revision_;
         assets_              = o.assets_;
         spawn_id             = o.spawn_id;
         spawn_method         = o.spawn_method;
@@ -585,18 +587,15 @@ void Asset::set_flip() {
 }
 
 void Asset::set_final_texture(SDL_Texture* tex) {
-        const bool same_texture = (tex == final_texture);
-
-        // The rendered content may have changed even when the texture pointer is the same,
-        // so all cached scale variants must be invalidated to avoid showing stale frames.
-        clear_downscale_cache();
-
-        if (!same_texture) {
+        if (tex != final_texture) {
                 if (final_texture) {
                         SDL_DestroyTexture(final_texture);
                 }
                 final_texture = tex;
+                clear_downscale_cache();
         }
+
+        invalidate_downscale_cache();
 
         if (tex) {
                 SDL_QueryTexture(tex, nullptr, nullptr, &cached_w, &cached_h);
@@ -656,6 +655,17 @@ void Asset::clear_render_caches() {
         render_pipeline::shading::ClearShadowStateFor(this);
 }
 
+void Asset::invalidate_downscale_cache() {
+        ++final_texture_revision_;
+
+        last_scaled_texture_      = nullptr;
+        last_scaled_source_       = nullptr;
+        last_scaled_w_            = 0;
+        last_scaled_h_            = 0;
+        last_scaled_camera_scale_ = -1.0f;
+        last_scale_usage_         = {};
+}
+
 void Asset::clear_downscale_cache() {
         const auto& steps = (info && !info->scale_variants.empty())
             ? static_cast<const std::vector<float>&>(info->scale_variants)
@@ -676,6 +686,7 @@ void Asset::clear_downscale_cache() {
                 entry.width   = 0;
                 entry.height  = 0;
                 entry.scale   = (idx < steps.size()) ? steps[idx] : 1.0f;
+                entry.revision = 0;
         }
 
         last_scaled_texture_      = nullptr;

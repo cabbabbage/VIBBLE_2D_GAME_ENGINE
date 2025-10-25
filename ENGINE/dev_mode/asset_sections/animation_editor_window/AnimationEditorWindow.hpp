@@ -27,6 +27,7 @@ class PreviewProvider;
 class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
+class AnimationListContextMenu;
 
 using DMButton = ::DMButton;
 
@@ -61,6 +62,10 @@ class AnimationEditorWindow {
     void select_animation(const std::optional<std::string>& animation_id, bool from_user);
     void ensure_selection_valid();
     void handle_list_context_menu(const std::string& animation_id, const SDL_Point& location);
+    void prompt_rename_animation(const std::string& animation_id);
+    void set_animation_as_start(const std::string& animation_id);
+    void duplicate_animation(const std::string& animation_id);
+    void delete_animation_with_confirmation(const std::string& animation_id);
     void render_background(SDL_Renderer* renderer) const;
     void render_header(SDL_Renderer* renderer) const;
     void render_status(SDL_Renderer* renderer) const;
@@ -97,6 +102,7 @@ class AnimationEditorWindow {
     std::unique_ptr<AnimationListPanel> list_panel_;
     std::unique_ptr<AnimationInspectorPanel> inspector_panel_;
     std::unique_ptr<FrameEditor> frame_editor_;
+    std::unique_ptr<AnimationListContextMenu> list_context_menu_;
     std::unique_ptr<DMButton> header_corner_button_;
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<DMButton> reload_button_;

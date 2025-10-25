@@ -1077,8 +1077,10 @@
                 0,
                 0
             ],
-            "last_updated": "2025-10-17T07:08:02Z",
+            "last_updated": "2025-10-25T16:26:11Z",
             "recommended_percentages": [
+                100,
+                75,
                 50
             ],
             "revision": 1

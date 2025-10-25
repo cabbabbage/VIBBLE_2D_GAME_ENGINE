@@ -39,6 +39,35 @@ SDL_Texture* create_half_scale(SDL_Renderer* renderer,
         return half;
 }
 
+bool rerender_scaled_texture(SDL_Renderer* renderer,
+                             SDL_Texture* destination,
+                             SDL_Texture* source,
+                             int dst_w,
+                             int dst_h)
+{
+        if (!renderer || !destination || !source || dst_w <= 0 || dst_h <= 0) {
+                return false;
+        }
+
+        SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
+        if (SDL_SetRenderTarget(renderer, destination) != 0) {
+                SDL_SetRenderTarget(renderer, previous_target);
+                return false;
+        }
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        if (SDL_RenderClear(renderer) != 0) {
+                SDL_SetRenderTarget(renderer, previous_target);
+                return false;
+        }
+
+        SDL_Rect dst{0, 0, dst_w, dst_h};
+        const int copy_result = SDL_RenderCopy(renderer, source, nullptr, &dst);
+
+        SDL_SetRenderTarget(renderer, previous_target);
+        return copy_result == 0;
+}
+
 }
 
 SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
@@ -92,17 +121,44 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                 }
                 SDL_Texture* scaled = render_pipeline::CreateScaledTexture(renderer_, base_tex, base_w, base_h, selection.stored_scale);
                 if (!scaled) {
-                        entry.texture = nullptr;
-                        entry.width   = 0;
-                        entry.height  = 0;
-                        entry.scale   = selection.stored_scale;
+                        entry.texture  = nullptr;
+                        entry.width    = 0;
+                        entry.height   = 0;
+                        entry.scale    = selection.stored_scale;
+                        entry.revision = 0;
                         asset->update_scale_usage(desired_scale, 1.0f, desired_scale, 0);
                         return base_tex;
                 }
-                entry.texture = scaled;
-                entry.width   = expected_w;
-                entry.height  = expected_h;
-                entry.scale   = selection.stored_scale;
+                entry.texture  = scaled;
+                entry.width    = expected_w;
+                entry.height   = expected_h;
+                entry.scale    = selection.stored_scale;
+                entry.revision = asset->final_texture_revision_;
+        } else if (entry.revision != asset->final_texture_revision_) {
+                if (!rerender_scaled_texture(renderer_, entry.texture, base_tex, expected_w, expected_h)) {
+                        SDL_DestroyTexture(entry.texture);
+                        entry.texture  = nullptr;
+                        entry.width    = 0;
+                        entry.height   = 0;
+                        entry.scale    = selection.stored_scale;
+                        entry.revision = 0;
+
+                        SDL_Texture* scaled = render_pipeline::CreateScaledTexture(renderer_, base_tex, base_w, base_h, selection.stored_scale);
+                        if (!scaled) {
+                                asset->update_scale_usage(desired_scale, 1.0f, desired_scale, 0);
+                                return base_tex;
+                        }
+
+                        entry.texture  = scaled;
+                        entry.width    = expected_w;
+                        entry.height   = expected_h;
+                        entry.scale    = selection.stored_scale;
+                }
+
+                entry.width    = expected_w;
+                entry.height   = expected_h;
+                entry.scale    = selection.stored_scale;
+                entry.revision = asset->final_texture_revision_;
         }
 
         SDL_Texture* result = entry.texture ? entry.texture : base_tex;

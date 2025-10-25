@@ -29,7 +29,7 @@
         "lighting": {
             "map_panel": {
                 "reactive": {
-                    "frame_blend_falloff_frames": 0.0,
+                    "frame_blend_falloff_frames": 31.0,
                     "opacity_sensitivity_percent": 100.0,
                     "virtual_light_map": {
                         "horizontal_falloff": 5.920000076293945,
@@ -37,9 +37,9 @@
                         "max_offset_x": 241.3300018310547,
                         "max_offset_y": 0.6299999952316284,
                         "max_scale_percent": 150.0,
-                        "min_scale_percent": 41.0,
-                        "parallax_percent": 0.0,
-                        "search_radius": 5.0,
+                        "min_scale_percent": 32.0,
+                        "parallax_percent": 7.510000228881836,
+                        "search_radius": 32.0,
                         "shadow_scale": 1.3600000143051147,
                         "vertical_falloff": 5.920000076293945
                     }

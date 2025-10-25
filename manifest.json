@@ -8539,6 +8539,7 @@
       "anti_tags": [],
       "asset_name": "lantern",
       "asset_type": "Object",
+      "can_invert": true,
       "duplicatable": false,
       "duplication_interval_max": 60,
       "duplication_interval_min": 30,
@@ -8587,11 +8588,23 @@
       "min_child_depth": 3,
       "min_distance_all": 82,
       "min_same_type_distance": 2000,
+      "neighbor_search_distance": 500,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
-      "size_settings": {
-        "scale_percentage": 30
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
       },
+      "size_settings": {
+        "scale_percentage": 54.0
+      },
+      "spawn_groups": [],
       "tags": [
         "large",
         "man-made",
@@ -15343,13 +15356,13 @@
       },
       "map_name": "FORREST",
       "reactive_shadows": {
-        "frame_blend_falloff_frames": 0,
+        "frame_blend_falloff_frames": 31,
         "opacity_sensitivity_percent": 100.0,
         "opacity_strength": 1.0,
         "parallax_strength": 1.0,
         "sampling_weights": {
-          "dynamic_weight": 1.0,
-          "static_weight": 0.17000000178813934
+          "dynamic_weight": 1.940000057220459,
+          "static_weight": 0.05000000074505806
         },
         "scale_strength": 1.0,
         "shadow_lut": [
@@ -15372,9 +15385,9 @@
           "max_offset_x": 241.3300018310547,
           "max_offset_y": 0.6299999952316284,
           "max_scale_percent": 150,
-          "min_scale_percent": 41,
-          "parallax_percent": 0.0,
-          "search_radius": 5,
+          "min_scale_percent": 32,
+          "parallax_percent": 7.510000228881836,
+          "search_radius": 32,
           "shadow_scale": 1.3600000143051147,
           "vertical_falloff": 5.920000076293945
         }
@@ -15383,9 +15396,9 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            129,
-            31,
-            204,
+            143,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 5,
@@ -15456,8 +15469,8 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            169,
-            85,
+            37,
+            36,
             242,
             255
           ],
@@ -15532,9 +15545,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            242,
-            223,
             36,
+            242,
+            242,
             255
           ],
           "edge_smoothness": 4,
@@ -15612,9 +15625,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            85,
-            242,
-            208,
+            175,
+            204,
+            71,
             255
           ],
           "edge_smoothness": 7,
@@ -15689,9 +15702,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
+            36,
+            123,
             242,
-            85,
-            208,
             255
           ],
           "edge_smoothness": 6,
@@ -15766,9 +15779,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            242,
-            85,
-            116,
+            192,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 9,
@@ -15839,8 +15852,8 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            75,
             242,
+            209,
             36,
             255
           ],
@@ -15912,9 +15925,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            187,
-            31,
-            204,
+            181,
+            85,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -15981,9 +15994,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
-            242,
-            36,
-            142,
+            93,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -16050,9 +16063,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            112,
-            79,
-            224,
+            31,
+            204,
+            124,
             255
           ],
           "edge_smoothness": 2,
@@ -16101,9 +16114,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            36,
             242,
-            184,
+            36,
+            131,
             255
           ],
           "edge_smoothness": 12,
@@ -16177,9 +16190,9 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            36,
             242,
-            83,
+            101,
+            36,
             255
           ],
           "edge_smoothness": 9,
@@ -16249,9 +16262,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            31,
-            112,
             204,
+            31,
+            31,
             255
           ],
           "edge_smoothness": 7,
@@ -16325,9 +16338,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            71,
-            191,
-            204,
+            113,
+            85,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -16405,9 +16418,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
+            197,
             242,
-            242,
-            85,
+            36,
             255
           ],
           "edge_smoothness": 10,
@@ -16489,9 +16502,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            155,
-            204,
-            71,
+            85,
+            242,
+            218,
             255
           ],
           "edge_smoothness": 5,
@@ -16561,9 +16574,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            76,
-            31,
-            204,
+            242,
+            85,
+            108,
             255
           ],
           "edge_smoothness": 6,
@@ -16630,9 +16643,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            242,
             36,
-            194,
+            242,
+            86,
             255
           ],
           "edge_smoothness": 10,
@@ -16706,9 +16719,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
+            71,
+            140,
             204,
-            50,
-            31,
             255
           ],
           "edge_smoothness": 5,
@@ -16809,9 +16822,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            204,
-            195,
+            146,
             71,
+            204,
             255
           ],
           "edge_smoothness": 101,
@@ -16966,9 +16979,9 @@
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            194,
-            224,
-            34,
+            242,
+            36,
+            192,
             255
           ],
           "edge_smoothness": 6,
@@ -17038,9 +17051,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            159,
-            36,
-            242,
+            204,
+            31,
+            100,
             255
           ],
           "edge_smoothness": 7,

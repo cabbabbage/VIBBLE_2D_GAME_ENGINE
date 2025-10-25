@@ -18,6 +18,7 @@
 
 #include "AnimationDocument.hpp"
 #include "AnimationInspectorPanel.hpp"
+#include "AnimationListContextMenu.hpp"
 #include "AnimationListPanel.hpp"
 #include "AsyncTaskQueue.hpp"
 #include "AudioImporter.hpp"
@@ -101,6 +102,7 @@ AnimationEditorWindow::AnimationEditorWindow() {
     inspector_panel_->set_document(document_);
     inspector_panel_->set_preview_provider(preview_provider_);
     configure_inspector_panel();
+    list_context_menu_ = std::make_unique<AnimationListContextMenu>();
 
     header_corner_button_ =
         std::make_unique<DMButton>(std::string(DMIcons::Close()),
@@ -124,6 +126,9 @@ void AnimationEditorWindow::set_visible(bool visible) {
         }
         auto_save_timer_frames_ = 0;
         process_auto_save();
+        if (list_context_menu_) {
+            list_context_menu_->close();
+        }
     }
     visible_ = visible;
 }
@@ -419,9 +424,34 @@ void AnimationEditorWindow::ensure_selection_valid() {
 }
 
 void AnimationEditorWindow::handle_list_context_menu(const std::string& animation_id, const SDL_Point& location) {
-    (void)location; // unused
+    if (!document_) {
+        return;
+    }
+    if (!list_context_menu_) {
+        list_context_menu_ = std::make_unique<AnimationListContextMenu>();
+    }
+
     select_animation(std::make_optional(animation_id), false);
-    set_status_message("Context menu requested for '" + animation_id + "'.", 120);
+    std::vector<AnimationListContextMenu::Option> options;
+    options.push_back(AnimationListContextMenu::Option{
+        "Rename…",
+        [this, animation_id]() { this->prompt_rename_animation(animation_id); },
+    });
+    options.push_back(AnimationListContextMenu::Option{
+        "Set as start",
+        [this, animation_id]() { this->set_animation_as_start(animation_id); },
+    });
+    options.push_back(AnimationListContextMenu::Option{
+        "Duplicate",
+        [this, animation_id]() { this->duplicate_animation(animation_id); },
+    });
+    options.push_back(AnimationListContextMenu::Option{
+        "Delete",
+        [this, animation_id]() { this->delete_animation_with_confirmation(animation_id); },
+    });
+
+    list_context_menu_->open(bounds_, location, std::move(options));
+    set_status_message("Context menu for '" + animation_id + "'.", 90);
 }
 
 void AnimationEditorWindow::update(const Input& input, int, int) {
@@ -473,6 +503,9 @@ void AnimationEditorWindow::render(SDL_Renderer* renderer) const {
     if (list_panel_) list_panel_->render(renderer);
     render_inspector(renderer);
     render_status(renderer);
+    if (list_context_menu_ && list_context_menu_->is_open()) {
+        list_context_menu_->render(renderer);
+    }
     if (frame_editor_visible_) {
         render_frame_editor_overlay(renderer);
     }
@@ -492,6 +525,25 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     if (frame_editor_visible_ && frame_editor_) {
         // Route events to the modal content first
         if (frame_editor_->handle_event(e)) {
+            return true;
+        }
+    }
+
+    if (list_context_menu_ && list_context_menu_->is_open()) {
+        if (list_context_menu_->handle_event(e)) {
+            return true;
+        }
+
+        if (e.type == SDL_MOUSEBUTTONDOWN) {
+            SDL_Point p{e.button.x, e.button.y};
+            SDL_Rect menu_bounds = list_context_menu_->bounds();
+            if (!SDL_PointInRect(&p, &menu_bounds)) {
+                list_context_menu_->close();
+            }
+        }
+
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            list_context_menu_->close();
             return true;
         }
     }
@@ -548,11 +600,119 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         return true;
     }
 
-    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        if (list_context_menu_) {
+            list_context_menu_->close();
+        }
+        return true;
+    }
+
+    if (e.type == SDL_MOUSEMOTION) {
         return true;
     }
 
     return false;
+}
+
+void AnimationEditorWindow::prompt_rename_animation(const std::string& animation_id) {
+    if (!document_) return;
+
+    const char* input = tinyfd_inputBox("Rename Animation", "Enter new animation identifier", animation_id.c_str());
+    if (!input) {
+        set_status_message("Rename cancelled.", 120);
+        return;
+    }
+
+    std::string desired = animation_editor::strings::trim_copy(input);
+    if (desired.empty()) {
+        set_status_message("Animation name cannot be empty.", 180);
+        return;
+    }
+
+    auto before_ids = document_->animation_ids();
+    document_->rename_animation(animation_id, desired);
+    auto after_ids = document_->animation_ids();
+
+    std::string new_id = animation_id;
+    for (const auto& id : after_ids) {
+        if (std::find(before_ids.begin(), before_ids.end(), id) == before_ids.end()) {
+            new_id = id;
+            break;
+        }
+    }
+
+    preview_provider_->invalidate(animation_id);
+    if (new_id != animation_id) {
+        preview_provider_->invalidate(new_id);
+    }
+
+    select_animation(std::make_optional(new_id), false);
+    set_status_message("Renamed animation to '" + new_id + "'.", 240);
+    if (list_context_menu_) {
+        list_context_menu_->close();
+    }
+}
+
+void AnimationEditorWindow::set_animation_as_start(const std::string& animation_id) {
+    if (!document_) return;
+    document_->set_start_animation(animation_id);
+    set_status_message("Set '" + animation_id + "' as start animation.", 180);
+    if (list_context_menu_) {
+        list_context_menu_->close();
+    }
+}
+
+void AnimationEditorWindow::duplicate_animation(const std::string& animation_id) {
+    if (!document_) return;
+
+    auto before_ids = document_->animation_ids();
+    document_->create_animation(animation_id);
+    auto after_ids = document_->animation_ids();
+
+    std::optional<std::string> created_id;
+    for (const auto& id : after_ids) {
+        if (std::find(before_ids.begin(), before_ids.end(), id) == before_ids.end()) {
+            created_id = id;
+            break;
+        }
+    }
+
+    if (created_id) {
+        if (auto payload = document_->animation_payload(animation_id)) {
+            document_->replace_animation_payload(*created_id, *payload);
+            preview_provider_->invalidate(*created_id);
+        }
+        select_animation(created_id, false);
+        set_status_message("Duplicated animation to '" + *created_id + "'.", 240);
+    } else {
+        set_status_message("Failed to duplicate animation.", 180);
+    }
+
+    if (list_context_menu_) {
+        list_context_menu_->close();
+    }
+}
+
+void AnimationEditorWindow::delete_animation_with_confirmation(const std::string& animation_id) {
+    if (!document_) return;
+
+    std::string message = "Delete animation '" + animation_id + "'? This cannot be undone.";
+    int result = tinyfd_messageBox("Delete Animation", message.c_str(), "yesno", "warning", 0);
+    if (result != 1) {
+        set_status_message("Deletion cancelled.", 120);
+        if (list_context_menu_) {
+            list_context_menu_->close();
+        }
+        return;
+    }
+
+    document_->delete_animation(animation_id);
+    preview_provider_->invalidate(animation_id);
+    set_status_message("Deleted animation '" + animation_id + "'.", 240);
+    if (list_context_menu_) {
+        list_context_menu_->close();
+    }
+    ensure_selection_valid();
 }
 
 void AnimationEditorWindow::set_on_document_saved(std::function<void()> callback) {

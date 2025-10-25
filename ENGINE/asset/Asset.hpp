@@ -7,6 +7,7 @@
 #include <memory>
 #include <SDL.h>
 #include <limits>
+#include <cstdint>
 
 #include "utils/area.hpp"
 #include "asset_info.hpp"
@@ -163,13 +164,15 @@ class Asset {
     bool      has_cached_grid_residency_ = false;
 
     struct DownscaleCacheEntry {
-        float        scale   = 1.0f;
-        int          width   = 0;
-        int          height  = 0;
-        SDL_Texture* texture = nullptr;
+        float          scale    = 1.0f;
+        int            width    = 0;
+        int            height   = 0;
+        SDL_Texture*   texture  = nullptr;
+        std::uint64_t  revision = 0;
 };
 
     void clear_downscale_cache();
+    void invalidate_downscale_cache();
     void refresh_cached_dimensions();
 
     std::vector<DownscaleCacheEntry> downscale_cache_{};
@@ -190,6 +193,8 @@ class Asset {
     mutable RenderTextureCache light_behind_cache_{};
     mutable RenderTextureCache shadow_mask_cache_{};
     mutable RenderTextureCache motion_blur_cache_{};
+
+    std::uint64_t final_texture_revision_ = 0;
 };
 
 #endif
