@@ -186,12 +186,15 @@ void MapShadowPanel::build_ui() {
                                        vsettings.max_offset_y,
                                        100,
                                        2);
-    shadow_scale_ = make_scaled_slider("Base Shadow Scale",
-                                       0.0f,
-                                       10.0f,
-                                       vsettings.shadow_scale,
-                                       100,
-                                       2);
+    const float initial_sensitivity =
+        std::clamp(current_settings_.opacity_sensitivity_percent, 0.0f, 100.0f);
+    opacity_sensitivity_percent_ = std::make_unique<DMSlider>("Opacity Sensitivity %",
+                                                              0,
+                                                              100,
+                                                              static_cast<int>(std::lround(initial_sensitivity)));
+    if (opacity_sensitivity_percent_) {
+        opacity_sensitivity_percent_->set_defer_commit_until_unfocus(false);
+    }
 
     const int min_scale_value = std::clamp(vsettings.min_scale_percent, 50, 200);
     const int max_scale_value = std::clamp(vsettings.max_scale_percent, 50, 200);
@@ -287,7 +290,7 @@ void MapShadowPanel::build_ui() {
     add_slider_row(vertical_falloff_);
     add_slider_row(max_offset_x_);
     add_slider_row(max_offset_y_);
-    add_slider_row(shadow_scale_);
+    add_slider_row(opacity_sensitivity_percent_);
     add_slider_row(min_scale_percent_);
     add_slider_row(max_scale_percent_);
     add_slider_row(map_light_dir_strength_);
@@ -309,7 +312,9 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
     if (vertical_falloff_) vertical_falloff_->set_value(static_cast<int>(std::round(settings.virtual_light_map.vertical_falloff * 100.0f)));
     if (max_offset_x_) max_offset_x_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_x * 100.0f)));
     if (max_offset_y_) max_offset_y_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_y * 100.0f)));
-    if (shadow_scale_) shadow_scale_->set_value(static_cast<int>(std::round(settings.virtual_light_map.shadow_scale * 100.0f)));
+    if (opacity_sensitivity_percent_)
+        opacity_sensitivity_percent_->set_value(
+            static_cast<int>(std::lround(std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f))));
     if (min_scale_percent_)
         min_scale_percent_->set_value(std::clamp(settings.virtual_light_map.min_scale_percent, 50, 200));
     if (max_scale_percent_)
@@ -330,7 +335,10 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
     settings.virtual_light_map.vertical_falloff   = read_scaled_slider(vertical_falloff_, 100, settings.virtual_light_map.vertical_falloff);
     settings.virtual_light_map.max_offset_x       = read_scaled_slider(max_offset_x_, 100, settings.virtual_light_map.max_offset_x);
     settings.virtual_light_map.max_offset_y       = read_scaled_slider(max_offset_y_, 100, settings.virtual_light_map.max_offset_y);
-    settings.virtual_light_map.shadow_scale       = read_scaled_slider(shadow_scale_, 100, settings.virtual_light_map.shadow_scale);
+    if (opacity_sensitivity_percent_) {
+        settings.opacity_sensitivity_percent =
+            static_cast<float>(std::clamp(opacity_sensitivity_percent_->displayed_value(), 0, 100));
+    }
     if (min_scale_percent_) {
         settings.virtual_light_map.min_scale_percent =
             std::clamp(min_scale_percent_->displayed_value(), 50, 200);

@@ -90,7 +90,8 @@ public:
         float falloff_vertical        = 1.0f;
         float max_offset_x_px         = 64.0f;
         float max_offset_y_px         = 48.0f;
-        float base_shadow_scale       = 1.0f;
+        // Controls how strongly global scene brightness influences opacity (0..100).
+        float opacity_sensitivity_percent = 50.0f;
         // New: min/max shadow scale as integer percents (50..200)
         int   min_scale_percent       = 80;   // 80% default
         int   max_scale_percent       = 120;  // 120% default

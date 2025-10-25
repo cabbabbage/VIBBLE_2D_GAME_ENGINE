@@ -371,37 +371,56 @@ static std::pair<float, float> compute_directional_average_strengths(const Light
     return {front_avg, behind_avg};
 }
 
+static float compute_scene_average_strength(const world::Grid& grid) {
+    const std::vector<world::Chunk*> chunks = grid.all_chunks();
+    if (chunks.empty()) {
+        return 1.0f;
+    }
+    double accum = 0.0;
+    std::size_t count = 0;
+    for (const world::Chunk* chunk : chunks) {
+        if (!chunk) {
+            continue;
+        }
+        accum += static_cast<double>(std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f));
+        ++count;
+    }
+    if (count == 0) {
+        return 1.0f;
+    }
+    const double average = std::clamp(accum / static_cast<double>(count), 0.0, 1.0);
+    return static_cast<float>(average);
+}
+
 static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
                                               const world::Grid& grid,
+                                              float scene_average_strength,
                                               const std::pair<float, float>& grad,
                                               const std::optional<SDL_FPoint>& map_light_direction,
                                               float map_light_opacity,
                                               world::Chunk& chunk) {
     world::Chunk::ChunkShadowParameters sample{};
 
-    // Opacity: inverse of front average strength.
     const auto [front_avg, behind_avg] =
         compute_directional_average_strengths(settings, grid, chunk);
-    sample.opacity = std::clamp(1.0f - front_avg, 0.0f, 1.0f);
 
-    // Scale: grow with front dominance, shrink with behind dominance (nonlinear towards min).
-    const float d = std::clamp(front_avg - behind_avg, -1.0f, 1.0f); // [-1,1]
+    const float sensitivity = std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f) / 100.0f;
+    const float blended_avg =
+        std::clamp(front_avg * (1.0f - sensitivity) + scene_average_strength * sensitivity, 0.0f, 1.0f);
+    sample.opacity = std::clamp(1.0f - blended_avg, 0.0f, 1.0f);
+
+    const float total_light = front_avg + behind_avg;
+    float       front_balance = 0.5f;
+    if (total_light > 1e-5f) {
+        front_balance = std::clamp(front_avg / total_light, 0.0f, 1.0f);
+    }
     const int min_p = std::clamp(settings.min_scale_percent, 50, 200);
     const int max_p = std::clamp(settings.max_scale_percent, 50, 200);
-    const float base_p = 100.0f;
-    float scale_percent = base_p;
-    if (d >= 0.0f) {
-        const float t = d; // more front light -> larger scale
-        scale_percent = base_p + t * (static_cast<float>(max_p) - base_p);
-    } else {
-        const float b = -d; // more behind light -> smaller scale
-        // Ease-out towards min: fast at first, slower as approaching min.
-        const float ease_out = 1.0f - std::pow(1.0f - b, 2.0f); // gamma=2.0
-        scale_percent = base_p - ease_out * (base_p - static_cast<float>(min_p));
-    }
-    scale_percent = std::clamp(scale_percent, static_cast<float>(min_p), static_cast<float>(max_p));
-    const float base_scale = std::max(0.0f, settings.base_shadow_scale);
-    sample.scale = std::max(0.0f, base_scale * (scale_percent / 100.0f));
+    const float scale_percent = std::clamp(static_cast<float>(min_p) +
+                                               (static_cast<float>(max_p - min_p) * front_balance),
+                                           static_cast<float>(min_p),
+                                           static_cast<float>(max_p));
+    sample.scale = std::max(0.0f, scale_percent / 100.0f);
 
     // Base offset away from brightest direction (opposite brightness gradient)
     float gx = grad.first, gy = grad.second;
@@ -478,7 +497,8 @@ LightMap::ShadowSettings LightMap::shadow_settings() const {
     settings.falloff_vertical    = std::max(0.0f, sanitized.virtual_light_map.vertical_falloff);
     settings.max_offset_x_px     = std::max(0.0f, sanitized.virtual_light_map.max_offset_x);
     settings.max_offset_y_px     = std::max(0.0f, sanitized.virtual_light_map.max_offset_y);
-    settings.base_shadow_scale   = std::max(0.0f, sanitized.virtual_light_map.shadow_scale);
+    settings.opacity_sensitivity_percent =
+        std::clamp(sanitized.opacity_sensitivity_percent, 0.0f, 100.0f);
     settings.min_scale_percent   = sanitized.virtual_light_map.min_scale_percent;
     settings.max_scale_percent   = sanitized.virtual_light_map.max_scale_percent;
     settings.map_light_dir_offset_strength =
@@ -588,6 +608,8 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         }
     }
 
+    const float scene_average_strength = compute_scene_average_strength(grid);
+
     std::optional<SDL_FPoint> map_light_direction;
     if (const Global_Light_Source* gl = assets_->map_light_source()) {
         const SDL_Point ref = gl->get_direction_reference();
@@ -632,6 +654,7 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
 
         compute_use_shadow_data_for_chunk(settings,
                                           grid,
+                                          scene_average_strength,
                                           grad,
                                           map_light_direction,
                                           map_light_opacity,

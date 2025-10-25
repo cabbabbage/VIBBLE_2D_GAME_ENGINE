@@ -35,6 +35,7 @@ struct ReactiveShadowSettings {
     } virtual_light_map;
 
     float opacity_strength  = 1.0f;
+    float opacity_sensitivity_percent = 50.0f;
     float parallax_strength = 1.0f;
     float scale_strength    = 1.0f;
 
@@ -73,6 +74,7 @@ struct ReactiveShadowSettings {
     bool operator==(const ReactiveShadowSettings& other) const {
         return virtual_light_map == other.virtual_light_map &&
                opacity_strength == other.opacity_strength &&
+               opacity_sensitivity_percent == other.opacity_sensitivity_percent &&
                parallax_strength == other.parallax_strength &&
                scale_strength == other.scale_strength &&
                response_lut == other.response_lut &&
@@ -106,6 +108,7 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.virtual_light_map.parallax_percent = clampf(out.virtual_light_map.parallax_percent, 0.0f, 100.0f);
     out.virtual_light_map.search_radius      = clampi(out.virtual_light_map.search_radius, 0, 64);
     out.opacity_strength                     = clampf(out.opacity_strength, 0.0f, 10.0f);
+    out.opacity_sensitivity_percent          = clampf(out.opacity_sensitivity_percent, 0.0f, 100.0f);
     out.parallax_strength                    = clampf(out.parallax_strength, 0.0f, 10.0f);
     out.scale_strength                       = clampf(out.scale_strength, 0.0f, 10.0f);
 
