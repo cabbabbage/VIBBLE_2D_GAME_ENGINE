@@ -954,6 +954,7 @@ struct SpawnGroupConfig::Entry {
         }
         enforce_widget_->set_editable(editable_);
         name_widget_->set_editable(editable_);
+        const bool hide_quantity_controls = quantity_hidden() || current_method_ == "Exact";
         const bool allow_quantity_inputs = editable_ && !hide_quantity_controls;
         if (min_widget_) {
             min_widget_->set_editable(allow_quantity_inputs && !use_exact_quantity_);

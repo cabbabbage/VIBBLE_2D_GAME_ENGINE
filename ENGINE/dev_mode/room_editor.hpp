@@ -217,7 +217,7 @@ private:
     std::optional<PerimeterOverlay> compute_perimeter_overlay_for_drag();
     std::optional<PerimeterOverlay> compute_perimeter_overlay_for_spawn(const std::string& spawn_id);
     void add_spawn_group_internal();
-    void delete_spawn_group_internal(const std::string& spawn_id);
+    bool delete_spawn_group_internal(const std::string& spawn_id);
     bool remove_spawn_group_by_id(const std::string& spawn_id);
     void move_spawn_group_internal(const std::string& spawn_id, int dir);
     void reorder_spawn_group_internal(const std::string& spawn_id, size_t target_index);

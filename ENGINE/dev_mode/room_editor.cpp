@@ -279,8 +279,6 @@ void RoomEditor::copy_selected_spawn_group() {
     }
     spawn_group_clipboard_->base_display_name = std::move(base);
     spawn_group_clipboard_->paste_count = 0;
-
-    show_notice("Copied spawn group '" + spawn_group_clipboard_->base_display_name + "'.");
 }
 
 void RoomEditor::paste_spawn_group_from_clipboard() {
@@ -343,7 +341,6 @@ void RoomEditor::paste_spawn_group_from_clipboard() {
 
     active_spawn_group_id_ = new_id;
     select_spawn_group_assets(new_id);
-    show_notice("Pasted spawn group '" + inserted.value("display_name", std::string{"Spawn Group"}) + "'.");
 }
 
 std::optional<std::string> RoomEditor::selected_spawn_group_id() const {
@@ -2643,15 +2640,45 @@ void RoomEditor::refresh_room_config_visibility() {
 
 void RoomEditor::handle_delete_shortcut(const Input& input) {
     if (!input.wasScancodePressed(SDL_SCANCODE_DELETE)) return;
-    if (selected_assets_.empty() || !active_assets_ || !current_room_) return;
+    if (!current_room_) return;
 
-    Asset* primary = selected_assets_.front();
-    if (!primary) return;
-    const std::string& spawn_id = primary->spawn_id;
-    if (spawn_id.empty()) return;
+    std::vector<std::string> spawn_ids;
+    spawn_ids.reserve(selected_assets_.size() + 1);
+    auto append_spawn_id = [&spawn_ids](Asset* asset) {
+        if (!asset) {
+            return;
+        }
+        const std::string& id = asset->spawn_id;
+        if (id.empty()) {
+            return;
+        }
+        if (std::find(spawn_ids.begin(), spawn_ids.end(), id) == spawn_ids.end()) {
+            spawn_ids.push_back(id);
+        }
+    };
 
-    delete_spawn_group_internal(spawn_id);
-    clear_selection();
+    for (Asset* asset : selected_assets_) {
+        append_spawn_id(asset);
+    }
+
+    if (spawn_ids.empty()) {
+        append_spawn_id(hovered_asset_);
+    }
+
+    if (spawn_ids.empty() && active_spawn_group_id_ && !active_spawn_group_id_->empty()) {
+        spawn_ids.push_back(*active_spawn_group_id_);
+    }
+
+    bool deleted_any = false;
+    for (const std::string& id : spawn_ids) {
+        if (delete_spawn_group_internal(id)) {
+            deleted_any = true;
+        }
+    }
+
+    if (deleted_any) {
+        clear_selection();
+    }
 }
 
 void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier) {
@@ -3578,9 +3605,9 @@ void RoomEditor::add_spawn_group_internal() {
     open_spawn_group_editor_by_id(new_spawn_id);
 }
 
-void RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
+bool RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
     if (!remove_spawn_group_by_id(spawn_id)) {
-        return;
+        return false;
     }
     save_current_room_assets_json();
     if (active_spawn_group_id_ && *active_spawn_group_id_ == spawn_id) {
@@ -3592,6 +3619,7 @@ void RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
     if (assets_) {
         assets_->refresh_active_asset_lists();
     }
+    return true;
 }
 
 bool RoomEditor::remove_spawn_group_by_id(const std::string& spawn_id) {
