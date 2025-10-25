@@ -1037,7 +1037,19 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
     sanitize_perimeter_spawn_groups(template_groups);
 
     auto& target_root = current_room_->assets_data();
+    nlohmann::json preserved_identity = nlohmann::json::object();
+    static const std::array<const char*, 3> preserved_keys{ "name", "key", "room_key" };
+    for (const char* key : preserved_keys) {
+        if (target_root.contains(key)) {
+            preserved_identity[key] = target_root[key];
+        }
+    }
+
     target_root = std::move(template_root);
+
+    for (auto& [key, value] : preserved_identity.items()) {
+        target_root[key] = value;
+    }
 
     regenerate_current_room();
 

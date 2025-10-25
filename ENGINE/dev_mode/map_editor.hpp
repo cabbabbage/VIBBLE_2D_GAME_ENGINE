@@ -44,8 +44,12 @@ private:
     void apply_camera_to_bounds();
     void restore_camera_state(bool focus_player, bool restore_previous_state);
     Room* hit_test_room(SDL_Point map_point) const;
-    void render_room_label(SDL_Renderer* renderer, Room* room);
-    SDL_Rect label_background_rect(const SDL_Surface* surface, SDL_Point screen_pos) const;
+    void render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoint desired_center);
+    SDL_Rect label_background_rect(const SDL_Surface* surface, SDL_FPoint desired_center) const;
+    SDL_Rect resolve_edge_overlap(SDL_Rect rect, SDL_FPoint desired_center);
+    SDL_Rect resolve_horizontal_edge_overlap(SDL_Rect rect, float desired_center_x, bool top_edge);
+    SDL_Rect resolve_vertical_edge_overlap(SDL_Rect rect, float desired_center_y, bool left_edge);
+    static bool rects_overlap(const SDL_Rect& a, const SDL_Rect& b);
     Room* find_spawn_room() const;
     camera* active_camera() const;
 

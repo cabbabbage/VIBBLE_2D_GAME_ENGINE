@@ -1914,24 +1914,10 @@ void DevControls::configure_header_button_sets() {
 
     MapModeUI::HeaderButtonConfig regenerate_btn;
     regenerate_btn.id = "regenerate";
-    regenerate_btn.label = "Regen Room";
+    regenerate_btn.label = "regen";
     regenerate_btn.momentary = true;
     regenerate_btn.style_override = &DMStyles::DeleteButton();
     regenerate_btn.on_toggle = [this](bool) {
-        if (room_editor_) {
-            room_editor_->close_room_config();
-            room_editor_->regenerate_room();
-        }
-        sync_header_button_states();
-};
-    room_buttons.push_back(std::move(regenerate_btn));
-
-    MapModeUI::HeaderButtonConfig regenerate_other_btn;
-    regenerate_other_btn.id = "regenerate_other";
-    regenerate_other_btn.label = "Regen Other";
-    regenerate_other_btn.momentary = true;
-    regenerate_other_btn.style_override = &DMStyles::DeleteButton();
-    regenerate_other_btn.on_toggle = [this](bool) {
         if (!room_editor_) {
             sync_header_button_states();
             return;
@@ -1944,8 +1930,8 @@ void DevControls::configure_header_button_sets() {
         }
         open_regenerate_room_popup();
         sync_header_button_states();
-};
-    room_buttons.push_back(std::move(regenerate_other_btn));
+    };
+    room_buttons.push_back(std::move(regenerate_btn));
 
     for (const auto& type : devmode::area_mode::area_types()) {
         MapModeUI::HeaderButtonConfig cfg;
@@ -1996,7 +1982,6 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_layers", layers_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "layers", layers_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate", false);
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate_other", false);
 
     const bool map_assets_open = map_assets_modal_ && map_assets_modal_->visible();
     const bool edge_open = edge_assets_modal_ && edge_assets_modal_->visible();
@@ -2457,21 +2442,33 @@ void DevControls::toggle_edge_assets_modal() {
 
 void DevControls::open_regenerate_room_popup() {
     if (!can_use_room_editor_ui()) return;
-    if (!rooms_ || rooms_->empty()) {
+    if (!room_editor_ || !current_room_) {
         if (regenerate_popup_) regenerate_popup_->close();
         return;
     }
 
     std::vector<std::pair<std::string, Room*>> entries;
-    entries.reserve(rooms_->size());
-    for (Room* room : *rooms_) {
-        if (!room || room == current_room_) continue;
-        if (!room->room_area) continue;
-        if (is_trail_room(room)) {
-            continue;
+    entries.reserve(1 + (rooms_ ? rooms_->size() : 0));
+    entries.emplace_back(std::string("current room"), current_room_);
+
+    if (rooms_) {
+        std::vector<std::pair<std::string, Room*>> other_entries;
+        other_entries.reserve(rooms_->size());
+        for (Room* room : *rooms_) {
+            if (!room || room == current_room_) continue;
+            if (!room->room_area) continue;
+            if (is_trail_room(room)) {
+                continue;
+            }
+            std::string name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
+            other_entries.emplace_back(std::move(name), room);
         }
-        std::string name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
-        entries.emplace_back(std::move(name), room);
+
+        std::sort(other_entries.begin(), other_entries.end(), [](const auto& a, const auto& b) {
+            return to_lower_copy(a.first) < to_lower_copy(b.first);
+        });
+
+        entries.insert(entries.end(), other_entries.begin(), other_entries.end());
     }
 
     if (entries.empty()) {
@@ -2479,18 +2476,18 @@ void DevControls::open_regenerate_room_popup() {
         return;
     }
 
-    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
-        return to_lower_copy(a.first) < to_lower_copy(b.first);
-    });
-
     if (!regenerate_popup_) {
         regenerate_popup_ = std::make_unique<RegenerateRoomPopup>();
     }
 
     regenerate_popup_->open(entries,
                             [this](Room* selected) {
-                                if (!selected || !room_editor_) return;
-                                room_editor_->regenerate_room_from_template(selected);
+                                if (!room_editor_) return;
+                                if (!selected || selected == current_room_) {
+                                    room_editor_->regenerate_room();
+                                } else {
+                                    room_editor_->regenerate_room_from_template(selected);
+                                }
                                 if (regenerate_popup_) regenerate_popup_->close();
                                 sync_header_button_states();
                             },
