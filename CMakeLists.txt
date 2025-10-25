@@ -49,10 +49,6 @@ file(GLOB_RECURSE ENGINE_SRC CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/ENGINE/*.h
 )
 
-list(APPEND ENGINE_SRC
-    ${CMAKE_SOURCE_DIR}/ENGINE/lighting/PreloopGating.cpp
-    ${CMAKE_SOURCE_DIR}/ENGINE/lighting/ChunkLightingPreloader.cpp
-)
 list(REMOVE_DUPLICATES ENGINE_SRC)
 
 add_executable(engine ${ENGINE_SRC})
