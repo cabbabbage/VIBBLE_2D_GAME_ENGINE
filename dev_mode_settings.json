@@ -29,17 +29,18 @@
         "lighting": {
             "map_panel": {
                 "reactive": {
+                    "opacity_sensitivity_percent": 100.0,
                     "virtual_light_map": {
                         "horizontal_falloff": 1.6200000047683716,
                         "map_light_dir_offset_strength": 0.07000000029802322,
-                        "max_offset_x": 93.43000030517578,
-                        "max_offset_y": 0.019999999552965164,
-                        "max_scale_percent": 126.0,
-                        "min_scale_percent": 58.0,
+                        "max_offset_x": 73.69999694824219,
+                        "max_offset_y": 0.0,
+                        "max_scale_percent": 200.0,
+                        "min_scale_percent": 50.0,
                         "parallax_percent": 44.220001220703125,
-                        "search_radius": 8.0,
+                        "search_radius": 4.0,
                         "shadow_scale": 1.3600000143051147,
-                        "vertical_falloff": 1.6200000047683716
+                        "vertical_falloff": 1.7699999809265137
                     }
                 },
                 "update_map_light": true
