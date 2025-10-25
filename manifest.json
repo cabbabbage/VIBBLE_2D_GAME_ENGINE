@@ -13843,17 +13843,11 @@
         {
           "bounding_extent": 1100.0,
           "level": 1,
-          "max_rooms": 2,
+          "max_rooms": 1,
           "min_rooms": 0,
           "name": "layer_1",
           "ring_radius": 2400.0,
           "rooms": [
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "spawn",
-              "required_children": []
-            },
             {
               "max_instances": 1,
               "min_instances": 0,
@@ -14195,7 +14189,20 @@
           ]
         },
         "test_2": {
+          "curvyness": 2,
+          "edge_smoothness": 2,
+          "geometry": "Circle",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 4000,
+          "max_radius": 2000,
+          "max_width": 4000,
+          "min_height": 1500,
+          "min_radius": 750,
+          "min_width": 1500,
           "name": "test_2",
+          "radius": 2000,
           "spawn_groups": []
         }
       },
