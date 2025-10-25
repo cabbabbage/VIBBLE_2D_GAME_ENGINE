@@ -89,6 +89,8 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
     settings.opacity_strength = read_float(json, "opacity_strength", settings.opacity_strength);
     settings.parallax_strength = read_float(json, "parallax_strength", settings.parallax_strength);
     settings.scale_strength = read_float(json, "scale_strength", settings.scale_strength);
+    settings.frame_blend_falloff_frames =
+        read_int(json, "frame_blend_falloff_frames", settings.frame_blend_falloff_frames);
 
     auto parse_lut = [&](const nlohmann::json& source) {
         if (!source.is_array()) {
@@ -168,6 +170,7 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
     json["opacity_strength"]  = sanitized.opacity_strength;
     json["parallax_strength"] = sanitized.parallax_strength;
     json["scale_strength"]    = sanitized.scale_strength;
+    json["frame_blend_falloff_frames"] = sanitized.frame_blend_falloff_frames;
 
     nlohmann::json lut = nlohmann::json::array();
     for (const auto& entry : sanitized.response_lut.entries) {

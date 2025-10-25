@@ -41,35 +41,40 @@ void Chunk::ChunkShadowHistory::reset() {
     blended = ChunkShadowParameters{};
 }
 
-void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample) {
+void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fade_frames) {
     samples[static_cast<std::size_t>(cursor)] = sample;
-    cursor = (cursor + 1) % kHistoryLength;
-    if (count < kHistoryLength) {
+    cursor = (cursor + 1) % kMaxHistoryLength;
+    if (count < kMaxHistoryLength) {
         ++count;
     }
+
+    fade_frames = std::clamp(fade_frames, 0, kMaxHistoryLength - 1);
 
     if (count <= 0) {
         blended = ChunkShadowParameters{};
         return;
     }
 
-    if (count == 1) {
+    if (fade_frames <= 0 || count == 1) {
         blended = sample;
         return;
     }
 
     ChunkShadowParameters accum{};
     float                 total_weight = 0.0f;
-    const int             last_index   = (cursor - 1 + kHistoryLength) % kHistoryLength;
+    const int             last_index   = (cursor - 1 + kMaxHistoryLength) % kMaxHistoryLength;
+    const int             max_samples = std::min(count, fade_frames + 1);
 
-    for (int i = 0; i < count; ++i) {
-        const int idx = (last_index - i + kHistoryLength) % kHistoryLength;
+    for (int i = 0; i < max_samples; ++i) {
+        const int idx = (last_index - i + kMaxHistoryLength) % kMaxHistoryLength;
         const auto& entry = samples[static_cast<std::size_t>(idx)];
 
-        const int   age           = i;
-        const float weight_numer  = static_cast<float>(kHistoryLength - age - 1);
-        const float weight_denom  = static_cast<float>(kHistoryLength - 1);
-        const float weight        = (weight_denom <= 0.0f) ? 1.0f : weight_numer / weight_denom;
+        const int   age = i;
+        float       weight = 0.0f;
+        if (fade_frames > 0) {
+            weight = static_cast<float>(fade_frames - age) / static_cast<float>(fade_frames);
+        }
+
         if (weight <= 0.0f) {
             continue;
         }
@@ -414,8 +419,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     if (total_light > 1e-5f) {
         front_balance = std::clamp(front_avg / total_light, 0.0f, 1.0f);
     }
-    const int min_p = std::clamp(settings.min_scale_percent, 50, 200);
-    const int max_p = std::clamp(settings.max_scale_percent, 50, 200);
+    const int min_p = std::clamp(settings.min_scale_percent, 10, 500);
+    const int max_p = std::clamp(settings.max_scale_percent, 10, 500);
     const float scale_percent = std::clamp(static_cast<float>(min_p) +
                                                (static_cast<float>(max_p - min_p) * front_balance),
                                            static_cast<float>(min_p),
@@ -469,7 +474,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
     sample.parallax_intensity_percent = std::clamp(settings.parallax_percent, 0.0f, 100.0f);
 
-    chunk.shadow_history.push(sample);
+    chunk.shadow_history.push(sample, settings.frame_blend_falloff_frames);
     chunk.shadow = chunk.shadow_history.value();
 }
 
@@ -504,6 +509,7 @@ LightMap::ShadowSettings LightMap::shadow_settings() const {
     settings.map_light_dir_offset_strength =
         std::clamp(sanitized.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
     settings.parallax_percent = std::clamp(sanitized.virtual_light_map.parallax_percent, 0.0f, 100.0f);
+    settings.frame_blend_falloff_frames = sanitized.frame_blend_falloff_frames;
 
     return settings;
 }

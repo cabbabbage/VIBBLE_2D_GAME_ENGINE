@@ -196,10 +196,10 @@ void MapShadowPanel::build_ui() {
         opacity_sensitivity_percent_->set_defer_commit_until_unfocus(false);
     }
 
-    const int min_scale_value = std::clamp(vsettings.min_scale_percent, 50, 200);
-    const int max_scale_value = std::clamp(vsettings.max_scale_percent, 50, 200);
-    min_scale_percent_        = std::make_unique<DMSlider>("Min Scale %", 50, 200, min_scale_value);
-    max_scale_percent_        = std::make_unique<DMSlider>("Max Scale %", 50, 200, max_scale_value);
+    const int min_scale_value = std::clamp(vsettings.min_scale_percent, 10, 500);
+    const int max_scale_value = std::clamp(vsettings.max_scale_percent, 10, 500);
+    min_scale_percent_        = std::make_unique<DMSlider>("Min Scale %", 10, 500, min_scale_value);
+    max_scale_percent_        = std::make_unique<DMSlider>("Max Scale %", 10, 500, max_scale_value);
     if (min_scale_percent_) {
         min_scale_percent_->set_defer_commit_until_unfocus(false);
         min_scale_percent_->set_value_formatter([](int value,
@@ -233,6 +233,30 @@ void MapShadowPanel::build_ui() {
             return std::string_view(buffer.data(), static_cast<std::size_t>(written));
         });
         max_scale_percent_->set_value_parser([](const std::string& text) -> std::optional<int> {
+            try {
+                return std::stoi(text);
+            } catch (...) {
+                return std::nullopt;
+            }
+        });
+    }
+
+    const int blur_frames_value = std::clamp(current_settings_.frame_blend_falloff_frames, 0, 200);
+    frame_blend_falloff_frames_ =
+        std::make_unique<DMSlider>("Motion Blur Frames", 0, 200, blur_frames_value);
+    if (frame_blend_falloff_frames_) {
+        frame_blend_falloff_frames_->set_defer_commit_until_unfocus(false);
+        frame_blend_falloff_frames_->set_value_formatter([](int value,
+                                                             std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
+                                                             -> std::string_view {
+            const int clamped = std::clamp(value, 0, 999);
+            const int written = std::snprintf(buffer.data(), buffer.size(), "%d frames", clamped);
+            if (written <= 0) {
+                return {};
+            }
+            return std::string_view(buffer.data(), static_cast<std::size_t>(written));
+        });
+        frame_blend_falloff_frames_->set_value_parser([](const std::string& text) -> std::optional<int> {
             try {
                 return std::stoi(text);
             } catch (...) {
@@ -293,6 +317,7 @@ void MapShadowPanel::build_ui() {
     add_slider_row(opacity_sensitivity_percent_);
     add_slider_row(min_scale_percent_);
     add_slider_row(max_scale_percent_);
+    add_slider_row(frame_blend_falloff_frames_);
     add_slider_row(map_light_dir_strength_);
     add_slider_row(parallax_percent_);
     add_slider_row(search_radius_);
@@ -316,9 +341,11 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
         opacity_sensitivity_percent_->set_value(
             static_cast<int>(std::lround(std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f))));
     if (min_scale_percent_)
-        min_scale_percent_->set_value(std::clamp(settings.virtual_light_map.min_scale_percent, 50, 200));
+        min_scale_percent_->set_value(std::clamp(settings.virtual_light_map.min_scale_percent, 10, 500));
     if (max_scale_percent_)
-        max_scale_percent_->set_value(std::clamp(settings.virtual_light_map.max_scale_percent, 50, 200));
+        max_scale_percent_->set_value(std::clamp(settings.virtual_light_map.max_scale_percent, 10, 500));
+    if (frame_blend_falloff_frames_)
+        frame_blend_falloff_frames_->set_value(std::clamp(settings.frame_blend_falloff_frames, 0, 200));
     if (map_light_dir_strength_)
         map_light_dir_strength_->set_value(static_cast<int>(std::round(settings.virtual_light_map.map_light_dir_offset_strength * 100.0f)));
     if (parallax_percent_)
@@ -341,11 +368,15 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
     }
     if (min_scale_percent_) {
         settings.virtual_light_map.min_scale_percent =
-            std::clamp(min_scale_percent_->displayed_value(), 50, 200);
+            std::clamp(min_scale_percent_->displayed_value(), 10, 500);
     }
     if (max_scale_percent_) {
         settings.virtual_light_map.max_scale_percent =
-            std::clamp(max_scale_percent_->displayed_value(), 50, 200);
+            std::clamp(max_scale_percent_->displayed_value(), 10, 500);
+    }
+    if (frame_blend_falloff_frames_) {
+        settings.frame_blend_falloff_frames =
+            std::clamp(frame_blend_falloff_frames_->displayed_value(), 0, 200);
     }
     settings.virtual_light_map.map_light_dir_offset_strength =
         read_scaled_slider(map_light_dir_strength_, 100, settings.virtual_light_map.map_light_dir_offset_strength);

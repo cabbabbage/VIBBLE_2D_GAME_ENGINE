@@ -37,15 +37,15 @@ struct Chunk {
     };
 
     struct ChunkShadowHistory {
-        static constexpr int kHistoryLength = 5;
+        static constexpr int kMaxHistoryLength = 256;
 
-        std::array<ChunkShadowParameters, kHistoryLength> samples{};
-        int                                              count  = 0;
-        int                                              cursor = 0;
-        ChunkShadowParameters                            blended{};
+        std::array<ChunkShadowParameters, kMaxHistoryLength> samples{};
+        int                                                  count  = 0;
+        int                                                  cursor = 0;
+        ChunkShadowParameters                                blended{};
 
         void reset();
-        void push(const ChunkShadowParameters& sample);
+        void push(const ChunkShadowParameters& sample, int fade_frames);
         const ChunkShadowParameters& value() const { return blended; }
     } shadow_history{};
 
@@ -92,12 +92,13 @@ public:
         float max_offset_y_px         = 48.0f;
         // Controls how strongly global scene brightness influences opacity (0..100).
         float opacity_sensitivity_percent = 50.0f;
-        // New: min/max shadow scale as integer percents (50..200)
+        // New: min/max shadow scale as integer percents (10..500)
         int   min_scale_percent       = 80;   // 80% default
         int   max_scale_percent       = 120;  // 120% default
         // Strength (0..1) of map-light directional offset contribution
         float map_light_dir_offset_strength = 0.5f;
         float parallax_percent        = 0.0f;
+        int   frame_blend_falloff_frames = 100;
     };
 
     static constexpr float kDefaultStaticWeight  = 0.8f;

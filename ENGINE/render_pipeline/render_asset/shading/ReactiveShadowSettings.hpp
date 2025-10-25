@@ -38,6 +38,7 @@ struct ReactiveShadowSettings {
     float opacity_sensitivity_percent = 50.0f;
     float parallax_strength = 1.0f;
     float scale_strength    = 1.0f;
+    int   frame_blend_falloff_frames = 100;
 
     struct ShadowResponseLutEntry {
         float brightness = 0.0f;
@@ -77,6 +78,7 @@ struct ReactiveShadowSettings {
                opacity_sensitivity_percent == other.opacity_sensitivity_percent &&
                parallax_strength == other.parallax_strength &&
                scale_strength == other.scale_strength &&
+               frame_blend_falloff_frames == other.frame_blend_falloff_frames &&
                response_lut == other.response_lut &&
                sampling_weights == other.sampling_weights;
     }
@@ -98,8 +100,8 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.virtual_light_map.max_offset_x       = clampf(out.virtual_light_map.max_offset_x, 0.0f, 500.0f);
     out.virtual_light_map.max_offset_y       = clampf(out.virtual_light_map.max_offset_y, 0.0f, 500.0f);
     out.virtual_light_map.shadow_scale       = clampf(out.virtual_light_map.shadow_scale, 0.0f, 10.0f);
-    out.virtual_light_map.min_scale_percent = clampi(out.virtual_light_map.min_scale_percent, 50, 200);
-    out.virtual_light_map.max_scale_percent = clampi(out.virtual_light_map.max_scale_percent, 50, 200);
+    out.virtual_light_map.min_scale_percent = clampi(out.virtual_light_map.min_scale_percent, 10, 500);
+    out.virtual_light_map.max_scale_percent = clampi(out.virtual_light_map.max_scale_percent, 10, 500);
     if (out.virtual_light_map.min_scale_percent > out.virtual_light_map.max_scale_percent) {
         std::swap(out.virtual_light_map.min_scale_percent, out.virtual_light_map.max_scale_percent);
     }
@@ -111,6 +113,7 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.opacity_sensitivity_percent          = clampf(out.opacity_sensitivity_percent, 0.0f, 100.0f);
     out.parallax_strength                    = clampf(out.parallax_strength, 0.0f, 10.0f);
     out.scale_strength                       = clampf(out.scale_strength, 0.0f, 10.0f);
+    out.frame_blend_falloff_frames = clampi(out.frame_blend_falloff_frames, 0, 200);
 
     auto sanitize_entry = [](ReactiveShadowSettings::ShadowResponseLutEntry entry) {
         entry.brightness = clampf(entry.brightness, 0.0f, 1.0f);
