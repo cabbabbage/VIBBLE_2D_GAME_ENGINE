@@ -38,17 +38,17 @@ void AssetSpawner::spawn(Room& room) {
         room.add_room_assets(std::move(all_));
 }
 
-std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_edge_from_json(const nlohmann::json& edge_json,
+std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const nlohmann::json& boundary_json,
                                                                           const Area& spawn_area,
                                                                           const std::string& source_name) {
-        if (edge_json.is_null()) {
+        if (boundary_json.is_null()) {
                 return {};
         }
-    std::vector<nlohmann::json> json_sources{ edge_json };
+    std::vector<nlohmann::json> json_sources{ boundary_json };
     AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_);
-        edge_mode_ = true;
+        boundary_mode_ = true;
         run_spawning(&planner, spawn_area);
-        edge_mode_ = false;
+        boundary_mode_ = false;
         return extract_all_assets();
 }
 
@@ -67,7 +67,7 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::extract_all_assets() {
 void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         asset_info_library_ = asset_library_->all();
         spawn_queue_ = planner->get_spawn_queue();
-        if (edge_mode_) {
+        if (boundary_mode_) {
                 run_edge_spawning(area);
                 return;
         }

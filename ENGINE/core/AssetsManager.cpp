@@ -233,7 +233,7 @@ void Assets::hydrate_map_info_sections() {
 };
 
     ensure_object("map_assets_data");
-    ensure_object("map_edge_data");
+    ensure_object("map_boundary_data");
     ensure_object("map_light_data");
     ensure_object("rooms_data");
     ensure_object("trails_data");

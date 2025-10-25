@@ -558,7 +558,7 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (trail_suite_) trail_suite_->set_screen_dimensions(width, height);
     asset_filter_.set_screen_dimensions(width, height);
     if (map_assets_modal_) map_assets_modal_->set_screen_dimensions(width, height);
-    if (edge_assets_modal_) edge_assets_modal_->set_screen_dimensions(width, height);
+    if (boundary_assets_modal_) boundary_assets_modal_->set_screen_dimensions(width, height);
     asset_filter_.ensure_layout();
     SDL_Rect usable = FloatingPanelLayoutManager::instance().computeUsableRect(
         bounds,
@@ -854,8 +854,8 @@ void DevControls::update(const Input& input) {
     if (map_assets_modal_ && map_assets_modal_->visible()) {
         map_assets_modal_->update(input);
     }
-    if (edge_assets_modal_ && edge_assets_modal_->visible()) {
-        edge_assets_modal_->update(input);
+    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
+        boundary_assets_modal_->update(input);
     }
     if (trail_suite_) {
         trail_suite_->update(input);
@@ -993,7 +993,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (consume_modal_event(map_assets_modal_.get(), event, pointer, pointer_relevant, input_)) {
         return;
     }
-    if (consume_modal_event(edge_assets_modal_.get(), event, pointer, pointer_relevant, input_)) {
+    if (consume_modal_event(boundary_assets_modal_.get(), event, pointer, pointer_relevant, input_)) {
         return;
     }
     if (consume_modal_event(regenerate_popup_.get(), event, pointer, pointer_relevant, input_)) {
@@ -1584,8 +1584,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (map_assets_modal_ && map_assets_modal_->visible()) {
         map_assets_modal_->render(renderer);
     }
-    if (edge_assets_modal_ && edge_assets_modal_->visible()) {
-        edge_assets_modal_->render(renderer);
+    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
+        boundary_assets_modal_->render(renderer);
     }
     if (trail_suite_) trail_suite_->render(renderer);
     if (camera_panel_ && camera_panel_->is_visible()) {
@@ -1888,19 +1888,19 @@ void DevControls::configure_header_button_sets() {
     }
 
     {
-        MapModeUI::HeaderButtonConfig edge_btn;
-        edge_btn.id = "map_edge";
-        edge_btn.label = "Edge Assets";
-        edge_btn.active = (edge_assets_modal_ && edge_assets_modal_->visible());
-        edge_btn.on_toggle = [this](bool active) {
+        MapModeUI::HeaderButtonConfig boundary_btn;
+        boundary_btn.id = "map_boundary";
+        boundary_btn.label = "Boundary Assets";
+        boundary_btn.active = (boundary_assets_modal_ && boundary_assets_modal_->visible());
+        boundary_btn.on_toggle = [this](bool active) {
             if (active) {
-                toggle_edge_assets_modal();
+                toggle_boundary_assets_modal();
             } else {
-                if (edge_assets_modal_) edge_assets_modal_->close();
+                if (boundary_assets_modal_) boundary_assets_modal_->close();
             }
             sync_header_button_states();
 };
-        map_buttons.push_back(std::move(edge_btn));
+        map_buttons.push_back(std::move(boundary_btn));
     }
 
     room_buttons.push_back(make_camera_button());
@@ -2006,9 +2006,9 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "regenerate", false);
 
     const bool map_assets_open = map_assets_modal_ && map_assets_modal_->visible();
-    const bool edge_open = edge_assets_modal_ && edge_assets_modal_->visible();
+    const bool boundary_open = boundary_assets_modal_ && boundary_assets_modal_->visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_assets", map_assets_open);
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_edge", edge_open);
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_boundary", boundary_open);
 
     if (room_editor_) {
         room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::AssetLibrary, library_open);
@@ -2036,7 +2036,7 @@ void DevControls::close_all_floating_panels() {
         map_mode_ui_->close_all_panels();
     }
     if (map_assets_modal_) map_assets_modal_->close();
-    if (edge_assets_modal_) edge_assets_modal_->close();
+    if (boundary_assets_modal_) boundary_assets_modal_->close();
     if (trail_suite_) {
         trail_suite_->close();
     }
@@ -2345,7 +2345,7 @@ void DevControls::regenerate_map_grid_assets() {
     }
 }
 
-void DevControls::regenerate_edge_spawn_group(const nlohmann::json& entry) {
+void DevControls::regenerate_boundary_spawn_group(const nlohmann::json& entry) {
     if (!assets_ || !entry.is_object()) {
         return;
     }
@@ -2359,7 +2359,7 @@ void DevControls::regenerate_edge_spawn_group(const nlohmann::json& entry) {
     const int radius = map_radius_or_default();
     const int diameter = radius * 2;
     SDL_Point center{radius, radius};
-    Area area("map_edge_regen", center, diameter, diameter, "Circle", 1, diameter, diameter);
+    Area area("map_boundary_regen", center, diameter, diameter, "Circle", 1, diameter, diameter);
 
     std::vector<Area> exclusion;
     const auto& rooms = assets_->rooms();
@@ -2376,9 +2376,9 @@ void DevControls::regenerate_edge_spawn_group(const nlohmann::json& entry) {
     root["spawn_groups"].push_back(entry);
     std::string source = assets_->map_info_path();
     if (!source.empty()) {
-        source += "::map_edge_data";
+        source += "::map_boundary_data";
     }
-    auto spawned = spawner.spawn_edge_from_json(root, area, source);
+    auto spawned = spawner.spawn_boundary_from_json(root, area, source);
     integrate_spawned_assets(spawned);
 }
 
@@ -2466,23 +2466,23 @@ void DevControls::restore_filter_hidden_assets() const {
     filter_hidden_assets_.clear();
 }
 
-void DevControls::toggle_edge_assets_modal() {
+void DevControls::toggle_boundary_assets_modal() {
     if (!assets_) return;
-    if (!edge_assets_modal_) {
-        edge_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
-        edge_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
-        edge_assets_modal_->set_floating_stack_key("edge_assets_modal");
+    if (!boundary_assets_modal_) {
+        boundary_assets_modal_ = std::make_unique<SingleSpawnGroupModal>();
+        boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+        boundary_assets_modal_->set_floating_stack_key("boundary_assets_modal");
     } else {
-        edge_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
+        boundary_assets_modal_->set_screen_dimensions(screen_w_, screen_h_);
     }
     auto save = [this]() { return persist_map_info_to_disk(); };
-    auto regen = [this](const nlohmann::json& entry) { this->regenerate_edge_spawn_group(entry); };
+    auto regen = [this](const nlohmann::json& entry) { this->regenerate_boundary_spawn_group(entry); };
     auto& map_json = assets_->map_info_json();
     SDL_Color color{255, 200, 120, 255};
-    edge_assets_modal_->open(map_json,
-                                 "map_edge_data",
-                                 "batch_map_edge",
-                                 "Edge",
+    boundary_assets_modal_->open(map_json,
+                                 "map_boundary_data",
+                                 "batch_map_boundary",
+                                 "Boundary",
                                  color,
                                  save,
                                  regen);

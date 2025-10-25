@@ -23,7 +23,7 @@ class AssetSpawner {
     AssetSpawner(AssetLibrary* asset_library, std::vector<Area> exclusion_zones);
     void spawn(Room& room);
     void spawn_children(const Area& spawn_area, AssetSpawnPlanner* planner);
-    std::vector<std::unique_ptr<Asset>> spawn_edge_from_json(const nlohmann::json& edge_json, const Area& spawn_area, const std::string& source_name);
+    std::vector<std::unique_ptr<Asset>> spawn_boundary_from_json(const nlohmann::json& boundary_json, const Area& spawn_area, const std::string& source_name);
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
     void set_map_grid_settings(const MapGridSettings& settings) { map_grid_settings_ = settings; }
 
@@ -39,7 +39,7 @@ class AssetSpawner {
     std::vector<SpawnInfo> spawn_queue_;
     std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library_;
     std::vector<std::unique_ptr<Asset>> all_;
-    bool edge_mode_ = false;
+    bool boundary_mode_ = false;
     Room* current_room_ = nullptr;
     MapGridSettings map_grid_settings_ = MapGridSettings::defaults();
 };

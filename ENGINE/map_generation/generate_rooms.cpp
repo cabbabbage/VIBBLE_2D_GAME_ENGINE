@@ -70,7 +70,7 @@ std::vector<RoomSpec> GenerateRooms::get_children_from_layer(const LayerSpec& la
 std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                         double map_radius,
                                                         const std::vector<double>& layer_radii,
-                                                        const nlohmann::json& edge_data,
+                                                        const nlohmann::json& boundary_data,
                                                         nlohmann::json& rooms_data,
                                                         nlohmann::json& trails_data,
                                                         nlohmann::json& map_assets_data,
@@ -286,7 +286,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 MapWideAssetSpawner map_wide(asset_lib, grid_settings, map_id_, map_assets_data);
                 map_wide.spawn(all_rooms);
         }
-        if (!edge_data.is_null() && !edge_data.empty()) {
+        if (!boundary_data.is_null() && !boundary_data.empty()) {
                 std::vector<Area> exclusion_zones;
                 for (const auto& r : all_rooms) {
                         exclusion_zones.push_back(*r->room_area);
@@ -296,12 +296,12 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 SDL_Point center{map_radius_int, map_radius_int};
                 Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
                 AssetSpawner spawner(asset_lib, exclusion_zones);
-                std::vector<std::unique_ptr<Asset>> edge_assets = spawner.spawn_edge_from_json(
-                        edge_data,
+                std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json(
+                        boundary_data,
                         area,
-                        map_id_ + "::map_edge_data");
+                        map_id_ + "::map_boundary_data");
                 int assigned_count = 0;
-                for (auto& asset_ptr : edge_assets) {
+                for (auto& asset_ptr : boundary_assets) {
                         Asset* asset = asset_ptr.get();
                         if (!asset) continue;
 			Room* closest_room = nullptr;

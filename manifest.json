@@ -13833,7 +13833,7 @@
           }
         ]
       },
-      "map_edge_data": {
+      "map_boundary_data": {
         "inherits_map_assets": false,
         "spawn_groups": [
           {
@@ -13851,7 +13851,7 @@
                 "name": "Tree_Darker"
               }
             ],
-            "display_name": "batch_map_edge",
+            "display_name": "batch_map_boundary",
             "enforce_spacing": false,
             "max_number": 100,
             "min_number": 100,
@@ -14421,7 +14421,7 @@
       "camera_settings": {},
       "content_root": "MAPS/test",
       "map_assets_data": {},
-      "map_edge_data": {},
+      "map_boundary_data": {},
       "map_grid_settings": {
         "jitter": 0,
         "spacing": 100

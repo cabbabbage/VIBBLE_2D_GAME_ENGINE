@@ -4182,52 +4182,52 @@ void RoomEditor::regenerate_current_room() {
     checker.reset_session();
 
     if (old_area_copy && new_area_size < old_area_size) {
-        std::vector<std::pair<std::string, int>> edge_options;
-        int edge_spacing = 100;
-        if (map_info_json.contains("map_edge_data") && map_info_json["map_edge_data"].is_object()) {
-            const auto& edge_json = map_info_json["map_edge_data"];
-            if (edge_json.contains("batch_assets")) {
-                const auto& batch = edge_json["batch_assets"];
-                edge_spacing = (batch.value("grid_spacing_min", edge_spacing) + batch.value("grid_spacing_max", edge_spacing)) / 2;
+        std::vector<std::pair<std::string, int>> boundary_options;
+        int boundary_spacing = 100;
+        if (map_info_json.contains("map_boundary_data") && map_info_json["map_boundary_data"].is_object()) {
+            const auto& boundary_json = map_info_json["map_boundary_data"];
+            if (boundary_json.contains("batch_assets")) {
+                const auto& batch = boundary_json["batch_assets"];
+                boundary_spacing = (batch.value("grid_spacing_min", boundary_spacing) + batch.value("grid_spacing_max", boundary_spacing)) / 2;
                 for (const auto& asset_entry : batch.value("batch_assets", std::vector<nlohmann::json>{})) {
                     if (asset_entry.contains("name") && asset_entry["name"].is_string()) {
                         int weight = asset_entry.value("percent", 1);
-                        edge_options.emplace_back(asset_entry["name"].get<std::string>(), weight);
+                        boundary_options.emplace_back(asset_entry["name"].get<std::string>(), weight);
                     }
                 }
             }
         }
 
-        if (!edge_options.empty()) {
-            const int edge_resolution = std::clamp(
-                static_cast<int>(std::lround(std::log2(static_cast<double>(std::max(1, edge_spacing))))),
+        if (!boundary_options.empty()) {
+            const int boundary_resolution = std::clamp(
+                static_cast<int>(std::lround(std::log2(static_cast<double>(std::max(1, boundary_spacing))))),
                 0,
                 vibble::grid::kMaxResolution);
             vibble::grid::Grid& grid_service = vibble::grid::global_grid();
-            vibble::grid::Occupancy edge_grid(*old_area_copy, edge_resolution, grid_service);
-            auto vertices = edge_grid.vertices_in_area(*old_area_copy);
+            vibble::grid::Occupancy boundary_grid(*old_area_copy, boundary_resolution, grid_service);
+            auto vertices = boundary_grid.vertices_in_area(*old_area_copy);
             if (!vertices.empty()) {
                 std::vector<int> weights;
-                weights.reserve(edge_options.size());
-                for (const auto& opt : edge_options) {
+                weights.reserve(boundary_options.size());
+                for (const auto& opt : boundary_options) {
                     weights.push_back(std::max(1, opt.second));
                 }
                 std::discrete_distribution<int> pick(weights.begin(), weights.end());
-                std::mt19937 edge_rng(std::random_device{}());
-                std::vector<std::unique_ptr<Asset>> edge_spawned;
+                std::mt19937 boundary_rng(std::random_device{}());
+                std::vector<std::unique_ptr<Asset>> boundary_spawned;
                 for (auto* vertex : vertices) {
                     if (!vertex) continue;
                     if (current_room_->room_area->contains_point(vertex->world)) continue;
-                    int idx = pick(edge_rng);
-                    const std::string& asset_name = edge_options[idx].first;
+                    int idx = pick(boundary_rng);
+                    const std::string& asset_name = boundary_options[idx].first;
                     auto info = assets_->library().get(asset_name);
                     if (!info) continue;
                     std::string spawn_id = generate_spawn_id();
                     Area spawn_area(asset_name, vertex->world, 1, 1, "Point", 1, 1, 1);
                     auto asset = std::make_unique<Asset>(info, spawn_area, vertex->world, 0, nullptr, spawn_id, std::string(asset_types::boundary));
-                    edge_spawned.push_back(std::move(asset));
+                    boundary_spawned.push_back(std::move(asset));
                 }
-                integrate_spawned_assets(edge_spawned);
+                integrate_spawned_assets(boundary_spawned);
             }
         }
     }

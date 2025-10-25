@@ -348,7 +348,7 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
     });
 
     map_info["map_assets_data"] = nlohmann::json::object();
-    map_info["map_edge_data"] = nlohmann::json::object();
+    map_info["map_boundary_data"] = nlohmann::json::object();
     map_info["map_light_data"] = std::move(default_light);
     map_info["trails_data"] = nlohmann::json::object();
 
