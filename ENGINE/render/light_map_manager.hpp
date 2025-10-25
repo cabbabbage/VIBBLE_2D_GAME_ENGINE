@@ -26,7 +26,6 @@ public:
         SDL_Rect world_rect{0, 0, 0, 0};
         bool     active                = false;
         bool     needs_update          = false;
-        bool     occupied_by_moving    = false;
         bool     has_runtime_sample    = false;
         float    brightness            = 1.0f;
         float    runtime_sample        = 1.0f;

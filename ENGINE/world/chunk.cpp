@@ -34,6 +34,67 @@ Chunk::~Chunk() {
     releaseLightingArtifacts();
 }
 
+void Chunk::ChunkShadowHistory::reset() {
+    samples.fill(ChunkShadowParameters{});
+    count  = 0;
+    cursor = 0;
+    blended = ChunkShadowParameters{};
+}
+
+void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample) {
+    samples[static_cast<std::size_t>(cursor)] = sample;
+    cursor = (cursor + 1) % kHistoryLength;
+    if (count < kHistoryLength) {
+        ++count;
+    }
+
+    if (count <= 0) {
+        blended = ChunkShadowParameters{};
+        return;
+    }
+
+    if (count == 1) {
+        blended = sample;
+        return;
+    }
+
+    ChunkShadowParameters accum{};
+    float                 total_weight = 0.0f;
+    const int             last_index   = (cursor - 1 + kHistoryLength) % kHistoryLength;
+
+    for (int i = 0; i < count; ++i) {
+        const int idx = (last_index - i + kHistoryLength) % kHistoryLength;
+        const auto& entry = samples[static_cast<std::size_t>(idx)];
+
+        const int   age           = i;
+        const float weight_numer  = static_cast<float>(kHistoryLength - age - 1);
+        const float weight_denom  = static_cast<float>(kHistoryLength - 1);
+        const float weight        = (weight_denom <= 0.0f) ? 1.0f : weight_numer / weight_denom;
+        if (weight <= 0.0f) {
+            continue;
+        }
+
+        total_weight += weight;
+        accum.opacity += entry.opacity * weight;
+        accum.scale += entry.scale * weight;
+        accum.offset_x_percent += entry.offset_x_percent * weight;
+        accum.offset_y_percent += entry.offset_y_percent * weight;
+        accum.parallax_intensity_percent += entry.parallax_intensity_percent * weight;
+    }
+
+    if (total_weight <= 1e-4f) {
+        blended = sample;
+        return;
+    }
+
+    const float inv_total = 1.0f / total_weight;
+    blended.opacity                    = accum.opacity * inv_total;
+    blended.scale                      = accum.scale * inv_total;
+    blended.offset_x_percent           = accum.offset_x_percent * inv_total;
+    blended.offset_y_percent           = accum.offset_y_percent * inv_total;
+    blended.parallax_intensity_percent = accum.parallax_intensity_percent * inv_total;
+}
+
 void Chunk::releaseLightingArtifacts() {
     lighting_dirty                     = true;
     has_dynamic_overlay                = false;
@@ -43,8 +104,8 @@ void Chunk::releaseLightingArtifacts() {
     lighting.has_runtime_average       = false;
     lighting.is_active                 = false;
     lighting.needs_update              = true;
-    lighting.is_occupied_by_moving_source = false;
-    shadow                             = ChunkShadowParameters{};
+    shadow_history.reset();
+    shadow = ChunkShadowParameters{};
 }
 
 } // namespace world
@@ -316,10 +377,12 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
                                               const std::optional<SDL_FPoint>& map_light_direction,
                                               float map_light_opacity,
                                               world::Chunk& chunk) {
+    world::Chunk::ChunkShadowParameters sample{};
+
     // Opacity: inverse of front average strength.
     const auto [front_avg, behind_avg] =
         compute_directional_average_strengths(settings, grid, chunk);
-    chunk.shadow.opacity  = std::clamp(1.0f - front_avg, 0.0f, 1.0f);
+    sample.opacity = std::clamp(1.0f - front_avg, 0.0f, 1.0f);
 
     // Scale: grow with front dominance, shrink with behind dominance (nonlinear towards min).
     const float d = std::clamp(front_avg - behind_avg, -1.0f, 1.0f); // [-1,1]
@@ -338,7 +401,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     }
     scale_percent = std::clamp(scale_percent, static_cast<float>(min_p), static_cast<float>(max_p));
     const float base_scale = std::max(0.0f, settings.base_shadow_scale);
-    chunk.shadow.scale = std::max(0.0f, base_scale * (scale_percent / 100.0f));
+    sample.scale = std::max(0.0f, base_scale * (scale_percent / 100.0f));
 
     // Base offset away from brightest direction (opposite brightness gradient)
     float gx = grad.first, gy = grad.second;
@@ -382,10 +445,13 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 
     const float clamped_px = std::clamp(px, -safe_max_x_percent, safe_max_x_percent);
     const float clamped_py = std::clamp(py, -safe_max_y_percent, safe_max_y_percent);
-    chunk.shadow.offset_x_percent = std::clamp(clamped_px, -100.0f, 100.0f);
-    chunk.shadow.offset_y_percent = std::clamp(clamped_py, -100.0f, 100.0f);
+    sample.offset_x_percent = std::clamp(clamped_px, -100.0f, 100.0f);
+    sample.offset_y_percent = std::clamp(clamped_py, -100.0f, 100.0f);
 
-    chunk.shadow.parallax_intensity_percent = std::clamp(settings.parallax_percent, 0.0f, 100.0f);
+    sample.parallax_intensity_percent = std::clamp(settings.parallax_percent, 0.0f, 100.0f);
+
+    chunk.shadow_history.push(sample);
+    chunk.shadow = chunk.shadow_history.value();
 }
 
 } // namespace
@@ -534,8 +600,6 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         }
     }
 
-    const auto& moving_assets = assets_->getActiveMovingLightAssets();
-
     for (world::Chunk* chunk : update_set) {
         if (!chunk) {
             continue;
@@ -554,22 +618,6 @@ void LightMap::update(SDL_Renderer* /*renderer*/, std::uint32_t /*delta_ms*/) {
         if (map_opacity_changed) {
             chunk->lighting.needs_update = true;
         }
-
-        bool occupied = false;
-        for (const Asset* asset : moving_assets) {
-            if (!asset) {
-                continue;
-            }
-            const SDL_Point asset_pos{asset->pos.x, asset->pos.y};
-            if (SDL_PointInRect(&asset_pos, &chunk->world_bounds)) {
-                occupied = true;
-                break;
-            }
-        }
-        if (occupied != chunk->lighting.is_occupied_by_moving_source) {
-            chunk->lighting.needs_update = true;
-        }
-        chunk->lighting.is_occupied_by_moving_source = occupied;
 
         if (!chunk->lighting.needs_update) {
             continue;
@@ -753,7 +801,8 @@ void LightMap::present_static_previews(SDL_Renderer* renderer) const {
 }
 
 void LightMap::render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {
-    render_visible_chunks(renderer, view_rect, 1.0f, SDL_Color{255, 255, 255, 255});
+    (void)renderer;
+    (void)view_rect;
 }
 
 void LightMap::render_visible_chunks(SDL_Renderer* renderer,
@@ -761,46 +810,10 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
                                      float alpha_multiplier,
                                      const SDL_Color& color_mod) const {
     std::scoped_lock lock(mutex_);
-    if (!renderer || !assets_) {
-        return;
-    }
-
-    const camera& cam = assets_->getView();
-    SDL_Rect      world_view = world_rect_from_screen(cam, view_rect);
-
-    const auto& chunks = active_chunks();
-    for (world::Chunk* chunk : chunks) {
-        if (!chunk) {
-            continue;
-        }
-        if (!intersects(chunk->world_bounds, world_view)) {
-            continue;
-        }
-
-        SDL_Point top_left     = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
-        SDL_Point bottom_right =
-            cam.map_to_screen({chunk->world_bounds.x + chunk->world_bounds.w,
-                               chunk->world_bounds.y + chunk->world_bounds.h});
-
-        SDL_Rect dst{};
-        dst.x = std::min(top_left.x, bottom_right.x);
-        dst.y = std::min(top_left.y, bottom_right.y);
-        dst.w = std::abs(bottom_right.x - top_left.x);
-        dst.h = std::abs(bottom_right.y - top_left.y);
-        if (dst.w <= 0 || dst.h <= 0) {
-            continue;
-        }
-
-        const float brightness = std::clamp(chunk->lighting.current_strength, 0.0f, 1.0f);
-        const float darkness   = std::clamp(1.0f - brightness, 0.0f, 1.0f);
-        const Uint8 alpha      = clamp_alpha(alpha_multiplier * darkness);
-        if (alpha == 0) {
-            continue;
-        }
-
-        SDL_SetRenderDrawColor(renderer, color_mod.r, color_mod.g, color_mod.b, alpha);
-        SDL_RenderFillRect(renderer, &dst);
-    }
+    (void)renderer;
+    (void)view_rect;
+    (void)alpha_multiplier;
+    (void)color_mod;
 }
 
 void LightMap::render_chunk_preview(SDL_Renderer* renderer, const SDL_Rect& view_rect) const {

@@ -747,8 +747,7 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             return;
         }
         std::ostringstream stream;
-        stream << (snap->active ? "A" : "-") << ' ' << (snap->needs_update ? "U" : "-") << ' '
-               << (snap->occupied_by_moving ? "M" : "-") << '\n';
+        stream << (snap->active ? "A" : "-") << ' ' << (snap->needs_update ? "U" : "-") << '\n';
         stream << "B:" << format_float(snap->brightness, 2) << '\n';
         if (snap->has_runtime_sample) {
             stream << "R:" << format_float(snap->runtime_sample, 2);
@@ -988,8 +987,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
 
         if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
             detail_lines.push_back(std::string("Needs Update: ") + (snap->needs_update ? "yes" : "no"));
-            detail_lines.push_back(std::string("Moving Light Overlap: ") +
-                                   (snap->occupied_by_moving ? "yes" : "no"));
             if (snap->has_runtime_sample) {
                 detail_lines.push_back("Runtime Sample: " + format_float(snap->runtime_sample, 3));
             } else {
@@ -997,7 +994,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             }
         } else {
             detail_lines.push_back("Needs Update: --");
-            detail_lines.push_back("Moving Light Overlap: --");
             detail_lines.push_back("Runtime Sample: --");
         }
 

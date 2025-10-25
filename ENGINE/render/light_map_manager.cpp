@@ -50,7 +50,6 @@ std::vector<LightMapManager::ChunkSnapshot> LightMapManager::all_snapshots() con
         snap.world_rect         = chunk->world_bounds;
         snap.active             = chunk->lighting.is_active;
         snap.needs_update       = chunk->lighting.needs_update;
-        snap.occupied_by_moving = chunk->lighting.is_occupied_by_moving_source;
         snap.has_runtime_sample = chunk->lighting.has_runtime_average;
         snap.runtime_sample     = chunk->lighting.runtime_average_strength;
         snap.brightness         = chunk->lighting.current_strength;
@@ -82,7 +81,6 @@ std::optional<LightMapManager::ChunkSnapshot> LightMapManager::snapshot_for_chun
     snap.world_rect         = chunk->world_bounds;
     snap.active             = chunk->lighting.is_active;
     snap.needs_update       = chunk->lighting.needs_update;
-    snap.occupied_by_moving = chunk->lighting.is_occupied_by_moving_source;
     snap.has_runtime_sample = chunk->lighting.has_runtime_average;
     snap.runtime_sample     = chunk->lighting.runtime_average_strength;
     snap.brightness         = chunk->lighting.current_strength;

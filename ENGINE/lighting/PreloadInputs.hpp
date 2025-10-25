@@ -75,7 +75,6 @@ private:
         bool  valid                    = false;
         bool  has_dynamic_overlay      = false;
         bool  lighting_active          = false;
-        bool  moving_light_occupied    = false;
         float current_strength         = 1.0f;
         bool  runtime_average_valid    = false;
         float runtime_average_strength = 1.0f;

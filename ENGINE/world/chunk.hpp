@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -22,21 +23,6 @@ struct Chunk {
 
     std::vector<Asset*> assets;
 
-    struct ChunkLightingState {
-        // Whether this chunk participates in lighting updates during the current frame.
-        bool is_active = false;
-        // Flags that the chunk's cached lighting values should be recomputed.
-        bool needs_update = true;
-        // True if a moving light currently overlaps this chunk, affecting runtime blending.
-        bool is_occupied_by_moving_source = false;
-        // Net light contribution applied to the chunk after static and dynamic blending [0,1].
-        float current_strength = 1.0f;
-        // Runtime measurement captured from the on-screen render output during this frame.
-        float runtime_average_strength = 1.0f;
-        // Marks whether runtime_average_strength contains a valid measurement for the current frame.
-        bool  has_runtime_average = false;
-    } lighting;
-
     struct ChunkShadowParameters {
         // Scalar applied to the shadow mask relative to its authored size.
         float scale = 1.0f;
@@ -48,7 +34,35 @@ struct Chunk {
         float offset_y_percent = 0.0f;
         // Parallax offset intensity expressed as a percent [0,100].
         float parallax_intensity_percent = 0.0f;
-    } shadow;
+    };
+
+    struct ChunkShadowHistory {
+        static constexpr int kHistoryLength = 5;
+
+        std::array<ChunkShadowParameters, kHistoryLength> samples{};
+        int                                              count  = 0;
+        int                                              cursor = 0;
+        ChunkShadowParameters                            blended{};
+
+        void reset();
+        void push(const ChunkShadowParameters& sample);
+        const ChunkShadowParameters& value() const { return blended; }
+    } shadow_history{};
+
+    struct ChunkLightingState {
+        // Whether this chunk participates in lighting updates during the current frame.
+        bool is_active = false;
+        // Flags that the chunk's cached lighting values should be recomputed.
+        bool needs_update = true;
+        // Net light contribution applied to the chunk after static and dynamic blending [0,1].
+        float current_strength = 1.0f;
+        // Runtime measurement captured from the on-screen render output during this frame.
+        float runtime_average_strength = 1.0f;
+        // Marks whether runtime_average_strength contains a valid measurement for the current frame.
+        bool has_runtime_average = false;
+    } lighting;
+
+    ChunkShadowParameters shadow{};
 
     bool lighting_dirty = true;
     bool has_dynamic_overlay = false;
