@@ -581,6 +581,8 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
 
     const SDL_BlendMode cutout_blend = darkness_cutout_blend_mode();
+    std::vector<SDL_Vertex> light_vertices;
+    std::vector<int>        light_indices;
 
     for (const LightOverlaySource& source : light_overlay_sources_) {
         Asset* asset = source.asset;
@@ -619,42 +621,23 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
 
         for (const LightSource& light : lights) {
-            SDL_Texture* light_texture = nullptr;
-            if (light.texture) {
-                const float selection_scale = std::max(safe_zoom_scale_x, safe_zoom_scale_y);
-                light_texture = light.texture_for_scale(selection_scale);
-            }
-
-            int base_w = light.cached_w;
-            int base_h = light.cached_h;
-
-            if (base_w <= 0 || base_h <= 0) {
-                SDL_Texture* reference = light.texture ? light.texture : light_texture;
-                if (reference) {
-                    SDL_QueryTexture(reference, nullptr, nullptr, &base_w, &base_h);
-                }
-            }
-
-            if (base_w <= 0 || base_h <= 0) {
-                SDL_Texture* fallback = light_texture ? light_texture : light.texture;
-                if (fallback) {
-                    SDL_QueryTexture(fallback, nullptr, nullptr, &base_w, &base_h);
-                }
-            }
-
-            if (base_w <= 0 || base_h <= 0) {
-                if (light.radius > 0) {
-                    base_w = light.radius * 2;
-                    base_h = light.radius * 2;
-                }
-            }
-
-            if (base_w <= 0 || base_h <= 0) {
+            const int raw_radius = light.radius;
+            if (raw_radius <= 0) {
                 continue;
             }
 
-            const float scaled_w = std::max(1.0f, static_cast<float>(base_w) * safe_zoom_scale_x);
-            const float scaled_h = std::max(1.0f, static_cast<float>(base_h) * safe_zoom_scale_y);
+            const Uint8 intensity = static_cast<Uint8>(std::clamp(light.intensity, 0, 255));
+            if (intensity == 0) {
+                continue;
+            }
+
+            const float radius_base = static_cast<float>(std::max(1, raw_radius));
+            const float radius_x    = std::max(1.0f, radius_base * safe_zoom_scale_x);
+            const float radius_y    = std::max(1.0f, radius_base * safe_zoom_scale_y);
+
+            if (!std::isfinite(radius_x) || !std::isfinite(radius_y)) {
+                continue;
+            }
 
             const float offset_x = static_cast<float>(source.flipped ? -light.offset_x : light.offset_x);
             const float offset_y = static_cast<float>(light.offset_y);
@@ -662,35 +645,66 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
             const float center_x = center_base_x + offset_x * scale_x;
             const float center_y = center_base_y + offset_y * scale_y;
 
-            SDL_Rect dst;
-            dst.w = std::max(1, static_cast<int>(std::lround(scaled_w)));
-            dst.h = std::max(1, static_cast<int>(std::lround(scaled_h)));
+            SDL_Rect dst{};
+            dst.w = std::max(1, static_cast<int>(std::lround(radius_x * 2.0f)));
+            dst.h = std::max(1, static_cast<int>(std::lround(radius_y * 2.0f)));
             dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(dst.w) * 0.5f));
             dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(dst.h) * 0.5f));
 
-            const Uint8 intensity = static_cast<Uint8>(std::clamp(light.intensity, 0, 255));
-            if (intensity == 0) {
-                continue;
+            const float falloff_norm  = std::clamp(static_cast<float>(light.fall_off) / 100.0f, 0.0f, 1.0f);
+            const float fade_exponent = 0.6f + 3.4f * falloff_norm;
+
+            const float radius_hint   = std::max(radius_x, radius_y);
+            const int   angular_steps = std::clamp(static_cast<int>(std::ceil(radius_hint / 6.0f)), 16, 64);
+            const int   radial_steps  = 12;
+            const float two_pi        = 6.28318530718f;
+
+            light_vertices.clear();
+            light_indices.clear();
+            light_vertices.reserve(static_cast<std::size_t>((radial_steps + 1) * (angular_steps + 1)));
+            light_indices.reserve(static_cast<std::size_t>(radial_steps * angular_steps * 6));
+
+            for (int ring = 0; ring <= radial_steps; ++ring) {
+                const float ring_ratio = static_cast<float>(ring) / static_cast<float>(radial_steps);
+                const float base       = std::max(0.0f, 1.0f - ring_ratio);
+                float       alpha_ratio = std::pow(base, fade_exponent);
+                alpha_ratio             = std::clamp(alpha_ratio, 0.0f, 1.0f);
+                const float scaled_alpha = std::min(255.0f, static_cast<float>(intensity) * alpha_ratio * 1.6f);
+                const Uint8 alpha        = static_cast<Uint8>(std::clamp(std::lround(scaled_alpha), 0L, 255L));
+
+                for (int step = 0; step <= angular_steps; ++step) {
+                    const float angle = (static_cast<float>(step) / static_cast<float>(angular_steps)) * two_pi;
+                    const float px    = center_x + std::cos(angle) * radius_x * ring_ratio;
+                    const float py    = center_y + std::sin(angle) * radius_y * ring_ratio;
+
+                    SDL_Vertex vertex{};
+                    vertex.position.x = px;
+                    vertex.position.y = py;
+                    vertex.color      = SDL_Color{0, 0, 0, alpha};
+                    vertex.tex_coord  = SDL_FPoint{0.0f, 0.0f};
+                    light_vertices.push_back(vertex);
+                }
             }
 
-            if (light_texture) {
-                SDL_BlendMode previous_texture_blend = SDL_BLENDMODE_BLEND;
-                SDL_GetTextureBlendMode(light_texture, &previous_texture_blend);
+            const int stride = angular_steps + 1;
+            for (int ring = 0; ring < radial_steps; ++ring) {
+                for (int step = 0; step < angular_steps; ++step) {
+                    const int current = ring * stride + step;
+                    const int next    = current + stride;
 
-                Uint8 prev_r = 255, prev_g = 255, prev_b = 255, prev_a = 255;
-                SDL_GetTextureColorMod(light_texture, &prev_r, &prev_g, &prev_b);
-                SDL_GetTextureAlphaMod(light_texture, &prev_a);
+                    light_indices.push_back(current);
+                    light_indices.push_back(next);
+                    light_indices.push_back(current + 1);
 
-                SDL_SetTextureBlendMode(light_texture, cutout_blend);
-                SDL_SetTextureColorMod(light_texture, 0, 0, 0);
-                SDL_SetTextureAlphaMod(light_texture, intensity);
+                    light_indices.push_back(current + 1);
+                    light_indices.push_back(next);
+                    light_indices.push_back(next + 1);
+                }
+            }
 
-                SDL_RenderCopy(renderer_, light_texture, nullptr, &dst);
-
-                SDL_SetTextureBlendMode(light_texture, previous_texture_blend);
-                SDL_SetTextureColorMod(light_texture, prev_r, prev_g, prev_b);
-                SDL_SetTextureAlphaMod(light_texture, prev_a);
-            } else {
+            if (SDL_RenderGeometry(renderer_, nullptr,
+                                   light_vertices.data(), static_cast<int>(light_vertices.size()),
+                                   light_indices.data(), static_cast<int>(light_indices.size())) != 0) {
                 SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
                 SDL_GetRenderDrawBlendMode(renderer_, &previous_mode);
                 SDL_SetRenderDrawBlendMode(renderer_, cutout_blend);

@@ -1,6 +1,5 @@
 #include "lighting_loader.hpp"
 #include "asset/asset_info.hpp"
-#include "utils/generate_light.hpp"
 #include <algorithm>
 #include <cmath>
 #include <optional>
@@ -76,13 +75,3 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
         }
 }
 
-void LightingLoader::generate_textures(AssetInfo& info, SDL_Renderer* renderer) {
-	GenerateLight generator(renderer);
-	for (std::size_t i = 0; i < info.light_sources.size(); ++i) {
-		generator.generate(renderer, info.name, info.light_sources[i], i);
-	}
-	std::size_t base_index = info.light_sources.size();
-	for (std::size_t i = 0; i < info.orbital_light_sources.size(); ++i) {
-		generator.generate(renderer, info.name, info.orbital_light_sources[i], base_index + i);
-	}
-}

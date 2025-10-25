@@ -200,10 +200,7 @@ public:
                     ui_->notify_light_sources_modified(purge_light_cache);
                 }
                 (void)info_->commit_manifest();
-                if (regenerate_lighting && ui_) {
-                    SDL_Renderer* r = ui_->get_last_renderer();
-                    if (r) LightingLoader::generate_textures(*info_, r);
-                }
+                (void)regenerate_lighting;
             }
         }
         return used || changed;

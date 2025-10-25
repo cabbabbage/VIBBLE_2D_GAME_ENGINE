@@ -557,9 +557,7 @@ bool AssetInfo::has_tag(const std::string &tag) const {
     return tag_lookup_.find(tag) != tag_lookup_.end();
 }
 
-void AssetInfo::generate_lights(SDL_Renderer *renderer) {
-	LightingLoader::generate_textures(*this, renderer);
-}
+void AssetInfo::generate_lights(SDL_Renderer* /*renderer*/) {}
 
 bool AssetInfo::commit_manifest() {
         nlohmann::json payload = info_json_;

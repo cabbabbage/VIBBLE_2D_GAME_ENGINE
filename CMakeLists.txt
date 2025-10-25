@@ -237,27 +237,6 @@ target_link_libraries(asset_loader_distance_tests PRIVATE
 target_compile_definitions(asset_loader_distance_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME asset_loader_distance_tests COMMAND asset_loader_distance_tests)
 
-add_executable(generate_light_tests
-    tests/core/generate_light_tests.cpp
-    ENGINE/utils/generate_light.cpp
-    ENGINE/utils/cache_manager.cpp
-)
-target_include_directories(generate_light_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}/external
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/ENGINE
-    ${CMAKE_SOURCE_DIR}/ENGINE/utils
-    ${CMAKE_SOURCE_DIR}/ENGINE/render_pipeline
-)
-target_link_libraries(generate_light_tests PRIVATE
-    nlohmann_json::nlohmann_json
-    SDL2::SDL2
-    SDL2_image::SDL2_image
-    vibble_log
-)
-target_compile_definitions(generate_light_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}" GENERATE_LIGHT_ENABLE_TEST_HOOKS)
-add_test(NAME generate_light_tests COMMAND generate_light_tests)
-
 add_executable(world_grid_chunk_tests
     tests/world/grid_chunk_tests.cpp
     tests/world/chunk_stub.cpp
@@ -367,7 +346,6 @@ add_executable(manifest_store_tests
     ENGINE/asset_info_methods/child_loader.cpp
     ENGINE/utils/cache_manager.cpp
     ENGINE/utils/generate_faded_mask.cpp
-    ENGINE/utils/generate_light.cpp
     ENGINE/utils/loading_status_notifier.cpp
     ENGINE/dev_mode/room_editor_map_info.cpp
     ENGINE/core/manifest/manifest_loader.cpp
@@ -406,7 +384,6 @@ add_executable(asset_info_manifest_tests
     ENGINE/utils/generate_faded_mask.cpp
     ENGINE/utils/area.cpp
     ENGINE/utils/cache_manager.cpp
-    ENGINE/utils/generate_light.cpp
     ENGINE/utils/loading_status_notifier.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
