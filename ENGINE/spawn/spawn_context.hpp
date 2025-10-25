@@ -12,6 +12,7 @@
 #include "spawn/check.hpp"
 #include "util/grid.hpp"
 #include "util/grid_occupancy.hpp"
+#include "utils/map_grid_settings.hpp"
 
 class Asset;
 class Area;
@@ -53,6 +54,9 @@ class SpawnContext {
     int spawn_resolution() const { return spawn_resolution_; }
     void set_spawn_resolution(int resolution) { spawn_resolution_ = vibble::grid::clamp_resolution(resolution); }
 
+    void set_map_grid_settings(const MapGridSettings& settings);
+    const MapGridSettings& map_grid_settings() const { return map_grid_settings_; }
+
     void set_clip_area(const Area* a) { clip_area_ = a; }
     const Area* clip_area() const { return clip_area_; }
 
@@ -72,4 +76,5 @@ class SpawnContext {
     int spawn_resolution_ = 0;
     const Area* clip_area_ = nullptr;
     std::vector<const Area*> trail_areas_{};
+    MapGridSettings map_grid_settings_ = MapGridSettings::defaults();
 };

@@ -2409,6 +2409,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         checker.begin_session(grid_service, resolution);
         std::vector<Area> exclusion;
         SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, &occupancy);
+        ctx.set_map_grid_settings(grid_settings);
         ctx.set_spawn_resolution(resolution);
         std::vector<const Area*> trail_areas;
         auto add_trail_area = [&trail_areas](const Area* candidate, const std::string& type) {

@@ -239,6 +239,7 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
                          asset_library_,
                          grid_service,
                          &occupancy);
+    context.set_map_grid_settings(grid_settings_);
     context.set_spawn_resolution(resolution);
     context.set_trail_areas(trail_areas);
 

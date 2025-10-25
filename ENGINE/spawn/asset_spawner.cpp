@@ -77,6 +77,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
     checker_.begin_session(grid_service, resolution);
     vibble::grid::Occupancy occupancy(area, resolution, grid_service);
     SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
+    ctx.set_map_grid_settings(map_grid_settings_);
     ctx.set_spawn_resolution(resolution);
         std::vector<const Area*> trail_areas;
         auto add_trail_area = [&trail_areas](const Area* candidate, const std::string& type) {
@@ -230,6 +231,7 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
 
                 vibble::grid::Occupancy occupancy(area, kEdgeResolution, grid_service);
                 SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
+                ctx.set_map_grid_settings(map_grid_settings_);
                 ctx.set_spawn_resolution(kEdgeResolution);
                 ctx.set_trail_areas({});
 
@@ -373,6 +375,7 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
                                  asset_library_,
                                  grid_service,
                                  &occupancy);
+                ctx.set_map_grid_settings(map_grid_settings_);
                 ctx.set_spawn_resolution(resolution);
                 ctx.set_trail_areas({});
                 ctx.set_clip_area(target_area);

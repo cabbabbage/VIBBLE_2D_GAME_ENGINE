@@ -12,6 +12,7 @@
 #include "spawn/asset_spawner.hpp"
 #include "utils/area.hpp"
 #include "utils/area_helpers.hpp"
+#include "utils/map_grid_settings.hpp"
 namespace fs = std::filesystem;
 
 SpawnContext::SpawnContext(std::mt19937& rng,
@@ -30,7 +31,8 @@ all_(all),
 asset_library_(asset_library),
 grid_(grid),
 occupancy_(occupancy),
-spawn_resolution_(occupancy ? occupancy->resolution() : grid_.default_resolution())
+spawn_resolution_(occupancy ? occupancy->resolution() : grid_.default_resolution()),
+map_grid_settings_(MapGridSettings::defaults())
 {}
 
 SpawnContext::Point SpawnContext::get_area_center(const Area& area) const {
@@ -70,11 +72,11 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 continue;
                         }
                         try {
-                                resolved_child_areas.insert_or_assign(named.name,
-                                                                      area_helpers::make_world_area(*raw->info,
-                                                                                                    *named.area,
-                                                                                                    raw->pos,
-                                                                                                    raw->flipped));
+                                Area world_area = raw->get_area(named.name);
+                                if (world_area.get_points().empty()) {
+                                        continue;
+                                }
+                                resolved_child_areas.insert_or_assign(named.name, std::move(world_area));
                         } catch (...) {
                                 continue;
                         }
@@ -87,8 +89,8 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                 std::mt19937 g(rd());
                 std::shuffle(shuffled_children.begin(), shuffled_children.end(), g);
                 for (auto* childInfo : shuffled_children) {
-                        Area* base_area = raw->info->find_area(childInfo->area_name);
-                        if (!base_area) {
+                        Area childArea = raw->get_area(childInfo->area_name);
+                        if (childArea.get_points().empty()) {
                                 continue;
                         }
                         nlohmann::json j;
@@ -113,16 +115,12 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                         continue;
                                 }
                         }
-                        Area childArea = area_helpers::make_world_area(*raw->info, *base_area, raw->pos, raw->flipped);
                         resolved_child_areas.insert_or_assign(childInfo->area_name, childArea);
                         AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
                                                        childArea,
                                                        *asset_library_);
                         AssetSpawner childSpawner(asset_library_, exclusion_zones_);
-                        MapGridSettings child_settings = MapGridSettings::defaults();
-                        child_settings.resolution = spawn_resolution_;
-                        child_settings.clamp();
-                        childSpawner.set_map_grid_settings(child_settings);
+                        childSpawner.set_map_grid_settings(map_grid_settings_);
                         childSpawner.spawn_children(childArea, resolved_child_areas, &childPlanner);
                         auto kids = childSpawner.extract_all_assets();
                         for (auto& uptr : kids) {
@@ -134,6 +132,7 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 }
                                 uptr->set_z_offset(z_offset);
                                 uptr->set_hidden(false);
+                                uptr->set_owning_room_name(raw->owning_room_name());
 
                                 raw->children.push_back(uptr.get());
                                 all_.push_back(std::move(uptr));
@@ -156,4 +155,10 @@ bool SpawnContext::point_overlaps_trail(SDL_Point pt, const Area* ignore) const 
                 }
         }
         return false;
+}
+
+void SpawnContext::set_map_grid_settings(const MapGridSettings& settings) {
+        map_grid_settings_ = settings;
+        map_grid_settings_.clamp();
+        spawn_resolution_ = occupancy_ ? occupancy_->resolution() : vibble::grid::clamp_resolution(map_grid_settings_.resolution);
 }

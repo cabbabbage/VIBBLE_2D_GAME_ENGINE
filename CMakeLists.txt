@@ -266,6 +266,7 @@ add_executable(world_grid_chunk_tests
     tests/world/grid_chunk_tests.cpp
     tests/world/chunk_stub.cpp
     ENGINE/world/grid.cpp
+    ENGINE/world/chunk.cpp
     ENGINE/world/chunk_manager.cpp
 )
 target_include_directories(world_grid_chunk_tests PRIVATE

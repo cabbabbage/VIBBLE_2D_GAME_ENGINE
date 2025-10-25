@@ -3987,6 +3987,9 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     int spawn_resolution = occupancy ? occupancy->resolution() : grid_service.default_resolution();
     checker.begin_session(grid_service, spawn_resolution);
     SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, occupancy.get());
+    if (current_room_) {
+        ctx.set_map_grid_settings(current_room_->map_grid_settings());
+    }
     if (occupancy) {
         ctx.set_spawn_resolution(occupancy->resolution());
     }
@@ -4229,6 +4232,7 @@ void RoomEditor::regenerate_current_room() {
     int regen_resolution = occupancy ? occupancy->resolution() : grid_service.default_resolution();
     checker.begin_session(grid_service, regen_resolution);
     SpawnContext ctx(regen_rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, occupancy.get());
+    ctx.set_map_grid_settings(current_room_->map_grid_settings());
     if (occupancy) {
         ctx.set_spawn_resolution(occupancy->resolution());
     }
