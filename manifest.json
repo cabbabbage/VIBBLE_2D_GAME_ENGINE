@@ -14125,7 +14125,7 @@
         "parallax_strength": 1.0,
         "sampling_weights": {
           "dynamic_weight": 1.0,
-          "static_weight": 0.800000011920929
+          "static_weight": 0.0
         },
         "scale_strength": 1.0,
         "shadow_lut": [
@@ -14137,31 +14137,31 @@
           },
           {
             "brightness": 1.0,
-            "offset": 0.0,
-            "opacity": 0.0,
-            "scale": 1.0
+            "offset": 658.9600219726563,
+            "opacity": 7.659999847412109,
+            "scale": 6.590000152587891
           }
         ],
         "virtual_light_map": {
           "horizontal_falloff": 2.4700000286102295,
-          "map_light_dir_offset_strength": 0.20999999344348907,
-          "max_offset_x": 102.5999984741211,
+          "map_light_dir_offset_strength": 0.0,
+          "max_offset_x": 93.93000030517578,
           "max_offset_y": 0.0,
-          "max_scale_percent": 120,
+          "max_scale_percent": 126,
           "min_scale_percent": 80,
-          "parallax_percent": 0.0,
-          "search_radius": 4,
-          "shadow_scale": 1.0,
-          "vertical_falloff": 3.5
+          "parallax_percent": 5.199999809265137,
+          "search_radius": 2,
+          "shadow_scale": 6.679999828338623,
+          "vertical_falloff": 2.4600000381469727
         }
       },
       "rooms_data": {
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            228,
-            36,
-            242,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 2,
@@ -14237,9 +14237,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            133,
-            36,
-            242,
+            32,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 101,
@@ -14357,6 +14357,7 @@
               "origional_height": 1800,
               "origional_width": 1800,
               "position": "Exact",
+              "priority": 3,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
