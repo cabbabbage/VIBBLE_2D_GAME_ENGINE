@@ -334,6 +334,7 @@ add_executable(manifest_store_tests
     tests/manifest/spawn_group_manifest_tests.cpp
     tests/dev_mode/room_editor_manifest_tests.cpp
     tests/dev_mode/spawn_group_config_tests.cpp
+    tests/dev_mode/spawn_group_model_tests.cpp
     ENGINE/dev_mode/search_assets.cpp
     ENGINE/asset/asset_info.cpp
     ENGINE/asset/animation.cpp

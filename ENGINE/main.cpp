@@ -381,21 +381,11 @@ nlohmann::json build_default_map_info(const std::string& map_name) {
 }
 
 std::optional<MapDescriptor> create_new_map_interactively() {
-    const fs::path maps_root{"MAPS"};
     devmode::core::ManifestStore manifest_store;
     try {
         manifest_store.reload();
     } catch (const std::exception& ex) {
         std::string msg = std::string("Failed to load manifest:\n") + ex.what();
-        tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
-        return std::nullopt;
-    }
-    try {
-        if (!fs::exists(maps_root)) {
-            fs::create_directories(maps_root);
-        }
-    } catch (const std::exception& ex) {
-        std::string msg = std::string("Failed to access MAPS directory:\n") + ex.what();
         tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
         return std::nullopt;
     }
@@ -412,27 +402,16 @@ std::optional<MapDescriptor> create_new_map_interactively() {
             continue;
         }
 
-        fs::path map_dir = maps_root / *sanitized;
-        if (fs::exists(map_dir)) {
+        if (manifest_store.find_map_entry(*sanitized)) {
             tinyfd_messageBox("Map Exists", "A map with that name already exists.", "ok", "error", 0);
             continue;
         }
 
-        try {
-            fs::create_directories(map_dir);
-        } catch (const std::exception& ex) {
-            std::string msg = std::string("Failed to create map directory:\n") + ex.what();
-            tinyfd_messageBox("Error Creating Map", msg.c_str(), "ok", "error", 0);
-            continue;
-        }
-
         nlohmann::json map_info = build_default_map_info(*sanitized);
-        map_info["content_root"] = map_dir.generic_string();
+        map_info["content_root"] = fs::path{"SRC"}.generic_string();
 
         if (!manifest_store.update_map_entry(*sanitized, map_info)) {
             tinyfd_messageBox("Error Creating Map", "Failed to update manifest for new map.", "ok", "error", 0);
-            std::error_code ec;
-            fs::remove_all(map_dir, ec);
             continue;
         }
 

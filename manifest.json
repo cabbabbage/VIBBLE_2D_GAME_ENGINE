@@ -12745,6 +12745,22 @@
           "radius": 0,
           "x_radius": 0,
           "y_radius": 0
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 125,
+          "offset_x": 0,
+          "offset_y": 0,
+          "radius": 1689
         }
       ],
       "max_child_depth": 2,
@@ -14101,7 +14117,7 @@
             "vertical_falloff": 3.5
           }
         },
-        "update_interval": 4
+        "update_interval": 15
       },
       "map_name": "FORREST",
       "reactive_shadows": {
@@ -14143,9 +14159,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            75,
             242,
             36,
-            184,
             255
           ],
           "edge_smoothness": 2,
@@ -14221,9 +14237,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            190,
+            242,
+            36,
             255
           ],
           "edge_smoothness": 101,
@@ -14293,6 +14309,31 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-7a9fb8aedbad"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "candle"
+                }
+              ],
+              "display_name": "candle",
+              "dx": -467,
+              "dy": -297,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 1800,
+              "origional_width": 1800,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-ce64c1af28ba"
             }
           ]
         }

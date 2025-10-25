@@ -694,27 +694,36 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
                 light_texture = light.texture_for_scale(selection_scale);
             }
 
-            int tex_w = light.cached_w;
-            int tex_h = light.cached_h;
-            if (light_texture) {
-                if (tex_w <= 0 || tex_h <= 0) {
-                    SDL_QueryTexture(light_texture, nullptr, nullptr, &tex_w, &tex_h);
-                }
-            } else {
-                if (tex_w <= 0) {
-                    tex_w = light.radius > 0 ? light.radius * 2 : 0;
-                }
-                if (tex_h <= 0) {
-                    tex_h = light.radius > 0 ? light.radius * 2 : 0;
+            int base_w = light.cached_w;
+            int base_h = light.cached_h;
+
+            if (base_w <= 0 || base_h <= 0) {
+                SDL_Texture* reference = light.texture ? light.texture : light_texture;
+                if (reference) {
+                    SDL_QueryTexture(reference, nullptr, nullptr, &base_w, &base_h);
                 }
             }
 
-            if (tex_w <= 0 || tex_h <= 0) {
+            if (base_w <= 0 || base_h <= 0) {
+                SDL_Texture* fallback = light_texture ? light_texture : light.texture;
+                if (fallback) {
+                    SDL_QueryTexture(fallback, nullptr, nullptr, &base_w, &base_h);
+                }
+            }
+
+            if (base_w <= 0 || base_h <= 0) {
+                if (light.radius > 0) {
+                    base_w = light.radius * 2;
+                    base_h = light.radius * 2;
+                }
+            }
+
+            if (base_w <= 0 || base_h <= 0) {
                 continue;
             }
 
-            const float scaled_w = std::max(1.0f, static_cast<float>(tex_w) * scale_x);
-            const float scaled_h = std::max(1.0f, static_cast<float>(tex_h) * scale_y);
+            const float scaled_w = std::max(1.0f, static_cast<float>(base_w) * scale_x);
+            const float scaled_h = std::max(1.0f, static_cast<float>(base_h) * scale_y);
 
             const float offset_x = static_cast<float>(source.flipped ? -light.offset_x : light.offset_x);
             const float offset_y = static_cast<float>(light.offset_y);
