@@ -1,8 +1,7 @@
 #pragma once
 
 #include <SDL.h>
-#include <tuple>
-
+class Area;
 class camera;
 
 namespace dm_draw {
@@ -18,8 +17,7 @@ const RoomBoundsOverlayStyle& ResolveRoomBoundsOverlayStyle();
 void RenderRoomBoundsOverlay(
     SDL_Renderer* renderer,
     const camera& cam,
-    const std::tuple<int, int, int, int>& bounds,
-    SDL_Point center,
+    const Area& area,
     const RoomBoundsOverlayStyle& style);
 
 }

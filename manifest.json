@@ -13880,7 +13880,7 @@
           "max_rooms": 1,
           "min_rooms": 0,
           "name": "layer_1",
-          "ring_radius": 3100.0,
+          "ring_radius": 3700.0,
           "rooms": [
             {
               "max_instances": 1,
@@ -13892,7 +13892,7 @@
         }
       ],
       "map_layers_settings": {
-        "min_edge_distance": 800
+        "min_edge_distance": 1920
       },
       "map_light_data": {
         "base_color": {
@@ -14176,6 +14176,33 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-e356fc635dd8"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Vibble"
+                }
+              ],
+              "display_name": "Vibble",
+              "dx": 185,
+              "dy": 8,
+              "enforce_spacing": false,
+              "link_to_area": true,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 1963,
+              "origional_width": 1944,
+              "position": "Exact",
+              "priority": 1,
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-e900ea94ff54"
             }
           ]
         }

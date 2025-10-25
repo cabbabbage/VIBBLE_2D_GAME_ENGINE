@@ -73,6 +73,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         }
     const int resolution = std::max(0, map_grid_settings_.resolution);
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+    checker_.begin_session(grid_service, resolution);
     vibble::grid::Occupancy occupancy(area, resolution, grid_service);
     SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
     ctx.set_spawn_resolution(resolution);
@@ -143,6 +144,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                 bool placed = false;
                                 std::vector<double> attempt_weights = base_weights;
                                 const size_t max_candidate_attempts = queue_item.candidates.size();
+                                const bool enforce_spacing = queue_item.check_min_spacing;
                                 for (size_t attempt = 0; attempt < max_candidate_attempts; ++attempt) {
                                         double total_weight = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0.0);
                                         if (total_weight <= 0.0) break;
@@ -160,15 +162,31 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                                 placed = true;
                                                 break;
                                         }
-                                        if (ctx.checker().check(candidate.info, spawn_pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {
+                                        if (ctx.checker().check(candidate.info,
+                                                                spawn_pos,
+                                                                ctx.exclusion_zones(),
+                                                                ctx.all_assets(),
+                                                                true,
+                                                                enforce_spacing,
+                                                                false,
+                                                                false,
+                                                                5)) {
                                                 attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
-                                        auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
+                                        auto* result = ctx.spawnAsset(candidate.name,
+                                                                      candidate.info,
+                                                                      area,
+                                                                      spawn_pos,
+                                                                      0,
+                                                                      nullptr,
+                                                                      queue_item.spawn_id,
+                                                                      queue_item.position);
                                         if (!result) {
                                                 attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
+                                        ctx.checker().register_asset(result, enforce_spacing, true);
                                         occupancy.set_occupied(vertex, true);
                                         placed = true;
                                         break;
@@ -193,6 +211,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                         random.spawn(queue_item, &area, ctx);
                 }
         }
+        checker_.reset_session();
 }
 
 void AssetSpawner::run_edge_spawning(const Area& area) {
@@ -202,11 +221,12 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
 };
 
         vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+        constexpr int kEdgeResolution = 7;
+        checker_.begin_session(grid_service, kEdgeResolution);
 
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
 
-                constexpr int kEdgeResolution = 7;
                 vibble::grid::Occupancy occupancy(area, kEdgeResolution, grid_service);
                 SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
                 ctx.set_spawn_resolution(kEdgeResolution);
@@ -254,6 +274,7 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
                         bool success = false;
                         std::vector<double> attempt_weights = base_weights;
                         const size_t max_candidate_attempts = queue_item.candidates.size();
+                        const bool enforce_spacing = queue_item.check_min_spacing;
                         for (size_t attempt = 0; attempt < max_candidate_attempts; ++attempt) {
                                 double total_weight = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0.0);
                                 if (total_weight <= 0.0) break;
@@ -271,16 +292,33 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
                                         break;
                                 }
 
-                                if (ctx.checker().check(candidate.info, spawn_pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {
+                                if (ctx.checker().check(candidate.info,
+                                                        spawn_pos,
+                                                        ctx.exclusion_zones(),
+                                                        ctx.all_assets(),
+                                                        true,
+                                                        enforce_spacing,
+                                                        true,
+                                                        false,
+                                                        5)) {
                                         attempt_weights[idx] = 0.0;
                                         continue;
                                 }
 
-                                auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
+                                auto* result = ctx.spawnAsset(candidate.name,
+                                                             candidate.info,
+                                                             area,
+                                                             spawn_pos,
+                                                             0,
+                                                             nullptr,
+                                                             queue_item.spawn_id,
+                                                             queue_item.position);
                                 if (!result) {
                                         attempt_weights[idx] = 0.0;
                                         continue;
                                 }
+
+                                ctx.checker().register_asset(result, enforce_spacing, false);
 
                                 occupancy.set_occupied(vertex, true);
                                 success = true;
@@ -292,17 +330,22 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
                         }
                 }
         }
+        checker_.reset_session();
 }
 
 void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner, const Area& area) {
         asset_info_library_ = asset_library_->all();
         spawn_queue_ = planner->get_spawn_queue();
 
-        SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, vibble::grid::global_grid(), nullptr);
-        ctx.set_spawn_resolution(map_grid_settings_.resolution);
+        vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+        const int resolution = std::max(0, map_grid_settings_.resolution);
+        checker_.begin_session(grid_service, resolution);
+        SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, nullptr);
+        ctx.set_spawn_resolution(resolution);
         ChildrenSpawner childMethod;
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
                 childMethod.spawn(queue_item, &area, ctx);
         }
+        checker_.reset_session();
 }

@@ -25,14 +25,16 @@ void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContex
             continue;
         }
 
+        const bool enforce_spacing = item.check_min_spacing;
         bool violate = ctx.checker().check(candidate->info,
                                            pos,
-                                            std::vector<Area>{},
+                                           std::vector<Area>{},
                                            ctx.all_assets(),
-                                            false,
-                                            false,
-                                            false,
-                                            0);
+                                           false,
+                                           enforce_spacing,
+                                           false,
+                                           false,
+                                           0);
         if (violate) continue;
 
         auto* result = ctx.spawnAsset(candidate->name, candidate->info, *area, pos, 0, nullptr, item.spawn_id, std::string("ChildRandom"));
@@ -40,6 +42,8 @@ void ChildrenSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContex
             ++slots_used;
             continue;
         }
+
+        ctx.checker().register_asset(result, enforce_spacing, true);
 
         ++slots_used;
     }

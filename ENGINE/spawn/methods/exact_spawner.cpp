@@ -38,13 +38,23 @@ void ExactSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext& 
             if (snapped) pos = snapped->world;
         }
 
-        if (ctx.checker().check(info, pos, ctx.exclusion_zones(), ctx.all_assets(),
-                                false, false, false, 5)) {
+        const bool enforce_spacing = item.check_min_spacing;
+        if (ctx.checker().check(info,
+                                pos,
+                                ctx.exclusion_zones(),
+                                ctx.all_assets(),
+                                false,
+                                enforce_spacing,
+                                false,
+                                false,
+                                5)) {
             continue;
         }
 
         auto* result = ctx.spawnAsset(candidate->name, info, *area, pos, 0, nullptr, item.spawn_id, item.position);
         if (!result) continue;
+
+        ctx.checker().register_asset(result, enforce_spacing, true);
 
         if (snapped && ctx.occupancy()) {
             ctx.occupancy()->set_occupied(snapped, true);

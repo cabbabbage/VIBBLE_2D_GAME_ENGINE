@@ -170,8 +170,7 @@ void MapEditor::render(SDL_Renderer* renderer) {
         dm_draw::RenderRoomBoundsOverlay(
             renderer,
             view,
-            room->room_area->get_bounds(),
-            room->room_area->get_center(),
+            *room->room_area,
             overlay_style);
 
         SDL_Point center = room->room_area->get_center();

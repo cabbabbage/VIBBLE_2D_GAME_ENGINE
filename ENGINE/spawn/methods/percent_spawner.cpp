@@ -54,8 +54,16 @@ void PercentSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext
         }
 
         auto& info = candidate->info;
-        if (ctx.checker().check(info, final_pos, ctx.exclusion_zones(), ctx.all_assets(),
-                                item.check_min_spacing, false, false, 5)) {
+        const bool enforce_spacing = item.check_min_spacing;
+        if (ctx.checker().check(info,
+                                final_pos,
+                                ctx.exclusion_zones(),
+                                ctx.all_assets(),
+                                true,
+                                enforce_spacing,
+                                false,
+                                false,
+                                5)) {
             continue;
         }
 
@@ -64,6 +72,8 @@ void PercentSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext
             ++slots_used;
             continue;
         }
+
+        ctx.checker().register_asset(result, enforce_spacing, true);
 
         if (snapped && ctx.occupancy()) {
             ctx.occupancy()->set_occupied(snapped, true);

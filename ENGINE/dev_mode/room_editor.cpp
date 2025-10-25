@@ -1513,8 +1513,7 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
             dm_draw::RenderRoomBoundsOverlay(
                 renderer,
                 assets_->getView(),
-                current_room_->room_area->get_bounds(),
-                current_room_->room_area->get_center(),
+                *current_room_->room_area,
                 style);
         }
         render_room_labels(renderer);
@@ -3904,6 +3903,8 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     std::vector<Area> exclusion;
     std::mt19937 rng(std::random_device{}());
     Check checker(false);
+    int spawn_resolution = occupancy ? occupancy->resolution() : grid_service.default_resolution();
+    checker.begin_session(grid_service, spawn_resolution);
     SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, occupancy.get());
     if (occupancy) {
         ctx.set_spawn_resolution(occupancy->resolution());
@@ -3952,6 +3953,7 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
         }
     }
     integrate_spawned_assets(spawned);
+    checker.reset_session();
 }
 
 void RoomEditor::regenerate_current_room() {
@@ -4143,6 +4145,8 @@ void RoomEditor::regenerate_current_room() {
     Check checker(false);
     std::mt19937 regen_rng(std::random_device{}());
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+    int regen_resolution = occupancy ? occupancy->resolution() : grid_service.default_resolution();
+    checker.begin_session(grid_service, regen_resolution);
     SpawnContext ctx(regen_rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, occupancy.get());
     if (occupancy) {
         ctx.set_spawn_resolution(occupancy->resolution());
@@ -4169,6 +4173,7 @@ void RoomEditor::regenerate_current_room() {
         }
     }
     integrate_spawned_assets(spawned);
+    checker.reset_session();
 
     if (old_area_copy && new_area_size < old_area_size) {
         std::vector<std::pair<std::string, int>> edge_options;

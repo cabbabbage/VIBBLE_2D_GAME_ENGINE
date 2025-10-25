@@ -227,6 +227,7 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
     });
 
     Check checker(false);
+    checker.begin_session(grid_service, resolution);
     std::vector<Area> exclusion_zones;
     auto asset_info_library = asset_library_->all();
     std::mt19937 rng;
@@ -276,12 +277,14 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
         spawn_pos = apply_map_grid_jitter(grid_settings_, spawn_pos, rng, *owner->room_area);
         context.set_clip_area(owner->room_area.get());
 
+        const bool enforce_spacing = spawn_info->check_min_spacing;
         if (context.checker().check(candidate->info,
                                     spawn_pos,
                                     context.exclusion_zones(),
                                     context.all_assets(),
                                     true,
-                                    true,
+                                    enforce_spacing,
+                                    false,
                                     true,
                                     5)) {
             occupancy.set_occupied(vertex, true);
@@ -299,9 +302,12 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
         if (spawned) {
             spawned->set_owning_room_name(owner->room_name);
             owner_map[spawned] = owner;
+            context.checker().register_asset(spawned, enforce_spacing, false);
         }
         occupancy.set_occupied(vertex, true);
     }
+
+    checker.reset_session();
 
     for (auto& asset_uptr : global_assets) {
         if (!asset_uptr) {

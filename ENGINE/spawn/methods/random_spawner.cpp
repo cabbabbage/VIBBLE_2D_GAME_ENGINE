@@ -32,7 +32,16 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
         }
 
         auto& info = candidate->info;
-        if (ctx.checker().check(info, pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {
+        const bool enforce_spacing = item.check_min_spacing;
+        if (ctx.checker().check(info,
+                                pos,
+                                ctx.exclusion_zones(),
+                                ctx.all_assets(),
+                                true,
+                                enforce_spacing,
+                                false,
+                                false,
+                                5)) {
             continue;
         }
 
@@ -41,6 +50,8 @@ void RandomSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext&
             ++attempt_slots_used;
             continue;
         }
+
+        ctx.checker().register_asset(result, enforce_spacing, true);
 
         if (occupancy) {
             occupancy->set_occupied(vertex, true);

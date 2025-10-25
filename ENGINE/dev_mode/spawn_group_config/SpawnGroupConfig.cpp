@@ -1046,13 +1046,12 @@ struct SpawnGroupConfig::Entry {
 
         if (terminate_with_parent_widget_) {
             terminate_with_parent_widget_->set_value(terminate_with_parent && linked_area_is_asset_child_);
-            terminate_with_parent_widget_->set_editable(editable_ && link_to_area_enabled_ && linked_area_is_asset_child_);
         }
         if (placed_on_top_parent_widget_) {
             placed_on_top_parent_widget_->set_value(place_on_top_parent && linked_area_is_asset_child_);
-            placed_on_top_parent_widget_->set_editable(editable_ && link_to_area_enabled_ && linked_area_is_asset_child_);
         }
 
+        update_asset_link_option_controls();
         update_link_area_button_states();
 
         update_area_dropdown_from_provider();
@@ -1124,12 +1123,7 @@ struct SpawnGroupConfig::Entry {
         refresh_linkable_area_sources();
         update_linked_area_selection_metadata();
         update_link_area_button_states();
-        if (terminate_with_parent_widget_) {
-            terminate_with_parent_widget_->set_editable(editable_ && link_to_area_enabled_ && linked_area_is_asset_child_);
-        }
-        if (placed_on_top_parent_widget_) {
-            placed_on_top_parent_widget_->set_editable(editable_ && link_to_area_enabled_ && linked_area_is_asset_child_);
-        }
+        update_asset_link_option_controls();
         update_priority_button_states();
     }
 
@@ -1434,8 +1428,11 @@ private:
                                           room_linkable_areas_,
                                           room_link_area_buttons_,
                                           room_link_area_widgets_) || changed;
-        if (changed && owner_) {
-            owner_->mark_layout_dirty();
+        if (changed) {
+            update_linked_area_selection_metadata();
+            update_link_area_button_states();
+            update_area_link_target();
+            if (owner_) owner_->mark_layout_dirty();
         }
     }
 
@@ -1462,6 +1459,8 @@ private:
             }
         }
 
+        update_asset_link_option_controls();
+
         if (auto* entry = mutable_entry()) {
             (*entry)["link_to_area"] = true;
             (*entry)["linked_area"] = option.id;
@@ -1478,6 +1477,7 @@ private:
     }
 
     void update_linked_area_selection_metadata() {
+        bool previous_asset_child = linked_area_is_asset_child_;
         bool found_asset = false;
         bool found_room = false;
         if (!linked_area_id_.empty()) {
@@ -1500,6 +1500,10 @@ private:
         if (!found_asset && !found_room) {
             linked_area_id_.clear();
         }
+        if (previous_asset_child != linked_area_is_asset_child_ && owner_) {
+            owner_->mark_layout_dirty();
+        }
+        update_asset_link_option_controls();
     }
 
     void update_link_area_button_states() {
@@ -1520,6 +1524,7 @@ private:
         if (!editable_) {
             link_to_area_enabled_ = value;
             update_link_area_button_states();
+            update_asset_link_option_controls();
             return;
         }
         link_to_area_enabled_ = value;
@@ -1544,6 +1549,7 @@ private:
         }
         update_link_area_button_states();
         update_area_link_target();
+        update_asset_link_option_controls();
         if (owner_) owner_->mark_layout_dirty();
     }
 
@@ -1560,6 +1566,16 @@ private:
         if (auto* entry = mutable_entry()) {
             (*entry)["placed_on_top_parent"] = value;
             notify_change(false, false, false);
+        }
+    }
+
+    void update_asset_link_option_controls() {
+        const bool allow_asset_options = editable_ && link_to_area_enabled_ && linked_area_is_asset_child_;
+        if (terminate_with_parent_widget_) {
+            terminate_with_parent_widget_->set_editable(allow_asset_options);
+        }
+        if (placed_on_top_parent_widget_) {
+            placed_on_top_parent_widget_->set_editable(allow_asset_options);
         }
     }
 

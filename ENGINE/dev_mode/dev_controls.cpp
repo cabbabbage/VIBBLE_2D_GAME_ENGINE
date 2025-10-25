@@ -1373,8 +1373,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 dm_draw::RenderRoomBoundsOverlay(
                     renderer,
                     cam,
-                    current_room_->room_area->get_bounds(),
-                    current_room_->room_area->get_center(),
+                    *current_room_->room_area,
                     overlay_style);
             }
 
@@ -2192,6 +2191,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         const int resolution = std::max(0, grid_settings.resolution);
         vibble::grid::Grid& grid_service = vibble::grid::global_grid();
         vibble::grid::Occupancy occupancy(*room->room_area, resolution, grid_service);
+        checker.begin_session(grid_service, resolution);
         std::vector<Area> exclusion;
         SpawnContext ctx(rng, checker, exclusion, asset_info_library, spawned, &assets_->library(), grid_service, &occupancy);
         ctx.set_spawn_resolution(resolution);
@@ -2247,6 +2247,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                     bool placed = false;
                     std::vector<double> attempt_weights = base_weights;
                     const size_t max_candidate_attempts = info.candidates.size();
+                    const bool enforce_spacing = info.check_min_spacing;
                     for (size_t attempt = 0; attempt < max_candidate_attempts; ++attempt) {
                         double weight_total = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0.0);
                         if (weight_total <= 0.0) break;
@@ -2263,15 +2264,31 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                             placed = true;
                             break;
                         }
-                        if (ctx.checker().check(candidate.info, spawn_pos, ctx.exclusion_zones(), ctx.all_assets(), true, true, true, 5)) {
+                        if (ctx.checker().check(candidate.info,
+                                                spawn_pos,
+                                                ctx.exclusion_zones(),
+                                                ctx.all_assets(),
+                                                true,
+                                                enforce_spacing,
+                                                false,
+                                                false,
+                                                5)) {
                             attempt_weights[idx] = 0.0;
                             continue;
                         }
-                        auto* result = ctx.spawnAsset(candidate.name, candidate.info, *area_ptr, spawn_pos, 0, nullptr, info.spawn_id, info.position);
+                        auto* result = ctx.spawnAsset(candidate.name,
+                                                      candidate.info,
+                                                      *area_ptr,
+                                                      spawn_pos,
+                                                      0,
+                                                      nullptr,
+                                                      info.spawn_id,
+                                                      info.position);
                         if (!result) {
                             attempt_weights[idx] = 0.0;
                             continue;
                         }
+                        ctx.checker().register_asset(result, enforce_spacing, true);
                         occupancy.set_occupied(vertex, true);
                         placed = true;
                         break;
@@ -2298,6 +2315,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                 random.spawn(info, area_ptr, ctx);
             }
         }
+        checker.reset_session();
     }
 
     integrate_spawned_assets(spawned);
