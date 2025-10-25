@@ -12,6 +12,8 @@ namespace map_layers {
 
 namespace {
 
+constexpr double kTau = 6.28318530717958647692;
+
 double clamp_min_edge(double value) {
     if (!std::isfinite(value)) {
         return static_cast<double>(kDefaultMinEdgeDistance);
@@ -48,6 +50,114 @@ bool is_circle_geometry(std::string geometry_value) {
 double sanitize_dimension(double value, double fallback) {
     if (value > 0.0) return value;
     return fallback;
+}
+
+double sanitize_extent(double value) {
+    if (!std::isfinite(value) || value <= 0.0) {
+        return 1.0;
+    }
+    return value;
+}
+
+double minimal_radius_requirement(const std::vector<double>& extents, double min_edge) {
+    if (extents.empty()) {
+        return 0.0;
+    }
+    if (extents.size() == 1) {
+        return sanitize_extent(extents.front()) + std::max(0.0, min_edge) * 0.5;
+    }
+    double minimum = 0.0;
+    const std::size_t count = extents.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        const double current = sanitize_extent(extents[i]);
+        const double next = sanitize_extent(extents[(i + 1) % count]);
+        const double required = (current + next + std::max(0.0, min_edge)) * 0.5;
+        minimum = std::max(minimum, required);
+    }
+    return minimum;
+}
+
+double total_required_angle(double radius, const std::vector<double>& extents, double min_edge) {
+    if (extents.size() <= 1) {
+        return 0.0;
+    }
+    if (!(radius > 0.0) || !std::isfinite(radius)) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const std::size_t count = extents.size();
+    const double edge = std::max(0.0, min_edge);
+    double total = 0.0;
+    for (std::size_t i = 0; i < count; ++i) {
+        const double current = sanitize_extent(extents[i]);
+        const double next = sanitize_extent(extents[(i + 1) % count]);
+        const double chord = current + next + edge;
+        if (chord <= 0.0) {
+            continue;
+        }
+        const double ratio = chord / (2.0 * radius);
+        if (ratio >= 1.0) {
+            return std::numeric_limits<double>::infinity();
+        }
+        total += 2.0 * std::asin(std::clamp(ratio, -1.0, 1.0));
+    }
+    return total;
+}
+
+double ensure_radius_for_extents(double base_radius,
+                                 const std::vector<double>& extents,
+                                 double min_edge) {
+    if (extents.empty()) {
+        return std::max(0.0, base_radius);
+    }
+    const double edge = clamp_min_edge(min_edge);
+    double radius = std::max(base_radius, minimal_radius_requirement(extents, edge));
+    if (!(radius > 0.0) || !std::isfinite(radius)) {
+        radius = minimal_radius_requirement(extents, edge);
+        if (!(radius > 0.0) || !std::isfinite(radius)) {
+            radius = 1.0;
+        }
+    }
+
+    for (int iter = 0; iter < 32; ++iter) {
+        const double required = total_required_angle(radius, extents, edge);
+        if (!std::isfinite(required)) {
+            radius = std::max(radius * 1.25, minimal_radius_requirement(extents, edge) + edge);
+            continue;
+        }
+        if (required <= kTau) {
+            break;
+        }
+        const double scale = std::max(1.01, required / kTau);
+        radius *= scale;
+    }
+    return radius;
+}
+
+std::vector<double> normalize_angles(const std::vector<double>& raw_angles) {
+    if (raw_angles.empty()) {
+        return {};
+    }
+    std::vector<double> adjusted;
+    adjusted.reserve(raw_angles.size());
+    double offset = std::floor(raw_angles.front() / kTau) * kTau;
+    double previous = 0.0;
+    for (std::size_t i = 0; i < raw_angles.size(); ++i) {
+        double angle = raw_angles[i] - offset;
+        while (angle < 0.0) {
+            angle += kTau;
+        }
+        if (i == 0) {
+            previous = angle;
+            adjusted.push_back(angle);
+            continue;
+        }
+        while (angle <= previous) {
+            angle += kTau;
+        }
+        previous = angle;
+        adjusted.push_back(angle);
+    }
+    return adjusted;
 }
 
 }  // namespace
@@ -120,6 +230,7 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
     const size_t layer_count = layers.size();
     result.layer_radii.assign(layer_count, 0.0);
     result.layer_extents.assign(layer_count, 0.0);
+    std::vector<std::vector<double>> layer_room_extents(layer_count);
 
     const double sanitized_edge = clamp_min_edge(min_edge_distance);
     result.min_edge_distance = sanitized_edge;
@@ -134,14 +245,33 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
         }
 
         double largest_room = 0.0;
+        std::vector<double> extents_list;
+        const int max_rooms_setting = layer.value("max_rooms", 0);
         const auto rooms_it = layer.find("rooms");
         if (rooms_it != layer.end() && rooms_it->is_array()) {
             for (const auto& candidate : *rooms_it) {
                 if (!candidate.is_object()) continue;
                 const std::string room_name = candidate.value("name", std::string());
-                largest_room = std::max(largest_room, room_extent_from_rooms_data(rooms_data, room_name));
+                double extent_value = room_extent_from_rooms_data(rooms_data, room_name);
+                extent_value = sanitize_extent(extent_value);
+                largest_room = std::max(largest_room, extent_value);
+                const int max_instances = std::max(0, candidate.value("max_instances", 0));
+                for (int inst = 0; inst < max_instances; ++inst) {
+                    extents_list.push_back(extent_value);
+                }
             }
         }
+        if (max_rooms_setting > 0 && extents_list.size() > static_cast<std::size_t>(max_rooms_setting)) {
+            std::sort(extents_list.begin(), extents_list.end(), std::greater<double>());
+            extents_list.resize(static_cast<std::size_t>(max_rooms_setting));
+        }
+        extents_list.erase(
+            std::remove_if(extents_list.begin(), extents_list.end(), [](double v) { return !(v > 0.0); }),
+            extents_list.end());
+        if (extents_list.empty() && largest_room > 0.0) {
+            extents_list.push_back(largest_room);
+        }
+        layer_room_extents[i] = std::move(extents_list);
         result.layer_extents[i] = largest_room;
         largest_extent = std::max(largest_extent, largest_room);
     }
@@ -158,10 +288,13 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
         const double current_extent = result.layer_extents[i];
 
         const double separation = prev_extent + current_extent + sanitized_edge;
-        const double desired_radius = prev_radius + separation;
-        int final_radius = static_cast<int>(std::ceil(std::max(0.0, desired_radius)));
-        if (final_radius < 0) final_radius = 0;
-        result.layer_radii[i] = static_cast<double>(final_radius);
+        const double desired_radius = std::max(0.0, prev_radius + separation);
+        double final_radius = std::ceil(desired_radius);
+        const auto& same_layer_extents = layer_room_extents[i];
+        if (!same_layer_extents.empty()) {
+            final_radius = ensure_radius_for_extents(final_radius, same_layer_extents, sanitized_edge);
+        }
+        result.layer_radii[i] = final_radius;
         max_extent = std::max(max_extent, result.layer_radii[i] + current_extent);
     }
 
@@ -210,6 +343,49 @@ double min_edge_distance_from_map_info(const nlohmann::json& map_info) {
         return clamp_min_edge(value_it->get<double>());
     }
     return static_cast<double>(kDefaultMinEdgeDistance);
+}
+
+RadialLayout compute_radial_layout(double base_radius,
+                                   const std::vector<double>& extents,
+                                   double min_edge_distance,
+                                   double start_angle) {
+    RadialLayout layout;
+    const double sanitized_edge = clamp_min_edge(min_edge_distance);
+    layout.radius = ensure_radius_for_extents(std::max(0.0, base_radius), extents, sanitized_edge);
+    if (extents.empty()) {
+        return layout;
+    }
+
+    const std::size_t count = extents.size();
+    if (count == 1) {
+        layout.angles = normalize_angles({start_angle});
+        return layout;
+    }
+
+    double total_required = total_required_angle(layout.radius, extents, sanitized_edge);
+    if (!std::isfinite(total_required)) {
+        total_required = kTau;
+    }
+    const double slack = std::max(0.0, kTau - total_required);
+    const double extra = (count > 0) ? slack / static_cast<double>(count) : 0.0;
+
+    std::vector<double> raw_angles;
+    raw_angles.reserve(count);
+    double current = start_angle;
+    for (std::size_t i = 0; i < count; ++i) {
+        raw_angles.push_back(current);
+        const double current_extent = sanitize_extent(extents[i]);
+        const double next_extent = sanitize_extent(extents[(i + 1) % count]);
+        const double chord = current_extent + next_extent + sanitized_edge;
+        double delta = 0.0;
+        if (chord > 0.0 && layout.radius > 0.0) {
+            const double ratio = std::clamp(chord / (2.0 * layout.radius), -1.0, 1.0);
+            delta = 2.0 * std::asin(ratio);
+        }
+        current += delta + extra;
+    }
+    layout.angles = normalize_angles(raw_angles);
+    return layout;
 }
 
 }  // namespace map_layers

@@ -228,11 +228,13 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
 }
 
 void AssetLoader::loadRooms() {
+        const double min_edge_distance = map_layers::min_edge_distance_from_map_info(map_info_json_);
         GenerateRooms generator(map_layers_,
                                 map_center_x_,
                                 map_center_y_,
                                 map_id_,
                                 map_info_json_,
+                                min_edge_distance,
                                 manifest_store_);
         nlohmann::json empty_boundary = nlohmann::json::object();
         nlohmann::json empty_rooms    = nlohmann::json::object();

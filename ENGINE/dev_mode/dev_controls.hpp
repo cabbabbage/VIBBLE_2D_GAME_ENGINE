@@ -163,6 +163,8 @@ private:
     void pulse_modal_header();
     void apply_header_suppression();
 
+    void create_trail_template();
+
     void refresh_active_asset_filters();
     void reset_asset_filters();
     bool passes_asset_filters(Asset* asset) const;
@@ -216,6 +218,7 @@ private:
     bool sliding_headers_hidden_ = false;
     mutable std::unordered_map<Asset*, bool> filter_hidden_assets_;
     std::unique_ptr<TrailEditorSuite> trail_suite_;
+    std::unique_ptr<Room> pending_trail_template_;
     devmode::core::ManifestStore manifest_store_;
     AssetFilterBar asset_filter_;
 

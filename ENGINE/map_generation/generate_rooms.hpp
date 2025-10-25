@@ -3,6 +3,7 @@
 #include "room.hpp"
 #include "utils/area.hpp"
 #include "asset/asset_library.hpp"
+#include "map_layers_geometry.hpp"
 #include <vector>
 #include <string>
 #include <memory>
@@ -38,6 +39,7 @@ class GenerateRooms {
                   int map_cy,
                   const std::string& map_id,
                   nlohmann::json& map_manifest,
+                  double min_edge_distance,
                   devmode::core::ManifestStore* manifest_store = nullptr,
                   Room::ManifestWriter manifest_writer = {});
     std::vector<std::unique_ptr<Room>> build(AssetLibrary* asset_lib, double map_radius, const std::vector<double>& layer_radii, const nlohmann::json& boundary_data, nlohmann::json& rooms_data, nlohmann::json& trails_data, nlohmann::json& map_assets_data, const MapGridSettings& grid_settings);
@@ -59,4 +61,5 @@ class GenerateRooms {
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     Room::ManifestWriter manifest_writer_{};
     std::mt19937 rng_;
+    double min_edge_distance_ = static_cast<double>(map_layers::kDefaultMinEdgeDistance);
 };

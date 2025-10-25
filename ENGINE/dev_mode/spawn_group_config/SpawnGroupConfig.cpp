@@ -657,10 +657,10 @@ struct SpawnGroupConfig::Entry {
 
         open_area_button_ = std::make_unique<DMButton>("Open", &DMStyles::ListButton(), 0, DMButton::height());
         open_area_widget_ = std::make_unique<ButtonWidget>(open_area_button_.get(), [this]() {
-            if (!open_area_handler_ || linked_area_id_.empty()) return;
+            if (!open_area_handler_ || area_link_target_.empty()) return;
             static const std::string kEmptyKey;
             const std::string& key = stack_key_ ? *stack_key_ : kEmptyKey;
-            open_area_handler_(linked_area_id_, key);
+            open_area_handler_(area_link_target_, key);
         });
 
         auto terminate_checkbox = std::make_unique<DMCheckbox>("Terminate with parent", false);
@@ -1108,7 +1108,7 @@ struct SpawnGroupConfig::Entry {
             DockableCollapsible::Row area_row;
             if (show_area_dropdown_) {
                 area_row.push_back(area_widget_.get());
-                if (open_area_widget_ && open_area_handler_) {
+                if (open_area_widget_ && open_area_handler_ && !area_link_target_.empty()) {
                     area_row.push_back(open_area_widget_.get());
                 }
             }
@@ -1249,6 +1249,23 @@ private:
             }
         }
         area_widget_->set_options(area_options_, index);
+        update_area_link_target();
+    }
+
+    void update_area_link_target() {
+        std::string previous_target = area_link_target_;
+        std::string new_target;
+        const auto& entry = entry_view();
+        if (entry.is_object()) {
+            new_target = safe_string(entry, "area", std::string{});
+            if (new_target.empty() && !linked_area_id_.empty()) {
+                new_target = linked_area_id_;
+            }
+        }
+        area_link_target_ = std::move(new_target);
+        if ((previous_target.empty() != area_link_target_.empty()) && owner_) {
+            owner_->mark_layout_dirty();
+        }
     }
 
 
@@ -1500,6 +1517,7 @@ private:
             (*entry)["area"] = area_options_[index];
             notify_change(false, false, false);
         }
+        update_area_link_target();
     }
 
     void refresh_linked_area_options() {
@@ -1549,6 +1567,7 @@ private:
         }
 
         update_child_link_option_visibility();
+        update_area_link_target();
     }
 
     void update_child_link_option_visibility() {
@@ -1596,6 +1615,7 @@ private:
             }
         }
         update_child_link_option_visibility();
+        update_area_link_target();
         notify_change(false, false, false);
     }
 
@@ -1744,6 +1764,7 @@ private:
     std::unique_ptr<DMButton> open_area_button_{};
     std::unique_ptr<ButtonWidget> open_area_widget_{};
     std::function<void(const std::string&, const std::string&)> open_area_handler_{};
+    std::string area_link_target_{};
     std::unique_ptr<CallbackDropdownWidget> linked_area_widget_{};
     std::unique_ptr<CallbackCheckboxWidget> terminate_with_parent_widget_{};
     std::unique_ptr<CallbackCheckboxWidget> placed_on_top_parent_widget_{};

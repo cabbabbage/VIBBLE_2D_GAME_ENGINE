@@ -48,6 +48,7 @@
 #include "util/grid_occupancy.hpp"
 #include "utils/input.hpp"
 #include "utils/string_utils.hpp"
+#include "utils/display_color.hpp"
 
 #include <algorithm>
 #include <unordered_map>
@@ -861,6 +862,9 @@ void DevControls::update(const Input& input) {
     }
     if (trail_suite_) {
         trail_suite_->update(input);
+        if (pending_trail_template_ && !trail_suite_->is_open()) {
+            pending_trail_template_.reset();
+        }
     }
 
     asset_filter_.ensure_layout();
@@ -1907,6 +1911,18 @@ void DevControls::configure_header_button_sets() {
         map_buttons.push_back(std::move(boundary_btn));
     }
 
+    {
+        MapModeUI::HeaderButtonConfig trail_btn;
+        trail_btn.id = "create_trail";
+        trail_btn.label = "New Trail";
+        trail_btn.momentary = true;
+        trail_btn.style_override = &DMStyles::CreateButton();
+        trail_btn.on_toggle = [this](bool) {
+            this->create_trail_template();
+        };
+        map_buttons.push_back(std::move(trail_btn));
+    }
+
     room_buttons.push_back(make_camera_button());
     room_buttons.push_back(make_lighting_button());
     room_buttons.push_back(make_layers_button());
@@ -2013,6 +2029,7 @@ void DevControls::sync_header_button_states() {
     const bool boundary_open = boundary_assets_modal_ && boundary_assets_modal_->visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_assets", map_assets_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_boundary", boundary_open);
+    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "create_trail", false);
 
     if (room_editor_) {
         room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::AssetLibrary, library_open);
@@ -2050,6 +2067,7 @@ void DevControls::close_all_floating_panels() {
     if (trail_suite_) {
         trail_suite_->close();
     }
+    pending_trail_template_.reset();
     if (regenerate_popup_) {
         regenerate_popup_->close();
     }
@@ -2544,6 +2562,95 @@ void DevControls::toggle_boundary_assets_modal() {
     sync_header_button_states();
 }
 
+void DevControls::create_trail_template() {
+    if (!map_info_json_ || !assets_) {
+        if (assets_) {
+            assets_->show_dev_notice("Unable to create trail: missing map info");
+        }
+        sync_header_button_states();
+        return;
+    }
+
+    nlohmann::json& map_info = *map_info_json_;
+    if (!map_info.is_object()) {
+        sync_header_button_states();
+        return;
+    }
+
+    nlohmann::json& trails = map_info["trails_data"];
+    if (!trails.is_object()) {
+        trails = nlohmann::json::object();
+    }
+
+    const std::string base_name = "NewTrail";
+    std::string key = base_name;
+    int suffix = 1;
+    while (trails.contains(key)) {
+        key = base_name + std::to_string(suffix++);
+    }
+
+    std::vector<SDL_Color> used_colors = utils::display_color::collect(trails);
+    SDL_Color display_color = utils::display_color::generate_distinct_color(used_colors);
+
+    nlohmann::json entry = nlohmann::json::object();
+    entry["name"] = key;
+    entry["geometry"] = "Square";
+    entry["min_width"] = 400;
+    entry["max_width"] = 400;
+    entry["min_height"] = 200;
+    entry["max_height"] = 200;
+    entry["inherits_map_assets"] = true;
+    entry["is_spawn"] = false;
+    entry["is_boss"] = false;
+    entry["edge_smoothness"] = 8;
+    entry["curvyness"] = 4;
+    entry["spawn_groups"] = nlohmann::json::array();
+    utils::display_color::write(entry, display_color);
+
+    trails[key] = std::move(entry);
+    nlohmann::json& inserted = trails[key];
+
+    nlohmann::json* map_assets_section = nullptr;
+    auto assets_it = map_info.find("map_assets_data");
+    if (assets_it != map_info.end() && assets_it->is_object()) {
+        map_assets_section = &(*assets_it);
+    }
+
+    const MapGridSettings grid_settings = assets_->map_grid_settings();
+    const std::string manifest_context = assets_->map_id();
+
+    pending_trail_template_ = std::make_unique<Room>(Room::Point{0, 0},
+                                                     "trail",
+                                                     key,
+                                                     nullptr,
+                                                     manifest_context,
+                                                     &assets_->library(),
+                                                     nullptr,
+                                                     &inserted,
+                                                     map_assets_section,
+                                                     grid_settings,
+                                                     static_cast<double>(map_radius_or_default()),
+                                                     "trails_data",
+                                                     &map_info,
+                                                     &manifest_store_,
+                                                     manifest_context,
+                                                     Room::ManifestWriter{});
+
+    if (pending_trail_template_) {
+        pending_trail_template_->set_manifest_store(&manifest_store_, manifest_context, &map_info);
+    }
+
+    if (trail_suite_) {
+        trail_suite_->open(pending_trail_template_.get());
+    }
+
+    persist_map_info_to_disk();
+    if (assets_) {
+        assets_->show_dev_notice(std::string("Created trail \"") + key + "\"");
+    }
+    sync_header_button_states();
+}
+
 void DevControls::open_regenerate_room_popup() {
     if (!can_use_room_editor_ui()) return;
     if (!room_editor_ || !current_room_) {
@@ -2743,12 +2850,14 @@ void DevControls::handle_map_selection() {
         if (trail_suite_) {
             trail_suite_->open(selected);
         }
+        pending_trail_template_.reset();
         return;
     }
 
     if (trail_suite_) {
         trail_suite_->close();
     }
+    pending_trail_template_.reset();
 
     dev_selected_room_ = selected;
     set_current_room(selected);

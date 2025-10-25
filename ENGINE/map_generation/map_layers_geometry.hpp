@@ -20,6 +20,11 @@ struct LayerRadiiResult {
     double min_edge_distance = static_cast<double>(kDefaultMinEdgeDistance);
 };
 
+struct RadialLayout {
+    double radius = 0.0;
+    std::vector<double> angles;
+};
+
 LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
                                       const nlohmann::json* rooms_data,
                                       double min_edge_distance = static_cast<double>(kDefaultMinEdgeDistance));
@@ -30,6 +35,11 @@ double room_extent_from_rooms_data(const nlohmann::json* rooms_data,
 double map_radius_from_map_info(const nlohmann::json& map_info);
 
 double min_edge_distance_from_map_info(const nlohmann::json& map_info);
+
+RadialLayout compute_radial_layout(double base_radius,
+                                   const std::vector<double>& extents,
+                                   double min_edge_distance,
+                                   double start_angle);
 
 }  // namespace map_layers
 

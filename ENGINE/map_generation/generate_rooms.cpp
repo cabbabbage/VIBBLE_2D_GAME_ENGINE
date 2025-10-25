@@ -11,11 +11,16 @@
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
+namespace {
+constexpr double kTau = 6.28318530717958647692;
+}
+
 GenerateRooms::GenerateRooms(const std::vector<LayerSpec>& layers,
                              int map_cx,
                              int map_cy,
                              const std::string& map_id,
                              nlohmann::json& map_manifest,
+                             double min_edge_distance,
                              devmode::core::ManifestStore* manifest_store,
                              Room::ManifestWriter manifest_writer)
 : map_layers_(layers),
@@ -25,7 +30,8 @@ map_id_(map_id),
 map_manifest_(&map_manifest),
 manifest_store_(manifest_store),
 manifest_writer_(std::move(manifest_writer)),
-rng_(std::random_device{}())
+rng_(std::random_device{}()),
+min_edge_distance_(std::max(0.0, min_edge_distance))
 {}
 
 SDL_Point GenerateRooms::polar_to_cartesian(int cx, int cy, double radius, float angle_rad) {
@@ -95,6 +101,11 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 (void)mutated;
                 return &entry;
 };
+        const nlohmann::json* rooms_data_lookup = rooms_data.is_object() ? &rooms_data : nullptr;
+        auto room_extent_lookup = [&](const std::string& room_name) {
+                double extent = map_layers::room_extent_from_rooms_data(rooms_data_lookup, room_name);
+                return (extent > 0.0) ? extent : 1.0;
+        };
         if (!map_assets_data.is_object()) {
                 map_assets_data = nlohmann::json::object();
         }
@@ -119,9 +130,30 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
  );
         root->layer = 0;
         all_rooms.push_back(std::move(root));
-	std::vector<Room*> current_parents = { all_rooms[0].get() };
-	std::vector<Sector> current_sectors = { { current_parents[0], 0.0f, 2 * M_PI } };
-	for (size_t li = 1; li < map_layers_.size(); ++li) {
+        std::vector<Room*> current_parents = { all_rooms[0].get() };
+        std::vector<Sector> current_sectors = { { current_parents[0], 0.0f, 2 * M_PI } };
+        auto append_sectors_from_angles = [](const std::vector<Room*>& rooms,
+                                             const std::vector<double>& angles,
+                                             std::vector<Sector>& out) {
+                if (rooms.empty() || rooms.size() != angles.size()) {
+                        return;
+                }
+                if (rooms.size() == 1) {
+                        out.push_back({ rooms[0], 0.0f, static_cast<float>(kTau) });
+                        return;
+                }
+                for (std::size_t idx = 0; idx < rooms.size(); ++idx) {
+                        const double current = angles[idx];
+                        const double prev = (idx == 0) ? angles.back() - kTau : angles[idx - 1];
+                        const double next = (idx + 1 == angles.size()) ? angles.front() + kTau : angles[idx + 1];
+                        const double prev_gap = current - prev;
+                        const double next_gap = next - current;
+                        const double start = current - prev_gap * 0.5;
+                        const double span = (prev_gap + next_gap) * 0.5;
+                        out.push_back({ rooms[idx], static_cast<float>(start), static_cast<float>(span) });
+                }
+        };
+        for (size_t li = 1; li < map_layers_.size(); ++li) {
                 const LayerSpec& layer = map_layers_[li];
                 const double radius = (li < layer_radii.size()) ? layer_radii[li] : 0.0;
                 auto children_specs = get_children_from_layer(layer);
@@ -132,17 +164,35 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 		}
 		std::vector<Sector> next_sectors;
 		std::vector<Room*> next_parents;
-		if (li == 1) {
-			std::shuffle(children_specs.begin(), children_specs.end(), rng_);
-			float slice = 2.0f * M_PI / children_specs.size();
-			float buf = slice * 0.05f;
-			for (size_t i = 0; i < children_specs.size(); ++i) {
-					float angle = i * slice + buf;
-					SDL_Point pos = polar_to_cartesian(map_center_x_, map_center_y_, radius, angle);
-					if (testing) {
-								std::cout << "[GenerateRooms] Placing layer-1 child " << children_specs[i].name
-								<< " at angle " << angle << " → (" << pos.x << ", " << pos.y << ")\n";
-					}
+                if (li == 1) {
+                        if (!children_specs.empty()) {
+                                std::shuffle(children_specs.begin(), children_specs.end(), rng_);
+                                std::vector<double> extents;
+                                extents.reserve(children_specs.size());
+                                for (const auto& spec : children_specs) {
+                                        extents.push_back(room_extent_lookup(spec.name));
+                                }
+                                std::uniform_real_distribution<double> start_angle_dist(0.0, kTau);
+                                map_layers::RadialLayout layout = map_layers::compute_radial_layout(
+                                        radius, extents, min_edge_distance_, start_angle_dist(rng_));
+                                std::vector<double> angles = layout.angles;
+                                if (angles.size() != children_specs.size()) {
+                                        angles.resize(children_specs.size());
+                                        const double step = kTau / static_cast<double>(children_specs.size());
+                                        for (std::size_t idx = 0; idx < angles.size(); ++idx) {
+                                                angles[idx] = step * static_cast<double>(idx);
+                                        }
+                                }
+                                const double used_radius = layout.radius;
+                                std::vector<double> placed_angles;
+                                placed_angles.reserve(children_specs.size());
+                                for (std::size_t i = 0; i < children_specs.size(); ++i) {
+                                        const double angle = angles[i];
+                                        SDL_Point pos = polar_to_cartesian(map_center_x_, map_center_y_, used_radius, static_cast<float>(angle));
+                                        if (testing) {
+                                                std::cout << "[GenerateRooms] Placing layer-1 child " << children_specs[i].name
+                                                          << " at angle " << angle << " → (" << pos.x << ", " << pos.y << ")\n";
+                                        }
                                         auto child = std::make_unique<Room>(
                                                 Room::Point{ pos.x, pos.y },
                                                 "room",
@@ -161,22 +211,24 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                 map_id_,
                                                 manifest_writer_
                                         );
-					child->layer = layer.level;
-					if (!next_parents.empty()) {
-								next_parents.back()->set_sibling_right(child.get());
-								child->set_sibling_left(next_parents.back());
-					}
-					current_parents[0]->children.push_back(child.get());
-					next_sectors.push_back({ child.get(), angle - (slice - 2 * buf) / 2, slice - 2 * buf });
-					next_parents.push_back(child.get());
-					all_rooms.push_back(std::move(child));
-			}
-		} else {
-			std::unordered_map<Room*, std::vector<RoomSpec>> assignments;
-			for (const auto& sec : current_sectors) {
-					for (const auto& rs : map_layers_[li-1].rooms) {
-								if (sec.room->room_name == rs.name) {
-													for (const auto& cname : rs.required_children) {
+                                        child->layer = layer.level;
+                                        if (!next_parents.empty()) {
+                                                next_parents.back()->set_sibling_right(child.get());
+                                                child->set_sibling_left(next_parents.back());
+                                        }
+                                        current_parents[0]->children.push_back(child.get());
+                                        next_parents.push_back(child.get());
+                                        placed_angles.push_back(angle);
+                                        all_rooms.push_back(std::move(child));
+                                }
+                                append_sectors_from_angles(next_parents, placed_angles, next_sectors);
+                        }
+                } else {
+                        std::unordered_map<Room*, std::vector<RoomSpec>> assignments;
+                        for (const auto& sec : current_sectors) {
+                                        for (const auto& rs : map_layers_[li-1].rooms) {
+                                                                if (sec.room->room_name == rs.name) {
+                                                                                                        for (const auto& cname : rs.required_children) {
 																					if (testing) {
 																																		std::cout << "[GenerateRooms] Adding required child " << cname
 																																		<< " for parent " << rs.name << "\n";
@@ -195,55 +247,83 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 					assignments[parent_order[idx]].push_back(rs);
 					counts[idx]++;
 			}
-			for (auto& sec : current_sectors) {
-					Room* parent = sec.room;
-					auto& kids = assignments[parent];
-					if (kids.empty()) continue;
-					std::shuffle(kids.begin(), kids.end(), rng_);
-					float slice = sec.span_angle / kids.size();
-					float buf = slice * 0.05f;
-					for (size_t i = 0; i < kids.size(); ++i) {
-								float angle = sec.start_angle + i * slice + buf;
-								float spread = slice - 2 * buf;
-								SDL_Point pos = polar_to_cartesian(map_center_x_, map_center_y_, radius, angle);
-								if (testing) {
-													std::cout << "[GenerateRooms] Placing child " << kids[i].name
-													<< " under parent " << parent->room_name
-													<< " at angle " << angle << " → (" << pos.x << ", " << pos.y << ")\n";
-								}
-                                                            auto child = std::make_unique<Room>(
-                                                                    Room::Point{ pos.x, pos.y },
-                                                                    "room",
-                                                                    kids[i].name,
-                                                                    parent,
-                                                                    map_id_,
-                                                                    asset_lib,
-                                                                    nullptr,
-                                                                    get_room_data(kids[i].name),
-                                                                    map_assets_ptr,
-                                                                    grid_settings,
-                                                                    map_radius,
-                                                                    "rooms_data",
-                                                                    map_manifest_,
-                                                                    manifest_store_,
-                                                                    map_id_,
-                                                                    manifest_writer_
-                                                            );
-								child->layer = layer.level;
-								if (!next_parents.empty()) {
-													next_parents.back()->set_sibling_right(child.get());
-													child->set_sibling_left(next_parents.back());
-								}
-								parent->children.push_back(child.get());
-								next_sectors.push_back({ child.get(), angle - spread/2, spread });
-								next_parents.push_back(child.get());
-								all_rooms.push_back(std::move(child));
-					}
-			}
-		}
-		current_parents = next_parents;
-		current_sectors = next_sectors;
-	}
+                        std::vector<RoomSpec> ordered_specs;
+                        std::vector<Room*> ordered_parents;
+                        ordered_specs.reserve(children_specs.size());
+                        ordered_parents.reserve(children_specs.size());
+                        for (auto& sec : current_sectors) {
+                                        Room* parent = sec.room;
+                                        auto& kids = assignments[parent];
+                                        if (kids.empty()) continue;
+                                        std::shuffle(kids.begin(), kids.end(), rng_);
+                                        for (auto& spec : kids) {
+                                                ordered_specs.push_back(spec);
+                                                ordered_parents.push_back(parent);
+                                        }
+                        }
+                        if (!ordered_specs.empty()) {
+                                        std::vector<double> extents;
+                                        extents.reserve(ordered_specs.size());
+                                        for (const auto& spec : ordered_specs) {
+                                                extents.push_back(room_extent_lookup(spec.name));
+                                        }
+                                        std::uniform_real_distribution<double> start_angle_dist(0.0, kTau);
+                                        map_layers::RadialLayout layout = map_layers::compute_radial_layout(
+                                                radius, extents, min_edge_distance_, start_angle_dist(rng_));
+                                        std::vector<double> angles = layout.angles;
+                                        if (angles.size() != ordered_specs.size()) {
+                                                angles.resize(ordered_specs.size());
+                                                const double step = kTau / static_cast<double>(ordered_specs.size());
+                                                for (std::size_t idx = 0; idx < angles.size(); ++idx) {
+                                                        angles[idx] = step * static_cast<double>(idx);
+                                                }
+                                        }
+                                        const double used_radius = layout.radius;
+                                        std::vector<double> placed_angles;
+                                        placed_angles.reserve(ordered_specs.size());
+                                        for (std::size_t idx = 0; idx < ordered_specs.size(); ++idx) {
+                                                Room* parent = ordered_parents[idx];
+                                                const double angle = angles[idx];
+                                                SDL_Point pos = polar_to_cartesian(map_center_x_, map_center_y_, used_radius, static_cast<float>(angle));
+                                                if (testing) {
+                                                        std::cout << "[GenerateRooms] Placing child " << ordered_specs[idx].name
+                                                                  << " under parent " << parent->room_name
+                                                                  << " at angle " << angle << " → (" << pos.x << ", " << pos.y << ")\n";
+                                                }
+                                                auto child = std::make_unique<Room>(
+                                                        Room::Point{ pos.x, pos.y },
+                                                        "room",
+                                                        ordered_specs[idx].name,
+                                                        parent,
+                                                        map_id_,
+                                                        asset_lib,
+                                                        nullptr,
+                                                        get_room_data(ordered_specs[idx].name),
+                                                        map_assets_ptr,
+                                                        grid_settings,
+                                                        map_radius,
+                                                        "rooms_data",
+                                                        map_manifest_,
+                                                        manifest_store_,
+                                                        map_id_,
+                                                        manifest_writer_
+                                                );
+                                                child->layer = layer.level;
+                                                if (!next_parents.empty()) {
+                                                        next_parents.back()->set_sibling_right(child.get());
+                                                        child->set_sibling_left(next_parents.back());
+                                                }
+                                                parent->children.push_back(child.get());
+                                                next_parents.push_back(child.get());
+                                                placed_angles.push_back(angle);
+                                                all_rooms.push_back(std::move(child));
+                                        }
+                                        append_sectors_from_angles(next_parents, placed_angles, next_sectors);
+                        }
+                }
+                current_parents = next_parents;
+                current_sectors = next_sectors;
+        }
 	std::vector<std::pair<Room*,Room*>> connections;
 	for (auto& rp : all_rooms) {
 		for (Room* c : rp->children) {

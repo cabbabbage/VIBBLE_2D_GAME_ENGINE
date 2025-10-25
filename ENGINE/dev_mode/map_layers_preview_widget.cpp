@@ -528,47 +528,65 @@ void MapLayersPreviewWidget::rebuild_visuals() {
                 }
 
                 if (total_instances > 0) {
-                    std::vector<double> angles;
-                    angles.reserve(static_cast<std::size_t>(total_instances));
-                    std::uniform_real_distribution<double> angle_dist(0.0, kTau);
-                    for (int n = 0; n < total_instances; ++n) {
-                        angles.push_back(angle_dist(rng));
-                    }
-                    std::sort(angles.begin(), angles.end());
-                    std::size_t angle_index = 0;
-
-                    double base_radius = (visual.index == 0)
-                                             ? 0.0
-                                             : (visual.inner_radius + std::max(visual.inner_radius, visual.radius)) * 0.5;
-                    const double min_radius = (visual.index == 0) ? 0.0 : visual.inner_radius;
-                    const double max_radius = (visual.index == 0) ? 0.0 : std::max(visual.inner_radius, visual.radius);
-                    const double radial_span = std::max(0.0, max_radius - min_radius);
-                    std::uniform_real_distribution<double> radius_jitter(-radial_span * 0.25, radial_span * 0.25);
-
                     for (const auto& alloc : allocations) {
-                        for (int n = 0; n < alloc.count && angle_index < angles.size(); ++n) {
+                        for (int n = 0; n < alloc.count; ++n) {
                             RoomVisual room;
                             room.layer_index = visual.index;
                             room.key = alloc.spec.name;
                             room.display_name = display_name_for_room(room.key);
                             room.color = room_color(room.key);
                             room.extent = map_layers::room_extent_from_rooms_data(rooms_info, room.key);
-
-                            double placement_radius = (visual.index == 0) ? 0.0 : base_radius;
-                            if (visual.index != 0 && radial_span > 0.0) {
-                                placement_radius = std::clamp(base_radius + radius_jitter(rng), min_radius, max_radius);
+                            if (!(room.extent > 0.0)) {
+                                room.extent = 1.0;
                             }
-
-                            const double angle = angles[angle_index++];
-                            room.angle = angle;
-                            room.radius = placement_radius;
-                            room.position.x = static_cast<float>(std::cos(angle) * placement_radius);
-                            room.position.y = static_cast<float>(std::sin(angle) * placement_radius);
                             visual.rooms.push_back(std::move(room));
                         }
                     }
                 }
             }
+        }
+        if (visual.index == 0) {
+            if (!visual.rooms.empty()) {
+                for (auto& room : visual.rooms) {
+                    room.angle = 0.0;
+                    room.radius = 0.0;
+                    room.position = {0.0f, 0.0f};
+                }
+            }
+        } else if (!visual.rooms.empty()) {
+            std::vector<double> extents;
+            extents.reserve(visual.rooms.size());
+            for (const auto& room : visual.rooms) {
+                extents.push_back(room.extent > 0.0 ? room.extent : 1.0);
+            }
+            std::uniform_real_distribution<double> start_angle_dist(0.0, kTau);
+            const double start_angle = start_angle_dist(rng);
+            map_layers::RadialLayout layout = map_layers::compute_radial_layout(visual.radius, extents, min_edge_distance_, start_angle);
+            if (!layout.angles.empty() && layout.angles.size() == visual.rooms.size()) {
+                visual.radius = layout.radius;
+                for (std::size_t idx = 0; idx < visual.rooms.size(); ++idx) {
+                    const double raw_angle = layout.angles[idx];
+                    const double normalized = std::fmod(raw_angle, kTau);
+                    visual.rooms[idx].angle = (normalized < 0.0) ? (normalized + kTau) : normalized;
+                    visual.rooms[idx].radius = layout.radius;
+                    visual.rooms[idx].position.x = static_cast<float>(std::cos(raw_angle) * layout.radius);
+                    visual.rooms[idx].position.y = static_cast<float>(std::sin(raw_angle) * layout.radius);
+                }
+            } else {
+                const double step = kTau / static_cast<double>(visual.rooms.size());
+                for (std::size_t idx = 0; idx < visual.rooms.size(); ++idx) {
+                    const double angle = step * static_cast<double>(idx);
+                    visual.rooms[idx].angle = angle;
+                    visual.rooms[idx].radius = visual.radius;
+                    visual.rooms[idx].position.x = static_cast<float>(std::cos(angle) * visual.radius);
+                    visual.rooms[idx].position.y = static_cast<float>(std::sin(angle) * visual.radius);
+                }
+            }
+        }
+        if (visual.index == 0) {
+            visual.inner_radius = 0.0;
+        } else {
+            visual.inner_radius = std::max(0.0, visual.radius - visual.extent);
         }
         visual.room_count = static_cast<int>(visual.rooms.size());
         layer_visuals_.push_back(std::move(visual));

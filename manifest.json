@@ -13893,7 +13893,7 @@
           "max_rooms": 7,
           "min_rooms": 2,
           "name": "layer_1",
-          "ring_radius": 4820.0,
+          "ring_radius": 7101.731304219596,
           "rooms": [
             {
               "max_instances": 7,
@@ -13909,7 +13909,7 @@
           "max_rooms": 0,
           "min_rooms": 0,
           "name": "layer_2",
-          "ring_radius": 8740.0,
+          "ring_radius": 11022.0,
           "rooms": []
         }
       ],
@@ -14143,9 +14143,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
-            193,
+            189,
             36,
+            242,
             255
           ],
           "edge_smoothness": 2,
@@ -14221,9 +14221,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            123,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 101,
@@ -14282,8 +14282,7 @@
               "dx": 19,
               "dy": -44,
               "enforce_spacing": false,
-              "link_to_area": true,
-              "linked_area": "spawning_area",
+              "link_to_area": false,
               "max_number": 1,
               "min_number": 1,
               "origional_height": 1800,
