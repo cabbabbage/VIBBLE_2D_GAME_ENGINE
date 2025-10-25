@@ -2500,7 +2500,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
         if (resolved.source == SpawnEntryResolution::Source::Map && resolved.owner_array) {
             if (sanitize_perimeter_spawn_groups(*resolved.owner_array)) {
                 if (assets_) {
-                    assets_->save_map_info_json();
+                    assets_->persist_map_info_json();
                 }
             }
         }
@@ -2510,7 +2510,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
         if (!assets_) {
             return;
         }
-        assets_->save_map_info_json();
+        assets_->persist_map_info_json();
     };
 
     auto map_on_entry_change = [this](const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary& summary) {
@@ -2525,7 +2525,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
                 sanitized = sanitize_perimeter_spawn_groups(*current.owner_array);
             }
         }
-        assets_->save_map_info_json();
+        assets_->persist_map_info_json();
         if (sanitized || summary.method_changed || summary.quantity_changed || summary.candidates_changed ||
             summary.resolution_changed) {
             assets_->notify_spawn_group_config_changed(entry);
@@ -2533,14 +2533,19 @@ void RoomEditor::refresh_spawn_group_config_ui() {
     };
 
     if (resolved.valid()) {
-        auto on_change_cb = (resolved.source == SpawnEntryResolution::Source::Room) ? on_change : map_on_change;
-        auto on_entry_change_cb =
-            (resolved.source == SpawnEntryResolution::Source::Room) ? on_entry_change : map_on_entry_change;
-        spawn_group_panel_->bind_entry(*resolved.entry,
-                                       on_change_cb,
-                                       on_entry_change_cb,
-                                       SpawnGroupConfig::EntryCallbacks{},
-                                       configure_entry);
+        if (resolved.source == SpawnEntryResolution::Source::Room) {
+            spawn_group_panel_->bind_entry(*resolved.entry,
+                                           on_change,
+                                           on_entry_change,
+                                           SpawnGroupConfig::EntryCallbacks{},
+                                           configure_entry);
+        } else {
+            spawn_group_panel_->bind_entry(*resolved.entry,
+                                           map_on_change,
+                                           map_on_entry_change,
+                                           SpawnGroupConfig::EntryCallbacks{},
+                                           configure_entry);
+        }
         spawn_group_panel_->set_scroll_enabled(false);
     } else {
         spawn_group_panel_->load(arr, on_change, on_entry_change, configure_entry);

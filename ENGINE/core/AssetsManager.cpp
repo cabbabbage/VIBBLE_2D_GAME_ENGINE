@@ -211,6 +211,10 @@ void Assets::save_map_info_json() {
     }
 }
 
+void Assets::persist_map_info_json() {
+    save_map_info_json();
+}
+
 void Assets::hydrate_map_info_sections() {
     if (!map_info_json_.is_object()) {
         return;

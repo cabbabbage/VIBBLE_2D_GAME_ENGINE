@@ -122,6 +122,8 @@ public:
     world::Grid& world_grid() { return world_grid_; }
     const world::Grid& world_grid() const { return world_grid_; }
 
+    void persist_map_info_json();
+
     AssetLibrary& library();
     const AssetLibrary& library() const;
 
