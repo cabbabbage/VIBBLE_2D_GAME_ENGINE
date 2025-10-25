@@ -11,6 +11,7 @@
 #include <SDL_ttf.h>
 
 #include "dev_mode/dev_ui_settings.hpp"
+#include "dev_mode/dm_icons.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "color_range_widget.hpp"
@@ -89,6 +90,90 @@ private:
     SDL_Color color_{255, 120, 120, 255};
 };
 
+class MapLightPanel::SectionToggleWidget : public Widget {
+public:
+    SectionToggleWidget(DMButton* button, std::function<void()> on_click)
+        : button_(button), on_click_(std::move(on_click)) {}
+
+    void set_rect(const SDL_Rect& r) override {
+        rect_ = r;
+        const int horizontal_pad = DMSpacing::small_gap();
+        const int vertical_pad = DMSpacing::small_gap();
+        const int button_height = DMButton::height();
+        button_rect_ = SDL_Rect{
+            rect_.x + horizontal_pad,
+            rect_.y + vertical_pad,
+            std::max(0, rect_.w - horizontal_pad * 2),
+            button_height};
+        card_rect_ = SDL_Rect{
+            button_rect_.x,
+            button_rect_.y - std::max(0, vertical_pad / 2),
+            button_rect_.w,
+            button_rect_.h + vertical_pad};
+        if (button_) {
+            button_->set_rect(button_rect_);
+        }
+    }
+
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int) const override {
+        return DMButton::height() + DMSpacing::small_gap() * 2;
+    }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (!button_) {
+            return false;
+        }
+        button_->set_rect(button_rect_);
+        bool used = button_->handle_event(e);
+        if (used && on_click_ && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            on_click_();
+        }
+        return used;
+    }
+
+    void render(SDL_Renderer* r) const override {
+        if (!r) {
+            return;
+        }
+        if (card_rect_.w > 0 && card_rect_.h > 0) {
+            const int radius = std::min(DMStyles::CornerRadius(), 6);
+            SDL_Color base = dm_draw::DarkenColor(DMStyles::PanelBG(), 0.06f);
+            if (button_ && button_->is_hovered()) {
+                base = dm_draw::LightenColor(base, 0.12f);
+            }
+            dm_draw::DrawBeveledRect(
+                r,
+                card_rect_,
+                radius,
+                1,
+                base,
+                base,
+                base,
+                false,
+                0.0f,
+                0.0f);
+            SDL_Color outline = DMStyles::Border();
+            dm_draw::DrawRoundedOutline(r, card_rect_, radius, 1, outline);
+        }
+
+        if (button_) {
+            button_->set_rect(button_rect_);
+            button_->render(r);
+        }
+    }
+
+    bool wants_full_row() const override { return true; }
+
+private:
+    DMButton* button_ = nullptr;
+    std::function<void()> on_click_{};
+    SDL_Rect rect_{0, 0, 0, 0};
+    SDL_Rect card_rect_{0, 0, 0, 0};
+    SDL_Rect button_rect_{0, 0, 0, 0};
+};
+
 class MapLightPanel::OrbitKeyWidget : public Widget {
 public:
     explicit OrbitKeyWidget(MapLightPanel& owner);
@@ -110,7 +195,8 @@ public:
 private:
     struct PairEntry {
         std::unique_ptr<DMColorRangeWidget> widget;
-        SDL_Rect rect{0, 0, 0, 0};
+        SDL_Rect outer_rect{0, 0, 0, 0};
+        SDL_Rect widget_rect{0, 0, 0, 0};
     };
 
     MapLightPanel& owner_;
@@ -157,9 +243,9 @@ int MapLightPanel::OrbitKeyWidget::height_for_width(int) const {
     const int rows = std::max<int>(owner_.orbit_key_pairs_.size(), 1);
     static const int row_height = []() {
         DMColorRangeWidget tmp("Pair");
-        return tmp.height_for_width(0);
+        return tmp.height_for_width(0) + DMSpacing::small_gap() * 2;
     }();
-    const int list_height = rows * row_height + (rows - 1) * spacing;
+    const int list_height = rows * row_height + (rows - 1) * spacing + spacing;
     const int content = std::max(min_circle, list_height);
     return pad * 2 + content;
 }
@@ -255,7 +341,7 @@ bool MapLightPanel::OrbitKeyWidget::handle_event(const SDL_Event& e) {
             continue;
         }
         if (pointer_event && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            if (SDL_PointInRect(&pointer, &entry.rect)) {
+            if (SDL_PointInRect(&pointer, &entry.outer_rect)) {
                 owner_.set_focused_pair(static_cast<int>(i));
             }
         }
@@ -289,6 +375,15 @@ void MapLightPanel::OrbitKeyWidget::render(SDL_Renderer* r) const {
     const SDL_Color focus_color = DMStyles::ButtonFocusOutline();
     const SDL_Color hover_color = DMStyles::HighlightColor();
 
+    if (list_rect_.w > 0 && list_rect_.h > 0) {
+        SDL_Color list_bg = dm_draw::DarkenColor(DMStyles::PanelBG(), 0.14f);
+        SDL_SetRenderDrawColor(r, list_bg.r, list_bg.g, list_bg.b, list_bg.a);
+        SDL_RenderFillRect(r, &list_rect_);
+        SDL_Color list_border = DMStyles::Border();
+        SDL_SetRenderDrawColor(r, list_border.r, list_border.g, list_border.b, list_border.a);
+        SDL_RenderDrawRect(r, &list_rect_);
+    }
+
     for (size_t i = 0; i < owner_.orbit_key_pairs_.size(); ++i) {
         const auto& pair = owner_.orbit_key_pairs_[i];
         SDL_Color color = utils::color::resolve_ranged_color(pair.color);
@@ -300,28 +395,37 @@ void MapLightPanel::OrbitKeyWidget::render(SDL_Renderer* r) const {
         draw_orbit_line(r, mirror, color, focused, hovered_pair);
     }
 
-    SDL_Color border = DMStyles::Border();
-    SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
-    if (list_rect_.w > 0 && list_rect_.h > 0) {
-        SDL_RenderDrawRect(r, &list_rect_);
-    }
-
     for (size_t i = 0; i < pair_entries_.size(); ++i) {
         const auto& entry = pair_entries_[i];
         if (!entry.widget) {
             continue;
         }
         const bool focused_entry = (owner_.focused_pair_index_ == static_cast<int>(i));
-        if (focused_entry) {
-            SDL_SetRenderDrawColor(r, focus_color.r, focus_color.g, focus_color.b, 72);
-            SDL_RenderFillRect(r, &entry.rect);
-            SDL_SetRenderDrawColor(r, focus_color.r, focus_color.g, focus_color.b, 200);
-            SDL_RenderDrawRect(r, &entry.rect);
-        } else if (hovered_pair_index_ == static_cast<int>(i)) {
-            SDL_SetRenderDrawColor(r, hover_color.r, hover_color.g, hover_color.b, 56);
-            SDL_RenderFillRect(r, &entry.rect);
-            SDL_SetRenderDrawColor(r, hover_color.r, hover_color.g, hover_color.b, 180);
-            SDL_RenderDrawRect(r, &entry.rect);
+        const bool hovered_entry = (hovered_pair_index_ == static_cast<int>(i));
+        if (entry.outer_rect.w > 0 && entry.outer_rect.h > 0) {
+            const int radius = std::min(DMStyles::CornerRadius(), 6);
+            SDL_Color base = dm_draw::DarkenColor(DMStyles::PanelBG(), 0.02f);
+            SDL_Color outline = DMStyles::Border();
+            if (hovered_entry) {
+                base = dm_draw::LightenColor(base, 0.12f);
+                outline = hover_color;
+            }
+            if (focused_entry) {
+                base = dm_draw::LightenColor(base, 0.2f);
+                outline = focus_color;
+            }
+            dm_draw::DrawBeveledRect(
+                r,
+                entry.outer_rect,
+                radius,
+                1,
+                base,
+                base,
+                base,
+                false,
+                0.0f,
+                0.0f);
+            dm_draw::DrawRoundedOutline(r, entry.outer_rect, radius, 1, outline);
         }
         entry.widget->render(r);
     }
@@ -432,16 +536,23 @@ void MapLightPanel::OrbitKeyWidget::rebuild_pair_entries() {
 
 void MapLightPanel::OrbitKeyWidget::layout_color_widgets() {
     const int gap = DMSpacing::small_gap();
-    int y = list_rect_.y;
-    const int width = std::max(list_rect_.w, 0);
+    const int inner_gap = DMSpacing::small_gap();
+    int y = list_rect_.y + gap;
+    const int width = std::max(list_rect_.w - gap * 2, 0);
     for (auto& entry : pair_entries_) {
         if (!entry.widget) {
             continue;
         }
-        const int h = entry.widget->height_for_width(width);
-        entry.rect = SDL_Rect{ list_rect_.x, y, width, h };
-        entry.widget->set_rect(entry.rect);
-        y += h + gap;
+        const int widget_height = entry.widget->height_for_width(std::max(0, width - inner_gap * 2));
+        const int outer_height = widget_height + inner_gap * 2;
+        entry.outer_rect = SDL_Rect{ list_rect_.x + gap, y, width, outer_height };
+        entry.widget_rect = SDL_Rect{
+            entry.outer_rect.x + inner_gap,
+            entry.outer_rect.y + inner_gap,
+            std::max(0, entry.outer_rect.w - inner_gap * 2),
+            widget_height};
+        entry.widget->set_rect(entry.widget_rect);
+        y += outer_height + gap;
     }
 }
 
@@ -462,7 +573,7 @@ void MapLightPanel::OrbitKeyWidget::release_scroll_capture() {
 int MapLightPanel::OrbitKeyWidget::pair_index_at_point(int x, int y) const {
     SDL_Point p{x, y};
     for (size_t i = 0; i < pair_entries_.size(); ++i) {
-        if (SDL_PointInRect(&p, &pair_entries_[i].rect)) {
+        if (SDL_PointInRect(&p, &pair_entries_[i].outer_rect)) {
             return static_cast<int>(i);
         }
     }
@@ -698,8 +809,12 @@ void MapLightPanel::build_ui() {
 
 void MapLightPanel::update_section_header_labels() {
     auto label_for = [](const std::string& title, bool collapsed) {
-        return std::string(collapsed ? "[\xE2\x86\x93] " : "[\xE2\x86\x91] ") + title;
-};
+        std::string label = collapsed ? std::string(DMIcons::CollapseCollapsed())
+                                      : std::string(DMIcons::CollapseExpanded());
+        label.push_back(' ');
+        label += title;
+        return label;
+    };
     if (orbit_section_btn_) {
         orbit_section_btn_->set_text(label_for("Orbit Settings", orbit_section_collapsed_));
     }
@@ -737,7 +852,7 @@ void MapLightPanel::rebuild_rows() {
         rows.push_back({ add_widget(std::make_unique<CheckboxWidget>(update_map_light_checkbox_.get())) });
     }
 
-    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(orbit_section_btn_.get(), [this]() { toggle_orbit_section(); })) });
+    rows.push_back({ add_widget(std::make_unique<SectionToggleWidget>(orbit_section_btn_.get(), [this]() { toggle_orbit_section(); })) });
     if (!orbit_section_collapsed_) {
         rows.push_back({
             add_widget(std::make_unique<SliderWidget>(update_interval_.get())),
@@ -748,7 +863,7 @@ void MapLightPanel::rebuild_rows() {
         });
     }
 
-    rows.push_back({ add_widget(std::make_unique<ButtonWidget>(texture_section_btn_.get(), [this]() { toggle_texture_section(); })) });
+    rows.push_back({ add_widget(std::make_unique<SectionToggleWidget>(texture_section_btn_.get(), [this]() { toggle_texture_section(); })) });
     if (!texture_section_collapsed_) {
         auto orbit_widget = std::make_unique<OrbitKeyWidget>(*this);
         orbit_key_widget_ = orbit_widget.get();
@@ -1497,47 +1612,6 @@ void MapLightPanel::update_save_status(bool success) const {
 }
 
 void MapLightPanel::render_content(SDL_Renderer* r) const {
-
-    if (!r) return;
-
-    if (!editing_light_.is_object()) return;
-    SDL_Color fill_color = utils::color::resolve_ranged_color(
-        editing_light_.value("base_color", nlohmann::json{}),
-        SDL_Color{255, 255, 255, 255});
-
-    if (focused_pair_index_ >= 0 && focused_pair_index_ < static_cast<int>(orbit_key_pairs_.size())) {
-        fill_color = utils::color::resolve_ranged_color(orbit_key_pairs_[focused_pair_index_].color);
-    } else if (!orbit_key_pairs_.empty()) {
-        fill_color = utils::color::resolve_ranged_color(orbit_key_pairs_.front().color);
-    }
-
-    SDL_Rect swatch = body_viewport_;
-    swatch.y += std::max(0, swatch.h - 24);
-    swatch.h = 16;
-    swatch.w = std::min(120, swatch.w);
-
-    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    const int radius = std::min(DMStyles::CornerRadius(), std::min(swatch.w, swatch.h) / 2);
-    const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(swatch.w, swatch.h) / 2));
-    dm_draw::DrawBeveledRect(
-        r,
-        swatch,
-        radius,
-        bevel,
-        fill_color,
-        fill_color,
-        fill_color,
-        false,
-        0.0f,
-        0.0f);
-
-    const SDL_Color border = DMStyles::Border();
-    dm_draw::DrawRoundedOutline(
-        r,
-        swatch,
-        radius,
-        1,
-        border);
-
+    (void)r;
 }
 

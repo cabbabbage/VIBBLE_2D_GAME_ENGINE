@@ -72,6 +72,7 @@ const SDL_Color kLabelText{240, 240, 240, 255};
 const SDL_Color kTrailLabelBg{10, 70, 30, 200};
 const SDL_Color kTrailLabelBorder{60, 190, 110, 200};
 const SDL_Color kTrailLabelText{210, 255, 220, 255};
+constexpr int kClipboardNudge = 16;
 
 std::string trim_copy_room_editor(const std::string& input) {
     auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
@@ -244,6 +245,335 @@ void RoomEditor::save_current_room_assets_json() {
     }
     current_room_->save_assets_json();
     notify_room_assets_saved();
+}
+
+void RoomEditor::copy_selected_spawn_group() {
+    auto spawn_id_opt = selected_spawn_group_id();
+    if (!spawn_id_opt) {
+        show_notice("Select a room spawn group to copy.");
+        return;
+    }
+
+    const std::string& spawn_id = *spawn_id_opt;
+    SpawnEntryResolution resolved = locate_spawn_entry(spawn_id);
+    if (!resolved.valid() || resolved.source != SpawnEntryResolution::Source::Room || !resolved.entry) {
+        show_notice("Map-wide spawn groups cannot be copied.");
+        return;
+    }
+
+    if (spawn_group_is_boundary(spawn_id)) {
+        show_notice("Boundary spawn groups cannot be copied.");
+        return;
+    }
+
+    spawn_group_clipboard_.emplace();
+    spawn_group_clipboard_->entry = *resolved.entry;
+    spawn_group_clipboard_->entry.erase("priority");
+    const std::string display_name = spawn_group_clipboard_->entry.value("display_name", std::string{"Spawn Group"});
+    std::string base = strip_copy_suffix(display_name);
+    if (base.empty()) {
+        base = display_name;
+    }
+    if (base.empty()) {
+        base = "Spawn Group";
+    }
+    spawn_group_clipboard_->base_display_name = std::move(base);
+    spawn_group_clipboard_->paste_count = 0;
+
+    show_notice("Copied spawn group '" + spawn_group_clipboard_->base_display_name + "'.");
+}
+
+void RoomEditor::paste_spawn_group_from_clipboard() {
+    if (!spawn_group_clipboard_) {
+        show_notice("Clipboard is empty. Copy a spawn group first.");
+        return;
+    }
+
+    Room* target_room = resolve_room_for_clipboard_action();
+    if (!target_room || !target_room->room_area) {
+        show_notice("No valid room available for paste.");
+        return;
+    }
+
+    if (target_room != current_room_) {
+        if (assets_) {
+            assets_->set_editor_current_room(target_room);
+        } else {
+            set_current_room(target_room);
+        }
+    }
+
+    if (!current_room_) {
+        show_notice("Unable to determine active room for paste.");
+        return;
+    }
+
+    auto& root = current_room_->assets_data();
+    auto& groups = ensure_spawn_groups_array(root);
+
+    nlohmann::json entry = spawn_group_clipboard_->entry;
+    const std::string new_id = generate_spawn_id();
+    entry["spawn_id"] = new_id;
+    const std::string next_name = next_clipboard_display_name();
+    if (!next_name.empty()) {
+        entry["display_name"] = next_name;
+    }
+
+    const std::string display_name = entry.value("display_name", std::string{"Spawn Group"});
+    const int default_resolution = current_room_ ? current_room_->map_grid_settings().resolution
+                                                : MapGridSettings::defaults().resolution;
+    devmode::spawn::ensure_spawn_group_entry_defaults(entry, display_name, default_resolution);
+    remap_clipboard_entry_to_room(entry, current_room_);
+
+    groups.push_back(entry);
+    for (size_t i = 0; i < groups.size(); ++i) {
+        if (groups[i].is_object()) {
+            groups[i]["priority"] = static_cast<int>(i);
+        }
+    }
+
+    sanitize_perimeter_spawn_groups(groups);
+    save_current_room_assets_json();
+    rebuild_room_spawn_id_cache();
+    refresh_spawn_group_config_ui();
+    reopen_room_configurator();
+
+    nlohmann::json& inserted = groups.back();
+    respawn_spawn_group(inserted);
+
+    active_spawn_group_id_ = new_id;
+    select_spawn_group_assets(new_id);
+    show_notice("Pasted spawn group '" + inserted.value("display_name", std::string{"Spawn Group"}) + "'.");
+}
+
+std::optional<std::string> RoomEditor::selected_spawn_group_id() const {
+    if (selected_assets_.empty()) {
+        return std::nullopt;
+    }
+    std::optional<std::string> result;
+    for (Asset* asset : selected_assets_) {
+        if (!asset) {
+            continue;
+        }
+        if (!asset_belongs_to_room(asset)) {
+            continue;
+        }
+        if (asset->spawn_id.empty()) {
+            return std::nullopt;
+        }
+        if (!result) {
+            result = asset->spawn_id;
+        } else if (*result != asset->spawn_id) {
+            return std::nullopt;
+        }
+    }
+    if (!result || result->empty()) {
+        return std::nullopt;
+    }
+    return result;
+}
+
+bool RoomEditor::spawn_group_is_boundary(const std::string& spawn_id) const {
+    if (spawn_id.empty() || !assets_) {
+        return false;
+    }
+    for (Asset* asset : assets_->all) {
+        if (!asset || asset->dead) {
+            continue;
+        }
+        if (!asset_belongs_to_room(asset)) {
+            continue;
+        }
+        if (asset->spawn_id == spawn_id) {
+            if (asset->info && asset->info->type == asset_types::boundary) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+Room* RoomEditor::resolve_room_for_clipboard_action() const {
+    const Assets* assets = assets_;
+    if (!assets) {
+        return current_room_;
+    }
+    if (!input_) {
+        return current_room_;
+    }
+
+    SDL_Point screen{input_->getX(), input_->getY()};
+    SDL_Point world = assets->getView().screen_to_map(screen);
+
+    if (current_room_ && current_room_->room_area && current_room_->room_area->contains_point(world)) {
+        return current_room_;
+    }
+
+    for (Room* room : assets->rooms()) {
+        if (!room || !room->room_area) {
+            continue;
+        }
+        if (room->room_area->contains_point(world)) {
+            return room;
+        }
+    }
+    return current_room_;
+}
+
+void RoomEditor::select_spawn_group_assets(const std::string& spawn_id) {
+    selected_assets_.clear();
+    if (spawn_id.empty()) {
+        sync_spawn_group_panel_with_selection();
+        update_highlighted_assets();
+        return;
+    }
+    if (!assets_) {
+        sync_spawn_group_panel_with_selection();
+        update_highlighted_assets();
+        return;
+    }
+
+    for (Asset* asset : assets_->all) {
+        if (!asset || asset->dead) {
+            continue;
+        }
+        if (!asset_belongs_to_room(asset)) {
+            continue;
+        }
+        if (asset->spawn_id == spawn_id) {
+            selected_assets_.push_back(asset);
+        }
+    }
+
+    sync_spawn_group_panel_with_selection();
+    update_highlighted_assets();
+}
+
+void RoomEditor::remap_clipboard_entry_to_room(nlohmann::json& entry, Room* room) {
+    if (!room || !room->room_area) {
+        return;
+    }
+
+    auto bounds = room->room_area->get_bounds();
+    const int width = std::max(1, std::get<2>(bounds) - std::get<0>(bounds));
+    const int height = std::max(1, std::get<3>(bounds) - std::get<1>(bounds));
+
+    std::string method = entry.value("position", std::string{});
+    if (method == "Exact Position") {
+        method = "Exact";
+    }
+
+    if (method == "Exact" || method == "Perimeter") {
+        int stored_dx = entry.value("dx", 0);
+        int stored_dy = entry.value("dy", 0);
+        int orig_w = std::max(1, entry.value("origional_width", width));
+        int orig_h = std::max(1, entry.value("origional_height", height));
+        RelativeRoomPosition relative(SDL_Point{stored_dx, stored_dy}, orig_w, orig_h);
+        SDL_Point scaled = relative.scaled_offset(width, height);
+        entry["dx"] = scaled.x;
+        entry["dy"] = scaled.y;
+        entry["origional_width"] = width;
+        entry["origional_height"] = height;
+        ensure_clipboard_position_is_valid(entry, room);
+    } else if (method == "Percent") {
+        entry["origional_width"] = width;
+        entry["origional_height"] = height;
+    }
+}
+
+void RoomEditor::ensure_clipboard_position_is_valid(nlohmann::json& entry, Room* room) {
+    if (!room || !room->room_area) {
+        return;
+    }
+
+    std::string method = entry.value("position", std::string{});
+    if (method == "Exact Position") {
+        method = "Exact";
+    }
+    if (method != "Exact" && method != "Perimeter") {
+        return;
+    }
+
+    SDL_Point center = room->room_area->get_center();
+    int dx = entry.value("dx", 0);
+    int dy = entry.value("dy", 0);
+    SDL_Point candidate{center.x + dx, center.y + dy};
+    if (room->room_area->contains_point(candidate)) {
+        return;
+    }
+
+    const std::array<SDL_Point, 8> adjustments{{
+        SDL_Point{kClipboardNudge, 0},
+        SDL_Point{-kClipboardNudge, 0},
+        SDL_Point{0, kClipboardNudge},
+        SDL_Point{0, -kClipboardNudge},
+        SDL_Point{kClipboardNudge, kClipboardNudge},
+        SDL_Point{kClipboardNudge, -kClipboardNudge},
+        SDL_Point{-kClipboardNudge, kClipboardNudge},
+        SDL_Point{-kClipboardNudge, -kClipboardNudge},
+    }};
+
+    for (const SDL_Point& delta : adjustments) {
+        SDL_Point test{candidate.x + delta.x, candidate.y + delta.y};
+        if (room->room_area->contains_point(test)) {
+            entry["dx"] = test.x - center.x;
+            entry["dy"] = test.y - center.y;
+            return;
+        }
+    }
+
+    entry["dx"] = 0;
+    entry["dy"] = 0;
+}
+
+std::string RoomEditor::strip_copy_suffix(const std::string& name) {
+    if (name.empty()) {
+        return name;
+    }
+    const std::string marker = " (Copy";
+    const size_t pos = name.rfind(marker);
+    if (pos == std::string::npos) {
+        return name;
+    }
+    if (name.back() != ')') {
+        return name;
+    }
+    const std::string inside = name.substr(pos + 2, name.size() - pos - 3);
+    if (inside == "Copy") {
+        return name.substr(0, pos);
+    }
+    const std::string prefix = "Copy ";
+    if (inside.rfind(prefix, 0) == 0) {
+        const bool digits = std::all_of(inside.begin() + prefix.size(), inside.end(), [](unsigned char ch) {
+            return std::isdigit(ch) != 0;
+        });
+        if (digits) {
+            return name.substr(0, pos);
+        }
+    }
+    return name;
+}
+
+std::string RoomEditor::next_clipboard_display_name() {
+    if (!spawn_group_clipboard_) {
+        return {};
+    }
+    ++spawn_group_clipboard_->paste_count;
+    std::string base = spawn_group_clipboard_->base_display_name;
+    if (base.empty()) {
+        base = "Spawn Group";
+    }
+    if (spawn_group_clipboard_->paste_count == 1) {
+        return base + " (Copy)";
+    }
+    return base + " (Copy " + std::to_string(spawn_group_clipboard_->paste_count) + ")";
+}
+
+void RoomEditor::show_notice(const std::string& message) const {
+    if (!assets_) {
+        return;
+    }
+    assets_->show_dev_notice(message);
 }
 
 void RoomEditor::set_input(Input* input) {
@@ -2068,6 +2398,13 @@ bool RoomEditor::should_enable_mouse_controls() const {
 void RoomEditor::handle_shortcuts(const Input& input) {
     const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (!ctrl) return;
+
+    if (input.wasScancodePressed(SDL_SCANCODE_C)) {
+        copy_selected_spawn_group();
+    }
+    if (input.wasScancodePressed(SDL_SCANCODE_V)) {
+        paste_spawn_group_from_clipboard();
+    }
 
     if (input.wasScancodePressed(SDL_SCANCODE_A)) {
         if (library_ui_ && library_ui_->is_locked()) {

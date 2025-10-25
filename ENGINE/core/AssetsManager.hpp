@@ -108,6 +108,8 @@ public:
     void notify_spawn_group_config_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
 
+    void show_dev_notice(const std::string& message, Uint32 duration_ms = 2000);
+
     void set_editor_current_room(Room* room);
 
     Room* current_room() { return current_room_; }
@@ -231,10 +233,10 @@ private:
     std::unique_ptr<devmode::core::ManifestStore> manifest_store_fallback_;
     std::unique_ptr<LightMapManager> light_map_manager_;
 
-    struct ScalingNotice {
+    struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;
 
-        ScalingNotice()
+        DevNotice()
             : texture(nullptr, SDL_DestroyTexture) {}
 
         std::string message;
@@ -245,7 +247,7 @@ private:
         bool dirty = true;
     };
 
-    std::optional<ScalingNotice> scaling_notice_;
+    std::optional<DevNotice> dev_notice_;
 
     void rebuild_active_assets_if_needed();
     void update_active_assets(SDL_Point center);

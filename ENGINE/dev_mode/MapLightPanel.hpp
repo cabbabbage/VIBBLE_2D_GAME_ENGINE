@@ -121,6 +121,7 @@ private:
     std::unique_ptr<DMSlider> update_interval_;
 
     class OrbitKeyWidget;
+    class SectionToggleWidget;
     struct OrbitKeyPair {
         int id = 0;
         double angle = 0.0;

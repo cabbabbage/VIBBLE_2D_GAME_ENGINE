@@ -225,6 +225,17 @@ private:
     void reopen_room_configurator();
     void notify_room_assets_saved();
     void save_current_room_assets_json();
+    void copy_selected_spawn_group();
+    void paste_spawn_group_from_clipboard();
+    std::optional<std::string> selected_spawn_group_id() const;
+    bool spawn_group_is_boundary(const std::string& spawn_id) const;
+    Room* resolve_room_for_clipboard_action() const;
+    void select_spawn_group_assets(const std::string& spawn_id);
+    void remap_clipboard_entry_to_room(nlohmann::json& entry, Room* room);
+    void ensure_clipboard_position_is_valid(nlohmann::json& entry, Room* room);
+    static std::string strip_copy_suffix(const std::string& name);
+    std::string next_clipboard_display_name();
+    void show_notice(const std::string& message) const;
 
 private:
     Assets* assets_ = nullptr;
@@ -297,6 +308,13 @@ private:
     std::optional<std::string> active_spawn_group_id_{};
     bool suppress_spawn_group_close_clear_ = false;
     std::unique_ptr<SpawnGroupConfig> spawn_group_panel_{};
+
+    struct SpawnGroupClipboard {
+        nlohmann::json entry;
+        std::string base_display_name;
+        int paste_count = 0;
+    };
+    std::optional<SpawnGroupClipboard> spawn_group_clipboard_{};
 
     TTF_Font* label_font_ = nullptr;
     std::vector<SDL_Rect> label_rects_;

@@ -799,7 +799,11 @@ void DevControls::update(const Input& input) {
         toggle_map_light_panel();
     }
     if (ctrl && input.wasScancodePressed(SDL_SCANCODE_C)) {
-        toggle_camera_panel();
+        const bool room_editor_active =
+            mode_ == Mode::RoomEditor && room_editor_ && room_editor_->is_enabled();
+        if (!room_editor_active) {
+            toggle_camera_panel();
+        }
     }
     pointer_over_camera_panel_ =
         camera_panel_ && camera_panel_->is_visible() && camera_panel_->is_point_inside(input.getX(), input.getY());

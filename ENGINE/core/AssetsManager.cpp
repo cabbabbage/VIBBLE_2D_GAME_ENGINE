@@ -551,15 +551,7 @@ void Assets::update(const Input& input)
             render_pipeline::ScalingLogic::FlushUsageData();
         }
         std::cout << "[Assets] Scaling usage tracking " << (enabled ? "enabled" : "disabled") << " (Ctrl+R).\n";
-        if (!scaling_notice_) {
-            scaling_notice_.emplace();
-        }
-        scaling_notice_->message = enabled ? std::string("Recording scale") : std::string("Stopped recording");
-        scaling_notice_->expiry_ms = SDL_GetTicks() + 2000u;
-        scaling_notice_->texture.reset();
-        scaling_notice_->texture_width = 0;
-        scaling_notice_->texture_height = 0;
-        scaling_notice_->dirty = true;
+        show_dev_notice(enabled ? std::string("Recording scale") : std::string("Stopped recording"));
     }
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
@@ -1121,19 +1113,19 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         return;
     }
 
-    if (scaling_notice_) {
+    if (dev_notice_) {
         const Uint32 now = SDL_GetTicks();
-        if (now >= scaling_notice_->expiry_ms) {
-            scaling_notice_->texture.reset();
-            scaling_notice_.reset();
+        if (now >= dev_notice_->expiry_ms) {
+            dev_notice_->texture.reset();
+            dev_notice_.reset();
         }
     }
 
-    if (!scaling_notice_) {
+    if (!dev_notice_) {
         return;
     }
 
-    ScalingNotice& notice = *scaling_notice_;
+    DevNotice& notice = *dev_notice_;
 
     if (!notice.texture || notice.dirty) {
         TTF_Font* font = scaling_notice_font();
@@ -1467,6 +1459,27 @@ void Assets::notify_spawn_group_removed(const std::string& spawn_id) {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->notify_spawn_group_removed(spawn_id);
     }
+}
+
+void Assets::show_dev_notice(const std::string& message, Uint32 duration_ms) {
+    if (message.empty()) {
+        if (dev_notice_) {
+            dev_notice_->texture.reset();
+            dev_notice_.reset();
+        }
+        return;
+    }
+
+    if (!dev_notice_) {
+        dev_notice_.emplace();
+    }
+
+    dev_notice_->message = message;
+    dev_notice_->expiry_ms = SDL_GetTicks() + duration_ms;
+    dev_notice_->texture.reset();
+    dev_notice_->texture_width = 0;
+    dev_notice_->texture_height = 0;
+    dev_notice_->dirty = true;
 }
 
 void Assets::set_editor_current_room(Room* room) {

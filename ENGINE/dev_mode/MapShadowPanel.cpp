@@ -6,13 +6,17 @@
 #include <cstdio>
 #include <limits>
 #include <optional>
+#include <string_view>
 
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
+#include "dev_mode/dev_ui_settings.hpp"
 #include "dev_mode/shared/formatting.hpp"
 #include "utils/input.hpp"
 
 namespace {
 constexpr int kDefaultPanelWidth = DockableCollapsible::kDefaultFloatingContentWidth;
+
+constexpr std::string_view kRenderShadowsSettingKey = "dev_ui.lighting.shadow_panel.render_shadows";
 
 std::unique_ptr<DMSlider> make_scaled_slider(const std::string& label,
                                              float min_value,
@@ -186,7 +190,17 @@ void MapShadowPanel::update(const Input& input, int screen_w, int screen_h) {
 }
 
 bool MapShadowPanel::handle_event(const SDL_Event& e) {
-    return DockableCollapsible::handle_event(e);
+    bool handled = DockableCollapsible::handle_event(e);
+
+    if (render_shadows_checkbox_) {
+        bool desired = render_shadows_checkbox_->value();
+        if (desired != render_shadows_enabled_) {
+            render_shadows_enabled_ = desired;
+            devmode::ui_settings::save_bool(kRenderShadowsSettingKey, render_shadows_enabled_);
+        }
+    }
+
+    return handled;
 }
 
 void MapShadowPanel::render(SDL_Renderer* renderer) const {
@@ -204,6 +218,14 @@ void MapShadowPanel::render_content(SDL_Renderer* renderer) const {
 void MapShadowPanel::build_ui() {
     widget_wrappers_.clear();
     Rows rows;
+
+    render_shadows_enabled_ = devmode::ui_settings::load_bool(kRenderShadowsSettingKey, true);
+    render_shadows_checkbox_ = std::make_unique<DMCheckbox>("Render Shadows", render_shadows_enabled_);
+    if (render_shadows_checkbox_) {
+        auto widget = std::make_unique<CheckboxWidget>(render_shadows_checkbox_.get());
+        rows.push_back({widget.get()});
+        widget_wrappers_.push_back(std::move(widget));
+    }
 
     auto add_slider_row = [&](std::unique_ptr<DMSlider>& slider) {
         if (!slider) {

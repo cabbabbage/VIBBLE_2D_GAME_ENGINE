@@ -98,6 +98,29 @@ namespace {
         return true;
     }
 
+    bool remove_tag_from_json_array(nlohmann::json& object,
+                                    const char* key,
+                                    const std::string& normalized,
+                                    const std::string& hashed) {
+        auto it = object.find(key);
+        if (it == object.end() || !it->is_array()) {
+            return false;
+        }
+        auto& arr = *it;
+        auto original_size = arr.size();
+        arr.erase(
+            std::remove_if(arr.begin(), arr.end(), [&](const nlohmann::json& entry) {
+                if (!entry.is_string()) {
+                    return false;
+                }
+                const std::string value = entry.get<std::string>();
+                const std::string normalized_value = normalize_tag_value(value);
+                return normalized_value == normalized || value == hashed;
+            }),
+            arr.end());
+        return original_size != arr.size();
+    }
+
 } // namespace
 
 struct AssetLibraryUI::AssetTileWidget : public Widget {
@@ -340,6 +363,7 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
 
 struct AssetLibraryUI::HashtagTileWidget : public Widget {
     static constexpr int kPad = 8;
+    static constexpr int kDeleteButtonSize = 24;
     AssetLibraryUI* owner = nullptr;
     std::string tag;
     int asset_count = 0;
@@ -347,19 +371,28 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
     bool hovered = false;
     bool pressed = false;
     std::function<void(const std::string&)> on_click;
+    std::function<void(const std::string&)> on_delete;
     bool resolvable = false;
+    SDL_Rect delete_rect_{0,0,kDeleteButtonSize,kDeleteButtonSize};
+    bool delete_hovered = false;
+    bool delete_pressed = false;
 
     HashtagTileWidget(AssetLibraryUI* owner_ptr,
                       std::string tag_value,
                       int count,
-                      std::function<void(const std::string&)> click)
+                      std::function<void(const std::string&)> click,
+                      std::function<void(const std::string&)> delete_click)
         : owner(owner_ptr),
           tag(std::move(tag_value)),
           asset_count(count),
           on_click(std::move(click)),
+          on_delete(std::move(delete_click)),
           resolvable(count > 0) {}
 
-    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    void set_rect(const SDL_Rect& r) override {
+        rect_ = r;
+        delete_rect_ = SDL_Rect{ rect_.x + kPad, rect_.y + kPad, kDeleteButtonSize, kDeleteButtonSize };
+    }
     const SDL_Rect& rect() const override { return rect_; }
     int height_for_width(int) const override { return 180; }
 
@@ -367,17 +400,31 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
         if (e.type == SDL_MOUSEMOTION) {
             SDL_Point p{ e.motion.x, e.motion.y };
             hovered = SDL_PointInRect(&p, &rect_);
+            delete_hovered = SDL_PointInRect(&p, &delete_rect_);
         } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
             SDL_Point p{ e.button.x, e.button.y };
+            if (SDL_PointInRect(&p, &delete_rect_)) {
+                delete_pressed = true;
+                return true;
+            }
             if (SDL_PointInRect(&p, &rect_)) {
                 pressed = true;
                 return true;
             }
         } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             SDL_Point p{ e.button.x, e.button.y };
+            bool inside_delete = SDL_PointInRect(&p, &delete_rect_);
+            bool was_delete = delete_pressed;
+            delete_pressed = false;
             bool inside = SDL_PointInRect(&p, &rect_);
             bool was_pressed = pressed;
             pressed = false;
+            if (inside_delete && was_delete) {
+                if (on_delete) {
+                    on_delete(tag);
+                }
+                return true;
+            }
             if (inside && was_pressed) {
                 if (on_click && resolvable) {
                     on_click(tag);
@@ -397,7 +444,56 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
         const int label_h = 26;
         const int footer_h = 24;
 
-        SDL_Rect label_rect{ rect_.x + pad, rect_.y + pad, std::max(0, rect_.w - 2 * pad), label_h };
+        const auto& delete_style = DMStyles::DeleteButton();
+        SDL_Rect button_rect = delete_rect_;
+        SDL_Color delete_bg = delete_style.bg;
+        if (delete_pressed) {
+            delete_bg = delete_style.press_bg;
+        } else if (delete_hovered) {
+            delete_bg = delete_style.hover_bg;
+        }
+
+        const int corner_radius = DMStyles::CornerRadius();
+        const int bevel_depth = DMStyles::BevelDepth();
+        const SDL_Color& highlight = DMStyles::HighlightColor();
+        const SDL_Color& shadow = DMStyles::ShadowColor();
+        dm_draw::DrawBeveledRect(
+            r,
+            button_rect,
+            corner_radius,
+            bevel_depth,
+            delete_bg,
+            highlight,
+            shadow,
+            false,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
+        dm_draw::DrawRoundedOutline(
+            r,
+            button_rect,
+            corner_radius,
+            1,
+            delete_style.border);
+        SDL_SetRenderDrawColor(r, delete_style.text.r, delete_style.text.g, delete_style.text.b, delete_style.text.a);
+        const int cross_inset = std::max(bevel_depth + 1, button_rect.w / 4);
+        SDL_RenderDrawLine(r,
+                           button_rect.x + cross_inset,
+                           button_rect.y + cross_inset,
+                           button_rect.x + button_rect.w - cross_inset,
+                           button_rect.y + button_rect.h - cross_inset);
+        SDL_RenderDrawLine(r,
+                           button_rect.x + button_rect.w - cross_inset,
+                           button_rect.y + cross_inset,
+                           button_rect.x + cross_inset,
+                           button_rect.y + button_rect.h - cross_inset);
+
+        int label_left = button_rect.x + button_rect.w + pad;
+        int label_right = rect_.x + rect_.w - pad;
+        if (label_left > label_right) {
+            label_left = rect_.x + pad;
+        }
+
+        SDL_Rect label_rect{ label_left, rect_.y + pad, std::max(0, label_right - label_left), label_h };
         SDL_Rect footer_rect{ rect_.x + pad,
                               rect_.y + rect_.h - pad - footer_h,
                               std::max(0, rect_.w - 2 * pad),
@@ -818,6 +914,131 @@ int AssetLibraryUI::count_assets_for_tag(const std::string& tag) const {
     return 0;
 }
 
+bool AssetLibraryUI::remove_tag_from_manifest_assets(const std::string& tag) {
+    if (!manifest_store_owner_ || tag.empty()) {
+        return false;
+    }
+
+    const std::string hashed = "#" + tag;
+    bool manifest_changed = false;
+
+    auto asset_views = manifest_store_owner_->assets();
+    for (const auto& view : asset_views) {
+        if (!view) {
+            continue;
+        }
+
+        auto txn = manifest_store_owner_->begin_asset_transaction(view.name, false);
+        if (!txn) {
+            continue;
+        }
+
+        nlohmann::json& data = txn.data();
+        bool modified = false;
+        modified |= remove_tag_from_json_array(data, "tags", tag, hashed);
+        modified |= remove_tag_from_json_array(data, "anti_tags", tag, hashed);
+
+        if (modified) {
+            if (!txn.finalize()) {
+                std::cerr << "[AssetLibraryUI] Failed to persist tag removal for asset '" << view.name << "'\n";
+            } else {
+                manifest_changed = true;
+            }
+        } else {
+            txn.cancel();
+        }
+    }
+
+    return manifest_changed;
+}
+
+bool AssetLibraryUI::remove_tag_from_manifest_maps(const std::string& tag) {
+    if (!manifest_store_owner_ || tag.empty()) {
+        return false;
+    }
+
+    const std::string hashed = "#" + tag;
+    bool manifest_changed = false;
+    const nlohmann::json& manifest = manifest_store_owner_->manifest_json();
+    auto maps_it = manifest.find("maps");
+    if (maps_it == manifest.end() || !maps_it->is_object()) {
+        return false;
+    }
+
+    for (auto it = maps_it->begin(); it != maps_it->end(); ++it) {
+        nlohmann::json map_entry = *it;
+        bool updated = false;
+        if (!hashed.empty()) {
+            updated |= devmode::manifest_utils::remove_asset_from_spawn_groups(map_entry, hashed);
+        }
+        if (!tag.empty()) {
+            updated |= devmode::manifest_utils::remove_asset_from_spawn_groups(map_entry, tag);
+        }
+        if (updated) {
+            if (!manifest_store_owner_->update_map_entry(it.key(), map_entry)) {
+                std::cerr << "[AssetLibraryUI] Failed to update spawn groups for map '" << it.key() << "'\n";
+            } else {
+                manifest_changed = true;
+            }
+        }
+    }
+
+    return manifest_changed;
+}
+
+void AssetLibraryUI::delete_hashtag(const std::string& tag) {
+    std::string normalized = normalize_tag_value(tag);
+    if (normalized.empty()) {
+        return;
+    }
+
+    const std::string hashed = "#" + normalized;
+
+    bool manifest_changed = remove_tag_from_manifest_assets(normalized);
+    manifest_changed |= remove_tag_from_manifest_maps(normalized);
+
+    if (manifest_changed && manifest_store_owner_) {
+        manifest_store_owner_->flush();
+    }
+
+    if (assets_owner_) {
+        devmode::manifest_utils::remove_asset_from_spawn_groups(assets_owner_->map_info_json(), hashed);
+        devmode::manifest_utils::remove_asset_from_spawn_groups(assets_owner_->map_info_json(), normalized);
+    }
+
+    bool tag_removed = TagLibrary::instance().remove_tag(normalized);
+    if (!tag_removed) {
+        std::cerr << "[AssetLibraryUI] Tag '" << normalized << "' not found in tag library\n";
+    }
+
+    for (auto& info : items_) {
+        if (!info) {
+            continue;
+        }
+        info->remove_tag(normalized);
+        info->remove_tag(hashed);
+        info->remove_anti_tag(normalized);
+        info->remove_anti_tag(hashed);
+    }
+
+    tag_items_.erase(
+        std::remove_if(tag_items_.begin(), tag_items_.end(), [&](const std::string& value) {
+            return normalize_tag_value(value) == normalized;
+        }),
+        tag_items_.end());
+
+    tag_asset_lookup_.erase(normalized);
+    tag_asset_lookup_.erase(hashed);
+
+    tag_items_initialized_ = false;
+    tag_assets_dirty_ = true;
+    filter_dirty_ = true;
+
+    if (manifest_changed || tag_removed) {
+        tag_utils::notify_tags_changed();
+    }
+}
+
 void AssetLibraryUI::refresh_tiles(Assets& assets) {
     tiles_.clear();
     tiles_.reserve(items_.size() + tag_items_.size());
@@ -863,6 +1084,9 @@ void AssetLibraryUI::refresh_tiles(Assets& assets) {
                 } else {
                     std::cerr << "[AssetLibraryUI] No assets found for tag '" << tag_value << "'\n";
                 }
+            },
+            [this](const std::string& tag_value){
+                delete_hashtag(tag_value);
             }
         ));
     }

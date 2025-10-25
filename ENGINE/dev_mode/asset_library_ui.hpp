@@ -70,6 +70,9 @@ private:
     void rebuild_tag_asset_lookup();
     std::shared_ptr<AssetInfo> resolve_tag_to_asset(const std::string& tag) const;
     int count_assets_for_tag(const std::string& tag) const;
+    void delete_hashtag(const std::string& tag);
+    bool remove_tag_from_manifest_assets(const std::string& tag);
+    bool remove_tag_from_manifest_maps(const std::string& tag);
 
 private:
     std::unique_ptr<DockableCollapsible> floating_;

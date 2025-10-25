@@ -69,6 +69,9 @@ private:
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_{};
 
+    std::unique_ptr<DMCheckbox> render_shadows_checkbox_{};
+    bool render_shadows_enabled_ = true;
+
     std::unique_ptr<DMSlider> horizontal_falloff_{};
     std::unique_ptr<DMSlider> vertical_falloff_{};
     std::unique_ptr<DMSlider> max_offset_x_{};

@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class TagLibrary {
@@ -14,10 +15,13 @@ public:
 
     void invalidate();
 
+    bool remove_tag(std::string_view value);
+
 private:
     TagLibrary();
     void ensure_loaded();
     void load_from_disk();
+    bool write_to_disk(const std::vector<std::string>& tags) const;
 
     std::filesystem::path csv_path_;
     std::vector<std::string> tags_;
