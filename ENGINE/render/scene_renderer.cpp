@@ -304,6 +304,7 @@ void SceneRenderer::render(){
     if (runtime_lighting_sampler_) {
         runtime_lighting_sampler_->set_assets(assets_);
         runtime_lighting_sampler_->begin_frame();
+        inject_map_light_sample();
     }
 
     light_overlay_sources_.clear();
@@ -582,6 +583,65 @@ void SceneRenderer::destroy_darkness_overlay() {
         darkness_overlay_width_   = 0;
         darkness_overlay_height_  = 0;
     }
+}
+
+void SceneRenderer::inject_map_light_sample() {
+    if (!runtime_lighting_sampler_ || !assets_) {
+        return;
+    }
+
+    const Global_Light_Source* map_light = assets_->map_light_source();
+    if (!map_light) {
+        return;
+    }
+
+    const SDL_Color light_color = map_light->get_current_color();
+    const float     opacity     = std::clamp(static_cast<float>(light_color.a) / 255.0f, 0.0f, 1.0f);
+    const float     brightness  = std::clamp(1.0f - opacity, 0.0f, 1.0f);
+    const float     strength    = std::clamp(
+        reactive_shadow_settings_.virtual_light_map.map_light_dir_offset_strength,
+        0.0f,
+        1.0f);
+    const float effective_intensity = brightness * strength;
+    if (effective_intensity <= 1e-4f) {
+        return;
+    }
+
+    const camera& cam = assets_->getView();
+    const SDL_Point screen_pos = map_light->get_position();
+    const SDL_Point world_pos  = cam.screen_to_map(screen_pos);
+
+    runtime_lighting::ExternalLightSample sample{};
+    sample.position.x = static_cast<float>(world_pos.x);
+    sample.position.y = static_cast<float>(world_pos.y);
+    sample.intensity  = std::clamp(effective_intensity, 0.0f, 1.0f);
+    sample.color      = light_color;
+
+    SDL_Point world00 = cam.screen_to_map({0, 0});
+    SDL_Point worldX  = cam.screen_to_map({screen_width_, 0});
+    SDL_Point worldY  = cam.screen_to_map({0, screen_height_});
+    const float span_x = std::abs(static_cast<float>(worldX.x - world00.x));
+    const float span_y = std::abs(static_cast<float>(worldY.y - world00.y));
+    float       dominant_span = std::max(span_x, span_y);
+    if (!(dominant_span > 1e-3f)) {
+        dominant_span = static_cast<float>(std::max(screen_width_, screen_height_));
+    }
+    sample.radius = std::max(dominant_span * 0.75f, 1000.0f);
+
+    SDL_Point reference = map_light->get_direction_reference();
+    SDL_FPoint default_dir{
+        static_cast<float>(reference.x) - sample.position.x,
+        static_cast<float>(reference.y) - sample.position.y};
+    const float dir_len = std::sqrt(default_dir.x * default_dir.x + default_dir.y * default_dir.y);
+    if (dir_len > 1e-4f) {
+        const float inv = 1.0f / dir_len;
+        default_dir.x *= inv;
+        default_dir.y *= inv;
+        sample.direction     = default_dir;
+        sample.has_direction = true;
+    }
+
+    runtime_lighting_sampler_->add_external_sample(sample);
 }
 
 void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
