@@ -594,7 +594,7 @@ bool SceneRenderer::ensure_darkness_overlay() {
                                                  screen_width_,
                                                  screen_height_);
         if (!texture) {
-            vibble::log::warn("[SceneRenderer] Failed to allocate darkness overlay: {}", SDL_GetError());
+            vibble::log::warn(std::string{"[SceneRenderer] Failed to allocate darkness overlay: "} + SDL_GetError());
             return false;
         }
         darkness_overlay_texture_ = texture;

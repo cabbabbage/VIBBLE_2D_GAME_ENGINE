@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <functional>
 #include <iomanip>
+#include <random>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -22,6 +24,15 @@
 
 namespace {
 constexpr double kTau = 6.28318530717958647692;
+
+std::uint64_t generate_preview_seed() {
+    static std::random_device rd;
+    if (rd.entropy() > 0.0) {
+        return (static_cast<std::uint64_t>(rd()) << 32) ^ static_cast<std::uint64_t>(rd());
+    }
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return static_cast<std::uint64_t>(now.count());
+}
 
 SDL_Color hsv_to_rgb(float hue, float saturation, float value) {
     hue = std::fmod(hue, 360.0f);
@@ -148,7 +159,8 @@ void fill_ring(SDL_Renderer* renderer, int cx, int cy, int inner_radius, int out
 }
 }  // namespace
 
-MapLayersPreviewWidget::MapLayersPreviewWidget() = default;
+MapLayersPreviewWidget::MapLayersPreviewWidget()
+    : preview_seed_(generate_preview_seed()) {}
 
 MapLayersPreviewWidget::~MapLayersPreviewWidget() { remove_listener(); }
 
@@ -219,14 +231,39 @@ void MapLayersPreviewWidget::set_rect(const SDL_Rect& r) {
     }
 
     const int spacing = (legend_width > 0) ? gap : 0;
-    preview_rect_.w = rect_.w - legend_width - spacing;
-    preview_rect_.h = rect_.h;
-    legend_rect_.x = preview_rect_.x + preview_rect_.w + spacing;
+    legend_rect_.x = rect_.x;
     legend_rect_.y = rect_.y;
     legend_rect_.w = legend_width;
     legend_rect_.h = rect_.h;
 
+    preview_rect_.x = rect_.x + legend_width + spacing;
+    preview_rect_.y = rect_.y;
+    preview_rect_.w = std::max(0, rect_.w - legend_width - spacing);
+    preview_rect_.h = rect_.h;
+
     preview_center_ = SDL_Point{preview_rect_.x + preview_rect_.w / 2, preview_rect_.y + preview_rect_.h / 2};
+
+    const int button_margin = DMSpacing::panel_padding();
+    const int raw_button_size = preview_rect_.w > 0 ? preview_rect_.w / 7 : 0;
+    int button_size = std::clamp(raw_button_size, 26, 40);
+    const int max_button_width = std::max(0, preview_rect_.w - button_margin * 2);
+    const int max_button_height = std::max(0, preview_rect_.h - button_margin * 2);
+    if (max_button_width > 0) {
+        button_size = std::min(button_size, max_button_width);
+    }
+    if (max_button_height > 0) {
+        button_size = std::min(button_size, max_button_height);
+    }
+    if (button_size > 0 && preview_rect_.w > 0 && preview_rect_.h > 0) {
+        refresh_button_rect_.w = button_size;
+        refresh_button_rect_.h = button_size;
+        refresh_button_rect_.x = preview_rect_.x + button_margin;
+        refresh_button_rect_.y = preview_rect_.y + preview_rect_.h - button_margin - button_size;
+        refresh_button_rect_.y = std::max(refresh_button_rect_.y, preview_rect_.y + button_margin);
+    } else {
+        refresh_button_rect_ = SDL_Rect{0, 0, 0, 0};
+    }
+    refresh_hovered_ = false;
     recalculate_preview_scale();
 }
 
@@ -259,10 +296,34 @@ bool MapLayersPreviewWidget::handle_event(const SDL_Event& e) {
     const bool inside = SDL_PointInRect(&p, &rect_) == SDL_TRUE;
     if (!inside) {
         if (e.type == SDL_MOUSEMOTION) {
+            if (refresh_hovered_) {
+                refresh_hovered_ = false;
+                request_geometry_update();
+            }
             clear_hover_state();
         }
         return false;
     }
+
+    const bool over_refresh = SDL_PointInRect(&p, &refresh_button_rect_) == SDL_TRUE;
+    if (e.type == SDL_MOUSEMOTION) {
+        if (refresh_hovered_ != over_refresh) {
+            refresh_hovered_ = over_refresh;
+            request_geometry_update();
+        }
+    }
+
+    if (over_refresh) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            regenerate_preview();
+            return true;
+        }
+        if (e.type == SDL_MOUSEMOTION) {
+            clear_hover_state();
+            return true;
+        }
+    }
+
     const int layer_hit = hit_test_layer(p.x, p.y);
     const std::string room_hit = hit_test_room(p.x, p.y);
     if (e.type == SDL_MOUSEMOTION) {
@@ -283,6 +344,7 @@ void MapLayersPreviewWidget::render(SDL_Renderer* renderer) const {
 
 void MapLayersPreviewWidget::mark_dirty() {
     dirty_ = true;
+    preview_seed_ = generate_preview_seed();
     request_geometry_update();
 }
 
@@ -308,6 +370,12 @@ void MapLayersPreviewWidget::create_new_room_entry() {
     if (on_change_) {
         on_change_();
     }
+}
+
+void MapLayersPreviewWidget::regenerate_preview() {
+    preview_seed_ = generate_preview_seed();
+    dirty_ = true;
+    request_geometry_update();
 }
 
 void MapLayersPreviewWidget::rebuild_visuals() {
@@ -336,6 +404,8 @@ void MapLayersPreviewWidget::rebuild_visuals() {
     min_edge_distance_ = radii.min_edge_distance;
     max_visual_radius_ = std::max(1.0, radii.map_radius);
 
+    std::mt19937_64 rng(preview_seed_);
+
     layer_visuals_.reserve(layers.size());
     for (size_t i = 0; i < layers.size(); ++i) {
         const auto& layer_json = layers[i];
@@ -359,6 +429,9 @@ void MapLayersPreviewWidget::rebuild_visuals() {
         visual.color = layer_color(visual.index);
         visual.min_rooms = layer_json.value("min_rooms", 0);
         visual.max_rooms = layer_json.value("max_rooms", 0);
+        if (visual.max_rooms > 0 && visual.max_rooms < visual.min_rooms) {
+            visual.max_rooms = visual.min_rooms;
+        }
         visual.invalid = invalid_layers_.find(visual.index) != invalid_layers_.end();
         visual.warning = warning_layers_.find(visual.index) != warning_layers_.end();
         visual.dependency = dependency_layers_.find(visual.index) != dependency_layers_.end();
@@ -366,27 +439,135 @@ void MapLayersPreviewWidget::rebuild_visuals() {
 
         const auto rooms_it = layer_json.find("rooms");
         if (rooms_it != layer_json.end() && rooms_it->is_array()) {
-            const auto& rooms_array = *rooms_it;
-            visual.room_count = static_cast<int>(rooms_array.size());
-            const size_t room_count = rooms_array.size();
-            const double angle_step = room_count > 0 ? kTau / static_cast<double>(room_count) : 0.0;
-            size_t room_idx = 0;
-            for (const auto& candidate : rooms_array) {
+            struct RoomSpec {
+                std::string name;
+                int min_instances = 0;
+                int max_instances = 0;
+            };
+            std::vector<RoomSpec> room_specs;
+            room_specs.reserve(rooms_it->size());
+            for (const auto& candidate : *rooms_it) {
                 if (!candidate.is_object()) {
                     continue;
                 }
-                RoomVisual room;
-                room.layer_index = visual.index;
-                room.key = candidate.value("name", std::string());
-                room.display_name = display_name_for_room(room.key);
-                room.color = room_color(room.key);
-                room.radius = visual.radius;
-                room.extent = map_layers::room_extent_from_rooms_data(rooms_info, room.key);
-                room.angle = angle_step > 0.0 ? angle_step * static_cast<double>(room_idx) : 0.0;
-                room.position.x = static_cast<float>(std::cos(room.angle) * room.radius);
-                room.position.y = static_cast<float>(std::sin(room.angle) * room.radius);
-                visual.rooms.push_back(room);
-                ++room_idx;
+                RoomSpec spec;
+                spec.name = candidate.value("name", std::string());
+                spec.min_instances = std::max(0, candidate.value("min_instances", 0));
+                spec.max_instances = std::max(spec.min_instances, candidate.value("max_instances", spec.min_instances));
+                room_specs.push_back(std::move(spec));
+            }
+
+            if (!room_specs.empty()) {
+                struct Allocation {
+                    RoomSpec spec;
+                    int count = 0;
+                    int max_count = 0;
+                };
+
+                std::vector<Allocation> allocations;
+                allocations.reserve(room_specs.size());
+                int sum_min_instances = 0;
+                int sum_max_instances = 0;
+                for (auto& spec : room_specs) {
+                    Allocation alloc;
+                    alloc.spec = std::move(spec);
+                    alloc.count = alloc.spec.min_instances;
+                    alloc.max_count = std::max(alloc.spec.min_instances, alloc.spec.max_instances);
+                    sum_min_instances += alloc.count;
+                    sum_max_instances += alloc.max_count;
+                    allocations.push_back(std::move(alloc));
+                }
+                sum_max_instances = std::max(sum_max_instances, sum_min_instances);
+
+                int min_total = std::max(visual.min_rooms, sum_min_instances);
+                if (visual.min_rooms <= 0 && sum_min_instances > 0) {
+                    min_total = sum_min_instances;
+                }
+                int max_total = visual.max_rooms;
+                if (max_total <= 0) {
+                    max_total = sum_max_instances;
+                } else if (sum_max_instances > 0) {
+                    max_total = std::min(max_total, sum_max_instances);
+                }
+                if (max_total < min_total) {
+                    max_total = std::max(min_total, sum_max_instances);
+                }
+                if (max_total < min_total) {
+                    max_total = min_total;
+                }
+
+                int target_total = min_total;
+                if (max_total > min_total) {
+                    std::uniform_int_distribution<int> total_dist(min_total, max_total);
+                    target_total = total_dist(rng);
+                }
+                target_total = std::clamp(target_total, min_total, std::max(min_total, max_total));
+                target_total = std::min(target_total, std::max(sum_max_instances, min_total));
+
+                int remaining = std::max(0, target_total - sum_min_instances);
+                while (remaining > 0) {
+                    std::vector<std::size_t> expandable;
+                    expandable.reserve(allocations.size());
+                    for (std::size_t idx = 0; idx < allocations.size(); ++idx) {
+                        if (allocations[idx].count < allocations[idx].max_count) {
+                            expandable.push_back(idx);
+                        }
+                    }
+                    if (expandable.empty()) {
+                        break;
+                    }
+                    std::uniform_int_distribution<std::size_t> pick(0, expandable.size() - 1);
+                    std::size_t chosen = expandable[pick(rng)];
+                    ++allocations[chosen].count;
+                    --remaining;
+                }
+
+                int total_instances = 0;
+                for (const auto& alloc : allocations) {
+                    total_instances += alloc.count;
+                }
+
+                if (total_instances > 0) {
+                    std::vector<double> angles;
+                    angles.reserve(static_cast<std::size_t>(total_instances));
+                    std::uniform_real_distribution<double> angle_dist(0.0, kTau);
+                    for (int n = 0; n < total_instances; ++n) {
+                        angles.push_back(angle_dist(rng));
+                    }
+                    std::sort(angles.begin(), angles.end());
+                    std::size_t angle_index = 0;
+
+                    double base_radius = (visual.index == 0)
+                                             ? 0.0
+                                             : (visual.inner_radius + std::max(visual.inner_radius, visual.radius)) * 0.5;
+                    const double min_radius = (visual.index == 0) ? 0.0 : visual.inner_radius;
+                    const double max_radius = (visual.index == 0) ? 0.0 : std::max(visual.inner_radius, visual.radius);
+                    const double radial_span = std::max(0.0, max_radius - min_radius);
+                    std::uniform_real_distribution<double> radius_jitter(-radial_span * 0.25, radial_span * 0.25);
+
+                    for (const auto& alloc : allocations) {
+                        for (int n = 0; n < alloc.count && angle_index < angles.size(); ++n) {
+                            RoomVisual room;
+                            room.layer_index = visual.index;
+                            room.key = alloc.spec.name;
+                            room.display_name = display_name_for_room(room.key);
+                            room.color = room_color(room.key);
+                            room.extent = map_layers::room_extent_from_rooms_data(rooms_info, room.key);
+
+                            double placement_radius = (visual.index == 0) ? 0.0 : base_radius;
+                            if (visual.index != 0 && radial_span > 0.0) {
+                                placement_radius = std::clamp(base_radius + radius_jitter(rng), min_radius, max_radius);
+                            }
+
+                            const double angle = angles[angle_index++];
+                            room.angle = angle;
+                            room.radius = placement_radius;
+                            room.position.x = static_cast<float>(std::cos(angle) * placement_radius);
+                            room.position.y = static_cast<float>(std::sin(angle) * placement_radius);
+                            visual.rooms.push_back(std::move(room));
+                        }
+                    }
+                }
             }
         }
         visual.room_count = static_cast<int>(visual.rooms.size());
@@ -659,6 +840,7 @@ void MapLayersPreviewWidget::render_preview(SDL_Renderer* renderer) const {
 
     if (layer_visuals_.empty() || max_visual_radius_ <= 0.0) {
         draw_text(renderer, "No layers configured.", rect.x + 16, rect.y + 16, DMStyles::Label());
+        render_refresh_button(renderer);
         render_room_legend(renderer);
         return;
     }
@@ -783,17 +965,25 @@ void MapLayersPreviewWidget::render_preview(SDL_Renderer* renderer) const {
         }
     }
 
+    const int footer_gap = DMSpacing::small_gap();
+    const int footer_radius_y = rect.y + rect.h - (base_label.font_size + footer_gap * 3);
+    int footer_text_x = rect.x + footer_gap;
+    if (refresh_button_rect_.w > 0) {
+        footer_text_x = std::max(footer_text_x, refresh_button_rect_.x + refresh_button_rect_.w + footer_gap);
+    }
+
     std::ostringstream radius_stream;
     radius_stream << "Map radius ≈ " << std::fixed << std::setprecision(0) << max_visual_radius_;
-    draw_text(renderer, radius_stream.str(), rect.x + 12,
-              rect.y + rect.h - (base_label.font_size + DMSpacing::small_gap() * 3), base_label);
+    draw_text(renderer, radius_stream.str(), footer_text_x, footer_radius_y, base_label);
 
+    DMLabelStyle footer_label = DMStyles::Label();
+    const int footer_info_y = rect.y + rect.h - (footer_label.font_size + footer_gap * 2);
     if (!hovered_room.empty()) {
         std::string label = display_name_for_room(hovered_room);
         if (label.empty()) {
             label = hovered_room;
         }
-        draw_text(renderer, label, rect.x + 12, rect.y + rect.h - (DMStyles::Label().font_size + 12), DMStyles::Label());
+        draw_text(renderer, label, footer_text_x, footer_info_y, footer_label);
     } else if (hovered_layer >= 0) {
         auto it = std::find_if(layer_visuals_.begin(), layer_visuals_.end(), [&](const LayerVisual& v) {
             return v.index == hovered_layer;
@@ -802,12 +992,48 @@ void MapLayersPreviewWidget::render_preview(SDL_Renderer* renderer) const {
             std::ostringstream oss;
             oss << it->name << " • " << it->room_count << (it->room_count == 1 ? " room" : " rooms");
             oss << " • " << it->min_rooms << "-" << it->max_rooms << " total";
-            draw_text(renderer, oss.str(), rect.x + 12,
-                      rect.y + rect.h - (DMStyles::Label().font_size + 12), DMStyles::Label());
+            draw_text(renderer, oss.str(), footer_text_x, footer_info_y, footer_label);
         }
     }
 
+    render_refresh_button(renderer);
     render_room_legend(renderer);
+}
+
+void MapLayersPreviewWidget::render_refresh_button(SDL_Renderer* renderer) const {
+    if (!renderer || refresh_button_rect_.w <= 0 || refresh_button_rect_.h <= 0) {
+        return;
+    }
+
+    SDL_Rect button_rect = refresh_button_rect_;
+    const DMButtonStyle& style = DMStyles::AccentButton();
+    SDL_Color fill = refresh_hovered_ ? style.hover_bg : style.bg;
+    const int corner_radius = std::max(4, DMStyles::CornerRadius() / 2);
+
+    dm_draw::DrawBeveledRect(renderer, button_rect, corner_radius, DMStyles::BevelDepth(), fill,
+                             DMStyles::HighlightColor(), DMStyles::ShadowColor(), true,
+                             DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    dm_draw::DrawRoundedOutline(renderer, button_rect, corner_radius, 1, style.border);
+
+    DMLabelStyle icon_style = style.label;
+    icon_style.color = style.text;
+    if (refresh_hovered_) {
+        icon_style.color = lighten(icon_style.color, 0.08f);
+    }
+
+    const std::string refresh_icon = "\xE2\x86\xBB";  // ↻
+    int text_w = 0;
+    int text_h = icon_style.font_size;
+    if (TTF_Font* font = icon_style.open_font()) {
+        if (TTF_SizeUTF8(font, refresh_icon.c_str(), &text_w, &text_h) != 0) {
+            text_w = 0;
+            text_h = icon_style.font_size;
+        }
+        TTF_CloseFont(font);
+    }
+    const int text_x = button_rect.x + (button_rect.w - text_w) / 2;
+    const int text_y = button_rect.y + (button_rect.h - text_h) / 2;
+    draw_text(renderer, refresh_icon, text_x, text_y, icon_style);
 }
 
 void MapLayersPreviewWidget::render_room_legend(SDL_Renderer* renderer) const {

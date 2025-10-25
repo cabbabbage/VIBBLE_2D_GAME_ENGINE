@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -45,6 +46,7 @@ public:
 
     void mark_dirty();
     void create_new_room_entry();
+    void regenerate_preview();
 
 private:
     struct RoomVisual {
@@ -102,6 +104,7 @@ private:
 
     void render_preview(SDL_Renderer* renderer) const;
     void render_room_legend(SDL_Renderer* renderer) const;
+    void render_refresh_button(SDL_Renderer* renderer) const;
 
 private:
     nlohmann::json* map_info_ = nullptr;
@@ -112,6 +115,7 @@ private:
     SDL_Point preview_center_{0, 0};
     SDL_Rect preview_rect_{0, 0, 0, 0};
     SDL_Rect legend_rect_{0, 0, 0, 0};
+    SDL_Rect refresh_button_rect_{0, 0, 0, 0};
 
     mutable bool dirty_ = true;
 
@@ -120,6 +124,7 @@ private:
     double max_visual_radius_ = 1.0;
     mutable double preview_scale_ = 1.0;
     double min_edge_distance_ = static_cast<double>(map_layers::kDefaultMinEdgeDistance);
+    std::uint64_t preview_seed_ = 0;
 
     int hovered_layer_index_ = -1;
     std::string hovered_room_key_;
@@ -127,6 +132,7 @@ private:
     std::unordered_set<int> invalid_layers_;
     std::unordered_set<int> warning_layers_;
     std::unordered_set<int> dependency_layers_;
+    mutable bool refresh_hovered_ = false;
 
     SelectLayerCallback on_select_layer_{};
     SelectRoomCallback on_select_room_{};
