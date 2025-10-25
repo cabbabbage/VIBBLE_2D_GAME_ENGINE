@@ -178,6 +178,8 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
     return emitter;
 }
 
+} // namespace
+
 class OcclusionSampler {
 public:
     OcclusionSampler(world::Grid& grid, RuntimeLightingSampler::OcclusionCache& cache)
@@ -298,11 +300,9 @@ private:
     }
 
 private:
-    world::Grid&                              grid_;
-    RuntimeLightingSampler::OcclusionCache&   cache_;
+    world::Grid&                            grid_;
+    RuntimeLightingSampler::OcclusionCache& cache_;
 };
-
-} // namespace
 
 RuntimeLightingSampler::RuntimeLightingSampler(Assets* assets)
     : assets_(assets) {}
