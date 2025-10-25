@@ -30,12 +30,12 @@
                 0,
                 0,
                 0,
-                131
+                163
             ],
             "last_requested_percent": 8,
-            "last_requested_scale": 0.0803108811378479,
+            "last_requested_scale": 0.08163265138864517,
             "last_updated": "2025-10-25T08:58:21Z",
-            "last_used_texture_scale": 0.5,
+            "last_used_texture_scale": 0.10000000149011612,
             "recommended_percentages": [
                 100,
                 75,
@@ -115,16 +115,19 @@
                 0,
                 0,
                 0,
-                0,
+                32,
                 0
             ],
-            "last_updated": "2025-10-25T13:15:10Z",
+            "last_requested_percent": 14,
+            "last_requested_scale": 0.13645833730697632,
+            "last_updated": "2025-10-25T14:49:19Z",
+            "last_used_texture_scale": 0.5,
             "recommended_percentages": [
                 100,
                 75,
-                50
+                15
             ],
-            "revision": 1
+            "revision": 2
         },
         "Bone": {
             "histogram": [
@@ -426,13 +429,18 @@
                 0,
                 0,
                 0,
-                0
+                32
             ],
-            "last_updated": "2025-10-17T07:08:00Z",
+            "last_requested_percent": 10,
+            "last_requested_scale": 0.10000000149011612,
+            "last_updated": "2025-10-25T14:49:19Z",
+            "last_used_texture_scale": 0.5,
             "recommended_percentages": [
-                50
+                100,
+                75,
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "Grass_1_FPS_2": {
             "histogram": [
@@ -445,12 +453,12 @@
                 0,
                 0,
                 0,
-                91485
+                101309
             ],
             "last_requested_percent": 3,
-            "last_requested_scale": 0.02675585262477398,
+            "last_requested_scale": 0.026809651404619217,
             "last_updated": "2025-10-23T21:05:10Z",
-            "last_used_texture_scale": 0.5,
+            "last_used_texture_scale": 0.10000000149011612,
             "recommended_percentages": [
                 100,
                 75,
@@ -469,7 +477,7 @@
                 0,
                 0,
                 0,
-                40482
+                47138
             ],
             "last_requested_percent": 3,
             "last_requested_scale": 0.026809651404619217,
@@ -573,13 +581,13 @@
                 0,
                 0,
                 0,
-                10122,
+                10314,
                 0
             ],
-            "last_requested_percent": 19,
-            "last_requested_scale": 0.18666666746139526,
+            "last_requested_percent": 20,
+            "last_requested_scale": 0.20000000298023224,
             "last_updated": "2025-10-23T17:22:12Z",
-            "last_used_texture_scale": 0.5,
+            "last_used_texture_scale": 0.15000000596046448,
             "recommended_percentages": [
                 100,
                 75,
@@ -780,7 +788,7 @@
         "Tree_Dark": {
             "histogram": [
                 3711,
-                57255,
+                57511,
                 14140,
                 949,
                 0,
@@ -790,10 +798,10 @@
                 0,
                 0
             ],
-            "last_requested_percent": 80,
-            "last_requested_scale": 0.7973484992980957,
+            "last_requested_percent": 83,
+            "last_requested_scale": 0.8333333134651184,
             "last_updated": "2025-10-22T08:21:44Z",
-            "last_used_texture_scale": 0.75,
+            "last_used_texture_scale": 0.8500000238418579,
             "recommended_percentages": [
                 100,
                 85,
@@ -803,7 +811,7 @@
         },
         "Tree_Darker": {
             "histogram": [
-                43486,
+                43678,
                 17735,
                 1097,
                 35,
@@ -814,10 +822,10 @@
                 0,
                 0
             ],
-            "last_requested_percent": 87,
-            "last_requested_scale": 0.8700565099716187,
+            "last_requested_percent": 93,
+            "last_requested_scale": 0.9284369349479675,
             "last_updated": "2025-10-22T08:21:44Z",
-            "last_used_texture_scale": 0.8500000238418579,
+            "last_used_texture_scale": 1.0,
             "recommended_percentages": [
                 100,
                 85,
@@ -835,11 +843,11 @@
                 0,
                 0,
                 2,
-                1011,
+                1043,
                 0
             ],
-            "last_requested_percent": 15,
-            "last_requested_scale": 0.15267175436019897,
+            "last_requested_percent": 16,
+            "last_requested_scale": 0.15606936812400818,
             "last_updated": "2025-10-22T08:21:59Z",
             "last_used_texture_scale": 0.15000000596046448,
             "recommended_percentages": [
@@ -879,15 +887,18 @@
                 0,
                 0,
                 0,
-                0
+                32
             ],
-            "last_updated": "2025-10-25T09:27:51Z",
+            "last_requested_percent": 5,
+            "last_requested_scale": 0.05202312022447586,
+            "last_updated": "2025-10-25T14:49:19Z",
+            "last_used_texture_scale": 0.5,
             "recommended_percentages": [
                 100,
                 75,
-                50
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "candle_3": {
             "histogram": [
@@ -957,13 +968,18 @@
                 0,
                 0,
                 0,
-                0
+                192
             ],
-            "last_updated": "2025-10-17T07:08:06Z",
+            "last_requested_percent": 5,
+            "last_requested_scale": 0.05135951563715935,
+            "last_updated": "2025-10-25T14:49:19Z",
+            "last_used_texture_scale": 0.5,
             "recommended_percentages": [
-                50
+                100,
+                75,
+                10
             ],
-            "revision": 1
+            "revision": 2
         },
         "flower_3": {
             "histogram": [
@@ -1149,6 +1165,6 @@
             "revision": 1
         }
     },
-    "new_values": false,
+    "new_values": true,
     "version": 1
 }

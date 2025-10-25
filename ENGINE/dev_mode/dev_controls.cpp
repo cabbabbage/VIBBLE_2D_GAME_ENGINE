@@ -1456,13 +1456,24 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 }
             } else {
                 Asset* target_asset = area_hovered_asset_with_area_ ? area_hovered_asset_with_area_ : area_hovered_asset_;
+                const SDL_Keymod mods = SDL_GetModState();
+                // Holding Shift forces a brand new area to be created even when the cursor is
+                // hovering an existing one. This makes it easy to author multiple child areas
+                // for a single asset without needing to find empty canvas space.
+                const bool shift_down = (mods & KMOD_SHIFT) != 0;
+
                 if (target_asset && target_asset->info) {
                     std::string selected_type = canonicalize_asset_area_type(first_selected_type);
                     const bool specific_type = !selected_type.empty() && selected_type != "all";
                     std::string area_name;
                     std::string area_type_override = specific_type ? selected_type : std::string{};
 
-                    if (target_asset == area_hovered_asset_with_area_ && !area_hovered_area_name_.empty()) {
+                    const bool should_reuse_hovered =
+                        target_asset == area_hovered_asset_with_area_ &&
+                        !area_hovered_area_name_.empty() &&
+                        !shift_down;
+
+                    if (should_reuse_hovered) {
                         area_name = area_hovered_area_name_;
                         area_type_override.clear();
                     } else if (!specific_type && !target_asset->info->areas.empty()) {
