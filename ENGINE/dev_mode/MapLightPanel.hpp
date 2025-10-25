@@ -97,7 +97,7 @@ private:
     void handle_pair_color_changed(int index, const utils::color::RangedColor& color);
     void handle_map_color_changed(const utils::color::RangedColor& color);
     void write_map_color_to_json();
-    void set_map_color_widget_value(SDL_Color color);
+    void set_map_color_widget_value(const utils::color::RangedColor& color);
     int find_pair_containing_angle(double angle_degrees) const;
     utils::color::RangedColor default_pair_color();
 
@@ -132,7 +132,7 @@ private:
     int focused_pair_index_ = -1;
     OrbitKeyWidget* orbit_key_widget_ = nullptr;
     DMColorRangeWidget* map_color_widget_ = nullptr;
-    SDL_Color map_color_{0, 0, 0, 255};
+    utils::color::RangedColor map_color_{{0, 0}, {0, 0}, {0, 0}, {255, 255}};
     bool suppress_map_color_callback_ = false;
     ColorSampleRequestCallback map_color_sample_callback_{};
     mutable std::string persistence_warning_text_;

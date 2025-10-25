@@ -276,15 +276,21 @@ public:
 
     bool handle_event(const SDL_Event& e) override {
         if (!box_ || !editable_) return false;
+        bool was_editing = box_->is_editing();
         std::string before = box_->value();
         bool used = box_->handle_event(e);
-        if (used) {
-            std::string after = box_->value();
-            if (after != before && on_change_) {
+        bool now_editing = box_->is_editing();
+        const std::string& after = box_->value();
+        if (used && on_change_ && after != before) {
+            on_change_(after);
+        }
+        if (on_change_ && was_editing && !now_editing) {
+            if (!used || after == before) {
                 on_change_(after);
             }
+            used = true;
         }
-        return used;
+        return used || was_editing != now_editing;
     }
 
     void render(SDL_Renderer* renderer) const override {
@@ -1211,6 +1217,15 @@ private:
             widgets.chance_widget = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(widgets.chance_box),
                 [this, i](const std::string& text) {
                     if (!editable_) return;
+                    if (i < candidate_entries_.size()) {
+                        auto* widget = candidate_entries_[i].chance_widget.get();
+                        if (widget) {
+                            DMTextBox* box = widget->box();
+                            if (box && box->is_editing()) {
+                                return;
+                            }
+                        }
+                    }
                     if (auto* entry = mutable_entry()) {
                         devmode::spawn::sanitize_spawn_group_candidates(*entry);
                         if (i < entry->at("candidates").size()) {
@@ -1339,6 +1354,9 @@ private:
 
     void on_min_changed(const std::string& text) {
         if (!editable_) return;
+        if (min_widget_ && min_widget_->box() && min_widget_->box()->is_editing()) {
+            return;
+        }
         if (auto* entry = mutable_entry()) {
             int min_value = parse_int_or(text, safe_int(*entry, "min_number", kDefaultMinNumber));
             int max_value = safe_int(*entry, "max_number", std::max(min_value, kDefaultMaxNumber));
@@ -1353,6 +1371,9 @@ private:
 
     void on_max_changed(const std::string& text) {
         if (!editable_) return;
+        if (max_widget_ && max_widget_->box() && max_widget_->box()->is_editing()) {
+            return;
+        }
         if (auto* entry = mutable_entry()) {
             int max_value = parse_int_or(text, safe_int(*entry, "max_number", kDefaultMaxNumber));
             int min_value = safe_int(*entry, "min_number", kDefaultMinNumber);
@@ -1365,6 +1386,9 @@ private:
 
     void on_exact_changed(const std::string& text) {
         if (!editable_) return;
+        if (exact_widget_ && exact_widget_->box() && exact_widget_->box()->is_editing()) {
+            return;
+        }
         if (auto* entry = mutable_entry()) {
             int value = parse_int_or(text, safe_int(*entry, "quantity", kExactDefaultQuantity));
             if (value < 1) value = 1;

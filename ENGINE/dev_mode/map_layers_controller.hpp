@@ -61,6 +61,7 @@ private:
     bool validate_candidate_index(const nlohmann::json& layer, int candidate_index) const;
     void notify();
     void clamp_layer_counts(nlohmann::json& layer) const;
+    void ensure_spawn_room_data(const std::string& previous_name) const;
     void ensure_map_settings();
 
 private:

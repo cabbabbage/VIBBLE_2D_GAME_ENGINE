@@ -12485,6 +12485,24 @@
       "size_settings": {
         "scale_percentage": 17.0
       },
+      "spawn_groups": [
+        {
+          "candidates": [
+            {
+              "chance": 0,
+              "name": "null"
+            }
+          ],
+          "display_name": "New Spawn",
+          "enforce_spacing": false,
+          "max_number": 1,
+          "min_number": 1,
+          "position": "Exact",
+          "priority": 0,
+          "resolution": 0,
+          "spawn_id": "spn-74cd2ebc7996"
+        }
+      ],
       "start": "default",
       "tags": [
         "death",
@@ -13825,7 +13843,7 @@
       },
       "map_layers": [
         {
-          "bounding_extent": 0.0,
+          "bounding_extent": 5000.0,
           "level": 0,
           "max_rooms": 1,
           "min_rooms": 1,
@@ -13846,7 +13864,7 @@
           "max_rooms": 0,
           "min_rooms": 0,
           "name": "layer_1",
-          "ring_radius": 200.0,
+          "ring_radius": 5200.0,
           "rooms": []
         }
       ],
@@ -14106,7 +14124,40 @@
             }
           ]
         },
-        "spawn": {}
+        "spawn": {
+          "curvyness": 2,
+          "edge_smoothness": 2,
+          "geometry": "Circle",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": true,
+          "max_height": 1800,
+          "max_radius": 900,
+          "max_width": 1800,
+          "min_height": 1800,
+          "min_radius": 900,
+          "min_width": 1800,
+          "name": "",
+          "radius": 900,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                }
+              ],
+              "display_name": "New Spawn",
+              "enforce_spacing": false,
+              "max_number": 8,
+              "min_number": 8,
+              "position": "Perimeter",
+              "priority": 0,
+              "resolution": 5,
+              "spawn_id": "spn-dcd209a9deb9"
+            }
+          ]
+        }
       },
       "trails_data": {
         "basic": {

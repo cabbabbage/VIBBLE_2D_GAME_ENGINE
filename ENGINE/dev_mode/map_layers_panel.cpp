@@ -1634,47 +1634,20 @@ bool MapLayersPanel::handle_min_edge_event(const SDL_Event& e) {
     const bool was_editing = min_edge_textbox_->is_editing();
     const bool changed = min_edge_textbox_->handle_event(e);
     const bool now_editing = min_edge_textbox_->is_editing();
-    if (changed) {
+    if (changed && now_editing) {
         on_min_edge_text_changed();
     }
     if (was_editing && !now_editing) {
         on_min_edge_edit_finished();
     }
-    return changed;
+    return changed || was_editing != now_editing;
 }
 
 void MapLayersPanel::on_min_edge_text_changed() {
     if (!min_edge_textbox_) {
         return;
     }
-    std::string value = min_edge_textbox_->value();
-    std::string trimmed_value = trimmed(value);
-    if (trimmed_value.empty()) {
-        return;
-    }
-    int parsed = 0;
-    const char* begin = trimmed_value.data();
-    const char* end = begin + trimmed_value.size();
-    auto [ptr, ec] = std::from_chars(begin, end, parsed);
-    if (ec != std::errc() || ptr != end) {
-        min_edge_textbox_->set_value(last_valid_min_edge_text_);
-        show_min_edge_note("Enter a number between 0 and 10000.", error_color());
-        return;
-    }
-    int clamped = std::clamp(parsed, 0, static_cast<int>(map_layers::kMinEdgeDistanceMax));
-    if (clamped != parsed) {
-        show_min_edge_note("Value clamped to 0–10000.", warning_color());
-    } else {
-        clear_min_edge_note();
-    }
-    if (clamped != min_edge_value_) {
-        apply_min_edge_value(clamped);
-    }
-    std::string normalized = std::to_string(clamped);
-    if (normalized != trimmed_value) {
-        min_edge_textbox_->set_value(normalized);
-    }
-    last_valid_min_edge_text_ = normalized;
+    clear_min_edge_note();
     if (min_edge_widget_) {
         min_edge_widget_->mark_layout_dirty();
     }
@@ -1684,13 +1657,44 @@ void MapLayersPanel::on_min_edge_edit_finished() {
     if (!min_edge_textbox_) {
         return;
     }
-    std::string trimmed_value = trimmed(min_edge_textbox_->value());
+    std::string raw_value = min_edge_textbox_->value();
+    std::string trimmed_value = trimmed(raw_value);
     if (trimmed_value.empty()) {
         min_edge_textbox_->set_value(last_valid_min_edge_text_);
         show_min_edge_note("Enter a number between 0 and 10000.", error_color());
         if (min_edge_widget_) {
             min_edge_widget_->mark_layout_dirty();
         }
+        return;
+    }
+    int parsed = 0;
+    const char* begin = trimmed_value.data();
+    const char* end = begin + trimmed_value.size();
+    auto [ptr, ec] = std::from_chars(begin, end, parsed);
+    if (ec != std::errc() || ptr != end) {
+        min_edge_textbox_->set_value(last_valid_min_edge_text_);
+        show_min_edge_note("Enter a number between 0 and 10000.", error_color());
+        if (min_edge_widget_) {
+            min_edge_widget_->mark_layout_dirty();
+        }
+        return;
+    }
+    int clamped = std::clamp(parsed, 0, static_cast<int>(map_layers::kMinEdgeDistanceMax));
+    if (clamped != min_edge_value_) {
+        apply_min_edge_value(clamped);
+    }
+    std::string normalized = std::to_string(clamped);
+    if (normalized != raw_value) {
+        min_edge_textbox_->set_value(normalized);
+    }
+    last_valid_min_edge_text_ = normalized;
+    if (clamped != parsed) {
+        show_min_edge_note("Value clamped to 0–10000.", warning_color());
+    } else {
+        clear_min_edge_note();
+    }
+    if (min_edge_widget_) {
+        min_edge_widget_->mark_layout_dirty();
     }
 }
 

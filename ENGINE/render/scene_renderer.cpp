@@ -99,8 +99,9 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     if (map_manifest.is_object()) {
         auto it = map_manifest.find("map_light_data");
         if (it != map_manifest.end() && it->is_object()) {
-            map_clear_color_ = utils::color::color_from_json(it->value("map_color", nlohmann::json{}))
-                                   .value_or(SDL_Color{0, 0, 0, 255});
+            map_clear_color_ = utils::color::resolve_ranged_color(
+                it->value("map_color", nlohmann::json{}),
+                SDL_Color{0, 0, 0, 255});
         }
     }
     main_light_source_.initialize_from_map_manifest(map_manifest, map_id);
@@ -235,8 +236,9 @@ void SceneRenderer::set_low_quality_rendering(bool enabled){
 
 void SceneRenderer::apply_map_light_config(const nlohmann::json& data){
     main_light_source_.apply_config(data);
-    map_clear_color_ = utils::color::color_from_json(data.value("map_color", nlohmann::json{}))
-                           .value_or(SDL_Color{0, 0, 0, 255});
+    map_clear_color_ = utils::color::resolve_ranged_color(
+        data.value("map_color", nlohmann::json{}),
+        SDL_Color{0, 0, 0, 255});
 
     using namespace render_pipeline::shading;
     auto reactive_it = data.find("reactive_shadows");

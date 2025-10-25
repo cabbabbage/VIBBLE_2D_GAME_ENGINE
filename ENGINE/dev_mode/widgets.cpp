@@ -733,15 +733,24 @@ int DMSlider::value_for_x(int x) const {
 
 bool DMSlider::handle_event(const SDL_Event& e) {
     if (edit_box_) {
-        if (edit_box_->handle_event(e)) {
+        bool was_editing = edit_box_->is_editing();
+        bool consumed = edit_box_->handle_event(e);
+        bool now_editing = edit_box_->is_editing();
+        if (!now_editing) {
             std::optional<int> parsed = parse_value(edit_box_->value());
             if (parsed) {
                 set_value(*parsed);
-                edit_box_->set_value(format_value(display_value()));
             }
+            edit_box_->set_value(format_value(display_value()));
+            edit_box_.reset();
             return true;
         }
-        if (!edit_box_->is_editing()) edit_box_.reset();
+        if (consumed) {
+            return true;
+        }
+        if (was_editing != now_editing) {
+            return true;
+        }
     }
     auto set_focus = [this](bool focus) {
         if (focused_ == focus) {
@@ -1216,28 +1225,48 @@ int DMRangeSlider::value_for_x(int x) const {
 
 bool DMRangeSlider::handle_event(const SDL_Event& e) {
     if (edit_min_) {
-        if (edit_min_->handle_event(e)) {
+        bool was_editing = edit_min_->is_editing();
+        bool consumed = edit_min_->handle_event(e);
+        bool now_editing = edit_min_->is_editing();
+        if (!now_editing) {
             try {
                 int nv = std::stoi(edit_min_->value());
                 set_min_value(nv);
             } catch (...) {
-
+                // Restore the displayed value if parsing fails.
             }
+            edit_min_->set_value(std::to_string(display_min_value()));
+            edit_min_.reset();
             return true;
         }
-        if (!edit_min_->is_editing()) edit_min_.reset();
+        if (consumed) {
+            return true;
+        }
+        if (was_editing != now_editing) {
+            return true;
+        }
     }
     if (edit_max_) {
-        if (edit_max_->handle_event(e)) {
+        bool was_editing = edit_max_->is_editing();
+        bool consumed = edit_max_->handle_event(e);
+        bool now_editing = edit_max_->is_editing();
+        if (!now_editing) {
             try {
                 int nv = std::stoi(edit_max_->value());
                 set_max_value(nv);
             } catch (...) {
-
+                // Restore the displayed value if parsing fails.
             }
+            edit_max_->set_value(std::to_string(display_max_value()));
+            edit_max_.reset();
             return true;
         }
-        if (!edit_max_->is_editing()) edit_max_.reset();
+        if (consumed) {
+            return true;
+        }
+        if (was_editing != now_editing) {
+            return true;
+        }
     }
     auto set_focus = [this](bool focus) {
         if (focused_ == focus) {

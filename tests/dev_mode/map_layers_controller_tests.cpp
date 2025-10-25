@@ -1,6 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITHOUT_MAIN
 #include "doctest/doctest.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -40,25 +41,25 @@ manifest::ManifestData manifest_loader_from(const fs::path& manifest_path) {
     return data;
 }
 
-nlohmann::json make_map_info(const std::string& room_name) {
+nlohmann::json make_map_info(const std::string& marker) {
     return nlohmann::json{
         {"map_layers", nlohmann::json::array({nlohmann::json{
             {"level", 0},
             {"name", "Layer 0"},
-            {"min_rooms", 0},
-            {"max_rooms", 0},
+            {"min_rooms", 1},
+            {"max_rooms", 1},
             {"rooms", nlohmann::json::array({nlohmann::json{
-                {"name", room_name},
-                {"min_instances", 0},
-                {"max_instances", 0},
-                {"weight", 1},
-                {"children", nlohmann::json::array()},
+                {"name", "spawn"},
+                {"min_instances", 1},
+                {"max_instances", 1},
                 {"required_children", nlohmann::json::array()}
             }})}
         }})},
         {"rooms_data", nlohmann::json::object({
-            {room_name, nlohmann::json::object({
-                {"is_spawn", false},
+            {"spawn", nlohmann::json::object({
+                {"is_spawn", true},
+                {"name", "spawn"},
+                {"description", marker},
                 {"radius", 0},
                 {"min_width", 0},
                 {"max_width", 0},
@@ -96,7 +97,8 @@ TEST_CASE("MapLayersController reloads map info from manifest") {
 
     auto rooms = controller.available_rooms();
     REQUIRE(rooms.size() == 1);
-    CHECK(rooms.front() == manifest_room);
+    CHECK(rooms.front() == "spawn");
+    CHECK(map_info["rooms_data"]["spawn"]["description"] == manifest_room);
 
     fs::remove_all(manifest_path.parent_path());
 }
@@ -116,4 +118,77 @@ TEST_CASE("MapLayersController refuses to reload without manifest store") {
     controller.bind(&map_info, "");
 
     CHECK_FALSE(controller.reload());
+}
+
+TEST_CASE("MapLayersController enforces spawn room on layer zero") {
+    nlohmann::json map_info = {
+        {"map_layers", nlohmann::json::array({
+            nlohmann::json{
+                {"level", 0},
+                {"name", "Layer 0"},
+                {"min_rooms", 0},
+                {"max_rooms", 0},
+                {"rooms", nlohmann::json::array({nlohmann::json{
+                    {"name", "OldSpawn"},
+                    {"min_instances", 0},
+                    {"max_instances", 0},
+                    {"required_children", nlohmann::json::array()}
+                }})}
+            },
+            nlohmann::json{
+                {"level", 1},
+                {"name", "Layer 1"},
+                {"min_rooms", 0},
+                {"max_rooms", 0},
+                {"rooms", nlohmann::json::array({nlohmann::json{
+                    {"name", "Second"},
+                    {"min_instances", 0},
+                    {"max_instances", 1},
+                    {"required_children", nlohmann::json::array({"OldSpawn"})}
+                }})}
+            }
+        })},
+        {"rooms_data", nlohmann::json::object({
+            {"OldSpawn", nlohmann::json::object({
+                {"is_spawn", true},
+                {"name", "OldSpawn"}
+            })},
+            {"Second", nlohmann::json::object({
+                {"is_spawn", false},
+                {"name", "Second"}
+            })}
+        })}
+    };
+
+    MapLayersController controller;
+    controller.bind(&map_info, "");
+
+    const auto& layers = map_info["map_layers"];
+    REQUIRE(layers.is_array());
+    REQUIRE_FALSE(layers.empty());
+    const auto& spawn_layer = layers.front();
+    REQUIRE(spawn_layer.is_object());
+    const auto& spawn_rooms = spawn_layer.at("rooms");
+    REQUIRE(spawn_rooms.is_array());
+    REQUIRE(spawn_rooms.size() == 1);
+    CHECK(spawn_rooms.front().at("name") == "spawn");
+    CHECK(spawn_layer.at("min_rooms") == 1);
+    CHECK(spawn_layer.at("max_rooms") == 1);
+
+    const auto& second_layer = layers.at(1);
+    const auto& second_rooms = second_layer.at("rooms");
+    REQUIRE(second_rooms.is_array());
+    REQUIRE(second_rooms.size() == 1);
+    const auto& required_children = second_rooms.front().at("required_children");
+    REQUIRE(required_children.is_array());
+    CHECK(required_children.front() == "spawn");
+
+    const auto rooms = controller.available_rooms();
+    CHECK(std::find(rooms.begin(), rooms.end(), "spawn") != rooms.end());
+
+    const auto& rooms_data = map_info.at("rooms_data");
+    REQUIRE(rooms_data.is_object());
+    CHECK(rooms_data.contains("spawn"));
+    CHECK(rooms_data.at("spawn").at("is_spawn").get<bool>());
+    CHECK_FALSE(rooms_data.contains("OldSpawn"));
 }

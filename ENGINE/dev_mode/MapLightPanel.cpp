@@ -23,22 +23,7 @@ using nlohmann::json;
 namespace {
 
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
-constexpr SDL_Color kDefaultMapColor{0, 0, 0, 255};
-
-utils::color::RangedColor solid_ranged_color(SDL_Color color) {
-    auto make_channel = [](Uint8 component) {
-        utils::color::ChannelRange range{};
-        range.min = range.max = static_cast<int>(component);
-        return range;
-    };
-
-    utils::color::RangedColor ranged{};
-    ranged.r = make_channel(color.r);
-    ranged.g = make_channel(color.g);
-    ranged.b = make_channel(color.b);
-    ranged.a = make_channel(color.a);
-    return utils::color::clamp_ranged_color(ranged);
-}
+constexpr utils::color::RangedColor kDefaultMapColor{{0, 0}, {0, 0}, {0, 0}, {255, 255}};
 
 } // namespace
 
@@ -915,9 +900,11 @@ nlohmann::json& MapLightPanel::ensure_light() {
             }
         }
     }
-    SDL_Color sanitized_map_color = utils::color::color_from_json(L.value("map_color", nlohmann::json{}))
-                                      .value_or(kDefaultMapColor);
-    L["map_color"] = utils::color::color_to_json(sanitized_map_color);
+    utils::color::RangedColor sanitized_map_color =
+        utils::color::ranged_color_from_json(L.value("map_color", nlohmann::json{}))
+            .value_or(kDefaultMapColor);
+    sanitized_map_color = utils::color::clamp_ranged_color(sanitized_map_color);
+    L["map_color"] = utils::color::ranged_color_to_json(sanitized_map_color);
     return L;
 }
 
@@ -985,8 +972,8 @@ void MapLightPanel::sync_ui_from_json() {
     rebuild_orbit_key_pairs_from_json();
     refresh_orbit_widget();
 
-    map_color_ = utils::color::color_from_json(L.value("map_color", nlohmann::json{})).value_or(kDefaultMapColor);
-    map_color_ = utils::color::clamp_color(map_color_);
+    map_color_ = utils::color::ranged_color_from_json(L.value("map_color", nlohmann::json{})).value_or(kDefaultMapColor);
+    map_color_ = utils::color::clamp_ranged_color(map_color_);
     set_map_color_widget_value(map_color_);
 
     needs_sync_to_json_ = false;
@@ -1199,8 +1186,7 @@ void MapLightPanel::handle_map_color_changed(const utils::color::RangedColor& co
     if (suppress_map_color_callback_) {
         return;
     }
-    map_color_ = utils::color::resolve_ranged_color(color);
-    map_color_ = utils::color::clamp_color(map_color_);
+    map_color_ = utils::color::clamp_ranged_color(color);
     suppress_map_color_callback_ = true;
     set_map_color_widget_value(map_color_);
     suppress_map_color_callback_ = false;
@@ -1210,15 +1196,15 @@ void MapLightPanel::handle_map_color_changed(const utils::color::RangedColor& co
 
 void MapLightPanel::write_map_color_to_json() {
     json& L = ensure_light();
-    L["map_color"] = utils::color::color_to_json(map_color_);
+    L["map_color"] = utils::color::ranged_color_to_json(map_color_);
 }
 
-void MapLightPanel::set_map_color_widget_value(SDL_Color color) {
+void MapLightPanel::set_map_color_widget_value(const utils::color::RangedColor& color) {
     if (!map_color_widget_) {
         return;
     }
     suppress_map_color_callback_ = true;
-    map_color_widget_->set_value(solid_ranged_color(utils::color::clamp_color(color)));
+    map_color_widget_->set_value(utils::color::clamp_ranged_color(color));
     suppress_map_color_callback_ = false;
 }
 

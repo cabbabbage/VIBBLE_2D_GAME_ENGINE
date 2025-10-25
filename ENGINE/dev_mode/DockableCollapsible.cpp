@@ -153,9 +153,14 @@ void DockableCollapsible::set_visible(bool v) {
     if (visible_ == v) {
         return;
     }
+    const bool was_visible = visible_;
     visible_ = v;
     if (visible_) {
         block_pointer_for(kPointerBlockOnShowMs);
+        if (!was_visible && scroll_enabled_) {
+            scroll_ = 0;
+            max_scroll_ = 0;
+        }
     } else {
         block_pointer_for(0);
     }
