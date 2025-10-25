@@ -17,6 +17,8 @@ namespace world {
 
 namespace runtime_lighting {
 
+class OcclusionSampler;
+
 struct AssetLight {
     Asset*   asset            = nullptr;
     SDL_Rect asset_rect{0, 0, 0, 0};
@@ -81,6 +83,8 @@ public:
                                 const camera&                  cam);
 
 private:
+    friend class OcclusionSampler;
+
     struct CachedOcclusion {
         SDL_Rect                  bounds{0, 0, 0, 0};
         int                       width  = 0;

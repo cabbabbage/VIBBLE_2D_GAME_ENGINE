@@ -9,6 +9,7 @@
 #include <memory>
 #include <nlohmann/json_fwd.hpp>
 #include <optional>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -203,13 +204,16 @@ private:
     std::unique_ptr<vibble::grid::Occupancy> build_room_grid(const std::string& ignore_spawn_id) const;
     void render_room_labels(SDL_Renderer* renderer);
     void render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoint desired_center);
-    SDL_Rect label_background_rect(const SDL_Surface* surface, SDL_FPoint desired_center) const;
+    SDL_Rect label_background_rect(int text_w, int text_h, SDL_FPoint desired_center) const;
     SDL_Rect resolve_edge_overlap(SDL_Rect rect, SDL_FPoint desired_center);
     SDL_Rect resolve_horizontal_edge_overlap(SDL_Rect rect, float desired_center_x, bool top_edge);
     SDL_Rect resolve_vertical_edge_overlap(SDL_Rect rect, float desired_center_y, bool left_edge);
     static bool rects_overlap(const SDL_Rect& a, const SDL_Rect& b);
     void ensure_label_font();
     void release_label_font();
+    void invalidate_label_cache(Room* room);
+    void invalidate_all_room_labels();
+    void prune_label_cache(const std::vector<Room*>& rooms);
     void integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned);
     void regenerate_current_room();
     void configure_shared_panel();
@@ -326,6 +330,14 @@ private:
 
     TTF_Font* label_font_ = nullptr;
     std::vector<SDL_Rect> label_rects_;
+    struct LabelCacheEntry {
+        SDL_Texture* texture = nullptr;
+        SDL_Point text_size{0, 0};
+        std::string last_name;
+        SDL_Color last_color{0, 0, 0, 0};
+        bool dirty = true;
+    };
+    std::unordered_map<Room*, LabelCacheEntry> label_cache_;
 
     double zoom_scale_factor_ = 1.1;
     PanAndZoom pan_zoom_;

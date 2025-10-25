@@ -93,6 +93,10 @@ float display_color_luminance(SDL_Color color) {
                               0.0722 * static_cast<double>(color.b) / 255.0);
 }
 
+bool colors_equal(SDL_Color lhs, SDL_Color rhs) {
+    return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b && lhs.a == rhs.a;
+}
+
 SDL_Color with_alpha(SDL_Color color, Uint8 alpha) {
     color.a = alpha;
     return color;
@@ -231,6 +235,8 @@ RoomEditor::RoomEditor(Assets* owner, int screen_w, int screen_h)
 
 RoomEditor::~RoomEditor() {
     release_label_font();
+    invalidate_all_room_labels();
+    label_cache_.clear();
 }
 
 void RoomEditor::set_room_assets_saved_callback(RoomAssetsSavedCallback cb) {
@@ -675,6 +681,7 @@ void RoomEditor::set_current_room(Room* room) {
         room_editor_trace("[RoomEditor] target room -> <null>");
     }
 
+    Room* previous_room = current_room_;
     const bool room_changed = (room != current_room_);
 
     if (room != current_room_) {
@@ -683,6 +690,10 @@ void RoomEditor::set_current_room(Room* room) {
     }
 
     current_room_ = room;
+    if (room_changed) {
+        invalidate_label_cache(previous_room);
+        invalidate_label_cache(current_room_);
+    }
     if (current_room_) {
         room_editor_trace("[RoomEditor] acquiring assets_data");
         auto& assets_json = current_room_->assets_data();
@@ -1123,6 +1134,52 @@ bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
     return false;
 }
 
+void RoomEditor::invalidate_label_cache(Room* room) {
+    if (!room) {
+        return;
+    }
+    auto it = label_cache_.find(room);
+    if (it == label_cache_.end()) {
+        return;
+    }
+    if (it->second.texture) {
+        SDL_DestroyTexture(it->second.texture);
+        it->second.texture = nullptr;
+    }
+    it->second.text_size = SDL_Point{0, 0};
+    it->second.last_name.clear();
+    it->second.last_color = SDL_Color{0, 0, 0, 0};
+    it->second.dirty = true;
+}
+
+void RoomEditor::invalidate_all_room_labels() {
+    for (auto& [room, entry] : label_cache_) {
+        (void)room;
+        if (entry.texture) {
+            SDL_DestroyTexture(entry.texture);
+            entry.texture = nullptr;
+        }
+        entry.text_size = SDL_Point{0, 0};
+        entry.last_name.clear();
+        entry.last_color = SDL_Color{0, 0, 0, 0};
+        entry.dirty = true;
+    }
+}
+
+void RoomEditor::prune_label_cache(const std::vector<Room*>& rooms) {
+    std::unordered_set<Room*> active(rooms.begin(), rooms.end());
+    for (auto it = label_cache_.begin(); it != label_cache_.end();) {
+        if (active.find(it->first) == active.end()) {
+            if (it->second.texture) {
+                SDL_DestroyTexture(it->second.texture);
+            }
+            it = label_cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 void RoomEditor::render_room_labels(SDL_Renderer* renderer) {
     if (!enabled_) return;
     if (!renderer || !assets_) return;
@@ -1132,6 +1189,8 @@ void RoomEditor::render_room_labels(SDL_Renderer* renderer) {
 
     const std::vector<Room*>& rooms = assets_->rooms();
     if (rooms.empty()) return;
+
+    prune_label_cache(rooms);
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
@@ -1183,16 +1242,47 @@ void RoomEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoin
     if (!room || !room->room_area || !assets_) return;
     if (!label_font_) return;
 
-    const std::string& name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
+    const std::string name = room->room_name.empty() ? std::string("<unnamed>") : room->room_name;
     SDL_Color base_color = room->display_color();
-    SDL_Color text_color = display_color_luminance(base_color) > 0.55f
-                               ? SDL_Color{20, 20, 20, 255}
-                               : kLabelText;
 
-    SDL_Surface* text_surface = TTF_RenderUTF8_Blended(label_font_, name.c_str(), text_color);
-    if (!text_surface) return;
+    auto& cache = label_cache_[room];
+    if (cache.last_name != name || !colors_equal(cache.last_color, base_color)) {
+        cache.dirty = true;
+    }
 
-    SDL_Rect bg_rect = label_background_rect(text_surface, desired_center);
+    if (cache.dirty) {
+        SDL_Color text_color = display_color_luminance(base_color) > 0.55f
+                                   ? SDL_Color{20, 20, 20, 255}
+                                   : kLabelText;
+
+        SDL_Surface* text_surface = TTF_RenderUTF8_Blended(label_font_, name.c_str(), text_color);
+        if (!text_surface) {
+            return;
+        }
+
+        SDL_Texture* new_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
+        if (!new_texture) {
+            SDL_FreeSurface(text_surface);
+            return;
+        }
+
+        if (cache.texture) {
+            SDL_DestroyTexture(cache.texture);
+        }
+        cache.texture = new_texture;
+        cache.text_size = SDL_Point{text_surface->w, text_surface->h};
+        cache.last_name = name;
+        cache.last_color = base_color;
+        cache.dirty = false;
+
+        SDL_FreeSurface(text_surface);
+    }
+
+    if (!cache.texture || cache.text_size.x <= 0 || cache.text_size.y <= 0) {
+        return;
+    }
+
+    SDL_Rect bg_rect = label_background_rect(cache.text_size.x, cache.text_size.y, desired_center);
     bg_rect = resolve_edge_overlap(bg_rect, desired_center);
 
     label_rects_.push_back(bg_rect);
@@ -1220,18 +1310,11 @@ void RoomEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoin
         1,
         border_color);
 
-    SDL_Texture* text_tex = SDL_CreateTextureFromSurface(renderer, text_surface);
-    if (text_tex) {
-        SDL_Rect dst{bg_rect.x + kLabelPadding, bg_rect.y + kLabelPadding, text_surface->w, text_surface->h};
-        SDL_RenderCopy(renderer, text_tex, nullptr, &dst);
-        SDL_DestroyTexture(text_tex);
-    }
-    SDL_FreeSurface(text_surface);
+    SDL_Rect dst{bg_rect.x + kLabelPadding, bg_rect.y + kLabelPadding, cache.text_size.x, cache.text_size.y};
+    SDL_RenderCopy(renderer, cache.texture, nullptr, &dst);
 }
 
-SDL_Rect RoomEditor::label_background_rect(const SDL_Surface* surface, SDL_FPoint desired_center) const {
-    int text_w = surface ? surface->w : 0;
-    int text_h = surface ? surface->h : 0;
+SDL_Rect RoomEditor::label_background_rect(int text_w, int text_h, SDL_FPoint desired_center) const {
     int rect_w = text_w + kLabelPadding * 2;
     int rect_h = text_h + kLabelPadding * 2;
 
@@ -2567,6 +2650,7 @@ std::string RoomEditor::rename_active_room(const std::string& old_name, const st
             }
         }
         rebuild_room_spawn_id_cache();
+        invalidate_label_cache(current_room_);
     }
 
     return final_key;
