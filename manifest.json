@@ -13904,12 +13904,12 @@
           ]
         },
         {
-          "bounding_extent": 900.0,
+          "bounding_extent": 0.0,
           "level": 2,
           "max_rooms": 0,
           "min_rooms": 0,
           "name": "layer_2",
-          "ring_radius": 9640.0,
+          "ring_radius": 8740.0,
           "rooms": []
         }
       ],
@@ -14128,13 +14128,13 @@
         ],
         "virtual_light_map": {
           "horizontal_falloff": 2.4700000286102295,
-          "map_light_dir_offset_strength": 0.5,
+          "map_light_dir_offset_strength": 0.20999999344348907,
           "max_offset_x": 102.5999984741211,
-          "max_offset_y": 15.899999618530273,
+          "max_offset_y": 0.0,
           "max_scale_percent": 120,
           "min_scale_percent": 80,
           "parallax_percent": 0.0,
-          "search_radius": 2,
+          "search_radius": 4,
           "shadow_scale": 1.0,
           "vertical_falloff": 3.5
         }
@@ -14143,9 +14143,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
+            120,
             36,
-            184,
+            242,
             255
           ],
           "edge_smoothness": 2,
@@ -14221,9 +14221,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            122,
-            242,
             36,
+            242,
+            242,
             255
           ],
           "edge_smoothness": 101,
@@ -14289,6 +14289,7 @@
               "origional_height": 1800,
               "origional_width": 1800,
               "position": "Exact",
+              "priority": 1,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
