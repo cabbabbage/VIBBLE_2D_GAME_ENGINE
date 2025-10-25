@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <set>
 #include <sstream>
@@ -237,6 +240,43 @@ private:
     SDL_Rect rect_{0, 0, 0, 0};
 };
 
+class MapLayersPanel::MinEdgeWidget : public Widget {
+public:
+    explicit MinEdgeWidget(MapLayersPanel* owner) : owner_(owner) {}
+
+    void set_rect(const SDL_Rect& r) override {
+        rect_ = r;
+        if (owner_) {
+            owner_->layout_min_edge_input(rect_);
+        }
+    }
+
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int w) const override {
+        return owner_ ? owner_->min_edge_widget_height_for_width(w) : DMTextBox::height();
+    }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (!owner_) {
+            return false;
+        }
+        return owner_->handle_min_edge_event(e);
+    }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (owner_) {
+            owner_->render_min_edge_input(renderer, rect_);
+        }
+    }
+
+    bool wants_full_row() const override { return true; }
+
+private:
+    MapLayersPanel* owner_ = nullptr;
+    SDL_Rect rect_{0, 0, 0, 0};
+};
+
 MapLayersPanel::MapLayersPanel(int x, int y)
     : DockableCollapsible("Map Layers", true, x, y) {
     add_layer_button_ = std::make_unique<DMButton>("Add Layer", &DMStyles::CreateButton(), 140, DMButton::height());
@@ -289,6 +329,17 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     preview_widget_->set_controller(controller_);
     preview_widget_->mark_dirty();
 
+    min_edge_textbox_ = std::make_unique<DMTextBox>("Min room edge distance (px)", "");
+    if (min_edge_textbox_) {
+        min_edge_textbox_->set_on_height_changed([this]() {
+            if (min_edge_widget_) {
+                min_edge_widget_->request_layout();
+            }
+        });
+    }
+    owned_widgets_.push_back(std::make_unique<MinEdgeWidget>(this));
+    min_edge_widget_ = static_cast<MinEdgeWidget*>(owned_widgets_.back().get());
+
     owned_widgets_.push_back(std::make_unique<ValidationSummaryWidget>(this));
     validation_widget_ = static_cast<ValidationSummaryWidget*>(owned_widgets_.back().get());
 
@@ -296,8 +347,10 @@ MapLayersPanel::MapLayersPanel(int x, int y)
     rows.push_back(Row{add_widget, reload_widget});
     rows.push_back(Row{list_widget_});
     rows.push_back(Row{preview_widget_});
+    rows.push_back(Row{min_edge_widget_});
     rows.push_back(Row{validation_widget_});
     set_rows(rows);
+    sync_min_edge_textbox();
 
     set_close_button_on_left(true);
     set_close_button_enabled(true);
@@ -316,6 +369,7 @@ void MapLayersPanel::set_map_info(nlohmann::json* map_info, const std::string& m
         preview_widget_->set_map_info(map_info_);
         preview_widget_->mark_dirty();
     }
+    sync_min_edge_textbox();
     mark_dirty();
 }
 
@@ -334,6 +388,7 @@ void MapLayersPanel::set_controller(std::shared_ptr<MapLayersController> control
         preview_widget_->set_controller(controller_);
         preview_widget_->mark_dirty();
     }
+    sync_min_edge_textbox();
     mark_dirty();
 }
 
@@ -464,6 +519,7 @@ void MapLayersPanel::update(const Input& input, int screen_w, int screen_h) {
     if (validation_dirty_) {
         validate_layers();
     }
+    update_min_edge_note();
     DockableCollapsible::update(input, screen_w, screen_h);
     if (validation_dirty_) {
         validate_layers();
@@ -557,6 +613,7 @@ void MapLayersPanel::mark_clean() {
 }
 
 void MapLayersPanel::rebuild_layers() {
+    sync_min_edge_textbox();
     const nlohmann::json& layers = controller_ ? controller_->layers() : layers_array();
     rebuild_layer_rows_from_json(layers);
 
@@ -595,6 +652,7 @@ void MapLayersPanel::rebuild_layer_rows_from_json(const nlohmann::json& layers) 
         row.invalid = false;
         row.warning = false;
         row.dependency_highlight = false;
+        row.deletable = (i != 0);
 
         const auto& layer_json = layers[i];
         std::string name;
@@ -638,8 +696,12 @@ void MapLayersPanel::rebuild_layer_rows_from_json(const nlohmann::json& layers) 
                 summary << " • target " << derived_min << "-" << derived_max;
             }
 
-            if (i == 0 && !first_room_name.empty()) {
-                summary << " • root: " << first_room_name;
+            if (i == 0) {
+                if (!first_room_name.empty()) {
+                    summary << " • spawn: " << first_room_name;
+                } else {
+                    summary << " • spawn";
+                }
             }
 
             row.summary = summary.str();
@@ -664,7 +726,9 @@ void MapLayersPanel::update_layer_row_geometry() {
         row.rect = SDL_Rect{area.x + padding, y, width, kRowHeight};
         const int available_height = std::max(0, row.rect.h - padding * 2);
         const int button_size = std::max(0, std::min(kLayerDeleteButtonSize, available_height));
-        if (button_size > 0) {
+        if (!row.deletable) {
+            row.delete_button_rect = SDL_Rect{row.rect.x + row.rect.w, row.rect.y, 0, 0};
+        } else if (button_size > 0) {
             const int button_x = std::max(row.rect.x + padding,
                                           row.rect.x + row.rect.w - padding - button_size);
             const int button_y = row.rect.y + (row.rect.h - button_size) / 2;
@@ -705,6 +769,10 @@ int MapLayersPanel::list_height_for_width(int w) const {
         if (preview_widget_) {
             rows_present += 1;
             other_heights += preview_widget_->height_for_width(w);
+        }
+        if (min_edge_widget_) {
+            rows_present += 1;
+            other_heights += min_edge_widget_->height_for_width(w);
         }
         if (validation_widget_) {
             rows_present += 1;
@@ -888,6 +956,16 @@ void MapLayersPanel::render_layers_list(SDL_Renderer* renderer) const {
 }
 
 void MapLayersPanel::on_layers_list_mouse_down(int index, int mouse_y) {
+    if (index == 0) {
+        select_layer(index);
+        dragging_layer_active_ = false;
+        drag_moved_ = false;
+        dragging_layer_index_ = -1;
+        dragging_start_slot_ = -1;
+        drop_target_slot_ = -1;
+        drag_start_mouse_y_ = mouse_y;
+        return;
+    }
     dragging_layer_active_ = true;
     drag_moved_ = false;
     dragging_layer_index_ = index;
@@ -966,6 +1044,9 @@ void MapLayersPanel::on_layers_list_mouse_up(int mouse_y, Uint8 button) {
         to_slot -= 1;
     }
     to_slot = std::clamp(to_slot, 0, static_cast<int>(layer_rows_.size()) - 1);
+    if (to_slot == 0 && static_cast<int>(layer_rows_.size()) > 1) {
+        to_slot = 1;
+    }
 
     bool changed = false;
     if (controller_) {
@@ -1081,6 +1162,8 @@ bool MapLayersPanel::validate_layers() {
         }
 
         std::string layer_name = trimmed(layer.value("name", std::string()));
+        const std::string layer_label =
+            layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name;
         if (layer_name.empty()) {
             errors.emplace_back("Layer " + std::to_string(i) + " is missing a name.");
             invalid_layers_.push_back(index);
@@ -1094,8 +1177,7 @@ bool MapLayersPanel::validate_layers() {
 
         const auto rooms_it = layer.find("rooms");
         if (rooms_it == layer.end() || !rooms_it->is_array()) {
-            errors.emplace_back("Layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) +
-                                "' is missing its room list.");
+            errors.emplace_back("Layer '" + layer_label + "' is missing its room list.");
             invalid_layers_.push_back(index);
             continue;
         }
@@ -1103,13 +1185,34 @@ bool MapLayersPanel::validate_layers() {
         const auto& rooms_array = *rooms_it;
         if (rooms_array.empty()) {
             if (i == 0) {
-                errors.emplace_back("The root layer must include at least one room candidate.");
+                errors.emplace_back("The spawn layer must include exactly one room candidate.");
                 invalid_layers_.push_back(index);
                 layer_has_error = true;
             } else {
                 warnings.emplace_back("Layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) +
                                       "' does not contain any rooms.");
                 warning_layers_.push_back(index);
+            }
+        } else if (i == 0) {
+            if (rooms_array.size() != 1) {
+                errors.emplace_back("Layer '" + layer_label + "' must contain exactly one room candidate.");
+                invalid_layers_.push_back(index);
+                layer_has_error = true;
+            } else {
+                const auto& spawn_entry = rooms_array.front();
+                if (!spawn_entry.is_object()) {
+                    errors.emplace_back("Layer '" + layer_label + "' has an invalid spawn room entry.");
+                    invalid_layers_.push_back(index);
+                    layer_has_error = true;
+                } else {
+                    const int min_instances = spawn_entry.value("min_instances", 0);
+                    const int max_instances = spawn_entry.value("max_instances", 0);
+                    if (min_instances != 1 || max_instances != 1) {
+                        errors.emplace_back("Layer '" + layer_label + "' spawn room must allow exactly one instance.");
+                        invalid_layers_.push_back(index);
+                        layer_has_error = true;
+                    }
+                }
             }
         }
 
@@ -1119,8 +1222,12 @@ bool MapLayersPanel::validate_layers() {
             min_rooms = 0;
         }
         if (max_rooms < min_rooms) {
-            errors.emplace_back("Layer '" + (layer_name.empty() ? std::string("Layer ") + std::to_string(i) : layer_name) +
-                                "' has min_rooms greater than max_rooms.");
+            errors.emplace_back("Layer '" + layer_label + "' has min_rooms greater than max_rooms.");
+            invalid_layers_.push_back(index);
+            layer_has_error = true;
+        }
+        if (i == 0 && (min_rooms != 1 || max_rooms != 1)) {
+            errors.emplace_back("Layer '" + layer_label + "' must require exactly one room.");
             invalid_layers_.push_back(index);
             layer_has_error = true;
         }
@@ -1438,6 +1545,9 @@ bool MapLayersPanel::delete_layer_at(int index) {
     if (index < 0) {
         return false;
     }
+    if (index == 0) {
+        return false;
+    }
 
     bool removed = false;
     if (controller_) {
@@ -1495,5 +1605,191 @@ nlohmann::json& MapLayersPanel::layers_array() {
         (*map_info_)["map_layers"] = nlohmann::json::array();
     }
     return (*map_info_)["map_layers"];
+}
+
+void MapLayersPanel::sync_min_edge_textbox() {
+    int value = map_layers::kDefaultMinEdgeDistance;
+    if (controller_) {
+        value = static_cast<int>(std::lround(controller_->min_edge_distance()));
+    } else if (map_info_) {
+        value = static_cast<int>(std::lround(map_layers::min_edge_distance_from_map_info(*map_info_)));
+    }
+    value = std::clamp(value, 0, static_cast<int>(map_layers::kMinEdgeDistanceMax));
+    min_edge_value_ = value;
+    last_valid_min_edge_text_ = std::to_string(value);
+    if (min_edge_textbox_ && !min_edge_textbox_->is_editing()) {
+        min_edge_textbox_->set_value(last_valid_min_edge_text_);
+    }
+    if (min_edge_widget_) {
+        min_edge_widget_->request_layout();
+    }
+}
+
+bool MapLayersPanel::handle_min_edge_event(const SDL_Event& e) {
+    if (!min_edge_textbox_) {
+        return false;
+    }
+    const bool was_editing = min_edge_textbox_->is_editing();
+    const bool changed = min_edge_textbox_->handle_event(e);
+    const bool now_editing = min_edge_textbox_->is_editing();
+    if (changed) {
+        on_min_edge_text_changed();
+    }
+    if (was_editing && !now_editing) {
+        on_min_edge_edit_finished();
+    }
+    return changed;
+}
+
+void MapLayersPanel::on_min_edge_text_changed() {
+    if (!min_edge_textbox_) {
+        return;
+    }
+    std::string value = min_edge_textbox_->value();
+    std::string trimmed_value = trimmed(value);
+    if (trimmed_value.empty()) {
+        return;
+    }
+    int parsed = 0;
+    const char* begin = trimmed_value.data();
+    const char* end = begin + trimmed_value.size();
+    auto [ptr, ec] = std::from_chars(begin, end, parsed);
+    if (ec != std::errc() || ptr != end) {
+        min_edge_textbox_->set_value(last_valid_min_edge_text_);
+        show_min_edge_note("Enter a number between 0 and 10000.", error_color());
+        return;
+    }
+    int clamped = std::clamp(parsed, 0, static_cast<int>(map_layers::kMinEdgeDistanceMax));
+    if (clamped != parsed) {
+        show_min_edge_note("Value clamped to 0–10000.", warning_color());
+    } else {
+        clear_min_edge_note();
+    }
+    if (clamped != min_edge_value_) {
+        apply_min_edge_value(clamped);
+    }
+    std::string normalized = std::to_string(clamped);
+    if (normalized != trimmed_value) {
+        min_edge_textbox_->set_value(normalized);
+    }
+    last_valid_min_edge_text_ = normalized;
+    if (min_edge_widget_) {
+        min_edge_widget_->request_layout();
+    }
+}
+
+void MapLayersPanel::on_min_edge_edit_finished() {
+    if (!min_edge_textbox_) {
+        return;
+    }
+    std::string trimmed_value = trimmed(min_edge_textbox_->value());
+    if (trimmed_value.empty()) {
+        min_edge_textbox_->set_value(last_valid_min_edge_text_);
+        show_min_edge_note("Enter a number between 0 and 10000.", error_color());
+        if (min_edge_widget_) {
+            min_edge_widget_->request_layout();
+        }
+    }
+}
+
+void MapLayersPanel::apply_min_edge_value(int value) {
+    value = std::clamp(value, 0, static_cast<int>(map_layers::kMinEdgeDistanceMax));
+    if (value == min_edge_value_) {
+        return;
+    }
+    min_edge_value_ = value;
+    last_valid_min_edge_text_ = std::to_string(value);
+    if (controller_) {
+        controller_->set_min_edge_distance(static_cast<double>(value));
+    } else if (map_info_ && map_info_->is_object()) {
+        (*map_info_)["map_layers_settings"]["min_edge_distance"] = value;
+        mark_dirty();
+    }
+    if (preview_widget_) {
+        preview_widget_->mark_dirty();
+    }
+    validation_dirty_ = true;
+    clear_min_edge_note();
+    trigger_save();
+}
+
+void MapLayersPanel::show_min_edge_note(const std::string& message, SDL_Color color) {
+    min_edge_note_ = message;
+    min_edge_note_color_ = color;
+    min_edge_note_expiration_ = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    if (min_edge_widget_) {
+        min_edge_widget_->request_layout();
+    }
+}
+
+void MapLayersPanel::clear_min_edge_note() {
+    if (min_edge_note_.empty()) {
+        return;
+    }
+    min_edge_note_.clear();
+    min_edge_note_color_ = DMStyles::Label().color;
+    if (min_edge_widget_) {
+        min_edge_widget_->request_layout();
+    }
+}
+
+void MapLayersPanel::update_min_edge_note() {
+    if (min_edge_note_.empty()) {
+        return;
+    }
+    if (min_edge_note_expiration_ == std::chrono::steady_clock::time_point{}) {
+        return;
+    }
+    if (std::chrono::steady_clock::now() >= min_edge_note_expiration_) {
+        clear_min_edge_note();
+        min_edge_note_expiration_ = std::chrono::steady_clock::time_point{};
+    }
+}
+
+bool MapLayersPanel::min_edge_note_visible() const {
+    return !min_edge_note_.empty();
+}
+
+int MapLayersPanel::min_edge_widget_height_for_width(int w) const {
+    const int padding = DMSpacing::small_gap();
+    const int inner_width = std::max(0, w - padding * 2);
+    int height = padding * 2;
+    if (min_edge_textbox_) {
+        height += min_edge_textbox_->preferred_height(inner_width);
+    } else {
+        height += DMTextBox::height();
+    }
+    if (min_edge_note_visible()) {
+        height += DMStyles::Label().font_size + DMSpacing::small_gap();
+    }
+    return height;
+}
+
+void MapLayersPanel::layout_min_edge_input(const SDL_Rect& bounds) {
+    if (!min_edge_textbox_) {
+        return;
+    }
+    const int padding = DMSpacing::small_gap();
+    const int inner_width = std::max(0, bounds.w - padding * 2);
+    const int box_height = min_edge_textbox_->preferred_height(inner_width);
+    SDL_Rect text_rect{bounds.x + padding, bounds.y + padding, inner_width, box_height};
+    min_edge_textbox_->set_rect(text_rect);
+    if (min_edge_note_visible()) {
+        int note_y = text_rect.y + text_rect.h + DMSpacing::small_gap();
+        min_edge_note_rect_ = SDL_Rect{text_rect.x, note_y, inner_width, DMStyles::Label().font_size};
+    } else {
+        min_edge_note_rect_ = SDL_Rect{text_rect.x, text_rect.y + text_rect.h, inner_width, 0};
+    }
+}
+
+void MapLayersPanel::render_min_edge_input(SDL_Renderer* renderer, const SDL_Rect&) const {
+    if (min_edge_textbox_) {
+        min_edge_textbox_->render(renderer);
+    }
+    if (min_edge_note_visible() && min_edge_note_rect_.w > 0) {
+        DMLabelStyle style = DMStyles::Label();
+        style.color = min_edge_note_color_;
+        DrawLabelText(renderer, min_edge_note_, min_edge_note_rect_.x, min_edge_note_rect_.y, style);
+    }
 }
 

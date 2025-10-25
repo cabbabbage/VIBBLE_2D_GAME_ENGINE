@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include <SDL.h>
 
@@ -13,6 +14,7 @@
 #include "DockableCollapsible.hpp"
 #include "SlidingWindowContainer.hpp"
 #include "widgets.hpp"
+#include "map_generation/map_layers_geometry.hpp"
 
 class Input;
 struct SDL_Renderer;
@@ -70,9 +72,11 @@ public:
 private:
     class LayersListWidget;
     class ValidationSummaryWidget;
+    class MinEdgeWidget;
 
     friend class LayersListWidget;
     friend class ValidationSummaryWidget;
+    friend class MinEdgeWidget;
 
     struct LayerRow {
         int index = -1;
@@ -83,6 +87,7 @@ private:
         bool invalid = false;
         bool warning = false;
         bool dependency_highlight = false;
+        bool deletable = true;
     };
 
     void rebuild_layers();
@@ -122,6 +127,19 @@ private:
     const nlohmann::json& layers_array() const;
     nlohmann::json& layers_array();
 
+    void sync_min_edge_textbox();
+    bool handle_min_edge_event(const SDL_Event& e);
+    void on_min_edge_text_changed();
+    void on_min_edge_edit_finished();
+    void apply_min_edge_value(int value);
+    void show_min_edge_note(const std::string& message, SDL_Color color);
+    void clear_min_edge_note();
+    void update_min_edge_note();
+    bool min_edge_note_visible() const;
+    int min_edge_widget_height_for_width(int w) const;
+    void layout_min_edge_input(const SDL_Rect& bounds);
+    void render_min_edge_input(SDL_Renderer* renderer, const SDL_Rect& bounds) const;
+
 private:
     nlohmann::json* map_info_ = nullptr;
     std::string map_path_;
@@ -149,6 +167,8 @@ private:
     LayersListWidget* list_widget_ = nullptr;
     MapLayersPreviewWidget* preview_widget_ = nullptr;
     ValidationSummaryWidget* validation_widget_ = nullptr;
+    MinEdgeWidget* min_edge_widget_ = nullptr;
+    std::unique_ptr<DMTextBox> min_edge_textbox_;
 
     std::vector<LayerRow> layer_rows_;
     int hovered_layer_index_ = -1;
@@ -182,5 +202,12 @@ private:
     int dragging_start_slot_ = -1;
     int drop_target_slot_ = -1;
     int drag_start_mouse_y_ = 0;
+
+    int min_edge_value_ = map_layers::kDefaultMinEdgeDistance;
+    std::string last_valid_min_edge_text_;
+    SDL_Rect min_edge_note_rect_{0, 0, 0, 0};
+    std::string min_edge_note_;
+    SDL_Color min_edge_note_color_{255, 255, 255, 255};
+    std::chrono::steady_clock::time_point min_edge_note_expiration_{};
 };
 

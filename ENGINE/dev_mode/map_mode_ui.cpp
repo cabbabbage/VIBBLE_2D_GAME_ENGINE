@@ -760,7 +760,7 @@ void MapModeUI::configure_footer_buttons() {
         DevFooterBar::Button layers_btn;
         layers_btn.id = "layers";
         layers_btn.label = "Layers";
-        layers_btn.style_override = &DMStyles::FooterToggleButton();
+        layers_btn.style_override = &DMStyles::WarnButton();
         layers_btn.active_style_override = &DMStyles::AccentButton();
         layers_btn.on_toggle = [this](bool active) {
             if (active) {
@@ -781,7 +781,7 @@ void MapModeUI::configure_footer_buttons() {
             DevFooterBar::Button lights_btn;
             lights_btn.id = kButtonIdLights;
             lights_btn.label = "Lighting";
-            lights_btn.style_override = &DMStyles::FooterToggleButton();
+            lights_btn.style_override = &DMStyles::WarnButton();
             lights_btn.active_style_override = &DMStyles::AccentButton();
             lights_btn.on_toggle = [this](bool active) {
                 if (active) {

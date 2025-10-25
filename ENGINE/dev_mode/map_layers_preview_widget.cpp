@@ -258,11 +258,15 @@ void MapLayersPreviewWidget::rebuild_visuals() {
         return;
     }
 
-    const map_layers::LayerRadiiResult radii = map_layers::compute_layer_radii(layers, rooms_info);
+    double min_edge_distance = map_layers::kDefaultMinEdgeDistance;
+    if (map_info_ && map_info_->is_object()) {
+        min_edge_distance = map_layers::min_edge_distance_from_map_info(*map_info_);
+    }
+    const map_layers::LayerRadiiResult radii = map_layers::compute_layer_radii(layers, rooms_info, min_edge_distance);
+    min_edge_distance_ = radii.min_edge_distance;
     max_visual_radius_ = std::max(1.0, radii.map_radius);
 
     layer_visuals_.reserve(layers.size());
-    double previous_radius = 0.0;
     for (size_t i = 0; i < layers.size(); ++i) {
         const auto& layer_json = layers[i];
         if (!layer_json.is_object()) {
@@ -274,7 +278,14 @@ void MapLayersPreviewWidget::rebuild_visuals() {
         if (i < radii.layer_radii.size()) {
             visual.radius = radii.layer_radii[i];
         }
-        visual.inner_radius = previous_radius;
+        if (i < radii.layer_extents.size()) {
+            visual.extent = radii.layer_extents[i];
+        }
+        if (visual.index == 0) {
+            visual.inner_radius = 0.0;
+        } else {
+            visual.inner_radius = std::max(0.0, visual.radius - visual.extent);
+        }
         visual.color = layer_color(visual.index);
         visual.min_rooms = layer_json.value("min_rooms", 0);
         visual.max_rooms = layer_json.value("max_rooms", 0);
@@ -309,7 +320,7 @@ void MapLayersPreviewWidget::rebuild_visuals() {
         }
         visual.room_count = static_cast<int>(visual.rooms.size());
         layer_visuals_.push_back(std::move(visual));
-        previous_radius = layer_visuals_.back().radius;
+        max_visual_radius_ = std::max(max_visual_radius_, layer_visuals_.back().radius + layer_visuals_.back().extent);
     }
     recalculate_preview_scale();
 }
@@ -440,13 +451,20 @@ int MapLayersPreviewWidget::hit_test_layer(int x, int y) const {
     const double dist_pixels = std::sqrt(dx * dx + dy * dy);
     const double tolerance = 6.0;
     for (const auto& layer : layer_visuals_) {
-        const double outer_pixels = layer.radius * scale;
-        const double inner_pixels = layer.inner_radius * scale;
-        if (outer_pixels <= 0.0 || outer_pixels <= inner_pixels) {
+        if (layer.index == 0) {
+            const double dot_radius = std::clamp(layer.extent * scale, 4.0, 18.0);
+            if (dist_pixels <= dot_radius + tolerance) {
+                return layer.index;
+            }
             continue;
         }
+        const double outer_pixels = layer.radius * scale;
+        const double inner_pixels = layer.inner_radius * scale;
         const double min_radius = std::max(0.0, inner_pixels - tolerance);
-        const double max_radius = outer_pixels + tolerance;
+        const double max_radius = std::max(outer_pixels, inner_pixels) + tolerance;
+        if (outer_pixels <= 0.0 || max_radius <= 0.0) {
+            continue;
+        }
         if (dist_pixels >= min_radius && dist_pixels <= max_radius) {
             return layer.index;
         }
@@ -542,26 +560,47 @@ void MapLayersPreviewWidget::render_preview(SDL_Renderer* renderer) const {
         } else if (layer.dependency) {
             outline_color = lighten(outline_color, 0.2f);
         }
-        const int radius_pixels = std::max(8, static_cast<int>(std::lround(layer.radius * preview_scale_)));
-        const int inner_radius_pixels = std::max(0, static_cast<int>(std::lround(layer.inner_radius * preview_scale_)));
         const bool hovered_layer_active = (hovered_layer == layer.index && hovered_room.empty());
         const bool selected_layer = layer.selected;
 
-        if (hovered_layer_active || selected_layer) {
-            SDL_Color ring_color = lighten(outline_color, selected_layer ? 0.12f : 0.25f);
-            ring_color.a = selected_layer ? 140 : 100;
-            fill_ring(renderer, center.x, center.y, inner_radius_pixels, radius_pixels, ring_color);
-        }
+        if (layer.index == 0) {
+            const double raw_dot = std::max(layer.extent, 1.0) * preview_scale_;
+            const int dot_radius = std::clamp(static_cast<int>(std::lround(raw_dot)), 4, 18);
+            SDL_Color fill_color = lighten(outline_color, selected_layer ? 0.25f : 0.1f);
+            fill_color.a = selected_layer ? 180 : 140;
+            if (hovered_layer_active && !selected_layer) {
+                fill_color = lighten(fill_color, 0.2f);
+            }
+            fill_circle(renderer, center.x, center.y, dot_radius, fill_color);
+            SDL_Color border_color = outline_color;
+            if (hovered_layer_active) {
+                border_color = lighten(border_color, 0.25f);
+            }
+            int thickness = selected_layer ? 4 : 3;
+            draw_circle(renderer, center.x, center.y, dot_radius, border_color, thickness);
+            if (selected_layer) {
+                draw_circle(renderer, center.x, center.y, dot_radius + 3, selection_outline, 1);
+            }
+        } else {
+            const int radius_pixels = std::max(1, static_cast<int>(std::lround(layer.radius * preview_scale_)));
+            const int inner_radius_pixels = std::max(0, static_cast<int>(std::lround(layer.inner_radius * preview_scale_)));
 
-        SDL_Color color = outline_color;
-        int thickness = selected_layer ? 6 : 3;
-        if (hovered_layer_active) {
-            color = lighten(color, 0.25f);
-            thickness = std::max(thickness, selected_layer ? 7 : 5);
-        }
-        draw_circle(renderer, center.x, center.y, radius_pixels, color, thickness);
-        if (selected_layer) {
-            draw_circle(renderer, center.x, center.y, radius_pixels + 4, selection_outline, 1);
+            if (hovered_layer_active || selected_layer) {
+                SDL_Color ring_color = lighten(outline_color, selected_layer ? 0.12f : 0.25f);
+                ring_color.a = selected_layer ? 140 : 100;
+                fill_ring(renderer, center.x, center.y, inner_radius_pixels, radius_pixels, ring_color);
+            }
+
+            SDL_Color color = outline_color;
+            int thickness = selected_layer ? 6 : 3;
+            if (hovered_layer_active) {
+                color = lighten(color, 0.25f);
+                thickness = std::max(thickness, selected_layer ? 7 : 5);
+            }
+            draw_circle(renderer, center.x, center.y, radius_pixels, color, thickness);
+            if (selected_layer) {
+                draw_circle(renderer, center.x, center.y, radius_pixels + 4, selection_outline, 1);
+            }
         }
 
         std::ostringstream oss;
@@ -588,6 +627,9 @@ void MapLayersPreviewWidget::render_preview(SDL_Renderer* renderer) const {
 
     const SDL_Color hover_fill = DMStyles::AccentButton().hover_bg;
     for (const auto& layer : layer_visuals_) {
+        if (layer.index == 0) {
+            continue;
+        }
         for (const auto& room : layer.rooms) {
             const int px = center.x + static_cast<int>(std::lround(room.position.x * preview_scale_));
             const int py = center.y + static_cast<int>(std::lround(room.position.y * preview_scale_));

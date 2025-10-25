@@ -10,6 +10,7 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "widgets.hpp"
+#include "map_generation/map_layers_geometry.hpp"
 
 class MapLayersController;
 
@@ -60,6 +61,7 @@ private:
         std::string name;
         double radius = 0.0;
         double inner_radius = 0.0;
+        double extent = 0.0;
         SDL_Color color{255, 255, 255, 255};
         int min_rooms = 0;
         int max_rooms = 0;
@@ -105,6 +107,7 @@ private:
     std::vector<LayerVisual> layer_visuals_;
     double max_visual_radius_ = 1.0;
     mutable double preview_scale_ = 1.0;
+    double min_edge_distance_ = static_cast<double>(map_layers::kDefaultMinEdgeDistance);
 
     int hovered_layer_index_ = -1;
     std::string hovered_room_key_;

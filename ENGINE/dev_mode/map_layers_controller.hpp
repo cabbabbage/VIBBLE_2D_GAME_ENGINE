@@ -37,6 +37,9 @@ public:
     const nlohmann::json& layers() const;
     std::vector<std::string> available_rooms() const;
 
+    double min_edge_distance() const;
+    bool set_min_edge_distance(double value);
+
     int create_layer(const std::string& display_name = {});
     bool delete_layer(int index);
     bool reorder_layer(int from, int to);
@@ -58,6 +61,7 @@ private:
     bool validate_candidate_index(const nlohmann::json& layer, int candidate_index) const;
     void notify();
     void clamp_layer_counts(nlohmann::json& layer) const;
+    void ensure_map_settings();
 
 private:
     struct ListenerEntry {

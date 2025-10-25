@@ -1707,7 +1707,7 @@ void DevControls::configure_header_button_sets() {
         camera_btn.id = "camera";
         camera_btn.label = "Camera";
         camera_btn.active = camera_panel_ && camera_panel_->is_visible();
-        camera_btn.style_override = &DMStyles::FooterToggleButton();
+        camera_btn.style_override = &DMStyles::WarnButton();
         camera_btn.active_style_override = &DMStyles::AccentButton();
         camera_btn.on_toggle = [this](bool active) {
             if (room_editor_) {
@@ -1733,7 +1733,7 @@ void DevControls::configure_header_button_sets() {
         lights_btn.label = "Lighting";
         const bool lights_visible = map_mode_ui_ && map_mode_ui_->is_light_panel_visible();
         lights_btn.active = lights_visible;
-        lights_btn.style_override = &DMStyles::FooterToggleButton();
+        lights_btn.style_override = &DMStyles::WarnButton();
         lights_btn.active_style_override = &DMStyles::AccentButton();
         lights_btn.on_toggle = [this](bool active) {
             if (room_editor_) {
@@ -1763,7 +1763,7 @@ void DevControls::configure_header_button_sets() {
         layers_btn.label = "Layers";
         const bool layers_visible = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
         layers_btn.active = layers_visible;
-        layers_btn.style_override = &DMStyles::FooterToggleButton();
+        layers_btn.style_override = &DMStyles::WarnButton();
         layers_btn.active_style_override = &DMStyles::AccentButton();
         layers_btn.on_toggle = [this](bool active) {
             if (room_editor_) {

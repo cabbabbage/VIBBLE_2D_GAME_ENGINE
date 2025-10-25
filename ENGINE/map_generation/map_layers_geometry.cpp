@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <limits>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -10,6 +11,19 @@
 namespace map_layers {
 
 namespace {
+
+double clamp_min_edge(double value) {
+    if (!std::isfinite(value)) {
+        return static_cast<double>(kDefaultMinEdgeDistance);
+    }
+    if (value < 0.0) {
+        return 0.0;
+    }
+    if (value > kMinEdgeDistanceMax) {
+        return kMinEdgeDistanceMax;
+    }
+    return value;
+}
 
 double extract_dimension(const nlohmann::json& room, const char* key) {
     if (!room.is_object()) return 0.0;
@@ -95,7 +109,8 @@ double room_extent_from_rooms_data(const nlohmann::json* rooms_data,
 }
 
 LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
-                                      const nlohmann::json* rooms_data) {
+                                      const nlohmann::json* rooms_data,
+                                      double min_edge_distance) {
     LayerRadiiResult result;
     if (!layers.is_array() || layers.empty()) {
         result.map_radius = 0.0;
@@ -105,6 +120,9 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
     const size_t layer_count = layers.size();
     result.layer_radii.assign(layer_count, 0.0);
     result.layer_extents.assign(layer_count, 0.0);
+
+    const double sanitized_edge = clamp_min_edge(min_edge_distance);
+    result.min_edge_distance = sanitized_edge;
 
     double max_extent = 0.0;
     double largest_extent = 0.0;
@@ -129,28 +147,22 @@ LayerRadiiResult compute_layer_radii(const nlohmann::json& layers,
     }
 
     for (size_t i = 0; i < layer_count; ++i) {
-        const auto& layer = layers[i];
-        if (!layer.is_object()) {
+        if (i == 0) {
+            result.layer_radii[i] = 0.0;
+            max_extent = std::max(max_extent, result.layer_extents[i]);
             continue;
         }
 
-        const double largest = result.layer_extents[i];
-        double desired_radius = largest;
+        const double prev_radius = result.layer_radii[i - 1];
+        const double prev_extent = result.layer_extents[i - 1];
+        const double current_extent = result.layer_extents[i];
 
-        if (i > 0) {
-            const double prev_radius = result.layer_radii[i - 1];
-            const double prev_extent = result.layer_extents[i - 1];
-            double separation = prev_extent + largest + kLayerEdgeBuffer;
-            const double minimum_step = static_cast<double>(kLayerRadiusStepDefault) + kLayerEdgeBuffer;
-            separation = std::max(separation, minimum_step);
-            const double minimum = prev_radius + separation;
-            desired_radius = minimum;
-        }
-
-        int final_radius = static_cast<int>(std::ceil(desired_radius));
+        const double separation = prev_extent + current_extent + sanitized_edge;
+        const double desired_radius = prev_radius + separation;
+        int final_radius = static_cast<int>(std::ceil(std::max(0.0, desired_radius)));
         if (final_radius < 0) final_radius = 0;
         result.layer_radii[i] = static_cast<double>(final_radius);
-        max_extent = std::max(max_extent, result.layer_radii[i] + largest);
+        max_extent = std::max(max_extent, result.layer_radii[i] + current_extent);
     }
 
     if (max_extent <= 0.0) {
@@ -177,8 +189,27 @@ double map_radius_from_map_info(const nlohmann::json& map_info) {
     if (rooms_it != map_info.end() && rooms_it->is_object()) {
         rooms_data_ptr = &(*rooms_it);
     }
-    const LayerRadiiResult result = compute_layer_radii(*layers_it, rooms_data_ptr);
+    const double min_edge = min_edge_distance_from_map_info(map_info);
+    const LayerRadiiResult result = compute_layer_radii(*layers_it, rooms_data_ptr, min_edge);
     return result.map_radius;
+}
+
+double min_edge_distance_from_map_info(const nlohmann::json& map_info) {
+    if (!map_info.is_object()) {
+        return static_cast<double>(kDefaultMinEdgeDistance);
+    }
+    const auto settings_it = map_info.find("map_layers_settings");
+    if (settings_it == map_info.end() || !settings_it->is_object()) {
+        return static_cast<double>(kDefaultMinEdgeDistance);
+    }
+    const auto value_it = settings_it->find("min_edge_distance");
+    if (value_it == settings_it->end()) {
+        return static_cast<double>(kDefaultMinEdgeDistance);
+    }
+    if (value_it->is_number_integer() || value_it->is_number_float()) {
+        return clamp_min_edge(value_it->get<double>());
+    }
+    return static_cast<double>(kDefaultMinEdgeDistance);
 }
 
 }  // namespace map_layers

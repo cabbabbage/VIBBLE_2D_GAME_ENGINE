@@ -121,6 +121,7 @@ public:
     void enqueue_notification(std::function<void()> cb);
     void process_pending_notifications();
     void fire_entry_callbacks(const nlohmann::json& entry, const ChangeSummary& summary);
+    bool single_entry_mode() const { return single_entry_mode_; }
 
 private:
     struct DragState {
@@ -160,6 +161,7 @@ private:
     std::optional<std::string> pending_focus_id_{};
     std::function<void(const nlohmann::json&)> pending_save_callback_{};
     int default_resolution_ = 0;
+    bool single_entry_mode_ = false;
 
     bool suppress_layout_change_callback_ = false;
     std::unique_ptr<DMButton> add_button_{};

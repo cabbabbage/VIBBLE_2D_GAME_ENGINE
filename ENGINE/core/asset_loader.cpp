@@ -400,16 +400,34 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
         trails_data_       = &map_info_json_["trails_data"];
         if (!trails_data_->is_object()) *trails_data_ = nlohmann::json::object();
 
-        const auto layers_it = map_info_json_.find("map_layers");
+        auto layers_it = map_info_json_.find("map_layers");
         map_layers::LayerRadiiResult radii_result;
         const nlohmann::json* rooms_data_ptr = rooms_data_;
         if (layers_it != map_info_json_.end()) {
-                radii_result = map_layers::compute_layer_radii(*layers_it, rooms_data_ptr);
+                const double min_edge = map_layers::min_edge_distance_from_map_info(map_info_json_);
+                radii_result = map_layers::compute_layer_radii(*layers_it, rooms_data_ptr, min_edge);
         }
 
         map_radius_   = radii_result.map_radius;
         map_center_x_ = map_center_y_ = map_radius_;
         layer_radii_  = radii_result.layer_radii;
+        if (layers_it != map_info_json_.end() && layers_it->is_array()) {
+                for (std::size_t idx = 0; idx < layers_it->size(); ++idx) {
+                        auto& layer_entry = (*layers_it)[idx];
+                        if (!layer_entry.is_object()) {
+                                continue;
+                        }
+                        const double ring_radius = idx < radii_result.layer_radii.size()
+                                                      ? radii_result.layer_radii[idx]
+                                                      : 0.0;
+                        const double extent_value = idx < radii_result.layer_extents.size()
+                                                        ? radii_result.layer_extents[idx]
+                                                        : 0.0;
+                        layer_entry["ring_radius"] = ring_radius;
+                        layer_entry["bounding_extent"] = extent_value;
+                }
+        }
+        map_info_json_["map_layers_settings"]["min_edge_distance"] = radii_result.min_edge_distance;
         map_layers_.clear();
 
         if (layers_it != map_info_json_.end() && layers_it->is_array()) {

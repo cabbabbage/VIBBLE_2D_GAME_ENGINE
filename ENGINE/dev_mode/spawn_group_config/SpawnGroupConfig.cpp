@@ -1546,6 +1546,7 @@ void SpawnGroupConfig::load(const nlohmann::json& groups) {
     on_change_ = {};
     on_entry_change_ = {};
     configure_entry_ = {};
+    single_entry_mode_ = false;
     readonly_snapshot_ = groups;
     if (!readonly_snapshot_.is_array()) {
         readonly_snapshot_ = nlohmann::json::array();
@@ -1565,6 +1566,7 @@ void SpawnGroupConfig::load_impl(nlohmann::json* array,
                                  ConfigureEntryCallback configure_entry) {
     bound_array_ = array;
     bound_entry_ = entry;
+    single_entry_mode_ = (bound_entry_ != nullptr);
     if (bound_entry_) {
         devmode::spawn::ensure_spawn_group_entry_defaults(*bound_entry_, default_display_name_for(*bound_entry_), default_resolution_);
     }
@@ -2221,7 +2223,7 @@ DockableCollapsible::Rows SpawnGroupConfig::build_layout_rows() {
         result.push_back({empty_state_label_.get()});
     }
 
-    if (callbacks_.on_add) {
+    if (callbacks_.on_add && !single_entry_mode_) {
         if (!add_button_) {
             add_button_ = std::make_unique<DMButton>("Add Spawn Group", &DMStyles::CreateButton(), 0, DMButton::height());
             add_button_widget_ = std::make_unique<ButtonWidget>(add_button_.get(), [this]() {

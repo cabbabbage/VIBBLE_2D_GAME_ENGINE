@@ -1,11 +1,13 @@
 #include "map_layers_controller.hpp"
 
 #include "map_layers_common.hpp"
+#include "map_generation/map_layers_geometry.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <SDL_log.h>
@@ -144,6 +146,34 @@ std::vector<std::string> MapLayersController::available_rooms() const {
     return result;
 }
 
+double MapLayersController::min_edge_distance() const {
+    if (!map_info_) {
+        return static_cast<double>(map_layers::kDefaultMinEdgeDistance);
+    }
+    return map_layers::min_edge_distance_from_map_info(*map_info_);
+}
+
+bool MapLayersController::set_min_edge_distance(double value) {
+    if (!map_info_) {
+        return false;
+    }
+    ensure_map_settings();
+    const double clamped = std::clamp(value, 0.0, map_layers::kMinEdgeDistanceMax);
+    int stored = static_cast<int>(std::lround(clamped));
+    auto& settings = (*map_info_)["map_layers_settings"];
+    if (!settings.is_object()) {
+        settings = json::object();
+    }
+    int current = settings.value("min_edge_distance", stored);
+    if (current == stored) {
+        return false;
+    }
+    settings["min_edge_distance"] = stored;
+    dirty_ = true;
+    notify();
+    return true;
+}
+
 int MapLayersController::create_layer(const std::string& display_name) {
     if (!map_info_) return -1;
     ensure_initialized();
@@ -165,6 +195,7 @@ int MapLayersController::create_layer(const std::string& display_name) {
 
 bool MapLayersController::delete_layer(int index) {
     if (!map_info_) return false;
+    if (index == 0) return false;
     auto& arr = (*map_info_)["map_layers"];
     if (!arr.is_array() || index < 0 || index >= static_cast<int>(arr.size())) return false;
     arr.erase(arr.begin() + index);
@@ -180,6 +211,7 @@ bool MapLayersController::reorder_layer(int from, int to) {
     if (!arr.is_array() || arr.empty()) return false;
     const int count = static_cast<int>(arr.size());
     if (from < 0 || from >= count || to < 0 || to >= count || from == to) return false;
+    if (from == 0 || to == 0) return false;
     json layer = arr[from];
     arr.erase(arr.begin() + from);
     arr.insert(arr.begin() + to, std::move(layer));
@@ -259,6 +291,33 @@ bool MapLayersController::add_candidate(int layer_index, const std::string& room
     auto& rooms = (*layer_json)["rooms"];
     if (!rooms.is_array()) rooms = json::array();
     if (room_name.empty()) return false;
+    if (layer_index == 0) {
+        if (rooms.empty() || !rooms[0].is_object()) {
+            json candidate = {
+                {"name", room_name},
+                {"min_instances", 1},
+                {"max_instances", 1},
+                {"required_children", json::array()}
+            };
+            rooms = json::array({candidate});
+        } else {
+            json& spawn_entry = rooms[0];
+            spawn_entry["name"] = room_name;
+            spawn_entry["min_instances"] = 1;
+            spawn_entry["max_instances"] = 1;
+            auto& required = spawn_entry["required_children"];
+            if (!required.is_array()) {
+                required = json::array();
+            }
+            if (rooms.size() > 1) {
+                rooms.erase(rooms.begin() + 1, rooms.end());
+            }
+        }
+        clamp_layer_counts(*layer_json);
+        dirty_ = true;
+        notify();
+        return true;
+    }
     json candidate = {
         {"name", room_name},
         {"min_instances", 0},
@@ -274,6 +333,7 @@ bool MapLayersController::add_candidate(int layer_index, const std::string& room
 
 bool MapLayersController::remove_candidate(int layer_index, int candidate_index) {
     if (!validate_layer_index(layer_index)) return false;
+    if (layer_index == 0) return false;
     auto* layer_json = layer(layer_index);
     if (!layer_json) return false;
     auto& rooms = (*layer_json)["rooms"];
@@ -290,6 +350,7 @@ bool MapLayersController::set_candidate_instance_range(int layer_index,
                                                        int min_instances,
                                                        int max_instances) {
     if (!validate_layer_index(layer_index)) return false;
+    if (layer_index == 0) return false;
     auto* layer_json = layer(layer_index);
     if (!layer_json) return false;
     auto& rooms = (*layer_json)["rooms"];
@@ -316,6 +377,7 @@ bool MapLayersController::set_candidate_instance_range(int layer_index,
 
 bool MapLayersController::set_candidate_instance_count(int layer_index, int candidate_index, int max_instances) {
     if (!validate_layer_index(layer_index)) return false;
+    if (layer_index == 0) return false;
     auto* layer_json = layer(layer_index);
     if (!layer_json) return false;
     auto& rooms = (*layer_json)["rooms"];
@@ -427,6 +489,7 @@ bool MapLayersController::remove_candidate_child(int layer_index, int candidate_
 
 void MapLayersController::ensure_initialized() {
     if (!map_info_) return;
+    ensure_map_settings();
     if (!map_info_->contains("map_layers") || !(*map_info_)["map_layers"].is_array()) {
         (*map_info_)["map_layers"] = json::array();
     }
@@ -435,6 +498,18 @@ void MapLayersController::ensure_initialized() {
         map_info_->erase(map_radius_it);
     }
     ensure_layer_indices();
+}
+
+void MapLayersController::ensure_map_settings() {
+    if (!map_info_) {
+        return;
+    }
+    double sanitized = map_layers::min_edge_distance_from_map_info(*map_info_);
+    auto& settings = (*map_info_)["map_layers_settings"];
+    if (!settings.is_object()) {
+        settings = json::object();
+    }
+    settings["min_edge_distance"] = static_cast<int>(std::lround(sanitized));
 }
 
 void MapLayersController::ensure_layer_indices() {
@@ -508,11 +583,50 @@ void MapLayersController::notify() {
 void MapLayersController::clamp_layer_counts(json& layer) const {
     if (!layer.is_object()) return;
 
+    int level = layer.value("level", -1);
+    auto& rooms_ref = layer["rooms"];
+    if (!rooms_ref.is_array()) {
+        rooms_ref = json::array();
+    }
+    if (level == 0) {
+        if (rooms_ref.empty() || !rooms_ref[0].is_object()) {
+            std::string existing_name;
+            if (!rooms_ref.empty() && rooms_ref[0].is_string()) {
+                existing_name = rooms_ref[0].get<std::string>();
+            }
+            json candidate = {
+                {"name", existing_name},
+                {"min_instances", 1},
+                {"max_instances", 1},
+                {"required_children", json::array()}
+            };
+            rooms_ref = json::array({candidate});
+        }
+        json& spawn_entry = rooms_ref[0];
+        if (!spawn_entry.is_object()) {
+            spawn_entry = json::object();
+        }
+        if (!spawn_entry.contains("name")) {
+            spawn_entry["name"] = "";
+        }
+        spawn_entry["min_instances"] = 1;
+        spawn_entry["max_instances"] = 1;
+        auto& required = spawn_entry["required_children"];
+        if (!required.is_array()) {
+            required = json::array();
+        }
+        if (rooms_ref.size() > 1) {
+            rooms_ref.erase(rooms_ref.begin() + 1, rooms_ref.end());
+        }
+        layer["min_rooms"] = 1;
+        layer["max_rooms"] = 1;
+        return;
+    }
+
     int min_sum = 0;
     int max_sum = 0;
-    const auto rooms_it = layer.find("rooms");
-    if (rooms_it != layer.end() && rooms_it->is_array()) {
-        for (auto& candidate : *rooms_it) {
+    if (rooms_ref.is_array()) {
+        for (auto& candidate : rooms_ref) {
             if (!candidate.is_object()) continue;
             int min_inst = clamp_candidate_min(candidate.value("min_instances", 0));
             int max_inst = clamp_candidate_max(min_inst, candidate.value("max_instances", min_inst));
