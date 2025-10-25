@@ -10,6 +10,7 @@
 #include "font_cache.hpp"
 #include "map_layers_common.hpp"
 #include "widgets.hpp"
+#include "dev_mode_color_utils.hpp"
 #include "dev_mode_sdl_event_utils.hpp"
 
 namespace {
@@ -217,8 +218,31 @@ void MapRoomsDisplay::render(SDL_Renderer* renderer) const {
         SDL_RenderDrawRect(renderer, &row.rect);
 
         const int padding = DMSpacing::small_gap();
-        SDL_Point text_size = MeasureLabelText(label_style, row.name);
+        const int base_swatch = std::max(12, row.rect.h - padding * 2);
+        const int max_swatch = std::max(12, row.rect.w / 6);
+        const int swatch_size = std::max(12, std::min(base_swatch, max_swatch));
+        const int swatch_height = std::max(8, std::min(swatch_size, std::max(0, row.rect.h - padding)));
+        SDL_Rect swatch{row.rect.x + padding,
+                        row.rect.y + std::max(0, (row.rect.h - swatch_height) / 2),
+                        swatch_size,
+                        swatch_height};
         int text_x = row.rect.x + padding;
+        if (swatch.w > 0 && swatch.h > 0 && swatch.x + swatch.w <= row.rect.x + row.rect.w) {
+            SDL_Color swatch_color = row.display_color;
+            swatch_color.a = 255;
+            if (row.key == hovered_room_) {
+                swatch_color = lighten(swatch_color, 0.18f);
+                swatch_color.a = 255;
+            }
+            SDL_SetRenderDrawColor(renderer, swatch_color.r, swatch_color.g, swatch_color.b, swatch_color.a);
+            SDL_RenderFillRect(renderer, &swatch);
+            SDL_Color swatch_outline = DMStyles::Border();
+            SDL_SetRenderDrawColor(renderer, swatch_outline.r, swatch_outline.g, swatch_outline.b, swatch_outline.a);
+            SDL_RenderDrawRect(renderer, &swatch);
+            text_x = swatch.x + swatch.w + padding;
+        }
+
+        SDL_Point text_size = MeasureLabelText(label_style, row.name);
         int text_y = row.rect.y + (row.rect.h - text_size.y) / 2;
         const int available = row.delete_rect.x - text_x - padding;
         std::string label = row.name;
@@ -349,6 +373,11 @@ void MapRoomsDisplay::rebuild_rows() {
         RoomRow row;
         row.key = it.key();
         row.name = room_display_name(row.key, it.value());
+        row.display_color = SDL_Color{180, 188, 202, 255};
+        if (auto display = utils::display_color::read(it.value())) {
+            row.display_color = *display;
+            row.display_color.a = 255;
+        }
         rooms_.push_back(std::move(row));
     }
 

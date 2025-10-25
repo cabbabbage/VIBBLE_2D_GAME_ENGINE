@@ -39,6 +39,7 @@ private:
         std::string name;
         SDL_Rect rect{0, 0, 0, 0};
         SDL_Rect delete_rect{0, 0, 0, 0};
+        SDL_Color display_color{180, 188, 202, 255};
     };
 
     void configure_container(SlidingWindowContainer& container);

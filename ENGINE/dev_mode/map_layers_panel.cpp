@@ -317,6 +317,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
 
     auto preview_widget_storage = std::make_unique<MapLayersPreviewWidget>();
     preview_widget_storage->set_on_select_layer([this](int index) {
+        this->force_layer_controls_on_next_select();
         this->select_layer(index);
     });
     preview_widget_storage->set_on_select_room([this](const std::string& room_key) {
@@ -451,6 +452,10 @@ void MapLayersPanel::set_side_panel_callback(std::function<void(SidePanel)> cb) 
     side_panel_callback_ = std::move(cb);
 }
 
+void MapLayersPanel::force_layer_controls_on_next_select() {
+    force_layer_controls_on_select_ = true;
+}
+
 void MapLayersPanel::set_rooms_list_container(SlidingWindowContainer* container) {
     rooms_list_container_ = container;
 }
@@ -559,6 +564,8 @@ void MapLayersPanel::select_layer(int index) {
             on_layer_selected_(-1);
         }
         recalculate_dependency_highlights();
+        force_layer_controls_on_select_ = false;
+        notify_side_panel(SidePanel::RoomsList);
         return;
     }
 
@@ -577,6 +584,7 @@ void MapLayersPanel::select_layer(int index) {
         found = true;
     }
     if (!found) {
+        force_layer_controls_on_select_ = false;
         return;
     }
 
@@ -598,8 +606,10 @@ void MapLayersPanel::select_layer(int index) {
     if (on_layer_selected_) {
         on_layer_selected_(selected_layer_index_);
     }
+    const bool notify_controls = force_layer_controls_on_select_ || selected_layer_index_ != previous_selection;
+    force_layer_controls_on_select_ = false;
     recalculate_dependency_highlights();
-    if (selected_layer_index_ != previous_selection) {
+    if (notify_controls) {
         notify_side_panel(SidePanel::LayerControls);
     }
 }

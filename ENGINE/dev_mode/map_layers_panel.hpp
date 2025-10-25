@@ -51,6 +51,7 @@ public:
 
     enum class SidePanel { None, RoomsList, LayerControls };
     void set_side_panel_callback(std::function<void(SidePanel)> cb);
+    void force_layer_controls_on_next_select();
     void set_rooms_list_container(SlidingWindowContainer* container);
     void set_layer_controls_container(SlidingWindowContainer* container);
 
@@ -179,6 +180,7 @@ private:
     bool validation_dirty_ = true;
     bool pending_save_ = false;
     bool save_blocked_ = false;
+    bool force_layer_controls_on_select_ = false;
 
     struct ValidationLine {
         std::string text;

@@ -708,6 +708,7 @@ void MapModeUI::ensure_panels() {
         layers_preview_panel_->set_on_select_layer([this](int layer_index) {
             this->set_active_panel(PanelType::Layers);
             if (layers_panel_) {
+                layers_panel_->force_layer_controls_on_next_select();
                 layers_panel_->select_layer(layer_index);
             }
         });

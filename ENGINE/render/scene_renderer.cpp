@@ -364,7 +364,11 @@ void SceneRenderer::render(){
     if (!light_map_only_mode_){
         const auto& camera_state=assets_->getView();
         const camera::RealismSettings& cam_settings = camera_state.realism_settings();
-        const float quality_percent = std::clamp(static_cast<float>(cam_settings.render_quality_percent), 10.0f, 100.0f);
+        const int effective_quality_percent = assets_
+                                                  ? assets_->effective_render_quality_percent()
+                                                  : cam_settings.render_quality_percent;
+        const float quality_percent =
+            std::clamp(static_cast<float>(effective_quality_percent), 10.0f, 100.0f);
         render_pipeline::ScalingLogic::SetQualityCap(quality_percent / 100.0f);
 
         float scale=camera_state.get_scale();
