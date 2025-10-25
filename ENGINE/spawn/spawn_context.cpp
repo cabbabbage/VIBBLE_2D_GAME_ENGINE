@@ -1,7 +1,5 @@
 #include "spawn_context.hpp"
 #include <algorithm>
-#include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <sstream>
@@ -15,8 +13,6 @@
 #include "utils/area_helpers.hpp"
 #include "utils/log.hpp"
 #include "utils/map_grid_settings.hpp"
-namespace fs = std::filesystem;
-
 SpawnContext::SpawnContext(std::mt19937& rng,
                            Check& checker,
                            std::vector<Area>& exclusion_zones,
@@ -103,43 +99,32 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                                 continue;
                         }
                         nlohmann::json j;
-                        bool have_inline = false;
-                        if (childInfo->inline_assets.is_array()) {
-                                j["spawn_groups"] = childInfo->inline_assets;
-                                have_inline = true;
-                        } else if (childInfo->inline_assets.is_object()) {
-                                j = childInfo->inline_assets;
-                                if (!j.contains("spawn_groups") || !j["spawn_groups"].is_array()) {
-                                        j["spawn_groups"] = nlohmann::json::array();
+                        if (childInfo->spawn_group.is_array()) {
+                                const auto& arr = childInfo->spawn_group;
+                                if (!arr.empty()) {
+                                        j["spawn_groups"] = arr;
                                 }
-                                have_inline = true;
+                        } else if (childInfo->spawn_group.is_object()) {
+                                nlohmann::json group = childInfo->spawn_group;
+                                if (!childInfo->area_name.empty()) {
+                                        group["linked_area"] = childInfo->area_name;
+                                        group["link_to_area"] = true;
+                                }
+                                group["placed_on_top_parent"] = childInfo->placed_on_top_parent;
+                                group["z_offset"] = childInfo->z_offset;
+                                j["spawn_groups"] = nlohmann::json::array();
+                                j["spawn_groups"].push_back(std::move(group));
                         }
-                        if (have_inline) {
-                                vibble::log::debug(std::string{"[Spawn] Using inline spawn groups for child area '"} +
-                                                   childInfo->area_name + "' on parent '" + parent_name + "'");
-                        } else {
-                                const auto& childJsonPath = childInfo->json_path;
-                                if (childJsonPath.empty()) {
-                                        vibble::log::debug(std::string{"[Spawn] No child JSON specified for area '"} +
-                                                           childInfo->area_name + "' on parent '" + parent_name +
-                                                           "'; skipping" );
-                                        continue;
-                                }
-                                if (!fs::exists(childJsonPath)) {
-                                        std::cerr << "[Spawn]  Child JSON not found: " << childJsonPath << "\n";
-                                        continue;
-                                }
-                                try {
-                                        std::ifstream in(childJsonPath);
-                                        in >> j;
-                                        vibble::log::debug(std::string{"[Spawn] Loaded child spawn groups from '"} +
-                                                           childJsonPath + "' for parent '" + parent_name + "'");
-                                } catch (const std::exception& e) {
-                                        std::cerr << "[Spawn]  Failed to parse child JSON: "
-                                                  << childJsonPath << " | " << e.what() << "\n";
-                                        continue;
-                                }
+
+                        if (!j.contains("spawn_groups") || !j["spawn_groups"].is_array() || j["spawn_groups"].empty()) {
+                                vibble::log::debug(std::string{"[Spawn] No spawn group data for child area '"} +
+                                                   childInfo->area_name + "' on parent '" + parent_name +
+                                                   "'; skipping" );
+                                continue;
                         }
+
+                        vibble::log::debug(std::string{"[Spawn] Using spawn groups for child area '"} +
+                                           childInfo->area_name + "' on parent '" + parent_name + "'");
                         resolved_child_areas.insert_or_assign(childInfo->area_name, childArea);
                         AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
                                                        childArea,

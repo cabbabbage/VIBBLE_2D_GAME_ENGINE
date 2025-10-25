@@ -1049,52 +1049,29 @@ void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
 
     children = new_children;
 
-    nlohmann::json arr = nlohmann::json::array();
-    std::filesystem::path asset_dir = std::filesystem::path(dir_path_);
-    if (!asset_dir.empty()) {
-        asset_dir = asset_dir.lexically_normal();
-    }
-
+    nlohmann::json groups = nlohmann::json::array();
     for (const auto& c : new_children) {
-        nlohmann::json entry;
-        entry["area_name"] = c.area_name;
+        nlohmann::json entry = nlohmann::json::object();
+        if (c.spawn_group.is_object()) {
+            entry = c.spawn_group;
+        }
+
+        if (!c.area_name.empty()) {
+            entry["linked_area"] = c.area_name;
+            entry["link_to_area"] = true;
+        }
+
         entry["z_offset"] = c.z_offset;
         entry["placed_on_top_parent"] = c.placed_on_top_parent;
 
-        try {
-            if (c.inline_assets.is_array() && !c.inline_assets.empty()) {
-                entry["spawn_groups"] = c.inline_assets;
-            } else if (!c.json_path.empty()) {
-                std::filesystem::path child_path = std::filesystem::path(c.json_path).lexically_normal();
-                std::string manifest_path;
-
-                if (child_path.is_relative()) {
-                    manifest_path = child_path.generic_string();
-                } else if (!asset_dir.empty()) {
-                    std::filesystem::path rel = child_path.lexically_relative(asset_dir);
-                    if (!rel.empty() && rel != ".") {
-                        manifest_path = rel.generic_string();
-                    }
-                }
-
-                if (manifest_path.empty()) {
-                    std::filesystem::path relative_form = child_path.relative_path();
-                    if (relative_form.empty()) {
-                        relative_form = child_path.filename();
-                    }
-                    manifest_path = relative_form.generic_string();
-                }
-
-                if (!manifest_path.empty()) {
-                    entry["json_path"] = manifest_path;
-                }
-            }
-        } catch (...) {
-
+        if (!entry.contains("candidates") || !entry["candidates"].is_array()) {
+            entry["candidates"] = nlohmann::json::array();
         }
-        arr.push_back(std::move(entry));
+
+        groups.push_back(std::move(entry));
     }
-    info_json_["child_assets"] = std::move(arr);
+
+    set_spawn_groups(groups);
 }
 
 void AssetInfo::set_spawn_groups_payload(const nlohmann::json& groups) {

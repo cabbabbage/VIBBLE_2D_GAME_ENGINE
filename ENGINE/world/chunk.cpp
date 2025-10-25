@@ -25,7 +25,6 @@
 #include "dev_mode/font_cache.hpp"
 #include "render/camera.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
-#include "lighting/PreloadInputs.hpp"
 #include "render/global_light_source.hpp"
 #include "world/grid.hpp"
 

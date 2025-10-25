@@ -8,7 +8,6 @@
 #include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
 #include "util/grid.hpp"
-#include <filesystem>
 #include <iostream>
 #include <random>
 #include <mutex>
@@ -394,21 +393,35 @@ bool Asset::is_current_animation_looping() const {
 }
 
 void Asset::add_child(Asset* child) {
-	if (!child || !child->info) return;
-	if (info) {
-		for (const auto& ci : info->children) {
-			try {
-					if (std::filesystem::path(ci.json_path).stem().string() == child->info->name) {
-								child->set_z_offset(ci.z_offset);
-								break;
-					}
-			} catch (...) {}
-		}
-	}
-	child->parent = this;
-	if (!child->get_assets()) child->set_assets(this->assets_);
-	child->set_z_index();
-	children.push_back(child);
+        if (!child || !child->info) return;
+        if (info) {
+                for (const auto& ci : info->children) {
+                        if (!ci.spawn_group.is_object()) {
+                                continue;
+                        }
+                        std::string child_spawn_id;
+                        try {
+                                if (ci.spawn_group.contains("spawn_id") && ci.spawn_group["spawn_id"].is_string()) {
+                                        child_spawn_id = ci.spawn_group["spawn_id"].get<std::string>();
+                                }
+                        } catch (...) {
+                                child_spawn_id.clear();
+                        }
+
+                        if (!child_spawn_id.empty() && child_spawn_id == child->spawn_id) {
+                                int z_offset = ci.z_offset;
+                                if (ci.placed_on_top_parent && z_offset <= 0) {
+                                        z_offset = 1;
+                                }
+                                child->set_z_offset(z_offset);
+                                break;
+                        }
+                }
+        }
+        child->parent = this;
+        if (!child->get_assets()) child->set_assets(this->assets_);
+        child->set_z_index();
+        children.push_back(child);
 }
 
 void Asset::set_assets(Assets* a) {

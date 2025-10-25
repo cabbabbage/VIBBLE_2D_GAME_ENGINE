@@ -86,20 +86,18 @@ TEST_CASE("AssetInfo manifest constructor populates metadata without disk access
                 }
             })}
         }},
-        {"child_assets", nlohmann::json::array({
+        {"spawn_groups", nlohmann::json::array({
             nlohmann::json{
-                {"json_path", "children/child.json"},
-                {"area_name", "core"},
+                {"display_name", "inline"},
+                {"candidates", nlohmann::json::array()},
+                {"max_number", 1},
+                {"min_number", 1},
+                {"position", "Exact"},
+                {"link_to_area", true},
+                {"linked_area", "core"},
                 {"z_offset", 3},
-                {"spawn_groups", nlohmann::json::array({
-                    nlohmann::json{
-                        {"display_name", "inline"},
-                        {"candidates", nlohmann::json::array()},
-                        {"max_number", 1},
-                        {"min_number", 1},
-                        {"position", "Exact"}
-                    }
-                })}
+                {"placed_on_top_parent", false},
+                {"spawn_id", "spn-inline"}
             }
         })},
         {"lighting_info", nlohmann::json::array({
@@ -154,11 +152,12 @@ TEST_CASE("AssetInfo manifest constructor populates metadata without disk access
     CHECK(info.pick_next_animation("looping") == "walk");
 
     REQUIRE(info.children.size() == 1);
-    const std::filesystem::path expected_child = expected_dir / "children" / "child.json";
-    CHECK(std::filesystem::path(info.children.front().json_path) == expected_child);
     CHECK(info.children.front().area_name == "core");
     CHECK(info.children.front().z_offset == 3);
-    CHECK(info.children.front().inline_assets.is_array());
+    CHECK_FALSE(info.children.front().placed_on_top_parent);
+    REQUIRE(info.children.front().spawn_group.is_object());
+    CHECK(info.children.front().spawn_group.value("display_name", "") == "inline");
+    CHECK(info.children.front().spawn_group.value("spawn_id", "") == "spn-inline");
 
     CHECK(info.light_sources.size() == 1);
     CHECK(info.is_light_source);
@@ -204,16 +203,29 @@ TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
     AssetInfo::ChildInfo absolute_child{};
     absolute_child.area_name = "absolute";
     absolute_child.z_offset = 1;
-    absolute_child.inline_assets = nlohmann::json::array();
-    const auto asset_dir = fs::path(info->asset_dir_path());
-    const auto absolute_child_path = fs::absolute(asset_dir / "children" / "abs.json");
-    absolute_child.json_path = absolute_child_path.string();
+    absolute_child.spawn_group = nlohmann::json{
+        {"display_name", "abs"},
+        {"candidates", nlohmann::json::array()},
+        {"min_number", 1},
+        {"max_number", 1},
+        {"link_to_area", true},
+        {"linked_area", "absolute"},
+        {"spawn_id", "spn-abs"}
+    };
 
     AssetInfo::ChildInfo relative_child{};
     relative_child.area_name = "relative";
     relative_child.z_offset = 2;
-    relative_child.inline_assets = nlohmann::json::array();
-    relative_child.json_path = (asset_dir / "children" / "rel.json").generic_string();
+    relative_child.placed_on_top_parent = true;
+    relative_child.spawn_group = nlohmann::json{
+        {"display_name", "rel"},
+        {"candidates", nlohmann::json::array()},
+        {"min_number", 1},
+        {"max_number", 3},
+        {"link_to_area", true},
+        {"linked_area", "relative"},
+        {"spawn_id", "spn-rel"}
+    };
 
     info->set_children({absolute_child, relative_child});
 
@@ -227,10 +239,12 @@ TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
     REQUIRE(asset_json["tags"].is_array());
     CHECK(asset_json["tags"].size() == 1);
     CHECK(asset_json["tags"][0].get<std::string>() == "fresh");
-    REQUIRE(asset_json["child_assets"].is_array());
-    REQUIRE(asset_json["child_assets"].size() == 2);
-    CHECK(asset_json["child_assets"][0]["json_path"].get<std::string>() == "children/abs.json");
-    CHECK(asset_json["child_assets"][1]["json_path"].get<std::string>() == "children/rel.json");
+    REQUIRE(asset_json["spawn_groups"].is_array());
+    REQUIRE(asset_json["spawn_groups"].size() == 2);
+    CHECK(asset_json["spawn_groups"][0]["linked_area"].get<std::string>() == "absolute");
+    CHECK(asset_json["spawn_groups"][0]["spawn_id"].get<std::string>() == "spn-abs");
+    CHECK(asset_json["spawn_groups"][1]["linked_area"].get<std::string>() == "relative");
+    CHECK(asset_json["spawn_groups"][1]["spawn_id"].get<std::string>() == "spn-rel");
 
     store.reload();
     auto view = store.get_asset("ManifestCommit");
@@ -243,8 +257,11 @@ TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
     CHECK_FALSE(rehydrated->has_tag("passable"));
     CHECK(rehydrated->has_tag("fresh"));
     REQUIRE(rehydrated->children.size() == 2);
-    CHECK(fs::path(rehydrated->children[0].json_path) == fs::path(info->asset_dir_path()) / "children" / "abs.json");
-    CHECK(fs::path(rehydrated->children[1].json_path) == fs::path(info->asset_dir_path()) / "children" / "rel.json");
+    CHECK(rehydrated->children[0].area_name == "absolute");
+    CHECK(rehydrated->children[0].spawn_group.value("spawn_id", "") == "spn-abs");
+    CHECK(rehydrated->children[1].area_name == "relative");
+    CHECK(rehydrated->children[1].placed_on_top_parent);
+    CHECK(rehydrated->children[1].spawn_group.value("spawn_id", "") == "spn-rel");
 
     AssetInfo::set_manifest_store_provider({});
     devmode::core::DevJsonStore::instance().flush_all();

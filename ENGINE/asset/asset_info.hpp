@@ -20,11 +20,10 @@ class ManifestStore;
 } // namespace devmode::core
 
 struct ChildInfo {
-    std::string json_path;
     std::string area_name;
-    int z_offset;
-    nlohmann::json inline_assets;
+    int z_offset = 0;
     bool placed_on_top_parent = false;
+    nlohmann::json spawn_group;
 };
 
 struct MappingOption {

@@ -1,41 +1,56 @@
 #include "child_loader.hpp"
 #include "asset/asset_info.hpp"
-#include <filesystem>
-#include <iostream>
+
 using nlohmann::json;
-namespace fs = std::filesystem;
 
 void ChildLoader::load_children(AssetInfo& info,
                                 const json& data,
-                                const std::string& dir_path) {
+                                const std::string&)
+{
     info.children.clear();
-    if (!data.contains("child_assets") || !data["child_assets"].is_array())
-    return;
-    for (const auto& entry : data["child_assets"]) {
-        if (!entry.is_object()) continue;
-        ChildInfo ci;
-        ci.json_path = entry.value("json_path", std::string{});
-        if (!ci.json_path.empty()) {
-            fs::path full = fs::path(dir_path) / ci.json_path;
-            ci.json_path = full.string();
+    if (!data.contains("spawn_groups") || !data["spawn_groups"].is_array()) {
+        return;
+    }
+
+    for (const auto& entry : data["spawn_groups"]) {
+        if (!entry.is_object()) {
+            continue;
         }
-        ci.area_name = entry.value("area_name", std::string{});
-        ci.z_offset  = entry.value("z_offset", 0);
-        ci.placed_on_top_parent = entry.value("placed_on_top_parent", false);
+
+        bool link_to_area = false;
+        std::string area_name;
         try {
-            if (entry.contains("spawn_groups")) {
-                const auto& inline_data = entry["spawn_groups"];
-                if (inline_data.is_array() || inline_data.is_object()) {
-                    ci.inline_assets = inline_data;
-                } else {
-                    ci.inline_assets = json::array();
+            if (entry.contains("link_to_area")) {
+                if (entry["link_to_area"].is_boolean()) {
+                    link_to_area = entry["link_to_area"].get<bool>();
+                } else if (entry["link_to_area"].is_number_integer()) {
+                    link_to_area = entry["link_to_area"].get<int>() != 0;
                 }
-            } else {
-                ci.inline_assets = json::array();
+            }
+            if (entry.contains("linked_area") && entry["linked_area"].is_string()) {
+                area_name = entry["linked_area"].get<std::string>();
             }
         } catch (...) {
-            ci.inline_assets = json::array();
+            link_to_area = false;
+            area_name.clear();
         }
+
+        if (!link_to_area || area_name.empty()) {
+            continue;
+        }
+
+        ChildInfo ci;
+        ci.area_name = area_name;
+        ci.placed_on_top_parent = entry.value("placed_on_top_parent", false);
+        try {
+            if (entry.contains("z_offset") && entry["z_offset"].is_number_integer()) {
+                ci.z_offset = entry["z_offset"].get<int>();
+            }
+        } catch (...) {
+            ci.z_offset = 0;
+        }
+
+        ci.spawn_group = entry;
         info.children.emplace_back(std::move(ci));
     }
 }
