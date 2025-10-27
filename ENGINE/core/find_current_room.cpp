@@ -3,6 +3,7 @@
 #include "asset/Asset.hpp"
 #include "utils/area.hpp"
 #include "utils/range_util.hpp"
+#include "utils/string_utils.hpp"
 
 #include <limits>
 #include <cmath>
@@ -34,27 +35,53 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
         return room &&
                room->room_area &&
                room->room_area->contains_point(SDL_Point{px, py});
-};
+    };
 
-    auto try_room = [&](Room* room) -> Room* {
-        if (contains_player(room)) {
-            last_room_ = room;
-            return room;
+    auto is_trail_room = [](Room* room) -> bool {
+        if (!room) return false;
+        return vibble::strings::to_lower_copy(room->type) == "trail";
+    };
+
+    Room* best = nullptr;
+    bool  best_is_trail = false;
+
+    auto try_room = [&](Room* room) -> bool {
+        if (!contains_player(room)) {
+            return false;
         }
-        return nullptr;
-};
 
-    if (Room* matched = try_room(last_room_)) return matched;
+        const bool candidate_is_trail = is_trail_room(room);
+        if (!best || (best_is_trail && !candidate_is_trail)) {
+            best = room;
+            best_is_trail = candidate_is_trail;
+            if (!candidate_is_trail) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (try_room(last_room_)) {
+        last_room_ = best;
+        return best;
+    }
 
     if (last_room_) {
         for (Room* connected : last_room_->connected_rooms) {
-            if (Room* matched = try_room(connected)) return matched;
+            if (try_room(connected)) {
+                last_room_ = best;
+                return best;
+            }
         }
-        if (Room* matched = try_room(last_room_->left_sibling)) return matched;
-        if (Room* matched = try_room(last_room_->right_sibling)) return matched;
+        if (try_room(last_room_->left_sibling)) {
+            last_room_ = best;
+            return best;
+        }
+        if (try_room(last_room_->right_sibling)) {
+            last_room_ = best;
+            return best;
+        }
     }
-
-    Room* best = nullptr;
 
     if (!rooms) {
         last_room_ = nullptr;
@@ -63,9 +90,9 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
 
     for (Room* r : *rooms) {
         if (!r || !r->room_area) continue;
-        if (r->room_area->contains_point(SDL_Point{px, py})) {
-            best = r;
-            break;
+        if (try_room(r)) {
+            last_room_ = best;
+            return best;
         }
     }
     if (best) {
