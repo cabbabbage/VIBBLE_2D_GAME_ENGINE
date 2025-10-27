@@ -29,7 +29,7 @@ void BombController::enter_idle(int rest_ratio) {
     pursuit_locked_  = false;
 
     const auto path = controller_paths::idle_path(self_, idle_ratio_);
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
+    self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void BombController::enter_pursue(Asset* target) {
@@ -46,7 +46,7 @@ void BombController::enter_pursue(Asset* target) {
     pursuit_locked_ = true;
 
     const auto path = controller_paths::pursue_path(self_, target);
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
+    self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void BombController::trigger_explosion() {
@@ -78,7 +78,7 @@ void BombController::trigger_explosion() {
         self_->Delete();
         return;
     }
-    self_->anim_->move({}, controller_utils::controller_visit_threshold(self_));
+    self_->anim_->auto_move({}, controller_utils::controller_visit_threshold(self_));
 }
 
 void BombController::update(const Input&) {

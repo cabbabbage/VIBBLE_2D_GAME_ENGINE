@@ -79,7 +79,7 @@ void AnimationUpdate::set_animation_qued(const std::string& anim_id) {
     queued_anim_ = anim_id;
 }
 
-void AnimationUpdate::move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px) {
+void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px) {
     if (!self_) {
         return;
     }

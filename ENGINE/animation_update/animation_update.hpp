@@ -24,7 +24,7 @@ public:
     void update();
     void set_animation_now(const std::string& anim_id);
     void set_animation_qued(const std::string& anim_id);
-    void move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px);
+    void auto_move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px);
     void clear_movement_plan();
     void set_manual_animation(const std::string& anim_id, bool loop = true);
     void clear_manual_animation();

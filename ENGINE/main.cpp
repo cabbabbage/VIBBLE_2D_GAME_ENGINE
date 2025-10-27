@@ -277,35 +277,12 @@ void MainApp::game_loop() {
                 const Uint64 frame_end = SDL_GetPerformanceCounter();
                 const double work_counts = static_cast<double>(frame_end - frame_begin);
                 if (work_counts < target_counts) {
-                        double remaining_counts = target_counts - work_counts;
+                        const double remaining_counts = target_counts - work_counts;
                         idle_counts_accum += remaining_counts;
                         ++idle_frame_counter;
-                        double remaining_ms = (remaining_counts * 1000.0) / perf_frequency;
+                        const double remaining_ms = (remaining_counts * 1000.0) / perf_frequency;
                         if (remaining_ms >= 1.0) {
                                 SDL_Delay(static_cast<Uint32>(remaining_ms));
-                        }
-                        while (true) {
-                                const Uint64 now = SDL_GetPerformanceCounter();
-                                const double elapsed_counts = static_cast<double>(now - frame_begin);
-                                if (elapsed_counts >= target_counts) {
-                                        break;
-                                }
-                                const double sub_remaining_counts = target_counts - elapsed_counts;
-                                const double sub_remaining_ms = (sub_remaining_counts * 1000.0) / perf_frequency;
-                                const int wait_timeout_ms = static_cast<int>(std::ceil(sub_remaining_ms));
-                                if (wait_timeout_ms <= 0) {
-                                        break;
-                                }
-                                SDL_Event wait_event;
-                                if (SDL_WaitEventTimeout(&wait_event, wait_timeout_ms)) {
-                                        if (wait_event.type == SDL_QUIT) {
-                                                quit = true;
-                                        }
-                                        if (input_) input_->handleEvent(wait_event);
-                                        if (game_assets_) game_assets_->handle_sdl_event(wait_event);
-                                } else {
-                                        SDL_PumpEvents();
-                                }
                         }
                 }
                 if (idle_frame_counter >= IDLE_REPORT_INTERVAL) {

@@ -142,7 +142,7 @@ void VibbleController::movement(const Input& input) {
 
                     std::vector<SDL_Point> path;
                     path.push_back(SDL_Point{ mdx, mdy });
-                    player_->anim_->move(path, 0);
+                    player_->anim_->auto_move(path, 0);
                     dx_ = mdx;
                     dy_ = mdy;
                     return;
@@ -197,7 +197,7 @@ void VibbleController::movement(const Input& input) {
     std::vector<SDL_Point> path;
     path.push_back(SDL_Point{ dx_, dy_ });
 
-    player_->anim_->move(path, 0);
+    player_->anim_->auto_move(path, 0);
 }
 
 void VibbleController::update(const Input& input) {
