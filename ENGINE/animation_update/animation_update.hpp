@@ -12,6 +12,10 @@
 #include "get_best_path.hpp"
 #include "stride_player.hpp"
 
+namespace vibble::grid {
+class Grid;
+}
+
 class Asset;
 class Assets;
 class AnimationFrame;
@@ -24,7 +28,9 @@ public:
     void update();
     void set_animation_now(const std::string& anim_id);
     void set_animation_qued(const std::string& anim_id);
-    void auto_move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px);
+    void auto_move(const std::vector<SDL_Point>& rel_checkpoints,
+                   int visited_thresh_px,
+                   std::optional<int> checkpoint_resolution = std::nullopt);
     void just_move(SDL_Point delta, const std::string& animation_id, bool resort_z = true);
     void clear_movement_plan();
     void set_manual_animation(const std::string& anim_id, bool loop = true);
@@ -48,11 +54,16 @@ private:
     void mark_progress_toward_checkpoints();
     bool replan_to_destination();
 
+    vibble::grid::Grid& grid() const;
+    int                 effective_grid_resolution(std::optional<int> override_resolution) const;
+    SDL_Point           convert_delta_to_world(SDL_Point delta, int resolution) const;
+
 private:
     friend class StridePlayer;
 
     Asset*  self_          = nullptr;
     Assets* assets_owner_  = nullptr;
+    vibble::grid::Grid* grid_service_ = nullptr;
 
     int visited_thresh_ = 0;
 

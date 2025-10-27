@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "asset/Asset.hpp"
+#include "util/grid.hpp"
 
 namespace {
 bool is_within_radius(long long ax, long long ay, long long bx, long long by, int radius) {
@@ -23,8 +24,11 @@ bool resolve_asset_pos(const Asset* asset, long long& x, long long& y) {
     if (!asset) {
         return false;
     }
-    x = static_cast<long long>(asset->pos.x);
-    y = static_cast<long long>(asset->pos.y);
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    const int          resolution = vibble::grid::clamp_resolution(asset->grid_resolution);
+    SDL_Point          snapped    = grid.snap_to_vertex(asset->pos, resolution);
+    x = static_cast<long long>(snapped.x);
+    y = static_cast<long long>(snapped.y);
     return true;
 }
 }
@@ -33,14 +37,19 @@ bool Range::xy(const Asset* a, double& x, double& y) {
     x = 0.0;
     y = 0.0;
     if (!a) return false;
-    x = static_cast<double>(a->pos.x);
-    y = static_cast<double>(a->pos.y);
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    const int          resolution = vibble::grid::clamp_resolution(a->grid_resolution);
+    SDL_Point          snapped    = grid.snap_to_vertex(a->pos, resolution);
+    x = static_cast<double>(snapped.x);
+    y = static_cast<double>(snapped.y);
     return true;
 }
 
 bool Range::xy(const SDL_Point& p, double& x, double& y) {
-    x = static_cast<double>(p.x);
-    y = static_cast<double>(p.y);
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    SDL_Point          snapped = grid.snap_to_vertex(p, 0);
+    x = static_cast<double>(snapped.x);
+    y = static_cast<double>(snapped.y);
     return true;
 }
 
@@ -71,7 +80,12 @@ bool Range::is_in_range(const Asset* a, const SDL_Point& b, int radius) {
     if (!resolve_asset_pos(a, ax, ay)) {
         return false;
     }
-    return is_within_radius(ax, ay, static_cast<long long>(b.x), static_cast<long long>(b.y), radius);
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    SDL_Point          snapped_b = grid.snap_to_vertex(b, 0);
+    return is_within_radius(ax, ay,
+                            static_cast<long long>(snapped_b.x),
+                            static_cast<long long>(snapped_b.y),
+                            radius);
 }
 
 bool Range::is_in_range(const SDL_Point& a, const Asset* b, int radius) {
@@ -79,11 +93,24 @@ bool Range::is_in_range(const SDL_Point& a, const Asset* b, int radius) {
     if (!resolve_asset_pos(b, bx, by)) {
         return false;
     }
-    return is_within_radius(static_cast<long long>(a.x), static_cast<long long>(a.y), bx, by, radius);
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    SDL_Point          snapped_a = grid.snap_to_vertex(a, 0);
+    return is_within_radius(static_cast<long long>(snapped_a.x),
+                            static_cast<long long>(snapped_a.y),
+                            bx,
+                            by,
+                            radius);
 }
 
 bool Range::is_in_range(const SDL_Point& a, const SDL_Point& b, int radius) {
-    return is_within_radius(static_cast<long long>(a.x), static_cast<long long>(a.y), static_cast<long long>(b.x), static_cast<long long>(b.y), radius);
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    SDL_Point          snapped_a = grid.snap_to_vertex(a, 0);
+    SDL_Point          snapped_b = grid.snap_to_vertex(b, 0);
+    return is_within_radius(static_cast<long long>(snapped_a.x),
+                            static_cast<long long>(snapped_a.y),
+                            static_cast<long long>(snapped_b.x),
+                            static_cast<long long>(snapped_b.y),
+                            radius);
 }
 
 long long Range::distance_sq(const Asset* a, const Asset* b) {
@@ -99,7 +126,12 @@ long long Range::distance_sq(const Asset* a, const SDL_Point& b) {
     if (!resolve_asset_pos(a, ax, ay)) {
         return std::numeric_limits<long long>::max();
     }
-    return distance_squared(ax, ay, static_cast<long long>(b.x), static_cast<long long>(b.y));
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    SDL_Point          snapped_b = grid.snap_to_vertex(b, 0);
+    return distance_squared(ax,
+                             ay,
+                             static_cast<long long>(snapped_b.x),
+                             static_cast<long long>(snapped_b.y));
 }
 
 long long Range::distance_sq(const SDL_Point& a, const Asset* b) {
@@ -107,11 +139,22 @@ long long Range::distance_sq(const SDL_Point& a, const Asset* b) {
     if (!resolve_asset_pos(b, bx, by)) {
         return std::numeric_limits<long long>::max();
     }
-    return distance_squared(static_cast<long long>(a.x), static_cast<long long>(a.y), bx, by);
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    SDL_Point          snapped_a = grid.snap_to_vertex(a, 0);
+    return distance_squared(static_cast<long long>(snapped_a.x),
+                             static_cast<long long>(snapped_a.y),
+                             bx,
+                             by);
 }
 
 long long Range::distance_sq(const SDL_Point& a, const SDL_Point& b) {
-    return distance_squared(static_cast<long long>(a.x), static_cast<long long>(a.y), static_cast<long long>(b.x), static_cast<long long>(b.y));
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    SDL_Point          snapped_a = grid.snap_to_vertex(a, 0);
+    SDL_Point          snapped_b = grid.snap_to_vertex(b, 0);
+    return distance_squared(static_cast<long long>(snapped_a.x),
+                            static_cast<long long>(snapped_a.y),
+                            static_cast<long long>(snapped_b.x),
+                            static_cast<long long>(snapped_b.y));
 }
 
 double Range::get_distance(const Asset* a, const Asset* b) {
@@ -144,14 +187,18 @@ void Range::get_in_range(const SDL_Point& center,
                          const std::vector<Asset*>& candidates,
                          std::vector<Asset*>& out) {
     out.clear();
-    const long long cx = static_cast<long long>(center.x);
-    const long long cy = static_cast<long long>(center.y);
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
+    SDL_Point          snapped_center = grid.snap_to_vertex(center, 0);
+    const long long    cx             = static_cast<long long>(snapped_center.x);
+    const long long    cy             = static_cast<long long>(snapped_center.y);
     const long long r = static_cast<long long>(radius);
     const long long r2 = r * r;
     for (Asset* a : candidates) {
         if (!a) continue;
-        const long long ax = static_cast<long long>(a->pos.x);
-        const long long ay = static_cast<long long>(a->pos.y);
+        const int       resolution = vibble::grid::clamp_resolution(a->grid_resolution);
+        SDL_Point       snapped    = grid.snap_to_vertex(a->pos, resolution);
+        const long long ax         = static_cast<long long>(snapped.x);
+        const long long ay         = static_cast<long long>(snapped.y);
         const long long dx = ax - cx;
         const long long dy = ay - cy;
         if (dx * dx + dy * dy <= r2) {

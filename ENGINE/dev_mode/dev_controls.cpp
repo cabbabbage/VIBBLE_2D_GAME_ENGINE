@@ -1219,7 +1219,16 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
             SDL_Point sp = (event.type == SDL_MOUSEMOTION) ? SDL_Point{event.motion.x, event.motion.y}
                                                            : SDL_Point{event.button.x, event.button.y};
-            SDL_Point world = assets_ ? assets_->getView().screen_to_map(sp) : sp;
+            SDL_Point world = sp;
+            if (input_) {
+                if (auto mapped = input_->screen_to_world(sp)) {
+                    world = *mapped;
+                } else if (assets_) {
+                    world = assets_->getView().screen_to_map(sp);
+                }
+            } else if (assets_) {
+                world = assets_->getView().screen_to_map(sp);
+            }
             int new_hover = -1;
             const bool allow_room_area_hover = (first_selected_type == "trigger" || first_selected_type == "spawning");
             if (allow_room_area_hover) {
@@ -1400,7 +1409,16 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             if (!first_selected_type.empty() && (first_selected_type == "trigger" || first_selected_type == "spawning")) {
                 if (assets_ && current_room_) {
                     SDL_Point sp{event.button.x, event.button.y};
-                    SDL_Point world = assets_->getView().screen_to_map(sp);
+                    SDL_Point world = sp;
+                    if (input_) {
+                        if (auto mapped = input_->screen_to_world(sp)) {
+                            world = *mapped;
+                        } else if (assets_) {
+                            world = assets_->getView().screen_to_map(sp);
+                        }
+                    } else if (assets_) {
+                        world = assets_->getView().screen_to_map(sp);
+                    }
                     std::string area_type = first_selected_type;
                     std::string area_name;
                     if (hovered_area_index_ >= 0 && hovered_area_index_ < static_cast<int>(area_list.size())) {

@@ -7,7 +7,9 @@
 #include <SDL.h>
 
 #include "asset/Asset.hpp"
+#include "asset/animation_frame.hpp"
 #include "asset/asset_types.hpp"
+#include "util/grid.hpp"
 #include "utils/area.hpp"
 
 class Assets;
@@ -90,6 +92,16 @@ inline SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos) {
     const int offset_x = bottom.x - asset.pos.x;
     const int offset_y = bottom.y - asset.pos.y;
     return SDL_Point{ pos.x + offset_x, pos.y + offset_y };
+}
+
+inline SDL_Point frame_world_delta(const AnimationFrame& frame,
+                                   const Asset&          asset,
+                                   const vibble::grid::Grid& grid) {
+    const int       resolution = vibble::grid::clamp_resolution(asset.grid_resolution);
+    SDL_Point       indices    = grid.convert_resolution(SDL_Point{ frame.dx, frame.dy }, 0, resolution);
+    const SDL_Point origin     = grid.index_to_world(SDL_Point{ 0, 0 }, resolution);
+    const SDL_Point target     = grid.index_to_world(indices, resolution);
+    return SDL_Point{ target.x - origin.x, target.y - origin.y };
 }
 
 bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_point);

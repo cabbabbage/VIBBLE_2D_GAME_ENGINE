@@ -146,10 +146,14 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     notify_reactive_shadow_settings_available();
     apply_map_light_config();
     apply_map_grid_settings(map_grid_settings_, false);
+    moving_assets_for_grid_.clear();
+    moving_assets_for_grid_.reserve(all.size());
+    pending_static_grid_registration_.clear();
     for (Asset* a : all) {
         if (!a) continue;
         a->set_assets(this);
     }
+    register_pending_static_assets();
 
     update_filtered_active_assets();
 
@@ -381,6 +385,9 @@ bool Assets::on_map_light_changed() {
 }
 
 Assets::~Assets() {
+    if (input) {
+        input->clear_screen_to_world_mapper();
+    }
     notify_reactive_shadow_settings_about_to_change();
     delete scene;
     scene = nullptr;
@@ -513,7 +520,17 @@ void Assets::ensure_dev_controls() {
 }
 
 void Assets::set_input(Input* m) {
+    if (input && input != m) {
+        input->clear_screen_to_world_mapper();
+    }
+
     input = m;
+
+    if (input) {
+        input->set_screen_to_world_mapper([this](SDL_Point screen, float parallax_x, float parallax_y) {
+            return camera_.screen_to_map(screen, parallax_x, parallax_y);
+        });
+    }
 
     if (dev_controls_) {
         dev_controls_->set_input(m);
@@ -625,21 +642,80 @@ void Assets::update(const Input& input)
         }
     }
 
-    for (Asset* asset : all) {
-        if (!asset) {
-            continue;
-        }
-        SDL_Point curr{asset->pos.x, asset->pos.y};
-        if (!asset->has_grid_residency_cache()) {
-            world_grid_.register_asset(asset);
-            asset->cache_grid_residency(curr);
-            continue;
+    register_pending_static_assets();
+
+    if (!moving_assets_for_grid_.empty()) {
+        std::vector<GridMovementCommand> movement_commands;
+        movement_commands.reserve(moving_assets_for_grid_.size());
+        std::vector<Asset*> moving_registration_requests;
+        moving_registration_requests.reserve(4);
+
+#if defined(__cpp_lib_execution)
+        if (moving_assets_for_grid_.size() > 1) {
+            std::mutex movement_commands_mutex;
+            std::mutex registration_mutex;
+            std::for_each(std::execution::par_unseq,
+                          moving_assets_for_grid_.begin(),
+                          moving_assets_for_grid_.end(),
+                          [&](Asset* asset) {
+                              if (!asset) {
+                                  return;
+                              }
+                              SDL_Point curr{asset->pos.x, asset->pos.y};
+                              if (!asset->has_grid_residency_cache()) {
+                                  std::lock_guard<std::mutex> reg_lock(registration_mutex);
+                                  moving_registration_requests.push_back(asset);
+                                  return;
+                              }
+                              const SDL_Point prev = asset->grid_residency_cache();
+                              if (prev.x == curr.x && prev.y == curr.y) {
+                                  return;
+                              }
+                              GridMovementCommand command{asset, prev, curr};
+                              std::lock_guard<std::mutex> lock(movement_commands_mutex);
+                              movement_commands.push_back(command);
+                          });
+        } else
+#endif
+        {
+            for (Asset* asset : moving_assets_for_grid_) {
+                if (!asset) {
+                    continue;
+                }
+                SDL_Point curr{asset->pos.x, asset->pos.y};
+                if (!asset->has_grid_residency_cache()) {
+                    moving_registration_requests.push_back(asset);
+                    continue;
+                }
+                const SDL_Point prev = asset->grid_residency_cache();
+                if (prev.x == curr.x && prev.y == curr.y) {
+                    continue;
+                }
+                movement_commands.push_back(GridMovementCommand{asset, prev, curr});
+            }
         }
 
-        const SDL_Point prev = asset->grid_residency_cache();
-        if (prev.x != curr.x || prev.y != curr.y) {
-            world_grid_.move_asset(asset, prev, curr);
-            asset->cache_grid_residency(curr);
+        if (!moving_registration_requests.empty()) {
+            std::sort(moving_registration_requests.begin(), moving_registration_requests.end());
+            moving_registration_requests.erase(
+                std::unique(moving_registration_requests.begin(), moving_registration_requests.end()),
+                moving_registration_requests.end());
+            for (Asset* asset : moving_registration_requests) {
+                if (!asset || asset->has_grid_residency_cache()) {
+                    continue;
+                }
+                SDL_Point curr{asset->pos.x, asset->pos.y};
+                world_grid_.register_asset(asset);
+                asset->cache_grid_residency(curr);
+            }
+        }
+
+        for (const GridMovementCommand& command : movement_commands) {
+            if (!command.asset) {
+                continue;
+            }
+            world_grid_.move_asset(command.asset, command.previous, command.current);
+            command.asset->cache_grid_residency(command.current);
         }
     }
 
@@ -810,6 +886,8 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
         std::cerr << "[Assets::addAsset][Exception] " << e.what() << "\n";
     }
 
+    register_pending_static_assets();
+
     initialize_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
     update_filtered_active_assets();
@@ -865,6 +943,8 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
         std::cerr << "[Assets::spawn_asset][Exception] " << e.what() << "\n";
     }
 
+    register_pending_static_assets();
+
     initialize_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
     update_filtered_active_assets();
@@ -897,6 +977,70 @@ void Assets::notify_light_map_static_assets_changed() {
     if (LightMap* map = light_map()) {
         map->mark_static_cache_dirty();
     }
+}
+
+void Assets::track_asset_for_grid(Asset* asset) {
+    if (!asset || !asset->info) {
+        return;
+    }
+
+    if (asset->info->moving_asset) {
+        if (std::find(moving_assets_for_grid_.begin(), moving_assets_for_grid_.end(), asset) == moving_assets_for_grid_.end()) {
+            moving_assets_for_grid_.push_back(asset);
+        }
+        if (!asset->has_grid_residency_cache()) {
+            SDL_Point curr{asset->pos.x, asset->pos.y};
+            world_grid_.register_asset(asset);
+            asset->cache_grid_residency(curr);
+        }
+        return;
+    }
+
+    if (asset->has_grid_residency_cache()) {
+        return;
+    }
+
+    if (std::find(pending_static_grid_registration_.begin(),
+                  pending_static_grid_registration_.end(),
+                  asset) == pending_static_grid_registration_.end()) {
+        pending_static_grid_registration_.push_back(asset);
+    }
+}
+
+void Assets::untrack_asset_for_grid(Asset* asset) {
+    if (!asset) {
+        return;
+    }
+
+    auto erase_ptr = [asset](auto& vec) {
+        vec.erase(std::remove(vec.begin(), vec.end(), asset), vec.end());
+    };
+
+    erase_ptr(moving_assets_for_grid_);
+    erase_ptr(pending_static_grid_registration_);
+}
+
+void Assets::register_pending_static_assets() {
+    if (pending_static_grid_registration_.empty()) {
+        return;
+    }
+
+    std::vector<Asset*> still_pending;
+    still_pending.reserve(pending_static_grid_registration_.size());
+    for (Asset* asset : pending_static_grid_registration_) {
+        if (!asset) {
+            continue;
+        }
+        if (!asset->has_grid_residency_cache()) {
+            SDL_Point curr{asset->pos.x, asset->pos.y};
+            world_grid_.register_asset(asset);
+            asset->cache_grid_residency(curr);
+        }
+        if (asset && !asset->has_grid_residency_cache()) {
+            still_pending.push_back(asset);
+        }
+    }
+    pending_static_grid_registration_.swap(still_pending);
 }
 
 void Assets::notify_reactive_shadow_settings_about_to_change() {
@@ -1034,6 +1178,7 @@ void Assets::process_removals() {
     for (Asset* asset : pending_removals) {
         render_pipeline::shading::ClearShadowStateFor(asset);
 
+        untrack_asset_for_grid(asset);
         world_grid_.unregister_asset(asset);
         if (asset) {
             asset->clear_grid_residency_cache();
@@ -1072,6 +1217,8 @@ void Assets::process_removals() {
     erase_ptrs(active_static_light_assets_);
     erase_ptrs(active_moving_light_assets_);
     erase_ptrs(filtered_active_assets);
+    erase_ptrs(moving_assets_for_grid_);
+    erase_ptrs(pending_static_grid_registration_);
 
     for (Asset* asset : pending_removals) {
         active_moving_light_lookup_.erase(asset);

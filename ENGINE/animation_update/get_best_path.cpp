@@ -154,6 +154,7 @@ Plan GetBestPath::operator()(const Asset& self,
         return plan;
     }
 
+    vibble::grid::Grid& grid = vibble::grid::global_grid();
     const auto collisions  = gather_collision_entries(self);
     const Assets* assets   = self.get_assets();
     const int visited_sq   = visited_thresh_px * visited_thresh_px;
@@ -191,7 +192,8 @@ Plan GetBestPath::operator()(const Asset& self,
 
                     for (int i = 0; i < frames; ++i) {
                         const AnimationFrame& frame = (*frames_path)[i];
-                        SDL_Point next{ simulated.x + frame.dx, simulated.y + frame.dy };
+                        SDL_Point delta = animation_update::detail::frame_world_delta(frame, self, grid);
+                        SDL_Point next{ simulated.x + delta.x, simulated.y + delta.y };
                         if (blocked_step(simulated, next, collisions, self, assets)) {
                             blocked = true;
                             break;

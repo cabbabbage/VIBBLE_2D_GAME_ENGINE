@@ -428,6 +428,9 @@ void Asset::add_child(Asset* child) {
 
 void Asset::set_assets(Assets* a) {
     assets_ = a;
+    if (assets_) {
+        assets_->track_asset_for_grid(this);
+    }
     if (assets_ && !anim_) {
             anim_ = std::make_unique<AnimationUpdate>(this, assets_);
     }

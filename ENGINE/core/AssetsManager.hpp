@@ -233,6 +233,19 @@ private:
     std::unique_ptr<devmode::core::ManifestStore> manifest_store_fallback_;
     std::unique_ptr<LightMapManager> light_map_manager_;
 
+    struct GridMovementCommand {
+        Asset* asset = nullptr;
+        SDL_Point previous{0, 0};
+        SDL_Point current{0, 0};
+    };
+
+    void track_asset_for_grid(Asset* asset);
+    void untrack_asset_for_grid(Asset* asset);
+    void register_pending_static_assets();
+
+    std::vector<Asset*> moving_assets_for_grid_;
+    std::vector<Asset*> pending_static_grid_registration_;
+
     struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;
 

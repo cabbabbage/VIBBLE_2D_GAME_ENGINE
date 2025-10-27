@@ -72,9 +72,9 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
     }
 
     AnimationFrame* frame = self->current_frame;
-    SDL_Point from = self->pos;
-    SDL_Point delta{ frame->dx, frame->dy };
-    SDL_Point to{ from.x + delta.x, from.y + delta.y };
+    SDL_Point        from  = self->pos;
+    SDL_Point        delta = animation_update::detail::frame_world_delta(*frame, *self, up.grid());
+    SDL_Point        to{ from.x + delta.x, from.y + delta.y };
 
     if (delta.x != 0 || delta.y != 0) {
         std::vector<const Asset*> blockers;

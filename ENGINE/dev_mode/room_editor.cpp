@@ -429,7 +429,12 @@ Room* RoomEditor::resolve_room_for_clipboard_action() const {
     }
 
     SDL_Point screen{input_->getX(), input_->getY()};
-    SDL_Point world = assets->getView().screen_to_map(screen);
+    SDL_Point world = screen;
+    if (auto mapped = input_->screen_to_world(screen)) {
+        world = *mapped;
+    } else {
+        world = assets->getView().screen_to_map(screen);
+    }
 
     if (current_room_ && current_room_->room_area && current_room_->room_area->contains_point(world)) {
         return current_room_;
@@ -2562,9 +2567,11 @@ void RoomEditor::update_hover_state(Asset* hit) {
 void RoomEditor::handle_click(const Input& input) {
     if (!input_) return;
 
-    SDL_Point world_mouse{0, 0};
-    if (assets_) {
-        world_mouse = assets_->getView().screen_to_map(SDL_Point{input_->getX(), input_->getY()});
+    SDL_Point world_mouse{input_->getX(), input_->getY()};
+    if (auto mapped = input_->mouse_world_position()) {
+        world_mouse = *mapped;
+    } else if (assets_) {
+        world_mouse = assets_->getView().screen_to_map(world_mouse);
     }
 
     bool selection_changed = false;

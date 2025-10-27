@@ -125,7 +125,12 @@ void VibbleController::movement(const Input& input) {
         if (Assets* owner = player_->get_assets()) {
             if (input.isDown(Input::LEFT)) {
                 SDL_Point mouse_screen{ input.getX(), input.getY() };
-                SDL_Point world = owner->getView().screen_to_map(mouse_screen);
+                SDL_Point world = mouse_screen;
+                if (auto mapped = input.screen_to_world(mouse_screen)) {
+                    world = *mapped;
+                } else {
+                    world = owner->getView().screen_to_map(mouse_screen);
+                }
 
                 SDL_Point origin = player_->pos;
                 const int radius = controller_paths::neighbor_radius(player_);

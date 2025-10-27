@@ -15,6 +15,7 @@
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
 #include "utils/area.hpp"
+#include "util/grid.hpp"
 
 namespace {
 template <typename Fn>
@@ -48,7 +49,7 @@ bool visit_impassable_neighbors(const Asset& asset, Fn&& fn) {
 }
 
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
-    : self_(self), assets_owner_(assets) {
+    : self_(self), assets_owner_(assets), grid_service_(&vibble::grid::global_grid()) {
     if (!assets_owner_ && self_) {
         assets_owner_ = self_->get_assets();
     }
@@ -79,21 +80,33 @@ void AnimationUpdate::set_animation_qued(const std::string& anim_id) {
     queued_anim_ = anim_id;
 }
 
-void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px) {
+void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
+                               int visited_thresh_px,
+                               std::optional<int> checkpoint_resolution) {
     if (!self_) {
         return;
     }
     manual_animation_.reset();
-    visited_thresh_ = std::max(0, visited_thresh_px);
+    const int resolution = effective_grid_resolution(checkpoint_resolution);
+    visited_thresh_      = std::max(0, visited_thresh_px);
+    if (resolution > 0) {
+        const int step = vibble::grid::delta(resolution);
+        if (step > 1 && visited_thresh_ > 0) {
+            visited_thresh_ = ((visited_thresh_ + step - 1) / step) * step;
+        }
+    }
     path_requested = false;
 
     std::vector<SDL_Point> absolute;
     absolute.reserve(rel_checkpoints.size());
-    SDL_Point cursor = self_->pos;
+    vibble::grid::Grid& grid_service = grid();
+    SDL_Point           cursor_index = grid_service.world_to_index(self_->pos, resolution);
     for (const SDL_Point& delta : rel_checkpoints) {
-        cursor.x += delta.x;
-        cursor.y += delta.y;
-        absolute.push_back(cursor);
+        SDL_Point delta_indices = grid_service.convert_resolution(delta, 0, resolution);
+        cursor_index.x += delta_indices.x;
+        cursor_index.y += delta_indices.y;
+        SDL_Point next_world = grid_service.index_to_world(cursor_index, resolution);
+        absolute.push_back(next_world);
     }
 
     plan_ = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_);
@@ -119,10 +132,12 @@ void AnimationUpdate::just_move(SDL_Point delta, const std::string& animation_id
     manual_animation_.reset();
     clear_movement_plan();
 
+    const int       resolution = effective_grid_resolution(std::nullopt);
     const SDL_Point from{ self_->pos.x, self_->pos.y };
-    const SDL_Point to{ from.x + delta.x, from.y + delta.y };
+    SDL_Point       world_delta = convert_delta_to_world(delta, resolution);
+    const SDL_Point to{ from.x + world_delta.x, from.y + world_delta.y };
 
-    if (delta.x != 0 || delta.y != 0) {
+    if (world_delta.x != 0 || world_delta.y != 0) {
         if (!path_blocked(from, to, self_, nullptr)) {
             self_->pos = to;
             if (resort_z) {
@@ -879,4 +894,30 @@ bool AnimationUpdate::replan_to_destination() {
     next_checkpoint_index_ = 0;
     mark_progress_toward_checkpoints();
     return true;
+}
+
+vibble::grid::Grid& AnimationUpdate::grid() const {
+    if (grid_service_) {
+        return *grid_service_;
+    }
+    return vibble::grid::global_grid();
+}
+
+int AnimationUpdate::effective_grid_resolution(std::optional<int> override_resolution) const {
+    if (override_resolution.has_value()) {
+        return vibble::grid::clamp_resolution(*override_resolution);
+    }
+    if (self_) {
+        return vibble::grid::clamp_resolution(self_->grid_resolution);
+    }
+    return 0;
+}
+
+SDL_Point AnimationUpdate::convert_delta_to_world(SDL_Point delta, int resolution) const {
+    const int           clamped_resolution = vibble::grid::clamp_resolution(resolution);
+    vibble::grid::Grid& grid_service       = grid();
+    SDL_Point           indices            = grid_service.convert_resolution(delta, 0, clamped_resolution);
+    const SDL_Point     origin_world       = grid_service.index_to_world(SDL_Point{ 0, 0 }, clamped_resolution);
+    const SDL_Point     target_world       = grid_service.index_to_world(indices, clamped_resolution);
+    return SDL_Point{ target_world.x - origin_world.x, target_world.y - origin_world.y };
 }
