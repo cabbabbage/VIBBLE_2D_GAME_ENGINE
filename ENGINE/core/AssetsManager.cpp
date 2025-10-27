@@ -557,19 +557,6 @@ void Assets::update(const Input& input)
 
     camera_.update_zoom(active_room, finder_, player);
 
-    {
-        const Area view = camera_.get_camera_area();
-        auto [minx, miny, maxx, maxy] = view.get_bounds();
-        SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
-        world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
-    }
-
-    update_active_assets(camera_.get_screen_center());
-    rebuild_active_assets_if_needed();
-
-    AudioEngine& audio_engine = AudioEngine::instance();
-    audio_engine.set_effect_max_distance(static_cast<float>(std::max(1, camera_.get_render_distance_world_margin())));
-
     dx = dy = 0;
 
     int start_px = player ? player->pos.x : 0;
@@ -584,15 +571,22 @@ void Assets::update(const Input& input)
         dy = player->pos.y - start_py;
         if (dx != 0 || dy != 0) {
             camera_.update_zoom(active_room, finder_, player);
-            const Area view = camera_.get_camera_area();
-            auto [minx2, miny2, maxx2, maxy2] = view.get_bounds();
-            SDL_Rect cam_rect2{minx2, miny2, std::max(0, maxx2 - minx2), std::max(0, maxy2 - miny2)};
-            world_grid_.update_active_chunks(cam_rect2, camera_.get_render_distance_world_margin());
-            update_active_assets(camera_.get_screen_center());
-            rebuild_active_assets_if_needed();
-            update_filtered_active_assets();
         }
     }
+
+    const Area view = camera_.get_camera_area();
+    auto [minx, miny, maxx, maxy] = view.get_bounds();
+    SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
+    world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
+
+    update_active_assets(camera_.get_screen_center());
+    const bool rebuilt_active_assets = rebuild_active_assets_if_needed();
+    if (rebuilt_active_assets) {
+        update_filtered_active_assets();
+    }
+
+    AudioEngine& audio_engine = AudioEngine::instance();
+    audio_engine.set_effect_max_distance(static_cast<float>(std::max(1, camera_.get_render_distance_world_margin())));
     if (!dev_mode) {
         constexpr std::size_t kParallelThreshold = 4;
         non_player_update_buffer_.clear();
@@ -942,13 +936,13 @@ void Assets::update_active_assets(SDL_Point center) {
     active_assets_dirty_.store(true, std::memory_order_release);
 }
 
-void Assets::rebuild_active_assets_if_needed() {
+bool Assets::rebuild_active_assets_if_needed() {
     if (!active_asset_list_) {
         initialize_active_assets(camera_.get_screen_center());
     }
 
     if (!active_asset_list_ || !active_assets_dirty_.load(std::memory_order_acquire)) {
-        return;
+        return false;
     }
 
     std::vector<Asset*> new_active_assets;
@@ -1008,6 +1002,7 @@ void Assets::rebuild_active_assets_if_needed() {
     active_static_light_assets_  = std::move(new_static_lights);
     active_moving_light_assets_  = std::move(new_moving_lights);
     active_assets_dirty_.store(false, std::memory_order_release);
+    return true;
 }
 
 int Assets::active_search_radius() const {

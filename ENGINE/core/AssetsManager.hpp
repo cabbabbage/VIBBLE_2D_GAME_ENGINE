@@ -249,7 +249,7 @@ private:
 
     std::optional<DevNotice> dev_notice_;
 
-    void rebuild_active_assets_if_needed();
+    bool rebuild_active_assets_if_needed();
     void update_active_assets(SDL_Point center);
     int active_search_radius() const;
 };
