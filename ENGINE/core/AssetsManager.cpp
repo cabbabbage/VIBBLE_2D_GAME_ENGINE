@@ -68,6 +68,7 @@ TTF_Font* scaling_notice_font() {
 
 constexpr int kQualityOptions[] = {100, 75, 50, 25, 10};
 constexpr int kMinRenderQuality = kQualityOptions[sizeof(kQualityOptions) / sizeof(kQualityOptions[0]) - 1];
+constexpr std::size_t kNonPlayerParallelThreshold = 4;
 
 int align_render_quality_percent(int percent) {
     int best = kQualityOptions[0];
@@ -609,14 +610,7 @@ void Assets::update(const Input& input)
     AudioEngine& audio_engine = AudioEngine::instance();
     audio_engine.set_effect_max_distance(static_cast<float>(std::max(1, camera_.get_render_distance_world_margin())));
     if (!dev_mode) {
-        constexpr std::size_t kParallelThreshold = 4;
-        non_player_update_buffer_.clear();
-        non_player_update_buffer_.reserve(active_assets.size());
-        for (Asset* asset : active_assets) {
-            if (asset && asset != player) {
-                non_player_update_buffer_.push_back(asset);
-            }
-        }
+        rebuild_non_player_update_buffer_if_needed();
 
         const std::size_t task_count = non_player_update_buffer_.size();
         if (task_count == 1) {
@@ -624,7 +618,7 @@ void Assets::update(const Input& input)
         } else if (task_count > 1) {
 #if defined(__cpp_lib_execution)
             const unsigned hardware_threads = std::max(1u, std::thread::hardware_concurrency());
-            const bool can_parallelize = hardware_threads > 1 && task_count >= kParallelThreshold;
+            const bool can_parallelize = hardware_threads > 1 && task_count >= kNonPlayerParallelThreshold;
             if (can_parallelize) {
                 std::for_each(std::execution::par_unseq,
                               non_player_update_buffer_.begin(),
@@ -963,6 +957,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
 
 void Assets::mark_active_assets_dirty() {
     active_assets_dirty_.store(true, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
 }
 
 void Assets::notify_light_map_asset_moved(const Asset* asset) {
@@ -1070,6 +1065,7 @@ void Assets::initialize_active_assets(SDL_Point center) {
         std::vector<std::string>{},
         SortMode::ZIndexAsc);
     active_assets_dirty_.store(true, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
 }
 
 void Assets::update_active_assets(SDL_Point center) {
@@ -1082,6 +1078,7 @@ void Assets::update_active_assets(SDL_Point center) {
     active_asset_list_->set_search_radius(active_search_radius());
     active_asset_list_->update();
     active_assets_dirty_.store(true, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
 }
 
 bool Assets::rebuild_active_assets_if_needed() {
@@ -1150,7 +1147,47 @@ bool Assets::rebuild_active_assets_if_needed() {
     active_static_light_assets_  = std::move(new_static_lights);
     active_moving_light_assets_  = std::move(new_moving_lights);
     active_assets_dirty_.store(false, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
+    rebuild_non_player_update_buffer_if_needed();
     return true;
+}
+
+void Assets::rebuild_non_player_update_buffer_if_needed() {
+    if (!non_player_update_buffer_dirty_.load(std::memory_order_acquire)) {
+        return;
+    }
+
+#if defined(__cpp_lib_execution)
+    const unsigned hardware_threads = std::max(1u, std::thread::hardware_concurrency());
+    const bool can_parallelize = hardware_threads > 1 && active_assets.size() >= kNonPlayerParallelThreshold;
+    if (can_parallelize) {
+        std::vector<Asset*> rebuilt(active_assets.size());
+        std::atomic_size_t next_index{0};
+        std::for_each(std::execution::par_unseq,
+                      active_assets.begin(),
+                      active_assets.end(),
+                      [&](Asset* asset) {
+                          if (asset && asset != player) {
+                              const std::size_t index = next_index.fetch_add(1, std::memory_order_relaxed);
+                              rebuilt[index] = asset;
+                          }
+                      });
+        const std::size_t final_count = next_index.load(std::memory_order_relaxed);
+        rebuilt.resize(final_count);
+        non_player_update_buffer_ = std::move(rebuilt);
+        non_player_update_buffer_dirty_.store(false, std::memory_order_release);
+        return;
+    }
+#endif
+
+    non_player_update_buffer_.clear();
+    non_player_update_buffer_.reserve(active_assets.size());
+    for (Asset* asset : active_assets) {
+        if (asset && asset != player) {
+            non_player_update_buffer_.push_back(asset);
+        }
+    }
+    non_player_update_buffer_dirty_.store(false, std::memory_order_release);
 }
 
 int Assets::active_search_radius() const {
@@ -1223,6 +1260,7 @@ void Assets::process_removals() {
     erase_ptrs(filtered_active_assets);
     erase_ptrs(moving_assets_for_grid_);
     erase_ptrs(pending_static_grid_registration_);
+    mark_non_player_update_buffer_dirty();
 
     for (Asset* asset : pending_removals) {
         active_moving_light_lookup_.erase(asset);
@@ -1417,6 +1455,7 @@ void Assets::force_shaded_assets_rerender() {
     }
 
     active_assets_dirty_.store(true, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
 }
 
 void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persist_json) {

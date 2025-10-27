@@ -144,7 +144,7 @@ void VibbleController::movement(const Input& input) {
                     mdx = clamped.x - origin.x;
                     mdy = clamped.y - origin.y;
 
-                    player_->anim_->move(SDL_Point{ mdx, mdy });
+                    player_->anim_->move(SDL_Point{ mdx, mdy }, animation_update::detail::kDefaultAnimation);
                     dx_ = mdx;
                     dy_ = mdy;
                     return;
@@ -152,15 +152,13 @@ void VibbleController::movement(const Input& input) {
             }
         }
 
-        player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
-        player_->anim_->clear_movement_plan();
+        player_->anim_->move(SDL_Point{ 0, 0 }, animation_update::detail::kDefaultAnimation);
         return;
     }
 
     SDL_Point step_delta = normalized_step(raw_x, raw_y, kWalkSpeed);
     if (step_delta.x == 0 && step_delta.y == 0) {
-        player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
-        player_->anim_->clear_movement_plan();
+        player_->anim_->move(SDL_Point{ 0, 0 }, animation_update::detail::kDefaultAnimation);
         return;
     }
 
@@ -181,8 +179,7 @@ void VibbleController::movement(const Input& input) {
     }
 
     if (dx_ == 0 && dy_ == 0) {
-        player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
-        player_->anim_->clear_movement_plan();
+        player_->anim_->move(SDL_Point{ 0, 0 }, animation_update::detail::kDefaultAnimation);
         return;
     }
 
@@ -193,7 +190,7 @@ void VibbleController::movement(const Input& input) {
         player_->anim_->clear_movement_plan();
     }
 
-    player_->anim_->move(SDL_Point{ dx_, dy_ });
+    player_->anim_->move(SDL_Point{ dx_, dy_ }, animation_update::detail::kDefaultAnimation);
 }
 
 void VibbleController::update(const Input& input) {

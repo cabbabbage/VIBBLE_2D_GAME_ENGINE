@@ -221,6 +221,7 @@ private:
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;
+    std::atomic<bool> non_player_update_buffer_dirty_{true};
 
     AssetLibrary& library_;
     std::string map_id_;
@@ -263,8 +264,12 @@ private:
     std::optional<DevNotice> dev_notice_;
 
     bool rebuild_active_assets_if_needed();
+    void rebuild_non_player_update_buffer_if_needed();
     void update_active_assets(SDL_Point center);
     int active_search_radius() const;
+    void mark_non_player_update_buffer_dirty() {
+        non_player_update_buffer_dirty_.store(true, std::memory_order_release);
+    }
 };
 #include "utils/map_grid_settings.hpp"
 

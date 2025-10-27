@@ -58,27 +58,6 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets, double)
     : AnimationUpdate(self, assets) {}
 
-void AnimationUpdate::set_animation_now(const std::string& anim_id) {
-    if (!self_ || !self_->info) {
-        return;
-    }
-    if (anim_id.empty()) {
-        return;
-    }
-    if (self_->current_animation == anim_id) {
-        return;
-    }
-    queued_anim_.reset();
-    switch_to(anim_id);
-}
-
-void AnimationUpdate::set_animation_qued(const std::string& anim_id) {
-    if (queued_anim_ && *queued_anim_ == anim_id) {
-        return;
-    }
-    queued_anim_ = anim_id;
-}
-
 void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
                                int visited_thresh_px,
                                std::optional<int> checkpoint_resolution) {
@@ -121,12 +100,28 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
     }
 }
 
-void AnimationUpdate::move(SDL_Point delta, bool resort_z) {
+namespace {
+std::string resolve_animation(const Asset& asset, const std::string& requested) {
+    if (!asset.info) {
+        return animation_update::detail::kDefaultAnimation;
+    }
+
+    if (!requested.empty()) {
+        auto it = asset.info->animations.find(requested);
+        if (it != asset.info->animations.end()) {
+            return it->first;
+        }
+    }
+
+    return animation_update::detail::kDefaultAnimation;
+}
+}
+
+void AnimationUpdate::move(SDL_Point delta, const std::string& animation, bool resort_z) {
     if (!self_ || !self_->info) {
         return;
     }
 
-    queued_anim_.reset();
     clear_movement_plan();
 
     const int       resolution = effective_grid_resolution(std::nullopt);
@@ -134,44 +129,58 @@ void AnimationUpdate::move(SDL_Point delta, bool resort_z) {
     SDL_Point       world_delta = convert_delta_to_world(delta, resolution);
     const SDL_Point to{ from.x + world_delta.x, from.y + world_delta.y };
 
+    SDL_Point final_position = from;
+
     if (world_delta.x != 0 || world_delta.y != 0) {
         if (!path_blocked(from, to, self_, nullptr)) {
-            self_->pos = to;
-            if (resort_z) {
-                refresh_z_index();
+            final_position = to;
+        } else {
+            const int steps = std::max(std::abs(world_delta.x), std::abs(world_delta.y));
+            if (steps > 0) {
+                const double step_x = static_cast<double>(world_delta.x) / static_cast<double>(steps);
+                const double step_y = static_cast<double>(world_delta.y) / static_cast<double>(steps);
+                double       accum_x = static_cast<double>(from.x);
+                double       accum_y = static_cast<double>(from.y);
+                SDL_Point    current = from;
+
+                for (int i = 0; i < steps; ++i) {
+                    accum_x += step_x;
+                    accum_y += step_y;
+                    SDL_Point candidate{ static_cast<int>(std::round(accum_x)), static_cast<int>(std::round(accum_y)) };
+
+                    if (candidate.x == current.x && candidate.y == current.y) {
+                        continue;
+                    }
+
+                    if (path_blocked(current, candidate, self_, nullptr)) {
+                        break;
+                    }
+
+                    final_position = candidate;
+                    current        = candidate;
+                }
             }
+        }
+    }
+
+    if (final_position.x != self_->pos.x || final_position.y != self_->pos.y) {
+        self_->pos = final_position;
+        if (resort_z) {
+            refresh_z_index();
         }
     }
 
     plan_.final_dest = self_->pos;
     final_dest       = self_->pos;
 
-    const std::string desired_animation = animation_update::detail::kDefaultAnimation;
+    const std::string resolved = resolve_animation(*self_, animation);
 
-    if (self_->current_animation != desired_animation) {
-        switch_to(desired_animation, path_index_for(desired_animation));
-        return;
-    }
-
-    if (advance(self_->current_frame)) {
-        return;
-    }
-
-    auto anim_it = self_->info->animations.find(self_->current_animation);
-    if (anim_it == self_->info->animations.end()) {
-        switch_to(animation_update::detail::kDefaultAnimation);
-        advance(self_->current_frame);
-        return;
-    }
-
-    Animation& anim = anim_it->second;
-    const bool force_loop_default = self_->current_animation == animation_update::detail::kDefaultAnimation;
-    if (anim.loop || force_loop_default) {
-        switch_to(self_->current_animation, path_index_for(self_->current_animation));
-        advance(self_->current_frame);
+    if (self_->current_animation != resolved) {
+        switch_to(resolved, path_index_for(resolved));
     } else {
-        switch_to(animation_update::detail::kDefaultAnimation);
-        advance(self_->current_frame);
+        if (!advance(self_->current_frame)) {
+            switch_to(resolved, path_index_for(resolved));
+        }
     }
 }
 
@@ -199,11 +208,6 @@ void AnimationUpdate::update() {
 
     if (!plan_.strides.empty() && player_.tick(*this, plan_, stride_index_, stride_frame_counter_)) {
         return;
-    }
-
-    if (queued_anim_ && self_->is_current_animation_last_frame()) {
-        switch_to(*queued_anim_);
-        queued_anim_.reset();
     }
 
     if (self_->get_current_animation() != animation_update::detail::kDefaultAnimation) {

@@ -63,12 +63,12 @@ void BombController::trigger_explosion() {
 
     bool animation_started = false;
     if (!self_->info) {
-        self_->anim_->set_animation_now("explosion");
+        self_->anim_->move(SDL_Point{ 0, 0 }, "explosion");
         animation_started = true;
     } else {
         const auto it = self_->info->animations.find("explosion");
         if (it != self_->info->animations.end()) {
-            self_->anim_->set_animation_now("explosion");
+            self_->anim_->move(SDL_Point{ 0, 0 }, "explosion");
             animation_started = true;
         }
     }

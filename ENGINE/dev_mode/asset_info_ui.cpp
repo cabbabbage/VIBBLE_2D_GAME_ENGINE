@@ -973,7 +973,7 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
 
         std::string desired = asset->current_animation.empty() ? std::string{"default"} : asset->current_animation;
         if (asset->anim_) {
-            asset->anim_->set_animation_now(desired);
+            asset->anim_->move(SDL_Point{ 0, 0 }, desired);
         } else if (asset->info) {
             auto it = asset->info->animations.find(desired);
             if (it == asset->info->animations.end()) {

@@ -22,7 +22,7 @@ void DefaultController::update(const Input& ) {
     }
 
     if (self_->current_animation != default_anim || self_->current_frame == nullptr) {
-        self_->anim_->set_animation_now(default_anim);
+        self_->anim_->move(SDL_Point{ 0, 0 }, default_anim);
         return;
     }
 

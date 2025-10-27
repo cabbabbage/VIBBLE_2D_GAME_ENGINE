@@ -26,12 +26,10 @@ public:
     AnimationUpdate(Asset* self, Assets* assets, double path_bias);
 
     void update();
-    void set_animation_now(const std::string& anim_id);
-    void set_animation_qued(const std::string& anim_id);
     void auto_move(const std::vector<SDL_Point>& rel_checkpoints,
                    int visited_thresh_px,
                    std::optional<int> checkpoint_resolution = std::nullopt);
-    void move(SDL_Point delta, bool resort_z = true);
+    void move(SDL_Point delta, const std::string& animation, bool resort_z = true);
     void clear_movement_plan();
     std::size_t path_index_for(const std::string& anim_id) const;
 
@@ -74,6 +72,5 @@ private:
     GetBestPath   planner_{};
     StridePlayer  player_{};
 
-    std::optional<std::string> queued_anim_{};
     std::unordered_map<std::string, std::size_t> active_paths_{};
 };
