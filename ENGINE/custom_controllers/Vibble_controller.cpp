@@ -152,7 +152,6 @@ void VibbleController::movement(const Input& input) {
             }
         }
 
-        player_->anim_->clear_manual_animation();
         player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
         player_->anim_->clear_movement_plan();
         return;
@@ -160,7 +159,6 @@ void VibbleController::movement(const Input& input) {
 
     SDL_Point step_delta = normalized_step(raw_x, raw_y, kWalkSpeed);
     if (step_delta.x == 0 && step_delta.y == 0) {
-        player_->anim_->clear_manual_animation();
         player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
         player_->anim_->clear_movement_plan();
         return;
@@ -183,7 +181,6 @@ void VibbleController::movement(const Input& input) {
     }
 
     if (dx_ == 0 && dy_ == 0) {
-        player_->anim_->clear_manual_animation();
         player_->anim_->set_animation_now(animation_update::detail::kDefaultAnimation);
         player_->anim_->clear_movement_plan();
         return;

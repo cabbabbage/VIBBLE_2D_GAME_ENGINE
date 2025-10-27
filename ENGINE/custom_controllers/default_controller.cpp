@@ -14,8 +14,6 @@ void DefaultController::update(const Input& ) {
         return;
     }
 
-    self_->anim_->clear_manual_animation();
-
     const std::string default_anim{ animation_update::detail::kDefaultAnimation };
 
     auto it = self_->info->animations.find(default_anim);
@@ -23,7 +21,7 @@ void DefaultController::update(const Input& ) {
         return;
     }
 
-    if (self_->current_animation != default_anim) {
+    if (self_->current_animation != default_anim || self_->current_frame == nullptr) {
         self_->anim_->set_animation_now(default_anim);
         return;
     }
