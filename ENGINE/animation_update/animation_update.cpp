@@ -110,6 +110,63 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints, i
     }
 }
 
+void AnimationUpdate::just_move(SDL_Point delta, const std::string& animation_id, bool resort_z) {
+    if (!self_ || !self_->info) {
+        return;
+    }
+
+    queued_anim_.reset();
+    manual_animation_.reset();
+    clear_movement_plan();
+
+    const SDL_Point from{ self_->pos.x, self_->pos.y };
+    const SDL_Point to{ from.x + delta.x, from.y + delta.y };
+
+    if (delta.x != 0 || delta.y != 0) {
+        if (!path_blocked(from, to, self_, nullptr)) {
+            self_->pos = to;
+            if (resort_z) {
+                refresh_z_index();
+            }
+        }
+    }
+
+    plan_.final_dest = self_->pos;
+    final_dest       = self_->pos;
+
+    const std::string desired_animation = animation_id.empty() ? self_->current_animation : animation_id;
+    if (desired_animation.empty()) {
+        advance(self_->current_frame);
+        return;
+    }
+
+    if (self_->current_animation != desired_animation) {
+        switch_to(desired_animation, path_index_for(desired_animation));
+        return;
+    }
+
+    if (advance(self_->current_frame)) {
+        return;
+    }
+
+    auto anim_it = self_->info->animations.find(self_->current_animation);
+    if (anim_it == self_->info->animations.end()) {
+        switch_to(animation_update::detail::kDefaultAnimation);
+        advance(self_->current_frame);
+        return;
+    }
+
+    Animation& anim = anim_it->second;
+    const bool force_loop_default = self_->current_animation == animation_update::detail::kDefaultAnimation;
+    if (anim.loop || force_loop_default) {
+        switch_to(self_->current_animation, path_index_for(self_->current_animation));
+        advance(self_->current_frame);
+    } else {
+        switch_to(animation_update::detail::kDefaultAnimation);
+        advance(self_->current_frame);
+    }
+}
+
 void AnimationUpdate::clear_movement_plan() {
     plan_.strides.clear();
     plan_.sanitized_checkpoints.clear();
