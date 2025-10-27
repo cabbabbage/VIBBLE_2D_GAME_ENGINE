@@ -33,7 +33,6 @@ if not defined VIBBLE_SAFE_LOADING (
     echo [run.bat] SAFE loading enabled (VIBBLE_SAFE_LOADING=1)
 )
 
-
 rem ----------------------------------------------------
 rem Ensure vcpkg exists (clone if missing)
 rem ----------------------------------------------------
@@ -53,6 +52,32 @@ if not exist "%LOCAL_VCPKG%\scripts\buildsystems\vcpkg.cmake" (
         goto :fail
     )
     popd >nul
+)
+
+rem ----------------------------------------------------
+rem Always refresh builtin-baseline before install
+rem First try x-update-baseline, then fall back to manual rewrite from vcpkg HEAD
+rem ----------------------------------------------------
+echo [run.bat] Updating vcpkg baseline...
+if exist "%cd%\vcpkg.json" (
+    "%LOCAL_VCPKG%\vcpkg.exe" x-update-baseline
+    if errorlevel 1 (
+        echo [run.bat] x-update-baseline failed, falling back to manual baseline update...
+        pushd "%LOCAL_VCPKG%" >nul
+        for /f %%H in ('git rev-parse HEAD') do set "NEW_BASELINE=%%H"
+        popd >nul
+        powershell -NoProfile -Command ^
+          "$p='vcpkg.json';" ^
+          "$json=Get-Content $p -Raw;" ^
+          "if($json -match '\"builtin-baseline\"'){" ^
+            "$json=$json -replace '\"builtin-baseline\"\s*:\s*\"[0-9a-fA-F]+\"','\"builtin-baseline\":\"%NEW_BASELINE%\"';" ^
+          "}else{" ^
+            "$json=$json -replace '^{','{\"builtin-baseline\":\"%NEW_BASELINE%\",';" ^
+          "};" ^
+          "Set-Content -Path $p -Value $json -NoNewline;"
+    )
+) else (
+    echo [WARN] vcpkg.json not found in repo root. Skipping baseline update.
 )
 
 rem ----------------------------------------------------
