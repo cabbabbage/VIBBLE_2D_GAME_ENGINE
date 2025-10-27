@@ -2,13 +2,15 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <deque>
+#include <filesystem>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <limits>
 #include <mutex>
@@ -383,6 +385,8 @@ struct ScalingLogic {
     }
 
     static inline bool FlushUsageData() {
+        wait_for_sampling_task();
+
         UsageState& state = usage_state();
         std::lock_guard<std::mutex> guard(state.mutex);
         ensure_loaded(state);
@@ -395,17 +399,73 @@ struct ScalingLogic {
     }
 
     static inline void TickUsageSampling() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        if (!state.enabled) {
+        wait_for_sampling_task();
+        TickUsageSamplingWork();
+    }
+
+    static inline void ScheduleUsageSamplingAsync() {
+        if (!UsageTrackingEnabled()) {
             return;
         }
-        ensure_loaded(state);
-        const Uint32 now = SDL_GetTicks();
-        const bool merged = process_pending_samples(state, now, false);
-        if (merged && state.dirty) {
-            save_to_disk(state);
+
+        UsageState& state = usage_state();
+        {
+            std::lock_guard<std::mutex> guard(state.mutex);
+            if (state.pending_samples.empty() && state.queued_assets.empty()) {
+                return;
+            }
         }
+
+        auto& pending_flag = sampling_pending_flag();
+        bool   expected    = false;
+        if (!pending_flag.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+            return;
+        }
+
+        auto worker = []() {
+            struct ResetFlag {
+                ~ResetFlag() {
+                    sampling_pending_flag().store(false, std::memory_order_release);
+                }
+            } reset_flag;
+
+            try {
+                TickUsageSamplingWork();
+            } catch (...) {
+            }
+        };
+
+        std::future<void> new_task;
+        try {
+            new_task = std::async(std::launch::async, std::move(worker));
+        } catch (...) {
+            pending_flag.store(false, std::memory_order_release);
+            TickUsageSamplingWork();
+            return;
+        }
+
+        std::future<void> previous;
+        {
+            std::lock_guard<std::mutex> guard(sampling_task_mutex());
+            auto& stored = sampling_task_handle();
+            if (stored.valid()) {
+                previous = std::move(stored);
+            }
+            stored = std::move(new_task);
+        }
+
+        if (previous.valid()) {
+            try {
+                previous.wait();
+            } catch (...) {
+            }
+        }
+    }
+
+    static inline void ShutdownUsageSampling() {
+        wait_for_sampling_task();
+        FlushUsageData();
+        wait_for_sampling_task();
     }
 
     static inline ScaleProfile ProfileForAsset(const std::string& asset_key) {
@@ -494,6 +554,53 @@ private:
     static inline UsageState& usage_state() {
         static UsageState state;
         return state;
+    }
+
+    static inline std::atomic<bool>& sampling_pending_flag() {
+        static std::atomic<bool> pending{false};
+        return pending;
+    }
+
+    static inline std::mutex& sampling_task_mutex() {
+        static std::mutex mutex;
+        return mutex;
+    }
+
+    static inline std::future<void>& sampling_task_handle() {
+        static std::future<void> task;
+        return task;
+    }
+
+    static inline void wait_for_sampling_task() {
+        std::future<void> task;
+        {
+            std::lock_guard<std::mutex> guard(sampling_task_mutex());
+            auto& stored = sampling_task_handle();
+            if (stored.valid()) {
+                task = std::move(stored);
+            }
+        }
+
+        if (task.valid()) {
+            try {
+                task.wait();
+            } catch (...) {
+            }
+        }
+    }
+
+    static inline void TickUsageSamplingWork() {
+        UsageState& state = usage_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        if (!state.enabled) {
+            return;
+        }
+        ensure_loaded(state);
+        const Uint32 now    = SDL_GetTicks();
+        const bool   merged = process_pending_samples(state, now, false);
+        if (merged && state.dirty) {
+            save_to_disk(state);
+        }
     }
 
     static inline nlohmann::json default_storage() {

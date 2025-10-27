@@ -31,6 +31,7 @@ public:
     void auto_move(const std::vector<SDL_Point>& rel_checkpoints,
                    int visited_thresh_px,
                    std::optional<int> checkpoint_resolution = std::nullopt);
+    void move(SDL_Point delta, bool resort_z = true);
     void just_move(SDL_Point delta, const std::string& animation_id, bool resort_z = true);
     void clear_movement_plan();
     void set_manual_animation(const std::string& anim_id, bool loop = true);

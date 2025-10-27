@@ -8,7 +8,6 @@
 #include "utils/input.hpp"
 
 #include <cmath>
-#include <vector>
 
 namespace {
 
@@ -145,9 +144,7 @@ void VibbleController::movement(const Input& input) {
                     mdx = clamped.x - origin.x;
                     mdy = clamped.y - origin.y;
 
-                    std::vector<SDL_Point> path;
-                    path.push_back(SDL_Point{ mdx, mdy });
-                    player_->anim_->auto_move(path, 0);
+                    player_->anim_->move(SDL_Point{ mdx, mdy });
                     dx_ = mdx;
                     dy_ = mdy;
                     return;
@@ -199,10 +196,7 @@ void VibbleController::movement(const Input& input) {
         player_->anim_->clear_movement_plan();
     }
 
-    std::vector<SDL_Point> path;
-    path.push_back(SDL_Point{ dx_, dy_ });
-
-    player_->anim_->auto_move(path, 0);
+    player_->anim_->move(SDL_Point{ dx_, dy_ });
 }
 
 void VibbleController::update(const Input& input) {

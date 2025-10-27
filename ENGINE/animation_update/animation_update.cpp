@@ -123,6 +123,10 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
     }
 }
 
+void AnimationUpdate::move(SDL_Point delta, bool resort_z) {
+    just_move(delta, animation_update::detail::kDefaultAnimation, resort_z);
+}
+
 void AnimationUpdate::just_move(SDL_Point delta, const std::string& animation_id, bool resort_z) {
     if (!self_ || !self_->info) {
         return;

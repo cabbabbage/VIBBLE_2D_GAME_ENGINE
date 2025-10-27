@@ -385,6 +385,8 @@ bool Assets::on_map_light_changed() {
 }
 
 Assets::~Assets() {
+    render_pipeline::ScalingLogic::ShutdownUsageSampling();
+
     if (input) {
         input->clear_screen_to_world_mapper();
     }
@@ -547,8 +549,10 @@ void Assets::set_input(Input* m) {
 
 void Assets::update(const Input& input)
 {
-
-    render_pipeline::ScalingLogic::TickUsageSampling();
+    const bool usage_tracking_enabled = render_pipeline::ScalingLogic::UsageTrackingEnabled();
+    if (usage_tracking_enabled) {
+        render_pipeline::ScalingLogic::ScheduleUsageSamplingAsync();
+    }
 
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
