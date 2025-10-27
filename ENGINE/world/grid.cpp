@@ -104,6 +104,7 @@ void Grid::unregister_asset(Asset* a) {
 }
 
 void Grid::rebuild_chunks() {
+    invalidate_active_cache();
     std::vector<Asset*> assets;
     assets.reserve(residency_.size());
     for (auto& entry : residency_) {
@@ -119,15 +120,26 @@ void Grid::rebuild_chunks() {
 }
 
 void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
-    chunks_.clear_active();
-    const int step = 1 << r_chunk_;
-
     const SDL_Rect expanded{
         camera_world.x - margin_px,
         camera_world.y - margin_px,
         camera_world.w + margin_px * 2,
         camera_world.h + margin_px * 2
-};
+    };
+
+    if (has_cached_camera_rect_ &&
+        last_chunk_resolution_ == r_chunk_ &&
+        last_margin_px_ == margin_px &&
+        expanded.x == last_expanded_camera_.x &&
+        expanded.y == last_expanded_camera_.y &&
+        expanded.w == last_expanded_camera_.w &&
+        expanded.h == last_expanded_camera_.h) {
+        return;
+    }
+
+    chunks_.clear_active();
+    const int step = 1 << r_chunk_;
+
     const int i_min = floor_div(expanded.x - origin_.x, step);
     const int j_min = floor_div(expanded.y - origin_.y, step);
     const int i_max = floor_div((expanded.x + expanded.w) - origin_.x, step);
@@ -138,6 +150,11 @@ void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
             chunks_.active().push_back(&c);
         }
     }
+
+    last_expanded_camera_ = expanded;
+    last_margin_px_ = margin_px;
+    last_chunk_resolution_ = r_chunk_;
+    has_cached_camera_rect_ = true;
 }
 
 void Grid::remove_from_chunk(Asset* a, Chunk* c) {
@@ -148,6 +165,13 @@ void Grid::remove_from_chunk(Asset* a, Chunk* c) {
     if (v.size() != old_size) {
         ++c->occlusion_revision;
     }
+}
+
+void Grid::invalidate_active_cache() {
+    has_cached_camera_rect_ = false;
+    last_expanded_camera_ = SDL_Rect{0, 0, 0, 0};
+    last_margin_px_ = -1;
+    last_chunk_resolution_ = -1;
 }
 
 }

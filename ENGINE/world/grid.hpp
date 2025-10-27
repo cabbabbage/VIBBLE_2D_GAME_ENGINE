@@ -14,7 +14,9 @@ namespace world {
 
 class Grid {
 public:
-    Grid(SDL_Point origin = SDL_Point{0,0}, int r_chunk = 0) : origin_(origin), r_chunk_(r_chunk) {}
+    Grid(SDL_Point origin = SDL_Point{0,0}, int r_chunk = 0) : origin_(origin), r_chunk_(r_chunk) {
+        invalidate_active_cache();
+    }
 
     void set_chunk_resolution(int r);
     int  chunk_resolution() const { return r_chunk_; }
@@ -38,12 +40,17 @@ public:
 private:
     void remove_from_chunk(Asset* a, Chunk* c);
     void rebuild_chunks();
+    void invalidate_active_cache();
 
 private:
     SDL_Point origin_{0,0};
     int r_chunk_ = 0;
     ChunkManager chunks_{};
     std::unordered_map<Asset*, Chunk*> residency_{};
+    SDL_Rect last_expanded_camera_{0, 0, 0, 0};
+    int last_margin_px_ = -1;
+    int last_chunk_resolution_ = -1;
+    bool has_cached_camera_rect_ = false;
 };
 
 }

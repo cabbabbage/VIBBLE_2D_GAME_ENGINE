@@ -4,6 +4,7 @@
 #include "world/grid.hpp"
 
 #include <set>
+#include <vector>
 
 namespace {
 constexpr int kResolution = 3; // 1 << 3 == 8px chunks
@@ -74,4 +75,35 @@ TEST_CASE("Grid::update_active_chunks includes chunks on both sides of origin") 
     CHECK(coords.count({0, -1}) == 1);
     CHECK(coords.count({0, 0}) == 1);
     CHECK(coords.size() == 4);
+}
+
+TEST_CASE("Grid::update_active_chunks refreshes when camera moves or margin changes") {
+    world::Grid grid(kOrigin, kResolution);
+    const int chunk_px = 1 << kResolution;
+
+    auto collect_coords = [](const std::vector<world::Chunk*>& active) {
+        std::set<std::pair<int, int>> coords;
+        for (const world::Chunk* chunk : active) {
+            REQUIRE(chunk != nullptr);
+            coords.emplace(chunk->i, chunk->j);
+        }
+        return coords;
+    };
+
+    SDL_Rect camera{0, 0, 1, 1};
+    grid.update_active_chunks(camera, 0);
+    auto coords_initial = collect_coords(grid.active_chunks());
+    CHECK(coords_initial.count({0, 0}) == 1);
+    CHECK(coords_initial.size() == 1);
+
+    camera.x += chunk_px;
+    grid.update_active_chunks(camera, 0);
+    auto coords_after_move = collect_coords(grid.active_chunks());
+    CHECK(coords_after_move.count({1, 0}) == 1);
+    CHECK(coords_after_move.count({0, 0}) == 0);
+
+    grid.update_active_chunks(camera, chunk_px);
+    auto coords_after_margin = collect_coords(grid.active_chunks());
+    CHECK(coords_after_margin.count({1, 0}) == 1);
+    CHECK(coords_after_margin.count({0, 0}) == 1);
 }
