@@ -58,8 +58,11 @@ inline Float3 lerp(const Float3& a, const Float3& b, float t) {
 }
 
 struct SurfaceDeleter { void operator()(SDL_Surface* s) const { if (s) SDL_FreeSurface(s); } };
-struct SurfaceDeleter { void operator()(SDL_Surface* s) const { if (s) SDL_FreeSurface(s); } };
 using SurfacePtr = std::unique_ptr<SDL_Surface, SurfaceDeleter>;
+
+inline SurfacePtr make_surface_ptr(SDL_Surface* surface) {
+    return SurfacePtr(surface, SurfaceDeleter{});
+}
 
 inline Uint8 clamp8(int v) { return static_cast<Uint8>(std::clamp(v, 0, 255)); }
 
@@ -121,13 +124,13 @@ OverlayImage load_overlay_image(const fs::path& path) {
     OverlayImage img;
     if (path.empty()) return img;
 
-    SurfacePtr surface(IMG_Load(path.u8string().c_str()));
+    SurfacePtr surface = make_surface_ptr(IMG_Load(path.u8string().c_str()));
     if (!surface) {
         SDL_Log("GlassButton: failed to load overlay '%s': %s", path.u8string().c_str(), IMG_GetError());
         return img;
     }
 
-    SurfacePtr converted(SDL_ConvertSurfaceFormat(surface.get(), SDL_PIXELFORMAT_RGBA32, 0));
+    SurfacePtr converted = make_surface_ptr(SDL_ConvertSurfaceFormat(surface.get(), SDL_PIXELFORMAT_RGBA32, 0));
     if (!converted) {
         SDL_Log("GlassButton: failed to convert overlay '%s' to RGBA32: %s", path.u8string().c_str(), SDL_GetError());
         return img;
@@ -315,7 +318,7 @@ inline SDL_Rect clamp_to_view(SDL_Renderer* r, SDL_Rect rect) {
 
 SurfacePtr capture(SDL_Renderer* renderer, const SDL_Rect& rect) {
     if (rect.w <= 0 || rect.h <= 0) return {};
-    SurfacePtr s(SDL_CreateRGBSurfaceWithFormat(0, rect.w, rect.h, 32, SDL_PIXELFORMAT_RGBA32));
+    SurfacePtr s = make_surface_ptr(SDL_CreateRGBSurfaceWithFormat(0, rect.w, rect.h, 32, SDL_PIXELFORMAT_RGBA32));
     if (!s) return {};
     if (SDL_RenderReadPixels(renderer, &rect, s->format->format, s->pixels, s->pitch) != 0) {
         SDL_Log("GlassButton: SDL_RenderReadPixels failed: %s", SDL_GetError());
@@ -515,7 +518,7 @@ void Button::draw_glass(SDL_Renderer* renderer, const SDL_Rect& rect) const {
     SurfacePtr bg = capture(renderer, cap);
     if (!bg) return;
 
-    SurfacePtr comp(SDL_CreateRGBSurfaceWithFormat(0, r.w, r.h, 32, SDL_PIXELFORMAT_RGBA32));
+    SurfacePtr comp = make_surface_ptr(SDL_CreateRGBSurfaceWithFormat(0, r.w, r.h, 32, SDL_PIXELFORMAT_RGBA32));
     if (!comp) return;
 
     if (SDL_LockSurface(comp.get()) != 0) return;

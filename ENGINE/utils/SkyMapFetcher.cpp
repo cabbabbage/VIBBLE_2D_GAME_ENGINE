@@ -293,7 +293,7 @@ bool SkyMapFetcher::geolocate_ip(double& lat_deg, double& lon_deg, std::string& 
 
     {
         std::string body; long code = 0;
-        if (http_get_text("http:
+        if (http_get_text("http://ip-api.com/json", body, code)) {
             try {
                 auto j = json::parse(body);
                 if (j.value("status", std::string()) == "success") {
@@ -307,7 +307,7 @@ bool SkyMapFetcher::geolocate_ip(double& lat_deg, double& lon_deg, std::string& 
     }
     {
         std::string body; long code = 0;
-        if (http_get_text("https:
+        if (http_get_text("https://ipapi.co/json", body, code)) {
             try {
                 auto j = json::parse(body);
                 lat_deg = j.value("latitude", 0.0);
@@ -360,7 +360,15 @@ std::string SkyMapFetcher::build_skyview_url(double ra_deg, double dec_deg,
     std::string survey_enc = survey;
     for (auto& ch : survey_enc) if (ch == ' ') ch = '+';
 
-    std::snprintf(buf, sizeof(buf), "https: "Position=%.8f,%.8f&coordinates=J2000&pixels=%d&size=%.4f&projection=Tan&scaling=Linear&survey=%s", ra_deg, dec_deg, pixels, fov_deg, survey_enc.c_str());
+    std::snprintf(
+        buf,
+        sizeof(buf),
+        "https://skyview.gsfc.nasa.gov/current/cgi/runquery.pl?Position=%.8f,%.8f&coordinates=J2000&pixels=%d&size=%.4f&projection=Tan&scaling=Linear&survey=%s",
+        ra_deg,
+        dec_deg,
+        pixels,
+        fov_deg,
+        survey_enc.c_str());
     return std::string(buf);
 }
 
@@ -375,12 +383,12 @@ std::string trim_left(const std::string& value) {
 }
 
 std::string resolve_skyview_href(const std::string& href_value) {
-    const std::string host_root = "https:
+    const std::string host_root = "https://skyview.gsfc.nasa.gov";
     std::string href = trim_left(href_value);
-    if (href.rfind("http:
+    if (href.rfind("http://", 0) == 0 || href.rfind("https://", 0) == 0) {
         return href;
     }
-    if (href.rfind("
+    if (href.rfind("//", 0) == 0) {
         return "https:" + href;
     }
 
@@ -419,7 +427,7 @@ std::string resolve_skyview_href(const std::string& href_value) {
 
 bool SkyMapFetcher::extract_quicklook_jpeg_url(const std::string& html, std::string& jpg_url) {
 
-    std::regex re(R"(https:
+    std::regex re(R"(https?://[^"'\s]+\.jpg)", std::regex::icase);
     std::smatch m;
     if (std::regex_search(html, m, re)) {
         jpg_url = m.str(0);
@@ -429,8 +437,10 @@ bool SkyMapFetcher::extract_quicklook_jpeg_url(const std::string& html, std::str
     std::regex re2(R"(href\s*=\s*['\"]?([^'\">\s]+\.jpg))", std::regex::icase);
     if (std::regex_search(html, m, re2) && m.size() >= 2) {
         std::string candidate = m.str(1);
-        if (candidate.rfind("http", 0) != 0 && candidate.rfind("
-            jpg_url = resolve_skyview_href(candidate);
+        if (candidate.rfind("http://", 0) == 0 || candidate.rfind("https://", 0) == 0) {
+            jpg_url = candidate;
+        } else if (candidate.rfind("//", 0) == 0) {
+            jpg_url = "https:" + candidate;
         } else {
             jpg_url = resolve_skyview_href(candidate);
         }
