@@ -515,6 +515,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         vibble::log::info("[Main] Main menu displayed.");
         std::optional<MapDescriptor> chosen_map;
         bool quit_requested = false;
+        bool should_show_loading_screen = false;
         SDL_Event e;
         bool choosing = true;
         while (choosing) {
@@ -539,6 +540,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                         chosen_map = std::move(*created);
                         vibble::log::info(std::string("[Main] New map created and selected: ") + chosen_map->id);
                         choosing = false;
+                        should_show_loading_screen = true;
                     }
                     continue;
                 }
@@ -548,6 +550,10 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                 chosen_map = std::move(descriptor);
                 vibble::log::info(std::string("[Main] Map selected: ") + chosen_map->id);
                 choosing = false;
+                should_show_loading_screen = true;
+                break;
+            }
+            if (!choosing) {
                 break;
             }
             SDL_SetRenderTarget(renderer, nullptr);
@@ -556,6 +562,9 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
             menu.render();
             SDL_RenderPresent(renderer);
             SDL_Delay(16);
+        }
+        if (should_show_loading_screen) {
+            menu.showLoadingScreen();
         }
         if (quit_requested || !chosen_map) break;
 
