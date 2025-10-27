@@ -3,8 +3,9 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <unordered_set>
 #include <unordered_map>
+#include <cstddef>
+#include <cstdint>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
 #include "global_light_source.hpp"
@@ -76,12 +77,15 @@ private:
     bool           chunk_preview_enabled_ = false;
     bool           chunk_lighting_suspended_ = false;
 
-    std::unordered_set<Asset*> last_active_assets_;
     std::unordered_map<Asset*, const AnimationFrame*> last_rendered_frames_;
-    std::unordered_set<Asset*> current_active_assets_;
+    std::uint64_t frame_counter_ = 0;
     std::vector<AssetRenderCommand> texture_commands_;
     std::vector<AssetRenderCommand> remaining_commands_;
     std::vector<LightOverlaySource> light_overlay_sources_;
+    std::vector<SDL_Vertex> darkness_overlay_vertices_;
+    std::vector<int>        darkness_overlay_indices_;
+    std::size_t             darkness_overlay_vertex_capacity_hint_ = 0;
+    std::size_t             darkness_overlay_index_capacity_hint_  = 0;
     std::unique_ptr<runtime_lighting::RuntimeLightingSampler> runtime_lighting_sampler_;
     SDL_Texture* darkness_overlay_texture_ = nullptr;
     int          darkness_overlay_width_   = 0;

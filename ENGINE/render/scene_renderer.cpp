@@ -19,7 +19,6 @@
 #include <string>
 #include <string_view>
 #include <tuple>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <cstdlib>
@@ -236,6 +235,7 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float in
 
 void SceneRenderer::render(){
     static int render_call_count=0; ++render_call_count;
+    ++frame_counter_;
 
     SDL_Point orbit_center{ screen_width_ / 2, screen_height_ / 2 };
     main_light_source_.set_screen_orbit_center(orbit_center);
@@ -335,8 +335,6 @@ void SceneRenderer::render(){
         if (player_sh<=0.f) player_sh=1.f;
 
         const auto& active = assets_->getActive();
-        current_active_assets_.clear();
-        current_active_assets_.reserve(active.size());
         texture_commands_.clear();
         texture_commands_.reserve(active.size());
         remaining_commands_.clear();
@@ -365,9 +363,8 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            current_active_assets_.insert(a);
-            const bool newly = last_active_assets_.find(a) == last_active_assets_.end();
-            if (newly) {
+            const bool is_new = a->last_render_frame_id != frame_counter_ - 1;
+            if (is_new) {
                 SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
                 a->set_final_texture(tex);
             } else if (shouldRegen(a)) {
@@ -380,6 +377,8 @@ void SceneRenderer::render(){
                 last_rendered_frames_.erase(a);
                 continue;
             }
+
+            a->last_render_frame_id = frame_counter_;
 
             int fw = a->cached_w;
             int fh = a->cached_h;
@@ -501,15 +500,14 @@ void SceneRenderer::render(){
 
         render_commands(remaining_commands_);
 
-        last_active_assets_.swap(current_active_assets_);
         for (auto it = last_rendered_frames_.begin(); it != last_rendered_frames_.end();) {
-            if (last_active_assets_.find(it->first) == last_active_assets_.end()) {
+            Asset* asset = it->first;
+            if (!asset || asset->last_render_frame_id != frame_counter_) {
                 it = last_rendered_frames_.erase(it);
             } else {
                 ++it;
             }
         }
-        current_active_assets_.clear();
     }
 
     SDL_SetRenderTarget(renderer_,nullptr);
@@ -642,8 +640,16 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
     SDL_SetRenderDrawBlendMode(renderer_, cutout_blend);
-    std::vector<SDL_Vertex> light_vertices;
-    std::vector<int>        light_indices;
+
+    if (darkness_overlay_vertex_capacity_hint_ > darkness_overlay_vertices_.capacity()) {
+        darkness_overlay_vertices_.reserve(darkness_overlay_vertex_capacity_hint_);
+    }
+    if (darkness_overlay_index_capacity_hint_ > darkness_overlay_indices_.capacity()) {
+        darkness_overlay_indices_.reserve(darkness_overlay_index_capacity_hint_);
+    }
+
+    std::size_t frame_max_vertices = 0;
+    std::size_t frame_max_indices  = 0;
 
     for (const LightOverlaySource& source : light_overlay_sources_) {
         Asset* asset = source.asset;
@@ -716,10 +722,24 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
             const int   radial_steps  = 12;
             const float two_pi        = 6.28318530718f;
 
+            const std::size_t desired_vertex_capacity = static_cast<std::size_t>((radial_steps + 1) * (angular_steps + 1));
+            const std::size_t desired_index_capacity  = static_cast<std::size_t>(radial_steps * angular_steps * 6);
+
+            auto& light_vertices = darkness_overlay_vertices_;
+            auto& light_indices  = darkness_overlay_indices_;
+
             light_vertices.clear();
             light_indices.clear();
-            light_vertices.reserve(static_cast<std::size_t>((radial_steps + 1) * (angular_steps + 1)));
-            light_indices.reserve(static_cast<std::size_t>(radial_steps * angular_steps * 6));
+
+            if (desired_vertex_capacity > light_vertices.capacity()) {
+                light_vertices.reserve(desired_vertex_capacity);
+            }
+            if (desired_index_capacity > light_indices.capacity()) {
+                light_indices.reserve(desired_index_capacity);
+            }
+
+            frame_max_vertices = std::max(frame_max_vertices, desired_vertex_capacity);
+            frame_max_indices  = std::max(frame_max_indices, desired_index_capacity);
 
             for (int ring = 0; ring <= radial_steps; ++ring) {
                 const float ring_ratio = static_cast<float>(ring) / static_cast<float>(radial_steps);
@@ -766,6 +786,13 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
                 SDL_RenderFillRect(renderer_, &dst);
             }
         }
+    }
+
+    if (frame_max_vertices > darkness_overlay_vertex_capacity_hint_) {
+        darkness_overlay_vertex_capacity_hint_ = frame_max_vertices;
+    }
+    if (frame_max_indices > darkness_overlay_index_capacity_hint_) {
+        darkness_overlay_index_capacity_hint_ = frame_max_indices;
     }
 
     SDL_SetRenderDrawBlendMode(renderer_, previous_draw_blend);

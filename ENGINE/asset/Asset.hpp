@@ -130,6 +130,7 @@ class Asset {
     bool static_frame = true;
     int cached_w = 0;
     int cached_h = 0;
+    std::uint64_t last_render_frame_id = 0;
     std::string spawn_id;
     std::string spawn_method;
     std::string owning_room_name_;
