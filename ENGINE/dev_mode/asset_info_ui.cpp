@@ -482,7 +482,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (!info_) return false;
+    if (!area_mode_ && !info_) return false;
 
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
         close();
@@ -526,9 +526,9 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         forcing_high_quality_rendering_ = false;
     }
 
-    if (!visible_ || !info_) return;
+    if (!visible_ || (!area_mode_ && !info_)) return;
 
-    if (asset_selector_ && asset_selector_->visible()) {
+    if (info_ && asset_selector_ && asset_selector_->visible()) {
         asset_selector_->update(input);
         const SDL_Rect& panel = container_.panel_rect();
         FloatingPanelLayoutManager::SlidingParentInfo parent;
@@ -554,16 +554,18 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     }
 
     if (!info_) {
-        if (asset_selector_ && asset_selector_->visible()) {
-            asset_selector_->render(r);
+        if (!area_mode_) {
+            if (asset_selector_ && asset_selector_->visible()) {
+                asset_selector_->render(r);
+            }
+            last_renderer_ = r;
+            return;
         }
-        last_renderer_ = r;
-        return;
     }
 
     container_.render(r, screen_w, screen_h);
 
-    if (asset_selector_ && asset_selector_->visible())
+    if (info_ && asset_selector_ && asset_selector_->visible())
         asset_selector_->render(r);
 
     DMDropdown::render_active_options(r);

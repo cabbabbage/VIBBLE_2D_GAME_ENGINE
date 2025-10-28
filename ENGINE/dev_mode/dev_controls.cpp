@@ -815,9 +815,6 @@ void DevControls::set_enabled(bool enabled) {
         if (map_mode_ui_) {
             map_mode_ui_->set_map_mode_active(false);
             map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-            if (auto* panel = map_mode_ui_->get_footer_bar()) {
-                panel->set_visible(false);
-            }
         }
         if (should_restore_camera && camera_ptr) {
             camera_ptr->set_manual_zoom_override(true);
@@ -843,9 +840,6 @@ void DevControls::set_enabled(bool enabled) {
         if (map_mode_ui_) {
             map_mode_ui_->set_map_mode_active(false);
             map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Room);
-            if (auto* panel = map_mode_ui_->get_footer_bar()) {
-                panel->set_visible(false);
-            }
         }
         set_mode(Mode::RoomEditor);
         dev_selected_room_ = nullptr;
