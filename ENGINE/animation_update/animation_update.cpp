@@ -26,7 +26,8 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets, double)
 
 void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
                                 int visited_thresh_px,
-                                std::optional<int> checkpoint_resolution) {
+                                std::optional<int> checkpoint_resolution,
+                                bool override_non_locked) {
     if (!self_) {
         return;
     }
@@ -54,12 +55,16 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
 
     plan_      = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_);
     final_dest = plan_.final_dest;
+    plan_.override_non_locked = override_non_locked;
 
     // Signal executor to re-evaluate plan
     input_event_ = true;
 }
 
-void AnimationUpdate::move(SDL_Point delta, const std::string& animation, bool resort_z) {
+void AnimationUpdate::move(SDL_Point delta,
+                           const std::string& animation,
+                           bool               resort_z,
+                           bool               override_non_locked) {
     if (!self_ || !self_->info) {
         return;
     }
@@ -67,6 +72,7 @@ void AnimationUpdate::move(SDL_Point delta, const std::string& animation, bool r
     pending_move_.delta        = delta;
     pending_move_.animation_id = animation;
     pending_move_.resort_z     = resort_z;
+    pending_move_.override_non_locked = override_non_locked;
     move_pending_              = true;
     input_event_               = true;
 }
@@ -75,6 +81,7 @@ void AnimationUpdate::clear_movement_plan() {
     plan_.strides.clear();
     plan_.sanitized_checkpoints.clear();
     plan_.final_dest = self_ ? self_->pos : SDL_Point{ 0, 0 };
+    plan_.override_non_locked = true;
     final_dest       = plan_.final_dest;
     path_requested   = false;
     input_event_     = true;

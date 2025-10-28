@@ -47,6 +47,7 @@ public:
     void mark_progress_toward_checkpoints();
     bool advance(AnimationFrame*& frame);
     void switch_to(const std::string& anim_id, std::size_t path_index = 0);
+    bool should_defer_for_non_locked(bool override_non_locked) const;
 
 private:
     int        effective_grid_resolution(std::optional<int> override_resolution) const;

@@ -30,10 +30,14 @@ public:
     // Plan a path using relative checkpoints from the controller
     void auto_move(const std::vector<SDL_Point>& rel_checkpoints,
                    int visited_thresh_px,
-                   std::optional<int> checkpoint_resolution = std::nullopt);
+                   std::optional<int> checkpoint_resolution = std::nullopt,
+                   bool override_non_locked = true);
 
     // Request an immediate move + animation selection (applied by executor in update)
-    void move(SDL_Point delta, const std::string& animation, bool resort_z = true);
+    void move(SDL_Point delta,
+              const std::string& animation,
+              bool               resort_z            = true,
+              bool               override_non_locked = true);
 
     // Clear any existing path plan
     void clear_movement_plan();
@@ -51,6 +55,7 @@ public:
         SDL_Point    delta{0, 0};
         std::string  animation_id;
         bool         resort_z = true;
+        bool         override_non_locked = true;
     };
     MoveRequest consume_move_request();
     bool consume_input_event();

@@ -16,4 +16,5 @@ struct Plan {
     std::vector<SDL_Point> sanitized_checkpoints;
     std::vector<Stride>    strides;
     SDL_Point              final_dest{0, 0};
+    bool                   override_non_locked = true;
 };

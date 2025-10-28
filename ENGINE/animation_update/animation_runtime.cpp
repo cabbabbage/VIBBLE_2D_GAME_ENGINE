@@ -82,18 +82,25 @@ void AnimationRuntime::update() {
     // Consume any input signal (planner sets this when controllers interacted)
     const bool got_input = planner_iface_->consume_input_event();
 
+    const bool has_plan = !planner_iface_->plan_.strides.empty();
+    const bool plan_deferred = has_plan &&
+                               should_defer_for_non_locked(planner_iface_->plan_.override_non_locked);
+
     // Follow path plan if present
-    if (!planner_iface_->plan_.strides.empty() &&
+    if (has_plan && !plan_deferred &&
         player_.tick(*this, planner_iface_->plan_, stride_index_, stride_frame_counter_)) {
         just_applied_controller_move_ = false;
         return;
     }
 
     // If controller issued a direct move request, apply it now
-    if (got_input && planner_iface_->has_pending_move()) {
-        apply_pending_move();
-        just_applied_controller_move_ = true;
-        return;
+    if (planner_iface_->has_pending_move()) {
+        const auto& req = planner_iface_->pending_move_;
+        if (!should_defer_for_non_locked(req.override_non_locked)) {
+            apply_pending_move();
+            just_applied_controller_move_ = true;
+            return;
+        }
     }
 
     // If no new input after a controller move, redirect immediately to on-end/default
@@ -240,6 +247,24 @@ void AnimationRuntime::switch_to(const std::string& anim_id, std::size_t path_in
     self_->static_frame      = anim.is_static() || anim.locked;
     self_->frame_progress    = 0.0f;
     active_paths_[self_->current_animation] = path_index;
+}
+
+bool AnimationRuntime::should_defer_for_non_locked(bool override_non_locked) const {
+    if (override_non_locked || !self_ || !self_->info) {
+        return false;
+    }
+
+    auto it = self_->info->animations.find(self_->current_animation);
+    if (it == self_->info->animations.end()) {
+        return false;
+    }
+
+    if (self_->current_animation == animation_update::detail::kDefaultAnimation) {
+        return false;
+    }
+
+    const Animation& anim = it->second;
+    return !anim.locked;
 }
 
 std::size_t AnimationRuntime::path_index_for(const std::string& anim_id) const {
@@ -589,6 +614,7 @@ bool AnimationRuntime::adjust_next_checkpoint(const std::vector<const Asset*>& b
         auto sanitized = sanitizer_.sanitize(*self_, targets, planner_iface_->visited_thresh_);
         if (sanitized.empty()) return false;
         Plan new_plan = planner_(*self_, sanitized, planner_iface_->visited_thresh_);
+        new_plan.override_non_locked = planner_iface_->plan_.override_non_locked;
         if (new_plan.strides.empty()) return false;
         planner_iface_->plan_ = std::move(new_plan);
         planner_iface_->final_dest = planner_iface_->plan_.final_dest;
@@ -660,6 +686,7 @@ bool AnimationRuntime::replan_to_destination() {
         return false;
     }
     Plan new_plan = planner_(*self_, sanitized, planner_iface_->visited_thresh_);
+    new_plan.override_non_locked = planner_iface_->plan_.override_non_locked;
     if (new_plan.strides.empty()) {
         return false;
     }
