@@ -31,6 +31,7 @@ class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
 class RegenerateRoomPopup;
+class AreaConfigPanel;
 
 class DevControls {
 public:
@@ -249,5 +250,8 @@ private:
     SDL_Point last_area_click_world_{0,0};
 
     RoomAreaCache room_area_cache_;
+
+    // Area Config UI (room-scoped area configuration)
+    std::unique_ptr<AreaConfigPanel> area_config_panel_;
 };
 
