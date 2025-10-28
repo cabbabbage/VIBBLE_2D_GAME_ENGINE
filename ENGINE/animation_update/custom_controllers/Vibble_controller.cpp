@@ -2,9 +2,6 @@
 
 #include "animation_update/animation_update_utils.hpp"
 #include "asset/Asset.hpp"
-#include "core/AssetsManager.hpp"
-#include "animation_update/custom_controllers/controller_path_utils.hpp"
-#include "animation_update/custom_controllers/controller_visit_threshold.hpp"
 #include "utils/input.hpp"
 
 #include <cmath>
@@ -120,38 +117,6 @@ void VibbleController::movement(const Input& input) {
     const int raw_y = (down  ? 1 : 0) - (up    ? 1 : 0);
 
     if (raw_x == 0 && raw_y == 0) {
-
-        if (Assets* owner = player_->get_assets()) {
-            if (input.isDown(Input::LEFT)) {
-                SDL_Point mouse_screen{ input.getX(), input.getY() };
-                SDL_Point world = mouse_screen;
-                if (auto mapped = input.screen_to_world(mouse_screen)) {
-                    world = *mapped;
-                } else {
-                    world = owner->getView().screen_to_map(mouse_screen);
-                }
-
-                SDL_Point origin = player_->pos;
-                const int radius = controller_paths::neighbor_radius(player_);
-                SDL_Point desired = controller_paths::clamp_to_radius(origin, world, radius);
-
-                int mdx = desired.x - origin.x;
-                int mdy = desired.y - origin.y;
-                if (mdx != 0 || mdy != 0) {
-                    const int stride_count = sprint ? kSprintMultiplier : 1;
-                    SDL_Point boosted{ origin.x + mdx * stride_count, origin.y + mdy * stride_count };
-                    SDL_Point clamped = controller_paths::clamp_to_radius(origin, boosted, radius);
-                    mdx = clamped.x - origin.x;
-                    mdy = clamped.y - origin.y;
-
-                    player_->anim_->move(SDL_Point{ mdx, mdy }, animation_update::detail::kDefaultAnimation);
-                    dx_ = mdx;
-                    dy_ = mdy;
-                    return;
-                }
-            }
-        }
-
         player_->anim_->move(SDL_Point{ 0, 0 }, animation_update::detail::kDefaultAnimation);
         return;
     }
@@ -167,35 +132,74 @@ void VibbleController::movement(const Input& input) {
     dx_ = step_delta.x * stride_count;
     dy_ = step_delta.y * stride_count;
 
-    SDL_Point origin = player_->pos;
-    SDL_Point desired{ origin.x + dx_, origin.y + dy_ };
+    const std::string animation_id = animation_for_direction(raw_x, raw_y);
 
-    const int radius = controller_paths::neighbor_radius(player_);
-    if (radius > 0) {
-        SDL_Point clamped = controller_paths::clamp_to_radius(origin, desired, radius);
-        dx_ = clamped.x - origin.x;
-        dy_ = clamped.y - origin.y;
-        desired = clamped;
-    }
-
-    if (dx_ == 0 && dy_ == 0) {
-        player_->anim_->move(SDL_Point{ 0, 0 }, animation_update::detail::kDefaultAnimation);
-        return;
-    }
-
-    const SDL_Point current_dest = player_->anim_->final_dest;
-    const bool same_target = (current_dest.x == desired.x && current_dest.y == desired.y);
-
-    if (!same_target || player_->anim_->path_requested) {
-        player_->anim_->clear_movement_plan();
-    }
-
-    player_->anim_->move(SDL_Point{ dx_, dy_ }, animation_update::detail::kDefaultAnimation);
+    player_->anim_->move(SDL_Point{ dx_, dy_ }, animation_id);
 }
 
 void VibbleController::update(const Input& input) {
     dx_ = dy_ = 0;
 
     movement(input);
+}
+
+std::string VibbleController::animation_for_direction(int raw_x, int raw_y) const {
+    const int sign_x = (raw_x > 0) - (raw_x < 0);
+    const int sign_y = (raw_y > 0) - (raw_y < 0);
+
+    if (sign_x == 0 && sign_y == 0) {
+        return std::string{ animation_update::detail::kDefaultAnimation };
+    }
+
+    if (!player_ || !player_->info) {
+        return std::string{ animation_update::detail::kDefaultAnimation };
+    }
+
+    const auto& animations = player_->info->animations;
+
+    auto direction_of = [](int dx, int dy) {
+        return SDL_Point{ (dx > 0) - (dx < 0), (dy > 0) - (dy < 0) };
+    };
+
+    std::string default_anim{ animation_update::detail::kDefaultAnimation };
+    std::string vertical_match;
+    bool        has_vertical = false;
+    std::string horizontal_match;
+    bool        has_horizontal = false;
+
+    for (const auto& [name, anim] : animations) {
+        const SDL_Point anim_dir = direction_of(anim.total_dx, anim.total_dy);
+
+        if (anim_dir.x == 0 && anim_dir.y == 0) {
+            if (name == animation_update::detail::kDefaultAnimation) {
+                default_anim = name;
+            }
+            continue;
+        }
+
+        if (anim_dir.x == sign_x && anim_dir.y == sign_y) {
+            return name;
+        }
+
+        if (!has_vertical && sign_y != 0 && anim_dir.x == 0 && anim_dir.y == sign_y) {
+            vertical_match = name;
+            has_vertical   = true;
+        }
+
+        if (!has_horizontal && sign_x != 0 && anim_dir.y == 0 && anim_dir.x == sign_x) {
+            horizontal_match = name;
+            has_horizontal   = true;
+        }
+    }
+
+    if (has_vertical) {
+        return vertical_match;
+    }
+
+    if (has_horizontal) {
+        return horizontal_match;
+    }
+
+    return default_anim;
 }
 

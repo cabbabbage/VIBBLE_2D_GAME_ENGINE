@@ -3,6 +3,7 @@
 
 #include "asset/asset_controller.hpp"
 #include <SDL.h>
+#include <string>
 
 class Asset;
 class Input;
@@ -18,6 +19,7 @@ public:
 
 private:
     void movement(const Input& input);
+    std::string animation_for_direction(int raw_x, int raw_y) const;
 
     static constexpr int kWalkSpeed       = 5;
     static constexpr int kSprintMultiplier = 2;
