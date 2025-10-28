@@ -19,6 +19,15 @@
 
 namespace animation_editor {
 
+struct ResolvedMovement {
+    float total_dx = 0.0f;
+    float total_dy = 0.0f;
+    bool derived = false;
+    std::string source_id;
+    std::vector<std::string> modifiers;
+    std::string signature;
+};
+
 namespace {
 
 const int kButtonHeight = DMButton::height();
@@ -54,11 +63,105 @@ void render_summary_label(SDL_Renderer* renderer, const std::string& text, int x
     TTF_CloseFont(font);
 }
 
-std::string payload_signature(const std::optional<std::string>& payload) {
-    if (!payload.has_value()) {
-        return {};
+float read_movement_component(const nlohmann::json& entry, int index) {
+    if (entry.is_array()) {
+        if (index < static_cast<int>(entry.size()) && entry[index].is_number()) {
+            return entry[index].get<float>();
+        }
+        return 0.0f;
     }
-    return *payload;
+    if (entry.is_object()) {
+        const char* keys[] = {"dx", "dy"};
+        const char* key = (index == 0) ? keys[0] : keys[1];
+        if (entry.contains(key) && entry[key].is_number()) {
+            return entry[key].get<float>();
+        }
+    }
+    return 0.0f;
+}
+
+ResolvedMovement resolve_movement(const AnimationDocument* document, const std::string& animation_id, int depth = 0) {
+    ResolvedMovement result;
+    result.signature = std::string{"anim:"} + animation_id;
+    if (!document || animation_id.empty() || depth > 16) {
+        return result;
+    }
+
+    auto payload_dump = document->animation_payload(animation_id);
+    std::string payload_signature = payload_dump.has_value() ? *payload_dump : std::string{};
+    if (!payload_dump.has_value()) {
+        result.signature += "|empty";
+        return result;
+    }
+
+    nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
+    if (payload.is_discarded() || !payload.is_object()) {
+        result.signature = payload_signature + "|invalid";
+        return result;
+    }
+
+    const nlohmann::json* source = payload.contains("source") && payload["source"].is_object() ? &payload["source"] : nullptr;
+    std::string kind = source ? source->value("kind", std::string{"folder"}) : std::string{"folder"};
+
+    if (kind == "animation") {
+        bool reverse = payload.value("reverse_source", false);
+        bool flip_x = payload.value("flipped_source", false);
+        bool flip_y = false;
+        if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
+            const auto& modifiers = payload["derived_modifiers"];
+            reverse = modifiers.value("reverse", reverse);
+            flip_x = modifiers.value("flipX", flip_x);
+            flip_y = modifiers.value("flipY", false);
+        }
+
+        std::string reference = source ? source->value("name", std::string{}) : std::string{};
+        if (reference.empty() && source) {
+            reference = source->value("path", std::string{});
+        }
+        reference = trim_copy(reference);
+        if (reference.empty()) {
+            result.signature = payload_signature + "|missing_ref";
+            result.derived = true;
+            return result;
+        }
+
+        ResolvedMovement nested = resolve_movement(document, reference, depth + 1);
+        result.total_dx = nested.total_dx;
+        result.total_dy = nested.total_dy;
+        result.signature = payload_signature + "|child{" + nested.signature + "}";
+        result.derived = true;
+        result.source_id = reference;
+
+        if (flip_x) result.total_dx = -result.total_dx;
+        if (flip_y) result.total_dy = -result.total_dy;
+        if (reverse) result.modifiers.push_back("Reverse");
+        if (flip_x) result.modifiers.push_back("Flip X");
+        if (flip_y) result.modifiers.push_back("Flip Y");
+
+        result.signature += "|mods:";
+        result.signature.push_back(reverse ? '1' : '0');
+        result.signature.push_back(flip_x ? '1' : '0');
+        result.signature.push_back(flip_y ? '1' : '0');
+        return result;
+    }
+
+    const nlohmann::json& movement = payload.contains("movement") ? payload["movement"] : nlohmann::json::array();
+    if (!movement.is_array()) {
+        result.signature = payload_signature + "|movement:none";
+        return result;
+    }
+
+    float dx = 0.0f;
+    float dy = 0.0f;
+    for (size_t i = 1; i < movement.size(); ++i) {
+        const nlohmann::json& entry = movement[i];
+        dx += read_movement_component(entry, 0);
+        dy += read_movement_component(entry, 1);
+    }
+    result.total_dx = dx;
+    result.total_dy = dy;
+    result.signature = payload_signature + "|movement";
+    return result;
 }
 
 }
@@ -121,11 +224,10 @@ void MovementSummaryWidget::update() {
         return;
     }
 
-    auto payload = document_->animation_payload(animation_id_);
-    std::string signature = payload_signature(payload);
-    if (signature != totals_signature_) {
-        totals_signature_ = std::move(signature);
-        refresh_totals();
+    ResolvedMovement resolved = resolve_movement(document_.get(), animation_id_);
+    if (resolved.signature != totals_signature_) {
+        totals_signature_ = resolved.signature;
+        apply_resolved_totals(resolved);
     }
 }
 
@@ -230,84 +332,48 @@ bool MovementSummaryWidget::handle_event(const SDL_Event& e) {
 }
 
 void MovementSummaryWidget::refresh_totals() {
-    total_dx_ = 0.0f;
-    total_dy_ = 0.0f;
-    derived_from_animation_ = false;
-    inherited_source_id_.clear();
+    ResolvedMovement resolved = resolve_movement(document_.get(), animation_id_);
+    totals_signature_ = resolved.signature;
+    apply_resolved_totals(resolved);
+}
+
+void MovementSummaryWidget::apply_resolved_totals(const ResolvedMovement& resolved) {
+    total_dx_ = resolved.total_dx;
+    total_dy_ = resolved.total_dy;
+    derived_from_animation_ = resolved.derived;
+    inherited_source_id_ = resolved.source_id;
     inherited_message_lines_.clear();
+
+    show_button_ = false;
     button_is_go_to_ = false;
-    show_button_ = static_cast<bool>(edit_callback_);
-
-    if (!document_ || animation_id_.empty()) {
-        set_bounds(bounds_);
-        return;
-    }
-
-    auto payload_dump = document_->animation_payload(animation_id_);
-    if (!payload_dump.has_value()) {
-        set_bounds(bounds_);
-        return;
-    }
-
-    nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
-    if (!payload.is_object()) {
-        set_bounds(bounds_);
-        return;
-    }
-
-    if (payload.contains("source") && payload["source"].is_object()) {
-        const nlohmann::json& source = payload["source"];
-        std::string kind = source.value("kind", "");
-        if (kind == "animation") {
-            derived_from_animation_ = true;
-            if (source.contains("name") && source["name"].is_string()) {
-                inherited_source_id_ = trim_copy(source["name"].get<std::string>());
-            }
-            if (inherited_source_id_.empty()) {
-                inherited_source_id_ = trim_copy(source.value("path", std::string{}));
-            }
-        }
-    }
 
     if (derived_from_animation_) {
         std::string target = inherited_source_id_.empty() ? std::string("the source animation")
                                                          : "animation '" + inherited_source_id_ + "'";
         inherited_message_lines_.push_back("Movement inherits from " + target + ".");
-        inherited_message_lines_.push_back("Go to the source animation to edit it.");
+        if (!resolved.modifiers.empty()) {
+            std::string joined;
+            for (size_t i = 0; i < resolved.modifiers.size(); ++i) {
+                if (i > 0) joined.append(", ");
+                joined.append(resolved.modifiers[i]);
+            }
+            inherited_message_lines_.push_back("Modifiers: " + joined + ".");
+        } else {
+            inherited_message_lines_.push_back("Modifiers: (none).");
+        }
+        inherited_message_lines_.push_back("Edit the source animation to change it.");
+        inherited_message_lines_.push_back("Totals ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))) +
+                                           ", ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))) + ".");
         show_button_ = go_to_source_callback_ && !inherited_source_id_.empty();
         button_is_go_to_ = show_button_;
-        set_bounds(bounds_);
-        return;
+    } else {
+        inherited_source_id_.clear();
+        inherited_message_lines_.clear();
+        show_button_ = static_cast<bool>(edit_callback_);
+        button_is_go_to_ = false;
     }
-
-    show_button_ = static_cast<bool>(edit_callback_);
-    button_is_go_to_ = false;
 
     set_bounds(bounds_);
-
-    if (!payload.contains("movement")) {
-        return;
-    }
-
-    const nlohmann::json& movement = payload["movement"];
-    if (!movement.is_array()) {
-        return;
-    }
-
-    for (size_t i = 1; i < movement.size(); ++i) {
-        const auto& entry = movement[i];
-        if (entry.is_array()) {
-            if (entry.size() > 0 && entry[0].is_number()) {
-                total_dx_ += entry[0].get<float>();
-            }
-            if (entry.size() > 1 && entry[1].is_number()) {
-                total_dy_ += entry[1].get<float>();
-            }
-        } else if (entry.is_object()) {
-            total_dx_ += entry.value("dx", 0.0f);
-            total_dy_ += entry.value("dy", 0.0f);
-        }
-    }
 }
 
 }

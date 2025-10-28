@@ -10,6 +10,7 @@
 namespace animation_editor {
 
 class AnimationDocument;
+struct ResolvedMovement;
 
 class MovementSummaryWidget {
   public:
@@ -32,6 +33,7 @@ class MovementSummaryWidget {
 
   private:
     void refresh_totals();
+    void apply_resolved_totals(const ResolvedMovement& resolved);
 
   private:
     std::shared_ptr<AnimationDocument> document_;

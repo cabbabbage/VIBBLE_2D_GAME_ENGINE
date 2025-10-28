@@ -23,6 +23,7 @@
 #include "dev_mode/dm_icons.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
+#include <nlohmann/json.hpp>
 
 namespace animation_editor {
 
@@ -240,7 +241,9 @@ int AnimationInspectorPanel::height_for_width(int width) const {
     total += item_gap;
     total += selector_height;
 
+    refresh_preview_metadata();
     std::vector<std::string> badges = source_config_ ? source_config_->summary_badges() : std::vector<std::string>{};
+    badges.insert(badges.end(), preview_modifier_badges_.begin(), preview_modifier_badges_.end());
     if (!badges.empty()) {
         total += item_gap;
         total += selector_height;
@@ -354,7 +357,9 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     if (source_animation_button_) source_animation_button_->render(renderer);
 
     if (source_summary_rect_.h > 0) {
+        refresh_preview_metadata();
         std::vector<std::string> badges = source_config_ ? source_config_->summary_badges() : std::vector<std::string>{};
+        badges.insert(badges.end(), preview_modifier_badges_.begin(), preview_modifier_badges_.end());
         render_summary_badges(renderer, source_summary_rect_, badges);
     }
 
@@ -394,6 +399,11 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
             const DMLabelStyle& style = DMStyles::Label();
             SDL_Color color = style.color;
             render_label(renderer, "No Preview Available", preview_rect_.x + (preview_rect_.w - text_width(style, "No Preview Available")) / 2, preview_rect_.y + preview_rect_.h / 2 - style.font_size / 2, color);
+        }
+        if (!preview_modifier_badges_.empty()) {
+            SDL_Rect badge_rect{preview_clip.x + DMSpacing::small_gap(), preview_clip.y + DMSpacing::small_gap(),
+                                std::max(0, preview_clip.w - DMSpacing::small_gap() * 2), DMButton::height()};
+            render_summary_badges(renderer, badge_rect, preview_modifier_badges_);
         }
     }
 
@@ -744,6 +754,70 @@ void AnimationInspectorPanel::update_source_mode_button_styles() {
     }
 }
 
+void AnimationInspectorPanel::refresh_preview_metadata() const {
+    auto* self = const_cast<AnimationInspectorPanel*>(this);
+    if (!document_ || animation_id_.empty()) {
+        self->preview_signature_.clear();
+        self->preview_modifier_badges_.clear();
+        self->preview_reverse_ = false;
+        self->preview_flip_x_ = false;
+        self->preview_flip_y_ = false;
+        return;
+    }
+
+    auto payload_dump = document_->animation_payload(animation_id_);
+    std::string signature = payload_dump.has_value() ? *payload_dump : std::string{};
+    if (signature == self->preview_signature_) {
+        return;
+    }
+
+    self->preview_signature_ = signature;
+    self->preview_modifier_badges_.clear();
+    self->preview_reverse_ = false;
+    self->preview_flip_x_ = false;
+    self->preview_flip_y_ = false;
+
+    if (!payload_dump.has_value()) {
+        return;
+    }
+
+    nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
+    if (!payload.is_object()) {
+        return;
+    }
+
+    bool derived = false;
+    if (payload.contains("source") && payload["source"].is_object()) {
+        const nlohmann::json& source = payload["source"];
+        std::string kind = source.value("kind", std::string{});
+        if (kind == "animation") {
+            derived = true;
+        }
+    }
+
+    if (derived) {
+        self->preview_reverse_ = payload.value("reverse_source", false);
+        self->preview_flip_x_ = payload.value("flipped_source", false);
+        if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
+            const auto& modifiers = payload["derived_modifiers"];
+            self->preview_reverse_ = modifiers.value("reverse", self->preview_reverse_);
+            self->preview_flip_x_ = modifiers.value("flipX", self->preview_flip_x_);
+            self->preview_flip_y_ = modifiers.value("flipY", false);
+        } else {
+            self->preview_flip_y_ = false;
+        }
+    } else {
+        self->preview_reverse_ = payload.value("reverse_source", false);
+        self->preview_flip_x_ = payload.value("flipped_source", false);
+        self->preview_flip_y_ = false;
+    }
+
+    auto add_badge = [&](const char* text) { self->preview_modifier_badges_.emplace_back(text); };
+    if (self->preview_reverse_) add_badge("Reverse");
+    if (self->preview_flip_x_) add_badge("Flip X");
+    if (self->preview_flip_y_) add_badge("Flip Y");
+}
+
 std::vector<AnimationInspectorPanel::FocusTarget> AnimationInspectorPanel::focus_order() const {
     std::vector<FocusTarget> order;
     if (collapse_toggle_button_) order.push_back(FocusTarget::kCollapse);
@@ -994,7 +1068,9 @@ void AnimationInspectorPanel::layout_widgets() const {
 
     y += item_gap;
 
+    refresh_preview_metadata();
     std::vector<std::string> badges = source_config_ ? source_config_->summary_badges() : std::vector<std::string>{};
+    badges.insert(badges.end(), preview_modifier_badges_.begin(), preview_modifier_badges_.end());
     if (!badges.empty()) {
         self->source_summary_rect_ = SDL_Rect{x, y, width, selector_height};
         y += selector_height;

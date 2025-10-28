@@ -430,8 +430,8 @@ Room* RoomEditor::resolve_room_for_clipboard_action() const {
 
     SDL_Point screen{input_->getX(), input_->getY()};
     SDL_Point world = screen;
-    if (auto mapped = input_->screen_to_world(screen)) {
-        world = *mapped;
+    if (auto mapped_point = input_->screen_to_world(screen)) {
+        world = *mapped_point;
     } else {
         SDL_FPoint mapped = assets->getView().screen_to_map(screen);
         world = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};

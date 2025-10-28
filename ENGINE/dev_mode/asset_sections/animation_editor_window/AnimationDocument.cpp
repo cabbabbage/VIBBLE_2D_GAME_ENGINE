@@ -68,64 +68,104 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     ensure_bool("loop", false);
     ensure_bool("rnd_start", false);
 
-    int speed_factor = parse_int(payload.contains("speed_factor") ? payload["speed_factor"] : nlohmann::json(1), 1);
-    if (speed_factor == 0) speed_factor = 1;
-    speed_factor = std::clamp(speed_factor, -20, 20);
-    payload["speed_factor"] = speed_factor;
+    bool derived_from_animation = (kind == "animation");
+    bool derived_reverse = payload.value("reverse_source", false);
+    bool derived_flip_x = payload.value("flipped_source", false);
+    bool derived_flip_y = false;
+    if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
+        const auto& modifiers = payload["derived_modifiers"];
+        if (modifiers.contains("reverse")) {
+            derived_reverse = parse_bool(modifiers["reverse"], derived_reverse);
+        }
+        if (modifiers.contains("flipX")) {
+            derived_flip_x = parse_bool(modifiers["flipX"], derived_flip_x);
+        }
+        if (modifiers.contains("flipY")) {
+            derived_flip_y = parse_bool(modifiers["flipY"], false);
+        }
+    }
+
+    if (derived_from_animation) {
+        payload["derived_modifiers"] = nlohmann::json{{"reverse", derived_reverse},
+                                                       {"flipX", derived_flip_x},
+                                                       {"flipY", derived_flip_y}};
+        payload.erase("movement");
+        payload.erase("movement_total");
+        payload.erase("movement_variants");
+        payload.erase("audio");
+        payload.erase("speed_factor");
+        payload.erase("movement_preview_bounds");
+    } else {
+        payload.erase("derived_modifiers");
+    }
+    payload["reverse_source"] = derived_reverse;
+    payload["flipped_source"] = derived_flip_x;
+
+    if (!derived_from_animation) {
+        int speed_factor = parse_int(payload.contains("speed_factor") ? payload["speed_factor"] : nlohmann::json(1), 1);
+        if (speed_factor == 0) speed_factor = 1;
+        speed_factor = std::clamp(speed_factor, -20, 20);
+        payload["speed_factor"] = speed_factor;
+    }
 
     int frames = parse_int(payload.contains("number_of_frames") ? payload["number_of_frames"] : nlohmann::json(1), 1);
     if (frames < 1) frames = 1;
     payload["number_of_frames"] = frames;
 
-    nlohmann::json movement = payload.contains("movement") && payload["movement"].is_array() ? payload["movement"] : nlohmann::json::array();
-    if (!movement.is_array()) {
-        movement = nlohmann::json::array();
-    }
-    if (movement.size() < static_cast<size_t>(frames)) {
-        while (movement.size() < static_cast<size_t>(frames)) {
+    if (!derived_from_animation) {
+        nlohmann::json movement = payload.contains("movement") && payload["movement"].is_array() ? payload["movement"] : nlohmann::json::array();
+        if (!movement.is_array()) {
+            movement = nlohmann::json::array();
+        }
+        if (movement.size() < static_cast<size_t>(frames)) {
+            while (movement.size() < static_cast<size_t>(frames)) {
+                movement.push_back(nlohmann::json::array({0, 0}));
+            }
+        } else if (movement.size() > static_cast<size_t>(frames)) {
+            movement.erase(movement.begin() + frames, movement.end());
+        }
+        if (movement.empty()) {
             movement.push_back(nlohmann::json::array({0, 0}));
         }
-    } else if (movement.size() > static_cast<size_t>(frames)) {
-        movement.erase(movement.begin() + frames, movement.end());
-    }
-    if (movement.empty()) {
-        movement.push_back(nlohmann::json::array({0, 0}));
-    }
-    movement[0] = nlohmann::json::array({0, 0});
-    payload["movement"] = movement;
+        movement[0] = nlohmann::json::array({0, 0});
+        payload["movement"] = movement;
 
-    auto read_component = [](const nlohmann::json& entry, int index) -> int {
-        if (entry.is_array()) {
-            if (index < static_cast<int>(entry.size()) && entry[index].is_number()) {
-                try {
-                    return entry[index].get<int>();
-                } catch (...) {
+        auto read_component = [](const nlohmann::json& entry, int index) -> int {
+            if (entry.is_array()) {
+                if (index < static_cast<int>(entry.size()) && entry[index].is_number()) {
+                    try {
+                        return entry[index].get<int>();
+                    } catch (...) {
+                    }
+                    try {
+                        return static_cast<int>(entry[index].get<double>());
+                    } catch (...) {
+                    }
                 }
-                try {
-                    return static_cast<int>(entry[index].get<double>());
-                } catch (...) {
+                return 0;
+            }
+            if (entry.is_object()) {
+                const char* keys[] = {"dx", "dy"};
+                const char* key = (index == 0) ? keys[0] : keys[1];
+                if (entry.contains(key)) {
+                    return parse_int(entry[key], 0);
                 }
             }
             return 0;
-        }
-        if (entry.is_object()) {
-            const char* keys[] = {"dx", "dy"};
-            const char* key = (index == 0) ? keys[0] : keys[1];
-            if (entry.contains(key)) {
-                return parse_int(entry[key], 0);
-            }
-        }
-        return 0;
-};
+        };
 
-    int total_dx = 0;
-    int total_dy = 0;
-    for (std::size_t i = 1; i < movement.size(); ++i) {
-        const nlohmann::json& entry = movement[i];
-        total_dx += read_component(entry, 0);
-        total_dy += read_component(entry, 1);
+        int total_dx = 0;
+        int total_dy = 0;
+        for (std::size_t i = 1; i < movement.size(); ++i) {
+            const nlohmann::json& entry = movement[i];
+            total_dx += read_component(entry, 0);
+            total_dy += read_component(entry, 1);
+        }
+        payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
+    } else {
+        payload.erase("movement");
+        payload.erase("movement_total");
     }
-    payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
 
     std::string on_end = "default";
     if (payload.contains("on_end")) {
@@ -137,13 +177,17 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     }
     payload["on_end"] = on_end;
 
-    if (payload.contains("audio") && payload["audio"].is_object()) {
-        auto audio = payload["audio"];
-        std::string name = audio.value("name", std::string{});
-        int volume = std::clamp(parse_int(audio.contains("volume") ? audio["volume"] : nlohmann::json(100), 100), 0, 100);
-        bool effects = parse_bool(audio.contains("effects") ? audio["effects"] : nlohmann::json(false), false);
-        if (!name.empty()) {
-            payload["audio"] = nlohmann::json{{"name", name}, {"volume", volume}, {"effects", effects}};
+    if (!derived_from_animation) {
+        if (payload.contains("audio") && payload["audio"].is_object()) {
+            auto audio = payload["audio"];
+            std::string name = audio.value("name", std::string{});
+            int volume = std::clamp(parse_int(audio.contains("volume") ? audio["volume"] : nlohmann::json(100), 100), 0, 100);
+            bool effects = parse_bool(audio.contains("effects") ? audio["effects"] : nlohmann::json(false), false);
+            if (!name.empty()) {
+                payload["audio"] = nlohmann::json{{"name", name}, {"volume", volume}, {"effects", effects}};
+            } else {
+                payload.erase("audio");
+            }
         } else {
             payload.erase("audio");
         }

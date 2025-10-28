@@ -469,10 +469,24 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::payload_to_state(con
     PlaybackState state;
     state.flipped_source = parse_bool_field(payload, "flipped_source", false);
     state.reverse_source = parse_bool_field(payload, "reverse_source", false);
+    state.flip_vertical = false;
     state.locked         = parse_bool_field(payload, "locked", false);
     state.random_start   = parse_bool_field(payload, "rnd_start", false);
     if (state.locked) {
         state.random_start = false;
+    }
+
+    if (payload.contains("source") && payload["source"].is_object()) {
+        const nlohmann::json& source = payload["source"];
+        std::string kind = source.value("kind", std::string{});
+        if (kind == "animation") {
+            if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
+                const auto& modifiers = payload["derived_modifiers"];
+                state.reverse_source = parse_bool_field(modifiers, "reverse", state.reverse_source);
+                state.flipped_source = parse_bool_field(modifiers, "flipX", state.flipped_source);
+                state.flip_vertical = parse_bool_field(modifiers, "flipY", false);
+            }
+        }
     }
 
     int speed = parse_int_field(payload, "speed_factor", 1);
@@ -494,9 +508,15 @@ void PlaybackSettingsPanel::apply_state_to_payload(nlohmann::json& payload, cons
     if (derived_from_animation_) {
         payload.erase("rnd_start");
         payload.erase("speed_factor");
+        nlohmann::json modifiers = nlohmann::json::object();
+        modifiers["reverse"] = state.reverse_source;
+        modifiers["flipX"] = state.flipped_source;
+        modifiers["flipY"] = state.flip_vertical;
+        payload["derived_modifiers"] = std::move(modifiers);
     } else {
         payload["rnd_start"]    = state.random_start && !state.locked;
         payload["speed_factor"] = state.speed_factor;
+        payload.erase("derived_modifiers");
     }
 }
 
@@ -506,6 +526,7 @@ void PlaybackSettingsPanel::update_inherited_state(const nlohmann::json& payload
 
     derived_from_animation_ = false;
     derived_source_id_.clear();
+    inherited_modifiers_.clear();
 
     if (payload.is_object() && payload.contains("source") && payload["source"].is_object()) {
         const nlohmann::json& source = payload["source"];
@@ -518,6 +539,18 @@ void PlaybackSettingsPanel::update_inherited_state(const nlohmann::json& payload
             if (derived_source_id_.empty()) {
                 derived_source_id_ = trim_copy(source.value("path", std::string{}));
             }
+            bool reverse = parse_bool_field(payload, "reverse_source", false);
+            bool flip_x = parse_bool_field(payload, "flipped_source", false);
+            bool flip_y = false;
+            if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
+                const auto& modifiers = payload["derived_modifiers"];
+                reverse = parse_bool_field(modifiers, "reverse", reverse);
+                flip_x = parse_bool_field(modifiers, "flipX", flip_x);
+                flip_y = parse_bool_field(modifiers, "flipY", false);
+            }
+            if (reverse) inherited_modifiers_.push_back("Reverse");
+            if (flip_x) inherited_modifiers_.push_back("Flip X");
+            if (flip_y) inherited_modifiers_.push_back("Flip Y");
         }
     }
 
@@ -541,6 +574,14 @@ void PlaybackSettingsPanel::refresh_inherited_message() {
         std::string target = derived_source_id_.empty() ? std::string("the source animation")
                                                        : "animation '" + derived_source_id_ + "'";
         inherited_message_lines_.push_back("Speed and starting frame inherit from " + target + ".");
+        if (!inherited_modifiers_.empty()) {
+            std::string joined;
+            for (size_t i = 0; i < inherited_modifiers_.size(); ++i) {
+                if (i > 0) joined.append(", ");
+                joined.append(inherited_modifiers_[i]);
+            }
+            inherited_message_lines_.push_back("Applied modifiers: " + joined + ".");
+        }
         inherited_message_lines_.push_back("Edit the source animation to change them.");
     }
 

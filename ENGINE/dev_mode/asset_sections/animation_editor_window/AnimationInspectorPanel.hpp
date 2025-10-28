@@ -79,6 +79,7 @@ class AnimationInspectorPanel {
     void update_collapse_toggle_label();
     void notify_section_visibility(const std::string& section_name, bool visible);
     void update_source_mode_button_styles();
+    void refresh_preview_metadata() const;
 
     enum class FocusTarget {
         kNone = -1,
@@ -133,6 +134,11 @@ class AnimationInspectorPanel {
     mutable SDL_Rect on_end_rect_{0, 0, 0, 0};
     mutable SDL_Rect audio_rect_{0, 0, 0, 0};
     mutable bool layout_dirty_ = true;
+    mutable std::string preview_signature_;
+    mutable bool preview_reverse_ = false;
+    mutable bool preview_flip_x_ = false;
+    mutable bool preview_flip_y_ = false;
+    mutable std::vector<std::string> preview_modifier_badges_;
     bool rename_pending_ = false;
     bool is_start_animation_ = false;
     bool playback_collapsed_ = false;

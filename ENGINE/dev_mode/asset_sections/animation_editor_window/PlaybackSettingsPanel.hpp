@@ -39,6 +39,7 @@ class PlaybackSettingsPanel {
     struct PlaybackState {
         bool flipped_source = false;
         bool reverse_source = false;
+        bool flip_vertical = false;
         bool locked = false;
         bool random_start = false;
         int speed_factor = 1;
@@ -46,6 +47,7 @@ class PlaybackSettingsPanel {
         bool operator==(const PlaybackState& other) const {
             return flipped_source == other.flipped_source &&
                    reverse_source == other.reverse_source &&
+                   flip_vertical == other.flip_vertical &&
                    locked == other.locked &&
                    random_start == other.random_start &&
                    speed_factor == other.speed_factor;
@@ -88,6 +90,7 @@ class PlaybackSettingsPanel {
     bool derived_from_animation_ = false;
     std::string derived_source_id_;
     std::vector<std::string> inherited_message_lines_;
+    std::vector<std::string> inherited_modifiers_;
     mutable SDL_Rect inherited_message_rect_{0, 0, 0, 0};
 };
 

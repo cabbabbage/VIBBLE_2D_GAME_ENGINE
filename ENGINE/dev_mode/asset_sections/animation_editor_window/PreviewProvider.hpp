@@ -42,19 +42,19 @@ class PreviewProvider {
 
     struct FrameImageRequest {
         std::filesystem::path path;
-        bool flipped = false;
+        bool flip_x = false;
+        bool flip_y = false;
+    };
+
+    struct ResolvedAnimation {
+        std::vector<FrameImageRequest> frames;
+        std::string signature;
     };
 
     std::shared_ptr<SDL_Texture> build_texture(SDL_Renderer* renderer, const std::string& animation_id, int depth = 0);
-    std::shared_ptr<SDL_Texture> build_texture_from_payload(SDL_Renderer* renderer, const std::string& animation_id, const nlohmann::json& payload, int depth);
-    std::shared_ptr<SDL_Texture> load_folder_texture(SDL_Renderer* renderer, const std::filesystem::path& folder, int frames, bool flipped) const;
-    std::vector<std::shared_ptr<SDL_Texture>> build_frame_textures(SDL_Renderer* renderer, const std::string& animation_id,
-                                                                   int depth = 0);
-    std::vector<FrameImageRequest> gather_frame_requests(const std::string& animation_id, int depth, bool inherited_flip);
-    std::vector<FrameImageRequest> gather_frame_requests_from_payload(const std::string& animation_id,
-                                                                      const nlohmann::json& payload,
-                                                                      int depth,
-                                                                      bool inherited_flip);
+    std::shared_ptr<SDL_Texture> build_texture_from_resolved(SDL_Renderer* renderer, const ResolvedAnimation& resolved);
+    std::vector<std::shared_ptr<SDL_Texture>> build_frame_textures(SDL_Renderer* renderer, const ResolvedAnimation& resolved);
+    ResolvedAnimation resolve_animation(const std::string& animation_id, int depth = 0) const;
     std::filesystem::path resolve_asset_root() const;
     std::filesystem::path find_first_frame(const std::filesystem::path& folder, int frames) const;
     std::vector<std::filesystem::path> find_frame_sequence(const std::filesystem::path& folder, int frames) const;
