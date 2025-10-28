@@ -362,6 +362,10 @@ void MapModeUI::set_button_state(HeaderMode mode, const std::string& id, bool ac
     }
 }
 
+void MapModeUI::register_floating_panel(DockableCollapsible* panel) {
+    track_floating_panel(panel);
+}
+
 void MapModeUI::track_floating_panel(DockableCollapsible* panel) {
     if (!panel) return;
     auto it = std::find(floating_panels_.begin(), floating_panels_.end(), panel);

@@ -1841,7 +1841,7 @@ void DevControls::configure_header_button_sets() {
             create_area_panel_->open_at(anchor_x, anchor_y);
             if (map_mode_ui_) {
                 if (auto* panel = create_area_panel_->panel()) {
-                    map_mode_ui_->track_floating_panel(panel);
+                    map_mode_ui_->register_floating_panel(panel);
                 }
             }
         };

@@ -103,6 +103,7 @@ public:
     void set_header_mode(HeaderMode mode);
     void set_button_state(const std::string& id, bool active);
     void set_button_state(HeaderMode mode, const std::string& id, bool active);
+    void register_floating_panel(DockableCollapsible* panel);
     HeaderMode header_mode() const { return header_mode_; }
     void set_on_mode_changed(std::function<void(HeaderMode)> cb) { on_mode_changed_ = std::move(cb); }
 
