@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <nlohmann/json.hpp>
@@ -268,7 +269,7 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
         if (map_entry.is_object()) {
             auto it = map_entry.find("content_root");
             if (it != map_entry.end() && it->is_string()) {
-                content_root = *it;
+                content_root = std::filesystem::path(it->get<std::string>());
             }
         }
         if (content_root.empty()) {
