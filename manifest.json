@@ -15266,7 +15266,7 @@
           ],
           "movement_total": {
             "dx": 0,
-            "dy": 40
+            "dy": 0
           },
           "number_of_frames": 8,
           "on_end": "SRC/assets/Vibble/default",
@@ -15282,7 +15282,7 @@
         "left": {
           "custom_animation_controller_hpp_path": "SRC/assets/Vibble",
           "custom_animation_controller_key": "SRC/assets/Vibble",
-          "flipped_source": false,
+          "flipped_source": true,
           "has_custom_animation_controller": false,
           "locked": false,
           "loop": false,
@@ -15419,7 +15419,7 @@
             ]
           ],
           "movement_total": {
-            "dx": 40,
+            "dx": 0,
             "dy": 0
           },
           "number_of_frames": 8,

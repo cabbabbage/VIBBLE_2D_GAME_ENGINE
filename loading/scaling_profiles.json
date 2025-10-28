@@ -827,27 +827,6 @@
             ],
             "revision": 2
         },
-        "Vibble": {
-            "histogram": [
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0
-            ],
-            "last_updated": "2025-10-25T18:08:43Z",
-            "recommended_percentages": [
-                100,
-                75,
-                50
-            ],
-            "revision": 1
-        },
         "bouncing": {
             "histogram": [
                 0,
