@@ -401,8 +401,6 @@ bool Assets::update_map_light_enabled() const {
 }
 
 Assets::~Assets() {
-    render_pipeline::ScalingLogic::ShutdownUsageSampling();
-
     movement_commands_buffer_.clear();
     grid_registration_buffer_.clear();
 
@@ -568,23 +566,11 @@ void Assets::set_input(Input* m) {
 
 void Assets::update(const Input& input)
 {
-    if (render_pipeline::ScalingLogic::UsageSamplingPending()) {
-        render_pipeline::ScalingLogic::ScheduleUsageSamplingAsync();
-    }
-
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
         scene->toggle_chunk_preview();
         std::cout << "[Assets] Chunk preview "
                   << (scene->chunk_preview_enabled() ? "enabled" : "disabled") << " (Ctrl+Q).\n";
-    }
-    if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
-        const bool enabled = render_pipeline::ScalingLogic::ToggleUsageTracking();
-        if (!enabled) {
-            render_pipeline::ScalingLogic::FlushUsageData();
-        }
-        std::cout << "[Assets] Scaling usage tracking " << (enabled ? "enabled" : "disabled") << " (Ctrl+R).\n";
-        show_dev_notice(enabled ? std::string("Recording scale") : std::string("Stopped recording"));
     }
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;

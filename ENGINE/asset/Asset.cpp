@@ -771,9 +771,6 @@ void Asset::update_scale_usage(float requested, float texture_scale, float remai
         const int max_index = downscale_cache_.empty() ? 0 : static_cast<int>(downscale_cache_.size() - 1);
         last_scale_usage_.variant_index   = std::clamp(variant_index, 0, max_index);
 
-        if (info) {
-                render_pipeline::ScalingLogic::RecordUsage(info->name, requested, texture_scale);
-        }
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }

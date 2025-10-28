@@ -10,6 +10,7 @@
 #include "asset/asset_types.hpp"
 #include "asset/asset_library.hpp"
 #include "scene_renderer.hpp"
+#include "render_pipeline/ScalingProfileBuilder.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
 #include "core/manifest/manifest_loader.hpp"
@@ -200,6 +201,14 @@ void MainApp::setup() {
                                 vibble::log::warn(std::string("[MainApp] Unable to persist manifest entry for '") + map_identifier + "': " + ex.what());
                         }
                 }
+
+                render_pipeline::ScalingProfileBuildOptions scaling_options;
+                scaling_options.manifest_root = manifest_root;
+                scaling_options.output_path  = manifest_root / "loading" / "scaling_profiles.json";
+                if (screen_w_ > 0 && screen_h_ > 0) {
+                        scaling_options.screen_aspect = static_cast<double>(screen_w_) / static_cast<double>(screen_h_);
+                }
+                render_pipeline::BuildScalingProfiles(scaling_options);
 
                 loader_ = std::make_unique<AssetLoader>(map_identifier, map_manifest_json, renderer_, content_root, nullptr, asset_library_);
                 loading_status::notify("Spawning assets");

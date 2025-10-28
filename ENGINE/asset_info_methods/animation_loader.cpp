@@ -45,11 +45,16 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 return oss.str();
 };
 
-        render_pipeline::ScalingLogic::ConfigureUsageStorage(std::filesystem::path("loading") / "scaling_profiles.json");
-        const bool scaling_refresh_pending = render_pipeline::ScalingLogic::HasPendingUsageData();
+        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(std::filesystem::path("loading") / "scaling_profiles.json");
         const auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info.name);
+        const bool scaling_refresh_pending = false;
+        std::ostringstream range_stream;
+        range_stream << std::fixed << std::setprecision(3) << profile.min_scale
+                     << "…" << std::fixed << std::setprecision(3) << profile.max_scale;
         std::cout << "[AnimationLoader] " << info.name
-                  << " scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false") << ", profile_revision=" << profile.revision << ", profile_steps=" << format_steps(profile.steps) << "\n";
+                  << " profile_revision=" << profile.revision
+                  << ", scale_range=" << range_stream.str()
+                  << ", profile_steps=" << format_steps(profile.steps) << "\n";
         if (profile.created_entry) {
                 std::filesystem::path asset_cache = std::filesystem::path("cache") / info.name / "animations";
                 try {
@@ -100,10 +105,6 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 		if (!anim.frames.empty()) {
 			info.animations[trigger] = std::move(anim);
 		}
-        }
-
-        if (scaling_refresh_pending) {
-                render_pipeline::ScalingLogic::ClearPendingUsageData();
         }
 
         info.moving_asset = false;

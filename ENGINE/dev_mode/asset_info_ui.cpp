@@ -845,8 +845,6 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
         return;
     }
 
-    render_pipeline::ScalingLogic::ResetAssetUsage(info_->name);
-
     bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
         asset->is_shaded = info_->is_shaded;
         asset->clear_render_caches();
@@ -960,8 +958,6 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
     if (!info_) {
         return;
     }
-
-    render_pipeline::ScalingLogic::ResetAssetUsage(info_->name);
 
     bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
         asset->clear_render_caches();

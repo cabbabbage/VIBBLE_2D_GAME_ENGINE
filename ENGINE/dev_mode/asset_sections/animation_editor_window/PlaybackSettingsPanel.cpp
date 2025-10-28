@@ -177,7 +177,7 @@ void PlaybackSettingsPanel::ensure_widgets() {
 
     ensure_checkbox(flip_checkbox_, "Flip Source Horizontally");
     ensure_checkbox(reverse_checkbox_, "Play Frames In Reverse");
-    ensure_checkbox(locked_checkbox_, "Lock Movement To Origin");
+    ensure_checkbox(locked_checkbox_, "Keep Sprite Anchored (Ignore Movement)");
     ensure_checkbox(loop_checkbox_, "Loop Animation");
     ensure_checkbox(random_start_checkbox_, "Randomize Starting Frame");
 
