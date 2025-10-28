@@ -8296,7 +8296,7 @@
           "speed_factor": -2
         },
         "default": {
-          "custom_animation_controller_hpp_path": "C:\\Users\\cal_m\\OneDrive\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\ENGINE\\custom_controllers\\Davey_default_controller.hpp",
+          "custom_animation_controller_hpp_path": "C:\\Users\\cal_m\\OneDrive\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\ENGINE\\animation_update\\custom_controllers\\Davey_default_controller.hpp",
           "custom_animation_controller_key": "Davey_default_controller",
           "flipped_source": false,
           "has_custom_animation_controller": true,

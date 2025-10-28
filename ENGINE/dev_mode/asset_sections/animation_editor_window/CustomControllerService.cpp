@@ -71,7 +71,7 @@ void CustomControllerService::set_asset_root(const std::filesystem::path& asset_
         throw std::runtime_error("Unable to locate ENGINE directory from " + asset_root_.string());
     }
 
-    controller_dir_ = engine_root_ / "custom_controllers";
+    controller_dir_ = engine_root_ / "animation_update" / "custom_controllers";
     controller_factory_cpp_ = engine_root_ / "asset" / "controller_factory.cpp";
 }
 
@@ -346,7 +346,7 @@ void CustomControllerService::ensure_controller_factory_registration(const std::
 
     bool modified = false;
 
-    const std::string include_line = "#include \"custom_controllers/" + base_name + ".hpp\"";
+    const std::string include_line = "#include \"animation_update/custom_controllers/" + base_name + ".hpp\"";
     if (content.find(include_line) == std::string::npos) {
         int insert_index = -1;
         int last_include_index = -1;
@@ -354,7 +354,7 @@ void CustomControllerService::ensure_controller_factory_registration(const std::
             std::string trimmed = trim_left_copy(lines[i]);
             if (trimmed.rfind("#include", 0) == 0) {
                 last_include_index = static_cast<int>(i);
-                if (lines[i].find("custom_controllers/") != std::string::npos) {
+                if (lines[i].find("animation_update/custom_controllers/") != std::string::npos) {
                     insert_index = static_cast<int>(i) + 1;
                 }
             }

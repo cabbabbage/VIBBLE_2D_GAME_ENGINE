@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "asset/asset_controller.hpp"
 
 class Asset;
@@ -14,3 +14,4 @@ public:
 private:
     Asset* self_ = nullptr;
 };
+

@@ -1,5 +1,5 @@
-#ifndef BOMB_CONTROLLER_HPP
-#define BOMB_CONTROLLER_HPP
+﻿#ifndef DAVEY_CONTROLLER_HPP
+#define DAVEY_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
 
@@ -7,27 +7,26 @@ class Assets;
 class Asset;
 class Input;
 
-class BombController : public AssetController {
+class DaveyController : public AssetController {
 
 public:
-    BombController(Assets* assets, Asset* self);
-    ~BombController() override = default;
+    DaveyController(Assets* assets, Asset* self);
+    ~DaveyController() = default;
     void update(const Input& in) override;
 
 private:
-    enum class State { Idle, Pursuing, Detonating };
+    enum class State { Idle, Pursuing, Orbiting };
 
     void enter_idle(int rest_ratio);
     void enter_pursue(Asset* target);
-    void trigger_explosion();
-
+    void enter_orbit(Asset* center, int radius);
     Assets* assets_ = nullptr;
     Asset*  self_   = nullptr;
     State state_ = State::Idle;
     int idle_ratio_ = 5;
     Asset* current_target_ = nullptr;
-    bool pursuit_locked_ = false;
-    bool explosion_started_ = false;
+    int    orbit_radius_   = 0;
 };
 
 #endif
+

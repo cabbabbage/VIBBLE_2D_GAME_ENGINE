@@ -246,6 +246,8 @@ private:
 
     std::vector<Asset*> moving_assets_for_grid_;
     std::vector<Asset*> pending_static_grid_registration_;
+    std::vector<GridMovementCommand> movement_commands_buffer_;
+    std::vector<Asset*> grid_registration_buffer_;
 
     struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;

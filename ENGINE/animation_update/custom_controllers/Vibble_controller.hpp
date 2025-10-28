@@ -1,4 +1,4 @@
-#ifndef VIBBLE_CONTROLLER_HPP
+﻿#ifndef VIBBLE_CONTROLLER_HPP
 #define VIBBLE_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
@@ -28,3 +28,4 @@ private:
 };
 
 #endif
+

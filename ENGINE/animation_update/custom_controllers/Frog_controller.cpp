@@ -1,8 +1,8 @@
-#include "Frog_controller.hpp"
+﻿#include "Frog_controller.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "custom_controllers/controller_path_utils.hpp"
-#include "custom_controllers/controller_visit_threshold.hpp"
+#include "animation_update/custom_controllers/controller_path_utils.hpp"
+#include "animation_update/custom_controllers/controller_visit_threshold.hpp"
 #include "utils/range_util.hpp"
 
 #include <algorithm>
@@ -305,3 +305,4 @@ SDL_Point FrogController::flee_destination(Asset* threat) {
 
     return controller_paths::clamp_to_radius(origin, desired, radius);
 }
+

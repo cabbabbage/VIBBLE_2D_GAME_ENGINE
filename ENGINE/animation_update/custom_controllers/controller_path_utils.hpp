@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <SDL.h>
 
@@ -195,4 +195,5 @@ inline int default_visit_threshold(const Asset* asset) {
 }
 
 }
+
 

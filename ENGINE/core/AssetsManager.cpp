@@ -150,6 +150,10 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     moving_assets_for_grid_.clear();
     moving_assets_for_grid_.reserve(all.size());
     pending_static_grid_registration_.clear();
+    movement_commands_buffer_.clear();
+    movement_commands_buffer_.reserve(all.size());
+    grid_registration_buffer_.clear();
+    grid_registration_buffer_.reserve(4);
     for (Asset* a : all) {
         if (!a) continue;
         a->set_assets(this);
@@ -387,6 +391,9 @@ bool Assets::on_map_light_changed() {
 
 Assets::~Assets() {
     render_pipeline::ScalingLogic::ShutdownUsageSampling();
+
+    movement_commands_buffer_.clear();
+    grid_registration_buffer_.clear();
 
     if (input) {
         input->clear_screen_to_world_mapper();
@@ -643,10 +650,12 @@ void Assets::update(const Input& input)
     register_pending_static_assets();
 
     if (!moving_assets_for_grid_.empty()) {
-        std::vector<GridMovementCommand> movement_commands;
-        movement_commands.reserve(moving_assets_for_grid_.size());
-        std::vector<Asset*> moving_registration_requests;
-        moving_registration_requests.reserve(4);
+        movement_commands_buffer_.clear();
+        movement_commands_buffer_.reserve(moving_assets_for_grid_.size());
+        grid_registration_buffer_.clear();
+        if (grid_registration_buffer_.capacity() < 4) {
+            grid_registration_buffer_.reserve(4);
+        }
 
 #if defined(__cpp_lib_execution)
         if (moving_assets_for_grid_.size() > 1) {
@@ -662,7 +671,7 @@ void Assets::update(const Input& input)
                               SDL_Point curr{asset->pos.x, asset->pos.y};
                               if (!asset->has_grid_residency_cache()) {
                                   std::lock_guard<std::mutex> reg_lock(registration_mutex);
-                                  moving_registration_requests.push_back(asset);
+                                  grid_registration_buffer_.push_back(asset);
                                   return;
                               }
                               const SDL_Point prev = asset->grid_residency_cache();
@@ -671,7 +680,7 @@ void Assets::update(const Input& input)
                               }
                               GridMovementCommand command{asset, prev, curr};
                               std::lock_guard<std::mutex> lock(movement_commands_mutex);
-                              movement_commands.push_back(command);
+                              movement_commands_buffer_.push_back(command);
                           });
         } else
 #endif
@@ -682,23 +691,23 @@ void Assets::update(const Input& input)
                 }
                 SDL_Point curr{asset->pos.x, asset->pos.y};
                 if (!asset->has_grid_residency_cache()) {
-                    moving_registration_requests.push_back(asset);
+                    grid_registration_buffer_.push_back(asset);
                     continue;
                 }
                 const SDL_Point prev = asset->grid_residency_cache();
                 if (prev.x == curr.x && prev.y == curr.y) {
                     continue;
                 }
-                movement_commands.push_back(GridMovementCommand{asset, prev, curr});
+                movement_commands_buffer_.push_back(GridMovementCommand{asset, prev, curr});
             }
         }
 
-        if (!moving_registration_requests.empty()) {
-            std::sort(moving_registration_requests.begin(), moving_registration_requests.end());
-            moving_registration_requests.erase(
-                std::unique(moving_registration_requests.begin(), moving_registration_requests.end()),
-                moving_registration_requests.end());
-            for (Asset* asset : moving_registration_requests) {
+        if (!grid_registration_buffer_.empty()) {
+            std::sort(grid_registration_buffer_.begin(), grid_registration_buffer_.end());
+            grid_registration_buffer_.erase(
+                std::unique(grid_registration_buffer_.begin(), grid_registration_buffer_.end()),
+                grid_registration_buffer_.end());
+            for (Asset* asset : grid_registration_buffer_) {
                 if (!asset || asset->has_grid_residency_cache()) {
                     continue;
                 }
@@ -708,7 +717,7 @@ void Assets::update(const Input& input)
             }
         }
 
-        for (const GridMovementCommand& command : movement_commands) {
+        for (const GridMovementCommand& command : movement_commands_buffer_) {
             if (!command.asset) {
                 continue;
             }

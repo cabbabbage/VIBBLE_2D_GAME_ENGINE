@@ -1,8 +1,8 @@
-#include "Bomb_controller.hpp"
+﻿#include "Bomb_controller.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "custom_controllers/controller_path_utils.hpp"
-#include "custom_controllers/controller_visit_threshold.hpp"
+#include "animation_update/custom_controllers/controller_path_utils.hpp"
+#include "animation_update/custom_controllers/controller_visit_threshold.hpp"
 #include "utils/range_util.hpp"
 
 #include <algorithm>
@@ -163,3 +163,4 @@ void BombController::update(const Input&) {
         enter_idle(5);
     }
 }
+

@@ -1,10 +1,10 @@
-#include "Vibble_controller.hpp"
+﻿#include "Vibble_controller.hpp"
 
 #include "animation_update/animation_update_utils.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "custom_controllers/controller_path_utils.hpp"
-#include "custom_controllers/controller_visit_threshold.hpp"
+#include "animation_update/custom_controllers/controller_path_utils.hpp"
+#include "animation_update/custom_controllers/controller_visit_threshold.hpp"
 #include "utils/input.hpp"
 
 #include <cmath>
@@ -198,3 +198,4 @@ void VibbleController::update(const Input& input) {
 
     movement(input);
 }
+

@@ -1,4 +1,4 @@
-#include "default_controller.hpp"
+﻿#include "default_controller.hpp"
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
 #include "asset/asset_info.hpp"
@@ -27,3 +27,4 @@ void DefaultController::update(const Input& ) {
     }
 
 }
+

@@ -119,7 +119,7 @@ TEST_CASE("CustomControllerService updates manifest metadata") {
 
     fs::path project_root = manifest_path.parent_path();
     fs::path engine_dir = project_root / "ENGINE";
-    fs::path controller_dir = engine_dir / "custom_controllers";
+    fs::path controller_dir = engine_dir / "animation_update" / "custom_controllers";
     fs::create_directories(controller_dir);
     fs::create_directories(engine_dir / "asset");
     fs::path asset_root = project_root / "SRC" / "TestAsset";

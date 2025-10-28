@@ -1,5 +1,5 @@
 #include "animation_loader.hpp"
-#include "custom_controllers/Davey_controller.hpp"
+#include "animation_update/custom_controllers/Davey_controller.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
 #include "asset/animation.hpp"
@@ -17,10 +17,10 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
-#include "custom_controllers/Vibble_controller.hpp"
-#include "custom_controllers/Bomb_controller.hpp"
-#include "custom_controllers/Frog_controller.hpp"
-#include "custom_controllers/default_controller.hpp"
+#include "animation_update/custom_controllers/Vibble_controller.hpp"
+#include "animation_update/custom_controllers/Bomb_controller.hpp"
+#include "animation_update/custom_controllers/Frog_controller.hpp"
+#include "animation_update/custom_controllers/default_controller.hpp"
 using nlohmann::json;
 
 void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
