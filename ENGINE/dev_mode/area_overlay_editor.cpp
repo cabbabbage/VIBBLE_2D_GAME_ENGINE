@@ -322,6 +322,7 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
     area_name_ = area_name;
     room_area_type_.clear();
     asset_area_type_ = canonical_area_type(area_type);
+    scale_area_to_room_ = false;
     canvas_w_ = cw;
     canvas_h_ = ch;
     mask_origin_x_ = 0;
@@ -422,6 +423,7 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     asset_area_type_.clear();
     name_box_ = std::make_unique<DMTextBox>("Area Name", area_name_);
     resolution_stepper_.reset();
+    scale_area_to_room_ = false;
 
     SDL_Point room_center = focus_world;
     if (room_->room_area) {
@@ -433,6 +435,13 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     Area* existing_area = room_->find_area(area_name_);
     if (room_area_type_.empty() && existing_area) {
         room_area_type_ = existing_area->get_type();
+    }
+
+    auto meta_it = std::find_if(room_->areas.begin(), room_->areas.end(), [&](const Room::NamedArea& na) {
+        return na.name == area_name_;
+    });
+    if (meta_it != room_->areas.end()) {
+        scale_area_to_room_ = meta_it->scale_to_room;
     }
 
     area_resolution_ = existing_area ? existing_area->resolution() : 3;
@@ -524,7 +533,11 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     }
 
     ensure_toolbox();
+    if (scale_to_room_checkbox_) {
+        scale_to_room_checkbox_->set_value(scale_area_to_room_);
+    }
     update_toolbox_title();
+    rebuild_toolbox_rows();
 
     active_ = true;
     saved_since_begin_ = false;
@@ -838,6 +851,9 @@ void AreaOverlayEditor::ensure_toolbox() {
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_geom_  = std::make_unique<DMButton>("Geometry",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_delete_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 180, DMButton::height());
+    if (!scale_to_room_checkbox_) {
+        scale_to_room_checkbox_ = std::make_unique<DMCheckbox>("Scale area to room", scale_area_to_room_);
+    }
     update_toolbox_title();
     rebuild_toolbox_rows();
 }
@@ -895,6 +911,12 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
 
     if (resolution_stepper_) {
         owned_widgets_.push_back(std::make_unique<StepperWidget>(resolution_stepper_.get()));
+        rows.push_back({ owned_widgets_.back().get() });
+    }
+
+    if (room_ && scale_to_room_checkbox_) {
+        owned_widgets_.push_back(std::make_unique<CheckboxWidget>(scale_to_room_checkbox_.get()));
+        register_tracked_checkbox(scale_to_room_checkbox_.get());
         rows.push_back({ owned_widgets_.back().get() });
     }
 
@@ -1669,7 +1691,12 @@ bool AreaOverlayEditor::persist_current_area() {
             std::string type = determine_room_type();
             area.set_type(type);
             room_area_type_ = type;
-            room_->upsert_named_area(area, type);
+            if (scale_to_room_checkbox_) {
+                scale_area_to_room_ = scale_to_room_checkbox_->value();
+            } else {
+                scale_area_to_room_ = false;
+            }
+            room_->upsert_named_area(area, type, scale_area_to_room_, 0, 0);
             room_->save_assets_json();
         }
     };

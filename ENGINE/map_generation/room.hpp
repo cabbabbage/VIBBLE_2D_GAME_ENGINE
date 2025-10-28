@@ -35,6 +35,7 @@ struct AnchorData {
 };
 SDL_Point choose_anchor(Kind kind, SDL_Point default_anchor, const std::vector<SDL_Point>& world_points);
 std::vector<SDL_Point> decode_points(const nlohmann::json& entry, SDL_Point anchor);
+std::vector<SDL_Point> decode_relative_points(const nlohmann::json& entry);
 nlohmann::json encode_points(const std::vector<SDL_Point>& points, SDL_Point anchor);
 AnchorData resolve_anchor(const nlohmann::json& entry, SDL_Point default_anchor, Kind kind);
 void write_anchor(nlohmann::json& entry, const AnchorData& anchor, Kind kind);
@@ -103,6 +104,9 @@ class Room {
         std::string type;
         std::string kind;
         std::unique_ptr<Area> area;
+        bool scale_to_room = false;
+        int  original_room_width = 0;
+        int  original_room_height = 0;
 };
 
     std::vector<NamedArea> areas;
@@ -110,7 +114,11 @@ class Room {
     Area* find_area(const std::string& name);
     bool remove_area(const std::string& name);
     bool rename_area(const std::string& old_name, const std::string& new_name);
-    void upsert_named_area(const Area& area, const std::string& type);
+    void upsert_named_area(const Area& area,
+                           const std::string& type,
+                           bool scale_to_room,
+                           int original_room_width,
+                           int original_room_height);
 
         private:
     nlohmann::json assets_json;
@@ -125,5 +133,6 @@ class Room {
     ManifestWriter manifest_writer_{};
     int clamp_int(int v, int lo, int hi) const;
     void bounds_to_size(const std::tuple<int,int,int,int>& b, int& w, int& h) const;
+    std::pair<int, int> current_room_dimensions() const;
     void load_named_areas_from_json();
 };

@@ -65,7 +65,9 @@ public:
 
         void set_listener(Listener listener);
         void invalidate();
-        const PolygonList& ensure_from_json(const nlohmann::json* root, std::optional<SDL_Point> default_anchor = std::nullopt);
+        const PolygonList& ensure_from_json(const nlohmann::json* root,
+                                            std::optional<SDL_Point> default_anchor = std::nullopt,
+                                            std::optional<std::pair<int, int>> room_dimensions = std::nullopt);
         std::size_t generation() const { return generation_; }
 
     private:

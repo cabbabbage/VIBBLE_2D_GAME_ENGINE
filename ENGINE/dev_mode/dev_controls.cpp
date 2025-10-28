@@ -56,6 +56,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <tuple>
 #include <cctype>
 #include <string>
 #include <vector>
@@ -207,7 +208,8 @@ void DevControls::RoomAreaCache::invalidate() {
 
 const DevControls::RoomAreaCache::PolygonList&
 DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
-                                             std::optional<SDL_Point> default_anchor) {
+                                             std::optional<SDL_Point> default_anchor,
+                                             std::optional<std::pair<int, int>> room_dimensions) {
     if (root != last_source_) {
         dirty_ = true;
     }
@@ -219,6 +221,11 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
     if (root) {
         try {
             if (root->contains("areas") && (*root)["areas"].is_array()) {
+                const int target_width = room_dimensions ? std::max(0, room_dimensions->first) : 0;
+                const int target_height = room_dimensions ? std::max(0, room_dimensions->second) : 0;
+                auto scale_component = [](int value, double factor) {
+                    return static_cast<int>(std::llround(static_cast<double>(value) * factor));
+                };
                 for (const auto& item : (*root)["areas"]) {
                     if (!item.is_object()) continue;
                     const std::string name = item.contains("name") && item["name"].is_string()
@@ -239,7 +246,31 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
                     if (default_anchor.has_value()) {
                         SDL_Point fallback = *default_anchor;
                         auto anchor = RoomAreaSerialization::resolve_anchor(item, fallback, kind);
-                        std::vector<SDL_Point> poly = RoomAreaSerialization::decode_points(item, anchor.world);
+                        const bool scale_to_room = item.value("scale_to_room", false);
+                        const int stored_width = item.value("origional_width", 0);
+                        const int stored_height = item.value("origional_height", 0);
+                        const bool can_scale = scale_to_room && stored_width > 0 && stored_height > 0 &&
+                                               target_width > 0 && target_height > 0;
+                        std::vector<SDL_Point> poly;
+                        if (can_scale) {
+                            const double sx = static_cast<double>(target_width) / static_cast<double>(stored_width);
+                            const double sy = static_cast<double>(target_height) / static_cast<double>(stored_height);
+                            if (anchor.relative_to_center) {
+                                anchor.relative_offset.x = scale_component(anchor.relative_offset.x, sx);
+                                anchor.relative_offset.y = scale_component(anchor.relative_offset.y, sy);
+                                anchor.world.x = fallback.x + anchor.relative_offset.x;
+                                anchor.world.y = fallback.y + anchor.relative_offset.y;
+                            }
+                            auto relative_points = RoomAreaSerialization::decode_relative_points(item);
+                            poly.reserve(relative_points.size());
+                            for (const auto& rel : relative_points) {
+                                const int dx = scale_component(rel.x, sx);
+                                const int dy = scale_component(rel.y, sy);
+                                poly.push_back(SDL_Point{anchor.world.x + dx, anchor.world.y + dy});
+                            }
+                        } else {
+                            poly = RoomAreaSerialization::decode_points(item, anchor.world);
+                        }
                         if (poly.size() >= 3) {
                             Polygon entry;
                             entry.name = name;
@@ -2907,15 +2938,40 @@ void DevControls::notify_room_area_data_changed() {
 const DevControls::RoomAreaCache::PolygonList& DevControls::room_area_polygons() {
     const nlohmann::json* root = nullptr;
     std::optional<SDL_Point> default_anchor;
+    std::optional<std::pair<int, int>> room_dimensions;
     if (current_room_) {
         root = &current_room_->assets_data();
         SDL_Point anchor{ current_room_->map_origin.first, current_room_->map_origin.second };
         if (current_room_->room_area) {
             anchor = current_room_->room_area->get_center();
+            auto bounds = current_room_->room_area->get_bounds();
+            const int width = std::max(0, std::get<2>(bounds) - std::get<0>(bounds));
+            const int height = std::max(0, std::get<3>(bounds) - std::get<1>(bounds));
+            if (width > 0 && height > 0) {
+                room_dimensions = std::make_pair(width, height);
+            }
+        } else if (root && root->is_object()) {
+            int min_w = root->value("min_width", 0);
+            int max_w = root->value("max_width", min_w);
+            int min_h = root->value("min_height", 0);
+            int max_h = root->value("max_height", min_h);
+            int width = std::max(min_w, max_w);
+            int height = std::max(min_h, max_h);
+            if ((width <= 0 || height <= 0) && root->contains("radius")) {
+                int radius = root->value("radius", 0);
+                if (radius > 0) {
+                    int diameter = radius * 2;
+                    if (width <= 0) width = diameter;
+                    if (height <= 0) height = diameter;
+                }
+            }
+            if (width > 0 && height > 0) {
+                room_dimensions = std::make_pair(width, height);
+            }
         }
         default_anchor = anchor;
     }
-    return room_area_cache_.ensure_from_json(root, default_anchor);
+    return room_area_cache_.ensure_from_json(root, default_anchor, room_dimensions);
 }
 
 void DevControls::toggle_map_light_panel() {

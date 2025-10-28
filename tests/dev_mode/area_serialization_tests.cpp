@@ -253,3 +253,105 @@ TEST_CASE("Relative room anchor offsets are preserved") {
     CHECK_EQ(entry["anchor"].value("y", 0), -8);
     CHECK(entry["anchor_relative_to_center"].get<bool>());
 }
+
+TEST_CASE("Room named areas scale with room dimensions when flagged") {
+    nlohmann::json room_json;
+    room_json["min_width"] = 200;
+    room_json["max_width"] = 200;
+    room_json["min_height"] = 150;
+    room_json["max_height"] = 150;
+    room_json["areas"] = nlohmann::json::array({
+        nlohmann::json{
+            {"name", "spawn_field"},
+            {"type", "spawn"},
+            {"kind", "Spawn"},
+            {"scale_to_room", true},
+            {"origional_width", 100},
+            {"origional_height", 50},
+            {"anchor", nlohmann::json{{"x", 0}, {"y", 0}}},
+            {"anchor_relative_to_center", true},
+            {"resolution", 2},
+            {"points", nlohmann::json::array({
+                nlohmann::json{{"x", -10}, {"y", -5}},
+                nlohmann::json{{"x", 10}, {"y", -5}},
+                nlohmann::json{{"x", 0}, {"y", 5}}
+            })}
+        }
+    });
+
+    MapGridSettings grid_settings{};
+    Room room_a(Room::Point{0, 0},
+                "test",
+                "RoomA",
+                nullptr,
+                std::string{},
+                nullptr,
+                nullptr,
+                &room_json,
+                nullptr,
+                grid_settings,
+                0.0,
+                "rooms");
+
+    REQUIRE_EQ(room_a.areas.size(), 1);
+    const auto& named_a = room_a.areas.front();
+    CHECK(named_a.scale_to_room);
+    CHECK_EQ(named_a.original_room_width, 200);
+    CHECK_EQ(named_a.original_room_height, 150);
+    const auto& pts_a = named_a.area->get_points();
+    REQUIRE_EQ(pts_a.size(), 3);
+    CHECK_EQ(pts_a[0].x, -20);
+    CHECK_EQ(pts_a[0].y, -15);
+    CHECK_EQ(pts_a[1].x, 20);
+    CHECK_EQ(pts_a[1].y, -15);
+    CHECK_EQ(pts_a[2].x, 0);
+    CHECK_EQ(pts_a[2].y, 15);
+
+    auto& stored_a = room_a.assets_data()["areas"][0];
+    CHECK(stored_a.value("scale_to_room", false));
+    CHECK_EQ(stored_a.value("origional_width", 0), 200);
+    CHECK_EQ(stored_a.value("origional_height", 0), 150);
+    CHECK_EQ(stored_a["points"][0].value("x", 0), -20);
+    CHECK_EQ(stored_a["points"][0].value("y", 0), -15);
+
+    room_json["min_width"] = 400;
+    room_json["max_width"] = 400;
+    room_json["min_height"] = 300;
+    room_json["max_height"] = 300;
+
+    Room room_b(Room::Point{0, 0},
+                "test",
+                "RoomB",
+                nullptr,
+                std::string{},
+                nullptr,
+                nullptr,
+                &room_json,
+                nullptr,
+                grid_settings,
+                0.0,
+                "rooms");
+
+    REQUIRE_EQ(room_b.areas.size(), 1);
+    const auto& named_b = room_b.areas.front();
+    CHECK(named_b.scale_to_room);
+    CHECK_EQ(named_b.original_room_width, 400);
+    CHECK_EQ(named_b.original_room_height, 300);
+    const auto& pts_b = named_b.area->get_points();
+    REQUIRE_EQ(pts_b.size(), 3);
+    CHECK_EQ(pts_b[0].x, -40);
+    CHECK_EQ(pts_b[0].y, -30);
+    CHECK_EQ(pts_b[1].x, 40);
+    CHECK_EQ(pts_b[1].y, -30);
+    CHECK_EQ(pts_b[2].x, 0);
+    CHECK_EQ(pts_b[2].y, 30);
+
+    Area resave(named_b.name, named_b.area->get_points(), named_b.area->resolution());
+    resave.set_type(named_b.area->get_type());
+    room_b.upsert_named_area(resave, named_b.type, true, 0, 0);
+
+    auto& stored_b = room_b.assets_data()["areas"][0];
+    CHECK(stored_b.value("scale_to_room", false));
+    CHECK_EQ(stored_b.value("origional_width", 0), 400);
+    CHECK_EQ(stored_b.value("origional_height", 0), 300);
+}
