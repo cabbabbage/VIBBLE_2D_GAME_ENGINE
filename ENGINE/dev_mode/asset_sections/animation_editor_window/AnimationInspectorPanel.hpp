@@ -76,6 +76,7 @@ class AnimationInspectorPanel {
     void update_section_toggle_labels();
     void update_collapse_toggle_label();
     void notify_section_visibility(const std::string& section_name, bool visible);
+    void update_source_mode_button_styles();
 
     enum class FocusTarget {
         kNone = -1,
@@ -83,7 +84,8 @@ class AnimationInspectorPanel {
         kName,
         kStart,
         kDelete,
-        kToggleSources,
+        kSourceFrames,
+        kSourceAnimation,
         kTogglePlayback,
         kToggleMovement,
         kToggleOnEnd,
@@ -108,7 +110,8 @@ class AnimationInspectorPanel {
     std::unique_ptr<DMTextBox> name_box_;
     std::unique_ptr<DMButton> start_button_;
     std::unique_ptr<DMButton> delete_button_;
-    std::unique_ptr<DMButton> source_toggle_button_;
+    std::unique_ptr<DMButton> source_frames_button_;
+    std::unique_ptr<DMButton> source_animation_button_;
     std::unique_ptr<DMButton> playback_toggle_button_;
     std::unique_ptr<DMButton> movement_toggle_button_;
     std::unique_ptr<DMButton> on_end_toggle_button_;
@@ -118,6 +121,8 @@ class AnimationInspectorPanel {
     SDL_Rect bounds_{0, 0, 0, 0};
     mutable SDL_Rect header_rect_{0, 0, 0, 0};
     mutable SDL_Rect collapse_toggle_rect_{0, 0, 0, 0};
+    mutable SDL_Rect source_selector_rect_{0, 0, 0, 0};
+    mutable SDL_Rect source_summary_rect_{0, 0, 0, 0};
     mutable SDL_Rect preview_rect_{0, 0, 0, 0};
     mutable SDL_Rect toggles_rect_{0, 0, 0, 0};
     mutable SDL_Rect source_rect_{0, 0, 0, 0};
@@ -128,7 +133,6 @@ class AnimationInspectorPanel {
     mutable bool layout_dirty_ = true;
     bool rename_pending_ = false;
     bool is_start_animation_ = false;
-    bool source_collapsed_ = true;
     bool playback_collapsed_ = false;
     bool movement_collapsed_ = false;
     bool on_end_collapsed_ = false;
@@ -136,6 +140,7 @@ class AnimationInspectorPanel {
     bool collapsed_ = true;
     int focus_index_ = -1;
     FocusTarget current_focus_target_ = FocusTarget::kNone;
+    bool source_uses_animation_ = false;
 
     std::shared_ptr<CroppingService> cropping_service_;
     std::shared_ptr<AsyncTaskQueue> task_queue_;

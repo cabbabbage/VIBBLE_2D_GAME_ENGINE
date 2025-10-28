@@ -43,6 +43,7 @@ bool case_insensitive_equals(std::string_view a, std::string_view b) {
 }
 
 using vibble::strings::to_lower_copy;
+using vibble::strings::trim_copy;
 
 bool has_extension_ci(const std::filesystem::path& path, std::string_view ext) {
     return case_insensitive_equals(path.extension().string(), std::string(ext));
@@ -147,7 +148,6 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 
     dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
-    if (from_animation_checkbox_) from_animation_checkbox_->render(renderer);
     if (use_animation_reference_) {
         if (animation_dropdown_) animation_dropdown_->render(renderer);
     } else {
@@ -229,26 +229,6 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
     }
 
     bool consumed = false;
-    if (from_animation_checkbox_ && from_animation_checkbox_->handle_event(e)) {
-        use_animation_reference_ = from_animation_checkbox_->value();
-
-        if (use_animation_reference_) {
-            refresh_animation_options();
-            if (!animation_options_.empty()) {
-                if (!animation_dropdown_) {
-                    animation_dropdown_ = std::make_unique<DMDropdown>("Select Animation", animation_options_, 0);
-                }
-                animation_index_ = std::max(0, std::min(static_cast<int>(animation_options_.size()) - 1, animation_index_));
-                animation_dropdown_->set_selected(animation_index_ >= 0 ? animation_index_ : 0);
-
-                clean_output_frames();
-                apply_animation_selection();
-            }
-        }
-        layout_controls();
-        consumed = true;
-    }
-
     if (!consumed && use_animation_reference_ && animation_dropdown_) {
         if (animation_dropdown_->handle_event(e)) {
             apply_animation_selection();
@@ -270,11 +250,85 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
 int SourceConfigPanel::preferred_height(int) const {
     const int padding = 6;
     int height = padding;
-    height += DMCheckbox::height();
-    height += padding;
     height += use_animation_reference_ ? DMDropdown::height() : DMButton::height();
     height += padding;
     return height;
+}
+
+SourceConfigPanel::SourceMode SourceConfigPanel::source_mode() const {
+    return use_animation_reference_ ? SourceMode::kAnimation : SourceMode::kFrames;
+}
+
+void SourceConfigPanel::set_source_mode(SourceMode mode) {
+    bool wants_animation = (mode == SourceMode::kAnimation);
+    if (use_animation_reference_ == wants_animation) {
+        return;
+    }
+
+    use_animation_reference_ = wants_animation;
+
+    if (use_animation_reference_) {
+        refresh_animation_options();
+        if (!animation_dropdown_) {
+            int idx = animation_index_;
+            if (idx < 0 && !animation_options_.empty()) {
+                idx = 0;
+            }
+            if (idx >= 0 && !animation_options_.empty()) {
+                idx = std::min(idx, static_cast<int>(animation_options_.size()) - 1);
+            }
+            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::max(0, idx));
+            animation_index_ = animation_dropdown_->selected();
+        } else {
+            int idx = animation_index_;
+            if (!animation_options_.empty()) {
+                idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+            } else {
+                idx = 0;
+            }
+            animation_dropdown_->set_selected(idx);
+            animation_index_ = animation_dropdown_->selected();
+        }
+        if (animation_dropdown_ && !animation_options_.empty()) {
+            clean_output_frames();
+            apply_animation_selection();
+        }
+    } else {
+        animation_index_ = -1;
+    }
+
+    layout_controls();
+}
+
+std::vector<std::string> SourceConfigPanel::summary_badges() const {
+    std::vector<std::string> badges;
+    badges.reserve(4);
+    badges.push_back(use_animation_reference_ ? std::string{"Animation"} : std::string{"Frames"});
+
+    if (use_animation_reference_) {
+        std::string target = trim_copy(current_source_.name.value_or(current_source_.path));
+        if (target.empty() && animation_index_ >= 0 && animation_index_ < static_cast<int>(animation_options_.size())) {
+            target = animation_options_[animation_index_];
+        }
+        if (target.empty()) {
+            target = "Unassigned";
+        }
+        badges.push_back(std::move(target));
+    } else {
+        std::string kind = trim_copy(current_source_.kind);
+        if (!kind.empty() && to_lower_copy(kind) != std::string{"folder"}) {
+            badges.push_back(kind);
+        }
+        std::string display_path = trim_copy(current_source_.path);
+        if (display_path.empty()) {
+            display_path = "Unassigned";
+        }
+        badges.push_back(std::move(display_path));
+    }
+
+    int frames = std::max(1, frame_count_);
+    badges.push_back(std::to_string(frames) + (frames == 1 ? " frame" : " frames"));
+    return badges;
 }
 
 void SourceConfigPanel::reload_from_document() {
@@ -626,19 +680,32 @@ void SourceConfigPanel::post_copy_process(const std::vector<std::filesystem::pat
 
 void SourceConfigPanel::layout_controls() {
 
-    if (!from_animation_checkbox_) {
-        from_animation_checkbox_ = std::make_unique<DMCheckbox>("Select frames from animation", use_animation_reference_);
-    } else {
-        from_animation_checkbox_->set_value(use_animation_reference_);
-    }
     if (!source_button_) {
         source_button_ = std::make_unique<DMButton>("Select Source Frames...", &DMStyles::AccentButton(), 220, DMButton::height());
     }
-    if (use_animation_reference_ && !animation_dropdown_) {
 
+    if (use_animation_reference_) {
         refresh_animation_options();
-        int idx = std::max(0, animation_index_);
-        animation_dropdown_ = std::make_unique<DMDropdown>("Select Animation", animation_options_, idx);
+        if (!animation_dropdown_) {
+            int idx = animation_index_;
+            if (idx < 0 && !animation_options_.empty()) {
+                idx = 0;
+            }
+            if (idx >= 0 && !animation_options_.empty()) {
+                idx = std::min(idx, static_cast<int>(animation_options_.size()) - 1);
+            }
+            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::max(0, idx));
+            animation_index_ = animation_dropdown_->selected();
+        } else {
+            int idx = animation_index_;
+            if (!animation_options_.empty()) {
+                idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+            } else {
+                idx = 0;
+            }
+            animation_dropdown_->set_selected(idx);
+            animation_index_ = animation_dropdown_->selected();
+        }
     }
 
     const int padding = 6;
@@ -646,16 +713,12 @@ void SourceConfigPanel::layout_controls() {
     int x = bounds_.x + padding;
     int y = bounds_.y + padding;
 
-    checkbox_rect_ = SDL_Rect{x, y, inner_w, DMCheckbox::height()};
-    if (from_animation_checkbox_) from_animation_checkbox_->set_rect(checkbox_rect_);
-    y += DMCheckbox::height() + padding;
-
     if (use_animation_reference_) {
         dropdown_rect_ = SDL_Rect{x, y, inner_w, DMDropdown::height()};
         if (animation_dropdown_) animation_dropdown_->set_rect(dropdown_rect_);
         source_button_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
     } else {
-        source_button_rect_ = SDL_Rect{x, y, 220, DMButton::height()};
+        source_button_rect_ = SDL_Rect{x, y, inner_w, DMButton::height()};
         if (source_button_) source_button_->set_rect(source_button_rect_);
         dropdown_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
     }
@@ -712,7 +775,7 @@ void SourceConfigPanel::refresh_animation_options() {
         int idx = std::max(0, animation_index_);
         animation_dropdown_.reset();
         if (!animation_options_.empty()) {
-            animation_dropdown_ = std::make_unique<DMDropdown>("Select Animation", animation_options_, std::min(idx, static_cast<int>(animation_options_.size()) - 1));
+            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::min(idx, static_cast<int>(animation_options_.size()) - 1));
         }
     }
 }
