@@ -716,11 +716,27 @@ int AnimationRuntime::effective_grid_resolution(std::optional<int> override_reso
 }
 
 SDL_Point AnimationRuntime::convert_delta_to_world(SDL_Point delta, int resolution) const {
-    const int           clamped_resolution = vibble::grid::clamp_resolution(resolution);
-    vibble::grid::Grid& grid_service       = grid();
-    SDL_Point           indices            = grid_service.convert_resolution(delta, 0, clamped_resolution);
-    const SDL_Point     origin_world       = grid_service.index_to_world(SDL_Point{ 0, 0 }, clamped_resolution);
-    const SDL_Point     target_world       = grid_service.index_to_world(indices, clamped_resolution);
+    const int clamped_resolution = vibble::grid::clamp_resolution(resolution);
+    if (clamped_resolution <= 0) {
+        return delta;
+    }
+
+    const int grid_step = vibble::grid::delta(clamped_resolution);
+    if (grid_step <= 1) {
+        return delta;
+    }
+
+    const bool delta_aligned_x = vibble::grid::is_multiple_of_delta(delta.x, clamped_resolution);
+    const bool delta_aligned_y = vibble::grid::is_multiple_of_delta(delta.y, clamped_resolution);
+
+    if (!delta_aligned_x || !delta_aligned_y) {
+        return delta;
+    }
+
+    vibble::grid::Grid& grid_service = grid();
+    SDL_Point           indices      = grid_service.convert_resolution(delta, 0, clamped_resolution);
+    const SDL_Point     origin_world = grid_service.index_to_world(SDL_Point{ 0, 0 }, clamped_resolution);
+    const SDL_Point     target_world = grid_service.index_to_world(indices, clamped_resolution);
     return SDL_Point{ target_world.x - origin_world.x, target_world.y - origin_world.y };
 }
 
