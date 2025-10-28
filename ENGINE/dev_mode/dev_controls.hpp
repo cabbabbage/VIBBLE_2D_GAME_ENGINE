@@ -16,7 +16,6 @@
 #include "map_grid_panel.hpp"
 #include "asset_filter_bar.hpp"
 #include "trail_editor_suite.hpp"
-#include "dev_mode/pan_and_zoom.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "map_assets_modals.hpp"
 
@@ -36,8 +35,7 @@ class DevControls {
 public:
     enum class Mode {
         RoomEditor,
-        MapEditor,
-        AreaMode
+        MapEditor
 };
 
     DevControls(Assets* owner, int screen_w, int screen_h);
@@ -167,9 +165,6 @@ private:
     bool is_modal_blocking_panels() const;
     void pulse_modal_header();
     void apply_header_suppression();
-    void clear_area_mode_selection();
-    void set_area_mode_selection(Asset* asset, const std::string& area_name);
-
     void create_trail_template();
 
     void refresh_active_asset_filters();
@@ -234,20 +229,7 @@ private:
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 
-    class PanAndZoom area_pan_zoom_;
     std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
-    class Asset* area_hovered_asset_ = nullptr;
-
-    class Asset* area_hovered_asset_with_area_ = nullptr;
-    std::string area_hovered_area_name_;
-    class Asset* area_selected_asset_ = nullptr;
-    std::string area_selected_area_name_;
-
-    std::unordered_set<std::string> active_area_type_filters_;
-
-    int hovered_area_index_ = -1;
-    int selected_area_index_ = -1;
-    SDL_Point last_area_click_world_{0,0};
 
     RoomAreaCache room_area_cache_;
 };

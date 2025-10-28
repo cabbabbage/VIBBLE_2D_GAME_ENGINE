@@ -15,7 +15,6 @@
 #include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
-#include "dev_mode/area_mode/area_types.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
 #include "asset/asset_info.hpp"
 #include "dm_styles.hpp"
@@ -81,7 +80,6 @@ void dev_mode_trace(const std::string& message) {
 
 constexpr const char* kModeIdRoom = "room";
 constexpr const char* kModeIdMap = "map";
-constexpr const char* kModeIdArea = "area";
 constexpr int kPopupOutlineThickness = 1;
 
 bool is_trail_room(const Room* room) {
@@ -522,22 +520,6 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                     }
                 }
                 asset_filter_.set_active_mode(kModeIdRoom);
-            } else if (mode == MapModeUI::HeaderMode::Area) {
-                if (this->mode_ == Mode::MapEditor) {
-                    exit_map_editor_mode(false, true);
-                }
-                this->set_mode(Mode::AreaMode);
-                if (map_mode_ui_) {
-                    map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
-                    if (auto* footer = map_mode_ui_->get_footer_bar()) {
-                        std::string label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
-                        footer->set_title(label);
-                    }
-                }
-
-                active_area_type_filters_.clear();
-                active_area_type_filters_.insert("all");
-                asset_filter_.set_active_mode(kModeIdArea);
             }
             sync_header_button_states();
         });
@@ -690,7 +672,7 @@ void DevControls::set_current_room(Room* room, bool force_refresh) {
     if (map_mode_ui_) {
         if (auto* footer = map_mode_ui_->get_footer_bar()) {
             std::string label;
-            if (mode_ == Mode::AreaMode) label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
+            if (mode_ == Mode::RoomEditor) label = std::string("Area Mode — Room: ") + (current_room_ ? current_room_->room_name : std::string{});
             else if (mode_ == Mode::RoomEditor) label = std::string("Room: ") + (current_room_ ? current_room_->room_name : std::string{});
             else label = std::string("Map");
             footer->set_title(label);
@@ -925,7 +907,7 @@ void DevControls::update(const Input& input) {
         if (!pointer_over_camera_panel_) {
             room_editor_->update(input);
         }
-    } else if (mode_ == Mode::AreaMode) {
+    } else if (mode_ == Mode::RoomEditor) {
 
         if (assets_) {
             area_pan_zoom_.handle_input(assets_->getView(), input, false);
@@ -1253,7 +1235,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
-    if (mode_ == Mode::AreaMode) {
+    if (mode_ == Mode::RoomEditor) {
 
         if (asset_area_editor_ && asset_area_editor_->is_active()) {
             if (asset_area_editor_->handle_event(event)) {
@@ -1666,7 +1648,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
             SDL_SetRenderDrawBlendMode(renderer, prev_mode);
         }
-    } else if (mode_ == Mode::AreaMode) {
+    } else if (mode_ == Mode::RoomEditor) {
 
         if (renderer && assets_) {
 
@@ -2466,7 +2448,7 @@ void DevControls::sync_header_button_states() {
 
     for (const auto& type : devmode::area_mode::area_types()) {
         const std::string id = std::string("area_") + type;
-        map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Area, id, active_area_type_filters_.count(type) > 0);
+        map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, id, active_area_type_filters_.count(type) > 0);
     }
 }
 
@@ -2911,7 +2893,7 @@ void DevControls::apply_camera_area_render_flag() {
 
     cam_ptr->set_render_areas_enabled(false);
 
-    const bool area_mode = (mode_ == Mode::AreaMode);
+    const bool area_mode = (mode_ == Mode::RoomEditor);
     cam_ptr->set_realism_enabled(!area_mode);
 }
 
@@ -2921,7 +2903,7 @@ void DevControls::set_mode(Mode new_mode) {
     }
     const Mode previous = mode_;
     mode_ = new_mode;
-    if (previous == Mode::AreaMode && mode_ != Mode::AreaMode) {
+    if (previous == Mode::RoomEditor && mode_ != Mode::RoomEditor) {
         clear_area_mode_selection();
         area_hovered_asset_ = nullptr;
         area_hovered_asset_with_area_ = nullptr;
@@ -2936,8 +2918,8 @@ void DevControls::set_mode(Mode new_mode) {
     case Mode::MapEditor:
         asset_filter_.set_active_mode(kModeIdMap);
         break;
-    case Mode::AreaMode:
-        asset_filter_.set_active_mode(kModeIdArea);
+    case Mode::RoomEditor:
+        asset_filter_.set_active_mode(kModeIdRoom);
         break;
     }
     apply_camera_area_render_flag();

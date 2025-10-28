@@ -116,7 +116,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     if (!info_) return used;
 
     if (!used) {
-    if (dd_type_ && dd_type_->handle_event(e)) used = true;
+        if (dd_type_ && dd_type_->handle_event(e)) used = true;
         if (s_scale_pct_ && s_scale_pct_->handle_event(e)) used = true;
         if (s_zindex_ && s_zindex_->handle_event(e)) used = true;
         if (c_flipable_ && c_flipable_->handle_event(e)) used = true;
@@ -127,12 +127,12 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     bool z_changed = false;
     if (dd_type_ && !type_options_.empty()) {
         int idx = std::clamp(dd_type_->selected(), 0, static_cast<int>(type_options_.size()) - 1);
-        const std::string& selected = type_options_[idx];
-        const bool is_area_asset = (asset_types::canonicalize(info_->type) == std::string(asset_types::area));
-        // Disallow: non-area -> area; and area -> other
-        if ((is_area_asset && selected != std::string(asset_types::area)) || (!is_area_asset && selected == std::string(asset_types::area))) {
-            // Ignore illegal change
-        } else if (info_->type != selected) {
+        std::string selected = asset_types::canonicalize(type_options_[idx]);
+        std::string current = asset_types::canonicalize(info_->type);
+        const bool is_area_asset = (current == std::string(asset_types::area));
+        const bool selecting_area = (selected == std::string(asset_types::area));
+
+        if (!(is_area_asset && !selecting_area) && !(!is_area_asset && selecting_area) && current != selected) {
             info_->set_asset_type(selected);
             changed = true;
         }
