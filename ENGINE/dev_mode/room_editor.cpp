@@ -4757,7 +4757,7 @@ void RoomEditor::regenerate_current_room() {
     const int map_radius = map_radius_value > 0.0 ? static_cast<int>(std::lround(map_radius_value)) : 0;
     int map_w = map_radius > 0 ? map_radius * 2 : std::max(width * 2, 1);
     int map_h = map_radius > 0 ? map_radius * 2 : std::max(height * 2, 1);
-    Area new_area(current_room_->room_name.empty() ? std::string("room") : current_room_->room_name, center, width, height, geometry, edge, map_w, map_h, 3);
+    Area new_area(current_room_->room_name.empty() ? std::string("room") : current_room_->room_name, center, width, height, geometry, edge, map_w, map_h);
 
     double old_area_size = old_area_copy ? old_area_copy->get_area() : 0.0;
     double new_area_size = new_area.get_area();
