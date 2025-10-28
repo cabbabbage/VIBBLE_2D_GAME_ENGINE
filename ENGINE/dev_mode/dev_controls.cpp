@@ -888,6 +888,10 @@ void DevControls::update(const Input& input) {
         if (!pointer_over_camera_panel_) {
             room_editor_->update(input);
         }
+        // Update Area Tool overlay/editor if active
+        if (asset_area_editor_ && asset_area_editor_->is_active()) {
+            asset_area_editor_->update(input, screen_w_, screen_h_);
+        }
     }
 
     if (camera_panel_) {
@@ -1186,11 +1190,13 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 // Right click -> open Area Info UI with Area sections
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
                     selected_room_area_name_ = hovered.name;
+                    // Open both the Area Tool for this area and the Area Config panel
+                    begin_room_area_edit(hovered.name);
                     if (room_editor_) {
                         room_editor_->open_area_info_editor(current_room_, hovered.name);
-                        consume(true);
-                        return;
                     }
+                    consume(true);
+                    return;
                 }
                 // Double-click left -> open Area Info UI with Area sections
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks >= 2) {
@@ -1234,6 +1240,10 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         if (map_editor_) map_editor_->render(renderer);
     } else if (mode_ == Mode::RoomEditor && room_editor_) {
         room_editor_->render_overlays(renderer);
+        // Render Area Tool overlay/editor if active
+        if (asset_area_editor_ && asset_area_editor_->is_active()) {
+            asset_area_editor_->render(renderer);
+        }
         // Draw room area overlays (always visible in Room mode)
         if (renderer && assets_ && current_room_) {
             const camera& cam = assets_->getView();

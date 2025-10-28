@@ -348,7 +348,7 @@ TEST_CASE("Room named areas scale with room dimensions when flagged") {
 
     Area resave(named_b.name, named_b.area->get_points(), named_b.area->resolution());
     resave.set_type(named_b.area->get_type());
-    room_b.upsert_named_area(resave, named_b.type, true, 0, 0);
+    room_b.upsert_named_area(resave, true, 0, 0);
 
     auto& stored_b = room_b.assets_data()["areas"][0];
     CHECK(stored_b.value("scale_to_room", false));

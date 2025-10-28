@@ -139,52 +139,28 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
 }
 
 AssetInfoUI::AssetInfoUI() {
-    auto basic = std::make_unique<Section_BasicInfo>();
-    basic_info_section_ = basic.get();
-    basic_info_section_->set_ui(this);
-    sections_.push_back(std::move(basic));
-    auto tags = std::make_unique<Section_Tags>();
-    tags->set_ui(this);
-    sections_.push_back(std::move(tags));
-    auto lighting = std::make_unique<Section_Lighting>();
-    lighting->set_ui(this);
-    lighting_section_ = lighting.get();
-    sections_.push_back(std::move(lighting));
-    auto shading = std::make_unique<Section_Shading>();
-    shading->set_ui(this);
-    shading_section_ = shading.get();
-    sections_.push_back(std::move(shading));
-    auto spacing = std::make_unique<Section_Spacing>();
-    spacing->set_ui(this);
-    sections_.push_back(std::move(spacing));
-
-    auto spawns = std::make_unique<Section_SpawnGroups>();
-    spawn_groups_section_ = spawns.get();
-    spawns->set_ui(this);
-    spawns->set_manifest_store(manifest_store_);
-    spawns->set_spawn_config_listener([this](const nlohmann::json& entry) {
-        this->notify_spawn_group_entry_changed(entry);
-    });
-    spawns->set_spawn_group_removed_listener([this](const std::string& spawn_id) {
-        this->notify_spawn_group_removed(spawn_id);
-    });
-    sections_.push_back(std::move(spawns));
-
-    configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
-    configure_btn_widget_ = std::make_unique<ButtonWidget>(configure_btn_.get(), [this]() {
-        if (!animation_editor_window_) {
-            return;
+    rebuild_default_sections();
+    if (!configure_btn_) {
+        configure_btn_ = std::make_unique<DMButton>("Configure Animations", &DMStyles::CreateButton(), 220, DMButton::height());
+    }
+    if (!configure_btn_widget_) {
+        configure_btn_widget_ = std::make_unique<ButtonWidget>(configure_btn_.get(), [this]() {
+            if (!animation_editor_window_) {
+                return;
+            }
+            if (animation_editor_window_->is_visible()) {
+                animation_editor_window_->set_visible(false);
+            } else if (info_) {
+                animation_editor_window_->set_visible(true);
+            }
+        });
+    }
+    if (!animation_editor_window_) {
+        animation_editor_window_ = std::make_unique<animation_editor::AnimationEditorWindow>();
+        if (animation_editor_window_) {
+            animation_editor_window_->set_manifest_store(manifest_store_);
+            animation_editor_window_->set_on_document_saved([this]() { this->on_animation_document_saved(); });
         }
-        if (animation_editor_window_->is_visible()) {
-            animation_editor_window_->set_visible(false);
-        } else if (info_) {
-            animation_editor_window_->set_visible(true);
-        }
-    });
-    animation_editor_window_ = std::make_unique<animation_editor::AnimationEditorWindow>();
-    if (animation_editor_window_) {
-        animation_editor_window_->set_manifest_store(manifest_store_);
-        animation_editor_window_->set_on_document_saved([this]() { this->on_animation_document_saved(); });
     }
 
     container_.set_header_text_provider([this]() {
@@ -1062,7 +1038,51 @@ void AssetInfoUI::open_for_room_area(Room* room, const std::string& area_name) {
     open();
 }
 
-void AssetInfoUI::clear_area_context() { area_mode_ = false; area_room_ = nullptr; area_name_.clear(); }
+void AssetInfoUI::clear_area_context() {
+    area_mode_ = false;
+    area_room_ = nullptr;
+    area_name_.clear();
+    rebuild_default_sections();
+}
+
+void AssetInfoUI::rebuild_default_sections() {
+    sections_.clear();
+
+    auto basic = std::make_unique<Section_BasicInfo>();
+    basic_info_section_ = basic.get();
+    basic_info_section_->set_ui(this);
+    sections_.push_back(std::move(basic));
+
+    auto tags = std::make_unique<Section_Tags>();
+    tags->set_ui(this);
+    sections_.push_back(std::move(tags));
+
+    auto lighting = std::make_unique<Section_Lighting>();
+    lighting->set_ui(this);
+    lighting_section_ = lighting.get();
+    sections_.push_back(std::move(lighting));
+
+    auto shading = std::make_unique<Section_Shading>();
+    shading->set_ui(this);
+    shading_section_ = shading.get();
+    sections_.push_back(std::move(shading));
+
+    auto spacing = std::make_unique<Section_Spacing>();
+    spacing->set_ui(this);
+    sections_.push_back(std::move(spacing));
+
+    auto spawns = std::make_unique<Section_SpawnGroups>();
+    spawn_groups_section_ = spawns.get();
+    spawns->set_ui(this);
+    spawns->set_manifest_store(manifest_store_);
+    spawns->set_spawn_config_listener([this](const nlohmann::json& entry) {
+        this->notify_spawn_group_entry_changed(entry);
+    });
+    spawns->set_spawn_group_removed_listener([this](const std::string& spawn_id) {
+        this->notify_spawn_group_removed(spawn_id);
+    });
+    sections_.push_back(std::move(spawns));
+}
 
 bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& fn) {
     if (!info_) {

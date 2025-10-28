@@ -183,14 +183,18 @@ void PlaybackSettingsPanel::render(SDL_Renderer* renderer) const {
         random_start_checkbox_->render(renderer);
     }
     if (!derived_from_animation_ && speed_slider_) speed_slider_->render(renderer);
-    if (derived_from_animation_) {
-        render_message_lines(renderer, inherited_message_rect_, inherited_message_lines_);
-    }
+    // Replace instructional labels with tooltip icon/info
+    DMWidgetTooltipRender(renderer, bounds_, info_tooltip_);
 }
 
 bool PlaybackSettingsPanel::handle_event(const SDL_Event& e) {
     layout_widgets();
     bool used = false;
+
+    // Consume tooltip interactions for the info icon
+    if (DMWidgetTooltipHandleEvent(e, bounds_, info_tooltip_)) {
+        return true;
+    }
 
     auto handle_checkbox = [&](std::unique_ptr<DMCheckbox>& checkbox) {
         if (checkbox && checkbox->handle_event(e)) {
@@ -587,6 +591,22 @@ void PlaybackSettingsPanel::refresh_inherited_message() {
 
     if (inherited_message_lines_ != previous_lines) {
         layout_dirty_ = true;
+    }
+
+    // Update tooltip content to replace labels
+    if (derived_from_animation_) {
+        std::string tip;
+        for (size_t i = 0; i < inherited_message_lines_.size(); ++i) {
+            if (i > 0) tip.append(" ");
+            tip.append(inherited_message_lines_[i]);
+        }
+        info_tooltip_.text = std::move(tip);
+        info_tooltip_.enabled = !info_tooltip_.text.empty();
+        DMWidgetTooltipResetHover(info_tooltip_);
+    } else {
+        info_tooltip_.enabled = false;
+        info_tooltip_.text.clear();
+        DMWidgetTooltipResetHover(info_tooltip_);
     }
 }
 

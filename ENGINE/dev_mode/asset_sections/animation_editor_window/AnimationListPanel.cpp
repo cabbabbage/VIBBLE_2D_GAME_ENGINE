@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <cstdint>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -74,6 +75,103 @@ bool rects_intersect(const SDL_Rect& a, const SDL_Rect& b) {
     return SDL_IntersectRect(&a, &b, &result) == SDL_TRUE;
 }
 
+// --- Color helpers for SFF/SFA coloring ---
+
+SDL_Color hsv_to_rgb(float hue, float saturation, float value) {
+    hue = std::fmod(hue, 360.0f);
+    if (hue < 0.0f) hue += 360.0f;
+    saturation = std::clamp(saturation, 0.0f, 1.0f);
+    value = std::clamp(value, 0.0f, 1.0f);
+
+    const float chroma = value * saturation;
+    const float h_prime = hue / 60.0f;
+    const float x = chroma * (1.0f - std::fabs(std::fmod(h_prime, 2.0f) - 1.0f));
+
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+    if (0.0f <= h_prime && h_prime < 1.0f) { r = chroma; g = x; }
+    else if (1.0f <= h_prime && h_prime < 2.0f) { r = x; g = chroma; }
+    else if (2.0f <= h_prime && h_prime < 3.0f) { g = chroma; b = x; }
+    else if (3.0f <= h_prime && h_prime < 4.0f) { g = x; b = chroma; }
+    else if (4.0f <= h_prime && h_prime < 5.0f) { r = x; b = chroma; }
+    else { r = chroma; b = x; }
+
+    const float m = value - chroma;
+    auto to_channel = [m](float c) {
+        c = std::clamp(c + m, 0.0f, 1.0f);
+        return static_cast<Uint8>(std::lround(c * 255.0f));
+    };
+    return SDL_Color{to_channel(r), to_channel(g), to_channel(b), 230};
+}
+
+SDL_Color color_for_root_key(const std::string& key) {
+    // Generate a vivid, diverse color for each root id, avoiding the orange range
+    // so that orange can be reserved exclusively for selection state.
+    // We derive a stable pseudo-random value from the key using a simple xorshift-like mix,
+    // then map it to HSV while skipping the orange wedge (~20..45 degrees).
+
+    auto mix64 = [](uint64_t x) {
+        x += 0x9e3779b97f4a7c15ull; // golden ratio seed
+        x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
+        x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
+        x = x ^ (x >> 31);
+        return x;
+    };
+
+    // Compute a 64-bit hash from the std::hash seed
+    uint64_t h = static_cast<uint64_t>(std::hash<std::string>{}(key));
+    h = mix64(h);
+
+    auto u01 = [&](uint64_t bits, int shift) {
+        // Produce a float in [0,1) from 24 bits
+        uint32_t v = static_cast<uint32_t>((bits >> shift) & 0xFFFFFFull);
+        return static_cast<float>(v) / static_cast<float>(0x1000000ull);
+    };
+
+    float r1 = u01(h, 0);
+    float r2 = u01(h, 24);
+    float r3 = u01(h, 48);
+
+    // Base hue from r1 across [0,360)
+    float hue = r1 * 360.0f;
+    // If hue falls within orange wedge [20,45], remap it out of that range by shifting forward
+    const float kOrangeMin = 20.0f;
+    const float kOrangeMax = 45.0f;
+    if (hue >= kOrangeMin && hue <= kOrangeMax) {
+        // Push into a non-orange band while keeping distribution stable
+        float span = kOrangeMax - kOrangeMin; // 25 deg
+        hue = std::fmod(kOrangeMax + (hue - kOrangeMin) + 60.0f, 360.0f); // jump past orange by +60°
+    }
+
+    // Prefer vivid saturation/value ranges for stronger differentiation
+    float saturation = 0.72f + 0.24f * r2; // 0.72..0.96
+    saturation = std::clamp(saturation, 0.70f, 0.96f);
+    float value = 0.78f + 0.18f * r3;      // 0.78..0.96
+    value = std::clamp(value, 0.78f, 0.96f);
+
+    return hsv_to_rgb(hue, saturation, value);
+}
+
+SDL_Color greyscale_of(SDL_Color c) {
+    // luminance approximation
+    int lum = static_cast<int>(std::lround(0.299f * c.r + 0.587f * c.g + 0.114f * c.b));
+    lum = std::clamp(lum, 0, 255);
+    return SDL_Color{static_cast<Uint8>(lum), static_cast<Uint8>(lum), static_cast<Uint8>(lum), c.a};
+}
+
+SDL_Color mix_color(SDL_Color a, SDL_Color b, float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    auto mix = [t](Uint8 x, Uint8 y) { return static_cast<Uint8>(std::lround((1.0f - t) * x + t * y)); };
+    return SDL_Color{mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a)};
+}
+
+SDL_Color grey_variant_for_level(SDL_Color root, int level) {
+    if (level <= 0) return root;
+    // Increase greying with depth, clamped
+    float t = 0.35f + 0.10f * static_cast<float>(level - 1); // 0.35 at level 1
+    t = std::clamp(t, 0.0f, 0.6f);
+    return mix_color(root, greyscale_of(root), t);
+}
+
 }
 
 namespace animation_editor {
@@ -139,11 +237,6 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
     }
 
     const DMButtonStyle& style = DMStyles::ListButton();
-    const SDL_Color& border = style.border;
-    const SDL_Color hover_bg = style.hover_bg;
-    // Use the accent (orange) fill for selected items to match theme
-    const SDL_Color selected_bg = DMStyles::AccentButton().bg;
-    const SDL_Color idle_bg = style.bg;
 
     const int row_padding = DMSpacing::small_gap();
 
@@ -157,10 +250,26 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         const float size_factor = size_factor_for_level(row.level);
         const bool selected = selected_animation_id_ && *selected_animation_id_ == row.id;
         const bool hovered = hovered_row_ && *hovered_row_ == i;
-        const SDL_Color fill = selected ? selected_bg : (hovered ? hover_bg : idle_bg);
+
+        // Compute per-row base fill color from its root SFF id
+        SDL_Color base = DMStyles::ListButton().bg;
+        auto it_root = root_for_id_.find(row.id);
+        if (it_root != root_for_id_.end()) {
+            SDL_Color root_col = color_for_root_key(it_root->second);
+            base = grey_variant_for_level(root_col, row.level);
+        }
+        SDL_Color fill = base;
+        if (hovered) {
+            fill = dm_draw::LightenColor(base, 0.08f);
+        }
+        if (selected) {
+            // Selected rows use the accent orange background explicitly
+            fill = DMStyles::AccentButton().bg;
+        }
 
         dm_draw::DrawBeveledRect(renderer, rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-        dm_draw::DrawRoundedOutline(renderer, rect, DMStyles::CornerRadius(), 1, border);
+        const SDL_Color border_col = dm_draw::DarkenColor(base, 0.45f);
+        dm_draw::DrawRoundedOutline(renderer, rect, DMStyles::CornerRadius(), 1, border_col);
 
         int content_x = rect.x + row_padding + indent_for_level(row.level);
         int content_y = rect.y + row_padding;
@@ -397,7 +506,10 @@ void AnimationListPanel::rebuild_rows() {
     std::unordered_set<std::string> visited;
     visited.reserve(nodes.size());
 
-    std::function<void(const std::string&, int)> visit = [&](const std::string& id, int level) {
+    // Rebuild mapping from id -> root (top-level SFF)
+    root_for_id_.clear();
+
+    std::function<void(const std::string&, int, const std::string&)> visit = [&](const std::string& id, int level, const std::string& root_id) {
         if (visited.count(id) != 0) {
             return;
         }
@@ -408,23 +520,24 @@ void AnimationListPanel::rebuild_rows() {
         }
         visited.insert(id);
         const NodeInfo& info = it->second;
+        root_for_id_[id] = root_id;
         DisplayRow row;
         row.id = id;
         row.level = level;
         row.missing_source = (!info.parent.has_value() && info.missing_source);
         flattened.push_back(row);
         for (const auto& child : info.children) {
-            visit(child, level + 1);
+            visit(child, level + 1, root_id);
         }
     };
 
     for (const auto& root : roots) {
-        visit(root, 0);
+        visit(root, 0, root);
     }
 
     for (const auto& entry : nodes) {
         if (visited.count(entry.first) == 0) {
-            visit(entry.first, 0);
+            visit(entry.first, 0, entry.first);
         }
     }
 

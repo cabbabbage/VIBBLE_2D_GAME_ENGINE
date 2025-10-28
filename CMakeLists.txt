@@ -172,6 +172,11 @@ target_link_libraries(engine
         OpenGL::GL
 )
 
+# Link Windows COM/Shell libs for modern file dialogs
+if (WIN32)
+    target_link_libraries(engine PRIVATE Ole32 Shell32)
+endif()
+
 # Faster relinks on MSVC Debug
 if(MSVC)
     target_link_options(engine PRIVATE "$<$<CONFIG:Debug>:/INCREMENTAL>")

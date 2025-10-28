@@ -65,6 +65,7 @@ class AssetInfoUI {
     void regenerate_shadow_masks();
 
   private:
+    void rebuild_default_sections();
     void layout_widgets(int screen_w, int screen_h) const;
     void apply_camera_override(bool enable);
     float compute_player_screen_height(const class camera& cam) const;

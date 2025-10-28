@@ -602,7 +602,6 @@ bool Room::rename_area(const std::string& old_name, const std::string& new_name)
 }
 
 void Room::upsert_named_area(const Area& area,
-                             const std::string& type,
                              bool scale_to_room,
                              int original_room_width,
                              int original_room_height) {
@@ -623,7 +622,7 @@ void Room::upsert_named_area(const Area& area,
                 return;
         }
 
-        std::string effective_type = !type.empty() ? type : area.get_type();
+        std::string effective_type = area.get_type();
         nlohmann::json* existing_entry = nullptr;
         std::string existing_kind;
         for (auto& item : assets_json["areas"]) {

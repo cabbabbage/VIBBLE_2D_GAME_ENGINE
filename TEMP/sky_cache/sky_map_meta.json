@@ -1,9 +1,9 @@
 {
   "contrast_factor": 0.0,
-  "created_iso8601": "2025-10-28T18:37:32Z",
-  "created_utc": 1761676652,
+  "created_iso8601": "2025-10-28T19:50:56Z",
+  "created_utc": 1761681056,
   "dec_deg": 40.5447,
-  "fetched_jpeg_url": "https://skyview.gsfc.nasa.gov/tempspace/fits/skv1145611299848.jpg",
+  "fetched_jpeg_url": "https://skyview.gsfc.nasa.gov/tempspace/fits/skv1149403032697.jpg",
   "fov_deg": 8.0,
   "hash_strength": 0.0,
   "latitude_deg": 40.5447,
@@ -11,7 +11,7 @@
   "longitude_deg": -105.1069,
   "pixels": 3000,
   "png_path": "C:\\Users\\calmi\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\TEMP\\sky_cache\\sky_map.png",
-  "post_processed_iso8601": "2025-10-28T18:37:32Z",
-  "ra_deg": 211.6351131750405,
+  "post_processed_iso8601": "2025-10-28T19:50:56Z",
+  "ra_deg": 230.03535368993357,
   "survey": "DSS2 Red"
 }

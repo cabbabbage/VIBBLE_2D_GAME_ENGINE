@@ -115,7 +115,6 @@ class Room {
     bool remove_area(const std::string& name);
     bool rename_area(const std::string& old_name, const std::string& new_name);
     void upsert_named_area(const Area& area,
-                           const std::string& type,
                            bool scale_to_room,
                            int original_room_width,
                            int original_room_height);

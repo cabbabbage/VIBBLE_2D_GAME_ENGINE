@@ -238,10 +238,8 @@ void AudioPanel::render(SDL_Renderer* renderer) const {
 
     label_y += label_height();
     if (derived_from_animation_) {
-        for (const auto& line : inherited_message_lines_) {
-            render_label(renderer, line, bounds_.x + padding, label_y, max_label_width);
-            label_y += label_height();
-        }
+        // Replace instructional labels with tooltip icon/info
+        DMWidgetTooltipRender(renderer, bounds_, info_tooltip_);
     } else if (has_audio_) {
         std::string clip_text = "Clip: " + audio_name_;
         render_label(renderer, clip_text, bounds_.x + padding, label_y, max_label_width);
@@ -259,6 +257,10 @@ void AudioPanel::render(SDL_Renderer* renderer) const {
 }
 
 bool AudioPanel::handle_event(const SDL_Event& e) {
+    // Always allow tooltip interactions
+    if (DMWidgetTooltipHandleEvent(e, bounds_, info_tooltip_)) {
+        return true;
+    }
     if (derived_from_animation_) {
         return false;
     }
@@ -463,6 +465,22 @@ void AudioPanel::refresh_inherited_message() {
 
     if (inherited_message_lines_ != previous_lines) {
         layout_dirty_ = true;
+    }
+
+    // Update tooltip content to replace labels
+    if (derived_from_animation_) {
+        std::string tip;
+        for (size_t i = 0; i < inherited_message_lines_.size(); ++i) {
+            if (i > 0) tip.append(" ");
+            tip.append(inherited_message_lines_[i]);
+        }
+        info_tooltip_.text = std::move(tip);
+        info_tooltip_.enabled = !info_tooltip_.text.empty();
+        DMWidgetTooltipResetHover(info_tooltip_);
+    } else {
+        info_tooltip_.enabled = false;
+        info_tooltip_.text.clear();
+        DMWidgetTooltipResetHover(info_tooltip_);
     }
 }
 

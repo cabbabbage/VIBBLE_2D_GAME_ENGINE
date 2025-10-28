@@ -28,6 +28,10 @@
 #include "string_utils.hpp"
 #include "utils/string_utils.hpp"
 
+// For GIF decoding and PNG writing
+#include "utils/stb_image.h"
+#include "utils/stb_image_write.h"
+
 namespace animation_editor {
 
 namespace {
@@ -720,7 +724,7 @@ void SourceConfigPanel::post_copy_process(const std::vector<std::filesystem::pat
 void SourceConfigPanel::layout_controls() {
 
     if (!source_button_) {
-        source_button_ = std::make_unique<DMButton>("Select Source Frames...", &DMStyles::AccentButton(), 220, DMButton::height());
+        source_button_ = std::make_unique<DMButton>("Upload Frames...", &DMStyles::AccentButton(), 220, DMButton::height());
     }
 
     if (use_animation_reference_) {
@@ -775,9 +779,9 @@ void SourceConfigPanel::layout_modal() {
     modal_rect_.x = bounds_.x + (bounds_.w - modal_rect_.w) / 2;
     modal_rect_.y = bounds_.y + (bounds_.h - modal_rect_.h) / 2;
 
-    if (!modal_buttons_[0]) modal_buttons_[0] = std::make_unique<DMButton>("Import From GIF", &DMStyles::HeaderButton(), width - padding * 2, button_height);
-    if (!modal_buttons_[1]) modal_buttons_[1] = std::make_unique<DMButton>("Import From Folder", &DMStyles::HeaderButton(), width - padding * 2, button_height);
-    if (!modal_buttons_[2]) modal_buttons_[2] = std::make_unique<DMButton>("Import PNG Sequence", &DMStyles::HeaderButton(), width - padding * 2, button_height);
+    if (!modal_buttons_[0]) modal_buttons_[0] = std::make_unique<DMButton>("Upload GIF", &DMStyles::HeaderButton(), width - padding * 2, button_height);
+    if (!modal_buttons_[1]) modal_buttons_[1] = std::make_unique<DMButton>("Upload Folder", &DMStyles::HeaderButton(), width - padding * 2, button_height);
+    if (!modal_buttons_[2]) modal_buttons_[2] = std::make_unique<DMButton>("Upload PNG", &DMStyles::HeaderButton(), width - padding * 2, button_height);
 
     int x = modal_rect_.x + padding;
     int y = modal_rect_.y + padding;
@@ -917,8 +921,81 @@ void SourceConfigPanel::import_from_gif() {
         return;
     }
 
-    SDL_Log("SourceConfigPanel: GIF import requested for %s, but decoding is not supported in this build.", file->string().c_str());
-    update_status("GIF import not supported");
+    // Read GIF into memory
+    std::vector<unsigned char> bytes;
+    try {
+        std::ifstream in(*file, std::ios::binary);
+        if (!in) {
+            update_status("Failed to open GIF file");
+            return;
+        }
+        in.seekg(0, std::ios::end);
+        std::streamsize sz = in.tellg();
+        in.seekg(0, std::ios::beg);
+        if (sz <= 0) {
+            update_status("GIF file is empty");
+            return;
+        }
+        bytes.resize(static_cast<size_t>(sz));
+        if (!in.read(reinterpret_cast<char*>(bytes.data()), sz)) {
+            update_status("Failed reading GIF file");
+            return;
+        }
+    } catch (const std::exception& ex) {
+        SDL_Log("SourceConfigPanel: failed reading GIF %s: %s", file->string().c_str(), ex.what());
+        update_status("Failed reading GIF");
+        return;
+    }
+
+    int x = 0, y = 0, z = 0, comp = 0;
+    int* delays = nullptr;
+    stbi_uc* data = stbi_load_gif_from_memory(bytes.data(), static_cast<int>(bytes.size()), &delays, &x, &y, &z, &comp, STBI_rgb_alpha);
+    if (!data || x <= 0 || y <= 0 || z <= 0) {
+        if (data) stbi_image_free(data);
+        if (delays) STBI_FREE(delays);
+        update_status("Failed to decode GIF frames");
+        return;
+    }
+
+    std::filesystem::path out_dir;
+    if (!prepare_output_directory(&out_dir)) {
+        stbi_image_free(data);
+        if (delays) STBI_FREE(delays);
+        return;
+    }
+
+    const int channels = 4; // STBI_rgb_alpha
+    const int stride = x * channels;
+    std::vector<std::filesystem::path> written;
+    written.reserve(static_cast<size_t>(z));
+    for (int i = 0; i < z; ++i) {
+        std::filesystem::path dst = out_dir / (std::to_string(i) + ".png");
+        const stbi_uc* frame = data + static_cast<size_t>(i) * static_cast<size_t>(x) * static_cast<size_t>(y) * channels;
+        int ok = 0;
+        try {
+            ok = stbi_write_png(dst.string().c_str(), x, y, channels, frame, stride);
+        } catch (...) {
+            ok = 0;
+        }
+        if (ok) {
+            written.push_back(dst);
+        } else {
+            SDL_Log("SourceConfigPanel: failed writing frame %d to %s", i, dst.string().c_str());
+        }
+    }
+
+    stbi_image_free(data);
+    if (delays) STBI_FREE(delays);
+
+    // Crop and finalize
+    post_copy_process(written);
+
+    SourceConfig config;
+    config.kind = "folder";
+    config.path = animation_id_;
+    config.name.reset();
+    apply_source_config(config);
+    update_status("Imported GIF frames");
 }
 
 void SourceConfigPanel::import_from_png_sequence() {

@@ -928,6 +928,83 @@ void RoomEditor::update_ui(const Input& input) {
                 open_asset_info_editor(selected);
             }
         }
+        // Handle room area selection from library
+        if (auto area_sel = library_ui_->consume_area_selection()) {
+            const bool had_pending_spawn = pending_spawn_world_pos_.has_value();
+            if (pending_spawn_world_pos_ && current_room_ && assets_) {
+                SDL_Point world = *pending_spawn_world_pos_;
+                pending_spawn_world_pos_.reset();
+                // find source room
+                Room* src_room = nullptr;
+                for (Room* r : assets_->rooms()) {
+                    if (r && r->room_name == area_sel->room_name) { src_room = r; break; }
+                }
+                if (src_room) {
+                    // locate area entry JSON in source room
+                    nlohmann::json* src_entry = nullptr;
+                    nlohmann::json& src_root = src_room->assets_data();
+                    if (src_root.is_object() && src_root.contains("areas") && src_root["areas"].is_array()) {
+                        for (auto& entry : src_root["areas"]) {
+                            if (entry.is_object() && entry.value("name", std::string{}) == area_sel->area_name) {
+                                src_entry = &entry; break;
+                            }
+                        }
+                    }
+                    if (src_entry) {
+                        // Prepare copy
+                        nlohmann::json copy = *src_entry;
+                        // Generate unique name for target room
+                        std::string base = copy.value("name", area_sel->area_name);
+                        if (base.empty()) base = "area";
+                        std::string candidate = base;
+                        int suffix = 1;
+                        auto name_conflict = [&](const std::string& name){
+                            for (const auto& na : current_room_->areas) {
+                                if (na.name == name) return true;
+                            }
+                            return false;
+                        };
+                        while (name_conflict(candidate)) {
+                            candidate = base + "_" + std::to_string(suffix++);
+                        }
+                        copy["name"] = candidate;
+
+                        // Ensure original bounds info present if source didn't have it
+                        auto dims_of = [&](Room* room){
+                            int w=0,h=0; if (room && room->room_area) {
+                                auto b = room->room_area->get_bounds();
+                                w = std::max(1, std::get<2>(b) - std::get<0>(b));
+                                h = std::max(1, std::get<3>(b) - std::get<1>(b));
+                            }
+                            return std::pair<int,int>(w,h);
+                        };
+                        auto [src_w, src_h] = dims_of(src_room);
+                        if (!copy.contains("origional_width") && src_w > 0) copy["origional_width"] = src_w;
+                        if (!copy.contains("origional_height") && src_h > 0) copy["origional_height"] = src_h;
+
+                        // Set anchor relative to center for target room based on click point
+                        SDL_Point center{0,0};
+                        if (current_room_->room_area) { auto c = current_room_->room_area->get_center(); center.x=c.x; center.y=c.y; }
+                        copy["anchor_relative_to_center"] = true;
+                        copy["anchor"] = nlohmann::json::object({ {"x", world.x - center.x}, {"y", world.y - center.y} });
+
+                        // Insert into target room areas
+                        nlohmann::json& dst_root = current_room_->assets_data();
+                        if (!dst_root.contains("areas") || !dst_root["areas"].is_array()) {
+                            dst_root["areas"] = nlohmann::json::array();
+                        }
+                        dst_root["areas"].push_back(copy);
+                        current_room_->save_assets_json();
+
+                        // Ensure an anchor spawn entry exists for drag/anchor updates
+                        ensure_area_anchor_spawn_entry(current_room_, candidate);
+                    }
+                }
+            } else if (!had_pending_spawn) {
+                // No placement point: open info for area library selection? Ignore for now.
+                pending_spawn_world_pos_.reset();
+            }
+        }
     }
 
     if (pending_spawn_world_pos_ && (!library_ui_ || !library_ui_->is_visible())) {
@@ -1771,6 +1848,8 @@ void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) 
     }
     if (info_ui_) info_ui_->set_assets(assets_);
     if (info_ui_) {
+        // Ensure Area Config mode is cleared before opening a normal asset
+        info_ui_->clear_area_context();
         info_ui_->clear_info();
         info_ui_->set_info(info);
         info_ui_->set_target_asset(nullptr);
@@ -2219,11 +2298,26 @@ void RoomEditor::handle_mouse_input(const Input& input) {
             } else {
                 update_drag_session(world_mouse);
             }
+        } else if (input_->isDown(Input::LEFT) && selected_assets_.empty()) {
+            // Support click-and-drag on room areas when no asset selection exists
+            if (!area_dragging_) {
+                if (current_room_) {
+                    if (auto area_name = find_room_area_at_point(world_mouse)) {
+                        begin_area_drag_session(*area_name, world_mouse);
+                    }
+                }
+            } else {
+                update_area_drag_session(world_mouse);
+            }
         } else {
             if (dragging_) {
                 finalize_drag_session();
             }
             dragging_ = false;
+            if (area_dragging_) {
+                finalize_area_drag_session();
+            }
+            area_dragging_ = false;
         }
     }
 
@@ -2733,7 +2827,12 @@ void RoomEditor::handle_click(const Input& input) {
             bool opened_area_info = false;
             if (current_room_) {
                 if (auto area_name = find_room_area_at_point(world_mouse)) {
+                    // Open area config and tool box on right click over area
                     open_area_info_editor(current_room_, *area_name);
+                    ensure_area_editor();
+                    if (area_editor_) {
+                        area_editor_->begin_for_room(current_room_, *area_name);
+                    }
                     opened_area_info = true;
                 }
             }
@@ -2855,6 +2954,141 @@ void RoomEditor::handle_click(const Input& input) {
     if (selection_changed || highlight_changed) {
         mark_highlight_dirty();
     }
+}
+
+// --- Area drag helpers ---
+
+nlohmann::json* RoomEditor::find_area_entry_json(Room* room, const std::string& area_name) const {
+    if (!room) return nullptr;
+    nlohmann::json& root = room->assets_data();
+    if (root.is_object() && root.contains("areas") && root["areas"].is_array()) {
+        for (auto& entry : root["areas"]) {
+            if (!entry.is_object()) continue;
+            if (entry.value("name", std::string{}) == area_name) {
+                return &entry;
+            }
+        }
+    }
+    return nullptr;
+}
+
+void RoomEditor::ensure_area_anchor_spawn_entry(Room* room, const std::string& area_name) {
+    if (!room) return;
+    nlohmann::json& root = room->assets_data();
+    auto& groups = ensure_spawn_groups_array(root);
+    nlohmann::json* existing = nullptr;
+    for (auto& entry : groups) {
+        if (!entry.is_object()) continue;
+        const bool linked = entry.value("link_to_area", false);
+        const std::string linked_area = entry.value("linked_area", std::string{});
+        const std::string display = entry.value("display_name", std::string{});
+        if ((linked && linked_area == area_name) || (!linked && display == area_name)) {
+            existing = &entry;
+            break;
+        }
+    }
+    const int default_resolution = room->map_grid_settings().resolution;
+    int width = 0, height = 0;
+    if (room->room_area) {
+        auto b = room->room_area->get_bounds();
+        width = std::max(1, std::get<2>(b) - std::get<0>(b));
+        height = std::max(1, std::get<3>(b) - std::get<1>(b));
+    }
+    if (!existing) {
+        nlohmann::json entry = nlohmann::json::object();
+        entry["display_name"] = area_name;
+        entry["position"] = "Exact";
+        entry["dx"] = 0;
+        entry["dy"] = 0;
+        if (width > 0) entry["origional_width"] = width;
+        if (height > 0) entry["origional_height"] = height;
+        entry["link_to_area"] = true;
+        entry["linked_area"] = area_name;
+        devmode::spawn::ensure_spawn_group_entry_defaults(entry, area_name, default_resolution);
+        groups.push_back(std::move(entry));
+        save_current_room_assets_json();
+    } else {
+        devmode::spawn::ensure_spawn_group_entry_defaults(*existing, area_name, default_resolution);
+        if (existing->value("position", std::string{"Random"}) != std::string{"Exact"}) {
+            (*existing)["position"] = "Exact";
+        }
+        if (width > 0 && !existing->contains("origional_width")) (*existing)["origional_width"] = width;
+        if (height > 0 && !existing->contains("origional_height")) (*existing)["origional_height"] = height;
+        if (!existing->value("link_to_area", false)) (*existing)["link_to_area"] = true;
+        if (existing->value("linked_area", std::string{}) != area_name) (*existing)["linked_area"] = area_name;
+        save_current_room_assets_json();
+    }
+}
+
+void RoomEditor::begin_area_drag_session(const std::string& area_name, const SDL_Point& world_mouse) {
+    area_dragging_ = true;
+    area_drag_moved_ = false;
+    area_drag_name_ = area_name;
+    area_drag_last_world_ = world_mouse;
+    area_drag_start_world_ = world_mouse;
+    MapGridSettings map_settings = current_room_ ? current_room_->map_grid_settings() : MapGridSettings::defaults();
+    map_settings.clamp();
+    area_drag_resolution_ = vibble::grid::clamp_resolution(map_settings.resolution);
+    // Make sure a spawn entry exists for this area
+    ensure_area_anchor_spawn_entry(current_room_, area_drag_name_);
+}
+
+void RoomEditor::update_area_drag_session(const SDL_Point& world_mouse) {
+    area_drag_last_world_ = world_mouse;
+    area_drag_moved_ = true;
+}
+
+void RoomEditor::finalize_area_drag_session() {
+    if (!current_room_ || area_drag_name_.empty()) {
+        area_dragging_ = false;
+        area_drag_moved_ = false;
+        return;
+    }
+    // Snap to grid
+    vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+    SDL_Point snapped = grid_service.snap_to_vertex(area_drag_last_world_, area_drag_resolution_);
+    // Compute dx/dy relative to room center
+    SDL_Point center{0, 0};
+    if (current_room_->room_area) {
+        auto c = current_room_->room_area->get_center();
+        center.x = c.x; center.y = c.y;
+    }
+    const int dx = snapped.x - center.x;
+    const int dy = snapped.y - center.y;
+
+    // Update area JSON anchor to be relative-to-center with dx/dy
+    if (nlohmann::json* area_entry = find_area_entry_json(current_room_, area_drag_name_)) {
+        (*area_entry)["anchor_relative_to_center"] = true;
+        (*area_entry)["anchor"] = nlohmann::json::object({ {"x", dx}, {"y", dy} });
+        // Leave scale_to_room untouched; size adjustments happen via existing logic
+        current_room_->save_assets_json();
+    }
+
+    // Also reflect dx/dy into the linked area spawn entry
+    nlohmann::json& root = current_room_->assets_data();
+    if (auto* groups_ptr = devmode::spawn::find_spawn_groups_array(root)) {
+        for (auto& entry : const_cast<nlohmann::json&>(*groups_ptr)) {
+            if (!entry.is_object()) continue;
+            if (entry.value("link_to_area", false) && entry.value("linked_area", std::string{}) == area_drag_name_) {
+                entry["position"] = "Exact";
+                entry["dx"] = dx;
+                entry["dy"] = dy;
+                // Keep origional dims if present; otherwise set from current room now
+                if (current_room_->room_area) {
+                    auto b = current_room_->room_area->get_bounds();
+                    const int w = std::max(1, std::get<2>(b) - std::get<0>(b));
+                    const int h = std::max(1, std::get<3>(b) - std::get<1>(b));
+                    if (!entry.contains("origional_width")) entry["origional_width"] = w;
+                    if (!entry.contains("origional_height")) entry["origional_height"] = h;
+                }
+                break;
+            }
+        }
+    }
+
+    save_current_room_assets_json();
+    area_dragging_ = false;
+    area_drag_moved_ = false;
 }
 
 void RoomEditor::update_highlighted_assets() {

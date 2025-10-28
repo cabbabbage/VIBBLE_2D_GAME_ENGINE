@@ -16,6 +16,8 @@
 #include "utils/input.hpp"
 #include "utils/area.hpp"
 #include "util/grid.hpp"
+#include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
+#include "utils/relative_room_position.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1717,8 +1719,69 @@ bool AreaOverlayEditor::persist_current_area() {
             } else {
                 scale_area_to_room_ = false;
             }
-            room_->upsert_named_area(area, type, scale_area_to_room_, 0, 0);
+            room_->upsert_named_area(area, scale_area_to_room_, 0, 0);
             room_->save_assets_json();
+
+            // Ensure a spawn group entry exists for this room area with Exact positioning
+            try {
+                nlohmann::json& root = room_->assets_data();
+                auto& groups = devmode::spawn::ensure_spawn_groups_array(root);
+
+                // Compute current room dimensions and center
+                int width = 0;
+                int height = 0;
+                if (room_->room_area) {
+                    auto b = room_->room_area->get_bounds();
+                    width = std::max(1, std::get<2>(b) - std::get<0>(b));
+                    height = std::max(1, std::get<3>(b) - std::get<1>(b));
+                }
+
+                // Find existing entry by linked_area name
+                nlohmann::json* existing = nullptr;
+                for (auto& entry : groups) {
+                    if (!entry.is_object()) continue;
+                    const bool linked = entry.value("link_to_area", false);
+                    const std::string linked_area = entry.value("linked_area", std::string{});
+                    const std::string display = entry.value("display_name", std::string{});
+                    if ((linked && linked_area == area_name_) || (!linked && display == area_name_)) {
+                        existing = &entry;
+                        break;
+                    }
+                }
+
+                const int default_resolution = room_->map_grid_settings().resolution;
+                if (!existing) {
+                    nlohmann::json entry = nlohmann::json::object();
+                    entry["display_name"] = area_name_;
+                    entry["position"] = "Exact";
+                    entry["dx"] = 0;
+                    entry["dy"] = 0;
+                    if (width > 0) entry["origional_width"] = width;
+                    if (height > 0) entry["origional_height"] = height;
+                    entry["link_to_area"] = true;
+                    entry["linked_area"] = area_name_;
+                    devmode::spawn::ensure_spawn_group_entry_defaults(entry, area_name_, default_resolution);
+                    groups.push_back(std::move(entry));
+                    room_->save_assets_json();
+                } else {
+                    // Ensure defaults are present and method is Exact for area anchor
+                    devmode::spawn::ensure_spawn_group_entry_defaults(*existing, area_name_, default_resolution);
+                    if (existing->value("position", std::string{"Random"}) != std::string{"Exact"}) {
+                        (*existing)["position"] = "Exact";
+                    }
+                    if (width > 0 && !existing->contains("origional_width")) (*existing)["origional_width"] = width;
+                    if (height > 0 && !existing->contains("origional_height")) (*existing)["origional_height"] = height;
+                    if (!existing->value("link_to_area", false)) {
+                        (*existing)["link_to_area"] = true;
+                    }
+                    if (existing->value("linked_area", std::string{}) != area_name_) {
+                        (*existing)["linked_area"] = area_name_;
+                    }
+                    room_->save_assets_json();
+                }
+            } catch (...) {
+                // Non-fatal; ignore spawn group creation errors
+            }
         }
     };
 

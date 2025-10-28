@@ -117,6 +117,12 @@ protected:
     void handle_spawn_config_change(const nlohmann::json& entry);
 
 private:
+    // Area drag helpers
+    void begin_area_drag_session(const std::string& area_name, const SDL_Point& world_mouse);
+    void update_area_drag_session(const SDL_Point& world_mouse);
+    void finalize_area_drag_session();
+    nlohmann::json* find_area_entry_json(Room* room, const std::string& area_name) const;
+    void ensure_area_anchor_spawn_entry(Room* room, const std::string& area_name);
     enum class BlockingPanel {
         Camera,
         Lighting,
@@ -347,6 +353,14 @@ private:
     std::optional<std::string> active_spawn_group_id_{};
     bool suppress_spawn_group_close_clear_ = false;
     std::unique_ptr<SpawnGroupConfig> spawn_group_panel_{};
+
+    // Area dragging state
+    bool area_dragging_ = false;
+    bool area_drag_moved_ = false;
+    std::string area_drag_name_;
+    int area_drag_resolution_ = 0;
+    SDL_Point area_drag_start_world_{0, 0};
+    SDL_Point area_drag_last_world_{0, 0};
 
     struct SpawnGroupClipboard {
         nlohmann::json entry;

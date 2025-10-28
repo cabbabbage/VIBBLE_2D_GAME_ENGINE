@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include <SDL.h>
 
@@ -55,6 +56,9 @@ class AnimationListPanel {
     int scroll_offset_ = 0;
     int content_height_ = 0;
     bool layout_dirty_ = true;
+
+    // Maps each animation id to its root SFF id for coloring.
+    std::unordered_map<std::string, std::string> root_for_id_;
 };
 
 }
