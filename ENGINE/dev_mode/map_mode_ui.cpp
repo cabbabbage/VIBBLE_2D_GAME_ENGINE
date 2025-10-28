@@ -779,19 +779,27 @@ void MapModeUI::configure_footer_buttons() {
 };
 
     if (header_mode_ == HeaderMode::Map) {
-        DevFooterBar::Button layers_btn;
-        layers_btn.id = "layers";
-        layers_btn.label = "Layers";
-        layers_btn.style_override = &DMStyles::WarnButton();
-        layers_btn.active_style_override = &DMStyles::AccentButton();
-        layers_btn.on_toggle = [this](bool active) {
-            if (active) {
-                this->set_active_panel(PanelType::Layers);
-            } else {
-                this->set_active_panel(PanelType::None);
-            }
-};
-        buttons.push_back(std::move(layers_btn));
+        const bool has_layers_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
+                                                  [](const HeaderButtonConfig& cfg) {
+                                                      return cfg.id == "layers";
+                                                  });
+
+        if (!has_layers_button) {
+            DevFooterBar::Button layers_btn;
+            layers_btn.id = "layers";
+            layers_btn.label = "Layers";
+            layers_btn.style_override = &DMStyles::WarnButton();
+            layers_btn.active_style_override = &DMStyles::AccentButton();
+            layers_btn.on_toggle = [this](bool active) {
+                if (active) {
+                    this->set_active_panel(PanelType::Layers);
+                } else {
+                    this->set_active_panel(PanelType::None);
+                }
+            };
+            buttons.push_back(std::move(layers_btn));
+        }
+
         append_custom(map_mode_buttons_, HeaderMode::Map);
 
         const bool has_lights_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),

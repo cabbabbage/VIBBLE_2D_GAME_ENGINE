@@ -434,7 +434,14 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::load_settings() const {
 }
 
 void MapShadowPanel::apply_settings(const ReactiveShadowSettings& settings, bool persist) {
-    last_applied_settings_ = settings;
+    const int previous_subdivide   = last_applied_settings_.virtual_light_map.grid_subdivide;
+    const bool subdivisions_changed = settings.virtual_light_map.grid_subdivide != previous_subdivide;
+    last_applied_settings_         = settings;
+
+    bool forced_by_subdivide = false;
+    if (assets_ && subdivisions_changed) {
+        forced_by_subdivide = assets_->apply_lighting_grid_subdivide(settings.virtual_light_map.grid_subdivide);
+    }
 
     ReactiveShadowSettings* shared = reactive_settings_accessor_ ? reactive_settings_accessor_() : nullptr;
     bool                      shared_changed = false;
@@ -447,7 +454,7 @@ void MapShadowPanel::apply_settings(const ReactiveShadowSettings& settings, bool
         }
     }
 
-    if (shared_changed && assets_) {
+    if (shared_changed && assets_ && !forced_by_subdivide) {
         assets_->force_shaded_assets_rerender();
     }
 

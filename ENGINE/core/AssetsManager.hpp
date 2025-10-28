@@ -149,6 +149,7 @@ public:
     LightMapManager*       light_map_manager();
     const LightMapManager* light_map_manager() const;
     void force_shaded_assets_rerender();
+    bool apply_lighting_grid_subdivide(int subdivisions);
     void set_map_light_panel_visible(bool visible);
     bool is_map_light_panel_visible() const;
     void set_update_map_light_enabled(bool enabled);

@@ -15,7 +15,7 @@ class ChunkManager {
 public:
     ChunkManager() = default;
 
-    Chunk& ensure(int i, int j, int r_chunk, SDL_Point origin);
+    Chunk& ensure(int i, int j, int r_chunk, SDL_Point origin, int lighting_subdivisions);
     Chunk* find(int i, int j) const;
     Chunk* from_world(SDL_Point world_px, int r_chunk, SDL_Point origin) const;
 

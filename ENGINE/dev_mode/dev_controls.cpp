@@ -1993,6 +1993,7 @@ void DevControls::configure_header_button_sets() {
 
     map_buttons.push_back(make_camera_button());
     map_buttons.push_back(make_lighting_button());
+    map_buttons.push_back(make_layers_button());
 
     {
         MapModeUI::HeaderButtonConfig grid_btn;

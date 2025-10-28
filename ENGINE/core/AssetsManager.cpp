@@ -1472,6 +1472,18 @@ void Assets::force_shaded_assets_rerender() {
     mark_non_player_update_buffer_dirty();
 }
 
+bool Assets::apply_lighting_grid_subdivide(int subdivisions) {
+    subdivisions = std::max(1, std::min(8, subdivisions));
+    bool changed = world_grid_.set_lighting_subdivisions_per_chunk(subdivisions);
+    if (changed) {
+        if (LightMap* map = light_map()) {
+            map->rebuild(nullptr);
+        }
+        force_shaded_assets_rerender();
+    }
+    return changed;
+}
+
 void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persist_json) {
     MapGridSettings sanitized = settings;
     sanitized.clamp();

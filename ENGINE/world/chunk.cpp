@@ -215,27 +215,52 @@ const Chunk::LightingChunk* Chunk::lighting_chunk_from_world(SDL_Point world_px)
 }
 
 void Chunk::rebuild_lighting_chunks() {
-    lighting_chunks_.clear();
+    const int default_subdivisions = std::clamp(1 << std::min(2, std::max(0, r_chunk)), 1, 8);
+    set_lighting_subdivisions(lighting_subdivisions_ > 0 ? lighting_subdivisions_ : default_subdivisions);
+}
 
-    const int subdivisions = 1 << std::min(2, std::max(0, r_chunk));
-    lighting_columns_       = subdivisions;
-    lighting_rows_          = subdivisions;
-    lighting_resolution_    = std::max(0, r_chunk - 2);
-    lighting_step_          = 1 << lighting_resolution_;
+void Chunk::set_lighting_subdivisions(int subdivisions) {
+    const int chunk_width  = std::max(1, world_bounds.w);
+    const int chunk_height = std::max(1, world_bounds.h);
+    const int chunk_limit  = std::max(1, std::min(chunk_width, chunk_height));
+    const int max_allowed  = std::max(1, std::min(8, chunk_limit));
+    const int clamped      = std::clamp(subdivisions, 1, max_allowed);
 
-    if (lighting_step_ <= 0) {
-        lighting_step_ = 1;
+    if (lighting_subdivisions_ == clamped && lighting_columns_ == clamped && lighting_rows_ == clamped &&
+        !lighting_chunks_.empty()) {
+        return;
     }
 
+    lighting_subdivisions_ = clamped;
+    lighting_columns_      = lighting_subdivisions_;
+    lighting_rows_         = lighting_subdivisions_;
+
+    const int chunk_size   = std::max(chunk_width, chunk_height);
+    const int min_dimension = std::min(chunk_width, chunk_height);
+    lighting_step_          = std::max(1, min_dimension / lighting_subdivisions_);
+
+    if (lighting_subdivisions_ > 0) {
+        const double log_subdiv = std::log2(static_cast<double>(std::max(1, lighting_subdivisions_)));
+        lighting_resolution_ = std::max(0, r_chunk - static_cast<int>(std::ceil(log_subdiv)));
+    } else {
+        lighting_resolution_ = 0;
+    }
+
+    lighting_chunks_.clear();
     lighting_chunks_.reserve(static_cast<std::size_t>(lighting_columns_ * lighting_rows_));
 
     for (int row = 0; row < lighting_rows_; ++row) {
         for (int col = 0; col < lighting_columns_; ++col) {
+            const int cell_min_x = world_bounds.x + (col * chunk_width) / lighting_columns_;
+            const int cell_max_x = world_bounds.x + ((col + 1) * chunk_width) / lighting_columns_;
+            const int cell_min_y = world_bounds.y + (row * chunk_height) / lighting_rows_;
+            const int cell_max_y = world_bounds.y + ((row + 1) * chunk_height) / lighting_rows_;
+
             SDL_Rect cell_bounds{};
-            cell_bounds.x = world_bounds.x + col * lighting_step_;
-            cell_bounds.y = world_bounds.y + row * lighting_step_;
-            cell_bounds.w = lighting_step_;
-            cell_bounds.h = lighting_step_;
+            cell_bounds.x = cell_min_x;
+            cell_bounds.y = cell_min_y;
+            cell_bounds.w = std::max(1, cell_max_x - cell_min_x);
+            cell_bounds.h = std::max(1, cell_max_y - cell_min_y);
 
             const int global_i = i * lighting_columns_ + col;
             const int global_j = j * lighting_rows_ + row;
@@ -245,7 +270,10 @@ void Chunk::rebuild_lighting_chunks() {
         }
     }
 
+    has_dynamic_overlay = false;
     update_aggregate_from_lighting_chunks();
+    lighting_dirty        = true;
+    lighting.needs_update = true;
 }
 
 void Chunk::update_aggregate_from_lighting_chunks() {
@@ -670,6 +698,7 @@ LightMap::ShadowSettings LightMap::shadow_settings() const {
     const auto sanitized = sanitize_reactive_shadow_settings(*reactive);
 
     settings.search_radius_cells = std::max(0, sanitized.virtual_light_map.search_radius);
+    settings.grid_subdivide      = std::max(1, sanitized.virtual_light_map.grid_subdivide);
     settings.falloff_horizontal  = std::max(0.0f, sanitized.virtual_light_map.horizontal_falloff);
     settings.falloff_vertical    = std::max(0.0f, sanitized.virtual_light_map.vertical_falloff);
     settings.max_offset_x_px     = std::max(0.0f, sanitized.virtual_light_map.max_offset_x);
@@ -752,7 +781,15 @@ void LightMap::update(SDL_Renderer* , std::uint32_t ) {
         return;
     }
 
-    const auto& chunks = active_chunks();
+    world::Grid& grid = assets_->world_grid();
+
+    const ShadowSettings settings = shadow_settings();
+    const bool subdivisions_changed = grid.set_lighting_subdivisions_per_chunk(settings.grid_subdivide);
+    if (subdivisions_changed) {
+        invalidate_scene_light_cache();
+    }
+
+    const auto& chunks = grid.active_chunks();
     if (chunks.empty()) {
         return;
     }
@@ -778,7 +815,6 @@ void LightMap::update(SDL_Renderer* , std::uint32_t ) {
     cached_chunk_count_     = static_cast<int>(chunks.size());
     scene_light_cache_valid_ = true;
 
-    const ShadowSettings settings = shadow_settings();
     const float          static_weight  = std::max(0.0f, settings.sampling_static_weight);
     const float          dynamic_weight = std::max(0.0f, settings.sampling_dynamic_weight);
 
@@ -788,8 +824,6 @@ void LightMap::update(SDL_Renderer* , std::uint32_t ) {
     }
     const bool map_opacity_changed = (std::abs(map_light_opacity - last_map_light_opacity_) > 1e-4f);
     last_map_light_opacity_        = map_light_opacity;
-
-    const world::Grid& grid = assets_->world_grid();
 
     int min_i = INT32_MAX;
     int max_i = INT32_MIN;
