@@ -75,32 +75,23 @@ class AnimationInspectorPanel {
     void commit_rename();
     void refresh_start_indicator();
     void apply_dependencies();
-    void update_section_toggle_labels();
-    void update_collapse_toggle_label();
-    void notify_section_visibility(const std::string& section_name, bool visible);
     void update_source_mode_button_styles();
     void refresh_preview_metadata() const;
 
     enum class FocusTarget {
         kNone = -1,
-        kCollapse = 0,
-        kName,
+        kName = 0,
         kStart,
         kDelete,
         kSourceFrames,
         kSourceAnimation,
-        kTogglePlayback,
-        kToggleMovement,
-        kToggleOnEnd,
-        kToggleAudio,
-};
+    };
 
     std::vector<FocusTarget> focus_order() const;
     void set_focus(FocusTarget target);
     void announce_focus(FocusTarget target) const;
     void activate_focus_target(FocusTarget target);
     void refresh_focus_index() const;
-    int layout_toggle_row(int origin_x, int origin_y, int width, bool apply) const;
 
   private:
     std::shared_ptr<AnimationDocument> document_;
@@ -115,19 +106,12 @@ class AnimationInspectorPanel {
     std::unique_ptr<DMButton> delete_button_;
     std::unique_ptr<DMButton> source_frames_button_;
     std::unique_ptr<DMButton> source_animation_button_;
-    std::unique_ptr<DMButton> playback_toggle_button_;
-    std::unique_ptr<DMButton> movement_toggle_button_;
-    std::unique_ptr<DMButton> on_end_toggle_button_;
-    std::unique_ptr<DMButton> audio_toggle_button_;
-    std::unique_ptr<DMButton> collapse_toggle_button_;
     std::string animation_id_;
     SDL_Rect bounds_{0, 0, 0, 0};
     mutable SDL_Rect header_rect_{0, 0, 0, 0};
-    mutable SDL_Rect collapse_toggle_rect_{0, 0, 0, 0};
     mutable SDL_Rect source_selector_rect_{0, 0, 0, 0};
     mutable SDL_Rect source_summary_rect_{0, 0, 0, 0};
     mutable SDL_Rect preview_rect_{0, 0, 0, 0};
-    mutable SDL_Rect toggles_rect_{0, 0, 0, 0};
     mutable SDL_Rect source_rect_{0, 0, 0, 0};
     mutable SDL_Rect playback_rect_{0, 0, 0, 0};
     mutable SDL_Rect movement_rect_{0, 0, 0, 0};
@@ -141,11 +125,6 @@ class AnimationInspectorPanel {
     mutable std::vector<std::string> preview_modifier_badges_;
     bool rename_pending_ = false;
     bool is_start_animation_ = false;
-    bool playback_collapsed_ = false;
-    bool movement_collapsed_ = false;
-    bool on_end_collapsed_ = false;
-    bool audio_collapsed_ = false;
-    bool collapsed_ = true;
     int focus_index_ = -1;
     FocusTarget current_focus_target_ = FocusTarget::kNone;
     bool source_uses_animation_ = false;

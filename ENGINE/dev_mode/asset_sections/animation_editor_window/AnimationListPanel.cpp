@@ -3,19 +3,49 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <cmath>
+#include <functional>
 #include <optional>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "AnimationDocument.hpp"
 #include "PreviewProvider.hpp"
+#include "string_utils.hpp"
 #include "dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/widgets.hpp"
+#include <nlohmann/json.hpp>
 
 namespace {
 
 constexpr int kRowHeight = 72;
+constexpr int kIndentPerLevel = 12;
+constexpr float kMinSizeFactor = 0.7f;
+
+float size_factor_for_level(int level) {
+    if (level <= 0) {
+        return 1.0f;
+    }
+    float factor = 1.0f - 0.1f * static_cast<float>(level);
+    return std::max(kMinSizeFactor, factor);
+}
+
+int row_height_for_level(int level) {
+    float factor = size_factor_for_level(level);
+    int height = static_cast<int>(std::round(kRowHeight * factor));
+    int min_height = static_cast<int>(std::round(kRowHeight * kMinSizeFactor));
+    return std::max(min_height, height);
+}
+
+int indent_for_level(int level) {
+    if (level <= 0) {
+        return 0;
+    }
+    return level * kIndentPerLevel;
+}
 
 SDL_Point event_point(const SDL_Event& e) {
     SDL_Point p{0, 0};
@@ -34,16 +64,6 @@ bool rects_intersect(const SDL_Rect& a, const SDL_Rect& b) {
     return SDL_IntersectRect(&a, &b, &result) == SDL_TRUE;
 }
 
-void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
-    if (!renderer || text.empty()) {
-        return;
-    }
-
-    DMLabelStyle style = DMStyles::Label();
-    style.color = color;
-    DMFontCache::instance().draw_text(renderer, style, text, x, y);
-}
-
 }
 
 namespace animation_editor {
@@ -52,7 +72,7 @@ AnimationListPanel::AnimationListPanel() = default;
 
 void AnimationListPanel::set_document(std::shared_ptr<AnimationDocument> document) {
     document_ = std::move(document);
-    rebuild_children();
+    rebuild_rows();
 }
 
 void AnimationListPanel::set_bounds(const SDL_Rect& bounds) {
@@ -84,37 +104,7 @@ void AnimationListPanel::set_on_context_menu(
 }
 
 void AnimationListPanel::update() {
-    if (document_) {
-        auto ids = document_->animation_ids();
-        if (ids != cached_animation_ids_) {
-            cached_animation_ids_ = ids;
-            layout_dirty_ = true;
-            if (selected_animation_id_) {
-                auto it = std::find(cached_animation_ids_.begin(), cached_animation_ids_.end(), *selected_animation_id_);
-                if (it == cached_animation_ids_.end()) {
-                    selected_animation_id_.reset();
-                    if (on_selection_changed_) {
-                        on_selection_changed_(std::nullopt);
-                    }
-                }
-            }
-        }
-        start_animation_id_ = document_->start_animation();
-    } else {
-        if (!cached_animation_ids_.empty()) {
-            cached_animation_ids_.clear();
-            selected_animation_id_.reset();
-            row_bounds_.clear();
-            scroll_offset_ = 0;
-            content_height_ = 0;
-            layout_dirty_ = true;
-            if (on_selection_changed_) {
-                on_selection_changed_(std::nullopt);
-            }
-        }
-        start_animation_id_.reset();
-    }
-
+    rebuild_rows();
     if (layout_dirty_) {
         layout_rows();
     }
@@ -140,32 +130,32 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
 
     const DMButtonStyle& style = DMStyles::ListButton();
     const SDL_Color& border = style.border;
-    const SDL_Color text_color = style.label.color;
     const SDL_Color hover_bg = style.hover_bg;
     const SDL_Color selected_bg = style.press_bg;
     const SDL_Color idle_bg = style.bg;
 
     const int row_padding = DMSpacing::small_gap();
 
-    for (size_t i = 0; i < cached_animation_ids_.size(); ++i) {
+    for (size_t i = 0; i < display_rows_.size(); ++i) {
         const SDL_Rect& rect = row_bounds_.at(i);
         if (!rects_intersect(rect, bounds_)) {
             continue;
         }
 
-        const bool selected = selected_animation_id_ && *selected_animation_id_ == cached_animation_ids_[i];
+        const DisplayRow& row = display_rows_[i];
+        const bool selected = selected_animation_id_ && *selected_animation_id_ == row.id;
         const bool hovered = hovered_row_ && *hovered_row_ == i;
         const SDL_Color fill = selected ? selected_bg : (hovered ? hover_bg : idle_bg);
 
         dm_draw::DrawBeveledRect(renderer, rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         dm_draw::DrawRoundedOutline(renderer, rect, DMStyles::CornerRadius(), 1, border);
 
-        int content_x = rect.x + row_padding;
+        int content_x = rect.x + row_padding + indent_for_level(row.level);
         int content_y = rect.y + row_padding;
         const int content_h = rect.h - row_padding * 2;
 
         if (preview_provider_) {
-            SDL_Texture* texture = preview_provider_->get_preview_texture(renderer, cached_animation_ids_[i]);
+            SDL_Texture* texture = preview_provider_->get_preview_texture(renderer, row.id);
             if (texture) {
                 const int thumb_size = content_h;
                 SDL_Rect thumb_rect{content_x, rect.y + (rect.h - thumb_size) / 2, thumb_size, thumb_size};
@@ -184,24 +174,38 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
             }
         }
 
-        const std::string& name = cached_animation_ids_[i];
-        draw_text(renderer, name, content_x, content_y, text_color);
+        DMLabelStyle label_style = DMStyles::Label();
+        label_style.color = style.label.color;
+        label_style.font_size = std::max(10, static_cast<int>(std::round(label_style.font_size * size_factor_for_level(row.level))));
+        DMFontCache::instance().draw_text(renderer, label_style, row.id, content_x, content_y);
 
-        if (start_animation_id_ && *start_animation_id_ == name) {
-            const DMButtonStyle& badge_style = DMStyles::AccentButton();
-            DMLabelStyle badge_label = badge_style.label;
+        std::vector<std::pair<const DMButtonStyle*, std::string>> badges;
+        if (row.missing_source) {
+            badges.emplace_back(&DMStyles::DeleteButton(), std::string{"(missing source)"});
+        }
+        if (start_animation_id_ && *start_animation_id_ == row.id) {
+            badges.emplace_back(&DMStyles::AccentButton(), std::string{"START"});
+        }
+
+        int badge_x = rect.x + rect.w - row_padding;
+        const int badge_padding = DMSpacing::small_gap();
+        for (auto it = badges.rbegin(); it != badges.rend(); ++it) {
+            const DMButtonStyle* badge_style = it->first;
+            DMLabelStyle badge_label = badge_style->label;
             badge_label.font_size = std::max(12, badge_label.font_size - 2);
-            const std::string badge_text = "START";
-            SDL_Point badge_size = DMFontCache::instance().measure_text(badge_label, badge_text);
-            const int badge_padding = DMSpacing::small_gap();
-            SDL_Rect badge_rect{rect.x + rect.w - badge_size.x - badge_padding * 2,
-                                rect.y + badge_padding,
-                                badge_size.x + badge_padding * 2,
-                                badge_size.y + badge_padding};
-            badge_rect.x = std::max(badge_rect.x, rect.x + content_x - row_padding);
-            dm_draw::DrawBeveledRect(renderer, badge_rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), badge_style.bg, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-            dm_draw::DrawRoundedOutline(renderer, badge_rect, DMStyles::CornerRadius(), 1, badge_style.border);
-            DMFontCache::instance().draw_text(renderer, badge_label, badge_text, badge_rect.x + badge_padding, badge_rect.y + (badge_rect.h - badge_size.y) / 2);
+            SDL_Point badge_size = DMFontCache::instance().measure_text(badge_label, it->second);
+            int badge_width = badge_size.x + badge_padding * 2;
+            int badge_height = badge_size.y + badge_padding * 2;
+            badge_x -= badge_width;
+            int min_badge_x = content_x + badge_padding;
+            if (badge_x < min_badge_x) {
+                badge_x = min_badge_x;
+            }
+            SDL_Rect badge_rect{badge_x, rect.y + std::max(0, (rect.h - badge_height) / 2), badge_width, badge_height};
+            dm_draw::DrawBeveledRect(renderer, badge_rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), badge_style->bg, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+            dm_draw::DrawRoundedOutline(renderer, badge_rect, DMStyles::CornerRadius(), 1, badge_style->border);
+            DMFontCache::instance().draw_text(renderer, badge_label, it->second, badge_rect.x + badge_padding, badge_rect.y + (badge_rect.h - badge_size.y) / 2);
+            badge_x -= badge_padding;
         }
     }
 
@@ -253,7 +257,7 @@ bool AnimationListPanel::handle_event(const SDL_Event& e) {
             return true;
         }
 
-        const std::string& animation_id = cached_animation_ids_.at(*index);
+        const std::string& animation_id = display_rows_.at(*index).id;
         if (e.button.button == SDL_BUTTON_LEFT) {
             if (!selected_animation_id_ || *selected_animation_id_ != animation_id) {
                 selected_animation_id_ = animation_id;
@@ -285,22 +289,163 @@ bool AnimationListPanel::handle_event(const SDL_Event& e) {
     return false;
 }
 
-void AnimationListPanel::rebuild_children() {
-    cached_animation_ids_.clear();
-    row_bounds_.clear();
-    scroll_offset_ = 0;
-    content_height_ = 0;
-    layout_dirty_ = true;
-    hovered_row_.reset();
-
+void AnimationListPanel::rebuild_rows() {
     if (!document_) {
+        if (!display_rows_.empty()) {
+            display_rows_.clear();
+            row_bounds_.clear();
+            scroll_offset_ = 0;
+            content_height_ = 0;
+            hovered_row_.reset();
+            layout_dirty_ = true;
+        }
         start_animation_id_.reset();
         return;
     }
 
-    cached_animation_ids_ = document_->animation_ids();
     start_animation_id_ = document_->start_animation();
-    row_bounds_.resize(cached_animation_ids_.size());
+
+    auto ids = document_->animation_ids();
+    std::unordered_set<std::string> id_set(ids.begin(), ids.end());
+
+    struct NodeInfo {
+        std::string id;
+        std::optional<std::string> parent;
+        bool missing_source = false;
+        std::vector<std::string> children;
+    };
+
+    std::unordered_map<std::string, NodeInfo> nodes;
+    nodes.reserve(ids.size());
+
+    for (const auto& id : ids) {
+        NodeInfo node;
+        node.id = id;
+
+        bool missing_parent = false;
+        std::optional<std::string> parent;
+
+        if (auto payload_text = document_->animation_payload(id)) {
+            nlohmann::json payload = nlohmann::json::parse(*payload_text, nullptr, false);
+            if (payload.is_object() && payload.contains("source") && payload["source"].is_object()) {
+                const nlohmann::json& source = payload["source"];
+                std::string kind = source.value("kind", std::string{});
+                if (kind == std::string{"animation"}) {
+                    std::string candidate;
+                    if (source.contains("name") && source["name"].is_string()) {
+                        candidate = strings::trim_copy(source["name"].get<std::string>());
+                    }
+                    if (candidate.empty()) {
+                        candidate = strings::trim_copy(source.value("path", std::string{}));
+                    }
+                    if (!candidate.empty()) {
+                        if (candidate == id) {
+                            missing_parent = true;
+                        } else if (id_set.count(candidate) > 0) {
+                            parent = candidate;
+                        } else {
+                            missing_parent = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        node.parent = parent;
+        node.missing_source = missing_parent;
+        nodes.emplace(id, std::move(node));
+    }
+
+    for (auto& entry : nodes) {
+        if (entry.second.parent) {
+            auto it = nodes.find(*entry.second.parent);
+            if (it != nodes.end()) {
+                it->second.children.push_back(entry.first);
+            }
+        }
+    }
+
+    for (auto& entry : nodes) {
+        std::sort(entry.second.children.begin(), entry.second.children.end());
+    }
+
+    std::vector<std::string> roots;
+    roots.reserve(nodes.size());
+    for (const auto& entry : nodes) {
+        const NodeInfo& node = entry.second;
+        if (!node.parent || nodes.find(*node.parent) == nodes.end()) {
+            roots.push_back(entry.first);
+        }
+    }
+    std::sort(roots.begin(), roots.end());
+
+    std::vector<DisplayRow> flattened;
+    flattened.reserve(nodes.size());
+
+    std::unordered_set<std::string> visited;
+    visited.reserve(nodes.size());
+
+    std::function<void(const std::string&, int)> visit = [&](const std::string& id, int level) {
+        if (visited.count(id) != 0) {
+            return;
+        }
+        auto it = nodes.find(id);
+        if (it == nodes.end()) {
+            visited.insert(id);
+            return;
+        }
+        visited.insert(id);
+        const NodeInfo& info = it->second;
+        DisplayRow row;
+        row.id = id;
+        row.level = level;
+        row.missing_source = (!info.parent.has_value() && info.missing_source);
+        flattened.push_back(row);
+        for (const auto& child : info.children) {
+            visit(child, level + 1);
+        }
+    };
+
+    for (const auto& root : roots) {
+        visit(root, 0);
+    }
+
+    for (const auto& entry : nodes) {
+        if (visited.count(entry.first) == 0) {
+            visit(entry.first, 0);
+        }
+    }
+
+    bool changed = flattened.size() != display_rows_.size();
+    if (!changed) {
+        for (size_t i = 0; i < flattened.size(); ++i) {
+            if (flattened[i].id != display_rows_[i].id ||
+                flattened[i].level != display_rows_[i].level ||
+                flattened[i].missing_source != display_rows_[i].missing_source) {
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    if (changed) {
+        display_rows_ = std::move(flattened);
+        row_bounds_.assign(display_rows_.size(), SDL_Rect{});
+        layout_dirty_ = true;
+        hovered_row_.reset();
+    }
+
+    if (selected_animation_id_) {
+        auto it = std::find_if(display_rows_.begin(), display_rows_.end(), [&](const DisplayRow& row) {
+            return row.id == *selected_animation_id_;
+        });
+        if (it == display_rows_.end()) {
+            selected_animation_id_.reset();
+            if (on_selection_changed_) {
+                on_selection_changed_(std::nullopt);
+            }
+        }
+    }
 }
 
 void AnimationListPanel::layout_rows() {
@@ -310,19 +455,24 @@ void AnimationListPanel::layout_rows() {
     const int gap = DMSpacing::small_gap();
     const int width = std::max(0, bounds_.w - padding * 2);
 
-    row_bounds_.assign(cached_animation_ids_.size(), SDL_Rect{});
+    row_bounds_.assign(display_rows_.size(), SDL_Rect{});
 
     int y = bounds_.y + padding - scroll_offset_;
-    for (size_t i = 0; i < cached_animation_ids_.size(); ++i) {
-        SDL_Rect rect{bounds_.x + padding, y, width, kRowHeight};
+    for (size_t i = 0; i < display_rows_.size(); ++i) {
+        int row_height = row_height_for_level(display_rows_[i].level);
+        SDL_Rect rect{bounds_.x + padding, y, width, row_height};
         row_bounds_[i] = rect;
-        y += kRowHeight + gap;
+        y += row_height + gap;
     }
 
     content_height_ = padding * 2;
-    if (!cached_animation_ids_.empty()) {
-        content_height_ += static_cast<int>(cached_animation_ids_.size()) * kRowHeight;
-        content_height_ += gap * (static_cast<int>(cached_animation_ids_.size()) - 1);
+    if (!display_rows_.empty()) {
+        int total_height = 0;
+        for (const auto& row : display_rows_) {
+            total_height += row_height_for_level(row.level);
+        }
+        content_height_ += total_height;
+        content_height_ += gap * static_cast<int>(display_rows_.size() - 1);
     }
 
     clamp_scroll();
@@ -345,11 +495,13 @@ void AnimationListPanel::scroll_selection_into_view() {
     if (layout_dirty_) {
         layout_rows();
     }
-    auto it = std::find(cached_animation_ids_.begin(), cached_animation_ids_.end(), *selected_animation_id_);
-    if (it == cached_animation_ids_.end()) {
+    auto it = std::find_if(display_rows_.begin(), display_rows_.end(), [&](const DisplayRow& row) {
+        return row.id == *selected_animation_id_;
+    });
+    if (it == display_rows_.end()) {
         return;
     }
-    size_t index = static_cast<size_t>(std::distance(cached_animation_ids_.begin(), it));
+    size_t index = static_cast<size_t>(std::distance(display_rows_.begin(), it));
     if (index >= row_bounds_.size()) {
         return;
     }

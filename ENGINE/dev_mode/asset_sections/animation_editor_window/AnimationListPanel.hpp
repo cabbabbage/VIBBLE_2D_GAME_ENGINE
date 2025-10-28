@@ -29,16 +29,22 @@ class AnimationListPanel {
     bool handle_event(const SDL_Event& e);
 
   private:
-    void rebuild_children();
+    void rebuild_rows();
     void layout_rows();
     void clamp_scroll();
     void scroll_selection_into_view();
     std::optional<size_t> row_index_at_point(const SDL_Point& p) const;
 
   private:
+    struct DisplayRow {
+        std::string id;
+        int level = 0;
+        bool missing_source = false;
+    };
+
     std::shared_ptr<AnimationDocument> document_;
     std::vector<SDL_Rect> row_bounds_;
-    std::vector<std::string> cached_animation_ids_;
+    std::vector<DisplayRow> display_rows_;
     std::optional<std::string> start_animation_id_;
     std::shared_ptr<PreviewProvider> preview_provider_;
     std::function<void(const std::optional<std::string>&)> on_selection_changed_;
