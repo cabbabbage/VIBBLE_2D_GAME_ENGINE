@@ -107,8 +107,6 @@ AnimationEditorWindow::AnimationEditorWindow() {
     header_corner_button_ =
         std::make_unique<DMButton>(std::string(DMIcons::Close()), &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
-    reload_button_ = std::make_unique<DMButton>("Reload", &DMStyles::AccentButton(), 120, DMButton::height());
-    close_button_ = std::make_unique<DMButton>("Close", &DMStyles::DeleteButton(), 120, DMButton::height());
     layout_dirty_ = true;
     update_corner_button();
 }
@@ -246,24 +244,11 @@ void AnimationEditorWindow::layout_children() {
 
     int y = header_rect_.y + header_gap;
     int left_x = header_rect_.x + padding;
-    int right_x = header_rect_.x + header_rect_.w - padding;
 
     if (header_corner_button_) {
         int width = header_corner_button_->rect().w;
         header_corner_button_->set_rect(SDL_Rect{left_x, y, width, DMButton::height()});
         left_x += width + button_gap;
-    }
-    if (close_button_) {
-        int width = close_button_->rect().w;
-        right_x -= width;
-        close_button_->set_rect(SDL_Rect{right_x, y, width, DMButton::height()});
-        right_x -= button_gap;
-    }
-    if (reload_button_) {
-        int width = reload_button_->rect().w;
-        right_x -= width;
-        reload_button_->set_rect(SDL_Rect{right_x, y, width, DMButton::height()});
-        right_x -= button_gap;
     }
     if (add_button_) {
         add_button_->set_rect(SDL_Rect{left_x, y, add_button_->rect().w, DMButton::height()});
@@ -742,8 +727,6 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
 
     if (!frame_editor_visible_ && header_corner_button_) header_corner_button_->render(renderer);
     if (add_button_) add_button_->render(renderer);
-    if (reload_button_) reload_button_->render(renderer);
-    if (close_button_) close_button_->render(renderer);
 
     int label_x = header_rect_.x + DMSpacing::panel_padding();
     if (!frame_editor_visible_ && header_corner_button_) {
@@ -845,8 +828,6 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
     });
     if (!frame_editor_visible_) {
         handle_button(add_button_, [this]() { create_animation_via_prompt(); });
-        handle_button(reload_button_, [this]() { reload_document(); });
-        handle_button(close_button_, [this]() { visible_ = false; });
     }
     return consumed;
 }

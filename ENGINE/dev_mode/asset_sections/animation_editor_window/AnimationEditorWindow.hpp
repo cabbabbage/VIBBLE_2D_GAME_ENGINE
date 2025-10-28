@@ -105,8 +105,6 @@ class AnimationEditorWindow {
     std::unique_ptr<AnimationListContextMenu> list_context_menu_;
     std::unique_ptr<DMButton> header_corner_button_;
     std::unique_ptr<DMButton> add_button_;
-    std::unique_ptr<DMButton> reload_button_;
-    std::unique_ptr<DMButton> close_button_;
     SDL_Rect header_rect_{0, 0, 0, 0};
     SDL_Rect list_rect_{0, 0, 0, 0};
     SDL_Rect inspector_rect_{0, 0, 0, 0};

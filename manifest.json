@@ -15367,7 +15367,7 @@
             "dy": 0
           },
           "number_of_frames": 8,
-          "on_end": "SRC/assets/Vibble/default",
+          "on_end": "default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
