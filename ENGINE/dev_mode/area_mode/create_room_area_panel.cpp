@@ -61,6 +61,10 @@ void CreateRoomAreaPanel::update(const Input& input, int screen_w, int screen_h)
 
 bool CreateRoomAreaPanel::handle_event(const SDL_Event& e) {
     if (!panel_ || !panel_->is_visible()) return false;
+    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+        close();
+        return true;
+    }
     return panel_->handle_event(e);
 }
 

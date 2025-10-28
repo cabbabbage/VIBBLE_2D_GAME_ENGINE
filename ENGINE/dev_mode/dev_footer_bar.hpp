@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -50,6 +51,7 @@ public:
 
     const std::vector<Button>& buttons() const { return buttons_; }
     const Button* find_button(const std::string& id) const;
+    std::optional<SDL_Rect> button_rect(const std::string& id) const;
 
     const SDL_Rect& rect() const { return rect_; }
     bool contains(int x, int y) const;

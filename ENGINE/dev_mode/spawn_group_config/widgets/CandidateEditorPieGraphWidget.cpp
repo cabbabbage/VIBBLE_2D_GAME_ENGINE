@@ -458,6 +458,13 @@ void CandidateEditorPieGraphWidget::set_on_add_candidate(std::function<void(cons
     notify_layout_change();
 }
 
+void CandidateEditorPieGraphWidget::set_search_extra_results_provider(SearchAssets::ExtraResultsProvider provider) {
+    search_extra_results_provider_ = std::move(provider);
+    if (search_assets_) {
+        search_assets_->set_extra_results_provider(search_extra_results_provider_);
+    }
+}
+
 void CandidateEditorPieGraphWidget::show_search(const SDL_Rect& anchor_rect,
                                                 std::function<void(const std::string&)> on_select) {
     (void)anchor_rect;
@@ -465,6 +472,9 @@ void CandidateEditorPieGraphWidget::show_search(const SDL_Rect& anchor_rect,
     hovered_index_ = -1;
     active_index_ = -1;
     release_scroll_capture();
+    if (search_assets_) {
+        search_assets_->set_extra_results_provider(search_extra_results_provider_);
+    }
     search_assets_->open([this, cb = std::move(on_select)](const std::string& value) {
         if (cb) {
             cb(value);
@@ -956,6 +966,7 @@ void CandidateEditorPieGraphWidget::ensure_search_created() {
         search_assets_ = std::make_unique<SearchAssets>();
         search_assets_->set_embedded_mode(true);
         search_assets_->set_screen_dimensions(screen_w_, screen_h_);
+        search_assets_->set_extra_results_provider(search_extra_results_provider_);
     }
 }
 

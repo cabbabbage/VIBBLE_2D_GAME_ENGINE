@@ -30,6 +30,7 @@ class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
 class RegenerateRoomPopup;
+class CreateRoomAreaPanel;
 
 class DevControls {
 public:
@@ -126,6 +127,8 @@ public:
     void reset_click_state();
     void clear_selection();
     void purge_asset(Asset* asset);
+
+    void create_room_area_with_type(const std::string& type_hint);
 
     void notify_spawn_group_config_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
@@ -230,6 +233,9 @@ private:
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 
     std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
+    std::unique_ptr<CreateRoomAreaPanel> create_area_panel_;
+    std::optional<std::string> selected_room_area_name_;
+    std::optional<std::string> hovered_room_area_name_;
 
     RoomAreaCache room_area_cache_;
 };

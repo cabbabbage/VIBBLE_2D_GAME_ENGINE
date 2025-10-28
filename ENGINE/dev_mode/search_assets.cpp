@@ -9,6 +9,7 @@
 #include "dev_mode/core/manifest_store.hpp"
 #include <nlohmann/json.hpp>
 #include <set>
+#include <unordered_set>
 #include <cctype>
 #include <algorithm>
 #include <vector>
@@ -293,6 +294,13 @@ bool SearchAssets::visible() const {
     return panel_ && panel_->is_visible();
 }
 
+void SearchAssets::set_extra_results_provider(ExtraResultsProvider provider) {
+    extra_results_provider_ = std::move(provider);
+    if (panel_ && panel_->is_visible()) {
+        filter_assets();
+    }
+}
+
 void SearchAssets::load_assets() {
     all_.clear();
     if (!manifest_store_) {
@@ -329,11 +337,18 @@ void SearchAssets::filter_assets() {
     }
     std::string q = to_lower(query_ ? query_->value() : "");
     results_.clear();
+    std::unordered_set<std::string> seen_labels;
     std::set<std::string> tagset;
     for (const auto& a : all_) {
         std::string ln = to_lower(a.name);
         if (q.empty() || ln.find(q) != std::string::npos) {
-            results_.push_back({a.name,false});
+            Result res;
+            res.label = a.name;
+            res.value = a.name;
+            res.is_tag = false;
+            if (seen_labels.insert(res.label).second) {
+                results_.push_back(std::move(res));
+            }
         }
         for (const auto& t : a.tags) {
             std::string lt = to_lower(t);
@@ -341,17 +356,46 @@ void SearchAssets::filter_assets() {
         }
     }
     for (const auto& t : tagset) {
-        results_.push_back({t,true});
+        Result res;
+        res.label = std::string("#") + t;
+        res.value = t;
+        res.is_tag = true;
+        if (seen_labels.insert(res.label).second) {
+            results_.push_back(std::move(res));
+        }
+    }
+    if (extra_results_provider_) {
+        try {
+            auto extras = extra_results_provider_();
+            for (auto& extra : extras) {
+                if (extra.label.empty() || extra.value.empty()) {
+                    continue;
+                }
+                std::string lowered_label = to_lower(extra.label);
+                std::string lowered_value = to_lower(extra.value);
+                if (!q.empty()) {
+                    if (lowered_label.find(q) == std::string::npos &&
+                        lowered_value.find(q) == std::string::npos) {
+                        continue;
+                    }
+                }
+                if (!seen_labels.insert(extra.label).second) {
+                    continue;
+                }
+                results_.push_back(std::move(extra));
+            }
+        } catch (...) {
+        }
     }
     buttons_.clear();
     button_widgets_.clear();
     DockableCollapsible::Rows rows;
     rows.push_back({ query_widget_.get() });
     for (const auto& r : results_) {
-        auto b = std::make_unique<DMButton>(r.second ? ("#"+r.first) : r.first, &DMStyles::ListButton(), 200, DMButton::height());
-        auto bw = std::make_unique<ButtonWidget>(b.get(), [this, r]() {
-            std::string v = r.first;
-            if (r.second) v = "#" + v;
+        auto b = std::make_unique<DMButton>(r.label, &DMStyles::ListButton(), 200, DMButton::height());
+        auto bw = std::make_unique<ButtonWidget>(b.get(), [this, value = r.value, is_tag = r.is_tag]() {
+            std::string v = value;
+            if (is_tag) v = "#" + v;
             if (cb_) cb_(v);
             close();
         });
@@ -434,7 +478,12 @@ void SearchAssets::set_query_for_testing(const std::string& value) {
 }
 
 std::vector<std::pair<std::string, bool>> SearchAssets::results_for_testing() const {
-    return results_;
+    std::vector<std::pair<std::string, bool>> out;
+    out.reserve(results_.size());
+    for (const auto& res : results_) {
+        out.emplace_back(res.value, res.is_tag);
+    }
+    return out;
 }
 
 FloatingPanelLayoutManager::PanelInfo SearchAssets::build_panel_info(bool force_layout) const {

@@ -1206,6 +1206,23 @@ private:
 
     void update_candidate_graph() {
         if (auto* graph = candidate_editor_widget()) {
+            graph->set_search_extra_results_provider([this]() {
+                std::vector<SearchAssets::Result> results;
+                try {
+                    const auto& provider = area_names_provider();
+                    auto names = provider ? provider() : std::vector<std::string>{};
+                    for (const auto& name : names) {
+                        if (name.empty()) continue;
+                        SearchAssets::Result res;
+                        res.label = name + " (Area)";
+                        res.value = name;
+                        res.is_tag = false;
+                        results.push_back(std::move(res));
+                    }
+                } catch (...) {
+                }
+                return results;
+            });
             graph->set_candidates_from_json(entry_view());
             graph->set_on_adjust([this](int index, int delta){
                 if (!editable_) return;
