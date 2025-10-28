@@ -66,6 +66,8 @@ class PlaybackSettingsPanel {
     void apply_state_to_payload(nlohmann::json& payload, const PlaybackState& state);
     void update_inherited_state(const nlohmann::json& payload);
     void refresh_inherited_message();
+    bool random_start_visible_for_state(const PlaybackState& state) const;
+    bool random_start_visible() const { return random_start_visible_for_state(state_); }
 
   private:
     std::shared_ptr<AnimationDocument> document_;
