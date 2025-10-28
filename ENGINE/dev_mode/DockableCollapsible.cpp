@@ -22,53 +22,123 @@
 
 namespace {
 
+    constexpr float kPi = 3.14159265358979323846f;
+
     constexpr int kHeaderDragStartThreshold = 2;
     constexpr Uint32 kPointerBlockOnShowMs = 16;
     constexpr Uint32 kPointerBlockAfterDragMs = 60;
 
     void draw_lock_icon(SDL_Renderer* r, const SDL_Rect& rect, bool locked) {
-        if (rect.w <= 0 || rect.h <= 0) {
+        if (!r || rect.w <= 0 || rect.h <= 0) {
             return;
         }
 
+        const SDL_Color stroke = DMStyles::Border();
+        const SDL_Color body_fill = locked ? DMStyles::ButtonBaseFill()
+                                           : dm_draw::LightenColor(DMStyles::ButtonBaseFill(), 0.08f);
+
+        const int horizontal_padding = std::max(1, rect.w / 8);
         SDL_Rect body = rect;
         body.y += rect.h / 2;
-        body.h = rect.h / 2 - 3;
-        body.x += 4;
-        body.w -= 8;
+        body.h = rect.h - (body.y - rect.y) - 2;
+        body.x += horizontal_padding;
+        body.w -= horizontal_padding * 2;
         if (body.w < 4) {
-            body.w = std::max(2, rect.w - 4);
+            body.w = std::max(4, rect.w - 4);
             body.x = rect.x + (rect.w - body.w) / 2;
         }
-
-        SDL_Rect shackle = rect;
-        shackle.h = rect.h / 2;
-        shackle.y = rect.y + 4;
-        shackle.x += 6;
-        shackle.w -= 12;
-        if (shackle.w < 4) {
-            shackle.w = std::max(2, rect.w - 8);
-            shackle.x = rect.x + (rect.w - shackle.w) / 2;
+        if (body.h < 4) {
+            body.h = std::max(4, rect.h / 2);
+            body.y = rect.y + rect.h - body.h;
         }
 
-        SDL_Color stroke = DMStyles::Border();
-        const int radius = std::min(DMStyles::CornerRadius(), std::min(body.w, body.h) / 2);
-        dm_draw::DrawRoundedOutline( r, body, radius, 1, stroke);
+        const int leg_inset = std::max(2, body.w / 6);
+        int shackle_left = body.x + leg_inset;
+        int shackle_right = body.x + body.w - leg_inset;
+        if (shackle_right - shackle_left < 4) {
+            const int inset = std::max(1, body.w / 4);
+            shackle_left = body.x + inset;
+            shackle_right = body.x + body.w - inset;
+        }
+        if (shackle_right <= shackle_left) {
+            const int mid = body.x + body.w / 2;
+            shackle_left = mid - 2;
+            shackle_right = mid + 2;
+        }
 
-        SDL_Point shackle_left_top{shackle.x, shackle.y + shackle.h / 2};
-        SDL_Point shackle_right_top{shackle.x + shackle.w, shackle.y + shackle.h / 2};
-        SDL_Point shackle_left_bottom{body.x, body.y};
-        SDL_Point shackle_right_bottom{body.x + body.w, body.y};
+        const int shackle_bottom = body.y;
+        int shackle_top = rect.y + std::max(1, rect.h / 8);
+        if (shackle_top >= shackle_bottom - 2) {
+            shackle_top = std::max(rect.y, shackle_bottom - std::max(4, rect.h / 3));
+        }
+        int arc_height = shackle_bottom - shackle_top;
+        if (arc_height < 4) {
+            arc_height = std::max(4, rect.h / 3);
+            shackle_top = shackle_bottom - arc_height;
+        }
 
+        const float cx = static_cast<float>(shackle_left + shackle_right) * 0.5f;
+        const float rx = static_cast<float>(shackle_right - shackle_left) * 0.5f;
+        const float cy = static_cast<float>(shackle_bottom);
+        const float ry = static_cast<float>(arc_height);
+
+        auto draw_thick_segment = [r](int x0, int y0, int x1, int y1) {
+            SDL_RenderDrawLine(r, x0, y0, x1, y1);
+            SDL_RenderDrawLine(r, x0, y0 + 1, x1, y1 + 1);
+        };
+
+        SDL_SetRenderDrawColor(r, stroke.r, stroke.g, stroke.b, stroke.a);
+
+        const int arc_steps = 24;
+        int prev_x = shackle_right;
+        int prev_y = shackle_bottom;
+        for (int i = 1; i <= arc_steps; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(arc_steps);
+            const float theta = kPi * t;
+            const int x = static_cast<int>(std::lround(cx + rx * std::cos(theta)));
+            const int y = static_cast<int>(std::lround(cy - ry * std::sin(theta)));
+            draw_thick_segment(prev_x, prev_y, x, y);
+            prev_x = x;
+            prev_y = y;
+        }
+
+        const int leg_length = std::max(3, std::min(body.h - 2, rect.h / 3));
+        draw_thick_segment(shackle_left, shackle_bottom, shackle_left, shackle_bottom + leg_length);
         if (locked) {
-            SDL_RenderDrawLine(r, shackle_left_top.x, shackle_left_top.y, shackle_left_bottom.x, shackle_left_bottom.y);
-            SDL_RenderDrawLine(r, shackle_right_top.x, shackle_right_top.y, shackle_right_bottom.x, shackle_right_bottom.y);
-            SDL_RenderDrawLine(r, shackle_left_top.x, shackle_left_top.y, shackle_right_top.x, shackle_right_top.y);
+            draw_thick_segment(shackle_right, shackle_bottom, shackle_right, shackle_bottom + leg_length);
         } else {
-            SDL_RenderDrawLine(r, shackle_right_top.x, shackle_right_top.y, shackle_right_bottom.x, shackle_right_bottom.y);
-            SDL_RenderDrawLine(r, shackle_left_top.x, shackle_left_top.y, shackle_right_top.x, shackle_right_top.y);
-            SDL_RenderDrawLine(r, shackle_left_top.x, shackle_left_top.y, shackle_left_top.x, shackle_left_top.y + shackle.h / 2);
+            const int open_dx = std::max(3, (shackle_right - shackle_left) / 3);
+            draw_thick_segment(shackle_right, shackle_bottom, shackle_right + open_dx, shackle_bottom - leg_length / 2);
         }
+
+        const int body_radius = std::min(DMStyles::CornerRadius(), std::min(body.w, body.h) / 3);
+        dm_draw::DrawBeveledRect(
+            r,
+            body,
+            body_radius,
+            DMStyles::BevelDepth(),
+            body_fill,
+            DMStyles::HighlightColor(),
+            DMStyles::ShadowColor(),
+            true,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
+
+        const SDL_Color key_color = dm_draw::DarkenColor(body_fill, 0.45f);
+        SDL_SetRenderDrawColor(r, key_color.r, key_color.g, key_color.b, key_color.a);
+        const int key_radius = std::max(1, std::min(body.w, body.h) / 6);
+        const int key_center_x = body.x + body.w / 2;
+        const int key_center_y = body.y + body.h / 2 - key_radius / 2;
+        for (int dy = -key_radius; dy <= key_radius; ++dy) {
+            const int span = static_cast<int>(std::sqrt(static_cast<double>(key_radius * key_radius - dy * dy)) + 0.5);
+            SDL_RenderDrawLine(r, key_center_x - span, key_center_y + dy, key_center_x + span, key_center_y + dy);
+        }
+
+        SDL_Rect stem{ key_center_x - std::max(1, key_radius / 3),
+                       key_center_y,
+                       std::max(2, key_radius / 2),
+                       std::max(2, body.h / 3) };
+        SDL_RenderFillRect(r, &stem);
     }
 
     class LayoutTimingScope {

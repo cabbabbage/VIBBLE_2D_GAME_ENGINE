@@ -60,7 +60,7 @@
                 "controls": false
             },
             "lighting": {
-                "map_panel": false,
+                "map_panel": true,
                 "shadow_panel": false
             },
             "map_assets": {
