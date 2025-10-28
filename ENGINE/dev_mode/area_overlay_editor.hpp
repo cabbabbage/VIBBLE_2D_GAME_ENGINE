@@ -58,7 +58,10 @@ private:
     void init_mask_from_existing_area();
     std::vector<SDL_Point> extract_edge_points(int step = 1) const;
     std::vector<SDL_Point> trace_polygon_from_mask() const;
-    void save_area();
+    bool persist_current_area();
+    void mark_persist_dirty();
+    void mark_mask_dirty();
+    void register_tracked_checkbox(class DMCheckbox* checkbox);
     void rebuild_mask_from_geometry();
     SDL_Point resolve_anchor_world() const;
     bool rename_current_area(const std::string& desired_name);
@@ -96,7 +99,6 @@ private:
     std::unique_ptr<DockableCollapsible> toolbox_;
     std::unique_ptr<DMButton> btn_mask_;
     std::unique_ptr<DMButton> btn_geom_;
-    std::unique_ptr<DMButton> btn_save_;
     std::unique_ptr<DMButton> btn_delete_;
     std::unique_ptr<DMSlider> crop_left_slider_;
     std::unique_ptr<DMSlider> crop_right_slider_;
@@ -130,6 +132,15 @@ private:
 
     std::vector<SDL_Point> geometry_points_;
     bool geometry_dirty_ = false;
+    bool mask_dirty_ = false;
+
+    bool persist_dirty_ = false;
+
+    struct TrackedCheckboxState {
+        DMCheckbox* checkbox = nullptr;
+        bool last_value = false;
+    };
+    std::vector<TrackedCheckboxState> tracked_checkboxes_;
 
     int area_resolution_ = 2;
 

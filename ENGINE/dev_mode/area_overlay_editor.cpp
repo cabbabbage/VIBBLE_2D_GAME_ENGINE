@@ -394,6 +394,8 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
 
     saved_since_begin_ = false;
     toolbox_autoplace_done_ = false;
+    persist_dirty_ = false;
+    mask_dirty_ = false;
 
     return true;
 }
@@ -527,6 +529,8 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     active_ = true;
     saved_since_begin_ = false;
     toolbox_autoplace_done_ = false;
+    persist_dirty_ = false;
+    mask_dirty_ = false;
 
     return true;
 }
@@ -534,6 +538,20 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
 void AreaOverlayEditor::cancel() {
     active_ = false;
     pending_mask_generation_ = false;
+}
+
+void AreaOverlayEditor::mark_persist_dirty() {
+    persist_dirty_ = true;
+}
+
+void AreaOverlayEditor::mark_mask_dirty() {
+    mask_dirty_ = true;
+    mark_persist_dirty();
+}
+
+void AreaOverlayEditor::register_tracked_checkbox(DMCheckbox* checkbox) {
+    if (!checkbox) return;
+    tracked_checkboxes_.push_back(TrackedCheckboxState{checkbox, checkbox->value()});
 }
 
 void AreaOverlayEditor::clear_mask() {
@@ -800,7 +818,6 @@ void AreaOverlayEditor::ensure_toolbox() {
     toolbox_->set_col_gap(12);
     btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_geom_  = std::make_unique<DMButton>("Geometry",  &DMStyles::CreateButton(), 180, DMButton::height());
-    btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
     btn_delete_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 180, DMButton::height());
     update_toolbox_title();
     rebuild_toolbox_rows();
@@ -824,40 +841,33 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
     if (!toolbox_) return;
 
     owned_widgets_.clear();
+    tracked_checkboxes_.clear();
     DockableCollapsible::Rows rows;
 
-    if (btn_save_) {
-
-        std::vector<Widget*> first_row;
-        if (btn_mask_ && asset_) {
-            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_mask_.get(), [this]() {
-                discard_autogen_base();
-                reset_mask_crop_values();
-                pending_mask_generation_ = (asset_ != nullptr);
-                geometry_points_.clear();
-                geometry_dirty_ = false;
-                set_mode(Mode::Mask);
-            }));
-            first_row.push_back(owned_widgets_.back().get());
-        }
-        if (btn_geom_) {
-            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_geom_.get(), [this]() {
-                clear_mask();
-                discard_autogen_base();
-                geometry_points_.clear();
-                geometry_dirty_ = true;
-                set_mode(Mode::Geometry);
-                upload_mask();
-            }));
-            first_row.push_back(owned_widgets_.back().get());
-        }
-        if (!first_row.empty()) rows.push_back(first_row);
-
-        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_save_.get(), [this]() {
-            save_area();
+    std::vector<Widget*> first_row;
+    if (btn_mask_ && asset_) {
+        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_mask_.get(), [this]() {
+            discard_autogen_base();
+            reset_mask_crop_values();
+            pending_mask_generation_ = (asset_ != nullptr);
+            geometry_points_.clear();
+            geometry_dirty_ = false;
+            set_mode(Mode::Mask);
         }));
-        rows.push_back({ owned_widgets_.back().get() });
+        first_row.push_back(owned_widgets_.back().get());
     }
+    if (btn_geom_) {
+        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_geom_.get(), [this]() {
+            clear_mask();
+            discard_autogen_base();
+            geometry_points_.clear();
+            geometry_dirty_ = true;
+            set_mode(Mode::Geometry);
+            upload_mask();
+        }));
+        first_row.push_back(owned_widgets_.back().get());
+    }
+    if (!first_row.empty()) rows.push_back(first_row);
 
     if (name_box_) {
         owned_widgets_.push_back(std::make_unique<TextBoxWidget>(name_box_.get(), true));
@@ -1157,6 +1167,7 @@ bool AreaOverlayEditor::generate_mask_from_asset(SDL_Renderer* renderer) {
     applied_crop_left_ = applied_crop_right_ = applied_crop_top_ = applied_crop_bottom_ = -1;
 
     upload_mask();
+    mark_mask_dirty();
     return true;
 }
 
@@ -1181,6 +1192,7 @@ void AreaOverlayEditor::apply_mask_crop() {
         applied_crop_top_ = top;
         applied_crop_bottom_ = bottom;
         upload_mask();
+        mark_mask_dirty();
         return;
     }
 
@@ -1209,6 +1221,7 @@ void AreaOverlayEditor::apply_mask_crop() {
     applied_crop_bottom_ = bottom;
 
     upload_mask();
+    mark_mask_dirty();
 }
 
 void AreaOverlayEditor::position_toolbox_near_anchor(int screen_w, int screen_h) {
@@ -1269,9 +1282,42 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
             crop_top_px_ = top;
             crop_bottom_px_ = bottom;
             apply_mask_crop();
+            mark_mask_dirty();
         }
     }
 
+    if (name_box_ && !name_box_->is_editing()) {
+        std::string trimmed = trim_copy(name_box_->value());
+        if (trimmed.empty()) {
+            if (!area_name_.empty()) {
+                mark_persist_dirty();
+            }
+        } else if (trimmed != area_name_) {
+            mark_persist_dirty();
+        }
+    }
+
+    if (resolution_box_ && !resolution_box_->is_editing()) {
+        const std::string& current_text = resolution_box_->value();
+        if (current_text != std::to_string(area_resolution_)) {
+            mark_persist_dirty();
+        }
+    }
+
+    for (auto& tracked : tracked_checkboxes_) {
+        if (!tracked.checkbox) continue;
+        bool value = tracked.checkbox->value();
+        if (value != tracked.last_value) {
+            tracked.last_value = value;
+            mark_persist_dirty();
+        }
+    }
+
+    if (persist_dirty_) {
+        if (persist_current_area()) {
+            persist_dirty_ = false;
+        }
+    }
 }
 
 bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
@@ -1343,6 +1389,7 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
             }
         }
         geometry_dirty_ = true;
+        mark_persist_dirty();
         rebuild_mask_from_geometry();
         upload_mask();
         return true;
@@ -1530,21 +1577,38 @@ int AreaOverlayEditor::sanitize_resolution_input() {
     return parsed;
 }
 
-void AreaOverlayEditor::save_area() {
-    if (name_box_) {
+bool AreaOverlayEditor::persist_current_area() {
+    bool handled = false;
+
+    if (name_box_ && !name_box_->is_editing()) {
         const std::string desired_name = name_box_->value();
-        if (!rename_current_area(desired_name)) {
-            name_box_->set_value(area_name_);
-            return;
+        std::string trimmed = trim_copy(desired_name);
+        if (trimmed.empty()) {
+            if (!area_name_.empty()) {
+                name_box_->set_value(area_name_);
+                handled = true;
+            }
+        } else if (trimmed != area_name_) {
+            if (!rename_current_area(desired_name)) {
+                name_box_->set_value(area_name_);
+            }
+            handled = true;
         }
     }
 
     if (!info_ && !room_) {
-        cancel();
-        return;
+        return handled;
     }
 
-    const int resolution_value = sanitize_resolution_input();
+    int resolution_value = area_resolution_;
+    if (resolution_box_ && !resolution_box_->is_editing()) {
+        handled = true;
+        const int previous_resolution = area_resolution_;
+        resolution_value = sanitize_resolution_input();
+        if (resolution_value != previous_resolution) {
+            handled = true;
+        }
+    }
 
     auto remove_current = [this]() -> bool {
         if (info_) {
@@ -1562,7 +1626,7 @@ void AreaOverlayEditor::save_area() {
             return removed;
         }
         return false;
-};
+    };
 
     auto determine_room_type = [this]() -> std::string {
         if (!room_) return std::string{};
@@ -1571,14 +1635,14 @@ void AreaOverlayEditor::save_area() {
             if (!existing->get_type().empty()) return existing->get_type();
         }
         return area_name_;
-};
+    };
 
     auto notify_saved = [this]() {
         saved_since_begin_ = true;
         if (on_saved_callback_) {
             on_saved_callback_();
         }
-};
+    };
 
     auto upsert_area = [this, &determine_room_type](Area& area) {
         if (info_) {
@@ -1617,15 +1681,17 @@ void AreaOverlayEditor::save_area() {
             room_->upsert_named_area(area, type);
             room_->save_assets_json();
         }
-};
+    };
 
     if (mode_ == Mode::Geometry) {
         if (geometry_points_.size() < 3) {
             if (remove_current()) {
                 notify_saved();
             }
-            cancel();
-            return;
+            handled = true;
+            geometry_dirty_ = false;
+            mask_dirty_ = false;
+            return handled;
         }
 
         std::vector<Area::Point> area_points;
@@ -1644,23 +1710,28 @@ void AreaOverlayEditor::save_area() {
             if (remove_current()) {
                 notify_saved();
             }
-            cancel();
-            return;
+            handled = true;
+            geometry_dirty_ = false;
+            mask_dirty_ = false;
+            return handled;
         }
         Area area(area_name_, area_points, resolution_value);
         area.set_resolution(resolution_value);
         upsert_area(area);
         notify_saved();
-        cancel();
-        return;
+        geometry_dirty_ = false;
+        mask_dirty_ = false;
+        return true;
     }
 
     if (!mask_) {
         if (remove_current()) {
             notify_saved();
         }
-        cancel();
-        return;
+        handled = true;
+        mask_dirty_ = false;
+        geometry_dirty_ = false;
+        return handled;
     }
 
     bool has_alpha = false;
@@ -1693,8 +1764,10 @@ void AreaOverlayEditor::save_area() {
         if (remove_current()) {
             notify_saved();
         }
-        cancel();
-        return;
+        handled = true;
+        mask_dirty_ = false;
+        geometry_dirty_ = false;
+        return handled;
     }
 
     auto polygon = trace_polygon_from_mask();
@@ -1739,13 +1812,17 @@ void AreaOverlayEditor::save_area() {
     }
 
     if (area_points.size() < 3) {
-        cancel();
-        return;
+        handled = true;
+        mask_dirty_ = false;
+        geometry_dirty_ = false;
+        return handled;
     }
 
     Area area(area_name_, area_points, resolution_value);
     area.set_resolution(resolution_value);
     upsert_area(area);
     notify_saved();
-    cancel();
+    mask_dirty_ = false;
+    geometry_dirty_ = false;
+    return true;
 }
