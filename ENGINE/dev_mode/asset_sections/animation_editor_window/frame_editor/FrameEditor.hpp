@@ -44,14 +44,21 @@ class FrameEditor {
     void update_layout();
     void set_mode(Mode mode);
     void update_button_styles() const;
-    SDL_Rect content_rect() const;
+    void update_navigation_styles() const;
 
   private:
     std::shared_ptr<AnimationDocument> document_;
     std::unique_ptr<FrameMovementEditor> movement_editor_;
     std::array<std::unique_ptr<DMButton>, 3> mode_buttons_;
+    std::unique_ptr<DMButton> prev_frame_button_;
+    std::unique_ptr<DMButton> next_frame_button_;
     SDL_Rect bounds_{0, 0, 0, 0};
-    SDL_Rect tabs_rect_{0, 0, 0, 0};
+    SDL_Rect header_rect_{0, 0, 0, 0};
+    SDL_Rect mode_controls_rect_{0, 0, 0, 0};
+    SDL_Rect frame_display_rect_{0, 0, 0, 0};
+    SDL_Rect frame_list_rect_{0, 0, 0, 0};
+    SDL_Rect prev_button_rect_{0, 0, 0, 0};
+    SDL_Rect next_button_rect_{0, 0, 0, 0};
     std::string animation_id_;
     CloseCallback close_callback_;
     Mode active_mode_ = Mode::Movement;

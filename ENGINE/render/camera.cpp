@@ -2,7 +2,7 @@
 #include "asset/Asset.hpp"
 #include "utils/area.hpp"
 #include "map_generation/room.hpp"
-#include "find_current_room.hpp"
+#include "core/find_current_room.hpp"
 #include <cmath>
 #include <algorithm>
 #include <vector>
