@@ -567,8 +567,7 @@ void Assets::set_input(Input* m) {
 
 void Assets::update(const Input& input)
 {
-    const bool usage_tracking_enabled = render_pipeline::ScalingLogic::UsageTrackingEnabled();
-    if (usage_tracking_enabled) {
+    if (render_pipeline::ScalingLogic::UsageSamplingPending()) {
         render_pipeline::ScalingLogic::ScheduleUsageSamplingAsync();
     }
 
@@ -592,9 +591,8 @@ void Assets::update(const Input& input)
     if (dev_controls_ && dev_controls_->is_enabled()) {
         active_room = dev_controls_->resolve_current_room(detected_room);
     }
+    const bool room_changed = (current_room_ != active_room);
     current_room_ = active_room;
-
-    camera_.update_zoom(active_room, finder_, player);
 
     dx = dy = 0;
 
@@ -605,13 +603,16 @@ void Assets::update(const Input& input)
         if (player) player->update();
     }
 
+    bool player_moved = false;
     if (player) {
         dx = player->pos.x - start_px;
         dy = player->pos.y - start_py;
-        if (dx != 0 || dy != 0) {
-            camera_.update_zoom(active_room, finder_, player);
-        }
+        player_moved = (dx != 0 || dy != 0);
     }
+
+    const bool zoom_animation_active = camera_.zooming_;
+    const bool camera_refresh_needed = room_changed || player_moved || zoom_animation_active;
+    camera_.update_zoom(current_room_, finder_, player, camera_refresh_needed);
 
     const Area view = camera_.get_camera_area();
     auto [minx, miny, maxx, maxy] = view.get_bounds();
@@ -625,7 +626,14 @@ void Assets::update(const Input& input)
     }
 
     AudioEngine& audio_engine = AudioEngine::instance();
-    audio_engine.set_effect_max_distance(static_cast<float>(std::max(1, camera_.get_render_distance_world_margin())));
+    const float effect_max_distance =
+        static_cast<float>(std::max(1, camera_.get_render_distance_world_margin()));
+    if (!last_audio_effect_max_distance_.has_value() ||
+        *last_audio_effect_max_distance_ != effect_max_distance) {
+        audio_engine.set_effect_max_distance(effect_max_distance);
+        last_audio_effect_max_distance_ = effect_max_distance;
+        std::cout << "[Assets] Audio effect max distance updated to " << effect_max_distance << "\n";
+    }
     if (!dev_mode) {
         rebuild_non_player_update_buffer_if_needed();
 

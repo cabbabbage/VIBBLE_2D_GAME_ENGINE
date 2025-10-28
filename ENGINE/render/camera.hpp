@@ -84,7 +84,7 @@ class camera {
 
     void update();
     void set_up_rooms(CurrentRoomFinder* finder);
-    void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player);
+    void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player, bool refresh_requested);
 
     void pan(const std::vector<SDL_Point>& , int ) {}
     void shake(double , double , int ) {}

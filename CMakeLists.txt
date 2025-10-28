@@ -237,6 +237,48 @@ target_link_libraries(asset_loader_distance_tests PRIVATE
 target_compile_definitions(asset_loader_distance_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME asset_loader_distance_tests COMMAND asset_loader_distance_tests)
 
+# === scaling_logic_usage_sampling_tests ===
+add_executable(scaling_logic_usage_sampling_tests
+    tests/core/scaling_logic_usage_sampling_tests.cpp
+)
+target_include_directories(scaling_logic_usage_sampling_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/render_pipeline
+)
+target_link_libraries(scaling_logic_usage_sampling_tests PRIVATE
+    nlohmann_json::nlohmann_json
+    SDL2::SDL2
+)
+target_compile_definitions(scaling_logic_usage_sampling_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+add_test(NAME scaling_logic_usage_sampling_tests COMMAND scaling_logic_usage_sampling_tests)
+
+# === camera_refresh_tests ===
+add_executable(camera_refresh_tests
+    tests/core/camera_refresh_tests.cpp
+    ENGINE/render/camera.cpp
+    ENGINE/utils/area.cpp
+    ENGINE/utils/cache_manager.cpp
+)
+target_include_directories(camera_refresh_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests/stubs
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/render
+    ${CMAKE_SOURCE_DIR}/ENGINE/utils
+)
+target_link_libraries(camera_refresh_tests PRIVATE
+    SDL2::SDL2
+    SDL2_image::SDL2_image
+    nlohmann_json::nlohmann_json
+    vibble_log
+)
+target_compile_definitions(camera_refresh_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+add_test(NAME camera_refresh_tests COMMAND camera_refresh_tests)
+
+
 add_executable(world_grid_chunk_tests
     tests/world/grid_chunk_tests.cpp
     tests/world/chunk_stub.cpp

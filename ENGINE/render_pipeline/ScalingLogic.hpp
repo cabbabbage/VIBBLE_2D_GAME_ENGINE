@@ -262,6 +262,7 @@ struct ScalingLogic {
             state.loaded    = false;
         }
         ensure_loaded(state);
+        refresh_usage_samples_flag(state);
     }
 
     static inline void SetUsageTrackingEnabled(bool enabled) {
@@ -351,6 +352,7 @@ struct ScalingLogic {
         state.queued_assets.erase(asset_key);
         auto& queue = state.sampling_queue;
         queue.erase(std::remove(queue.begin(), queue.end(), asset_key), queue.end());
+        refresh_usage_samples_flag(state);
 
         bool changed = false;
         if (state.data.contains("assets") && state.data["assets"].is_object()) {
@@ -374,6 +376,10 @@ struct ScalingLogic {
         return state.enabled;
     }
 
+    static inline bool UsageSamplingPending() {
+        return usage_samples_pending_flag().load(std::memory_order_acquire);
+    }
+
     static inline void RecordUsage(const std::string& asset_key, float requested_scale, float stored_scale) {
         UsageState& state = usage_state();
         std::lock_guard<std::mutex> guard(state.mutex);
@@ -392,6 +398,7 @@ struct ScalingLogic {
         ensure_loaded(state);
         const Uint32 now = SDL_GetTicks();
         const bool merged = process_pending_samples(state, now, true);
+        refresh_usage_samples_flag(state);
         if (merged || state.dirty) {
             return save_to_disk(state);
         }
@@ -404,14 +411,19 @@ struct ScalingLogic {
     }
 
     static inline void ScheduleUsageSamplingAsync() {
-        if (!UsageTrackingEnabled()) {
+        if (!UsageSamplingPending()) {
             return;
         }
 
         UsageState& state = usage_state();
         {
             std::lock_guard<std::mutex> guard(state.mutex);
+            if (!state.enabled) {
+                refresh_usage_samples_flag(state);
+                return;
+            }
             if (state.pending_samples.empty() && state.queued_assets.empty()) {
+                refresh_usage_samples_flag(state);
                 return;
             }
         }
@@ -556,6 +568,11 @@ private:
         return state;
     }
 
+    static inline std::atomic<bool>& usage_samples_pending_flag() {
+        static std::atomic<bool> pending{false};
+        return pending;
+    }
+
     static inline std::atomic<bool>& sampling_pending_flag() {
         static std::atomic<bool> pending{false};
         return pending;
@@ -569,6 +586,14 @@ private:
     static inline std::future<void>& sampling_task_handle() {
         static std::future<void> task;
         return task;
+    }
+
+    static inline bool has_pending_usage_samples(const UsageState& state) {
+        return !state.pending_samples.empty() || !state.queued_assets.empty();
+    }
+
+    static inline void refresh_usage_samples_flag(const UsageState& state) {
+        usage_samples_pending_flag().store(has_pending_usage_samples(state), std::memory_order_release);
     }
 
     static inline void wait_for_sampling_task() {
@@ -598,6 +623,7 @@ private:
         ensure_loaded(state);
         const Uint32 now    = SDL_GetTicks();
         const bool   merged = process_pending_samples(state, now, false);
+        refresh_usage_samples_flag(state);
         if (merged && state.dirty) {
             save_to_disk(state);
         }
@@ -675,6 +701,7 @@ private:
         if (state.queued_assets.insert(asset_key).second) {
             state.sampling_queue.push_back(asset_key);
         }
+        usage_samples_pending_flag().store(true, std::memory_order_release);
     }
 
     static inline bool merge_samples_for_asset(UsageState& state,

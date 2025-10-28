@@ -235,6 +235,7 @@ private:
     MapGridSettings map_grid_settings_{};
     std::unique_ptr<devmode::core::ManifestStore> manifest_store_fallback_;
     std::unique_ptr<LightMapManager> light_map_manager_;
+    std::optional<float> last_audio_effect_max_distance_{};
 
     struct GridMovementCommand {
         Asset* asset = nullptr;

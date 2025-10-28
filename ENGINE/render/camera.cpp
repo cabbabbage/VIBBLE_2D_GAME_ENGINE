@@ -158,7 +158,13 @@ void camera::set_up_rooms(CurrentRoomFinder* finder) {
     }
 }
 
-void camera::update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player) {
+void camera::update_zoom(Room* cur,
+                         CurrentRoomFinder* finder,
+                         Asset* player,
+                         bool refresh_requested) {
+    if (!refresh_requested && !zooming_) {
+        return;
+    }
     pan_offset_x_ = 0.0;
     pan_offset_y_ = 0.0;
     if (!pan_override_) {
