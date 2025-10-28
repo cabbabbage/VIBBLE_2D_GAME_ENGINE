@@ -329,7 +329,7 @@ std::vector<std::shared_ptr<SDL_Texture>> PreviewProvider::build_frame_textures(
             textures.emplace_back();
             continue;
         }
-        SurfacePtr flipped_surface;
+        SurfacePtr flipped_surface(nullptr, SDL_FreeSurface);
         SDL_Surface* source_surface = surface.get();
         if (request.flipped) {
             flipped_surface = flip_horizontal(surface.get());
