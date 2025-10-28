@@ -6,7 +6,7 @@
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
 #include "asset/animation_frame.hpp"
-#include "animation_update_utils.hpp"
+#include "animation_update.hpp"
 
 bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
                         std::size_t& stride_index, int& stride_frame_counter) {

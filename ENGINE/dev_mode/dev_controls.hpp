@@ -30,7 +30,7 @@ class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
 class RegenerateRoomPopup;
-class CreateRoomAreaPanel;
+// Legacy chooser removed
 
 class DevControls {
 public:
@@ -55,7 +55,6 @@ public:
     struct RoomAreaCache {
         struct Polygon {
             std::string name;
-            std::string type;
             std::vector<SDL_Point> points;
             SDL_Point anchor{0, 0};
             int z = 0;
@@ -128,7 +127,7 @@ public:
     void clear_selection();
     void purge_asset(Asset* asset);
 
-    void create_room_area_with_type(const std::string& type_hint);
+    void create_room_area();
 
     void notify_spawn_group_config_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
@@ -233,7 +232,6 @@ private:
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 
     std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
-    std::unique_ptr<CreateRoomAreaPanel> create_area_panel_;
     std::optional<std::string> selected_room_area_name_;
     std::optional<std::string> hovered_room_area_name_;
 

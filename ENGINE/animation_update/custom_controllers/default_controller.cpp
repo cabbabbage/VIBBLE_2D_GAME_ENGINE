@@ -2,7 +2,7 @@
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
 #include "asset/asset_info.hpp"
-#include "animation_update/animation_update_utils.hpp"
+#include "animation_update/animation_update.hpp"
 
 #include <string>
 

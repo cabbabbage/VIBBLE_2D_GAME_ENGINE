@@ -10,7 +10,7 @@
 #include "asset/animation_frame.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
-#include "animation_update_utils.hpp"
+#include "animation_update.hpp"
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
 #include "utils/area.hpp"

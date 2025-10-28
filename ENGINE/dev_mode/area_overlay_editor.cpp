@@ -78,7 +78,7 @@ namespace {
         return 1.0f;
     }
 
-    static bool should_use_room_center_anchor(const std::string& type, const std::string& name) {
+    static bool should_use_room_center_anchor(const std::string& name) {
         auto matches = [](const std::string& value) {
             if (value.empty()) return false;
             std::string lowered = value;
@@ -88,7 +88,6 @@ namespace {
             return lowered == "trigger" || lowered == "spawning" || lowered == "spawn" ||
                    lowered.find("trigger") != std::string::npos || lowered.find("spawn") != std::string::npos;
 };
-        if (matches(type)) return true;
         return matches(name);
     }
 
@@ -403,6 +402,14 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
     return true;
 }
 
+bool AreaOverlayEditor::begin_for_room(Room* room, const std::string& area_name) {
+    SDL_Point focus{0, 0};
+    if (room && room->room_area) {
+        focus = room->room_area->get_center();
+    }
+    return begin_for_room(room, area_name, std::string{}, focus);
+}
+
 bool AreaOverlayEditor::begin_for_room(Room* room, const std::string& area_name, const std::string& area_type) {
     SDL_Point focus{0, 0};
     if (room && room->room_area) {
@@ -449,7 +456,7 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     area_resolution_ = existing_area ? existing_area->resolution() : 3;
     area_resolution_ = vibble::grid::clamp_resolution(area_resolution_);
     setup_resolution_stepper();
-    const bool use_center_anchor = should_use_room_center_anchor(room_area_type_, area_name_);
+    const bool use_center_anchor = should_use_room_center_anchor(area_name_);
 
     std::vector<SDL_Point> reference_points;
     if (existing_area) {
@@ -689,7 +696,7 @@ SDL_Point AreaOverlayEditor::resolve_anchor_world() const {
         return SDL_Point{ asset_->pos.x, asset_->pos.y };
     }
     if (room_) {
-        if (should_use_room_center_anchor(room_area_type_, area_name_)) {
+        if (should_use_room_center_anchor(area_name_)) {
             if (room_->room_area) {
                 return room_->room_area->get_center();
             }
@@ -1664,14 +1671,7 @@ bool AreaOverlayEditor::persist_current_area() {
         return false;
     };
 
-    auto determine_room_type = [this]() -> std::string {
-        if (!room_) return std::string{};
-        if (!room_area_type_.empty()) return room_area_type_;
-        if (Area* existing = room_->find_area(area_name_)) {
-            if (!existing->get_type().empty()) return existing->get_type();
-        }
-        return area_name_;
-    };
+    // Room area 'type' no longer used; do not assign or infer types for room areas
 
     auto notify_saved = [this]() {
         saved_since_begin_ = true;
@@ -1680,7 +1680,7 @@ bool AreaOverlayEditor::persist_current_area() {
         }
     };
 
-    auto upsert_area = [this, &determine_room_type](Area& area) {
+    auto upsert_area = [this](Area& area) {
         if (info_) {
             std::string final_type = canonical_area_type(asset_area_type_);
             if (final_type.empty()) {
@@ -1711,9 +1711,7 @@ bool AreaOverlayEditor::persist_current_area() {
             info_->upsert_area_from_editor(area, frame);
             (void)info_->commit_manifest();
         } else if (room_) {
-            std::string type = determine_room_type();
-            area.set_type(type);
-            room_area_type_ = type;
+            // Do not set type for room areas
             if (scale_to_room_checkbox_) {
                 scale_area_to_room_ = scale_to_room_checkbox_->value();
             } else {
@@ -1944,3 +1942,4 @@ void AreaOverlayEditor::append_room_area_spawn_rows(DockableCollapsible::Rows& r
     room_area_spawn_list_->load(*groups_ptr, std::move(on_change), std::move(on_entry_change), std::move(cfg));
     room_area_spawn_list_->append_rows(rows);
 }
+

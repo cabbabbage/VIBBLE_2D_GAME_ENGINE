@@ -878,8 +878,9 @@ void AnimationEditorWindow::create_animation_via_prompt() {
     const char* input = tinyfd_inputBox("Create Animation", "Enter new animation identifier", "animation");
     if (!input) return;
     std::string name = animation_editor::strings::trim_copy(input);
+    // If no name was provided (e.g., spurious callback), do not create a default.
     if (name.empty()) {
-        name = "animation";
+        return;
     }
     document_->create_animation(name);
     preview_provider_->invalidate_all();

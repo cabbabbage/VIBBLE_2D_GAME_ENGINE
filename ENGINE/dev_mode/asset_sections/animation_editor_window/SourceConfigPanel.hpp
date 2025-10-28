@@ -136,6 +136,7 @@ class SourceConfigPanel {
     bool show_import_modal_ = false;
     std::vector<std::string> animation_options_;
     int animation_index_ = -1;
+    std::string animation_ids_signature_;
 };
 
 }

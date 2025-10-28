@@ -40,6 +40,7 @@ class OnEndSelector {
     std::unique_ptr<DMDropdown> dropdown_;
     mutable bool layout_dirty_ = true;
     std::string payload_signature_;
+    std::string ids_signature_;
 };
 
 }

@@ -141,7 +141,8 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
     const DMButtonStyle& style = DMStyles::ListButton();
     const SDL_Color& border = style.border;
     const SDL_Color hover_bg = style.hover_bg;
-    const SDL_Color selected_bg = style.press_bg;
+    // Use the accent (orange) fill for selected items to match theme
+    const SDL_Color selected_bg = DMStyles::AccentButton().bg;
     const SDL_Color idle_bg = style.bg;
 
     const int row_padding = DMSpacing::small_gap();

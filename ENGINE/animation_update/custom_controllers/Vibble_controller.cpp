@@ -1,6 +1,6 @@
 ﻿#include "Vibble_controller.hpp"
 
-#include "animation_update/animation_update_utils.hpp"
+#include "animation_update/animation_update.hpp"
 #include "asset/Asset.hpp"
 #include "utils/input.hpp"
 

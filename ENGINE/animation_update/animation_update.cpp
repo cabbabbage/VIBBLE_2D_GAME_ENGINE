@@ -1,18 +1,236 @@
 ﻿#include "animation_update.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
+#include "asset/animation_frame.hpp"
 #include "asset/asset_info.hpp"
-#include "animation_update_utils.hpp"
-#include "core/AssetsManager.hpp"
-#include "util/grid.hpp"
+#include "asset/asset_types.hpp"
 #include "animation_runtime.hpp"
+#include "core/AssetsManager.hpp"
+#include "map_generation/room.hpp"
+#include "util/grid.hpp"
+#include "utils/area.hpp"
+
+namespace {
+
+struct PlayableRoomsCacheEntry {
+    const Room* last_containing_room = nullptr;
+    std::unordered_map<const Room*, bool> playable_lookup;
+    std::uintptr_t rooms_identity = 0;
+    std::size_t    rooms_size     = 0;
+};
+
+auto& playable_rooms_cache() {
+    static std::unordered_map<const Assets*, PlayableRoomsCacheEntry> cache;
+    return cache;
+}
+
+bool equals_ignore_case(std::string_view value, std::string_view target) {
+    if (value.size() != target.size()) {
+        return false;
+    }
+    for (std::size_t idx = 0; idx < value.size(); ++idx) {
+        if (std::tolower(static_cast<unsigned char>(value[idx])) !=
+            std::tolower(static_cast<unsigned char>(target[idx]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool compute_is_playable_room(const Room& room) {
+    if (!room.room_area) {
+        return false;
+    }
+
+    if (equals_ignore_case(room.room_area->get_type(), "room") ||
+        equals_ignore_case(room.room_area->get_type(), "trail")) {
+        return true;
+    }
+
+    return equals_ignore_case(room.type, "room") || equals_ignore_case(room.type, "trail");
+}
+
+bool is_playable_room_cached(const Room& room, PlayableRoomsCacheEntry& entry) {
+    auto [it, inserted] = entry.playable_lookup.emplace(&room, false);
+    if (inserted) {
+        it->second = compute_is_playable_room(room);
+    }
+    return it->second;
+}
+
+} // namespace
+
+namespace animation_update::detail {
+
+bool should_consider_overlap(const Asset& self, const Asset& other) {
+    if (!self.info || !other.info) {
+        return false;
+    }
+
+    const std::string self_type  = asset_types::canonicalize(self.info->type);
+    const std::string other_type = asset_types::canonicalize(other.info->type);
+
+    if (self_type == asset_types::player || other_type == asset_types::player) {
+        return false;
+    }
+
+    if (self.info->moving_asset && other.info->moving_asset) {
+        return true;
+    }
+
+    if (other_type == asset_types::boundary) {
+        return true;
+    }
+
+    if (other_type == asset_types::enemy || other_type == asset_types::npc) {
+        return true;
+    }
+
+    if (self_type == other_type && other_type != asset_types::player) {
+        return true;
+    }
+
+    return false;
+}
+
+int distance_sq(SDL_Point a, SDL_Point b) {
+    const int dx = a.x - b.x;
+    const int dy = a.y - b.y;
+    return dx * dx + dy * dy;
+}
+
+bool segment_hits_area(SDL_Point from, SDL_Point to, const Area& area) {
+    const int steps = std::max(std::abs(to.x - from.x), std::abs(to.y - from.y));
+    if (steps == 0) {
+        return area.contains_point(from);
+    }
+
+    const double step_x = (to.x - from.x) / static_cast<double>(steps);
+    const double step_y = (to.y - from.y) / static_cast<double>(steps);
+
+    for (int i = 0; i <= steps; ++i) {
+        SDL_Point sample{ static_cast<int>(std::round(from.x + step_x * i)),
+                          static_cast<int>(std::round(from.y + step_y * i)) };
+        if (area.contains_point(sample)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos) {
+    Area        area = asset.get_area("collision_area");
+    const auto& pts  = area.get_points();
+    if (pts.empty()) {
+        return pos;
+    }
+
+    SDL_Point bottom = pts.front();
+    for (const SDL_Point& pt : pts) {
+        if (pt.y > bottom.y) {
+            bottom = pt;
+        }
+    }
+
+    const int offset_x = bottom.x - asset.pos.x;
+    const int offset_y = bottom.y - asset.pos.y;
+    return SDL_Point{ pos.x + offset_x, pos.y + offset_y };
+}
+
+SDL_Point frame_world_delta(const AnimationFrame& frame,
+                            const Asset&          asset,
+                            const vibble::grid::Grid& grid) {
+    const int       resolution = vibble::grid::clamp_resolution(asset.grid_resolution);
+    SDL_Point       indices    = grid.convert_resolution(SDL_Point{ frame.dx, frame.dy }, 0, resolution);
+    const SDL_Point origin     = grid.index_to_world(SDL_Point{ 0, 0 }, resolution);
+    const SDL_Point target     = grid.index_to_world(indices, resolution);
+    return SDL_Point{ target.x - origin.x, target.y - origin.y };
+}
+
+bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_point) {
+    if (!assets) {
+        return false;
+    }
+
+    auto& cache_entry = playable_rooms_cache()[assets];
+
+    const std::vector<Room*>& rooms = assets->rooms();
+    const std::uintptr_t identity = rooms.empty() ? 0 : reinterpret_cast<std::uintptr_t>(rooms.data());
+    if (cache_entry.rooms_identity != identity || cache_entry.rooms_size != rooms.size()) {
+        cache_entry.rooms_identity        = identity;
+        cache_entry.rooms_size            = rooms.size();
+        cache_entry.last_containing_room  = nullptr;
+        cache_entry.playable_lookup.clear();
+    }
+
+    auto contains_playable = [&](const Room* room) -> bool {
+        if (!room || !room->room_area) {
+            return false;
+        }
+        if (!is_playable_room_cached(*room, cache_entry)) {
+            return false;
+        }
+        return room->room_area->contains_point(bottom_point);
+    };
+
+    if (cache_entry.last_containing_room && contains_playable(cache_entry.last_containing_room)) {
+        return true;
+    }
+
+    for (const Room* room : rooms) {
+        if (contains_playable(room)) {
+            cache_entry.last_containing_room = room;
+            return true;
+        }
+    }
+
+    cache_entry.last_containing_room = nullptr;
+    return false;
+}
+
+bool segment_leaves_playable_area(const Assets* assets, SDL_Point from, SDL_Point to) {
+    if (!assets) {
+        return false;
+    }
+
+    const bool start_inside = bottom_point_inside_playable_area(assets, from);
+    const bool end_inside   = bottom_point_inside_playable_area(assets, to);
+
+    if (!start_inside || !end_inside) {
+        return true;
+    }
+
+    const int steps = std::max(std::abs(to.x - from.x), std::abs(to.y - from.y));
+    if (steps <= 1) {
+        return false;
+    }
+
+    const double step_x = (to.x - from.x) / static_cast<double>(steps);
+    const double step_y = (to.y - from.y) / static_cast<double>(steps);
+
+    for (int i = 1; i < steps; ++i) {
+        SDL_Point sample{ static_cast<int>(std::round(from.x + step_x * i)),
+                          static_cast<int>(std::round(from.y + step_y * i)) };
+        if (!bottom_point_inside_playable_area(assets, sample)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+} // namespace animation_update::detail
 
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
     : self_(self), assets_owner_(assets), grid_service_(&vibble::grid::global_grid()) {

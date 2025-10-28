@@ -10,13 +10,33 @@
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
 
+class Area;
+class Asset;
+class Assets;
+class AnimationFrame;
+
 namespace vibble::grid {
 class Grid;
 }
 
-class Asset;
-class Assets;
 class AnimationRuntime; // non-public executor
+
+namespace animation_update::detail {
+
+inline constexpr const char kDefaultAnimation[] = "default";
+inline constexpr int        kOverlapDistanceSq  = 40 * 40;
+
+bool should_consider_overlap(const Asset& self, const Asset& other);
+int  distance_sq(SDL_Point a, SDL_Point b);
+bool segment_hits_area(SDL_Point from, SDL_Point to, const Area& area);
+SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos);
+SDL_Point frame_world_delta(const AnimationFrame& frame,
+                            const Asset&          asset,
+                            const vibble::grid::Grid& grid);
+bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_point);
+bool segment_leaves_playable_area(const Assets* assets, SDL_Point from, SDL_Point to);
+
+} // namespace animation_update::detail
 
 // Public-facing planner/controller API. Does not mutate the Asset directly.
 class AnimationUpdate {

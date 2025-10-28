@@ -6,7 +6,6 @@
 #include <utility>
 #include <vector>
 
-#include "animation_update_utils.hpp"
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
 #include "asset/animation_frame.hpp"

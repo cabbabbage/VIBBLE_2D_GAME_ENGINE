@@ -72,6 +72,22 @@ void OnEndSelector::update() {
     if (!document_ || animation_id_.empty()) {
         return;
     }
+    // Refresh options when the set of animations changes
+    {
+        auto ids = document_->animation_ids();
+        std::sort(ids.begin(), ids.end());
+        std::string sig;
+        sig.reserve(ids.size() * 8);
+        for (const auto& id : ids) {
+            if (!sig.empty()) sig.push_back('|');
+            sig.append(id);
+        }
+        if (sig != ids_signature_) {
+            ids_signature_.swap(sig);
+            rebuild_options();
+            sync_from_document();
+        }
+    }
     auto payload = document_->animation_payload(animation_id_);
     std::string signature = payload_signature(payload);
     if (signature != payload_signature_) {

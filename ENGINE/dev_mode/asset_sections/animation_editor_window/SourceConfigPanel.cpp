@@ -136,6 +136,34 @@ void SourceConfigPanel::update() {
     } else {
         busy_indicator_ = false;
     }
+
+    // When referencing another animation, keep options in sync with document changes.
+    if (use_animation_reference_ && document_) {
+        auto ids = document_->animation_ids();
+        std::sort(ids.begin(), ids.end());
+        std::string sig;
+        sig.reserve(ids.size() * 8);
+        for (const auto& id : ids) {
+            if (!sig.empty()) sig.push_back('|');
+            sig.append(id);
+        }
+        if (sig != animation_ids_signature_) {
+            animation_ids_signature_.swap(sig);
+            int previous_index = animation_index_;
+            std::string previously_selected = (previous_index >= 0 && previous_index < static_cast<int>(animation_options_.size()))
+                                              ? animation_options_[previous_index]
+                                              : std::string{};
+            refresh_animation_options();
+            // Try to preserve previous selection by name if possible
+            if (!previously_selected.empty() && !animation_options_.empty()) {
+                auto it = std::find(animation_options_.begin(), animation_options_.end(), previously_selected);
+                if (it != animation_options_.end()) {
+                    animation_index_ = static_cast<int>(std::distance(animation_options_.begin(), it));
+                    if (animation_dropdown_) animation_dropdown_->set_selected(animation_index_);
+                }
+            }
+        }
+    }
 }
 
 void SourceConfigPanel::render(SDL_Renderer* renderer) const {
