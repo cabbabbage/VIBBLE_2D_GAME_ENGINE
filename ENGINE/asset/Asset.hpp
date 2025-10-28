@@ -103,10 +103,6 @@ class Asset {
     void clear_grid_residency_cache();
     bool has_grid_residency_cache() const;
     SDL_Point grid_residency_cache() const;
-    RenderTextureCache& light_front_cache();
-    RenderTextureCache& light_front_cache() const;
-    RenderTextureCache& light_behind_cache();
-    RenderTextureCache& light_behind_cache() const;
     RenderTextureCache& shadow_mask_cache();
     RenderTextureCache& shadow_mask_cache() const;
     RenderTextureCache& motion_blur_cache();
@@ -192,8 +188,6 @@ class Asset {
     void clear_render_caches();
     static void destroy_render_cache(RenderTextureCache& cache);
 
-    mutable RenderTextureCache light_front_cache_{};
-    mutable RenderTextureCache light_behind_cache_{};
     mutable RenderTextureCache shadow_mask_cache_{};
     mutable RenderTextureCache motion_blur_cache_{};
 
