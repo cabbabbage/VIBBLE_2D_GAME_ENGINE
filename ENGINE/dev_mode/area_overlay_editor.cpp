@@ -6,6 +6,8 @@
 #include "draw_utils.hpp"
 #include "dm_styles.hpp"
 
+#include "spawn_group_config/SpawnGroupConfig.hpp"
+
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
@@ -949,6 +951,11 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
         }
     }
 
+    // For room-scoped area editing, append an embedded Spawn Group Config section
+    if (room_ && !area_name_.empty()) {
+        append_room_area_spawn_rows(rows);
+    }
+
     toolbox_->set_rows(rows);
 }
 
@@ -1313,6 +1320,19 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
     }
     if (toolbox_) toolbox_->update(input, screen_w, screen_h);
 
+    if (room_area_spawn_list_) {
+        room_area_spawn_list_->set_screen_dimensions(screen_w, screen_h);
+        // Anchor near toolbox for any floating sub-panels (e.g., search)
+        SDL_Point anchor{0, 0};
+        if (toolbox_) {
+            SDL_Rect r = toolbox_->rect();
+            anchor.x = std::max(16, r.x - 320);
+            anchor.y = std::max(16, r.y + r.h / 4);
+        }
+        room_area_spawn_list_->set_anchor(anchor.x, anchor.y);
+        room_area_spawn_list_->update(input, screen_w, screen_h);
+    }
+
     if (mode_ == Mode::Mask && mask_autogen_base_) {
         int left = crop_left_slider_ ? crop_left_slider_->value() : 0;
         int right = crop_right_slider_ ? crop_right_slider_->value() : 0;
@@ -1358,6 +1378,7 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
 bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
     if (!active_) return false;
     if (toolbox_ && toolbox_->handle_event(e)) return true;
+    if (room_area_spawn_list_ && room_area_spawn_list_->handle_event(e)) return true;
 
     if (e.type == SDL_KEYDOWN) {
         if (e.key.keysym.sym == SDLK_ESCAPE) {
@@ -1512,6 +1533,7 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
     }
 
     if (toolbox_) toolbox_->render(r);
+    if (room_area_spawn_list_) room_area_spawn_list_->render(r);
 }
 
 std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
@@ -1844,4 +1866,81 @@ bool AreaOverlayEditor::persist_current_area() {
     mask_dirty_ = false;
     geometry_dirty_ = false;
     return true;
+}
+
+void AreaOverlayEditor::append_room_area_spawn_rows(DockableCollapsible::Rows& rows) {
+    // Build or refresh an embedded SpawnGroupConfig for the current room area
+    if (!room_ || area_name_.empty()) {
+        return;
+    }
+
+    if (!room_area_spawn_list_) room_area_spawn_list_ = std::make_unique<SpawnGroupConfig>(false);
+    if (!room_area_spawn_list_) return;
+
+    room_area_spawn_list_->set_embedded_mode(true);
+
+    // Locate or create the spawn_groups array for this area within room assets JSON
+    nlohmann::json* groups_ptr = nullptr;
+    nlohmann::json& root = room_->assets_data();
+    if (root.contains("areas") && root["areas"].is_array()) {
+        for (auto& entry : root["areas"]) {
+            if (!entry.is_object()) continue;
+            if (entry.value("name", std::string{}) != area_name_) continue;
+            if (!entry.contains("spawn_groups") || !entry["spawn_groups"].is_array()) {
+                entry["spawn_groups"] = nlohmann::json::array();
+            }
+            groups_ptr = &entry["spawn_groups"];
+            break;
+        }
+    }
+
+    if (!groups_ptr) {
+        return;
+    }
+
+    auto on_change = [this]() {
+        if (room_) room_->save_assets_json();
+    };
+    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) {
+        if (room_) room_->save_assets_json();
+    };
+
+    SpawnGroupConfig::Callbacks cb{};
+    cb.on_add = [this, groups_ptr]() {
+        if (!groups_ptr) return;
+        if (!groups_ptr->is_array()) return;
+        nlohmann::json entry = nlohmann::json::object();
+        entry["position"] = "Random";
+        entry["min_number"] = 1;
+        entry["max_number"] = 1;
+        entry["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name","null"},{"chance",100}}) });
+        groups_ptr->push_back(std::move(entry));
+        if (room_) room_->save_assets_json();
+        room_area_spawn_list_->refresh_row_configuration();
+    };
+    cb.on_delete = [this, groups_ptr](const std::string& id) {
+        if (!groups_ptr) return;
+        if (!groups_ptr->is_array()) return;
+        for (auto it = groups_ptr->begin(); it != groups_ptr->end(); ++it) {
+            if (it->is_object() && it->value("spawn_id", std::string{}) == id) {
+                groups_ptr->erase(it);
+                break;
+            }
+        }
+        if (room_) room_->save_assets_json();
+        room_area_spawn_list_->refresh_row_configuration();
+    };
+    cb.on_reorder = [this](const std::string&, size_t) {
+        if (room_) room_->save_assets_json();
+    };
+
+    // Don’t allow linking in this context
+    SpawnGroupConfig::ConfigureEntryCallback cfg = [](SpawnGroupConfig::EntryController& ctrl, const nlohmann::json&) {
+        ctrl.set_linkable_room_areas_provider({});
+        ctrl.set_linkable_asset_areas_provider({});
+    };
+
+    room_area_spawn_list_->set_callbacks(std::move(cb));
+    room_area_spawn_list_->load(*groups_ptr, std::move(on_change), std::move(on_entry_change), std::move(cfg));
+    room_area_spawn_list_->append_rows(rows);
 }

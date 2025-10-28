@@ -1640,12 +1640,14 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
         }
         render_room_labels(renderer);
     }
-    if (library_ui_ && library_ui_->is_visible()) {
-        library_ui_->render(renderer, screen_w_, screen_h_);
-    }
     ensure_area_editor();
+    // Draw area editor overlay before dev UI panels so UI stays on top
     if (area_editor_ && area_editor_->is_active()) {
         area_editor_->render(renderer);
+    }
+    // Now render dev-mode UI panels
+    if (library_ui_ && library_ui_->is_visible()) {
+        library_ui_->render(renderer, screen_w_, screen_h_);
     }
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->render_world_overlay(renderer, assets_->getView());

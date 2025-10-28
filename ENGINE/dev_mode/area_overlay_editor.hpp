@@ -19,6 +19,7 @@ class DMNumericStepper;
 class DMCheckbox;
 class camera;
 class Room;
+class SpawnGroupConfig;
 
 class AreaOverlayEditor {
 public:
@@ -69,6 +70,7 @@ private:
     SDL_Point resolve_anchor_world() const;
     bool rename_current_area(const std::string& desired_name);
     void delete_current_area();
+    void append_room_area_spawn_rows(class DockableCollapsible::Rows& rows);
 
     struct OverlayTransform {
         SDL_Point anchor_screen{0, 0};
@@ -111,6 +113,7 @@ private:
     std::unique_ptr<DMTextBox> name_box_;
     std::unique_ptr<DMNumericStepper> resolution_stepper_;
     std::unique_ptr<DMCheckbox> scale_to_room_checkbox_;
+    std::unique_ptr<SpawnGroupConfig> room_area_spawn_list_;
 
     int crop_left_px_ = 0;
     int crop_right_px_ = 0;

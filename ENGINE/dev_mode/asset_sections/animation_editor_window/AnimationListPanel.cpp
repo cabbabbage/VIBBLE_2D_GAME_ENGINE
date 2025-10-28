@@ -22,8 +22,10 @@
 namespace {
 
 constexpr int kRowHeight = 72;
-constexpr int kIndentPerLevel = 12;
-constexpr float kMinSizeFactor = 0.45f;
+// Slightly increase indent so children read as grouped under parents
+constexpr int kIndentPerLevel = 16;
+// Keep a sensible floor for very deep chains
+constexpr float kMinSizeFactor = 0.60f;
 
 float size_factor_for_level(int level) {
     if (level <= 0) {
@@ -31,11 +33,12 @@ float size_factor_for_level(int level) {
     }
     switch (level) {
         case 1:
-            return 0.8f;
+            // SFA (derived) items render slightly smaller than SFF
+            return 0.85f;
         case 2:
-            return 0.65f;
+            return 0.75f;
         case 3:
-            return 0.55f;
+            return 0.65f;
         default:
             return kMinSizeFactor;
     }

@@ -618,20 +618,21 @@ void DevControls::set_active_assets(std::vector<Asset*>& actives) {
 }
 
 void DevControls::set_screen_dimensions(int width, int height) {
-    if (screen_w_ == width && screen_h_ == height) {
-        return;
-    }
     screen_w_ = width;
     screen_h_ = height;
+
     if (room_editor_) room_editor_->set_screen_dimensions(width, height);
     if (map_editor_) map_editor_->set_screen_dimensions(width, height);
     if (map_mode_ui_) map_mode_ui_->set_screen_dimensions(width, height);
+
     SDL_Rect bounds{0, 0, screen_w_, screen_h_};
     if (camera_panel_) camera_panel_->set_work_area(bounds);
     if (trail_suite_) trail_suite_->set_screen_dimensions(width, height);
+
     asset_filter_.set_screen_dimensions(width, height);
     if (map_assets_modal_) map_assets_modal_->set_screen_dimensions(width, height);
     if (boundary_assets_modal_) boundary_assets_modal_->set_screen_dimensions(width, height);
+
     asset_filter_.ensure_layout();
     SDL_Rect usable = FloatingPanelLayoutManager::instance().computeUsableRect(
         bounds,
@@ -1800,7 +1801,7 @@ void DevControls::configure_header_button_sets() {
 };
     room_buttons.push_back(std::move(regenerate_btn));
 
-    // Add Area: create a room-scoped Area entry and open the Area Tool
+    // Add Area: open Area Tool immediately (legacy type chooser removed)
     {
         MapModeUI::HeaderButtonConfig add_area_btn;
         add_area_btn.id = "add_area";
@@ -1811,6 +1812,9 @@ void DevControls::configure_header_button_sets() {
             if (!assets_ || !current_room_) {
                 return;
             }
+            // Open the Area Tool directly; type is deprecated
+            this->create_room_area_with_type(std::string{});
+            return;
             if (!create_area_panel_) {
                 create_area_panel_ = std::make_unique<CreateRoomAreaPanel>();
                 if (create_area_panel_) {

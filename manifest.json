@@ -76,8 +76,7 @@
     },
     "Barrel": {
       "animations": {
-        "collision": {
-          "area_name": "collision_area",
+        "animation": {
           "flipped_source": false,
           "locked": false,
           "loop": false,
@@ -85,20 +84,20 @@
             [
               0,
               0
-            ],
-            [
-              0,
-              0
             ]
           ],
-          "number_of_frames": 2,
-          "on_end": "SRC/assets/Barrel/default",
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
             "kind": "folder",
             "name": null,
-            "path": "SRC/assets/Barrel/collision"
+            "path": "animation"
           },
           "speed_factor": 1
         },
@@ -116,6 +115,10 @@
               0
             ]
           ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
           "number_of_frames": 2,
           "on_end": "SRC/assets/Barrel/default",
           "reverse_source": false,
@@ -124,6 +127,31 @@
             "kind": "folder",
             "name": null,
             "path": "SRC/assets/Barrel/default"
+          },
+          "speed_factor": 1
+        },
+        "ok": {
+          "flipped_source": false,
+          "locked": false,
+          "loop": false,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": null,
+            "path": "ok"
           },
           "speed_factor": 1
         }
@@ -863,7 +891,7 @@
           "spawn_id": "spn-37f623fb75ae"
         }
       ],
-      "start": "SRC/assets/Barrel/collision",
+      "start": "default",
       "tags": [],
       "update_radius": 1000,
       "z_threshold": -10

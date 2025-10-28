@@ -1057,44 +1057,7 @@ void AssetInfoUI::open_for_room_area(Room* room, const std::string& area_name) {
     auto area_spacing = std::make_unique<Section_AreaSpacing>(); area_spacing->set_ctx(area_room_, area_name_);
     sections_.push_back(std::move(area_spacing));
 
-    class Section_AreaSpawns : public DockableCollapsible {
-    public:
-        Room* room = nullptr; std::string name; std::unique_ptr<SpawnGroupConfig> list;
-        Section_AreaSpawns(): DockableCollapsible("Area Spawn Groups", false) { set_scroll_enabled(true); }
-        void set_ctx(Room* r, const std::string& n){ room=r; name=n; }
-        void build() override {
-            Rows rows; if (!room) { set_rows(rows); return; }
-            if (!list) list = std::make_unique<SpawnGroupConfig>(false);
-            list->set_embedded_mode(true);
-            nlohmann::json* groups_ptr = nullptr;
-            nlohmann::json& root = room->assets_data();
-            if (root.contains("areas") && root["areas"].is_array()) {
-                for (auto& entry : root["areas"]) {
-                    if (!entry.is_object()) continue; if (entry.value("name", std::string{}) != name) continue;
-                    if (!entry.contains("spawn_groups") || !entry["spawn_groups"].is_array()) entry["spawn_groups"] = nlohmann::json::array();
-                    groups_ptr = &entry["spawn_groups"]; break;
-                }
-            }
-            if (groups_ptr) {
-                auto on_change = [this]() { if (room) room->save_assets_json(); };
-                auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&){ if (room) room->save_assets_json(); };
-                SpawnGroupConfig::Callbacks cb{};
-                cb.on_add = [this, groups_ptr]() { if (!groups_ptr) return; nlohmann::json entry = nlohmann::json::object(); entry["position"] = "Random"; entry["min_number"] = 1; entry["max_number"] = 1; entry["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name","null"},{"chance",100}}) }); groups_ptr->push_back(std::move(entry)); if (room) room->save_assets_json(); list->refresh_row_configuration(); };
-                cb.on_delete = [this, groups_ptr](const std::string& id) { if (!groups_ptr) return; if (!groups_ptr->is_array()) return; for (auto it = groups_ptr->begin(); it != groups_ptr->end(); ++it) { if (it->is_object() && it->value("spawn_id", std::string{}) == id) { groups_ptr->erase(it); break; } } if (room) room->save_assets_json(); list->refresh_row_configuration(); };
-                cb.on_reorder = [this](const std::string&, size_t){ if (room) room->save_assets_json(); };
-                SpawnGroupConfig::ConfigureEntryCallback cfg = [](SpawnGroupConfig::EntryController& ctrl, const nlohmann::json&){ ctrl.set_linkable_room_areas_provider({}); ctrl.set_linkable_asset_areas_provider({}); };
-                list->set_callbacks(std::move(cb));
-                list->load(*groups_ptr, std::move(on_change), std::move(on_entry_change), std::move(cfg));
-                list->append_rows(rows);
-            }
-            set_rows(rows);
-        }
-        void update(const Input& input, int w, int h) override { if (list){ list->set_screen_dimensions(w,h); list->update(input,w,h);} DockableCollapsible::update(input,w,h); }
-        void render(SDL_Renderer* r) const override { DockableCollapsible::render(r); if (list) list->render(r); }
-    };
-
-    auto area_spawns = std::make_unique<Section_AreaSpawns>(); area_spawns->set_ctx(area_room_, area_name_);
-    sections_.push_back(std::move(area_spawns));
+    // Spawn group configuration is now embedded in the Area Tool panel (AreaOverlayEditor).
 
     open();
 }
