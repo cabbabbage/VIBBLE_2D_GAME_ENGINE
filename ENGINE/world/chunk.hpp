@@ -39,6 +39,8 @@ struct Chunk {
 
         float offset_x_px = 0.0f;
         float offset_y_px = 0.0f;
+
+        float scale = 1.0f;
 };
 
     struct ChunkShadowHistory {

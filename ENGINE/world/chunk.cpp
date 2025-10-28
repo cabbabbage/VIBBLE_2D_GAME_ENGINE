@@ -89,7 +89,8 @@ void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fa
     }
 
     ChunkShadowParameters accum{};
-    float                 total_weight = 0.0f;
+    accum.scale = 0.0f;
+    float total_weight = 0.0f;
     const int             last_index   = (cursor - 1 + kMaxHistoryLength) % kMaxHistoryLength;
     const int             max_samples = std::min(count, fade_frames + 1);
 
@@ -113,6 +114,7 @@ void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fa
         accum.offset_y_percent += entry.offset_y_percent * weight;
         accum.offset_x_px += entry.offset_x_px * weight;
         accum.offset_y_px += entry.offset_y_px * weight;
+        accum.scale += entry.scale * weight;
     }
 
     if (total_weight <= 1e-4f) {
@@ -126,6 +128,7 @@ void Chunk::ChunkShadowHistory::push(const ChunkShadowParameters& sample, int fa
     blended.offset_y_percent = accum.offset_y_percent * inv_total;
     blended.offset_x_px      = accum.offset_x_px * inv_total;
     blended.offset_y_px      = accum.offset_y_px * inv_total;
+    blended.scale            = accum.scale * inv_total;
 }
 
 void Chunk::LightingChunk::releaseLightingArtifacts() {
@@ -591,6 +594,9 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     chunk.has_dynamic_overlay = (std::abs(dynamic_strength - static_strength) > 1e-3f);
     chunk.lighting.current_strength = std::clamp(blended_strength, 0.0f, 1.0f);
 
+    const world::Chunk::ChunkShadowParameters previous = chunk.shadow_history.value();
+    sample.scale = previous.scale;
+
     const float sensitivity = std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f) / 100.0f;
     const float local_avg = std::clamp(influence.average_brightness, 0.0f, 1.0f);
     const float blended_avg =
@@ -620,8 +626,6 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     sample.offset_y_percent = std::clamp(py_percent, -100.0f, 100.0f);
     sample.offset_x_px      = sample.offset_x_percent * percent_to_px_x;
     sample.offset_y_px      = sample.offset_y_percent * percent_to_px_y;
-
-    const world::Chunk::ChunkShadowParameters previous = chunk.shadow_history.value();
     const float delta_opacity = std::abs(sample.opacity - previous.opacity);
     const float delta_offset  = std::max(std::abs(sample.offset_x_percent - previous.offset_x_percent), std::abs(sample.offset_y_percent - previous.offset_y_percent));
 
