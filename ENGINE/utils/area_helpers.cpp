@@ -50,6 +50,7 @@ inline int scaled_dimension(int dimension, float scale) {
 inline void copy_area_metadata(const Area& source, Area& target) {
     target.set_name(source.get_name());
     target.set_type(source.get_type());
+    target.set_resolution(source.resolution());
 }
 
 inline const AssetInfo::NamedArea::RenderFrame*
@@ -73,7 +74,7 @@ Area make_world_area(const AssetInfo& info,
                      bool              flipped) {
     const auto& local_points = local_area.get_points();
     if (local_points.empty()) {
-        return Area(local_area.get_name());
+        return Area(local_area.get_name(), local_area.resolution());
     }
 
     const float scale_factor = effective_scale(info);
@@ -128,7 +129,7 @@ Area make_world_area(const AssetInfo& info,
         world_points.push_back(SDL_Point{ world_x, world_y });
     }
 
-    Area world_area(local_area.get_name(), world_points);
+    Area world_area(local_area.get_name(), world_points, local_area.resolution());
     copy_area_metadata(local_area, world_area);
     return world_area;
 }
@@ -138,11 +139,11 @@ Area make_world_area(const AssetInfo& info,
                      SDL_Point          world_pos,
                      bool               flipped) {
     if (area_name.empty()) {
-        return Area(area_name);
+        return Area(area_name, 0);
     }
     Area* local = const_cast<AssetInfo&>(info).find_area(area_name);
     if (!local) {
-        return Area(area_name);
+        return Area(area_name, 0);
     }
     return make_world_area(info, *local, world_pos, flipped);
 }

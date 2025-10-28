@@ -104,6 +104,7 @@ private:
     std::unique_ptr<DMSlider> crop_bottom_slider_;
     std::vector<std::unique_ptr<class Widget>> owned_widgets_;
     std::unique_ptr<DMTextBox> name_box_;
+    std::unique_ptr<DMTextBox> resolution_box_;
 
     int crop_left_px_ = 0;
     int crop_right_px_ = 0;
@@ -129,5 +130,9 @@ private:
 
     std::vector<SDL_Point> geometry_points_;
     bool geometry_dirty_ = false;
+
+    int area_resolution_ = 2;
+
+    int sanitize_resolution_input();
 
 };

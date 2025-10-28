@@ -118,7 +118,8 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                   SDL_Point{ 10,-10},
                   SDL_Point{ 10,10},
                   SDL_Point{-10, 10}
-              })
+              },
+              0)
       ),
       screen_width(screen_width_),
       screen_height(screen_height_),

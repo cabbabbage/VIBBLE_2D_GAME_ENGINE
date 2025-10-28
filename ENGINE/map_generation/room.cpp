@@ -243,7 +243,7 @@ manifest_writer_(std::move(manifest_writer))
                 if (testing) {
                         std::cout << "[Room] Using precomputed area for: " << room_name << "\n";
                 }
-                room_area = std::make_unique<Area>(room_name, precomputed_area->get_points());
+                room_area = std::make_unique<Area>(room_name, precomputed_area->get_points(), 3);
                 if (room_area) room_area->set_type("room");
         } else {
                 int min_w = assets_json.value("min_width", 64);
@@ -284,7 +284,7 @@ manifest_writer_(std::move(manifest_writer))
                         << ", geometry: " << geometry
 			<< ", map radius: " << map_radius << "\n";
 		}
-                room_area = std::make_unique<Area>(room_name, SDL_Point{map_origin.first, map_origin.second}, width, height, geometry, edge_smoothness, map_w, map_h);
+                room_area = std::make_unique<Area>(room_name, SDL_Point{map_origin.first, map_origin.second}, width, height, geometry, edge_smoothness, map_w, map_h, 3);
                 if (room_area) room_area->set_type("room");
 	}
         std::vector<json> json_sources;
@@ -419,7 +419,7 @@ void Room::load_named_areas_from_json() {
 
                         auto anchor = RoomAreaSerialization::resolve_anchor(item, default_anchor, kind);
 
-                        const int resolution = vibble::grid::clamp_resolution(item.value("resolution", 0));
+                        const int resolution = vibble::grid::clamp_resolution(item.value("resolution", 2));
                         auto pts = RoomAreaSerialization::decode_points(item, anchor.world);
                         if (pts.size() < 3) continue;
 
@@ -436,7 +436,7 @@ void Room::load_named_areas_from_json() {
                         na.name = name;
                         na.type = type;
                         na.kind = RoomAreaSerialization::to_string(kind);
-                        na.area = std::make_unique<Area>(name, pts);
+                        na.area = std::make_unique<Area>(name, pts, resolution);
                         if (na.area) {
                                 na.area->set_resolution(resolution);
                         }

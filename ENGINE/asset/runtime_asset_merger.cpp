@@ -134,7 +134,8 @@ void TemporaryMergedAssetInfo::set_geometry(int width,
     area_entry.name = "merged_bounds";
     area_entry.type = "render";
     area_entry.kind = "render";
-    area_entry.area = std::make_unique<Area>(area_entry.name, local_polygon);
+    area_entry.area = std::make_unique<Area>(area_entry.name, local_polygon, 2);
+    area_entry.area->set_resolution(2);
     area_entry.area->set_type("render");
 
     AssetInfo::NamedArea::RenderFrame frame;
@@ -506,7 +507,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
 
     std::shared_ptr<AssetInfo> merged_info = info_builder.finalize(variant_steps);
 
-    Area spawn_area = merged_info->areas.empty() || !merged_info->areas.front().area ? Area("merged_spawn") : Area(*merged_info->areas.front().area);
+    Area spawn_area = merged_info->areas.empty() || !merged_info->areas.front().area ? Area("merged_spawn", 0) : Area(*merged_info->areas.front().area);
 
     Asset* exemplar = samples.front().asset;
     const int depth = exemplar ? exemplar->depth : 0;

@@ -359,7 +359,7 @@ TEST_CASE("AssetSpawnPlanner persists spawn ids through manifest store") {
     };
     contexts.push_back(context);
 
-    Area area("TestRoom", SDL_Point{0, 0}, 10, 10, "Square", 1, 40, 40);
+    Area area("TestRoom", SDL_Point{0, 0}, 10, 10, "Square", 1, 40, 40, 0);
     AssetLibrary library;
     AssetSpawnPlanner planner(sources, area, library, contexts);
 
@@ -397,7 +397,7 @@ TEST_CASE("AssetSpawnPlanner treats exact spawn method quantity as one") {
 
         std::vector<nlohmann::json> sources{source};
         std::vector<AssetSpawnPlanner::SourceContext> contexts;
-        Area area("ExactTest", SDL_Point{0, 0}, 10, 10, "Square", 1, 40, 40);
+        Area area("ExactTest", SDL_Point{0, 0}, 10, 10, "Square", 1, 40, 40, 0);
         AssetLibrary library(false);
         AssetSpawnPlanner planner(sources, area, library, contexts);
 

@@ -625,7 +625,7 @@ void Asset::set_shading_group(int x){
 
 Area Asset::get_area(const std::string& name) const {
         if (!info) {
-                return Area(name);
+                return Area(name, 0);
         }
 
         Area* base = info->find_area(name);
@@ -633,7 +633,7 @@ Area Asset::get_area(const std::string& name) const {
                 base = info->find_area(name + "_area");
         }
         if (!base) {
-                return Area(name);
+                return Area(name, 0);
         }
 
         return area_helpers::make_world_area(*info, *base, pos, flipped);

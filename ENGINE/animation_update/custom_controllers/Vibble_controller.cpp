@@ -4,99 +4,6 @@
 #include "asset/Asset.hpp"
 #include "utils/input.hpp"
 
-#include <cmath>
-
-namespace {
-
-SDL_Point normalized_step(int raw_x, int raw_y, int target_speed) {
-    if (target_speed <= 0) {
-        return SDL_Point{ 0, 0 };
-    }
-
-    const int magnitude_sq = raw_x * raw_x + raw_y * raw_y;
-    if (magnitude_sq == 0) {
-        return SDL_Point{ 0, 0 };
-    }
-
-    const double length = std::sqrt(static_cast<double>(magnitude_sq));
-    if (length <= 0.0) {
-        return SDL_Point{ 0, 0 };
-    }
-
-    const double scale = static_cast<double>(target_speed) / length;
-    int move_x = static_cast<int>(std::lround(static_cast<double>(raw_x) * scale));
-    int move_y = static_cast<int>(std::lround(static_cast<double>(raw_y) * scale));
-
-    auto ensure_non_zero = [](int component, int raw) {
-        if (component == 0 && raw != 0) {
-            return (raw > 0) ? 1 : -1;
-        }
-        return component;
-};
-
-    move_x = ensure_non_zero(move_x, raw_x);
-    move_y = ensure_non_zero(move_y, raw_y);
-
-    auto magnitude_squared = [&]() {
-        return move_x * move_x + move_y * move_y;
-};
-
-    auto reduce_once = [](int value) {
-        if (value > 0) return value - 1;
-        if (value < 0) return value + 1;
-        return value;
-};
-
-    const int target_magnitude_sq = target_speed * target_speed;
-
-    int adjusted_mag_sq = magnitude_squared();
-    if (adjusted_mag_sq == 0) {
-        move_x = ensure_non_zero(move_x, raw_x);
-        move_y = ensure_non_zero(move_y, raw_y);
-        adjusted_mag_sq = magnitude_squared();
-    }
-
-    while (adjusted_mag_sq > target_magnitude_sq) {
-        if (std::abs(move_x) >= std::abs(move_y)) {
-            move_x = reduce_once(move_x);
-        } else {
-            move_y = reduce_once(move_y);
-        }
-        adjusted_mag_sq = magnitude_squared();
-    }
-
-    while (adjusted_mag_sq < target_magnitude_sq && (move_x != 0 || move_y != 0)) {
-        bool adjusted = false;
-        if (std::abs(move_x) <= std::abs(move_y) && move_x != 0) {
-            const int step = (move_x > 0) ? 1 : -1;
-            const int candidate = move_x + step;
-            const int candidate_mag_sq = candidate * candidate + move_y * move_y;
-            if (candidate_mag_sq <= target_magnitude_sq) {
-                move_x = candidate;
-                adjusted_mag_sq = candidate_mag_sq;
-                adjusted = true;
-            }
-        }
-        if (!adjusted && move_y != 0) {
-            const int step = (move_y > 0) ? 1 : -1;
-            const int candidate = move_y + step;
-            const int candidate_mag_sq = move_x * move_x + candidate * candidate;
-            if (candidate_mag_sq <= target_magnitude_sq) {
-                move_y = candidate;
-                adjusted_mag_sq = candidate_mag_sq;
-                adjusted = true;
-            }
-        }
-        if (!adjusted) {
-            break;
-        }
-    }
-
-    return SDL_Point{ move_x, move_y };
-}
-
-}
-
 VibbleController::VibbleController(Asset* player)
     : player_(player) {}
 
@@ -121,16 +28,10 @@ void VibbleController::movement(const Input& input) {
         return;
     }
 
-    SDL_Point step_delta = normalized_step(raw_x, raw_y, kWalkSpeed);
-    if (step_delta.x == 0 && step_delta.y == 0) {
-        player_->anim_->move(SDL_Point{ 0, 0 }, animation_update::detail::kDefaultAnimation);
-        return;
-    }
-
     const int stride_count = sprint ? kSprintMultiplier : 1;
 
-    dx_ = step_delta.x * stride_count;
-    dy_ = step_delta.y * stride_count;
+    dx_ = raw_x * kWalkSpeed * stride_count;
+    dy_ = raw_y * kWalkSpeed * stride_count;
 
     const std::string animation_id = animation_for_direction(raw_x, raw_y);
 
@@ -157,49 +58,45 @@ std::string VibbleController::animation_for_direction(int raw_x, int raw_y) cons
 
     const auto& animations = player_->info->animations;
 
-    auto direction_of = [](int dx, int dy) {
-        return SDL_Point{ (dx > 0) - (dx < 0), (dy > 0) - (dy < 0) };
+    auto has_animation = [&animations](const std::string& name) {
+        return animations.find(name) != animations.end();
     };
 
-    std::string default_anim{ animation_update::detail::kDefaultAnimation };
-    std::string vertical_match;
-    bool        has_vertical = false;
-    std::string horizontal_match;
-    bool        has_horizontal = false;
+    const std::string forward_anim   = "forward";
+    const std::string backward_anim  = "backward";
+    const std::string left_anim      = "left";
+    const std::string right_anim     = "right";
 
-    for (const auto& [name, anim] : animations) {
-        const SDL_Point anim_dir = direction_of(anim.total_dx, anim.total_dy);
-
-        if (anim_dir.x == 0 && anim_dir.y == 0) {
-            if (name == animation_update::detail::kDefaultAnimation) {
-                default_anim = name;
-            }
-            continue;
+    if (sign_x != 0 && sign_y != 0) {
+        const std::string vertical_choice = (sign_y < 0) ? backward_anim : forward_anim;
+        if (has_animation(vertical_choice)) {
+            return vertical_choice;
         }
 
-        if (anim_dir.x == sign_x && anim_dir.y == sign_y) {
-            return name;
-        }
-
-        if (!has_vertical && sign_y != 0 && anim_dir.x == 0 && anim_dir.y == sign_y) {
-            vertical_match = name;
-            has_vertical   = true;
-        }
-
-        if (!has_horizontal && sign_x != 0 && anim_dir.y == 0 && anim_dir.x == sign_x) {
-            horizontal_match = name;
-            has_horizontal   = true;
+        const std::string horizontal_choice = (sign_x < 0) ? left_anim : right_anim;
+        if (has_animation(horizontal_choice)) {
+            return horizontal_choice;
         }
     }
 
-    if (has_vertical) {
-        return vertical_match;
+    if (sign_y != 0) {
+        const std::string vertical_choice = (sign_y < 0) ? backward_anim : forward_anim;
+        if (has_animation(vertical_choice)) {
+            return vertical_choice;
+        }
     }
 
-    if (has_horizontal) {
-        return horizontal_match;
+    if (sign_x != 0) {
+        const std::string horizontal_choice = (sign_x < 0) ? left_anim : right_anim;
+        if (has_animation(horizontal_choice)) {
+            return horizontal_choice;
+        }
     }
 
-    return default_anim;
+    if (has_animation(animation_update::detail::kDefaultAnimation)) {
+        return std::string{ animation_update::detail::kDefaultAnimation };
+    }
+
+    return std::string{ animation_update::detail::kDefaultAnimation };
 }
 

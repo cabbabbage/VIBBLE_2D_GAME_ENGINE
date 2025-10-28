@@ -67,7 +67,7 @@ TEST_CASE("Asset area codec preserves render frame metadata and rescales points"
         SDL_Point{frame.pivot_x - 6, frame.pivot_y - 48}
     };
 
-    Area area("impassable", render_points);
+    Area area("impassable", render_points, 2);
     area.set_type("impassable");
     info.upsert_area_from_editor(area, frame);
     auto* stored = info.find_area("impassable");
@@ -144,7 +144,7 @@ TEST_CASE("World areas honour per-area pivot metadata for flipped assets") {
         SDL_Point{frame.pivot_x - 5, frame.pivot_y - 60}
     };
 
-    Area area("interaction", local_points);
+    Area area("interaction", local_points, 2);
     area.set_type("interaction");
     info.upsert_area_from_editor(area, frame);
     auto* stored = info.find_area("interaction");

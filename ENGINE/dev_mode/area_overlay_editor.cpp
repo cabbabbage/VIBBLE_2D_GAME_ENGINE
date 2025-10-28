@@ -13,6 +13,7 @@
 #include "render/camera.hpp"
 #include "utils/input.hpp"
 #include "utils/area.hpp"
+#include "util/grid.hpp"
 
 #include <algorithm>
 #include <array>
@@ -342,17 +343,31 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
     applied_crop_left_ = applied_crop_right_ = applied_crop_top_ = applied_crop_bottom_ = -1;
 
     name_box_ = std::make_unique<DMTextBox>("Area Name", area_name_);
+    resolution_box_.reset();
+
+    Area* existing_area = nullptr;
+    if (asset && info) {
+        existing_area = info->find_area(area_name_);
+        if (existing_area) {
+            const std::string existing_type = canonical_area_type(existing_area->get_type());
+            if (!existing_type.empty()) {
+                asset_area_type_ = existing_type;
+            }
+        }
+    }
+
+    area_resolution_ = existing_area ? existing_area->resolution() : 2;
+    area_resolution_ = vibble::grid::clamp_resolution(area_resolution_);
+    resolution_box_ = std::make_unique<DMTextBox>("Area Resolution (r)", std::to_string(area_resolution_));
 
     mask_ = SDL_CreateRGBSurfaceWithFormat(0, canvas_w_, canvas_h_, 32, SDL_PIXELFORMAT_RGBA32);
     if (!mask_) return false;
     clear_mask();
 
-    if (asset && info) {
-        if (Area* existing = info->find_area(area_name_)) {
-            const std::string existing_type = canonical_area_type(existing->get_type());
-            if (!existing_type.empty()) {
-                asset_area_type_ = existing_type;
-            }
+    if (existing_area) {
+        area_resolution_ = vibble::grid::clamp_resolution(existing_area->resolution());
+        if (resolution_box_) {
+            resolution_box_->set_value(std::to_string(area_resolution_));
         }
     }
     if (asset_area_type_.empty()) {
@@ -404,6 +419,7 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     room_area_type_ = area_type;
     asset_area_type_.clear();
     name_box_ = std::make_unique<DMTextBox>("Area Name", area_name_);
+    resolution_box_.reset();
 
     SDL_Point room_center = focus_world;
     if (room_->room_area) {
@@ -416,6 +432,10 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     if (room_area_type_.empty() && existing_area) {
         room_area_type_ = existing_area->get_type();
     }
+
+    area_resolution_ = existing_area ? existing_area->resolution() : 3;
+    area_resolution_ = vibble::grid::clamp_resolution(area_resolution_);
+    resolution_box_ = std::make_unique<DMTextBox>("Area Resolution (r)", std::to_string(area_resolution_));
     const bool use_center_anchor = should_use_room_center_anchor(room_area_type_, area_name_);
 
     std::vector<SDL_Point> reference_points;
@@ -840,6 +860,11 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
 
     if (name_box_) {
         owned_widgets_.push_back(std::make_unique<TextBoxWidget>(name_box_.get(), true));
+        rows.push_back({ owned_widgets_.back().get() });
+    }
+
+    if (resolution_box_) {
+        owned_widgets_.push_back(std::make_unique<TextBoxWidget>(resolution_box_.get(), true));
         rows.push_back({ owned_widgets_.back().get() });
     }
 
@@ -1486,6 +1511,24 @@ std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
     return out;
 }
 
+int AreaOverlayEditor::sanitize_resolution_input() {
+    int parsed = area_resolution_;
+    if (resolution_box_) {
+        const std::string& text = resolution_box_->value();
+        try {
+            parsed = std::stoi(text);
+        } catch (...) {
+            parsed = area_resolution_;
+        }
+    }
+    parsed = vibble::grid::clamp_resolution(parsed);
+    area_resolution_ = parsed;
+    if (resolution_box_) {
+        resolution_box_->set_value(std::to_string(parsed));
+    }
+    return parsed;
+}
+
 void AreaOverlayEditor::save_area() {
     if (name_box_) {
         const std::string desired_name = name_box_->value();
@@ -1499,6 +1542,8 @@ void AreaOverlayEditor::save_area() {
         cancel();
         return;
     }
+
+    const int resolution_value = sanitize_resolution_input();
 
     auto remove_current = [this]() -> bool {
         if (info_) {
@@ -1601,7 +1646,8 @@ void AreaOverlayEditor::save_area() {
             cancel();
             return;
         }
-        Area area(area_name_, area_points);
+        Area area(area_name_, area_points, resolution_value);
+        area.set_resolution(resolution_value);
         upsert_area(area);
         notify_saved();
         cancel();
@@ -1696,7 +1742,8 @@ void AreaOverlayEditor::save_area() {
         return;
     }
 
-    Area area(area_name_, area_points);
+    Area area(area_name_, area_points, resolution_value);
+    area.set_resolution(resolution_value);
     upsert_area(area);
     notify_saved();
     cancel();

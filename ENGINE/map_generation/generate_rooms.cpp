@@ -364,7 +364,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 const int map_radius_int = map_radius > 0.0 ? static_cast<int>(std::lround(map_radius)) : 0;
                 const int diameter = map_radius_int * 2;
                 SDL_Point center{map_radius_int, map_radius_int};
-                Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter);
+                Area area("Map", center, diameter, diameter, "Circle", 1, diameter, diameter, 3);
                 AssetSpawner spawner(asset_lib, exclusion_zones);
                 std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json( boundary_data, area, map_id_ + "::map_boundary_data");
                 int assigned_count = 0;

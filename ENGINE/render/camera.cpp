@@ -22,7 +22,7 @@ static inline int height_from_area(const Area& a) {
     return std::max(0, maxy - miny);
 }
 
-static inline Area make_rect_area(const std::string& name, SDL_Point center, int w, int h) {
+static inline Area make_rect_area(const std::string& name, SDL_Point center, int w, int h, int resolution) {
     const int left   = center.x - (w / 2);
     const int top    = center.y - (h / 2);
     const int right  = left + w;
@@ -33,7 +33,7 @@ static inline Area make_rect_area(const std::string& name, SDL_Point center, int
         { right, bottom },
         { left,  bottom }
 };
-    return Area(name, corners);
+    return Area(name, corners, resolution);
 }
 
 camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
@@ -43,7 +43,7 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     aspect_        = (screen_height_ > 0) ? static_cast<double>(screen_width_) / static_cast<double>(screen_height_) : 1.0;
     Area adjusted_start = convert_area_to_aspect(starting_zoom);
     SDL_Point start_center = adjusted_start.get_center();
-    base_zoom_    = make_rect_area("base_zoom", start_center, screen_width_, screen_height_);
+    base_zoom_    = make_rect_area("base_zoom", start_center, screen_width_, screen_height_, adjusted_start.resolution());
     current_view_ = adjusted_start;
     screen_center_ = start_center;
     screen_center_initialized_ = true;
@@ -226,7 +226,7 @@ Area camera::convert_area_to_aspect(const Area& in) const {
     } else if (cur > aspect_) {
         target_h = static_cast<int>(std::lround(static_cast<double>(w) / aspect_));
     }
-    return make_rect_area("adjusted_" + in.get_name(), c, target_w, target_h);
+    return make_rect_area("adjusted_" + in.get_name(), c, target_w, target_h, in.resolution());
 }
 
 void camera::recompute_current_view() {
@@ -234,7 +234,7 @@ void camera::recompute_current_view() {
     const int base_h = std::max(1, height_from_area(base_zoom_));
     const int cur_w  = static_cast<int>(std::lround(static_cast<double>(base_w) * std::max(0.0001, static_cast<double>(scale_))));
     const int cur_h  = static_cast<int>(std::lround(static_cast<double>(base_h) * std::max(0.0001, static_cast<double>(scale_))));
-    current_view_    = make_rect_area("current_view", screen_center_, cur_w, cur_h);
+    current_view_    = make_rect_area("current_view", screen_center_, cur_w, cur_h, base_zoom_.resolution());
 }
 
 void camera::pan_and_zoom_to_point(SDL_Point world_pos, double zoom_scale_factor, int duration_steps) {

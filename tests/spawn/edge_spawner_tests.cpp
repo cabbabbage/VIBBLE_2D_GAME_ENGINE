@@ -18,7 +18,7 @@ Area make_square(const std::string& name, int half_extent) {
         {  half_extent,  half_extent },
         { -half_extent,  half_extent }
     };
-    return Area(name, pts);
+    return Area(name, pts, 0);
 }
 
 Area make_diamond(const std::string& name, int radius) {
@@ -28,7 +28,7 @@ Area make_diamond(const std::string& name, int radius) {
         { 0, -radius },
         { -radius, 0 }
     };
-    return Area(name, pts);
+    return Area(name, pts, 0);
 }
 
 SpawnInfo make_spawn_info(int quantity, int inset_percent) {

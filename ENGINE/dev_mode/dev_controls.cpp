@@ -2565,7 +2565,7 @@ void DevControls::regenerate_boundary_spawn_group(const nlohmann::json& entry) {
     const int radius = map_radius_or_default();
     const int diameter = radius * 2;
     SDL_Point center{radius, radius};
-    Area area("map_boundary_regen", center, diameter, diameter, "Circle", 1, diameter, diameter);
+    Area area("map_boundary_regen", center, diameter, diameter, "Circle", 1, diameter, diameter, 3);
 
     std::vector<Area> exclusion;
     const auto& rooms = assets_->rooms();

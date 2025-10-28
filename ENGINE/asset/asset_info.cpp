@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "dev_mode/core/manifest_store.hpp"
+#include "util/grid.hpp"
 
 namespace {
 
@@ -460,8 +461,9 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
     if (named.kind.empty()) {
         named.kind = named.type;
     }
-    named.area = std::make_unique<Area>(name, points);
-    named.area->set_resolution(entry.value("resolution", 0));
+    const int resolution = vibble::grid::clamp_resolution(entry.value("resolution", 2));
+    named.area = std::make_unique<Area>(name, points, resolution);
+    named.area->set_resolution(resolution);
     const std::string& applied_type = !named.type.empty() ? named.type : named.kind;
     if (!applied_type.empty()) {
         named.area->set_type(applied_type);

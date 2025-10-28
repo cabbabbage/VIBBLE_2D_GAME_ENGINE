@@ -17,9 +17,9 @@ class Area {
     SDL_Point pos{0, 0};
 
 	public:
-    explicit Area(const std::string& name);
-    Area(const std::string& name, const std::vector<Point>& pts);
-    Area(const std::string& name, SDL_Point center, int w, int h, const std::string& geometry, int edge_smoothness, int map_width, int map_height);
+    explicit Area(const std::string& name, int resolution);
+    Area(const std::string& name, const std::vector<Point>& pts, int resolution);
+    Area(const std::string& name, SDL_Point center, int w, int h, const std::string& geometry, int edge_smoothness, int map_width, int map_height, int resolution);
     Area(const std::string& name, const std::string& json_path, float scale);
     Area(const std::string& name, const Area& base, SDL_Renderer* renderer, int window_w = 0, int window_h = 0);
     Area(const std::string& name, SDL_Texture* background, SDL_Renderer* renderer, int window_w = 0, int window_h = 0);
@@ -42,7 +42,7 @@ class Area {
     Point get_center() const;
     double get_size() const;
     int resolution() const { return resolution_; }
-    void set_resolution(int r) { resolution_ = vibble::grid::clamp_resolution(r); }
+    void set_resolution(int r);
 
 	public:
     const std::string& get_name() const { return area_name_; }
@@ -71,4 +71,6 @@ class Area {
     mutable int max_y_ = 0;
     mutable bool bounds_valid_ = false;
     int resolution_ = 0;
+
+    bool apply_resolution_to_points();
 };

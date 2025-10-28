@@ -300,7 +300,7 @@ void MapEditor::apply_camera_to_bounds() {
             {right, bottom},
             {left, bottom},
 };
-        Area area("map_bounds", pts);
+        Area area("map_bounds", pts, 3);
         cam->set_focus_override(center);
         cam->zoom_to_area(area, 0);
     } else if (has_entry_center_) {
