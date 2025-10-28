@@ -1245,6 +1245,9 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reac
     settings.frame_blend_falloff_frames = static_cast<int>(std::lround(load_number( make_setting_key("frame_blend_falloff_frames"), static_cast<double>(settings.frame_blend_falloff_frames))));
     settings.virtual_light_map.map_light_dir_offset_strength = static_cast<float>(load_number( make_setting_key("virtual_light_map.map_light_dir_offset_strength"), settings.virtual_light_map.map_light_dir_offset_strength));
     settings.virtual_light_map.search_radius = static_cast<int>( std::lround(load_number(make_setting_key("virtual_light_map.search_radius"), static_cast<double>(settings.virtual_light_map.search_radius))));
+    settings.virtual_light_map.grid_subdivide = static_cast<int>(
+        std::lround(load_number(make_setting_key("virtual_light_map.grid_subdivide"),
+                                static_cast<double>(settings.virtual_light_map.grid_subdivide))));
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
 
@@ -1258,6 +1261,7 @@ void MapLightPreviewPanel::persist_reactive_settings_to_dev_settings(const rende
     save_number(make_setting_key("frame_blend_falloff_frames"), settings.frame_blend_falloff_frames);
     save_number(make_setting_key("virtual_light_map.map_light_dir_offset_strength"), settings.virtual_light_map.map_light_dir_offset_strength);
     save_number(make_setting_key("virtual_light_map.search_radius"), settings.virtual_light_map.search_radius);
+    save_number(make_setting_key("virtual_light_map.grid_subdivide"), settings.virtual_light_map.grid_subdivide);
 }
 
 void MapLightPreviewPanel::write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings) {

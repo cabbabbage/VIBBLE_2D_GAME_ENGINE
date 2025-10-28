@@ -14,6 +14,7 @@ struct ReactiveShadowSettings {
         float max_offset_y       = 0.0f;
         float map_light_dir_offset_strength = 0.5f;
         int   search_radius      = 2;
+        int   grid_subdivide     = 0;
         int   light_grid_subdivide = 1;
 
         bool operator==(const VirtualLightMapSettings& other) const {
@@ -23,6 +24,7 @@ struct ReactiveShadowSettings {
                    max_offset_y == other.max_offset_y &&
                    map_light_dir_offset_strength == other.map_light_dir_offset_strength &&
                    search_radius == other.search_radius &&
+                   grid_subdivide == other.grid_subdivide &&
                    light_grid_subdivide == other.light_grid_subdivide;
         }
         bool operator!=(const VirtualLightMapSettings& other) const { return !(*this == other); }
@@ -92,6 +94,10 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.virtual_light_map.map_light_dir_offset_strength =
         clampf(out.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
     out.virtual_light_map.search_radius      = clampi(out.virtual_light_map.search_radius, 0, 64);
+    out.virtual_light_map.grid_subdivide     = clampi(out.virtual_light_map.grid_subdivide, 0, 8);
+    if (out.virtual_light_map.grid_subdivide == 0) {
+        out.virtual_light_map.grid_subdivide = 1;
+    }
     out.virtual_light_map.light_grid_subdivide = clampi(out.virtual_light_map.light_grid_subdivide, 1, 8);
     out.opacity_strength                     = clampf(out.opacity_strength, 0.0f, 10.0f);
     out.opacity_sensitivity_percent          = clampf(out.opacity_sensitivity_percent, 0.0f, 100.0f);

@@ -97,6 +97,52 @@ private:
     bool hovered_ = false;
 };
 
+class DMNumericStepper {
+public:
+    DMNumericStepper(const std::string& label, int min_value, int max_value, int value);
+    void set_rect(const SDL_Rect& r);
+    const SDL_Rect& rect() const { return rect_; }
+    void set_value(int v);
+    int value() const { return value_; }
+    void set_range(int min_value, int max_value);
+    void set_step(int step);
+    void set_on_change(std::function<void(int)> cb) { on_change_ = std::move(cb); }
+    bool handle_event(const SDL_Event& e);
+    void render(SDL_Renderer* r) const;
+    int preferred_height(int width) const;
+    static int height();
+
+private:
+    int clamp_value(int v) const;
+    void update_layout();
+    void update_hover(SDL_Point p);
+    bool apply_delta(int delta);
+    void commit_value(int new_value);
+    int compute_label_height(int width) const;
+    SDL_Rect decrement_rect() const { return dec_rect_; }
+    SDL_Rect increment_rect() const { return inc_rect_; }
+    SDL_Rect value_rect() const { return value_rect_; }
+
+    SDL_Rect rect_{0,0,200,32};
+    SDL_Rect label_rect_{0,0,0,0};
+    SDL_Rect control_rect_{0,0,0,0};
+    SDL_Rect dec_rect_{0,0,0,0};
+    SDL_Rect inc_rect_{0,0,0,0};
+    SDL_Rect value_rect_{0,0,0,0};
+    int label_height_ = 0;
+    std::string label_;
+    int min_value_ = 0;
+    int max_value_ = 0;
+    int value_ = 0;
+    int step_ = 1;
+    bool hovered_dec_ = false;
+    bool hovered_inc_ = false;
+    bool hovered_value_ = false;
+    bool pressed_dec_ = false;
+    bool pressed_inc_ = false;
+    std::function<void(int)> on_change_{};
+};
+
 class DMTextBox;
 
 class DMSlider {
@@ -358,6 +404,28 @@ public:
     void render(SDL_Renderer* r) const override { if (c_) c_->render(r); }
 private:
     DMCheckbox* c_ = nullptr;
+};
+
+class StepperWidget : public Widget {
+public:
+    explicit StepperWidget(DMNumericStepper* s) : s_(s) {}
+    void set_rect(const SDL_Rect& r) override {
+        rect_cache_ = r;
+        if (s_) s_->set_rect(r);
+    }
+    const SDL_Rect& rect() const override {
+        if (s_) {
+            return s_->rect();
+        }
+        return rect_cache_;
+    }
+    int height_for_width(int w) const override { return s_ ? s_->preferred_height(w) : DMNumericStepper::height(); }
+    bool handle_event(const SDL_Event& e) override { return s_ ? s_->handle_event(e) : false; }
+    void render(SDL_Renderer* r) const override { if (s_) s_->render(r); }
+    bool wants_full_row() const override { return true; }
+private:
+    DMNumericStepper* s_ = nullptr;
+    SDL_Rect rect_cache_{0, 0, 0, DMNumericStepper::height()};
 };
 
 class SliderWidget : public Widget {

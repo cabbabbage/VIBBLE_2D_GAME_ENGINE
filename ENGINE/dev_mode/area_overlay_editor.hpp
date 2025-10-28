@@ -15,6 +15,7 @@ class DockableCollapsible;
 class DMButton;
 class DMSlider;
 class DMTextBox;
+class DMNumericStepper;
 class camera;
 class Room;
 
@@ -56,6 +57,7 @@ private:
     void upload_mask();
     void ensure_mask_contains(int lx, int ly, int radius);
     void init_mask_from_existing_area();
+    void setup_resolution_stepper();
     std::vector<SDL_Point> extract_edge_points(int step = 1) const;
     std::vector<SDL_Point> trace_polygon_from_mask() const;
     bool persist_current_area();
@@ -106,7 +108,7 @@ private:
     std::unique_ptr<DMSlider> crop_bottom_slider_;
     std::vector<std::unique_ptr<class Widget>> owned_widgets_;
     std::unique_ptr<DMTextBox> name_box_;
-    std::unique_ptr<DMTextBox> resolution_box_;
+    std::unique_ptr<DMNumericStepper> resolution_stepper_;
 
     int crop_left_px_ = 0;
     int crop_right_px_ = 0;
@@ -143,7 +145,5 @@ private:
     std::vector<TrackedCheckboxState> tracked_checkboxes_;
 
     int area_resolution_ = 2;
-
-    int sanitize_resolution_input();
 
 };

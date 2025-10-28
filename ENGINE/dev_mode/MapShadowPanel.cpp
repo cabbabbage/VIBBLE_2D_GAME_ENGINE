@@ -274,6 +274,29 @@ void MapShadowPanel::build_ui() {
         });
     }
 
+    const int grid_subdivide_value = std::clamp(std::max(1, vsettings.grid_subdivide), 0, 8);
+    grid_subdivide_ = std::make_unique<DMSlider>("Grid Subdivide", 0, 8, grid_subdivide_value);
+    if (grid_subdivide_) {
+        grid_subdivide_->set_defer_commit_until_unfocus(false);
+        grid_subdivide_->set_value_formatter([](int value,
+                                                std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
+                                                -> std::string_view {
+            const int clamped = std::clamp(value, 0, 8);
+            const int written = std::snprintf(buffer.data(), buffer.size(), "%dx", clamped == 0 ? 1 : clamped);
+            if (written <= 0) {
+                return {};
+            }
+            return std::string_view(buffer.data(), static_cast<std::size_t>(written));
+        });
+        grid_subdivide_->set_value_parser([](const std::string& text) -> std::optional<int> {
+            try {
+                return std::stoi(text);
+            } catch (...) {
+                return std::nullopt;
+            }
+        });
+    }
+
     const int light_grid_subdivide_value =
         std::clamp(std::max(1, vsettings.light_grid_subdivide), 0, 8);
     light_grid_subdivide_ =
@@ -319,6 +342,8 @@ void MapShadowPanel::build_ui() {
     add_slider_with_help(frame_blend_falloff_frames_, "Lower: changes respond instantly. Higher: smooth changes across more frames.");
     add_slider_with_help(map_light_dir_strength_, "Lower: ignore directional light push. Higher: follow main light direction strongly.");
     add_slider_with_help(search_radius_, "Lower: sample nearby cells. Higher: gather lighting from a wider area.");
+    add_slider_with_help(grid_subdivide_,
+                         "Lower: fewer grid cells. Higher: subdivide the virtual light map grid for smoother detail.");
     add_slider_with_help(light_grid_subdivide_,
                          "Lower: fewer light cells. Higher: subdivide grid for smoother falloff.");
 
@@ -344,6 +369,8 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
     if (map_light_dir_strength_)
         map_light_dir_strength_->set_value(static_cast<int>(std::round(settings.virtual_light_map.map_light_dir_offset_strength * 100.0f)));
     if (search_radius_) search_radius_->set_value(std::clamp(settings.virtual_light_map.search_radius, 0, 128));
+    if (grid_subdivide_)
+        grid_subdivide_->set_value(std::clamp(std::max(1, settings.virtual_light_map.grid_subdivide), 0, 8));
     if (light_grid_subdivide_)
         light_grid_subdivide_->set_value(std::clamp(std::max(1, settings.virtual_light_map.light_grid_subdivide), 0, 8));
     applying_ui_ = false;
@@ -368,6 +395,10 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
         read_scaled_slider(map_light_dir_strength_, 100, settings.virtual_light_map.map_light_dir_offset_strength);
     if (search_radius_) {
         settings.virtual_light_map.search_radius = std::clamp(search_radius_->displayed_value(), 0, 128);
+    }
+    if (grid_subdivide_) {
+        int subdivide = std::clamp(grid_subdivide_->displayed_value(), 0, 8);
+        settings.virtual_light_map.grid_subdivide = subdivide;
     }
     if (light_grid_subdivide_) {
         int subdivide = std::clamp(light_grid_subdivide_->displayed_value(), 0, 8);
