@@ -181,6 +181,7 @@ enable_testing()
 
 add_executable(dev_mode_ui_tests
     tests/dev_mode/dev_footer_bar_tests.cpp
+    tests/dev_mode/widgets_tooltip_tests.cpp
     tests/dev_mode/tag_cache_tests.cpp
     tests/dev_mode/asset_info_stub.cpp
     ENGINE/dev_mode/dev_ui_settings.cpp

@@ -66,5 +66,48 @@
                 "candidates": false
             }
         }
+    },
+    "render": {
+        "smoothing": {
+            "asset": {
+                "alpha": {
+                    "lerp_rate": 8.0,
+                    "max_step": 2.0,
+                    "method": 1.0,
+                    "snap_threshold": 0.009999999776482582,
+                    "spring_frequency": 0.0
+                },
+                "scale": {
+                    "lerp_rate": 12.0,
+                    "max_step": 8.0,
+                    "method": 1.0,
+                    "snap_threshold": 0.0010000000474974513,
+                    "spring_frequency": 0.0
+                },
+                "translation": {
+                    "lerp_rate": 0.0,
+                    "max_step": 6000.0,
+                    "method": 2.0,
+                    "snap_threshold": 0.10000000149011612,
+                    "spring_frequency": 6.0
+                }
+            },
+            "camera": {
+                "center": {
+                    "lerp_rate": 0.0,
+                    "max_step": 8000.0,
+                    "method": 2.0,
+                    "snap_threshold": 0.25,
+                    "spring_frequency": 5.0
+                },
+                "zoom": {
+                    "lerp_rate": 0.0,
+                    "max_step": 4.0,
+                    "method": 2.0,
+                    "snap_threshold": 0.0005000000237487257,
+                    "spring_frequency": 4.0
+                }
+            }
+        }
     }
 }

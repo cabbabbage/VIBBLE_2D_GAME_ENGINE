@@ -23,5 +23,6 @@ inline constexpr std::array<LineSegment, 4> CollapsibleHandleSegments() noexcept
 inline constexpr std::string_view CollapseExpanded() noexcept { return u8"\u25B2"; }
 inline constexpr std::string_view CollapseCollapsed() noexcept { return u8"\u25BC"; }
 inline constexpr std::string_view Close() noexcept { return "X"; }
+inline constexpr std::string_view Info() noexcept { return u8"\u2139"; }
 }
 

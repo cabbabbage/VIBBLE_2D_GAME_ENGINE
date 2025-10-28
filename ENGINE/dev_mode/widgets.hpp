@@ -14,6 +14,20 @@
 #include "dm_styles.hpp"
 #include "shared/formatting.hpp"
 
+struct DMWidgetTooltipState {
+    bool enabled = false;
+    std::string text{};
+    bool icon_hovered = false;
+    Uint32 hover_start_ms = 0;
+};
+
+SDL_Rect DMWidgetTooltipIconRect(const SDL_Rect& bounds);
+bool DMWidgetTooltipHandleEvent(const SDL_Event& e, const SDL_Rect& bounds, DMWidgetTooltipState& state);
+bool DMWidgetTooltipEnabled(const DMWidgetTooltipState& state);
+bool DMWidgetTooltipShouldDisplay(const DMWidgetTooltipState& state, Uint32 now_ticks);
+void DMWidgetTooltipRender(SDL_Renderer* renderer, const SDL_Rect& bounds, const DMWidgetTooltipState& state);
+void DMWidgetTooltipResetHover(DMWidgetTooltipState& state);
+
 bool DMWidgetsSliderScrollCaptured();
 void DMWidgetsSetSliderScrollCapture(const void* owner, bool capture);
 
@@ -25,6 +39,7 @@ public:
     void set_text(const std::string& t);
     const std::string& text() const { return text_; }
     void set_style(const DMButtonStyle* style);
+    void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_hovered() const { return hovered_; }
@@ -40,6 +55,7 @@ private:
     bool pressed_ = false;
     const DMButtonStyle* style_ = nullptr;
     int preferred_width_ = 0;
+    DMWidgetTooltipState* tooltip_state_ = nullptr;
 };
 
 class DMTextBox {
@@ -49,6 +65,7 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     void set_value(const std::string& v);
     const std::string& value() const { return text_; }
+    void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_editing() const { return editing_; }
@@ -76,6 +93,7 @@ private:
     bool editing_ = false;
     size_t caret_pos_ = 0;
     std::function<void()> on_height_changed_{};
+    DMWidgetTooltipState* tooltip_state_ = nullptr;
 };
 
 class DMCheckbox {
@@ -85,6 +103,7 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     void set_value(bool v) { value_ = v; }
     bool value() const { return value_; }
+    void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     int preferred_width() const;
@@ -95,6 +114,7 @@ private:
     std::string label_;
     bool value_ = false;
     bool hovered_ = false;
+    DMWidgetTooltipState* tooltip_state_ = nullptr;
 };
 
 class DMNumericStepper {
@@ -107,6 +127,7 @@ public:
     void set_range(int min_value, int max_value);
     void set_step(int step);
     void set_on_change(std::function<void(int)> cb) { on_change_ = std::move(cb); }
+    void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     int preferred_height(int width) const;
@@ -141,6 +162,7 @@ private:
     bool pressed_dec_ = false;
     bool pressed_inc_ = false;
     std::function<void(int)> on_change_{};
+    DMWidgetTooltipState* tooltip_state_ = nullptr;
 };
 
 class DMTextBox;
@@ -169,6 +191,7 @@ public:
     using SliderValueFormatter = std::function<std::string_view(int, std::array<char, dev_mode::kSliderFormatBufferSize>&)>;
     void set_value_formatter(SliderValueFormatter formatter);
     void set_value_parser(std::function<std::optional<int>(const std::string&)> parser);
+    void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     int preferred_height(int width) const;
@@ -209,6 +232,7 @@ private:
     mutable std::string formatted_value_cache_{};
     SliderValueFormatter value_formatter_{};
     std::function<std::optional<int>(const std::string&)> value_parser_{};
+    DMWidgetTooltipState* tooltip_state_ = nullptr;
 };
 
 class DMRangeSlider {
@@ -234,6 +258,7 @@ public:
         pending_dirty_ = false;
     }
     bool defer_commit_until_unfocus() const { return defer_commit_until_unfocus_; }
+    void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     static int height();
@@ -272,6 +297,7 @@ private:
     bool wheel_target_max_ = false;
     std::unique_ptr<DMTextBox> edit_min_;
     std::unique_ptr<DMTextBox> edit_max_;
+    DMWidgetTooltipState* tooltip_state_ = nullptr;
 };
 
 class DMDropdown {
@@ -284,6 +310,7 @@ public:
     void set_selected(int idx);
     bool focused() const { return focused_; }
     int pending_index() const { return has_pending_index_ ? pending_index_ : index_; }
+    void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     void render_options(SDL_Renderer* r) const;
@@ -318,6 +345,7 @@ private:
     bool has_pending_index_ = false;
     int hovered_option_index_ = -1;
     static DMDropdown* active_;
+    DMWidgetTooltipState* tooltip_state_ = nullptr;
 };
 
 class Widget {
@@ -333,6 +361,14 @@ public:
     void clear_layout_dirty_flags() const { layout_dirty_ = false; geometry_dirty_ = false; }
     bool needs_layout() const { return layout_dirty_; }
     bool needs_geometry() const { return geometry_dirty_; }
+    void set_tooltip_text(std::string text);
+    void set_tooltip_enabled(bool enabled);
+    void set_tooltip(std::string text) {
+        set_tooltip_text(std::move(text));
+        set_tooltip_enabled(true);
+    }
+    bool tooltip_enabled() const { return DMWidgetTooltipEnabled(tooltip_state_); }
+    const std::string& tooltip_text() const { return tooltip_state_.text; }
 protected:
     void request_layout() const {
         layout_dirty_ = true;
@@ -343,16 +379,24 @@ protected:
         geometry_dirty_ = true;
         if (layout_dirty_callback_) layout_dirty_callback_();
     }
+    DMWidgetTooltipState* tooltip_state() { return &tooltip_state_; }
+    const DMWidgetTooltipState* tooltip_state() const { return &tooltip_state_; }
 private:
     mutable std::function<void()> layout_dirty_callback_{};
     mutable bool layout_dirty_ = false;
     mutable bool geometry_dirty_ = false;
+    DMWidgetTooltipState tooltip_state_{};
 };
 
 class ButtonWidget : public Widget {
 public:
     explicit ButtonWidget(DMButton* b, std::function<void()> on_click = {})
-        : b_(b), on_click_(std::move(on_click)) {}
+        : b_(b), on_click_(std::move(on_click)) {
+        if (b_) b_->set_tooltip_state(this->tooltip_state());
+    }
+    ~ButtonWidget() override {
+        if (b_) b_->set_tooltip_state(nullptr);
+    }
     void set_rect(const SDL_Rect& r) override { if (b_) b_->set_rect(r); }
     const SDL_Rect& rect() const override { return b_->rect(); }
     int height_for_width(int ) const override { return DMButton::height(); }
@@ -376,11 +420,13 @@ public:
         : t_(t), full_row_(full_row) {
         if (t_) {
             t_->set_on_height_changed([this]() { this->request_layout(); });
+            t_->set_tooltip_state(this->tooltip_state());
         }
     }
     ~TextBoxWidget() override {
         if (t_) {
             t_->set_on_height_changed(nullptr);
+            t_->set_tooltip_state(nullptr);
         }
     }
     void set_rect(const SDL_Rect& r) override { if (t_) t_->set_rect(r); }
@@ -396,7 +442,12 @@ private:
 
 class CheckboxWidget : public Widget {
 public:
-    explicit CheckboxWidget(DMCheckbox* c) : c_(c) {}
+    explicit CheckboxWidget(DMCheckbox* c) : c_(c) {
+        if (c_) c_->set_tooltip_state(this->tooltip_state());
+    }
+    ~CheckboxWidget() override {
+        if (c_) c_->set_tooltip_state(nullptr);
+    }
     void set_rect(const SDL_Rect& r) override { if (c_) c_->set_rect(r); }
     const SDL_Rect& rect() const override { return c_->rect(); }
     int height_for_width(int ) const override { return DMCheckbox::height(); }
@@ -408,7 +459,12 @@ private:
 
 class StepperWidget : public Widget {
 public:
-    explicit StepperWidget(DMNumericStepper* s) : s_(s) {}
+    explicit StepperWidget(DMNumericStepper* s) : s_(s) {
+        if (s_) s_->set_tooltip_state(this->tooltip_state());
+    }
+    ~StepperWidget() override {
+        if (s_) s_->set_tooltip_state(nullptr);
+    }
     void set_rect(const SDL_Rect& r) override {
         rect_cache_ = r;
         if (s_) s_->set_rect(r);
@@ -430,7 +486,12 @@ private:
 
 class SliderWidget : public Widget {
 public:
-    explicit SliderWidget(DMSlider* s) : s_(s) {}
+    explicit SliderWidget(DMSlider* s) : s_(s) {
+        if (s_) s_->set_tooltip_state(this->tooltip_state());
+    }
+    ~SliderWidget() override {
+        if (s_) s_->set_tooltip_state(nullptr);
+    }
     void set_rect(const SDL_Rect& r) override { if (s_) s_->set_rect(r); }
     const SDL_Rect& rect() const override { return s_->rect(); }
     int height_for_width(int w) const override { return s_ ? s_->preferred_height(w) : DMSlider::height(); }
@@ -443,7 +504,12 @@ private:
 
 class RangeSliderWidget : public Widget {
 public:
-    explicit RangeSliderWidget(DMRangeSlider* s) : s_(s) {}
+    explicit RangeSliderWidget(DMRangeSlider* s) : s_(s) {
+        if (s_) s_->set_tooltip_state(this->tooltip_state());
+    }
+    ~RangeSliderWidget() override {
+        if (s_) s_->set_tooltip_state(nullptr);
+    }
     void set_rect(const SDL_Rect& r) override { if (s_) s_->set_rect(r); }
     const SDL_Rect& rect() const override { return s_->rect(); }
     int height_for_width(int ) const override { return DMRangeSlider::height(); }
@@ -456,7 +522,12 @@ private:
 
 class DropdownWidget : public Widget {
 public:
-    explicit DropdownWidget(DMDropdown* d) : d_(d) {}
+    explicit DropdownWidget(DMDropdown* d) : d_(d) {
+        if (d_) d_->set_tooltip_state(this->tooltip_state());
+    }
+    ~DropdownWidget() override {
+        if (d_) d_->set_tooltip_state(nullptr);
+    }
     void set_rect(const SDL_Rect& r) override {
         rect_cache_ = r;
         if (d_) d_->set_rect(r);
