@@ -217,9 +217,14 @@ target_link_libraries(dev_mode_ui_tests PRIVATE
 target_compile_definitions(dev_mode_ui_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}" ASSET_INFO_ENABLE_TEST_ACCESS)
 add_test(NAME dev_mode_ui_tests COMMAND dev_mode_ui_tests)
 
+set(AREA_SOURCES
+    ENGINE/utils/area.cpp
+    ENGINE/util/grid_math.cpp
+)
+
 add_executable(asset_loader_distance_tests
     tests/core/asset_loader_distance_tests.cpp
-    ENGINE/utils/area.cpp
+    ${AREA_SOURCES}
     ENGINE/core/asset_loader_internal.cpp
 )
 target_include_directories(asset_loader_distance_tests PRIVATE
@@ -259,7 +264,7 @@ add_executable(camera_refresh_tests
     tests/core/camera_refresh_tests.cpp
     ENGINE/render/camera.cpp
     ENGINE/core/find_current_room.cpp
-    ENGINE/utils/area.cpp
+    ${AREA_SOURCES}
     ENGINE/utils/range_util.cpp
     ENGINE/utils/cache_manager.cpp
 )
@@ -384,7 +389,7 @@ add_executable(manifest_store_tests
     ENGINE/dev_mode/search_assets.cpp
     ENGINE/utils/map_grid_settings.cpp
     ENGINE/utils/input.cpp
-    ENGINE/utils/area.cpp
+    ${AREA_SOURCES}
     ENGINE/asset_info_methods/animation_loader.cpp
     ENGINE/asset_info_methods/lighting_loader.cpp
     ENGINE/asset_info_methods/asset_child_loader.cpp
@@ -426,7 +431,7 @@ add_executable(asset_info_manifest_tests
     ENGINE/asset_info_methods/lighting_loader.cpp
     ENGINE/asset_info_methods/asset_child_loader.cpp
     ENGINE/utils/generate_faded_mask.cpp
-    ENGINE/utils/area.cpp
+    ${AREA_SOURCES}
     ENGINE/utils/cache_manager.cpp
     ENGINE/utils/loading_status_notifier.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
@@ -458,8 +463,7 @@ add_test(NAME asset_info_manifest_tests COMMAND asset_info_manifest_tests)
 add_executable(edge_spawner_tests
     tests/spawn/edge_spawner_tests.cpp
     ENGINE/spawn/methods/edge_spawner.cpp
-    ENGINE/utils/area.cpp
-    ENGINE/util/grid_math.cpp
+    ${AREA_SOURCES}
 )
 target_include_directories(edge_spawner_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/external
