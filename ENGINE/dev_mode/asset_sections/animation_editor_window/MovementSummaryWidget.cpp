@@ -13,6 +13,7 @@
 #include "PanelLayoutConstants.hpp"
 #include "dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
+#include "dev_mode/font_cache.hpp"
 #include "dev_mode/widgets.hpp"
 
 namespace animation_editor {
@@ -55,19 +56,6 @@ std::string payload_signature(const std::optional<std::string>& payload) {
         return {};
     }
     return *payload;
-}
-
-int measure_text_width(const DMLabelStyle& style, const std::string& text) {
-    TTF_Font* font = style.open_font();
-    if (!font) {
-        return 0;
-    }
-    int width = 0;
-    if (TTF_SizeUTF8(font, text.c_str(), &width, nullptr) != 0) {
-        width = 0;
-    }
-    TTF_CloseFont(font);
-    return width;
 }
 
 }
@@ -161,7 +149,8 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
         dm_draw::DrawRoundedOutline( renderer, button_rect_, button_radius, 1, button_style.border);
 
         const std::string button_text = "Frame Editor";
-        int label_width = measure_text_width(button_style.label, button_text);
+        const SDL_Point label_size = DMFontCache::instance().measure_text(button_style.label, button_text);
+        int label_width = label_size.x;
         int label_x = button_rect_.x + (button_rect_.w - label_width) / 2;
         label_x = std::max(label_x, button_rect_.x + 8);
         int label_y = button_rect_.y + (button_rect_.h - button_style.label.font_size) / 2;
