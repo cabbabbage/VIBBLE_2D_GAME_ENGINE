@@ -26,6 +26,7 @@ public:
 
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
     void set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings);
+    void set_update_map_light_callback(std::function<void(bool)> cb);
 
     using ColorSampleRequestCallback = std::function<void( const utils::color::RangedColor&, std::function<void(SDL_Color)>, std::function<void()>)>;
     void set_map_color_sample_callback(ColorSampleRequestCallback cb);
@@ -145,6 +146,7 @@ private:
     bool needs_sync_to_json_ = false;
 
     bool update_map_light_enabled_ = false;
+    std::function<void(bool)> update_map_light_callback_{};
 
     OrbitSettings last_applied_orbit_{};
 

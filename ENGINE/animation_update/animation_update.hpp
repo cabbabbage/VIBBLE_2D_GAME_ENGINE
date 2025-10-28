@@ -1,8 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include <SDL.h>
@@ -10,7 +9,6 @@
 #include "stride_types.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
-#include "stride_player.hpp"
 
 namespace vibble::grid {
 class Grid;
@@ -18,59 +16,67 @@ class Grid;
 
 class Asset;
 class Assets;
-class AnimationFrame;
+class AnimationRuntime; // non-public executor
 
+// Public-facing planner/controller API. Does not mutate the Asset directly.
 class AnimationUpdate {
 public:
     AnimationUpdate(Asset* self, Assets* assets);
     AnimationUpdate(Asset* self, Assets* assets, double path_bias);
 
-    void update();
+    // Wire to the executor after both are constructed
+    void set_runtime(AnimationRuntime* runtime) { runtime_ = runtime; }
+
+    // Plan a path using relative checkpoints from the controller
     void auto_move(const std::vector<SDL_Point>& rel_checkpoints,
                    int visited_thresh_px,
                    std::optional<int> checkpoint_resolution = std::nullopt);
+
+    // Request an immediate move + animation selection (applied by executor in update)
     void move(SDL_Point delta, const std::string& animation, bool resort_z = true);
+
+    // Clear any existing path plan
     void clear_movement_plan();
+
+    // Query active movement path index for a given animation (delegates to executor)
     std::size_t path_index_for(const std::string& anim_id) const;
 
+    // Exposed state for controllers to inspect
     bool      path_requested = false;
     SDL_Point final_dest{0, 0};
 
+    // Executor interface (internal)
+    bool has_pending_move() const { return move_pending_; }
+    struct MoveRequest {
+        SDL_Point    delta{0, 0};
+        std::string  animation_id;
+        bool         resort_z = true;
+    };
+    MoveRequest consume_move_request();
+    bool consume_input_event();
+
 private:
-    bool advance(AnimationFrame*& frame);
-    void switch_to(const std::string& anim_id, std::size_t path_index = 0);
-
-    SDL_Point bottom_middle(SDL_Point pos) const;
-    bool point_in_impassable(SDL_Point pt, const Asset* ignored) const;
-    bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored, std::vector<const Asset*>* blockers = nullptr) const;
-    bool attempt_unstick(SDL_Point from, SDL_Point to, const std::vector<const Asset*>& blockers);
-    bool adjust_next_checkpoint(const std::vector<const Asset*>& blockers);
-    bool handle_blocked_path(SDL_Point from, SDL_Point to, const std::vector<const Asset*>& blockers);
-    void mark_progress_toward_checkpoints();
-    bool replan_to_destination();
-
     vibble::grid::Grid& grid() const;
     int                 effective_grid_resolution(std::optional<int> override_resolution) const;
-    SDL_Point           convert_delta_to_world(SDL_Point delta, int resolution) const;
-    void                refresh_z_index();
 
 private:
-    friend class StridePlayer;
+    friend class AnimationRuntime;
 
     Asset*  self_          = nullptr;
     Assets* assets_owner_  = nullptr;
     vibble::grid::Grid* grid_service_ = nullptr;
+    AnimationRuntime* runtime_ = nullptr;
 
-    int visited_thresh_ = 0;
+    // Planning state
+    Plan plan_{};
+    int  visited_thresh_ = 0;
 
-    Plan   plan_{};
-    size_t stride_index_        = 0;
-    int    stride_frame_counter_ = 0;
-    size_t next_checkpoint_index_ = 0;
-
+    // Planning helpers
     PathSanitizer sanitizer_{};
     GetBestPath   planner_{};
-    StridePlayer  player_{};
 
-    std::unordered_map<std::string, std::size_t> active_paths_{};
+    // Controller interaction state
+    bool        input_event_ = false;
+    bool        move_pending_ = false;
+    MoveRequest pending_move_{};
 };

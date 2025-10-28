@@ -87,7 +87,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   main_light_source_,
                                   assets->player,
                                   nullptr,
-                                  &reactive_shadow_settings_ })
+                                  &reactive_shadow_settings_ }),
+  update_map_light_enabled_(devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true))
 {
     if (map_manifest.is_object()) {
         auto it = map_manifest.find("map_light_data");
@@ -120,6 +121,10 @@ SceneRenderer::~SceneRenderer() {
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
+
+void SceneRenderer::set_update_map_light_enabled(bool enabled) {
+    update_map_light_enabled_ = enabled;
+}
 
 LightMap* SceneRenderer::light_map() {
     return light_map_ ? light_map_.get() : nullptr;
@@ -245,9 +250,9 @@ void SceneRenderer::render(){
         main_light_source_.set_direction_reference_world(camera_state->get_screen_center());
     }
 
-    bool should_update_light=true;
-    if (assets_ && assets_->is_dev_mode()){
-        should_update_light=devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true);
+    bool should_update_light = true;
+    if (assets_ && assets_->is_dev_mode()) {
+        should_update_light = update_map_light_enabled_;
     }
 
     if (light_map_ && !chunk_lighting_suspended_){

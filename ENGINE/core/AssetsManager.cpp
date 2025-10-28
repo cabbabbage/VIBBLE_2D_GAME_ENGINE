@@ -389,6 +389,16 @@ bool Assets::on_map_light_changed() {
     return true;
 }
 
+void Assets::set_update_map_light_enabled(bool enabled) {
+    if (scene) {
+        scene->set_update_map_light_enabled(enabled);
+    }
+}
+
+bool Assets::update_map_light_enabled() const {
+    return scene ? scene->update_map_light_enabled() : true;
+}
+
 Assets::~Assets() {
     render_pipeline::ScalingLogic::ShutdownUsageSampling();
 

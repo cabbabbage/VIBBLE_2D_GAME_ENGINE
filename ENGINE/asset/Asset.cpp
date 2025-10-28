@@ -5,6 +5,7 @@
 #include "core/asset_list.hpp"
 #include "render/camera.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
+#include "animation_update/animation_runtime.hpp"
 #include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
 #include "util/grid.hpp"
@@ -245,7 +246,10 @@ void Asset::finalize_setup() {
         }
         #endif
         if (assets_ && !anim_) {
+                anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
                 anim_ = std::make_unique<AnimationUpdate>(this, assets_);
+                if (anim_runtime_) anim_runtime_->set_planner(anim_.get());
+                if (anim_) anim_->set_runtime(anim_runtime_.get());
         }
         if (assets_ && !controller_) {
                 ControllerFactory cf(assets_);
@@ -355,8 +359,8 @@ void Asset::update() {
         }
     }
 
-    if (!dead && anim_) {
-        anim_->update();
+    if (!dead && anim_runtime_) {
+        anim_runtime_->update();
     }
 
     if (info->moving_asset) {
@@ -432,7 +436,10 @@ void Asset::set_assets(Assets* a) {
         assets_->track_asset_for_grid(this);
     }
     if (assets_ && !anim_) {
+            anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
             anim_ = std::make_unique<AnimationUpdate>(this, assets_);
+            if (anim_runtime_) anim_runtime_->set_planner(anim_.get());
+            if (anim_) anim_->set_runtime(anim_runtime_.get());
     }
     if (!controller_ && assets_) {
             ControllerFactory cf(assets_);

@@ -135,8 +135,10 @@ class Asset {
     std::string spawn_method;
     std::string owning_room_name_;
     std::unique_ptr<AnimationUpdate> anim_;
+    std::unique_ptr<class AnimationRuntime> anim_runtime_;
         private:
     friend class AnimationUpdate;
+    friend class AnimationRuntime;
     friend class Move;
     friend class AssetInfoUI;
     friend class RenderAsset;

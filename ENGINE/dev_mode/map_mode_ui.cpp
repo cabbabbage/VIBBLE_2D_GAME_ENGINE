@@ -541,6 +541,11 @@ void MapModeUI::ensure_panels() {
                    std::function<void()> on_cancel) {
                 this->begin_map_color_sampling(current, std::move(on_sample), std::move(on_cancel));
             });
+        light_panel_->set_update_map_light_callback([this](bool enabled) {
+            if (assets_) {
+                assets_->set_update_map_light_enabled(enabled);
+            }
+        });
     }
     if (!shadow_panel_) {
         shadow_panel_ = std::make_unique<MapShadowPanel>(assets_, kDefaultPanelX + 280, kDefaultPanelY);

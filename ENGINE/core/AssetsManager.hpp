@@ -151,6 +151,8 @@ public:
     void force_shaded_assets_rerender();
     void set_map_light_panel_visible(bool visible);
     bool is_map_light_panel_visible() const;
+    void set_update_map_light_enabled(bool enabled);
+    bool update_map_light_enabled() const;
 
     void apply_map_grid_settings(const MapGridSettings& settings, bool persist_json = true);
     int  map_grid_chunk_resolution() const;

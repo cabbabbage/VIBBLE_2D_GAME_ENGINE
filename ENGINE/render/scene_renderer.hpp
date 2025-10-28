@@ -33,6 +33,8 @@ public:
     bool light_map_only_mode() const { return light_map_only_mode_; }
     void toggle_chunk_preview() { chunk_preview_enabled_ = !chunk_preview_enabled_; }
     bool chunk_preview_enabled() const { return chunk_preview_enabled_; }
+    bool update_map_light_enabled() const { return update_map_light_enabled_; }
+    void set_update_map_light_enabled(bool enabled);
     Global_Light_Source& map_light_source() { return main_light_source_; }
     const Global_Light_Source& map_light_source() const { return main_light_source_; }
     render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() { return reactive_shadow_settings_; }
@@ -75,6 +77,7 @@ private:
     bool           low_quality_rendering_ = false;
     bool           light_map_only_mode_ = false;
     bool           chunk_preview_enabled_ = false;
+    bool           update_map_light_enabled_ = true;
     bool           chunk_lighting_suspended_ = false;
 
     std::unordered_map<Asset*, const AnimationFrame*> last_rendered_frames_;
