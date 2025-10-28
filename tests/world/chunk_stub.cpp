@@ -7,12 +7,12 @@
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 
-SDL_Point camera::map_to_screen(SDL_Point world, float, float) const {
-    return world;
+SDL_FPoint camera::map_to_screen(SDL_Point world, float, float) const {
+    return SDL_FPoint{ static_cast<float>(world.x), static_cast<float>(world.y) };
 }
 
-SDL_Point camera::screen_to_map(SDL_Point screen, float, float) const {
-    return screen;
+SDL_FPoint camera::screen_to_map(SDL_Point screen, float, float) const {
+    return SDL_FPoint{ static_cast<float>(screen.x), static_cast<float>(screen.y) };
 }
 
 Global_Light_Source* Assets::map_light_source() {

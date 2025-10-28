@@ -132,22 +132,30 @@ void StageContext::update_projection(Asset& asset) {
             base_sh,
             reference_height);
 
-    const float scaled_sw = base_sw * effects.distance_scale;
-    const float scaled_sh = base_sh * effects.distance_scale;
+    const float scaled_sw       = base_sw * effects.distance_scale;
+    const float scaled_sh       = base_sh * effects.distance_scale;
     const float final_visible_h = scaled_sh * effects.vertical_scale;
 
     if (!std::isfinite(scaled_sw) || !std::isfinite(final_visible_h) || scaled_sw <= 0.0f || final_visible_h <= 0.0f) {
         return;
     }
 
-    const int   sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
-    const int   sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
     const float center_x = effects.screen_position.x + effects.parallax_offset_x;
     const float center_y = effects.screen_position.y;
-    const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
-    const int   top      = static_cast<int>(std::lround(center_y - static_cast<float>(sh)));
-    screen_rect          = SDL_Rect{ left, top, sw, sh };
-    screen_center        = SDL_FPoint{ center_x, center_y - static_cast<float>(sh) * 0.5f };
+
+    const float rect_w = std::max(scaled_sw, 1.0f);
+    const float rect_h = std::max(final_visible_h, 1.0f);
+
+    const float left_f = center_x - rect_w * 0.5f;
+    const float top_f  = center_y - rect_h;
+
+    screen_center = SDL_FPoint{ center_x, center_y - rect_h * 0.5f };
+
+    const int sw = std::max(1, static_cast<int>(std::lround(rect_w)));
+    const int sh = std::max(1, static_cast<int>(std::lround(rect_h)));
+    const int left = static_cast<int>(std::lround(left_f));
+    const int top  = static_cast<int>(std::lround(top_f));
+    screen_rect    = SDL_Rect{ left, top, sw, sh };
 
     if (const LightMap* light_map_sampler = light_map()) {
         const LightMap::SampledBrightness sample =

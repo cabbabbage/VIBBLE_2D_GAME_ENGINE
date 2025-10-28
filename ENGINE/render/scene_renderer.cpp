@@ -226,10 +226,10 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
             base_scale = 1.0f;
         }
     }
-    float scaled_fw=(float)fw*base_scale;
-    float scaled_fh=(float)fh*base_scale;
-    float base_sw=scaled_fw*inv_scale;
-    float base_sh=scaled_fh*inv_scale;
+    const float scaled_fw = static_cast<float>(fw) * base_scale;
+    const float scaled_fh = static_cast<float>(fh) * base_scale;
+    const float base_sw   = scaled_fw * inv_scale;
+    const float base_sh   = scaled_fh * inv_scale;
 
     camera& cam = assets_->getView();
     camera::RenderEffects ef=cam.compute_render_effects(
@@ -238,21 +238,42 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
         ref_sh);
     SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ world_x, world_y });
     ef.screen_position = screen;
-    float scaled_sw=base_sw*ef.distance_scale;
-    float scaled_sh2=base_sh*ef.distance_scale;
-    float final_h=scaled_sh2*ef.vertical_scale;
+    const float scaled_sw = base_sw * ef.distance_scale;
+    const float scaled_sh2 = base_sh * ef.distance_scale;
+    const float final_h = scaled_sh2 * ef.vertical_scale;
 
-    if (scaled_sw<min_w && final_h<min_h) return SDL_FRect{0.0f,0.0f,0.0f,0.0f};
+    const float min_w_f = static_cast<float>(min_w);
+    const float min_h_f = static_cast<float>(min_h);
+    if (scaled_sw < min_w_f && final_h < min_h_f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
 
-    int sw=std::max(1,(int)std::lround(scaled_sw));
-    int sh=std::max(1,(int)std::lround(final_h));
-    if (sw<min_w && sh<min_h) return SDL_FRect{0.0f,0.0f,0.0f,0.0f};
+    float width  = scaled_sw;
+    float height = final_h;
+
+    bool enforced_min = false;
+    if (width < min_w_f) {
+        width = min_w_f;
+        enforced_min = true;
+    }
+    if (height < min_h_f) {
+        height = min_h_f;
+        enforced_min = true;
+    }
+
+    width  = std::max(width, 1.0f);
+    height = std::max(height, 1.0f);
 
     const float center_x = ef.screen_position.x + ef.parallax_offset_x;
-    const float half_w   = static_cast<float>(sw) * 0.5f;
-    const float left     = center_x - half_w;
-    const float top      = ef.screen_position.y - static_cast<float>(sh);
-    return SDL_FRect{ left, top, static_cast<float>(sw), static_cast<float>(sh) };
+    const float left     = center_x - width * 0.5f;
+    const float top      = ef.screen_position.y - height;
+
+    if (enforced_min) {
+        width  = static_cast<float>(std::max(1, static_cast<int>(std::lround(width))));
+        height = static_cast<float>(std::max(1, static_cast<int>(std::lround(height))));
+    }
+
+    return SDL_FRect{ left, top, width, height };
 }
 
 void SceneRenderer::render(){
@@ -623,19 +644,19 @@ void SceneRenderer::inject_map_light_sample() {
 
     const camera& cam = assets_->getView();
     const SDL_Point screen_pos = map_light->get_position();
-    const SDL_Point world_pos  = cam.screen_to_map(screen_pos);
+    const SDL_FPoint world_pos  = cam.screen_to_map(screen_pos);
 
     runtime_lighting::ExternalLightSample sample{};
-    sample.position.x = static_cast<float>(world_pos.x);
-    sample.position.y = static_cast<float>(world_pos.y);
+    sample.position.x = world_pos.x;
+    sample.position.y = world_pos.y;
     sample.intensity  = std::clamp(effective_intensity, 0.0f, 1.0f);
     sample.color      = light_color;
 
-    SDL_Point world00 = cam.screen_to_map({0, 0});
-    SDL_Point worldX  = cam.screen_to_map({screen_width_, 0});
-    SDL_Point worldY  = cam.screen_to_map({0, screen_height_});
-    const float span_x = std::abs(static_cast<float>(worldX.x - world00.x));
-    const float span_y = std::abs(static_cast<float>(worldY.y - world00.y));
+    SDL_FPoint world00 = cam.screen_to_map({0, 0});
+    SDL_FPoint worldX  = cam.screen_to_map({screen_width_, 0});
+    SDL_FPoint worldY  = cam.screen_to_map({0, screen_height_});
+    const float span_x = std::abs(worldX.x - world00.x);
+    const float span_y = std::abs(worldY.y - world00.y);
     float       dominant_span = std::max(span_x, span_y);
     if (!(dominant_span > 1e-3f)) {
         dominant_span = static_cast<float>(std::max(screen_width_, screen_height_));

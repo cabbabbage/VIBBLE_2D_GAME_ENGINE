@@ -1267,7 +1267,8 @@ void AreaOverlayEditor::apply_mask_crop() {
 
 void AreaOverlayEditor::position_toolbox_near_anchor(int screen_w, int screen_h) {
     if (!toolbox_ || !assets_ || !has_anchor_) return;
-    SDL_Point ap = assets_->getView().map_to_screen(anchor_world_);
+    SDL_FPoint ap_f = assets_->getView().map_to_screen(anchor_world_);
+    SDL_Point ap{static_cast<int>(std::lround(ap_f.x)), static_cast<int>(std::lround(ap_f.y))};
     toolbox_->set_work_area(SDL_Rect{0, 0, screen_w, screen_h});
 
     SDL_Rect rect = toolbox_->rect();

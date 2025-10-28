@@ -433,7 +433,8 @@ Room* RoomEditor::resolve_room_for_clipboard_action() const {
     if (auto mapped = input_->screen_to_world(screen)) {
         world = *mapped;
     } else {
-        world = assets->getView().screen_to_map(screen);
+        SDL_FPoint mapped = assets->getView().screen_to_map(screen);
+        world = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
     }
 
     if (current_room_ && current_room_->room_area && current_room_->room_area->contains_point(world)) {
@@ -1256,9 +1257,9 @@ void RoomEditor::render_room_labels(SDL_Renderer* renderer) {
         if (!room || !room->room_area) continue;
 
         SDL_Point center = room->room_area->get_center();
-        SDL_Point screen_pt = view.map_to_screen(center);
-        SDL_FPoint desired_center{static_cast<float>(screen_pt.x),
-                                  static_cast<float>(screen_pt.y - kLabelVerticalOffset)};
+        SDL_FPoint screen_pt = view.map_to_screen(center);
+        SDL_FPoint desired_center{screen_pt.x,
+                                  screen_pt.y - kLabelVerticalOffset};
 
         float dx = desired_center.x - screen_center.x;
         float dy = desired_center.y - screen_center.y;
@@ -1674,7 +1675,9 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
             const camera& cam = assets_->getView();
             const double scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
             const double inv_scale = 1.0 / scale;
-            SDL_Point screen_center = cam.map_to_screen(overlay->center);
+            SDL_FPoint screen_center_f = cam.map_to_screen(overlay->center);
+            SDL_Point screen_center{static_cast<int>(std::lround(screen_center_f.x)),
+                                    static_cast<int>(std::lround(screen_center_f.y))};
             int radius_px = static_cast<int>(std::lround(overlay->radius * inv_scale));
             radius_px = std::max(1, radius_px);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -2156,7 +2159,8 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         mark_spatial_index_dirty();
     }
 
-    SDL_Point world_mouse = cam.screen_to_map(SDL_Point{mx, my});
+    SDL_FPoint world_mouse_f = cam.screen_to_map(SDL_Point{mx, my});
+    SDL_Point world_mouse{static_cast<int>(std::lround(world_mouse_f.x)), static_cast<int>(std::lround(world_mouse_f.y))};
 
     if (suppress_hover_and_drag) {
         if (dragging_) {
@@ -2578,7 +2582,8 @@ void RoomEditor::handle_click(const Input& input) {
     if (auto mapped = input_->mouse_world_position()) {
         world_mouse = *mapped;
     } else if (assets_) {
-        world_mouse = assets_->getView().screen_to_map(world_mouse);
+        SDL_FPoint mapped = assets_->getView().screen_to_map(world_mouse);
+        world_mouse = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
     }
 
     bool selection_changed = false;

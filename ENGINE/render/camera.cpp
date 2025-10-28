@@ -407,22 +407,18 @@ SDL_FPoint camera::map_to_screen_f(SDL_FPoint world, float, float) const {
     return SDL_FPoint{ static_cast<float>(sx), static_cast<float>(sy) };
 }
 
-SDL_Point camera::map_to_screen(SDL_Point world, float parallax_x, float parallax_y) const {
+SDL_FPoint camera::map_to_screen(SDL_Point world, float parallax_x, float parallax_y) const {
     SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
-    SDL_FPoint screen_f = map_to_screen_f(world_f, parallax_x, parallax_y);
-    return SDL_Point{
-        static_cast<int>(std::lround(screen_f.x)),
-        static_cast<int>(std::lround(screen_f.y))
-    };
+    return map_to_screen_f(world_f, parallax_x, parallax_y);
 }
 
-SDL_Point camera::screen_to_map(SDL_Point screen, float, float) const {
+SDL_FPoint camera::screen_to_map(SDL_Point screen, float, float) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
     const double s = static_cast<double>(std::max(0.000001f, smoothed_scale_));
     double wx = static_cast<double>(left) + static_cast<double>(screen.x) * s;
     double wy = static_cast<double>(top)  + static_cast<double>(screen.y) * s;
-    return SDL_Point{ static_cast<int>(std::lround(wx)), static_cast<int>(std::lround(wy)) };
+    return SDL_FPoint{ static_cast<float>(wx), static_cast<float>(wy) };
 }
 
 camera::RenderEffects camera::compute_render_effects(

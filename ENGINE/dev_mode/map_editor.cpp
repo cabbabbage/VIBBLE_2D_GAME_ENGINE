@@ -113,7 +113,8 @@ void MapEditor::update(const Input& input) {
     if (!cam) return;
 
     SDL_Point screen_pt{input.getX(), input.getY()};
-    SDL_Point map_pt = cam->screen_to_map(screen_pt);
+    SDL_FPoint map_pt_f = cam->screen_to_map(screen_pt);
+    SDL_Point map_pt{static_cast<int>(std::lround(map_pt_f.x)), static_cast<int>(std::lround(map_pt_f.y))};
     const bool pointer_over_ui = ui_blocker_ ? ui_blocker_(screen_pt.x, screen_pt.y) : false;
 
     Room* area_hit = hit_test_room(map_pt);
@@ -176,9 +177,9 @@ void MapEditor::render(SDL_Renderer* renderer) {
         dm_draw::RenderRoomBoundsOverlay( renderer, view, *room->room_area, style);
 
         SDL_Point center = room->room_area->get_center();
-        SDL_Point screen_pt = view.map_to_screen(center);
-        SDL_FPoint desired_center{static_cast<float>(screen_pt.x),
-                                  static_cast<float>(screen_pt.y - kLabelVerticalOffset)};
+        SDL_FPoint screen_pt = view.map_to_screen(center);
+        SDL_FPoint desired_center{screen_pt.x,
+                                  screen_pt.y - kLabelVerticalOffset};
 
         float dx = desired_center.x - screen_center.x;
         float dy = desired_center.y - screen_center.y;

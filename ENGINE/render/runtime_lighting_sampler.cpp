@@ -139,22 +139,18 @@ RuntimeEmitter make_emitter_from_light(const AssetLight&              source,
 
     const SDL_Point screen_center{
         static_cast<int>(std::lround(center_x)), static_cast<int>(std::lround(center_y))};
-    const SDL_Point world_center = cam.screen_to_map(screen_center);
-    emitter.position.x           = static_cast<float>(world_center.x);
-    emitter.position.y           = static_cast<float>(world_center.y);
+    const SDL_FPoint world_center = cam.screen_to_map(screen_center);
+    emitter.position.x           = world_center.x;
+    emitter.position.y           = world_center.y;
 
     const SDL_Point screen_right{screen_center.x + std::max(dst.w / 2, 1), screen_center.y};
     const SDL_Point screen_up{screen_center.x, screen_center.y - std::max(dst.h / 2, 1)};
 
-    const SDL_Point world_right = cam.screen_to_map(screen_right);
-    const SDL_Point world_up    = cam.screen_to_map(screen_up);
+    const SDL_FPoint world_right = cam.screen_to_map(screen_right);
+    const SDL_FPoint world_up    = cam.screen_to_map(screen_up);
 
-    const SDL_FPoint world_right_f{static_cast<float>(world_right.x),
-                                   static_cast<float>(world_right.y)};
-    const SDL_FPoint world_up_f{static_cast<float>(world_up.x), static_cast<float>(world_up.y)};
-
-    const float radius_x = distance(emitter.position, world_right_f);
-    const float radius_y = distance(emitter.position, world_up_f);
+    const float radius_x = distance(emitter.position, world_right);
+    const float radius_y = distance(emitter.position, world_up);
 
     float radius = std::max(radius_x, radius_y);
     radius       = std::max(radius, 0.0f);

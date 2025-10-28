@@ -198,11 +198,12 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     SDL_Rect bounds{ left, top, sw, sh };
 
     int z_world_y = target->pos.y + target->info->z_threshold;
-    SDL_Point z_screen = cam.map_to_screen(SDL_Point{target->pos.x, z_world_y});
+    SDL_FPoint z_screen_f = cam.map_to_screen(SDL_Point{target->pos.x, z_world_y});
+    const int z_line_y = static_cast<int>(std::lround(z_screen_f.y));
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     const SDL_Color accent = DMStyles::DeleteButton().hover_bg;
     SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 200);
-    SDL_RenderDrawLine(r, bounds.x, z_screen.y, bounds.x + bounds.w, z_screen.y);
+    SDL_RenderDrawLine(r, bounds.x, z_line_y, bounds.x + bounds.w, z_line_y);
 }
 

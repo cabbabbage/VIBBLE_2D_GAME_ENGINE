@@ -549,7 +549,8 @@ void Assets::set_input(Input* m) {
 
     if (input) {
         input->set_screen_to_world_mapper([this](SDL_Point screen, float parallax_x, float parallax_y) {
-            return camera_.screen_to_map(screen, parallax_x, parallax_y);
+            SDL_FPoint mapped = camera_.screen_to_map(screen, parallax_x, parallax_y);
+            return SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
         });
     }
 

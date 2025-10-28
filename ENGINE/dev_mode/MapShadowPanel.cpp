@@ -11,61 +11,11 @@
 #include "core/AssetsManager.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "dev_mode/dm_styles.hpp"
-#include "dev_mode/font_cache.hpp"
 #include "dev_mode/shared/formatting.hpp"
 #include "utils/input.hpp"
 
 namespace {
 constexpr int kDefaultPanelWidth = DockableCollapsible::kDefaultFloatingContentWidth;
-
-class SliderHelpLabel : public Widget {
-public:
-    explicit SliderHelpLabel(std::string text) : text_(std::move(text)) {}
-
-    void set_rect(const SDL_Rect& r) override { rect_ = r; }
-    const SDL_Rect& rect() const override { return rect_; }
-    int  height_for_width(int) const override {
-        const DMLabelStyle& style = DMStyles::Label();
-        int                 lines = 1;
-        for (char c : text_) {
-            if (c == '\n') {
-                ++lines;
-            }
-        }
-        lines = std::max(1, lines);
-        return lines * (style.font_size + DMSpacing::small_gap());
-    }
-    bool handle_event(const SDL_Event&) override { return false; }
-    void render(SDL_Renderer* renderer) const override {
-        if (!renderer) {
-            return;
-        }
-        const DMLabelStyle& style = DMStyles::Label();
-        const int           line_height = style.font_size + DMSpacing::small_gap();
-        int                 y = rect_.y;
-        std::string         current;
-        auto flush_line = [&](const std::string& line) {
-            if (!line.empty()) {
-                DrawLabelText(renderer, line, rect_.x, y, style);
-            }
-            y += line_height;
-        };
-        for (char c : text_) {
-            if (c == '\n') {
-                flush_line(current);
-                current.clear();
-            } else {
-                current.push_back(c);
-            }
-        }
-        flush_line(current);
-    }
-    bool wants_full_row() const override { return true; }
-
-private:
-    std::string text_;
-    SDL_Rect    rect_{0, 0, 0, 0};
-};
 
 std::unique_ptr<DMSlider> make_scaled_slider(const std::string& label,
                                              float min_value,
@@ -322,30 +272,28 @@ void MapShadowPanel::build_ui() {
         });
     }
 
-    auto add_slider_with_help = [&](std::unique_ptr<DMSlider>& slider, const std::string& help_text) {
+    auto add_slider_with_tooltip = [&](std::unique_ptr<DMSlider>& slider, const std::string& help_text) {
         if (!slider) {
             return;
         }
         auto slider_widget = std::make_unique<SliderWidget>(slider.get());
-        auto help_widget   = std::make_unique<SliderHelpLabel>(help_text);
+        slider_widget->set_tooltip(help_text);
         rows.push_back({slider_widget.get()});
-        rows.push_back({help_widget.get()});
         widget_wrappers_.push_back(std::move(slider_widget));
-        widget_wrappers_.push_back(std::move(help_widget));
-};
+    };
 
-    add_slider_with_help(horizontal_falloff_, "Lower: tighter horizontal fade. Higher: spreads effect wider.");
-    add_slider_with_help(vertical_falloff_, "Lower: tighter vertical fade. Higher: spreads effect taller.");
-    add_slider_with_help(max_offset_x_, "Lower: limits sideways shift. Higher: allows more horizontal movement.");
-    add_slider_with_help(max_offset_y_, "Lower: keeps shadows close vertically. Higher: lets them stretch farther up/down.");
-    add_slider_with_help(opacity_sensitivity_percent_, "Lower: react to local brightness. Higher: follow scene-wide light levels.");
-    add_slider_with_help(frame_blend_falloff_frames_, "Lower: changes respond instantly. Higher: smooth changes across more frames.");
-    add_slider_with_help(map_light_dir_strength_, "Lower: ignore directional light push. Higher: follow main light direction strongly.");
-    add_slider_with_help(search_radius_, "Lower: sample nearby cells. Higher: gather lighting from a wider area.");
-    add_slider_with_help(grid_subdivide_,
-                         "Lower: fewer grid cells. Higher: subdivide the virtual light map grid for smoother detail.");
-    add_slider_with_help(light_grid_subdivide_,
-                         "Lower: fewer light cells. Higher: subdivide grid for smoother falloff.");
+    add_slider_with_tooltip(horizontal_falloff_, "Lower: tighter horizontal fade. Higher: spreads effect wider.");
+    add_slider_with_tooltip(vertical_falloff_, "Lower: tighter vertical fade. Higher: spreads effect taller.");
+    add_slider_with_tooltip(max_offset_x_, "Lower: limits sideways shift. Higher: allows more horizontal movement.");
+    add_slider_with_tooltip(max_offset_y_, "Lower: keeps shadows close vertically. Higher: lets them stretch farther up/down.");
+    add_slider_with_tooltip(opacity_sensitivity_percent_, "Lower: react to local brightness. Higher: follow scene-wide light levels.");
+    add_slider_with_tooltip(frame_blend_falloff_frames_, "Lower: changes respond instantly. Higher: smooth changes across more frames.");
+    add_slider_with_tooltip(map_light_dir_strength_, "Lower: ignore directional light push. Higher: follow main light direction strongly.");
+    add_slider_with_tooltip(search_radius_, "Lower: sample nearby cells. Higher: gather lighting from a wider area.");
+    add_slider_with_tooltip(grid_subdivide_,
+                            "Lower: fewer grid cells. Higher: subdivide the virtual light map grid for smoother detail.");
+    add_slider_with_tooltip(light_grid_subdivide_,
+                            "Lower: fewer light cells. Higher: subdivide grid for smoother falloff.");
 
     set_rows(rows);
 }

@@ -72,7 +72,7 @@ TEST_CASE("Parallax offset preserves fractional precision") {
     const float reference_height    = 128.0f;
 
     camera::RenderEffects effects = cam.compute_render_effects(world, asset_screen_height, reference_height);
-    SDL_Point baseline            = cam.map_to_screen(world);
+    SDL_FPoint baseline           = cam.map_to_screen(world);
 
     CHECK_EQ(effects.screen_position.x, baseline.x);
     CHECK_EQ(effects.screen_position.y, baseline.y);

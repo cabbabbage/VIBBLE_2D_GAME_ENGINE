@@ -1255,10 +1255,12 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 if (auto mapped = input_->screen_to_world(sp)) {
                     world = *mapped;
                 } else if (assets_) {
-                    world = assets_->getView().screen_to_map(sp);
+                    SDL_FPoint mapped = assets_->getView().screen_to_map(sp);
+                    world = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
                 }
             } else if (assets_) {
-                world = assets_->getView().screen_to_map(sp);
+                SDL_FPoint mapped = assets_->getView().screen_to_map(sp);
+                world = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
             }
             int new_hover = -1;
             const bool allow_room_area_hover = (first_selected_type == "trigger" || first_selected_type == "spawning");
@@ -1390,12 +1392,12 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         const auto& wpts = world_area.get_points();
                         if (wpts.size() < 3) continue;
                         camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, 0.0f, player_screen_height);
-                        SDL_Point pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
+                        SDL_FPoint pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
                         std::vector<SDL_Point> spts; spts.reserve(wpts.size());
                         for (const auto& wp : wpts) {
-                            SDL_Point p_lin = cam.map_to_screen(wp);
-                            const float dx = static_cast<float>(p_lin.x - pivot_linear.x);
-                            const float dy = static_cast<float>(p_lin.y - pivot_linear.y);
+                            SDL_FPoint p_lin = cam.map_to_screen(wp);
+                            const float dx = p_lin.x - pivot_linear.x;
+                            const float dy = p_lin.y - pivot_linear.y;
                             const float base_cx = static_cast<float>(eff.screen_position.x) + eff.parallax_offset_x;
                             const float sx = base_cx + dx * eff.distance_scale;
                             const float sy = static_cast<float>(eff.screen_position.y) + dy * (eff.distance_scale * eff.vertical_scale);
@@ -1456,10 +1458,12 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         if (auto mapped = input_->screen_to_world(sp)) {
                             world = *mapped;
                         } else if (assets_) {
-                            world = assets_->getView().screen_to_map(sp);
+                            SDL_FPoint mapped = assets_->getView().screen_to_map(sp);
+                            world = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
                         }
                     } else if (assets_) {
-                        world = assets_->getView().screen_to_map(sp);
+                        SDL_FPoint mapped = assets_->getView().screen_to_map(sp);
+                        world = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
                     }
                     std::string area_type = first_selected_type;
                     std::string area_name;
@@ -1580,7 +1584,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             Uint8 pr=0,pg=0,pb=0,pa=0; SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
 
             auto draw_anchor = [&](SDL_Point world, SDL_Color color) {
-                SDL_Point screen = cam.map_to_screen(world);
+                SDL_FPoint screen_f = cam.map_to_screen(world);
+                SDL_Point screen{static_cast<int>(std::lround(screen_f.x)), static_cast<int>(std::lround(screen_f.y))};
                 const int arm = 5;
                 SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
                 SDL_RenderDrawLine(renderer, screen.x - arm, screen.y, screen.x + arm, screen.y);
@@ -1595,7 +1600,11 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                         if (!type_visible(t)) continue;
                         const auto& poly_world = room_areas[i].points;
                         std::vector<SDL_Point> spts; spts.reserve(poly_world.size());
-                        for (const auto& wp : poly_world) spts.push_back(cam.map_to_screen(wp));
+                        for (const auto& wp : poly_world) {
+                            SDL_FPoint screen_f = cam.map_to_screen(wp);
+                            spts.push_back(SDL_Point{static_cast<int>(std::lround(screen_f.x)),
+                                                     static_cast<int>(std::lround(screen_f.y))});
+                        }
                         if (spts.size() >= 3) {
                             SDL_Color base = color_for_type(t);
                             if (i == hovered_area_index_) base = SDL_Color{ std::min<Uint8>(255, Uint8(base.r + 30)), std::min<Uint8>(255, Uint8(base.g + 30)), std::min<Uint8>(255, Uint8(base.b + 30)), 120 };
@@ -1677,13 +1686,13 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                             if (wpts.size() < 3) continue;
 
                             camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, 0.0f, player_screen_height);
-                            SDL_Point pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
+                            SDL_FPoint pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
 
                             std::vector<SDL_Point> spts; spts.reserve(wpts.size());
                             for (const auto& wp : wpts) {
-                                SDL_Point p_lin = cam.map_to_screen(wp);
-                                const float dx = static_cast<float>(p_lin.x - pivot_linear.x);
-                                const float dy = static_cast<float>(p_lin.y - pivot_linear.y);
+                                SDL_FPoint p_lin = cam.map_to_screen(wp);
+                                const float dx = p_lin.x - pivot_linear.x;
+                                const float dy = p_lin.y - pivot_linear.y;
                                 const float base_cx = static_cast<float>(eff.screen_position.x) + eff.parallax_offset_x;
                                 const float sx = base_cx + dx * eff.distance_scale;
                                 const float sy = static_cast<float>(eff.screen_position.y) + dy * (eff.distance_scale * eff.vertical_scale);
@@ -1744,7 +1753,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (renderer && map_mode_ui_ && map_mode_ui_->is_light_panel_visible() && assets_) {
         const camera& cam = assets_->getView();
         SDL_Point screen_center_map = cam.get_screen_center();
-        SDL_Point screen_center = cam.map_to_screen(screen_center_map);
+        SDL_FPoint screen_center_f = cam.map_to_screen(screen_center_map);
+        SDL_Point screen_center{static_cast<int>(std::lround(screen_center_f.x)),
+                                static_cast<int>(std::lround(screen_center_f.y))};
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
         SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
         Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
@@ -1755,8 +1766,10 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         if (const Global_Light_Source* light = assets_->map_light_source()) {
             SDL_Point start_map = light->get_direction_reference();
             SDL_Point end_map = light->get_direction_target();
-            SDL_Point start = cam.map_to_screen(start_map);
-            SDL_Point end = cam.map_to_screen(end_map);
+            SDL_FPoint start_f = cam.map_to_screen(start_map);
+            SDL_FPoint end_f = cam.map_to_screen(end_map);
+            SDL_Point start{static_cast<int>(std::lround(start_f.x)), static_cast<int>(std::lround(start_f.y))};
+            SDL_Point end{static_cast<int>(std::lround(end_f.x)), static_cast<int>(std::lround(end_f.y))};
             SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
             SDL_RenderDrawLine(renderer, start.x, start.y, end.x, end.y);
             SDL_Rect tip{ end.x - 4, end.y - 4, 8, 8 };

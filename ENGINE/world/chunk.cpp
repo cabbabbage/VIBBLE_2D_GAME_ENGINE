@@ -491,13 +491,17 @@ Uint8 clamp_alpha(float value) {
 }
 
 SDL_Rect world_rect_from_screen(const camera& cam, const SDL_Rect& screen_rect) {
-    SDL_Point top_left     = cam.screen_to_map({screen_rect.x, screen_rect.y});
-    SDL_Point bottom_right = cam.screen_to_map({screen_rect.x + screen_rect.w, screen_rect.y + screen_rect.h});
+    SDL_FPoint top_left     = cam.screen_to_map({screen_rect.x, screen_rect.y});
+    SDL_FPoint bottom_right = cam.screen_to_map({screen_rect.x + screen_rect.w, screen_rect.y + screen_rect.h});
     SDL_Rect result{};
-    result.x = std::min(top_left.x, bottom_right.x);
-    result.y = std::min(top_left.y, bottom_right.y);
-    result.w = std::abs(bottom_right.x - top_left.x);
-    result.h = std::abs(bottom_right.y - top_left.y);
+    const float min_x = std::min(top_left.x, bottom_right.x);
+    const float min_y = std::min(top_left.y, bottom_right.y);
+    const float width = std::abs(bottom_right.x - top_left.x);
+    const float height = std::abs(bottom_right.y - top_left.y);
+    result.x = static_cast<int>(std::lround(min_x));
+    result.y = static_cast<int>(std::lround(min_y));
+    result.w = static_cast<int>(std::lround(width));
+    result.h = static_cast<int>(std::lround(height));
     return result;
 }
 
@@ -1393,16 +1397,20 @@ void LightMap::collect_runtime_shadow_masks(const SDL_Rect& view_rect,
             continue;
         }
 
-        SDL_Point top_left = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
-        SDL_Point bottom_right =
+        SDL_FPoint top_left = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
+        SDL_FPoint bottom_right =
             cam.map_to_screen({chunk->world_bounds.x + chunk->world_bounds.w,
                                chunk->world_bounds.y + chunk->world_bounds.h});
 
         SDL_Rect screen_rect{};
-        screen_rect.x = std::min(top_left.x, bottom_right.x);
-        screen_rect.y = std::min(top_left.y, bottom_right.y);
-        screen_rect.w = std::abs(bottom_right.x - top_left.x);
-        screen_rect.h = std::abs(bottom_right.y - top_left.y);
+        const float min_x = std::min(top_left.x, bottom_right.x);
+        const float min_y = std::min(top_left.y, bottom_right.y);
+        const float width = std::abs(bottom_right.x - top_left.x);
+        const float height = std::abs(bottom_right.y - top_left.y);
+        screen_rect.x = static_cast<int>(std::lround(min_x));
+        screen_rect.y = static_cast<int>(std::lround(min_y));
+        screen_rect.w = static_cast<int>(std::lround(width));
+        screen_rect.h = static_cast<int>(std::lround(height));
 
         if (screen_rect.w <= 0 || screen_rect.h <= 0) {
             continue;
@@ -1716,16 +1724,20 @@ void LightMap::render_chunk_preview(SDL_Renderer* renderer, const SDL_Rect& view
             continue;
         }
 
-        SDL_Point top_left = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
-        SDL_Point bottom_right =
+        SDL_FPoint top_left = cam.map_to_screen({chunk->world_bounds.x, chunk->world_bounds.y});
+        SDL_FPoint bottom_right =
             cam.map_to_screen({chunk->world_bounds.x + chunk->world_bounds.w,
                                chunk->world_bounds.y + chunk->world_bounds.h});
 
         SDL_Rect world_rect_screen{};
-        world_rect_screen.x = std::min(top_left.x, bottom_right.x);
-        world_rect_screen.y = std::min(top_left.y, bottom_right.y);
-        world_rect_screen.w = std::abs(bottom_right.x - top_left.x);
-        world_rect_screen.h = std::abs(bottom_right.y - top_left.y);
+        const float min_x = std::min(top_left.x, bottom_right.x);
+        const float min_y = std::min(top_left.y, bottom_right.y);
+        const float width = std::abs(bottom_right.x - top_left.x);
+        const float height = std::abs(bottom_right.y - top_left.y);
+        world_rect_screen.x = static_cast<int>(std::lround(min_x));
+        world_rect_screen.y = static_cast<int>(std::lround(min_y));
+        world_rect_screen.w = static_cast<int>(std::lround(width));
+        world_rect_screen.h = static_cast<int>(std::lround(height));
         if (world_rect_screen.w <= 0 || world_rect_screen.h <= 0) {
             continue;
         }
@@ -1754,15 +1766,23 @@ void LightMap::render_chunk_preview(SDL_Renderer* renderer, const SDL_Rect& view
         const int mid_world_x = entry.chunk->world_bounds.x + entry.chunk->world_bounds.w / 2;
         const int mid_world_y = entry.chunk->world_bounds.y + entry.chunk->world_bounds.h / 2;
 
-        SDL_Point mid_top = cam.map_to_screen({mid_world_x, entry.chunk->world_bounds.y});
-        SDL_Point mid_bottom =
+        SDL_FPoint mid_top = cam.map_to_screen({mid_world_x, entry.chunk->world_bounds.y});
+        SDL_FPoint mid_bottom =
             cam.map_to_screen({mid_world_x, entry.chunk->world_bounds.y + entry.chunk->world_bounds.h});
-        SDL_Point mid_left = cam.map_to_screen({entry.chunk->world_bounds.x, mid_world_y});
-        SDL_Point mid_right =
+        SDL_FPoint mid_left = cam.map_to_screen({entry.chunk->world_bounds.x, mid_world_y});
+        SDL_FPoint mid_right =
             cam.map_to_screen({entry.chunk->world_bounds.x + entry.chunk->world_bounds.w, mid_world_y});
 
-        SDL_RenderDrawLine(renderer, mid_left.x, mid_left.y, mid_right.x, mid_right.y);
-        SDL_RenderDrawLine(renderer, mid_top.x, mid_top.y, mid_bottom.x, mid_bottom.y);
+        SDL_RenderDrawLine(renderer,
+                           static_cast<int>(std::lround(mid_left.x)),
+                           static_cast<int>(std::lround(mid_left.y)),
+                           static_cast<int>(std::lround(mid_right.x)),
+                           static_cast<int>(std::lround(mid_right.y)));
+        SDL_RenderDrawLine(renderer,
+                           static_cast<int>(std::lround(mid_top.x)),
+                           static_cast<int>(std::lround(mid_top.y)),
+                           static_cast<int>(std::lround(mid_bottom.x)),
+                           static_cast<int>(std::lround(mid_bottom.y)));
 
         std::ostringstream label_stream;
         label_stream << "Chunk (" << entry.chunk->i << ", " << entry.chunk->j << ") "
@@ -1904,9 +1924,10 @@ std::optional<world::Chunk::ChunkShadowParameters> LightMap::get_shadow_data(SDL
                                            static_cast<int>(std::lround(world_or_screen_pos.y))});
         if (!chunk) {
             const camera& cam = assets_->getView();
-            SDL_Point from_screen = cam.screen_to_map({static_cast<int>(std::lround(world_or_screen_pos.x)),
+            SDL_FPoint from_screen = cam.screen_to_map({static_cast<int>(std::lround(world_or_screen_pos.x)),
                                                        static_cast<int>(std::lround(world_or_screen_pos.y))});
-            chunk = chunk_from_world(from_screen);
+            chunk = chunk_from_world(SDL_Point{static_cast<int>(std::lround(from_screen.x)),
+                                               static_cast<int>(std::lround(from_screen.y))});
         }
     }
     if (!chunk) return std::nullopt;
