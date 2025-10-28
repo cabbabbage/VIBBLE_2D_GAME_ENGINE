@@ -73,5 +73,6 @@ private:
     std::unique_ptr<DMSlider> frame_blend_falloff_frames_{};
     std::unique_ptr<DMSlider> map_light_dir_strength_{};
     std::unique_ptr<DMSlider> search_radius_{};
+    std::unique_ptr<DMSlider> light_grid_subdivide_{};
 
 };

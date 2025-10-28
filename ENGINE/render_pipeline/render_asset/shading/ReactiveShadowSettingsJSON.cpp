@@ -73,6 +73,8 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
     settings.virtual_light_map.map_light_dir_offset_strength = read_float( json, "map_light_dir_offset_strength", settings.virtual_light_map.map_light_dir_offset_strength);
     settings.virtual_light_map.search_radius =
         read_int(json, "search_radius", settings.virtual_light_map.search_radius);
+    settings.virtual_light_map.light_grid_subdivide =
+        read_int(json, "light_grid_subdivide", settings.virtual_light_map.light_grid_subdivide);
     settings.opacity_sensitivity_percent =
         read_float(json, "opacity_sensitivity_percent", settings.opacity_sensitivity_percent);
     settings.opacity_strength = read_float(json, "opacity_strength", settings.opacity_strength);
@@ -147,7 +149,8 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
         { "max_offset_x", sanitized.virtual_light_map.max_offset_x },
         { "max_offset_y", sanitized.virtual_light_map.max_offset_y },
         { "map_light_dir_offset_strength", sanitized.virtual_light_map.map_light_dir_offset_strength },
-        { "search_radius", sanitized.virtual_light_map.search_radius }
+        { "search_radius", sanitized.virtual_light_map.search_radius },
+        { "light_grid_subdivide", sanitized.virtual_light_map.light_grid_subdivide }
     });
     json["opacity_sensitivity_percent"] = sanitized.opacity_sensitivity_percent;
     json["opacity_strength"]  = sanitized.opacity_strength;
