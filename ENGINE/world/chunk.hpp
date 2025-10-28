@@ -185,6 +185,7 @@ public:
     struct ShadowSettings {
         int   search_radius_cells     = 1;
         int   grid_subdivide          = 1;
+        int   requested_grid_subdivide = 1;
         float falloff_horizontal      = 1.0f;
         float falloff_vertical        = 1.0f;
         float max_offset_x_px         = 64.0f;

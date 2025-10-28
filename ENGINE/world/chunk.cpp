@@ -222,9 +222,7 @@ void Chunk::rebuild_lighting_chunks() {
 void Chunk::set_lighting_subdivisions(int subdivisions) {
     const int chunk_width  = std::max(1, world_bounds.w);
     const int chunk_height = std::max(1, world_bounds.h);
-    const int chunk_limit  = std::max(1, std::min(chunk_width, chunk_height));
-    const int max_allowed  = std::max(1, std::min(8, chunk_limit));
-    const int clamped      = std::clamp(subdivisions, 1, max_allowed);
+    const int clamped      = std::clamp(subdivisions, 1, 8);
 
     if (lighting_subdivisions_ == clamped && lighting_columns_ == clamped && lighting_rows_ == clamped &&
         !lighting_chunks_.empty()) {
@@ -414,7 +412,7 @@ namespace {
 using LightingChunk = world::Chunk::LightingChunk;
 
 LightingChunk* find_lighting_chunk_from_global(const world::Grid& grid, int global_i, int global_j) {
-    const int subdivisions = grid.lighting_subdivisions_per_chunk();
+    const int subdivisions = std::clamp(grid.requested_lighting_subdivisions_per_chunk(), 1, 8);
     if (subdivisions <= 0) {
         return nullptr;
     }
@@ -697,8 +695,9 @@ LightMap::ShadowSettings LightMap::shadow_settings() const {
     using render_pipeline::shading::sanitize_reactive_shadow_settings;
     const auto sanitized = sanitize_reactive_shadow_settings(*reactive);
 
-    settings.search_radius_cells = std::max(0, sanitized.virtual_light_map.search_radius);
-    settings.grid_subdivide      = std::max(1, sanitized.virtual_light_map.grid_subdivide);
+    settings.search_radius_cells     = std::max(0, sanitized.virtual_light_map.search_radius);
+    settings.requested_grid_subdivide = sanitized.virtual_light_map.grid_subdivide;
+    settings.grid_subdivide          = std::clamp(sanitized.virtual_light_map.grid_subdivide, 1, 8);
     settings.falloff_horizontal  = std::max(0.0f, sanitized.virtual_light_map.horizontal_falloff);
     settings.falloff_vertical    = std::max(0.0f, sanitized.virtual_light_map.vertical_falloff);
     settings.max_offset_x_px     = std::max(0.0f, sanitized.virtual_light_map.max_offset_x);
@@ -784,9 +783,12 @@ void LightMap::update(SDL_Renderer* , std::uint32_t ) {
     world::Grid& grid = assets_->world_grid();
 
     const ShadowSettings settings = shadow_settings();
-    const bool subdivisions_changed = grid.set_lighting_subdivisions_per_chunk(settings.grid_subdivide);
+    const bool subdivisions_changed =
+        grid.set_lighting_subdivisions_per_chunk(settings.requested_grid_subdivide);
     if (subdivisions_changed) {
         invalidate_scene_light_cache();
+        destroy_runtime_shadow_mask();
+        mark_static_cache_dirty();
     }
 
     const auto& chunks = grid.active_chunks();

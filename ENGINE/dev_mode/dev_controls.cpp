@@ -859,7 +859,7 @@ void DevControls::set_enabled(bool enabled) {
             camera_ptr->set_focus_override(preserved_center);
             camera_ptr->set_screen_center(preserved_center);
             camera_ptr->set_scale(preserved_scale);
-            camera_ptr->update();
+            camera_ptr->update(0.0f);
         }
         if (camera_was_visible && camera_panel_) {
             camera_panel_->open();

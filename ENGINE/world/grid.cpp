@@ -185,9 +185,7 @@ void Grid::invalidate_active_cache() {
 }
 
 int Grid::clamp_lighting_subdivisions(int subdivisions) const {
-    const int chunk_size = 1 << std::max(0, r_chunk_);
-    const int max_allowed = std::max(1, std::min(8, chunk_size));
-    return std::clamp(subdivisions, 1, max_allowed);
+    return std::clamp(subdivisions, 1, 8);
 }
 
 bool Grid::refresh_lighting_subdivision_cache(bool apply_to_chunks) {
@@ -200,6 +198,7 @@ bool Grid::refresh_lighting_subdivision_cache(bool apply_to_chunks) {
         for (const auto& chunk_ptr : chunks_.storage()) {
             if (chunk_ptr) {
                 chunk_ptr->set_lighting_subdivisions(cached_lighting_subdivisions_);
+                chunk_ptr->releaseLightingArtifacts();
             }
         }
     }
@@ -211,7 +210,7 @@ int Grid::lighting_subdivisions_per_chunk() const {
 }
 
 bool Grid::set_lighting_subdivisions_per_chunk(int subdivisions) {
-    requested_lighting_subdivisions_ = std::max(1, subdivisions);
+    requested_lighting_subdivisions_ = clamp_lighting_subdivisions(subdivisions);
     return refresh_lighting_subdivision_cache(true);
 }
 
