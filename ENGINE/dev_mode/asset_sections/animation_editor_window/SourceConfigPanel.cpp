@@ -43,7 +43,6 @@ bool case_insensitive_equals(std::string_view a, std::string_view b) {
 }
 
 using vibble::strings::to_lower_copy;
-using vibble::strings::trim_copy;
 
 bool has_extension_ci(const std::filesystem::path& path, std::string_view ext) {
     return case_insensitive_equals(path.extension().string(), std::string(ext));
@@ -306,7 +305,7 @@ std::vector<std::string> SourceConfigPanel::summary_badges() const {
     badges.push_back(use_animation_reference_ ? std::string{"Animation"} : std::string{"Frames"});
 
     if (use_animation_reference_) {
-        std::string target = trim_copy(current_source_.name.value_or(current_source_.path));
+        std::string target = strings::trim_copy(current_source_.name.value_or(current_source_.path));
         if (target.empty() && animation_index_ >= 0 && animation_index_ < static_cast<int>(animation_options_.size())) {
             target = animation_options_[animation_index_];
         }
@@ -315,11 +314,11 @@ std::vector<std::string> SourceConfigPanel::summary_badges() const {
         }
         badges.push_back(std::move(target));
     } else {
-        std::string kind = trim_copy(current_source_.kind);
+        std::string kind = strings::trim_copy(current_source_.kind);
         if (!kind.empty() && to_lower_copy(kind) != std::string{"folder"}) {
             badges.push_back(kind);
         }
-        std::string display_path = trim_copy(current_source_.path);
+        std::string display_path = strings::trim_copy(current_source_.path);
         if (display_path.empty()) {
             display_path = "Unassigned";
         }
