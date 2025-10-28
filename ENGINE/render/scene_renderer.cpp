@@ -232,10 +232,13 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
     const float base_sh   = scaled_fh * inv_scale;
 
     camera& cam = assets_->getView();
+    const camera::RenderSmoothingKey smoothing_key = a ?
+        reinterpret_cast<camera::RenderSmoothingKey>(a) : 0;
     camera::RenderEffects ef=cam.compute_render_effects(
         SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
         base_sh,
-        ref_sh);
+        ref_sh,
+        smoothing_key);
     SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ world_x, world_y });
     ef.screen_position = screen;
     const float scaled_sw = base_sw * ef.distance_scale;

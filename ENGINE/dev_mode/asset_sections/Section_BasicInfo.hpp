@@ -182,7 +182,10 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     if (base_sw <= 0.0f || base_sh <= 0.0f) return;
 
     const auto effects = cam.compute_render_effects(
-        SDL_Point{target->pos.x, target->pos.y}, base_sh, reference_screen_height <= 0.0f ? 1.0f : reference_screen_height);
+        SDL_Point{target->pos.x, target->pos.y},
+        base_sh,
+        reference_screen_height <= 0.0f ? 1.0f : reference_screen_height,
+        reinterpret_cast<camera::RenderSmoothingKey>(target));
 
     float scaled_sw = base_sw * effects.distance_scale;
     float scaled_sh = base_sh * effects.distance_scale;

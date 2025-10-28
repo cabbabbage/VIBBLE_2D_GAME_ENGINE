@@ -9,6 +9,36 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
+namespace {
+    constexpr float kDefaultSmoothingDt = 1.0f / 60.0f;
+
+    TransformSmoothingParams sanitize_params(const TransformSmoothingParams& params) {
+        TransformSmoothingParams out = params;
+        if (!std::isfinite(out.lerp_rate) || out.lerp_rate < 0.0f) {
+            out.lerp_rate = 0.0f;
+        }
+        if (!std::isfinite(out.spring_frequency) || out.spring_frequency < 0.0f) {
+            out.spring_frequency = 0.0f;
+        }
+        if (!std::isfinite(out.max_step) || out.max_step < 0.0f) {
+            out.max_step = 0.0f;
+        }
+        if (!std::isfinite(out.snap_threshold) || out.snap_threshold < 0.0f) {
+            out.snap_threshold = 0.0f;
+        }
+        switch (out.method) {
+        case TransformSmoothingMethod::None:
+        case TransformSmoothingMethod::Lerp:
+        case TransformSmoothingMethod::CriticallyDampedSpring:
+            break;
+        default:
+            out.method = TransformSmoothingMethod::None;
+            break;
+        }
+        return out;
+    }
+}
+
 static inline int width_from_area(const Area& a) {
     int minx, miny, maxx, maxy;
     std::tie(minx, miny, maxx, maxy) = a.get_bounds();
@@ -71,6 +101,14 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     smoothed_center_.x = center_smoothing_x_.value_for_render();
     smoothed_center_.y = center_smoothing_y_.value_for_render();
     smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
+    last_update_dt_    = kDefaultSmoothingDt;
+    smoothing_frame_counter_ = 0;
+}
+
+void camera::set_realism_settings(const RealismSettings& settings) {
+    settings_ = settings;
+    settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
+    reset_parallax_smoothing();
 }
 
 void camera::set_screen_center(SDL_Point p) {
@@ -83,6 +121,7 @@ void camera::set_screen_center(SDL_Point p) {
         center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
         smoothed_center_.x = center_smoothing_x_.value_for_render();
         smoothed_center_.y = center_smoothing_y_.value_for_render();
+        reset_parallax_smoothing();
         return;
     }
     const double dx = static_cast<double>(p.x) - static_cast<double>(screen_center_.x);
@@ -90,6 +129,12 @@ void camera::set_screen_center(SDL_Point p) {
     pan_offset_x_ += dx;
     pan_offset_y_ += dy;
     screen_center_ = p;
+
+    const double distance = std::hypot(dx, dy);
+    const double teleport_threshold = std::max(200.0, static_cast<double>(settings_.render_distance) * 0.25);
+    if (distance > teleport_threshold) {
+        reset_parallax_smoothing();
+    }
 }
 
 void camera::set_scale(float s) {
@@ -99,6 +144,7 @@ void camera::set_scale(float s) {
     start_scale_ = target_scale_ = scale_;
     zoom_smoothing_.reset(scale_);
     smoothed_scale_ = scale_;
+    reset_parallax_smoothing();
 }
 
 float camera::get_scale() const { return smoothed_scale_; }
@@ -137,6 +183,12 @@ void camera::zoom_to_area(const Area& target_area, int duration_steps) {
 }
 
 void camera::update(float dt) {
+    if (!std::isfinite(dt) || dt < 0.0f) {
+        dt = 0.0f;
+    }
+    last_update_dt_ = dt;
+    ++smoothing_frame_counter_;
+
     if (zooming_) {
         ++steps_done_;
         double t = static_cast<double>(steps_done_) / static_cast<double>(std::max(1, steps_total_));
@@ -176,6 +228,19 @@ void camera::update(float dt) {
     smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
 
     recompute_current_view();
+
+    if (!smoothing_entries_.empty()) {
+        const uint64_t prune_threshold = (smoothing_frame_counter_ > 480)
+            ? smoothing_frame_counter_ - 480
+            : 0;
+        for (auto it = smoothing_entries_.begin(); it != smoothing_entries_.end(); ) {
+            if (it->second.last_used_frame < prune_threshold) {
+                it = smoothing_entries_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
 }
 
 double camera::compute_room_scale_from_area(const Room* room) const {
@@ -424,7 +489,8 @@ SDL_FPoint camera::screen_to_map(SDL_Point screen, float, float) const {
 camera::RenderEffects camera::compute_render_effects(
     SDL_Point world,
     float asset_screen_height,
-    float reference_screen_height) const
+    float reference_screen_height,
+    RenderSmoothingKey smoothing_key) const
 {
     RenderEffects result;
     SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
@@ -535,6 +601,55 @@ camera::RenderEffects camera::compute_render_effects(
         }
     }
 
+    if (smoothing_key != 0) {
+        const TransformSmoothingParams raw_params = sanitize_params(settings_.parallax_smoothing);
+        if (raw_params.method != TransformSmoothingMethod::None) {
+            auto& entry = smoothing_entries_[smoothing_key];
+            entry.parallax.set_params(raw_params);
+            entry.zoom.set_params(raw_params);
+
+            const float dt = (last_update_dt_ > 0.0f) ? last_update_dt_ : kDefaultSmoothingDt;
+            const float target_parallax = std::isfinite(result.parallax_offset_x) ? result.parallax_offset_x : 0.0f;
+            const float target_zoom     = std::isfinite(result.distance_scale) && result.distance_scale > 0.0f
+                                              ? result.distance_scale
+                                              : 1.0f;
+
+            bool force_snap = !entry.initialized;
+            const float snap_threshold = std::max(0.0f, raw_params.snap_threshold);
+            const float max_step       = std::max(0.0f, raw_params.max_step);
+            if (!force_snap) {
+                const float current = entry.parallax.current;
+                const float delta   = std::fabs(target_parallax - current);
+                if (snap_threshold > 0.0f && delta > snap_threshold * 4.0f) {
+                    force_snap = true;
+                } else if (max_step > 0.0f && dt > 0.0f) {
+                    const float max_delta = max_step * dt * 4.0f;
+                    if (delta > max_delta) {
+                        force_snap = true;
+                    }
+                }
+            }
+
+            entry.parallax.target = target_parallax;
+            entry.zoom.target     = target_zoom;
+
+            if (force_snap) {
+                entry.parallax.reset(target_parallax);
+                entry.zoom.reset(target_zoom);
+                entry.parallax.target = target_parallax;
+                entry.zoom.target     = target_zoom;
+                entry.initialized     = true;
+            } else {
+                entry.parallax.advance(dt);
+                entry.zoom.advance(dt);
+            }
+
+            entry.last_used_frame = smoothing_frame_counter_;
+            result.parallax_offset_x = entry.parallax.value_for_render();
+            result.distance_scale    = std::max(0.0f, entry.zoom.value_for_render());
+        }
+    }
+
     return result;
 }
 
@@ -586,6 +701,33 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_int("render_quality_percent", settings_.render_quality_percent);
 
+    auto try_read_smoothing_method = [&](const char* key, TransformSmoothingMethod& target) {
+        auto it = data.find(key);
+        if (it == data.end()) return;
+        if (it->is_number_integer()) {
+            const int raw = it->get<int>();
+            switch (raw) {
+            case static_cast<int>(TransformSmoothingMethod::None):
+                target = TransformSmoothingMethod::None;
+                break;
+            case static_cast<int>(TransformSmoothingMethod::Lerp):
+                target = TransformSmoothingMethod::Lerp;
+                break;
+            case static_cast<int>(TransformSmoothingMethod::CriticallyDampedSpring):
+                target = TransformSmoothingMethod::CriticallyDampedSpring;
+                break;
+            default:
+                break;
+            }
+        }
+    };
+
+    try_read_smoothing_method("parallax_smoothing_method", settings_.parallax_smoothing.method);
+    try_read_float("parallax_smoothing_lerp_rate", settings_.parallax_smoothing.lerp_rate);
+    try_read_float("parallax_smoothing_spring_frequency", settings_.parallax_smoothing.spring_frequency);
+    try_read_float("parallax_smoothing_max_step", settings_.parallax_smoothing.max_step);
+    try_read_float("parallax_smoothing_snap_threshold", settings_.parallax_smoothing.snap_threshold);
+
     if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
         settings_.render_distance = 800.0f;
     }
@@ -627,6 +769,10 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 };
 
     settings_.render_quality_percent = align_quality(settings_.render_quality_percent);
+
+    settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
+
+    reset_parallax_smoothing();
 }
 
 nlohmann::json camera::camera_settings_to_json() const {
@@ -640,10 +786,19 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["tripod_distance_y"]     = settings_.tripod_distance_y;
     j["min_visible_screen_ratio"] = settings_.min_visible_screen_ratio;
     j["render_quality_percent"]   = settings_.render_quality_percent;
+    j["parallax_smoothing_method"] = static_cast<int>(settings_.parallax_smoothing.method);
+    j["parallax_smoothing_lerp_rate"] = settings_.parallax_smoothing.lerp_rate;
+    j["parallax_smoothing_spring_frequency"] = settings_.parallax_smoothing.spring_frequency;
+    j["parallax_smoothing_max_step"] = settings_.parallax_smoothing.max_step;
+    j["parallax_smoothing_snap_threshold"] = settings_.parallax_smoothing.snap_threshold;
     return j;
 }
 
 int camera::get_render_distance_world_margin() const {
     const double margin = std::max(0.0, static_cast<double>(settings_.render_distance));
     return static_cast<int>(std::lround(margin));
+}
+
+void camera::reset_parallax_smoothing() {
+    smoothing_entries_.clear();
 }

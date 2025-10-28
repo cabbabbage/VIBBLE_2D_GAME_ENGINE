@@ -1318,10 +1318,13 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
                     const float world_x = a->smoothed_translation_x();
                     const float world_y = a->smoothed_translation_y();
+                    const camera::RenderSmoothingKey smoothing_key =
+                        reinterpret_cast<camera::RenderSmoothingKey>(a);
                     camera::RenderEffects eff = cam.compute_render_effects(
                         SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
                         base_sh,
-                        player_screen_height);
+                        player_screen_height,
+                        smoothing_key);
                     SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ world_x, world_y });
                     eff.screen_position = screen;
                     float scaled_sw = base_sw * eff.distance_scale;
@@ -1391,7 +1394,11 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         Area world_area = a->get_area(na.name);
                         const auto& wpts = world_area.get_points();
                         if (wpts.size() < 3) continue;
-                        camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, 0.0f, player_screen_height);
+                        camera::RenderEffects eff = cam.compute_render_effects(
+                            SDL_Point{a->pos.x, a->pos.y},
+                            0.0f,
+                            player_screen_height,
+                            reinterpret_cast<camera::RenderSmoothingKey>(a));
                         SDL_FPoint pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
                         std::vector<SDL_Point> spts; spts.reserve(wpts.size());
                         for (const auto& wp : wpts) {
@@ -1685,7 +1692,11 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                             const auto& wpts = world_area.get_points();
                             if (wpts.size() < 3) continue;
 
-                            camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, 0.0f, player_screen_height);
+                            camera::RenderEffects eff = cam.compute_render_effects(
+                                SDL_Point{a->pos.x, a->pos.y},
+                                0.0f,
+                                player_screen_height,
+                                reinterpret_cast<camera::RenderSmoothingKey>(a));
                             SDL_FPoint pivot_linear = cam.map_to_screen(SDL_Point{a->pos.x, a->pos.y});
 
                             std::vector<SDL_Point> spts; spts.reserve(wpts.size());

@@ -130,7 +130,8 @@ void StageContext::update_projection(Asset& asset) {
         cam.compute_render_effects(
             SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
             base_sh,
-            reference_height);
+            reference_height,
+            reinterpret_cast<camera::RenderSmoothingKey>(&asset));
 
     const float scaled_sw       = base_sw * effects.distance_scale;
     const float scaled_sh       = base_sh * effects.distance_scale;

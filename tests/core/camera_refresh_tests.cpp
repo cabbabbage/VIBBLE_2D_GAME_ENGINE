@@ -63,6 +63,8 @@ TEST_CASE("Parallax offset preserves fractional precision") {
     Area base_area = make_base_area("base_zoom", 640, 480);
     camera cam(640, 480, base_area);
 
+    cam.realism_settings().parallax_smoothing.method = TransformSmoothingMethod::None;
+
     const camera::RealismSettings& settings = cam.realism_settings();
 
     SDL_Point center = cam.get_screen_center();

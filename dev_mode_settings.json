@@ -53,7 +53,8 @@
         },
         "lock": {
             "asset_info": {
-                "basic": false
+                "basic": false,
+                "lighting": true
             },
             "camera": {
                 "controls": false

@@ -3,6 +3,8 @@
 #include <SDL.h>
 #include <algorithm>
 #include <vector>
+#include <cstdint>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 #include "utils/area.hpp"
 #include "utils/transform_smoothing.hpp"
@@ -23,7 +25,13 @@ class camera {
         float tripod_distance_y = 0.0f;
         float min_visible_screen_ratio = 0.015f;
         int   render_quality_percent = 100;
-};
+        TransformSmoothingParams parallax_smoothing{
+            TransformSmoothingMethod::CriticallyDampedSpring,
+            0.0f,
+            6.0f,
+            8000.0f,
+            0.5f};
+    };
 
     struct RenderEffects {
         SDL_FPoint screen_position{0.0f, 0.0f};
@@ -60,7 +68,12 @@ class camera {
     SDL_FPoint map_to_screen_f(SDL_FPoint world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
     SDL_FPoint screen_to_map(SDL_Point screen, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
 
-    RenderEffects compute_render_effects(SDL_Point world, float asset_screen_height, float reference_screen_height) const;
+    using RenderSmoothingKey = std::uintptr_t;
+
+    RenderEffects compute_render_effects(SDL_Point world,
+                                         float asset_screen_height,
+                                         float reference_screen_height,
+                                         RenderSmoothingKey smoothing_key = 0) const;
 
     void set_parallax_enabled(bool e) { parallax_enabled_ = e; }
     bool parallax_enabled() const { return parallax_enabled_; }
@@ -71,7 +84,7 @@ class camera {
     void set_render_areas_enabled(bool enabled) { render_areas_enabled_ = enabled; }
     bool render_areas_enabled() const { return render_areas_enabled_; }
 
-    void set_realism_settings(const RealismSettings& settings) { settings_ = settings; }
+    void set_realism_settings(const RealismSettings& settings);
     RealismSettings& realism_settings() { return settings_; }
     const RealismSettings& realism_settings() const { return settings_; }
 
@@ -140,5 +153,18 @@ class camera {
     TransformSmoothingState zoom_smoothing_{};
     SDL_FPoint smoothed_center_{0.0f, 0.0f};
     float      smoothed_scale_ = 1.0f;
+
+    struct ParallaxZoomSmoothingEntry {
+        TransformSmoothingState parallax;
+        TransformSmoothingState zoom;
+        bool initialized = false;
+        uint64_t last_used_frame = 0;
+    };
+
+    mutable std::unordered_map<RenderSmoothingKey, ParallaxZoomSmoothingEntry> smoothing_entries_{};
+    mutable uint64_t smoothing_frame_counter_ = 0;
+    float last_update_dt_ = 0.0f;
+
+    void reset_parallax_smoothing();
 };
 
