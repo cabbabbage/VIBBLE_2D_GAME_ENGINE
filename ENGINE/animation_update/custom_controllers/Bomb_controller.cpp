@@ -1,5 +1,6 @@
 ﻿#include "Bomb_controller.hpp"
 #include "asset/Asset.hpp"
+#include "asset/asset_types.hpp"
 #include "core/AssetsManager.hpp"
 #include "animation_update/custom_controllers/controller_path_utils.hpp"
 #include "animation_update/custom_controllers/controller_visit_threshold.hpp"
@@ -7,12 +8,58 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string>
 
 BombController::BombController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
     if (self_ && self_->anim_) {
         enter_idle(idle_ratio_);
     }
+}
+
+bool BombController::target_active(Asset* asset) {
+    return asset && !asset->dead && asset->active;
+}
+
+Asset* BombController::resolve_player_target() const {
+    if (!assets_) {
+        return nullptr;
+    }
+
+    Asset* player = assets_->player;
+    if (target_active(player)) {
+        return player;
+    }
+
+    const auto& active_assets = assets_->getActive();
+    if (active_assets.empty()) {
+        return nullptr;
+    }
+
+    Asset*  closest       = nullptr;
+    double  best_distance = std::numeric_limits<double>::infinity();
+
+    for (Asset* candidate : active_assets) {
+        if (!target_active(candidate) || !candidate->info) {
+            continue;
+        }
+        const std::string canonical_type = asset_types::canonicalize(candidate->info->type);
+        if (canonical_type != asset_types::player) {
+            continue;
+        }
+
+        const double distance = Range::get_distance(self_, candidate);
+        if (!std::isfinite(distance)) {
+            continue;
+        }
+        if (!closest || distance < best_distance) {
+            closest       = candidate;
+            best_distance = distance;
+        }
+    }
+
+    return closest;
 }
 
 void BombController::enter_idle(int rest_ratio) {
@@ -95,10 +142,6 @@ void BombController::update(const Input&) {
         return;
     }
 
-    auto target_active = [](Asset* asset) {
-        return asset && !asset->dead && asset->active;
-};
-
     if (self_->anim_->path_requested) {
         switch (state_) {
         case State::Idle:
@@ -123,7 +166,7 @@ void BombController::update(const Input&) {
     }
 
     try {
-        Asset* player = assets_->player;
+        Asset* player = resolve_player_target();
         if (!target_active(player) || player == self_) {
             if (!pursuit_locked_) {
                 enter_idle(35);

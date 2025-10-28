@@ -5,6 +5,7 @@
 #include "../../../dm_styles.hpp"
 #include "../../../draw_utils.hpp"
 #include "../../../widgets.hpp"
+#include "../PreviewProvider.hpp"
 #include "movement/FrameMovementEditor.hpp"
 
 namespace animation_editor {
@@ -58,10 +59,18 @@ void FrameEditor::set_close_callback(CloseCallback callback) {
     }
 }
 
+void FrameEditor::set_preview_provider(std::shared_ptr<PreviewProvider> provider) {
+    preview_provider_ = std::move(provider);
+    ensure_children();
+    if (movement_editor_) {
+        movement_editor_->set_preview_provider(preview_provider_);
+    }
+}
+
 void FrameEditor::update() {
     ensure_children();
     update_button_styles();
-    if (active_mode_ == Mode::Movement && movement_editor_) {
+    if (movement_editor_) {
         movement_editor_->update();
     }
     update_navigation_styles();
@@ -84,8 +93,12 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         }
     }
 
-    if (active_mode_ == Mode::Movement && movement_editor_) {
-        movement_editor_->render(renderer);
+    if (movement_editor_) {
+        if (active_mode_ == Mode::Movement) {
+            movement_editor_->render(renderer);
+        } else {
+            movement_editor_->render_frame_list(renderer);
+        }
     }
 
     if (prev_frame_button_) prev_frame_button_->render(renderer);
@@ -103,8 +116,8 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
     }
 
     if (prev_frame_button_ && prev_frame_button_->handle_event(e)) {
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && active_mode_ == Mode::Movement &&
-            movement_editor_ && movement_editor_->can_select_previous_frame()) {
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && movement_editor_ &&
+            movement_editor_->can_select_previous_frame()) {
             movement_editor_->select_previous_frame();
             update_navigation_styles();
         }
@@ -112,8 +125,8 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
     }
 
     if (next_frame_button_ && next_frame_button_->handle_event(e)) {
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && active_mode_ == Mode::Movement &&
-            movement_editor_ && movement_editor_->can_select_next_frame()) {
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && movement_editor_ &&
+            movement_editor_->can_select_next_frame()) {
             movement_editor_->select_next_frame();
             update_navigation_styles();
         }
@@ -121,6 +134,12 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
     }
 
     if (active_mode_ == Mode::Movement && movement_editor_ && movement_editor_->handle_event(e)) {
+        update_navigation_styles();
+        return true;
+    }
+
+    if (movement_editor_ && active_mode_ != Mode::Movement && movement_editor_->handle_frame_list_event(e)) {
+        update_navigation_styles();
         return true;
     }
 
@@ -156,12 +175,15 @@ void FrameEditor::ensure_children() {
                 close_callback_();
             }
         });
+        movement_editor_->set_preview_provider(preview_provider_);
         movement_editor_->set_document(document_);
         movement_editor_->set_animation_id(animation_id_);
         movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
     } else {
+        movement_editor_->set_preview_provider(preview_provider_);
         movement_editor_->set_document(document_);
         movement_editor_->set_animation_id(animation_id_);
+        movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
     }
     update_button_styles();
     update_navigation_styles();
@@ -291,13 +313,13 @@ void FrameEditor::update_button_styles() const {
 void FrameEditor::update_navigation_styles() const {
     const DMButtonStyle& enabled_style = DMStyles::AccentButton();
     const DMButtonStyle& disabled_style = DMStyles::HeaderButton();
-    bool movement_active = active_mode_ == Mode::Movement && movement_editor_ != nullptr;
+    bool movement_ready = movement_editor_ != nullptr;
     if (prev_frame_button_) {
-        bool can_step_back = movement_active && movement_editor_->can_select_previous_frame();
+        bool can_step_back = movement_ready && movement_editor_->can_select_previous_frame();
         prev_frame_button_->set_style(can_step_back ? &enabled_style : &disabled_style);
     }
     if (next_frame_button_) {
-        bool can_step_forward = movement_active && movement_editor_->can_select_next_frame();
+        bool can_step_forward = movement_ready && movement_editor_->can_select_next_frame();
         next_frame_button_->set_style(can_step_forward ? &enabled_style : &disabled_style);
     }
 }

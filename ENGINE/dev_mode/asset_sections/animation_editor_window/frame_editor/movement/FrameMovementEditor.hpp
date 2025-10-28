@@ -14,6 +14,7 @@
 namespace animation_editor {
 
 class AnimationDocument;
+class PreviewProvider;
 class FrameMovementEditor {
   public:
     using CloseCallback = std::function<void()>;
@@ -26,10 +27,13 @@ class FrameMovementEditor {
                              const SDL_Rect& frame_display_bounds,
                              const SDL_Rect& frame_list_bounds);
     void set_close_callback(CloseCallback callback);
+    void set_preview_provider(std::shared_ptr<PreviewProvider> provider);
 
     void update();
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
+    void render_frame_list(SDL_Renderer* renderer) const;
+    bool handle_frame_list_event(const SDL_Event& e);
 
     bool can_select_previous_frame() const;
     bool can_select_next_frame() const;
@@ -46,8 +50,6 @@ class FrameMovementEditor {
     void layout_variant_header();
     void render_variant_header(SDL_Renderer* renderer) const;
     bool handle_variant_header_event(const SDL_Event& e);
-    bool handle_frame_list_event(const SDL_Event& e);
-    void render_frame_list(SDL_Renderer* renderer) const;
     void layout_frame_list();
     void set_active_variant(int index, bool preserve_view);
     void update_child_frames(bool preserve_view);
@@ -77,6 +79,7 @@ class FrameMovementEditor {
     std::unique_ptr<MovementCanvas> canvas_;
     std::unique_ptr<TotalsPanel> totals_panel_;
     std::unique_ptr<FramePropertiesPanel> properties_panel_;
+    std::shared_ptr<PreviewProvider> preview_provider_;
     std::string animation_id_;
     SDL_Rect mode_controls_rect_{0, 0, 0, 0};
     SDL_Rect frame_display_rect_{0, 0, 0, 0};

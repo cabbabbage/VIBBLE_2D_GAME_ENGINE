@@ -862,6 +862,7 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
         frame_editor_->set_close_callback([this]() { this->close_frame_editor(); });
     }
     frame_editor_animation_id_ = animation_id;
+    frame_editor_->set_preview_provider(preview_provider_);
     frame_editor_->set_document(document_);
     frame_editor_->set_animation_id(animation_id);
     frame_editor_->set_bounds(frame_editor_rect_);

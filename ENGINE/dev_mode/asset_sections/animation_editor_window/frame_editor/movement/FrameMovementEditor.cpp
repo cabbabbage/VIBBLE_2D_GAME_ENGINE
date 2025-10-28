@@ -12,6 +12,7 @@
 #include "../../PanelLayoutConstants.hpp"
 #include "../../../../dm_styles.hpp"
 #include "../../../../draw_utils.hpp"
+#include "../../PreviewProvider.hpp"
 #include "FramePropertiesPanel.hpp"
 #include "MovementCanvas.hpp"
 #include "TotalsPanel.hpp"
@@ -28,6 +29,7 @@ constexpr int kVariantTabWidth = 140;
 constexpr int kVariantCloseSize = 18;
 constexpr int kFrameListBaseSize = 56;
 constexpr int kFrameListMinSize = 36;
+constexpr int kFrameThumbnailPadding = 6;
 
 int clamp_index(int index, int max_value) {
     if (max_value <= 0) return 0;
@@ -155,6 +157,10 @@ void FrameMovementEditor::set_layout_sections(const SDL_Rect& mode_controls_boun
 }
 
 void FrameMovementEditor::set_close_callback(CloseCallback callback) { close_callback_ = std::move(callback); }
+
+void FrameMovementEditor::set_preview_provider(std::shared_ptr<PreviewProvider> provider) {
+    preview_provider_ = std::move(provider);
+}
 
 void FrameMovementEditor::update() {
     ensure_children();
@@ -592,7 +598,47 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
         dm_draw::DrawBeveledRect(renderer, item, radius, bevel, fill_color, fill_color, fill_color, false, 0.0f, 0.0f);
         dm_draw::DrawRoundedOutline(renderer, item, radius, 1, list_style.border);
 
-        render_tab_text(renderer, std::to_string(i + 1), item, text_color);
+        bool rendered_texture = false;
+        if (preview_provider_ && !animation_id_.empty()) {
+            SDL_Texture* texture = preview_provider_->get_frame_texture(renderer, animation_id_, static_cast<int>(i));
+            if (texture) {
+                int tex_w = 0;
+                int tex_h = 0;
+                if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) == 0 && tex_w > 0 && tex_h > 0) {
+                    const int max_w = std::max(1, item.w - kFrameThumbnailPadding * 2);
+                    const int max_h = std::max(1, item.h - kFrameThumbnailPadding * 2);
+                    float scale = std::min(static_cast<float>(max_w) / static_cast<float>(tex_w),
+                                            static_cast<float>(max_h) / static_cast<float>(tex_h));
+                    if (scale <= 0.0f) {
+                        scale = 1.0f;
+                    }
+                    if (scale > 1.0f) {
+                        scale = 1.0f;
+                    }
+                    int draw_w = std::max(1, static_cast<int>(std::round(tex_w * scale)));
+                    int draw_h = std::max(1, static_cast<int>(std::round(tex_h * scale)));
+                    SDL_Rect dst{item.x + (item.w - draw_w) / 2, item.y + (item.h - draw_h) / 2, draw_w, draw_h};
+                    SDL_RenderCopy(renderer, texture, nullptr, &dst);
+                    rendered_texture = true;
+                }
+            }
+        }
+
+        if (!rendered_texture) {
+            render_tab_text(renderer, std::to_string(i + 1), item, text_color);
+        } else {
+            const int badge_padding = 4;
+            const int badge_height = 18;
+            const int badge_width = 28;
+            SDL_Rect badge{item.x + item.w - badge_width - badge_padding,
+                           item.y + item.h - badge_height - badge_padding, badge_width, badge_height};
+            SDL_Color badge_bg = DMStyles::PanelBG();
+            badge_bg.a = 215;
+            const int badge_radius = std::min(DMStyles::CornerRadius(), std::min(badge.w, badge.h) / 2);
+            dm_draw::DrawBeveledRect(renderer, badge, badge_radius, 1, badge_bg, badge_bg, badge_bg, false, 0.0f, 0.0f);
+            dm_draw::DrawRoundedOutline(renderer, badge, badge_radius, 1, list_style.border);
+            render_tab_text(renderer, std::to_string(i + 1), badge, text_color);
+        }
     }
 }
 
