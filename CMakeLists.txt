@@ -361,7 +361,6 @@ add_executable(manifest_store_tests
     ENGINE/dev_mode/spawn_group_config/widgets/PerimeterWidget.cpp
     ENGINE/dev_mode/spawn_group_config/widgets/EdgeWidget.cpp
     ENGINE/dev_mode/spawn_group_config/widgets/RandomWidget.cpp
-    ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/LinkToAreaButton.cpp
     ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/SpawnMethodDropdown.cpp
     ENGINE/dev_mode/DockableCollapsible.cpp
     ENGINE/dev_mode/FloatingDockableManager.cpp

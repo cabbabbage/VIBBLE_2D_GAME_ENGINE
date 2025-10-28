@@ -53,12 +53,8 @@ TEST_CASE("Camera realism toggles with DevControls mode transitions") {
     DevControls controls(nullptr, 800, 600);
     controls.set_camera_override_for_testing(&cam);
 
-    // Initial mode is RoomEditor; realism should be enabled.
+    // Initial mode is RoomEditor; realism should be disabled in editor.
     controls.set_mode(DevControls::Mode::RoomEditor);
-    CHECK(cam.realism_enabled());
-
-    // Enter Area mode and ensure realism is disabled.
-    controls.set_mode(DevControls::Mode::AreaMode);
     CHECK_FALSE(cam.realism_enabled());
 
     // Switching to Map mode should re-enable realism.
@@ -66,17 +62,13 @@ TEST_CASE("Camera realism toggles with DevControls mode transitions") {
     CHECK_EQ(controls.mode(), DevControls::Mode::MapEditor);
     CHECK(cam.realism_enabled());
 
-    // Exiting map mode restores room mode realism.
+    // Exiting map mode restores room editor realism setting (disabled).
     controls.exit_map_editor_mode(false, true);
     CHECK_EQ(controls.mode(), DevControls::Mode::RoomEditor);
-    CHECK(cam.realism_enabled());
-
-    // Returning to area mode disables realism again.
-    controls.set_mode(DevControls::Mode::AreaMode);
     CHECK_FALSE(cam.realism_enabled());
 
     controls.set_mode(DevControls::Mode::RoomEditor);
-    CHECK(cam.realism_enabled());
+    CHECK_FALSE(cam.realism_enabled());
 }
 
 TEST_CASE("Camera zoom is preserved when switching modes") {
@@ -101,7 +93,7 @@ TEST_CASE("Camera zoom is preserved when switching modes") {
     CHECK_EQ(cam.get_scale(), doctest::Approx(initial_scale));
     CHECK_EQ(cam.has_focus_override(), initial_focus_override);
 
-    controls.set_mode(DevControls::Mode::AreaMode);
+    controls.set_mode(DevControls::Mode::RoomEditor);
     CHECK_EQ(cam.get_scale(), doctest::Approx(initial_scale));
 
     controls.set_mode(DevControls::Mode::RoomEditor);

@@ -31,7 +31,6 @@
 #include "asset_sections/Section_Spacing.hpp"
 #include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
-#include "dev_mode/spawn_group_config/SpawnGroupConfig.hpp"
 #include "map_generation/room.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"

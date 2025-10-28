@@ -3860,38 +3860,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             const std::string label = current_room_->room_name.empty() ? std::string("Room") : current_room_->room_name;
             entry.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
         }
-        entry.set_linkable_asset_areas_provider([this]() {
-            std::vector<SpawnGroupLinkableAreaDescriptor> result;
-            if (!current_room_) return result;
-            auto& data = current_room_->assets_data();
-            if (data.contains("areas") && data["areas"].is_array()) {
-                for (const auto& area_entry : data["areas"]) {
-                    if (!area_entry.is_object()) continue;
-                    auto type_it = area_entry.find("type");
-                    if (type_it == area_entry.end() || !type_it->is_string()) continue;
-                    if (type_it->get<std::string>() != "spawning") continue;
-                    auto name_it = area_entry.find("name");
-                    if (name_it != area_entry.end() && name_it->is_string()) {
-                        std::string name = name_it->get<std::string>();
-                        if (!name.empty()) {
-                            result.push_back({name, name, true});
-                        }
-                    }
-                }
-            }
-            return result;
-        });
-        entry.set_linkable_room_areas_provider([this]() {
-            std::vector<SpawnGroupLinkableAreaDescriptor> result;
-            if (!current_room_) return result;
-            for (const auto& named : current_room_->areas) {
-                if (named.type != "spawning") continue;
-                if (!named.name.empty()) {
-                    result.push_back({named.name, named.name, false});
-                }
-            }
-            return result;
-        });
+        // Linked-to-area providers removed; ownership is implicit via config context.
 };
 
     SpawnEntryResolution resolved;

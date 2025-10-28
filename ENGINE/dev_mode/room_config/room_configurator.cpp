@@ -1244,18 +1244,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
         entry_callbacks.on_quantity_changed = [request_regenerate](int, int) { request_regenerate(); };
         entry_callbacks.on_candidates_changed = [request_regenerate](const nlohmann::json&) { request_regenerate(); };
 
-        SpawnGroupConfig::ConfigureEntryCallback final_configure_entry;
-        if (configure_entry) {
-            final_configure_entry = [this, configure_entry = std::move(configure_entry)](
-                                        SpawnGroupConfig::EntryController& entry, const nlohmann::json& cfg_entry) {
-                configure_entry(entry, cfg_entry);
-                entry.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
-};
-        } else if (on_spawn_area_open_ || !spawn_area_stack_key_.empty()) {
-            final_configure_entry = [this](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
-                entry.set_open_area_handler(on_spawn_area_open_, spawn_area_stack_key_);
-};
-        }
+        SpawnGroupConfig::ConfigureEntryCallback final_configure_entry = std::move(configure_entry);
 
         auto title_from = [](const nlohmann::json& e) -> std::string {
             if (e.is_object()) {
@@ -1318,38 +1307,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                 std::string label = room_->room_name.empty() ? std::string("Room") : room_->room_name;
                 entry.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
             }
-            entry.set_linkable_asset_areas_provider([this]() {
-                std::vector<SpawnGroupLinkableAreaDescriptor> result;
-                if (!room_) return result;
-                auto& data = room_->assets_data();
-                if (data.contains("areas") && data["areas"].is_array()) {
-                    for (const auto& area_entry : data["areas"]) {
-                        if (!area_entry.is_object()) continue;
-                        auto type_it = area_entry.find("type");
-                        if (type_it == area_entry.end() || !type_it->is_string()) continue;
-                        if (type_it->get<std::string>() != "spawning") continue;
-                        auto name_it = area_entry.find("name");
-                        if (name_it != area_entry.end() && name_it->is_string()) {
-                            std::string name = name_it->get<std::string>();
-                            if (!name.empty()) {
-                                result.push_back({name, name, true});
-                            }
-                        }
-                    }
-                }
-                return result;
-            });
-            entry.set_linkable_room_areas_provider([this]() {
-                std::vector<SpawnGroupLinkableAreaDescriptor> result;
-                if (!room_) return result;
-                for (const auto& named : room_->areas) {
-                    if (named.type != "spawning") continue;
-                    if (!named.name.empty()) {
-                        result.push_back({named.name, named.name, false});
-                    }
-                }
-                return result;
-            });
+            // Linked-to-area providers removed; ownership is implicit via config context.
 };
 
         for (auto& entry : groups) {

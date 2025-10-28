@@ -16411,6 +16411,11 @@
         "foreshorten_strength": 0.5199999809265137,
         "height_at_zoom1": 486.0,
         "min_visible_screen_ratio": 0.007000000216066837,
+        "motion_smoothing_max_step": 8000.0,
+        "motion_smoothing_method": 2,
+        "motion_smoothing_snap_threshold": 0.25,
+        "motion_smoothing_spring_frequency": 5.0,
+        "motion_smoothing_tau": 0.0,
         "parallax_smoothing_lerp_rate": 0.0,
         "parallax_smoothing_max_step": 8000.0,
         "parallax_smoothing_method": 2,
@@ -16420,6 +16425,8 @@
         "realism_enabled": true,
         "render_distance": 1380.0,
         "render_quality_percent": 10,
+        "scale_hysteresis_margin": 0.05000000074505806,
+        "smooth_motion_zoom": true,
         "tripod_distance_y": -1605.0
       },
       "content_root": "MAPS/FORREST",
@@ -16771,9 +16778,9 @@
       "rooms_data": {
         "NewRoom": {
           "display_color": [
-            242,
-            241,
+            173,
             36,
+            242,
             255
           ],
           "name": "NewRoom",
@@ -16782,9 +16789,9 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            31,
-            101,
-            204,
+            242,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 5,
@@ -16855,9 +16862,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            242,
-            114,
+            126,
             85,
+            242,
             255
           ],
           "edge_smoothness": 4,
@@ -16931,9 +16938,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            162,
-            242,
-            85,
+            31,
+            204,
+            146,
             255
           ],
           "edge_smoothness": 4,
@@ -17011,9 +17018,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            204,
+            123,
             31,
-            64,
+            204,
             255
           ],
           "edge_smoothness": 7,
@@ -17092,9 +17099,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            61,
-            62,
-            242,
+            31,
+            204,
+            42,
             255
           ],
           "edge_smoothness": 6,
@@ -17195,9 +17202,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            154,
-            85,
-            242,
+            160,
+            204,
+            71,
             255
           ],
           "edge_smoothness": 9,
@@ -17268,9 +17275,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            71,
-            159,
-            204,
+            36,
+            215,
+            242,
             255
           ],
           "edge_smoothness": 8,
@@ -17341,9 +17348,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            187,
+            206,
+            85,
             242,
-            36,
             255
           ],
           "edge_smoothness": 6,
@@ -17411,8 +17418,8 @@
           "curvyness": 2,
           "display_color": [
             36,
-            234,
             242,
+            190,
             255
           ],
           "edge_smoothness": 6,
@@ -17479,9 +17486,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            217,
             242,
-            85,
+            235,
+            36,
             255
           ],
           "edge_smoothness": 2,
@@ -17530,9 +17537,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            242,
-            61,
-            96,
+            31,
+            32,
+            204,
             255
           ],
           "edge_smoothness": 12,
@@ -17606,8 +17613,8 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
+            183,
             242,
-            170,
             36,
             255
           ],
@@ -17678,9 +17685,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            71,
-            204,
-            108,
+            242,
+            122,
+            85,
             255
           ],
           "edge_smoothness": 7,
@@ -17754,9 +17761,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            85,
+            204,
+            31,
             199,
-            242,
             255
           ],
           "edge_smoothness": 6,
@@ -17834,9 +17841,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            102,
-            242,
-            36,
+            161,
+            71,
+            204,
             255
           ],
           "edge_smoothness": 10,
@@ -17947,8 +17954,8 @@
           "curvyness": 2,
           "display_color": [
             242,
+            148,
             36,
-            204,
             255
           ],
           "edge_smoothness": 5,
@@ -18018,9 +18025,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            71,
             204,
-            177,
+            86,
+            71,
             255
           ],
           "edge_smoothness": 6,
@@ -18087,9 +18094,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            204,
-            83,
-            71,
+            36,
+            127,
+            242,
             255
           ],
           "edge_smoothness": 10,
@@ -18163,9 +18170,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
-            31,
+            71,
             204,
-            136,
+            182,
             255
           ],
           "edge_smoothness": 5,
@@ -18262,13 +18269,19 @@
               ],
               "resolution": 0,
               "type": "spawning"
+            },
+            {
+              "name": "spawning_area",
+              "points": [],
+              "resolution": 3,
+              "type": "spawning"
             }
           ],
           "curvyness": 2,
           "display_color": [
-            242,
-            164,
-            85,
+            117,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 101,
@@ -18449,9 +18462,9 @@
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            36,
-            130,
-            242,
+            71,
+            204,
+            114,
             255
           ],
           "edge_smoothness": 6,
@@ -18521,9 +18534,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            31,
-            204,
-            59,
+            135,
+            242,
+            85,
             255
           ],
           "edge_smoothness": 7,
