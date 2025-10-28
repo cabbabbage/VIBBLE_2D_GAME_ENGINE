@@ -246,6 +246,9 @@ add_test(NAME asset_loader_distance_tests COMMAND asset_loader_distance_tests)
 add_executable(camera_refresh_tests
     tests/core/camera_refresh_tests.cpp
     ENGINE/render/camera.cpp
+    ENGINE/utils/transform_smoothing_settings.cpp
+    ENGINE/dev_mode/dev_ui_settings.cpp
+    ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/core/find_current_room.cpp
     ${AREA_SOURCES}
     ENGINE/utils/range_util.cpp

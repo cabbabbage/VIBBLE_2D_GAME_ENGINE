@@ -124,8 +124,13 @@ void StageContext::update_projection(Asset& asset) {
     }
     reference_screen_height = reference_height;
 
+    const float world_x = asset.smoothed_translation_x();
+    const float world_y = asset.smoothed_translation_y();
     const camera::RenderEffects effects =
-        cam.compute_render_effects(SDL_Point{ asset.pos.x, asset.pos.y }, base_sh, reference_height);
+        cam.compute_render_effects(
+            SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
+            base_sh,
+            reference_height);
 
     const float scaled_sw = base_sw * effects.distance_scale;
     const float scaled_sh = base_sh * effects.distance_scale;
@@ -137,8 +142,8 @@ void StageContext::update_projection(Asset& asset) {
 
     const int   sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
     const int   sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
-    const float center_x = static_cast<float>(effects.screen_position.x) + effects.parallax_offset_x;
-    const float center_y = static_cast<float>(effects.screen_position.y);
+    const float center_x = effects.screen_position.x + effects.parallax_offset_x;
+    const float center_y = effects.screen_position.y;
     const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
     const int   top      = static_cast<int>(std::lround(center_y - static_cast<float>(sh)));
     screen_rect          = SDL_Rect{ left, top, sw, sh };

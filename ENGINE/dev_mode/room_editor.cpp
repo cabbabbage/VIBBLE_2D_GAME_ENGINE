@@ -2352,8 +2352,13 @@ bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
     const float base_sw = scaled_fw * inv_scale;
     const float base_sh = scaled_fh * inv_scale;
 
+    const float world_x = asset->smoothed_translation_x();
+    const float world_y = asset->smoothed_translation_y();
     const camera::RenderEffects effects =
-        cam.compute_render_effects(SDL_Point{asset->pos.x, asset->pos.y}, base_sh, reference_height);
+        cam.compute_render_effects(
+            SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
+            base_sh,
+            reference_height);
 
     const float scaled_sw = base_sw * effects.distance_scale;
     const float scaled_sh = base_sh * effects.distance_scale;
@@ -2363,10 +2368,11 @@ bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
     const int sh = std::max(1, static_cast<int>(std::lround(static_cast<double>(final_visible_h))));
     if (sw <= 0 || sh <= 0) return false;
 
-    const float center_x = static_cast<float>(effects.screen_position.x) + effects.parallax_offset_x;
+    const float center_x = effects.screen_position.x + effects.parallax_offset_x;
     const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
-    out_rect             = SDL_Rect{left, effects.screen_position.y - sh, sw, sh};
-    out_screen_y         = effects.screen_position.y;
+    const int   top      = static_cast<int>(std::lround(effects.screen_position.y)) - sh;
+    out_rect             = SDL_Rect{left, top, sw, sh};
+    out_screen_y         = static_cast<int>(std::lround(effects.screen_position.y));
     return true;
 }
 

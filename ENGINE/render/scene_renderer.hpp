@@ -58,7 +58,8 @@ private:
         bool         highlighted         = false;
         bool         selected            = false;
         bool         flipped             = false;
-};
+        float        alpha               = 1.0f;
+    };
 
     bool ensure_darkness_overlay();
     void destroy_darkness_overlay();

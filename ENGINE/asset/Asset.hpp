@@ -12,6 +12,8 @@
 #include "utils/area.hpp"
 #include "asset_info.hpp"
 
+#include "utils/transform_smoothing.hpp"
+
 #include "asset_controller.hpp"
 #include "animation_update/animation_update.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
@@ -107,6 +109,11 @@ class Asset {
     RenderTextureCache& shadow_mask_cache() const;
     RenderTextureCache& motion_blur_cache();
     RenderTextureCache& motion_blur_cache() const;
+
+    float smoothed_translation_x() const;
+    float smoothed_translation_y() const;
+    float smoothed_scale() const;
+    float smoothed_alpha() const;
     Asset* parent = nullptr;
     std::shared_ptr<AssetInfo> info;
     std::string current_animation;
@@ -191,7 +198,13 @@ class Asset {
     mutable RenderTextureCache shadow_mask_cache_{};
     mutable RenderTextureCache motion_blur_cache_{};
 
+    TransformSmoothingState translation_smoothing_x_{};
+    TransformSmoothingState translation_smoothing_y_{};
+    TransformSmoothingState scale_smoothing_{};
+    TransformSmoothingState alpha_smoothing_{};
+
     std::uint64_t final_texture_revision_ = 0;
+
 };
 
 #endif

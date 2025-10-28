@@ -11,6 +11,8 @@
 #include "asset/Asset.hpp"
 
 namespace {
+constexpr float kFrameDt = 1.0f / 60.0f;
+
 Area make_base_area(const std::string& name, int width, int height) {
     std::vector<SDL_Point> corners{
         SDL_Point{0, 0},
@@ -29,18 +31,18 @@ TEST_CASE("Camera refresh tracks player movement when requested") {
     Asset player;
 
     player.pos = SDL_Point{12, 34};
-    cam.update_zoom(nullptr, nullptr, &player, true);
+    cam.update_zoom(nullptr, nullptr, &player, true, kFrameDt);
     CHECK_EQ(cam.get_screen_center().x, player.pos.x);
     CHECK_EQ(cam.get_screen_center().y, player.pos.y);
 
     SDL_Point locked_center = cam.get_screen_center();
 
     player.pos = SDL_Point{120, 220};
-    cam.update_zoom(nullptr, nullptr, &player, false);
+    cam.update_zoom(nullptr, nullptr, &player, false, kFrameDt);
     CHECK_EQ(cam.get_screen_center().x, locked_center.x);
     CHECK_EQ(cam.get_screen_center().y, locked_center.y);
 
-    cam.update_zoom(nullptr, nullptr, &player, true);
+    cam.update_zoom(nullptr, nullptr, &player, true, kFrameDt);
     CHECK_EQ(cam.get_screen_center().x, player.pos.x);
     CHECK_EQ(cam.get_screen_center().y, player.pos.y);
 }
@@ -52,7 +54,7 @@ TEST_CASE("Camera update continues zoom animations when refresh is skipped") {
     cam.zoom_to_scale(2.0, 10);
     const float initial_scale = cam.get_scale();
 
-    cam.update_zoom(nullptr, nullptr, nullptr, false);
+    cam.update_zoom(nullptr, nullptr, nullptr, false, kFrameDt);
     CHECK(cam.zooming_);
     CHECK_GT(cam.get_scale(), initial_scale);
 }

@@ -216,14 +216,28 @@ bool SceneRenderer::shouldRegen(Asset* a){
 }
 
 SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){
-    float base_scale=1.f;
-    if (a && a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor>=0.f) base_scale=a->info->scale_factor;
+    const float world_x = a ? a->smoothed_translation_x() : 0.0f;
+    const float world_y = a ? a->smoothed_translation_y() : 0.0f;
+
+    float base_scale = 1.0f;
+    if (a) {
+        base_scale = a->smoothed_scale();
+        if (!std::isfinite(base_scale) || base_scale <= 0.0f) {
+            base_scale = 1.0f;
+        }
+    }
     float scaled_fw=(float)fw*base_scale;
     float scaled_fh=(float)fh*base_scale;
     float base_sw=scaled_fw*inv_scale;
     float base_sh=scaled_fh*inv_scale;
 
-    const camera::RenderEffects ef=assets_->getView().compute_render_effects(SDL_Point{a->pos.x,a->pos.y}, base_sh, ref_sh);
+    camera& cam = assets_->getView();
+    camera::RenderEffects ef=cam.compute_render_effects(
+        SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
+        base_sh,
+        ref_sh);
+    SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ world_x, world_y });
+    ef.screen_position = screen;
     float scaled_sw=base_sw*ef.distance_scale;
     float scaled_sh2=base_sh*ef.distance_scale;
     float final_h=scaled_sh2*ef.vertical_scale;
@@ -234,10 +248,10 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
     int sh=std::max(1,(int)std::lround(final_h));
     if (sw<min_w && sh<min_h) return SDL_FRect{0.0f,0.0f,0.0f,0.0f};
 
-    const float center_x = static_cast<float>(ef.screen_position.x) + ef.parallax_offset_x;
+    const float center_x = ef.screen_position.x + ef.parallax_offset_x;
     const float half_w   = static_cast<float>(sw) * 0.5f;
     const float left     = center_x - half_w;
-    const float top      = static_cast<float>(ef.screen_position.y - sh);
+    const float top      = ef.screen_position.y - static_cast<float>(sh);
     return SDL_FRect{ left, top, static_cast<float>(sw), static_cast<float>(sh) };
 }
 
@@ -361,6 +375,11 @@ void SceneRenderer::render(){
             cmd.highlighted         = asset->is_highlighted();
             cmd.selected            = asset->is_selected();
             cmd.flipped             = asset->flipped;
+            cmd.alpha               = asset ? asset->smoothed_alpha() : 1.0f;
+            if (!std::isfinite(cmd.alpha)) {
+                cmd.alpha = 1.0f;
+            }
+            cmd.alpha = std::clamp(cmd.alpha, 0.0f, 1.0f);
 
             auto& target_commands = (asset->info->type == asset_types::texture) ? texture_commands_ : remaining_commands_;
             target_commands.push_back(std::move(cmd));
@@ -455,6 +474,7 @@ void SceneRenderer::render(){
                 }
 
                 SDL_Texture* mod_target = cmd.source_texture;
+                const Uint8 alpha_mod = static_cast<Uint8>(std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
                 if (cmd.highlighted) {
                     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
                     SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
@@ -481,10 +501,13 @@ void SceneRenderer::render(){
                     SDL_SetTextureColorMod(mod_target, 255, 255, 255);
                 }
 
+                SDL_SetTextureAlphaMod(mod_target, alpha_mod);
                 SDL_RenderCopyExF(renderer_, cmd.source_texture, nullptr, &cmd.dst, 0.0, nullptr, cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
                 SDL_SetTextureColorMod(mod_target, 255, 255, 255);
+                SDL_SetTextureAlphaMod(mod_target, 255);
                 if (cmd.uses_scaled_texture && cmd.final_texture) {
                     SDL_SetTextureColorMod(cmd.final_texture, 255, 255, 255);
+                    SDL_SetTextureAlphaMod(cmd.final_texture, 255);
                 }
             }
             SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);

@@ -9,6 +9,7 @@
 #include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
 #include "util/grid.hpp"
+#include "utils/transform_smoothing_settings.hpp"
 #include <iostream>
 #include <random>
 #include <mutex>
@@ -85,6 +86,19 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
                         current_frame = f;
                 }
         }
+        translation_smoothing_x_.set_params(transform_smoothing::asset_translation_params());
+        translation_smoothing_y_.set_params(transform_smoothing::asset_translation_params());
+        scale_smoothing_.set_params(transform_smoothing::asset_scale_params());
+        alpha_smoothing_.set_params(transform_smoothing::asset_alpha_params());
+
+        translation_smoothing_x_.reset(static_cast<float>(pos.x));
+        translation_smoothing_y_.reset(static_cast<float>(pos.y));
+        const float initial_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f)
+                                        ? info->scale_factor
+                                        : 1.0f;
+        scale_smoothing_.reset(initial_scale);
+        alpha_smoothing_.reset(hidden ? 0.0f : 1.0f);
+
         clear_downscale_cache();
 }
 
@@ -153,6 +167,10 @@ Asset::Asset(const Asset& o)
         last_scale_usage_ = o.last_scale_usage_;
         cached_grid_residency_    = o.cached_grid_residency_;
         has_cached_grid_residency_ = o.has_cached_grid_residency_;
+        translation_smoothing_x_  = o.translation_smoothing_x_;
+        translation_smoothing_y_  = o.translation_smoothing_y_;
+        scale_smoothing_          = o.scale_smoothing_;
+        alpha_smoothing_          = o.alpha_smoothing_;
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -202,6 +220,10 @@ Asset& Asset::operator=(const Asset& o) {
         last_scale_usage_         = o.last_scale_usage_;
         cached_grid_residency_    = o.cached_grid_residency_;
         has_cached_grid_residency_ = o.has_cached_grid_residency_;
+        translation_smoothing_x_  = o.translation_smoothing_x_;
+        translation_smoothing_y_  = o.translation_smoothing_y_;
+        scale_smoothing_          = o.scale_smoothing_;
+        alpha_smoothing_          = o.alpha_smoothing_;
         return *this;
 }
 
@@ -372,6 +394,24 @@ void Asset::update() {
             }
         }
     }
+
+    const float dt = assets_ ? assets_->frame_delta_seconds() : (1.0f / 60.0f);
+    translation_smoothing_x_.target = static_cast<float>(pos.x);
+    translation_smoothing_y_.target = static_cast<float>(pos.y);
+
+    float scale_target = 1.0f;
+    if (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) {
+        scale_target = info->scale_factor;
+    }
+    scale_smoothing_.target = scale_target;
+
+    const float alpha_target = hidden ? 0.0f : 1.0f;
+    alpha_smoothing_.target  = alpha_target;
+
+    translation_smoothing_x_.advance(dt);
+    translation_smoothing_y_.advance(dt);
+    scale_smoothing_.advance(dt);
+    alpha_smoothing_.advance(dt);
 }
 
 std::string Asset::get_current_animation() const { return current_animation; }
@@ -743,6 +783,12 @@ void Asset::on_scale_factor_changed() {
         motion_blur_cache_.width  = 0;
         motion_blur_cache_.height = 0;
 
+        float scale_target = 1.0f;
+        if (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) {
+                scale_target = info->scale_factor;
+        }
+        scale_smoothing_.reset(scale_target);
+
         if (!asset_children.empty() && info) {
                 for (Asset* asset_child : asset_children) {
                         if (!asset_child || !asset_child->info) {
@@ -801,6 +847,20 @@ bool Asset::has_grid_residency_cache() const {
 
 SDL_Point Asset::grid_residency_cache() const {
         return cached_grid_residency_;
+}
+
+float Asset::smoothed_translation_x() const { return translation_smoothing_x_.value_for_render(); }
+
+float Asset::smoothed_translation_y() const { return translation_smoothing_y_.value_for_render(); }
+
+float Asset::smoothed_scale() const { return scale_smoothing_.value_for_render(); }
+
+float Asset::smoothed_alpha() const {
+        float value = alpha_smoothing_.value_for_render();
+        if (!std::isfinite(value)) {
+                value = hidden ? 0.0f : 1.0f;
+        }
+        return std::clamp(value, 0.0f, 1.0f);
 }
 
 Asset::RenderTextureCache& Asset::shadow_mask_cache() { return shadow_mask_cache_; }

@@ -9,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -77,6 +78,8 @@ public:
     std::vector<Asset*>& mutable_filtered_active_assets() { return filtered_active_assets; }
     camera& getView() { return camera_; }
     const camera& getView() const { return camera_; }
+
+    float frame_delta_seconds() const { return last_frame_dt_seconds_; }
 
     void render_overlays(SDL_Renderer* renderer);
     SDL_Renderer* renderer() const;
@@ -225,6 +228,10 @@ private:
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;
     std::atomic<bool> non_player_update_buffer_dirty_{true};
+
+    float      last_frame_dt_seconds_   = 1.0f / 60.0f;
+    double     perf_counter_frequency_  = 0.0;
+    std::uint64_t last_frame_counter_   = 0;
 
     AssetLibrary& library_;
     std::string map_id_;

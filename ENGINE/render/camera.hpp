@@ -5,6 +5,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include "utils/area.hpp"
+#include "utils/transform_smoothing.hpp"
 
 class Asset;
 class Room;
@@ -25,7 +26,7 @@ class camera {
 };
 
     struct RenderEffects {
-        SDL_Point screen_position{0, 0};
+        SDL_FPoint screen_position{0.0f, 0.0f};
         float     parallax_offset_x = 0.0f;
         float     vertical_scale    = 1.0f;
         float     distance_scale    = 1.0f;
@@ -56,6 +57,7 @@ class camera {
     const Area& get_current_view() const { return current_view_; }
 
     SDL_Point map_to_screen(SDL_Point world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
+    SDL_FPoint map_to_screen_f(SDL_FPoint world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
     SDL_Point screen_to_map(SDL_Point screen, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
 
     RenderEffects compute_render_effects(SDL_Point world, float asset_screen_height, float reference_screen_height) const;
@@ -83,9 +85,9 @@ class camera {
     void      set_screen_center(SDL_Point p);
     SDL_Point get_screen_center() const { return screen_center_; }
 
-    void update();
+    void update(float dt);
     void set_up_rooms(CurrentRoomFinder* finder);
-    void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player, bool refresh_requested);
+    void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player, bool refresh_requested, float dt);
 
     void pan(const std::vector<SDL_Point>& , int ) {}
     void shake(double , double , int ) {}
@@ -132,5 +134,11 @@ class camera {
     bool       realism_enabled_ = true;
     RealismSettings settings_{};
     bool       render_areas_enabled_ = true;
+
+    TransformSmoothingState center_smoothing_x_{};
+    TransformSmoothingState center_smoothing_y_{};
+    TransformSmoothingState zoom_smoothing_{};
+    SDL_FPoint smoothed_center_{0.0f, 0.0f};
+    float      smoothed_scale_ = 1.0f;
 };
 

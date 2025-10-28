@@ -3,6 +3,7 @@
 #include "utils/area.hpp"
 #include "map_generation/room.hpp"
 #include "core/find_current_room.hpp"
+#include "utils/transform_smoothing_settings.hpp"
 #include <cmath>
 #include <algorithm>
 #include <vector>
@@ -60,6 +61,16 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     zooming_ = false;
     steps_total_ = steps_done_ = 0;
     start_scale_ = target_scale_ = scale_;
+
+    center_smoothing_x_.set_params(transform_smoothing::camera_center_params());
+    center_smoothing_y_.set_params(transform_smoothing::camera_center_params());
+    zoom_smoothing_.set_params(transform_smoothing::camera_zoom_params());
+    center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
+    center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
+    zoom_smoothing_.reset(std::max(scale_, 0.0001f));
+    smoothed_center_.x = center_smoothing_x_.value_for_render();
+    smoothed_center_.y = center_smoothing_y_.value_for_render();
+    smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
 }
 
 void camera::set_screen_center(SDL_Point p) {
@@ -68,6 +79,10 @@ void camera::set_screen_center(SDL_Point p) {
         screen_center_initialized_ = true;
         pan_offset_x_ = 0.0;
         pan_offset_y_ = 0.0;
+        center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
+        center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
+        smoothed_center_.x = center_smoothing_x_.value_for_render();
+        smoothed_center_.y = center_smoothing_y_.value_for_render();
         return;
     }
     const double dx = static_cast<double>(p.x) - static_cast<double>(screen_center_.x);
@@ -82,9 +97,11 @@ void camera::set_scale(float s) {
     zooming_ = false;
     steps_total_ = steps_done_ = 0;
     start_scale_ = target_scale_ = scale_;
+    zoom_smoothing_.reset(scale_);
+    smoothed_scale_ = scale_;
 }
 
-float camera::get_scale() const { return scale_; }
+float camera::get_scale() const { return smoothed_scale_; }
 
 void camera::zoom_to_scale(double target_scale, int duration_steps) {
     double clamped = (target_scale > 0.0) ? target_scale : 0.0001;
@@ -119,34 +136,46 @@ void camera::zoom_to_area(const Area& target_area, int duration_steps) {
     zoom_to_scale(target, duration_steps);
 }
 
-void camera::update() {
-    if (!zooming_) {
-        recompute_current_view();
-        intro = false;
-        return;
-    }
-    ++steps_done_;
-    double t = static_cast<double>(steps_done_) / static_cast<double>(std::max(1, steps_total_));
-    t = std::clamp(t, 0.0, 1.0);
-    double s = start_scale_ + (target_scale_ - start_scale_) * t;
-    scale_ = static_cast<float>(std::max(0.0001, s));
-    if (pan_override_) {
-        const double cx = static_cast<double>(start_center_.x) + (static_cast<double>(target_center_.x) - static_cast<double>(start_center_.x)) * t;
-        const double cy = static_cast<double>(start_center_.y) + (static_cast<double>(target_center_.y) - static_cast<double>(start_center_.y)) * t;
-        SDL_Point new_center{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
-        set_screen_center(new_center);
-    }
-    recompute_current_view();
-    if (steps_done_ >= steps_total_) {
-        scale_ = static_cast<float>(target_scale_);
+void camera::update(float dt) {
+    if (zooming_) {
+        ++steps_done_;
+        double t = static_cast<double>(steps_done_) / static_cast<double>(std::max(1, steps_total_));
+        t = std::clamp(t, 0.0, 1.0);
+        double s = start_scale_ + (target_scale_ - start_scale_) * t;
+        scale_ = static_cast<float>(std::max(0.0001, s));
         if (pan_override_) {
-            set_screen_center(target_center_);
+            const double cx = static_cast<double>(start_center_.x) + (static_cast<double>(target_center_.x) - static_cast<double>(start_center_.x)) * t;
+            const double cy = static_cast<double>(start_center_.y) + (static_cast<double>(target_center_.y) - static_cast<double>(start_center_.y)) * t;
+            SDL_Point new_center{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
+            set_screen_center(new_center);
         }
-        zooming_ = false;
-        pan_override_ = false;
-        steps_total_ = steps_done_ = 0;
-        start_scale_ = target_scale_;
+        if (steps_done_ >= steps_total_) {
+            scale_ = static_cast<float>(target_scale_);
+            if (pan_override_) {
+                set_screen_center(target_center_);
+            }
+            zooming_ = false;
+            pan_override_ = false;
+            steps_total_ = steps_done_ = 0;
+            start_scale_ = target_scale_;
+        }
+    } else {
+        intro = false;
     }
+
+    center_smoothing_x_.target = static_cast<float>(screen_center_.x);
+    center_smoothing_y_.target = static_cast<float>(screen_center_.y);
+    zoom_smoothing_.target     = std::max(scale_, 0.0001f);
+
+    center_smoothing_x_.advance(dt);
+    center_smoothing_y_.advance(dt);
+    zoom_smoothing_.advance(dt);
+
+    smoothed_center_.x = center_smoothing_x_.value_for_render();
+    smoothed_center_.y = center_smoothing_y_.value_for_render();
+    smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
+
+    recompute_current_view();
 }
 
 double camera::compute_room_scale_from_area(const Room* room) const {
@@ -174,8 +203,10 @@ void camera::set_up_rooms(CurrentRoomFinder* finder) {
 void camera::update_zoom(Room* cur,
                          CurrentRoomFinder* finder,
                          Asset* player,
-                         bool refresh_requested) {
+                         bool refresh_requested,
+                         float dt) {
     if (!refresh_requested && !zooming_) {
+        update(dt);
         return;
     }
     pan_offset_x_ = 0.0;
@@ -195,7 +226,7 @@ void camera::update_zoom(Room* cur,
         starting_area_ = adjusted.get_size();
         if (starting_area_ <= 0.0) starting_area_ = 1.0;
     }
-    update();
+    update(dt);
     if (!cur) return;
     if (manual_zoom_override_) {
         return;
@@ -248,9 +279,14 @@ Area camera::convert_area_to_aspect(const Area& in) const {
 void camera::recompute_current_view() {
     const int base_w = std::max(1, width_from_area(base_zoom_));
     const int base_h = std::max(1, height_from_area(base_zoom_));
-    const int cur_w  = static_cast<int>(std::lround(static_cast<double>(base_w) * std::max(0.0001, static_cast<double>(scale_))));
-    const int cur_h  = static_cast<int>(std::lround(static_cast<double>(base_h) * std::max(0.0001, static_cast<double>(scale_))));
-    current_view_    = make_rect_area("current_view", screen_center_, cur_w, cur_h, base_zoom_.resolution());
+    const double scale_value = std::max(0.0001, static_cast<double>(smoothed_scale_));
+    const int cur_w  = static_cast<int>(std::lround(static_cast<double>(base_w) * scale_value));
+    const int cur_h  = static_cast<int>(std::lround(static_cast<double>(base_h) * scale_value));
+    SDL_Point center{
+        static_cast<int>(std::lround(smoothed_center_.x)),
+        static_cast<int>(std::lround(smoothed_center_.y))
+    };
+    current_view_    = make_rect_area("current_view", center, cur_w, cur_h, base_zoom_.resolution());
 }
 
 void camera::pan_and_zoom_to_point(SDL_Point world_pos, double zoom_scale_factor, int duration_steps) {
@@ -362,19 +398,28 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
     manual_zoom_override_ = true;
 }
 
-SDL_Point camera::map_to_screen(SDL_Point world, float, float) const {
+SDL_FPoint camera::map_to_screen_f(SDL_FPoint world, float, float) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
-    const double inv_scale = (scale_ > 0.000001f) ? (1.0 / static_cast<double>(scale_)) : 1e6;
-    int sx = static_cast<int>(std::lround((static_cast<double>(world.x - left)) * inv_scale));
-    int sy = static_cast<int>(std::lround((static_cast<double>(world.y - top)) * inv_scale));
-    return SDL_Point{ sx, sy };
+    const double inv_scale = (smoothed_scale_ > 0.000001f) ? (1.0 / static_cast<double>(smoothed_scale_)) : 1e6;
+    const double sx = (static_cast<double>(world.x) - static_cast<double>(left)) * inv_scale;
+    const double sy = (static_cast<double>(world.y) - static_cast<double>(top)) * inv_scale;
+    return SDL_FPoint{ static_cast<float>(sx), static_cast<float>(sy) };
+}
+
+SDL_Point camera::map_to_screen(SDL_Point world, float parallax_x, float parallax_y) const {
+    SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
+    SDL_FPoint screen_f = map_to_screen_f(world_f, parallax_x, parallax_y);
+    return SDL_Point{
+        static_cast<int>(std::lround(screen_f.x)),
+        static_cast<int>(std::lround(screen_f.y))
+    };
 }
 
 SDL_Point camera::screen_to_map(SDL_Point screen, float, float) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
-    const double s = static_cast<double>(std::max(0.000001f, scale_));
+    const double s = static_cast<double>(std::max(0.000001f, smoothed_scale_));
     double wx = static_cast<double>(left) + static_cast<double>(screen.x) * s;
     double wy = static_cast<double>(top)  + static_cast<double>(screen.y) * s;
     return SDL_Point{ static_cast<int>(std::lround(wx)), static_cast<int>(std::lround(wy)) };
@@ -386,12 +431,13 @@ camera::RenderEffects camera::compute_render_effects(
     float reference_screen_height) const
 {
     RenderEffects result;
-    result.screen_position  = map_to_screen(world);
+    SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
+    result.screen_position  = map_to_screen_f(world_f);
     result.parallax_offset_x = 0.0f;
     result.vertical_scale   = 1.0f;
     result.distance_scale   = 1.0f;
 
-    const double safe_scale       = std::max(1e-6, static_cast<double>(scale_));
+    const double safe_scale       = std::max(1e-6, static_cast<double>(smoothed_scale_));
     const double pixels_per_world = 1.0 / safe_scale;
 
     if (!realism_enabled_) {
@@ -413,7 +459,7 @@ camera::RenderEffects camera::compute_render_effects(
     constexpr double RANGE_COMPRESS   = 2.0;
     constexpr double R_REF            = 400.0;
 
-    const double raw_scale      = std::isfinite(scale_) ? static_cast<double>(scale_) : 0.0;
+    const double raw_scale      = std::isfinite(smoothed_scale_) ? static_cast<double>(smoothed_scale_) : 0.0;
     const double zoom_norm      = std::clamp(raw_scale, 0.0, 1.0);
     const double height_at_zoom1 = std::isfinite(settings_.height_at_zoom1) ? std::max(0.0f, settings_.height_at_zoom1) : 0.0f;
     const double camera_height  = height_at_zoom1 * zoom_norm;

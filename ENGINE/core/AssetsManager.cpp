@@ -129,6 +129,8 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
       map_path_(std::move(content_root)),
       map_info_path_(map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json"))
 {
+    perf_counter_frequency_ = static_cast<double>(SDL_GetPerformanceFrequency());
+    last_frame_counter_     = SDL_GetPerformanceCounter();
     map_info_json_ = map_manifest;
     if (!map_info_json_.is_object()) {
         map_info_json_ = nlohmann::json::object();
@@ -566,6 +568,17 @@ void Assets::set_input(Input* m) {
 
 void Assets::update(const Input& input)
 {
+    const std::uint64_t now_counter = SDL_GetPerformanceCounter();
+    float dt = 1.0f / 60.0f;
+    if (last_frame_counter_ != 0 && perf_counter_frequency_ > 0.0) {
+        const double elapsed = static_cast<double>(now_counter - last_frame_counter_) / perf_counter_frequency_;
+        if (std::isfinite(elapsed) && elapsed > 0.0) {
+            dt = static_cast<float>(std::clamp(elapsed, 0.0, 0.25));
+        }
+    }
+    last_frame_counter_    = now_counter;
+    last_frame_dt_seconds_ = dt;
+
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
         scene->toggle_chunk_preview();
@@ -599,7 +612,7 @@ void Assets::update(const Input& input)
 
     const bool zoom_animation_active = camera_.zooming_;
     const bool camera_refresh_needed = room_changed || player_moved || zoom_animation_active;
-    camera_.update_zoom(current_room_, finder_, player, camera_refresh_needed);
+    camera_.update_zoom(current_room_, finder_, player, camera_refresh_needed, last_frame_dt_seconds_);
 
     const Area view = camera_.get_camera_area();
     auto [minx, miny, maxx, maxy] = view.get_bounds();

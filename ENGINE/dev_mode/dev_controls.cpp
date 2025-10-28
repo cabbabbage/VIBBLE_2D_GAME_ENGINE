@@ -1314,15 +1314,23 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     const float base_scale = (a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor >= 0.0f) ? a->info->scale_factor : 1.0f;
                     float base_sw = static_cast<float>(fw) * base_scale * inv_scale;
                     float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
-                    camera::RenderEffects eff = cam.compute_render_effects(SDL_Point{a->pos.x, a->pos.y}, base_sh, player_screen_height);
+                    const float world_x = a->smoothed_translation_x();
+                    const float world_y = a->smoothed_translation_y();
+                    camera::RenderEffects eff = cam.compute_render_effects(
+                        SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
+                        base_sh,
+                        player_screen_height);
+                    SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ world_x, world_y });
+                    eff.screen_position = screen;
                     float scaled_sw = base_sw * eff.distance_scale;
                     float scaled_sh = base_sh * eff.distance_scale;
                     float final_h   = scaled_sh * eff.vertical_scale;
                     int sw_px = std::max(1, static_cast<int>(std::round(scaled_sw)));
                     int sh_px = std::max(1, static_cast<int>(std::round(final_h)));
-                    const float center_x = static_cast<float>(eff.screen_position.x) + eff.parallax_offset_x;
+                    const float center_x = eff.screen_position.x + eff.parallax_offset_x;
                     const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw_px) * 0.5f));
-                    return SDL_Rect{ left, eff.screen_position.y - sh_px, sw_px, sh_px };
+                    const int   top      = static_cast<int>(std::lround(eff.screen_position.y)) - sh_px;
+                    return SDL_Rect{ left, top, sw_px, sh_px };
 };
 
                 if (event.type == SDL_MOUSEMOTION) {
