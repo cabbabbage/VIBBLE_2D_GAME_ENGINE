@@ -258,7 +258,9 @@ add_test(NAME scaling_logic_usage_sampling_tests COMMAND scaling_logic_usage_sam
 add_executable(camera_refresh_tests
     tests/core/camera_refresh_tests.cpp
     ENGINE/render/camera.cpp
+    ENGINE/core/find_current_room.cpp
     ENGINE/utils/area.cpp
+    ENGINE/utils/range_util.cpp
     ENGINE/utils/cache_manager.cpp
 )
 target_include_directories(camera_refresh_tests PRIVATE
