@@ -68,6 +68,15 @@ inline void Section_BasicInfo::build() {
     if (!info_) { set_rows(rows); return; }
 
     type_options_ = asset_types::all_as_strings();
+    // Prevent selecting area type unless it's already an area; and prevent changing area to anything else
+    const bool is_area_asset = (asset_types::canonicalize(info_->type) == std::string(asset_types::area));
+    if (is_area_asset) {
+        type_options_.clear();
+        type_options_.emplace_back(std::string(asset_types::area));
+    } else {
+        // Remove 'area' from options for non-area assets
+        type_options_.erase(std::remove(type_options_.begin(), type_options_.end(), std::string(asset_types::area)), type_options_.end());
+    }
     dd_type_ = std::make_unique<DMDropdown>("Type", type_options_, find_index(type_options_, info_->type));
     int pct = std::max(0, static_cast<int>(std::lround(info_->scale_factor * 100.0f)));
     s_scale_pct_ = std::make_unique<DMSlider>("Scale (%)", 1, 400, pct);
@@ -107,7 +116,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     if (!info_) return used;
 
     if (!used) {
-        if (dd_type_ && dd_type_->handle_event(e)) used = true;
+    if (dd_type_ && dd_type_->handle_event(e)) used = true;
         if (s_scale_pct_ && s_scale_pct_->handle_event(e)) used = true;
         if (s_zindex_ && s_zindex_->handle_event(e)) used = true;
         if (c_flipable_ && c_flipable_->handle_event(e)) used = true;
@@ -119,7 +128,11 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     if (dd_type_ && !type_options_.empty()) {
         int idx = std::clamp(dd_type_->selected(), 0, static_cast<int>(type_options_.size()) - 1);
         const std::string& selected = type_options_[idx];
-        if (info_->type != selected) {
+        const bool is_area_asset = (asset_types::canonicalize(info_->type) == std::string(asset_types::area));
+        // Disallow: non-area -> area; and area -> other
+        if ((is_area_asset && selected != std::string(asset_types::area)) || (!is_area_asset && selected == std::string(asset_types::area))) {
+            // Ignore illegal change
+        } else if (info_->type != selected) {
             info_->set_asset_type(selected);
             changed = true;
         }

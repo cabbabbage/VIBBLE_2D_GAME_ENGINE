@@ -286,9 +286,9 @@ void SceneRenderer::render(){
     SDL_Point orbit_center{ screen_width_ / 2, screen_height_ / 2 };
     main_light_source_.set_screen_orbit_center(orbit_center);
 
-    const camera* camera_state = assets_ ? &assets_->getView() : nullptr;
-    if (camera_state) {
-        main_light_source_.set_direction_reference_world(camera_state->get_screen_center());
+    const camera* camera_state_ptr = assets_ ? &assets_->getView() : nullptr;
+    if (camera_state_ptr) {
+        main_light_source_.set_direction_reference_world(camera_state_ptr->get_screen_center());
     }
 
     bool should_update_light = true;
@@ -347,16 +347,21 @@ void SceneRenderer::render(){
     light_overlay_sources_.clear();
 
     if (!light_map_only_mode_){
-        const auto& camera_state=assets_->getView();
-        const camera::RealismSettings& cam_settings = camera_state.realism_settings();
+        const camera* camera_state = assets_ ? &assets_->getView() : nullptr;
+        const camera::RealismSettings cam_settings = camera_state
+            ? camera_state->realism_settings()
+            : camera::RealismSettings{};
         const int effective_quality_percent = assets_
                                                   ? assets_->effective_render_quality_percent() : cam_settings.render_quality_percent;
         const float quality_percent =
             std::clamp(static_cast<float>(effective_quality_percent), 10.0f, 100.0f);
         render_pipeline::ScalingLogic::SetQualityCap(quality_percent / 100.0f);
 
-        float scale=camera_state.get_scale();
-        float inv_scale=1.f/scale;
+        float scale = camera_state ? camera_state->get_scale() : 1.0f;
+        if (!std::isfinite(scale) || scale <= 0.0f) {
+            scale = 1.0f;
+        }
+        float inv_scale = 1.0f / scale;
         float min_ratio = cam_settings.min_visible_screen_ratio;
         if (!std::isfinite(min_ratio) || min_ratio < 0.0f) {
             min_ratio = kDefaultMinVisibleScreenRatio;

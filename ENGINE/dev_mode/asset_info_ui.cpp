@@ -330,6 +330,22 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     for (auto& s : sections_) {
         try {
             s->set_info(info_);
+            // Hide some sections if the asset is an area
+            bool is_area_asset = false;
+            if (info_) {
+                std::string t = info_->type;
+                std::transform(t.begin(), t.end(), t.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
+                is_area_asset = (t == "area");
+            }
+            if (is_area_asset) {
+                if (auto* lighting = dynamic_cast<Section_Lighting*>(s.get())) lighting->set_visible(false);
+                if (auto* shading  = dynamic_cast<Section_Shading*>(s.get()))  shading->set_visible(false);
+                if (auto* spawns   = dynamic_cast<Section_SpawnGroups*>(s.get())) spawns->set_visible(false);
+            } else {
+                if (auto* lighting = dynamic_cast<Section_Lighting*>(s.get())) lighting->set_visible(true);
+                if (auto* shading  = dynamic_cast<Section_Shading*>(s.get()))  shading->set_visible(true);
+                if (auto* spawns   = dynamic_cast<Section_SpawnGroups*>(s.get())) spawns->set_visible(true);
+            }
             s->reset_scroll();
             s->build();
         } catch (const std::exception& ex) {
@@ -1004,6 +1020,41 @@ void AssetInfoUI::open_for_room_area(Room* room, const std::string& area_name) {
 
     auto area_settings = std::make_unique<Section_AreaSettings>(); area_settings->set_ctx(this, area_room_, area_name_);
     sections_.push_back(std::move(area_settings));
+
+    // Area Tags section
+    class Section_AreaTags : public DockableCollapsible {
+    public:
+        Room* room = nullptr; std::string name; std::unique_ptr<DMTextBox> tags_box; std::unique_ptr<TextBoxWidget> tags_widget;
+        Section_AreaTags(): DockableCollapsible("Area Tags", false) { set_scroll_enabled(false); }
+        void set_ctx(Room* r, const std::string& n){ room=r; name=n; }
+        static std::string join(const std::vector<std::string>& arr){ std::string s; for(size_t i=0;i<arr.size();++i){ if(i) s+=", "; s+=arr[i]; } return s; }
+        static std::vector<std::string> split(const std::string& s){ std::vector<std::string> out; std::string cur; for(char ch: s){ if(ch==','){ if(!cur.empty()){ size_t a=cur.find_first_not_of(" \t\n\r"); size_t b=cur.find_last_not_of(" \t\n\r"); if(a!=std::string::npos) out.push_back(cur.substr(a,b-a+1)); cur.clear(); } } else { cur.push_back(ch);} } if(!cur.empty()){ size_t a=cur.find_first_not_of(" \t\n\r"); size_t b=cur.find_last_not_of(" \t\n\r"); if(a!=std::string::npos) out.push_back(cur.substr(a,b-a+1)); } return out; }
+        void build() override {
+            Rows rows; if (!tags_box) tags_box = std::make_unique<DMTextBox>("Tags (comma separated)", ""); if (!tags_widget) tags_widget = std::make_unique<TextBoxWidget>(tags_box.get(), true); rows.push_back({ tags_widget.get() }); set_rows(rows);
+            if (room) { nlohmann::json& root = room->assets_data(); if (root.contains("areas") && root["areas"].is_array()) { for (auto& entry : root["areas"]) { if (!entry.is_object()) continue; if (entry.value("name", std::string{}) != name) continue; std::vector<std::string> tags; if (entry.contains("tags") && entry["tags"].is_array()){ for (auto& v: entry["tags"]) if (v.is_string()) tags.push_back(v.get<std::string>());} tags_box->set_value(join(tags)); break; } } }
+        }
+        void update(const Input& input, int w, int h) override {
+            DockableCollapsible::update(input,w,h); if (!room) return; if (tags_box && tags_box->is_editing()) return; nlohmann::json& root = room->assets_data(); if (!root.contains("areas") || !root["areas"].is_array()) return; for (auto& entry : root["areas"]) { if (!entry.is_object()) continue; if (entry.value("name", std::string{}) != name) continue; auto tags = split(tags_box ? tags_box->value() : std::string{}); entry["tags"] = nlohmann::json::array(); for (auto& t : tags) entry["tags"].push_back(t); room->save_assets_json(); break; }
+        }
+    };
+
+    auto area_tags = std::make_unique<Section_AreaTags>(); area_tags->set_ctx(area_room_, area_name_);
+    sections_.push_back(std::move(area_tags));
+
+    // Area Spacing section
+    class Section_AreaSpacing : public DockableCollapsible {
+    public:
+        Room* room=nullptr; std::string name; std::unique_ptr<DMNumericStepper> min_same; std::unique_ptr<StepperWidget> min_same_w; std::unique_ptr<DMNumericStepper> min_all; std::unique_ptr<StepperWidget> min_all_w;
+        Section_AreaSpacing(): DockableCollapsible("Area Spacing", false) { set_scroll_enabled(false); }
+        void set_ctx(Room* r, const std::string& n){ room=r; name=n; }
+        void build() override {
+            Rows rows; if (!min_same) min_same = std::make_unique<DMNumericStepper>("Min Same Type Distance", 0, 10000, 0); if (!min_same_w) min_same_w = std::make_unique<StepperWidget>(min_same.get()); rows.push_back({ min_same_w.get() }); if (!min_all) min_all = std::make_unique<DMNumericStepper>("Min Distance All", 0, 10000, 0); if (!min_all_w) min_all_w = std::make_unique<StepperWidget>(min_all.get()); rows.push_back({ min_all_w.get() }); set_rows(rows); if (room) { nlohmann::json& root = room->assets_data(); if (root.contains("areas") && root["areas"].is_array()) { for (auto& entry : root["areas"]) { if (!entry.is_object()) continue; if (entry.value("name", std::string{}) != name) continue; min_same->set_value(entry.value("min_same_type_distance", 0)); min_all->set_value(entry.value("min_distance_all", 0)); break; } } }
+        }
+        void update(const Input& input, int w, int h) override { DockableCollapsible::update(input,w,h); if (!room) return; nlohmann::json& root = room->assets_data(); if (!root.contains("areas") || !root["areas"].is_array()) return; for (auto& entry : root["areas"]) { if (!entry.is_object()) continue; if (entry.value("name", std::string{}) != name) continue; entry["min_same_type_distance"] = min_same ? min_same->value() : 0; entry["min_distance_all"] = min_all ? min_all->value() : 0; room->save_assets_json(); break; } }
+    };
+
+    auto area_spacing = std::make_unique<Section_AreaSpacing>(); area_spacing->set_ctx(area_room_, area_name_);
+    sections_.push_back(std::move(area_spacing));
 
     class Section_AreaSpawns : public DockableCollapsible {
     public:

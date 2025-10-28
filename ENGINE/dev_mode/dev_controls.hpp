@@ -235,8 +235,6 @@ private:
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 
     class PanAndZoom area_pan_zoom_;
-    std::unique_ptr<class CreateRoomAreaPanel> create_area_panel_;
-    std::unique_ptr<class EditRoomAreaPanel>   edit_area_panel_;
     std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
     class Asset* area_hovered_asset_ = nullptr;
 

@@ -15,8 +15,6 @@
 #include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
-#include "dev_mode/area_mode/create_room_area_panel.hpp"
-#include "dev_mode/area_mode/edit_room_area_panel.hpp"
 #include "dev_mode/area_mode/area_types.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
 #include "asset/asset_info.hpp"
