@@ -93,6 +93,7 @@ class SourceConfigPanel {
     void update_status(const std::string& message) const;
     void refresh_animation_options();
     void apply_animation_selection();
+    void clear_derived_fields();
 
     void import_from_folder();
     void import_from_animation();

@@ -405,11 +405,23 @@ void SourceConfigPanel::apply_source_config(const SourceConfig& config) {
     current_source_ = config;
     payload_["source"] = build_source_json(config);
     update_number_of_frames();
+    if (previous_kind != std::string("animation") && config.kind == std::string("animation")) {
+        clear_derived_fields();
+    }
     commit_payload();
 
     if (previous_kind != std::string("animation") && config.kind == std::string("animation")) {
         clean_output_frames();
     }
+}
+
+void SourceConfigPanel::clear_derived_fields() {
+    ensure_payload_loaded();
+    payload_.erase("movement");
+    payload_.erase("movement_total");
+    payload_.erase("audio");
+    payload_.erase("speed_factor");
+    payload_.erase("rnd_start");
 }
 
 void SourceConfigPanel::update_number_of_frames() {

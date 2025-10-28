@@ -15,12 +15,15 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
+#include "string_utils.hpp"
 
 namespace animation_editor {
 
 namespace {
 
 constexpr int kItemGap = 8;
+
+using animation_editor::strings::trim_copy;
 
 void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y, int max_width = -1,
                   SDL_Color color = DMStyles::Label().color) {
@@ -67,6 +70,13 @@ int label_height() {
     return style.font_size + DMSpacing::small_gap();
 }
 
+int message_block_height(const std::vector<std::string>& lines) {
+    if (lines.empty()) {
+        return 0;
+    }
+    return static_cast<int>(lines.size()) * label_height();
+}
+
 }
 
 AudioPanel::AudioPanel() { ensure_widgets(); }
@@ -100,7 +110,9 @@ int AudioPanel::preferred_height(int width) const {
     const int slider_h = volume_slider_ ? volume_slider_->preferred_height(slider_area_width) : DMSlider::height();
     int height = padding;
     height += label_h;
-    if (has_audio_) {
+    if (derived_from_animation_) {
+        height += message_block_height(inherited_message_lines_);
+    } else if (has_audio_) {
         height += label_h;
         height += DMButton::height();
         height += gap;
@@ -147,6 +159,20 @@ void AudioPanel::layout_widgets() const {
     const int content_w = std::max(0, bounds_.w - padding * 2);
     int cursor_y = bounds_.y + padding + label_height() + DMSpacing::small_gap();
 
+    if (derived_from_animation_) {
+        if (attach_button_) attach_button_->set_rect(SDL_Rect{0, 0, 0, 0});
+        if (preview_button_) preview_button_->set_rect(SDL_Rect{0, 0, 0, 0});
+        if (replace_button_) replace_button_->set_rect(SDL_Rect{0, 0, 0, 0});
+        if (remove_button_) remove_button_->set_rect(SDL_Rect{0, 0, 0, 0});
+        if (volume_slider_) volume_slider_->set_rect(SDL_Rect{0, 0, 0, 0});
+        if (effects_checkbox_) effects_checkbox_->set_rect(SDL_Rect{0, 0, 0, 0});
+        int message_height = message_block_height(inherited_message_lines_);
+        inherited_message_rect_ = SDL_Rect{content_x, cursor_y, content_w, message_height};
+        return;
+    }
+
+    inherited_message_rect_ = SDL_Rect{0, 0, 0, 0};
+
     if (has_audio_) {
         if (preview_button_) {
             int width = std::min(content_w, preview_button_->rect().w);
@@ -189,6 +215,9 @@ void AudioPanel::layout_widgets() const {
 
 void AudioPanel::update() {
     layout_widgets();
+    if (derived_from_animation_) {
+        return;
+    }
     if (preview_button_ && importer_) {
         preview_button_->set_text(importer_->is_previewing() ? "Stop Preview" : "Play Preview");
     }
@@ -208,7 +237,12 @@ void AudioPanel::render(SDL_Renderer* renderer) const {
     render_label(renderer, "Audio", bounds_.x + padding, label_y);
 
     label_y += label_height();
-    if (has_audio_) {
+    if (derived_from_animation_) {
+        for (const auto& line : inherited_message_lines_) {
+            render_label(renderer, line, bounds_.x + padding, label_y, max_label_width);
+            label_y += label_height();
+        }
+    } else if (has_audio_) {
         std::string clip_text = "Clip: " + audio_name_;
         render_label(renderer, clip_text, bounds_.x + padding, label_y, max_label_width);
         label_y += label_height();
@@ -225,6 +259,9 @@ void AudioPanel::render(SDL_Renderer* renderer) const {
 }
 
 bool AudioPanel::handle_event(const SDL_Event& e) {
+    if (derived_from_animation_) {
+        return false;
+    }
     layout_widgets();
 
     bool consumed = false;
@@ -257,6 +294,7 @@ bool AudioPanel::handle_event(const SDL_Event& e) {
 }
 
 void AudioPanel::attach_audio() {
+    if (derived_from_animation_) return;
     if (!importer_ || !file_picker_) return;
     auto selection = file_picker_();
     if (!selection) return;
@@ -276,10 +314,12 @@ void AudioPanel::attach_audio() {
 }
 
 void AudioPanel::replace_audio() {
+    if (derived_from_animation_) return;
     attach_audio();
 }
 
 void AudioPanel::remove_audio() {
+    if (derived_from_animation_) return;
     if (importer_) importer_->stop_preview();
     audio_name_.clear();
     has_audio_ = false;
@@ -291,6 +331,7 @@ void AudioPanel::remove_audio() {
 }
 
 void AudioPanel::preview_audio() {
+    if (derived_from_animation_) return;
     if (!importer_ || !has_audio_) return;
     std::filesystem::path clip_path = resolve_audio_path();
     if (clip_path.empty()) return;
@@ -309,26 +350,27 @@ void AudioPanel::sync_from_document() {
     volume_ = 100;
     effects_enabled_ = false;
 
-    if (!document_ || animation_id_.empty()) {
-        apply_state_to_controls();
-        layout_dirty_ = true;
-        return;
+    nlohmann::json payload = nlohmann::json::object();
+    if (document_ && !animation_id_.empty()) {
+        auto payload_dump = document_->animation_payload(animation_id_);
+        if (payload_dump && !payload_dump->empty()) {
+            nlohmann::json parsed = nlohmann::json::parse(*payload_dump, nullptr, false);
+            if (!parsed.is_discarded() && parsed.is_object()) {
+                payload = std::move(parsed);
+            }
+        }
     }
 
-    auto payload_dump = document_->animation_payload(animation_id_);
-    if (payload_dump && !payload_dump->empty()) {
-        nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
-        if (!payload.is_discarded() && payload.is_object()) {
-            if (payload.contains("audio") && payload["audio"].is_object()) {
-                const nlohmann::json& audio = payload["audio"];
-                std::string name = audio.value("name", std::string{});
-                if (!name.empty()) {
-                    audio_name_ = std::move(name);
-                    has_audio_ = true;
-                    volume_ = std::clamp(audio.value("volume", volume_), 0, 100);
-                    effects_enabled_ = audio.value("effects", effects_enabled_);
-                }
-            }
+    update_inherited_state(payload);
+
+    if (!derived_from_animation_ && payload.contains("audio") && payload["audio"].is_object()) {
+        const nlohmann::json& audio = payload["audio"];
+        std::string name = audio.value("name", std::string{});
+        if (!name.empty()) {
+            audio_name_ = std::move(name);
+            has_audio_ = true;
+            volume_ = std::clamp(audio.value("volume", volume_), 0, 100);
+            effects_enabled_ = audio.value("effects", effects_enabled_);
         }
     }
 
@@ -343,7 +385,7 @@ void AudioPanel::apply_state_to_controls() {
 }
 
 void AudioPanel::commit_audio_state() {
-    if (!document_ || animation_id_.empty()) return;
+    if (!document_ || animation_id_.empty() || derived_from_animation_) return;
 
     nlohmann::json payload = nlohmann::json::object();
     auto payload_dump = document_->animation_payload(animation_id_);
@@ -377,6 +419,51 @@ std::filesystem::path AudioPanel::resolve_audio_path() const {
         relative += ".wav";
     }
     return importer_->resolve_asset_path(relative);
+}
+
+void AudioPanel::update_inherited_state(const nlohmann::json& payload) {
+    bool previous_flag = derived_from_animation_;
+    std::string previous_id = inherited_source_id_;
+
+    derived_from_animation_ = false;
+    inherited_source_id_.clear();
+
+    if (payload.is_object() && payload.contains("source") && payload["source"].is_object()) {
+        const nlohmann::json& source = payload["source"];
+        std::string kind = source.value("kind", std::string{});
+        if (kind == "animation") {
+            derived_from_animation_ = true;
+            if (source.contains("name") && source["name"].is_string()) {
+                inherited_source_id_ = trim_copy(source["name"].get<std::string>());
+            }
+            if (inherited_source_id_.empty()) {
+                inherited_source_id_ = trim_copy(source.value("path", std::string{}));
+            }
+        }
+    }
+
+    refresh_inherited_message();
+
+    if (previous_flag != derived_from_animation_ || previous_id != inherited_source_id_) {
+        layout_dirty_ = true;
+    }
+}
+
+void AudioPanel::refresh_inherited_message() {
+    std::vector<std::string> previous_lines = inherited_message_lines_;
+    inherited_message_lines_.clear();
+    inherited_message_rect_ = SDL_Rect{0, 0, 0, 0};
+
+    if (derived_from_animation_) {
+        std::string target = inherited_source_id_.empty() ? std::string("the source animation")
+                                                         : "animation '" + inherited_source_id_ + "'";
+        inherited_message_lines_.push_back("Audio settings inherit from " + target + ".");
+        inherited_message_lines_.push_back("Edit the source animation to change them.");
+    }
+
+    if (inherited_message_lines_ != previous_lines) {
+        layout_dirty_ = true;
+    }
 }
 
 }

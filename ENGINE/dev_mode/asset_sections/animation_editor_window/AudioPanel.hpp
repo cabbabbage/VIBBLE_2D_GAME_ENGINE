@@ -5,8 +5,11 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <SDL.h>
+
+#include <nlohmann/json.hpp>
 
 #include "dev_mode/widgets.hpp"
 
@@ -53,6 +56,8 @@ class AudioPanel {
     void apply_state_to_controls();
     void commit_audio_state();
     std::filesystem::path resolve_audio_path() const;
+    void update_inherited_state(const nlohmann::json& payload);
+    void refresh_inherited_message();
 
   private:
     std::shared_ptr<AnimationDocument> document_;
@@ -72,6 +77,10 @@ class AudioPanel {
     std::unique_ptr<DMButton> preview_button_;
     std::unique_ptr<DMSlider> volume_slider_;
     std::unique_ptr<DMCheckbox> effects_checkbox_;
+    bool derived_from_animation_ = false;
+    std::string inherited_source_id_;
+    std::vector<std::string> inherited_message_lines_;
+    mutable SDL_Rect inherited_message_rect_{0, 0, 0, 0};
 };
 
 }

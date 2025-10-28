@@ -2,7 +2,7 @@
     "dev": {
         "asset_filter": {
             "current_room": true,
-            "filters_expanded": false,
+            "filters_expanded": true,
             "initialized": true,
             "map_assets": true,
             "methods": {
@@ -32,6 +32,7 @@
                     "frame_blend_falloff_frames": 15.0,
                     "opacity_sensitivity_percent": 100.0,
                     "virtual_light_map": {
+                        "grid_subdivide": 1.0,
                         "horizontal_falloff": 1.9900000095367432,
                         "map_light_dir_offset_strength": 0.0,
                         "max_offset_x": 93.93000030517578,

@@ -212,6 +212,11 @@ void AnimationInspectorPanel::set_frame_edit_callback(FrameEditCallback callback
     apply_dependencies();
 }
 
+void AnimationInspectorPanel::set_navigate_to_animation_callback(AnimationNavigateCallback callback) {
+    navigate_to_animation_callback_ = std::move(callback);
+    apply_dependencies();
+}
+
 void AnimationInspectorPanel::set_audio_importer(std::shared_ptr<AudioImporter> importer) {
     audio_importer_ = std::move(importer);
     apply_dependencies();
@@ -678,6 +683,7 @@ void AnimationInspectorPanel::apply_dependencies() {
 
     if (movement_summary_) {
         movement_summary_->set_edit_callback(frame_edit_callback_);
+        movement_summary_->set_go_to_source_callback(navigate_to_animation_callback_);
     }
 
     if (audio_panel_) {

@@ -15,6 +15,7 @@
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/widgets.hpp"
+#include "string_utils.hpp"
 
 namespace animation_editor {
 
@@ -22,6 +23,8 @@ namespace {
 
 const int kButtonHeight = DMButton::height();
 const int kButtonWidth = 160;
+
+using animation_editor::strings::trim_copy;
 
 void render_summary_label(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
     if (!renderer || text.empty()) {
@@ -76,7 +79,7 @@ void MovementSummaryWidget::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
 
     const int padding = kPanelPadding;
-    if (show_edit_button_) {
+    if (show_button_) {
         const int width = std::max(kButtonWidth, std::min(bounds_.w - padding * 2, kButtonWidth));
         const int x = bounds_.x + bounds_.w - padding - width;
         const int y = bounds_.y + bounds_.h - padding - kButtonHeight;
@@ -88,14 +91,24 @@ void MovementSummaryWidget::set_bounds(const SDL_Rect& bounds) {
     }
 }
 
-void MovementSummaryWidget::set_edit_callback(EditCallback callback) { edit_callback_ = std::move(callback); }
+void MovementSummaryWidget::set_edit_callback(EditCallback callback) {
+    edit_callback_ = std::move(callback);
+    refresh_totals();
+}
+
+void MovementSummaryWidget::set_go_to_source_callback(GoToSourceCallback callback) {
+    go_to_source_callback_ = std::move(callback);
+    refresh_totals();
+}
 
 int MovementSummaryWidget::preferred_height(int) const {
     const int padding = kPanelPadding;
     const int label_height = DMStyles::Label().font_size + DMSpacing::small_gap();
     int height = padding;
-    height += label_height * 2;
-    if (show_edit_button_) {
+    int text_lines = derived_from_animation_ ? static_cast<int>(inherited_message_lines_.empty() ? 1 : inherited_message_lines_.size())
+                                             : 2;
+    height += label_height * std::max(1, text_lines);
+    if (show_button_) {
         height += DMSpacing::small_gap();
         height += DMButton::height();
     }
@@ -130,11 +143,20 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
     int text_y = bounds_.y + padding;
 
     const SDL_Color text_color = DMStyles::Label().color;
-    render_summary_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y, text_color);
-    text_y += DMStyles::Label().font_size + DMSpacing::small_gap();
-    render_summary_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y, text_color);
+    const int label_stride = DMStyles::Label().font_size + DMSpacing::small_gap();
+    if (derived_from_animation_) {
+        for (const auto& line : inherited_message_lines_) {
+            render_summary_label(renderer, line, text_x, text_y, text_color);
+            text_y += label_stride;
+        }
+    } else {
+        render_summary_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y, text_color);
+        text_y += label_stride;
+        render_summary_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y, text_color);
+        text_y += label_stride;
+    }
 
-    if (show_edit_button_) {
+    if (show_button_) {
         const DMButtonStyle& button_style = DMStyles::AccentButton();
         SDL_Color button_color = button_style.bg;
         if (button_pressed_) {
@@ -148,7 +170,7 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
 
         dm_draw::DrawRoundedOutline( renderer, button_rect_, button_radius, 1, button_style.border);
 
-        const std::string button_text = "Frame Editor";
+        const std::string button_text = button_is_go_to_ ? "Go to Source" : "Frame Editor";
         const SDL_Point label_size = DMFontCache::instance().measure_text(button_style.label, button_text);
         int label_width = label_size.x;
         int label_x = button_rect_.x + (button_rect_.w - label_width) / 2;
@@ -159,7 +181,7 @@ void MovementSummaryWidget::render(SDL_Renderer* renderer) const {
 }
 
 bool MovementSummaryWidget::handle_event(const SDL_Event& e) {
-    if (!show_edit_button_) {
+    if (!show_button_) {
         button_hovered_ = false;
         button_pressed_ = false;
         return false;
@@ -190,7 +212,11 @@ bool MovementSummaryWidget::handle_event(const SDL_Event& e) {
             bool was_pressed = button_pressed_;
             button_pressed_ = false;
             if (inside && was_pressed) {
-                if (edit_callback_) {
+                if (button_is_go_to_) {
+                    if (go_to_source_callback_ && !inherited_source_id_.empty()) {
+                        go_to_source_callback_(inherited_source_id_);
+                    }
+                } else if (edit_callback_) {
                     edit_callback_(animation_id_);
                 }
                 return true;
@@ -206,7 +232,11 @@ bool MovementSummaryWidget::handle_event(const SDL_Event& e) {
 void MovementSummaryWidget::refresh_totals() {
     total_dx_ = 0.0f;
     total_dy_ = 0.0f;
-    show_edit_button_ = true;
+    derived_from_animation_ = false;
+    inherited_source_id_.clear();
+    inherited_message_lines_.clear();
+    button_is_go_to_ = false;
+    show_button_ = static_cast<bool>(edit_callback_);
 
     if (!document_ || animation_id_.empty()) {
         set_bounds(bounds_);
@@ -229,9 +259,29 @@ void MovementSummaryWidget::refresh_totals() {
         const nlohmann::json& source = payload["source"];
         std::string kind = source.value("kind", "");
         if (kind == "animation") {
-            show_edit_button_ = false;
+            derived_from_animation_ = true;
+            if (source.contains("name") && source["name"].is_string()) {
+                inherited_source_id_ = trim_copy(source["name"].get<std::string>());
+            }
+            if (inherited_source_id_.empty()) {
+                inherited_source_id_ = trim_copy(source.value("path", std::string{}));
+            }
         }
     }
+
+    if (derived_from_animation_) {
+        std::string target = inherited_source_id_.empty() ? std::string("the source animation")
+                                                         : "animation '" + inherited_source_id_ + "'";
+        inherited_message_lines_.push_back("Movement inherits from " + target + ".");
+        inherited_message_lines_.push_back("Go to the source animation to edit it.");
+        show_button_ = go_to_source_callback_ && !inherited_source_id_.empty();
+        button_is_go_to_ = show_button_;
+        set_bounds(bounds_);
+        return;
+    }
+
+    show_button_ = static_cast<bool>(edit_callback_);
+    button_is_go_to_ = false;
 
     set_bounds(bounds_);
 

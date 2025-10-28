@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <SDL.h>
 
@@ -39,7 +40,6 @@ class PlaybackSettingsPanel {
         bool flipped_source = false;
         bool reverse_source = false;
         bool locked = false;
-        bool loop = false;
         bool random_start = false;
         int speed_factor = 1;
 
@@ -47,7 +47,6 @@ class PlaybackSettingsPanel {
             return flipped_source == other.flipped_source &&
                    reverse_source == other.reverse_source &&
                    locked == other.locked &&
-                   loop == other.loop &&
                    random_start == other.random_start &&
                    speed_factor == other.speed_factor;
         }
@@ -63,8 +62,10 @@ class PlaybackSettingsPanel {
     void sync_from_document();
     void commit_changes(const PlaybackState& desired_state);
     static std::optional<std::string> fetch_payload(const AnimationDocument* document, const std::string& animation_id);
-    static PlaybackState payload_to_state(const nlohmann::json& payload);
-    static void apply_state_to_payload(nlohmann::json& payload, const PlaybackState& state);
+    PlaybackState payload_to_state(const nlohmann::json& payload);
+    void apply_state_to_payload(nlohmann::json& payload, const PlaybackState& state);
+    void update_inherited_state(const nlohmann::json& payload);
+    void refresh_inherited_message();
 
   private:
     std::shared_ptr<AnimationDocument> document_;
@@ -74,7 +75,6 @@ class PlaybackSettingsPanel {
     std::unique_ptr<DMCheckbox> flip_checkbox_;
     std::unique_ptr<DMCheckbox> reverse_checkbox_;
     std::unique_ptr<DMCheckbox> locked_checkbox_;
-    std::unique_ptr<DMCheckbox> loop_checkbox_;
     std::unique_ptr<DMCheckbox> random_start_checkbox_;
     std::unique_ptr<DMSlider> speed_slider_;
 
@@ -83,6 +83,10 @@ class PlaybackSettingsPanel {
     bool has_document_state_ = false;
     mutable bool layout_dirty_ = true;
     bool is_syncing_ui_ = false;
+    bool derived_from_animation_ = false;
+    std::string derived_source_id_;
+    std::vector<std::string> inherited_message_lines_;
+    mutable SDL_Rect inherited_message_rect_{0, 0, 0, 0};
 };
 
 }

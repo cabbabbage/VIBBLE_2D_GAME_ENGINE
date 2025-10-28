@@ -14,13 +14,38 @@
 #include "PanelLayoutConstants.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
+#include "dev_mode/font_cache.hpp"
 #include "dev_mode/widgets.hpp"
+#include "string_utils.hpp"
 
 namespace {
 
 constexpr int kItemGap = 8;
 
 using animation_editor::kPanelPadding;
+using animation_editor::strings::trim_copy;
+
+int message_block_height(const std::vector<std::string>& lines) {
+    if (lines.empty()) {
+        return 0;
+    }
+    const DMLabelStyle& style = DMStyles::Label();
+    const int line_height = style.font_size + DMSpacing::small_gap();
+    return static_cast<int>(lines.size()) * line_height;
+}
+
+void render_message_lines(SDL_Renderer* renderer, const SDL_Rect& rect, const std::vector<std::string>& lines) {
+    if (!renderer || lines.empty()) {
+        return;
+    }
+    const DMLabelStyle& style = DMStyles::Label();
+    const int line_height = style.font_size + DMSpacing::small_gap();
+    int y = rect.y;
+    for (const auto& line : lines) {
+        DMFontCache::instance().draw_text(renderer, style, line, rect.x, y);
+        y += line_height;
+    }
+}
 
 bool parse_bool_value(const nlohmann::json& value, bool fallback) {
     if (value.is_boolean()) {
@@ -114,9 +139,24 @@ int PlaybackSettingsPanel::preferred_height(int width) const {
     const int slider_height = speed_slider_ ? speed_slider_->preferred_height(slider_area_width) : DMSlider::height();
 
     int height = padding;
-    height += checkbox_height * 5;
-    height += gap * 4;
-    height += slider_height;
+    height += checkbox_height;  // flip
+    height += gap;
+    height += checkbox_height;  // reverse
+    height += gap;
+    height += checkbox_height;  // locked
+
+    if (derived_from_animation_) {
+        if (!inherited_message_lines_.empty()) {
+            height += gap;
+            height += message_block_height(inherited_message_lines_);
+        }
+    } else {
+        height += gap;
+        height += checkbox_height;  // random start
+        height += gap;
+        height += slider_height;
+    }
+
     height += padding;
     return height;
 }
@@ -137,9 +177,11 @@ void PlaybackSettingsPanel::render(SDL_Renderer* renderer) const {
     if (flip_checkbox_) flip_checkbox_->render(renderer);
     if (reverse_checkbox_) reverse_checkbox_->render(renderer);
     if (locked_checkbox_) locked_checkbox_->render(renderer);
-    if (loop_checkbox_) loop_checkbox_->render(renderer);
-    if (random_start_checkbox_) random_start_checkbox_->render(renderer);
-    if (speed_slider_) speed_slider_->render(renderer);
+    if (!derived_from_animation_ && random_start_checkbox_) random_start_checkbox_->render(renderer);
+    if (!derived_from_animation_ && speed_slider_) speed_slider_->render(renderer);
+    if (derived_from_animation_) {
+        render_message_lines(renderer, inherited_message_rect_, inherited_message_lines_);
+    }
 }
 
 bool PlaybackSettingsPanel::handle_event(const SDL_Event& e) {
@@ -156,10 +198,11 @@ bool PlaybackSettingsPanel::handle_event(const SDL_Event& e) {
     handle_checkbox(flip_checkbox_);
     handle_checkbox(reverse_checkbox_);
     handle_checkbox(locked_checkbox_);
-    handle_checkbox(loop_checkbox_);
-    handle_checkbox(random_start_checkbox_);
+    if (!derived_from_animation_) {
+        handle_checkbox(random_start_checkbox_);
+    }
 
-    if (speed_slider_ && speed_slider_->handle_event(e)) {
+    if (!derived_from_animation_ && speed_slider_ && speed_slider_->handle_event(e)) {
         used = true;
         handle_controls_changed();
     }
@@ -178,7 +221,6 @@ void PlaybackSettingsPanel::ensure_widgets() {
     ensure_checkbox(flip_checkbox_, "Flip Source Horizontally");
     ensure_checkbox(reverse_checkbox_, "Play Frames In Reverse");
     ensure_checkbox(locked_checkbox_, "Keep Sprite Anchored (Ignore Movement)");
-    ensure_checkbox(loop_checkbox_, "Loop Animation");
     ensure_checkbox(random_start_checkbox_, "Randomize Starting Frame");
 
     if (!speed_slider_) {
@@ -218,14 +260,30 @@ void PlaybackSettingsPanel::layout_widgets() const {
     place_checkbox(flip_checkbox_.get());
     place_checkbox(reverse_checkbox_.get());
     place_checkbox(locked_checkbox_.get());
-    place_checkbox(loop_checkbox_.get());
-    place_checkbox(random_start_checkbox_.get());
 
-    if (speed_slider_) {
-        int slider_height = speed_slider_->preferred_height(width);
-        SDL_Rect slider_rect{x, y, width, slider_height};
-        speed_slider_->set_rect(slider_rect);
-        y += slider_rect.h + gap;
+    if (derived_from_animation_) {
+        if (random_start_checkbox_) {
+            random_start_checkbox_->set_rect(SDL_Rect{0, 0, 0, 0});
+        }
+        if (speed_slider_) {
+            speed_slider_->set_rect(SDL_Rect{0, 0, 0, 0});
+        }
+        int message_height = message_block_height(inherited_message_lines_);
+        if (message_height > 0) {
+            inherited_message_rect_ = SDL_Rect{x, y, width, message_height};
+            y += message_height + gap;
+        } else {
+            inherited_message_rect_ = SDL_Rect{0, 0, 0, 0};
+        }
+    } else {
+        place_checkbox(random_start_checkbox_.get());
+        if (speed_slider_) {
+            int slider_height = speed_slider_->preferred_height(width);
+            SDL_Rect slider_rect{x, y, width, slider_height};
+            speed_slider_->set_rect(slider_rect);
+            y += slider_rect.h + gap;
+        }
+        inherited_message_rect_ = SDL_Rect{0, 0, 0, 0};
     }
 }
 
@@ -234,7 +292,6 @@ void PlaybackSettingsPanel::apply_state_to_controls(const PlaybackState& state) 
     if (flip_checkbox_) flip_checkbox_->set_value(state.flipped_source);
     if (reverse_checkbox_) reverse_checkbox_->set_value(state.reverse_source);
     if (locked_checkbox_) locked_checkbox_->set_value(state.locked);
-    if (loop_checkbox_) loop_checkbox_->set_value(state.loop);
     if (random_start_checkbox_) random_start_checkbox_->set_value(state.random_start);
     if (speed_slider_) speed_slider_->set_value(state.speed_factor);
 }
@@ -244,10 +301,11 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::read_controls() cons
     if (flip_checkbox_) state.flipped_source = flip_checkbox_->value();
     if (reverse_checkbox_) state.reverse_source = reverse_checkbox_->value();
     if (locked_checkbox_) state.locked = locked_checkbox_->value();
-    if (loop_checkbox_) state.loop = loop_checkbox_->value();
-    if (random_start_checkbox_) state.random_start = random_start_checkbox_->value();
+    if (!derived_from_animation_ && random_start_checkbox_) {
+        state.random_start = random_start_checkbox_->value();
+    }
 
-    if (speed_slider_) {
+    if (!derived_from_animation_ && speed_slider_) {
         int raw_speed = speed_slider_->value();
         raw_speed = std::clamp(raw_speed, -20, 20);
         if (raw_speed == 0) {
@@ -288,17 +346,24 @@ void PlaybackSettingsPanel::sync_from_document() {
 
     PlaybackState new_state;
     bool found = false;
+    nlohmann::json parsed_payload = nlohmann::json::object();
 
     if (document_ && !animation_id_.empty()) {
         if (auto payload = fetch_payload(document_.get(), animation_id_)) {
-            nlohmann::json parsed = nlohmann::json::parse(*payload, nullptr, false);
-            if (!parsed.is_object()) {
-                parsed = nlohmann::json::object();
+            parsed_payload = nlohmann::json::parse(*payload, nullptr, false);
+            if (!parsed_payload.is_object()) {
+                parsed_payload = nlohmann::json::object();
             }
-            new_state = payload_to_state(parsed);
+            new_state = payload_to_state(parsed_payload);
             found = true;
         }
     }
+
+    if (!found) {
+        parsed_payload = nlohmann::json::object();
+    }
+
+    update_inherited_state(parsed_payload);
 
     state_ = new_state;
     document_state_ = new_state;
@@ -339,6 +404,8 @@ void PlaybackSettingsPanel::commit_changes(const PlaybackState& desired_state) {
         updated = nlohmann::json::object();
     }
 
+    update_inherited_state(updated);
+
     PlaybackState normalized = payload_to_state(updated);
     document_state_ = normalized;
     state_ = normalized;
@@ -362,7 +429,6 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::payload_to_state(con
     state.flipped_source = parse_bool_field(payload, "flipped_source", false);
     state.reverse_source = parse_bool_field(payload, "reverse_source", false);
     state.locked         = parse_bool_field(payload, "locked", false);
-    state.loop           = parse_bool_field(payload, "loop", false);
     state.random_start   = parse_bool_field(payload, "rnd_start", false);
 
     int speed = parse_int_field(payload, "speed_factor", 1);
@@ -381,9 +447,58 @@ void PlaybackSettingsPanel::apply_state_to_payload(nlohmann::json& payload, cons
     payload["flipped_source"] = state.flipped_source;
     payload["reverse_source"] = state.reverse_source;
     payload["locked"]         = state.locked;
-    payload["loop"]           = state.loop;
-    payload["rnd_start"]      = state.random_start;
-    payload["speed_factor"]   = state.speed_factor;
+    if (derived_from_animation_) {
+        payload.erase("rnd_start");
+        payload.erase("speed_factor");
+    } else {
+        payload["rnd_start"]    = state.random_start;
+        payload["speed_factor"] = state.speed_factor;
+    }
+}
+
+void PlaybackSettingsPanel::update_inherited_state(const nlohmann::json& payload) {
+    bool previous_flag = derived_from_animation_;
+    std::string previous_source = derived_source_id_;
+
+    derived_from_animation_ = false;
+    derived_source_id_.clear();
+
+    if (payload.is_object() && payload.contains("source") && payload["source"].is_object()) {
+        const nlohmann::json& source = payload["source"];
+        std::string kind = source.value("kind", std::string{});
+        if (kind == "animation") {
+            derived_from_animation_ = true;
+            if (source.contains("name") && source["name"].is_string()) {
+                derived_source_id_ = trim_copy(source["name"].get<std::string>());
+            }
+            if (derived_source_id_.empty()) {
+                derived_source_id_ = trim_copy(source.value("path", std::string{}));
+            }
+        }
+    }
+
+    refresh_inherited_message();
+
+    if (previous_flag != derived_from_animation_ || previous_source != derived_source_id_) {
+        layout_dirty_ = true;
+    }
+}
+
+void PlaybackSettingsPanel::refresh_inherited_message() {
+    std::vector<std::string> previous_lines = inherited_message_lines_;
+    inherited_message_lines_.clear();
+    inherited_message_rect_ = SDL_Rect{0, 0, 0, 0};
+
+    if (derived_from_animation_) {
+        std::string target = derived_source_id_.empty() ? std::string("the source animation")
+                                                       : "animation '" + derived_source_id_ + "'";
+        inherited_message_lines_.push_back("Speed and starting frame inherit from " + target + ".");
+        inherited_message_lines_.push_back("Edit the source animation to change them.");
+    }
+
+    if (inherited_message_lines_ != previous_lines) {
+        layout_dirty_ = true;
+    }
 }
 
 }

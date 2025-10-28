@@ -332,6 +332,9 @@ void AnimationEditorWindow::configure_inspector_panel() {
     inspector_panel_->set_source_png_sequence_picker([this]() { return this->pick_png_sequence(); });
     inspector_panel_->set_source_status_callback([this](const std::string& message) { this->set_status_message(message); });
     inspector_panel_->set_frame_edit_callback([this](const std::string& id) { this->open_frame_editor(id); });
+    inspector_panel_->set_navigate_to_animation_callback([this](const std::string& id) {
+        this->select_animation(std::optional<std::string>{id}, true);
+    });
     inspector_panel_->set_audio_importer(audio_importer_);
     inspector_panel_->set_audio_file_picker([this]() { return this->pick_audio_file(); });
     if (selected_animation_id_) {

@@ -42,6 +42,7 @@ class AnimationInspectorPanel {
     using StatusCallback = std::function<void(const std::string&)>;
     using FrameEditCallback = std::function<void(const std::string&)>;
     using AudioFilePicker = std::function<std::optional<std::filesystem::path>()>;
+    using AnimationNavigateCallback = std::function<void(const std::string&)>;
 
     AnimationInspectorPanel();
 
@@ -57,6 +58,7 @@ class AnimationInspectorPanel {
     void set_source_png_sequence_picker(MultiPathPicker picker);
     void set_source_status_callback(StatusCallback callback);
     void set_frame_edit_callback(FrameEditCallback callback);
+    void set_navigate_to_animation_callback(AnimationNavigateCallback callback);
     void set_audio_importer(std::shared_ptr<AudioImporter> importer);
     void set_audio_file_picker(AudioFilePicker picker);
 
@@ -150,6 +152,7 @@ class AnimationInspectorPanel {
     MultiPathPicker png_sequence_picker_;
     StatusCallback status_callback_;
     FrameEditCallback frame_edit_callback_;
+    AnimationNavigateCallback navigate_to_animation_callback_;
     std::shared_ptr<AudioImporter> audio_importer_;
     AudioFilePicker audio_file_picker_;
 };
