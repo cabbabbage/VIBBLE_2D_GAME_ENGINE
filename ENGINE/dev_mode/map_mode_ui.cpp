@@ -865,7 +865,8 @@ void MapModeUI::sync_footer_button_states() {
 void MapModeUI::update_footer_visibility() {
     if (!footer_bar_) return;
     footer_bar_->set_bounds(screen_w_, screen_h_);
-    const bool should_show = !headers_suppressed_ && (footer_always_visible_ || map_mode_active_);
+    const bool headers_block_footer = headers_suppressed_ && !sliding_only_header_suppression_;
+    const bool should_show = !headers_block_footer && (footer_always_visible_ || map_mode_active_);
     footer_bar_->set_visible(should_show);
 }
 

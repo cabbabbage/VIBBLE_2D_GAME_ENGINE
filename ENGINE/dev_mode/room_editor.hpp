@@ -159,6 +159,7 @@ private:
     Asset* hit_test_asset(SDL_Point screen_point) const;
     void update_hover_state(Asset* hit);
     void handle_click(const Input& input);
+    std::optional<std::string> find_room_area_at_point(SDL_Point world_point);
     void update_highlighted_assets();
     bool is_ui_blocking_input(int mx, int my) const;
     bool should_enable_mouse_controls() const;

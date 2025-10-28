@@ -2602,6 +2602,101 @@ void RoomEditor::update_hover_state(Asset* hit) {
     }
 }
 
+std::optional<std::string> RoomEditor::find_room_area_at_point(SDL_Point world_point) {
+    if (!current_room_) {
+        return std::nullopt;
+    }
+
+    nlohmann::json& root = current_room_->assets_data();
+
+    struct AreaMetadata {
+        int z = 0;
+        bool visible = true;
+        std::size_t order = 0;
+    };
+
+    std::unordered_map<std::string, AreaMetadata> metadata;
+    std::size_t order_counter = 0;
+
+    if (root.is_object() && root.contains("areas") && root["areas"].is_array()) {
+        for (const auto& entry : root["areas"]) {
+            if (!entry.is_object()) {
+                ++order_counter;
+                continue;
+            }
+
+            std::string name = entry.value("name", std::string{});
+            if (name.empty()) {
+                ++order_counter;
+                continue;
+            }
+
+            AreaMetadata data;
+            data.z = entry.value("z", 0);
+            data.visible = !(entry.contains("visible") && entry["visible"].is_boolean() && !entry["visible"].get<bool>());
+            data.order = order_counter;
+            metadata.insert_or_assign(name, data);
+
+            ++order_counter;
+        }
+    }
+
+    std::size_t fallback_order = order_counter;
+    std::optional<std::string> best_name;
+    int best_z = std::numeric_limits<int>::min();
+    std::size_t best_order = 0;
+    bool have_best_order = false;
+
+    auto consider_area = [&](const std::string& name, const Area* area) {
+        if (!area) {
+            return;
+        }
+
+        auto it = metadata.find(name);
+        AreaMetadata info;
+        if (it != metadata.end()) {
+            info = it->second;
+        } else {
+            info.order = fallback_order++;
+        }
+
+        if (!info.visible) {
+            return;
+        }
+
+        if (!area->contains_point(world_point)) {
+            return;
+        }
+
+        bool take = false;
+        if (!best_name) {
+            take = true;
+        } else if (info.z > best_z) {
+            take = true;
+        } else if (info.z == best_z) {
+            if (!have_best_order || info.order >= best_order) {
+                take = true;
+            }
+        }
+
+        if (take) {
+            best_name = name;
+            best_z = info.z;
+            best_order = info.order;
+            have_best_order = true;
+        }
+    };
+
+    for (const auto& named : current_room_->areas) {
+        if (named.name.empty()) {
+            continue;
+        }
+        consider_area(named.name, named.area.get());
+    }
+
+    return best_name;
+}
+
 void RoomEditor::handle_click(const Input& input) {
     if (!input_) return;
 
@@ -2633,15 +2728,25 @@ void RoomEditor::handle_click(const Input& input) {
         if (hovered_asset_) {
             open_asset_info_editor_for_asset(hovered_asset_);
         } else {
-            bool inside_room = true;
-            if (current_room_ && current_room_->room_area) {
-                inside_room = current_room_->room_area->contains_point(world_mouse);
+            bool opened_area_info = false;
+            if (current_room_) {
+                if (auto area_name = find_room_area_at_point(world_mouse)) {
+                    open_area_info_editor(current_room_, *area_name);
+                    opened_area_info = true;
+                }
             }
-            if (inside_room) {
-                pending_spawn_world_pos_ = world_mouse;
-                open_asset_library();
-                if (!is_asset_library_open()) {
-                    pending_spawn_world_pos_.reset();
+
+            if (!opened_area_info) {
+                bool inside_room = true;
+                if (current_room_ && current_room_->room_area) {
+                    inside_room = current_room_->room_area->contains_point(world_mouse);
+                }
+                if (inside_room) {
+                    pending_spawn_world_pos_ = world_mouse;
+                    open_asset_library();
+                    if (!is_asset_library_open()) {
+                        pending_spawn_world_pos_.reset();
+                    }
                 }
             }
         }
