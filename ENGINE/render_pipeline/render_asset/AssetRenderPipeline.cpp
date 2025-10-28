@@ -136,11 +136,14 @@ void StageContext::update_projection(Asset& asset) {
         return;
     }
 
-    const int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
-    const int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
-    const SDL_Point cp = effects.screen_position;
-    screen_rect   = SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
-    screen_center = SDL_FPoint{ static_cast<float>(cp.x), static_cast<float>(cp.y - sh / 2) };
+    const int   sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
+    const int   sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
+    const float center_x = static_cast<float>(effects.screen_position.x) + effects.parallax_offset_x;
+    const float center_y = static_cast<float>(effects.screen_position.y);
+    const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
+    const int   top      = static_cast<int>(std::lround(center_y - static_cast<float>(sh)));
+    screen_rect          = SDL_Rect{ left, top, sw, sh };
+    screen_center        = SDL_FPoint{ center_x, center_y - static_cast<float>(sh) * 0.5f };
 
     if (const LightMap* light_map_sampler = light_map()) {
         const LightMap::SampledBrightness sample =

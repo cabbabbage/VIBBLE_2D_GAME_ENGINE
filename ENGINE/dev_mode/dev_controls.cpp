@@ -1289,7 +1289,9 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     float final_h   = scaled_sh * eff.vertical_scale;
                     int sw_px = std::max(1, static_cast<int>(std::round(scaled_sw)));
                     int sh_px = std::max(1, static_cast<int>(std::round(final_h)));
-                    return SDL_Rect{ eff.screen_position.x - sw_px / 2, eff.screen_position.y - sh_px, sw_px, sh_px };
+                    const float center_x = static_cast<float>(eff.screen_position.x) + eff.parallax_offset_x;
+                    const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw_px) * 0.5f));
+                    return SDL_Rect{ left, eff.screen_position.y - sh_px, sw_px, sh_px };
 };
 
                 if (event.type == SDL_MOUSEMOTION) {
@@ -1355,8 +1357,9 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                             SDL_Point p_lin = cam.map_to_screen(wp);
                             const float dx = static_cast<float>(p_lin.x - pivot_linear.x);
                             const float dy = static_cast<float>(p_lin.y - pivot_linear.y);
-                            const float sx = eff.screen_position.x + dx * eff.distance_scale;
-                            const float sy = eff.screen_position.y + dy * (eff.distance_scale * eff.vertical_scale);
+                            const float base_cx = static_cast<float>(eff.screen_position.x) + eff.parallax_offset_x;
+                            const float sx = base_cx + dx * eff.distance_scale;
+                            const float sy = static_cast<float>(eff.screen_position.y) + dy * (eff.distance_scale * eff.vertical_scale);
                             spts.push_back(SDL_Point{ static_cast<int>(std::lround(sx)), static_cast<int>(std::lround(sy)) });
                         }
                         if (!spts.empty() && point_in_poly(spts, sp)) {
@@ -1642,8 +1645,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                                 SDL_Point p_lin = cam.map_to_screen(wp);
                                 const float dx = static_cast<float>(p_lin.x - pivot_linear.x);
                                 const float dy = static_cast<float>(p_lin.y - pivot_linear.y);
-                                const float sx = eff.screen_position.x + dx * eff.distance_scale;
-                                const float sy = eff.screen_position.y + dy * (eff.distance_scale * eff.vertical_scale);
+                                const float base_cx = static_cast<float>(eff.screen_position.x) + eff.parallax_offset_x;
+                                const float sx = base_cx + dx * eff.distance_scale;
+                                const float sy = static_cast<float>(eff.screen_position.y) + dy * (eff.distance_scale * eff.vertical_scale);
                                 spts.push_back(SDL_Point{ static_cast<int>(std::lround(sx)), static_cast<int>(std::lround(sy)) });
                             }
 

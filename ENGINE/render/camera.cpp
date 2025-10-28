@@ -36,6 +36,11 @@ static inline Area make_rect_area(const std::string& name, SDL_Point center, int
     return Area(name, corners, resolution);
 }
 
+namespace {
+    static constexpr double SCALE_EPS  = 1e-4;
+    static constexpr double BASE_RATIO = 1.1;
+}
+
 camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
 {
     screen_width_  = screen_width;
@@ -87,10 +92,22 @@ void camera::zoom_to_scale(double target_scale, int duration_steps) {
         set_scale(static_cast<float>(clamped));
         return;
     }
-    start_scale_  = scale_;
+    duration_steps = std::max(1, duration_steps);
+
+    const bool currently_zooming = zooming_ && steps_total_ > 0;
+    bool restart_zoom = !currently_zooming || steps_total_ != duration_steps;
+
+    if (!restart_zoom && std::fabs(clamped - target_scale_) > SCALE_EPS) {
+        restart_zoom = true;
+    }
+
+    if (restart_zoom) {
+        start_scale_ = scale_;
+        steps_total_ = duration_steps;
+        steps_done_  = 0;
+    }
+
     target_scale_ = clamped;
-    steps_total_  = duration_steps;
-    steps_done_   = 0;
     zooming_      = true;
 }
 
@@ -130,10 +147,6 @@ void camera::update() {
         steps_total_ = steps_done_ = 0;
         start_scale_ = target_scale_;
     }
-}
-
-namespace {
-    static constexpr double BASE_RATIO = 1.1;
 }
 
 double camera::compute_room_scale_from_area(const Room* room) const {
@@ -210,7 +223,10 @@ void camera::update_zoom(Room* cur,
         target_zoom = (sa * (1.0 - t)) + (sb * t);
     }
     target_zoom = std::clamp(target_zoom, BASE_RATIO * 0.7, BASE_RATIO * 1.3);
-    zoom_to_scale(target_zoom, 35);
+    const bool idle = !zooming_;
+    if (idle || std::fabs(target_zoom - target_scale_) > SCALE_EPS) {
+        zoom_to_scale(target_zoom, 35);
+    }
 }
 
 Area camera::convert_area_to_aspect(const Area& in) const {
@@ -370,9 +386,10 @@ camera::RenderEffects camera::compute_render_effects(
     float reference_screen_height) const
 {
     RenderEffects result;
-    result.screen_position = map_to_screen(world);
-    result.vertical_scale  = 1.0f;
-    result.distance_scale  = 1.0f;
+    result.screen_position  = map_to_screen(world);
+    result.parallax_offset_x = 0.0f;
+    result.vertical_scale   = 1.0f;
+    result.distance_scale   = 1.0f;
 
     const double safe_scale       = std::max(1e-6, static_cast<double>(scale_));
     const double pixels_per_world = 1.0 / safe_scale;
@@ -436,7 +453,7 @@ camera::RenderEffects camera::compute_render_effects(
                                  pixels_per_world * vertical_bias * zoom_gain;
 
             parallax_px = std::clamp(parallax_px, -PARALLAX_MAX, PARALLAX_MAX);
-            result.screen_position.x += static_cast<int>(std::lround(parallax_px));
+            result.parallax_offset_x = static_cast<float>(parallax_px);
         }
     }
 

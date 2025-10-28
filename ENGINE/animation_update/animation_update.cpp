@@ -57,6 +57,10 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
     final_dest = plan_.final_dest;
     plan_.override_non_locked = override_non_locked;
 
+    if (runtime_) {
+        runtime_->reset_plan_progress();
+    }
+
     // Signal executor to re-evaluate plan
     input_event_ = true;
 }
@@ -85,6 +89,10 @@ void AnimationUpdate::clear_movement_plan() {
     final_dest       = plan_.final_dest;
     path_requested   = false;
     input_event_     = true;
+
+    if (runtime_) {
+        runtime_->reset_plan_progress();
+    }
 }
 
 std::size_t AnimationUpdate::path_index_for(const std::string& anim_id) const {

@@ -26,9 +26,10 @@ class camera {
 
     struct RenderEffects {
         SDL_Point screen_position{0, 0};
-        float vertical_scale = 1.0f;
-        float distance_scale = 1.0f;
-};
+        float     parallax_offset_x = 0.0f;
+        float     vertical_scale    = 1.0f;
+        float     distance_scale    = 1.0f;
+    };
 
     camera(int screen_width, int screen_height, const Area& starting_zoom);
 

@@ -44,7 +44,7 @@ public:
 
 private:
     bool shouldRegen(Asset* a);
-    SDL_Rect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
+    SDL_FRect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
     bool initialize_static_light_chunks();
 
 private:
@@ -53,7 +53,7 @@ private:
     struct AssetRenderCommand {
         SDL_Texture* source_texture      = nullptr;
         SDL_Texture* final_texture       = nullptr;
-        SDL_Rect     dst                 { 0, 0, 0, 0 };
+        SDL_FRect    dst                 { 0.0f, 0.0f, 0.0f, 0.0f };
         bool         uses_scaled_texture = false;
         bool         highlighted         = false;
         bool         selected            = false;

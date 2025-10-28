@@ -636,10 +636,11 @@ bool AreaOverlayEditor::compute_overlay_transform(camera& cam, OverlayTransform&
     const int pivot_screen_x = static_cast<int>(std::lround(pivot_local_fx * scale_per_mask_x));
     const int pivot_screen_y = static_cast<int>(std::lround(pivot_local_fy * scale_per_mask_y));
 
-    const SDL_Point anchor_screen = effects.screen_position;
+    const float      anchor_center_x = static_cast<float>(effects.screen_position.x) + effects.parallax_offset_x;
+    const SDL_Point  anchor_screen{ static_cast<int>(std::lround(anchor_center_x)), effects.screen_position.y };
     out.anchor_screen = anchor_screen;
     out.dst = SDL_Rect{
-        anchor_screen.x - pivot_screen_x,
+        static_cast<int>(std::lround(anchor_center_x)) - pivot_screen_x,
         anchor_screen.y - pivot_screen_y,
         dst_w,
         dst_h

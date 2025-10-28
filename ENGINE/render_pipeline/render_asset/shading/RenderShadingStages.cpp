@@ -42,7 +42,7 @@ float compute_parallax_shift(const StageContext& context, const Asset& asset, in
                                        : 1.0f;
 
     camera::RenderEffects effects = cam.compute_render_effects(world_pos, asset_screen_height, reference_height);
-    const float parallax_px = static_cast<float>(effects.screen_position.x - baseline.x);
+    const float parallax_px = effects.parallax_offset_x;
     return parallax_px * weight;
 }
 

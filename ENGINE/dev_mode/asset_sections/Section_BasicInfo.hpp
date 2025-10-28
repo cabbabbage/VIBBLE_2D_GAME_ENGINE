@@ -192,8 +192,10 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     int sh = std::max(1, static_cast<int>(std::round(final_visible_h)));
     if (sw <= 0 || sh <= 0) return;
 
-    const SDL_Point& base = effects.screen_position;
-    SDL_Rect bounds{ base.x - sw / 2, base.y - sh, sw, sh };
+    const float center_x = static_cast<float>(effects.screen_position.x) + effects.parallax_offset_x;
+    const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
+    const int   top      = effects.screen_position.y - sh;
+    SDL_Rect bounds{ left, top, sw, sh };
 
     int z_world_y = target->pos.y + target->info->z_threshold;
     SDL_Point z_screen = cam.map_to_screen(SDL_Point{target->pos.x, z_world_y});

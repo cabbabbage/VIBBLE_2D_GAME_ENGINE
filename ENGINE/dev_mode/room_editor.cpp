@@ -2363,9 +2363,10 @@ bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
     const int sh = std::max(1, static_cast<int>(std::lround(static_cast<double>(final_visible_h))));
     if (sw <= 0 || sh <= 0) return false;
 
-    const SDL_Point& center = effects.screen_position;
-    out_rect = SDL_Rect{center.x - sw / 2, center.y - sh, sw, sh};
-    out_screen_y = center.y;
+    const float center_x = static_cast<float>(effects.screen_position.x) + effects.parallax_offset_x;
+    const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
+    out_rect             = SDL_Rect{left, effects.screen_position.y - sh, sw, sh};
+    out_screen_y         = effects.screen_position.y;
     return true;
 }
 

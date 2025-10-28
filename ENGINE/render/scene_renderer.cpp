@@ -215,7 +215,7 @@ bool SceneRenderer::shouldRegen(Asset* a){
     return it->second != current_frame;
 }
 
-SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){
+SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){
     float base_scale=1.f;
     if (a && a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor>=0.f) base_scale=a->info->scale_factor;
     float scaled_fw=(float)fw*base_scale;
@@ -228,14 +228,17 @@ SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float in
     float scaled_sh2=base_sh*ef.distance_scale;
     float final_h=scaled_sh2*ef.vertical_scale;
 
-    if (scaled_sw<min_w && final_h<min_h) return {0,0,0,0};
+    if (scaled_sw<min_w && final_h<min_h) return SDL_FRect{0.0f,0.0f,0.0f,0.0f};
 
     int sw=std::max(1,(int)std::lround(scaled_sw));
     int sh=std::max(1,(int)std::lround(final_h));
-    if (sw<min_w && sh<min_h) return {0,0,0,0};
+    if (sw<min_w && sh<min_h) return SDL_FRect{0.0f,0.0f,0.0f,0.0f};
 
-    const SDL_Point& cp=ef.screen_position;
-    return SDL_Rect{ cp.x - sw/2, cp.y - sh, sw, sh };
+    const float center_x = static_cast<float>(ef.screen_position.x) + ef.parallax_offset_x;
+    const float half_w   = static_cast<float>(sw) * 0.5f;
+    const float left     = center_x - half_w;
+    const float top      = static_cast<float>(ef.screen_position.y - sh);
+    return SDL_FRect{ left, top, static_cast<float>(sw), static_cast<float>(sh) };
 }
 
 void SceneRenderer::render(){
@@ -349,7 +352,7 @@ void SceneRenderer::render(){
         auto enqueue_command = [&](Asset* asset,
                                    SDL_Texture* final_tex,
                                    SDL_Texture* draw_tex,
-                                   const SDL_Rect& dst_rect) {
+                                   const SDL_FRect& dst_rect) {
             AssetRenderCommand cmd;
             cmd.source_texture      = draw_tex ? draw_tex : final_tex;
             cmd.final_texture       = final_tex;
@@ -393,8 +396,8 @@ void SceneRenderer::render(){
                 a->cached_h = fh;
             }
 
-            SDL_Rect dst = get_scaled_position_rect(a, fw, fh, inv_scale, min_w, min_h, player_sh);
-            if (dst.w == 0 && dst.h == 0) {
+            SDL_FRect dst = get_scaled_position_rect(a, fw, fh, inv_scale, min_w, min_h, player_sh);
+            if (dst.w <= 0.0f || dst.h <= 0.0f) {
                 if (a->current_frame) {
                     last_rendered_frames_[a] = a->current_frame;
                 } else {
@@ -403,10 +406,16 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(a, final_tex, fw, fh, dst.w, dst.h);
+            SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(
+                a,
+                final_tex,
+                fw,
+                fh,
+                static_cast<int>(std::lround(dst.w)),
+                static_cast<int>(std::lround(dst.h)));
             enqueue_command(a, final_tex, draw_tex, dst);
 
-            if (a->info && !a->info->light_sources.empty() && dst.w > 0 && dst.h > 0 && fw > 0 && fh > 0) {
+            if (a->info && !a->info->light_sources.empty() && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
                 const std::string canonical_type = asset_types::canonicalize(a->info->type);
                 const bool        punches_overlay =
                     (canonical_type == asset_types::object || canonical_type == asset_types::texture || canonical_type == asset_types::player);
@@ -415,7 +424,12 @@ void SceneRenderer::render(){
                 }
                 LightOverlaySource source;
                 source.asset       = a;
-                source.asset_rect  = dst;
+                source.asset_rect  = SDL_Rect{
+                    static_cast<int>(std::lround(dst.x)),
+                    static_cast<int>(std::lround(dst.y)),
+                    static_cast<int>(std::lround(dst.w)),
+                    static_cast<int>(std::lround(dst.h))
+                };
                 source.base_width  = fw;
                 source.base_height = fh;
                 source.flipped     = a->flipped;
@@ -444,30 +458,30 @@ void SceneRenderer::render(){
                 if (cmd.highlighted) {
                     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
                     SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
-                    SDL_Rect outline = cmd.dst;
-                    outline.x -= 2;
-                    outline.y -= 2;
-                    outline.w += 4;
-                    outline.h += 4;
-                    SDL_RenderFillRect(renderer_, &outline);
+                    SDL_FRect outline = cmd.dst;
+                    outline.x -= 2.0f;
+                    outline.y -= 2.0f;
+                    outline.w += 4.0f;
+                    outline.h += 4.0f;
+                    SDL_RenderFillRectF(renderer_, &outline);
                     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
                     SDL_SetTextureColorMod(mod_target, 255, 200, 200);
                 } else if (cmd.selected) {
                     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
                     SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100);
-                    SDL_Rect outline = cmd.dst;
-                    outline.x -= 2;
-                    outline.y -= 2;
-                    outline.w += 4;
-                    outline.h += 4;
-                    SDL_RenderFillRect(renderer_, &outline);
+                    SDL_FRect outline = cmd.dst;
+                    outline.x -= 2.0f;
+                    outline.y -= 2.0f;
+                    outline.w += 4.0f;
+                    outline.h += 4.0f;
+                    SDL_RenderFillRectF(renderer_, &outline);
                     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
                     SDL_SetTextureColorMod(mod_target, 255, 200, 200);
                 } else {
                     SDL_SetTextureColorMod(mod_target, 255, 255, 255);
                 }
 
-                SDL_RenderCopyEx(renderer_, cmd.source_texture, nullptr, &cmd.dst, 0, nullptr, cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+                SDL_RenderCopyExF(renderer_, cmd.source_texture, nullptr, &cmd.dst, 0.0, nullptr, cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
                 SDL_SetTextureColorMod(mod_target, 255, 255, 255);
                 if (cmd.uses_scaled_texture && cmd.final_texture) {
                     SDL_SetTextureColorMod(cmd.final_texture, 255, 255, 255);

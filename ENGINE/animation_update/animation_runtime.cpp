@@ -275,6 +275,12 @@ std::size_t AnimationRuntime::path_index_for(const std::string& anim_id) const {
     return 0;
 }
 
+void AnimationRuntime::reset_plan_progress() {
+    stride_index_ = 0;
+    stride_frame_counter_ = 0;
+    next_checkpoint_index_ = 0;
+}
+
 SDL_Point AnimationRuntime::bottom_middle(SDL_Point pos) const {
     if (!self_ || !self_->info) {
         return pos;
