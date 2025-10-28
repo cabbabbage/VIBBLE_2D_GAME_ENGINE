@@ -952,7 +952,7 @@ void SourceConfigPanel::import_from_gif() {
     stbi_uc* data = stbi_load_gif_from_memory(bytes.data(), static_cast<int>(bytes.size()), &delays, &x, &y, &z, &comp, STBI_rgb_alpha);
     if (!data || x <= 0 || y <= 0 || z <= 0) {
         if (data) stbi_image_free(data);
-        if (delays) STBI_FREE(delays);
+        if (delays) stbi_image_free(delays);
         update_status("Failed to decode GIF frames");
         return;
     }
@@ -960,7 +960,7 @@ void SourceConfigPanel::import_from_gif() {
     std::filesystem::path out_dir;
     if (!prepare_output_directory(&out_dir)) {
         stbi_image_free(data);
-        if (delays) STBI_FREE(delays);
+        if (delays) stbi_image_free(delays);
         return;
     }
 
@@ -985,7 +985,7 @@ void SourceConfigPanel::import_from_gif() {
     }
 
     stbi_image_free(data);
-    if (delays) STBI_FREE(delays);
+    if (delays) stbi_image_free(delays);
 
     // Crop and finalize
     post_copy_process(written);

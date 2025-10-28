@@ -62,17 +62,55 @@ int read_int(const nlohmann::json& obj, const char* key, int fallback) {
 }
 
 void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
+    // Legacy shared falloffs
+    const bool has_legacy_h = json.contains("horizontal_falloff");
+    const bool has_legacy_v = json.contains("vertical_falloff");
     settings.virtual_light_map.horizontal_falloff =
         read_float(json, "horizontal_falloff", settings.virtual_light_map.horizontal_falloff);
     settings.virtual_light_map.vertical_falloff =
         read_float(json, "vertical_falloff", settings.virtual_light_map.vertical_falloff);
+    // New split falloffs
+    settings.virtual_light_map.offset_horizontal_falloff =
+        read_float(json, "offset_horizontal_falloff", settings.virtual_light_map.offset_horizontal_falloff);
+    settings.virtual_light_map.offset_vertical_falloff =
+        read_float(json, "offset_vertical_falloff", settings.virtual_light_map.offset_vertical_falloff);
+    settings.virtual_light_map.opacity_horizontal_falloff =
+        read_float(json, "opacity_horizontal_falloff", settings.virtual_light_map.opacity_horizontal_falloff);
+    settings.virtual_light_map.opacity_vertical_falloff =
+        read_float(json, "opacity_vertical_falloff", settings.virtual_light_map.opacity_vertical_falloff);
+    // If new fields weren't provided here, propagate legacy values
+    if (!json.contains("offset_horizontal_falloff") && has_legacy_h) {
+        settings.virtual_light_map.offset_horizontal_falloff = settings.virtual_light_map.horizontal_falloff;
+    }
+    if (!json.contains("opacity_horizontal_falloff") && has_legacy_h) {
+        settings.virtual_light_map.opacity_horizontal_falloff = settings.virtual_light_map.horizontal_falloff;
+    }
+    if (!json.contains("offset_vertical_falloff") && has_legacy_v) {
+        settings.virtual_light_map.offset_vertical_falloff = settings.virtual_light_map.vertical_falloff;
+    }
+    if (!json.contains("opacity_vertical_falloff") && has_legacy_v) {
+        settings.virtual_light_map.opacity_vertical_falloff = settings.virtual_light_map.vertical_falloff;
+    }
     settings.virtual_light_map.max_offset_x =
         read_float(json, "max_offset_x", settings.virtual_light_map.max_offset_x);
     settings.virtual_light_map.max_offset_y =
         read_float(json, "max_offset_y", settings.virtual_light_map.max_offset_y);
     settings.virtual_light_map.map_light_dir_offset_strength = read_float( json, "map_light_dir_offset_strength", settings.virtual_light_map.map_light_dir_offset_strength);
+    // Legacy shared search radius
+    const bool has_legacy_radius = json.contains("search_radius");
     settings.virtual_light_map.search_radius =
         read_int(json, "search_radius", settings.virtual_light_map.search_radius);
+    // New split radii
+    settings.virtual_light_map.offset_search_radius =
+        read_int(json, "offset_search_radius", settings.virtual_light_map.offset_search_radius);
+    settings.virtual_light_map.opacity_search_radius =
+        read_int(json, "opacity_search_radius", settings.virtual_light_map.opacity_search_radius);
+    if (!json.contains("offset_search_radius") && has_legacy_radius) {
+        settings.virtual_light_map.offset_search_radius = settings.virtual_light_map.search_radius;
+    }
+    if (!json.contains("opacity_search_radius") && has_legacy_radius) {
+        settings.virtual_light_map.opacity_search_radius = settings.virtual_light_map.search_radius;
+    }
     settings.virtual_light_map.grid_subdivide =
         read_int(json, "grid_subdivide", settings.virtual_light_map.grid_subdivide);
     settings.virtual_light_map.light_grid_subdivide =
@@ -82,6 +120,30 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
     settings.opacity_strength = read_float(json, "opacity_strength", settings.opacity_strength);
     settings.frame_blend_falloff_frames =
         read_int(json, "frame_blend_falloff_frames", settings.frame_blend_falloff_frames);
+
+    // New toggles and opacity controls
+    settings.virtual_light_map.enable_offset = json.contains("enable_offset")
+        ? (json["enable_offset"].is_boolean() ? json["enable_offset"].get<bool>()
+                                               : (read_int(json, "enable_offset", settings.virtual_light_map.enable_offset ? 1 : 0) != 0))
+        : settings.virtual_light_map.enable_offset;
+    settings.virtual_light_map.enable_opacity = json.contains("enable_opacity")
+        ? (json["enable_opacity"].is_boolean() ? json["enable_opacity"].get<bool>()
+                                                : (read_int(json, "enable_opacity", settings.virtual_light_map.enable_opacity ? 1 : 0) != 0))
+        : settings.virtual_light_map.enable_opacity;
+    settings.virtual_light_map.min_opacity = read_float(json, "min_opacity", settings.virtual_light_map.min_opacity);
+    settings.virtual_light_map.max_opacity = read_float(json, "max_opacity", settings.virtual_light_map.max_opacity);
+    // Opacity boost accepts -1..1 or -100..100, try both
+    {
+        float boost = settings.virtual_light_map.opacity_boost;
+        if (json.contains("opacity_boost")) {
+            boost = read_float(json, "opacity_boost", boost);
+            // Heuristic: if boost seems like percentage, map to -1..1
+            if (std::abs(boost) > 1.0f) {
+                boost = boost / 100.0f;
+            }
+        }
+        settings.virtual_light_map.opacity_boost = boost;
+    }
 
     auto parse_lut = [&](const nlohmann::json& source) {
         if (!source.is_array()) {
@@ -146,12 +208,24 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
 
     json = nlohmann::json::object();
     json["virtual_light_map"] = nlohmann::json::object({
+        // Keep legacy fields populated to ease migration, though new fields are authoritative
         { "horizontal_falloff", sanitized.virtual_light_map.horizontal_falloff },
         { "vertical_falloff", sanitized.virtual_light_map.vertical_falloff },
+        { "offset_horizontal_falloff", sanitized.virtual_light_map.offset_horizontal_falloff },
+        { "offset_vertical_falloff", sanitized.virtual_light_map.offset_vertical_falloff },
+        { "opacity_horizontal_falloff", sanitized.virtual_light_map.opacity_horizontal_falloff },
+        { "opacity_vertical_falloff", sanitized.virtual_light_map.opacity_vertical_falloff },
         { "max_offset_x", sanitized.virtual_light_map.max_offset_x },
         { "max_offset_y", sanitized.virtual_light_map.max_offset_y },
         { "map_light_dir_offset_strength", sanitized.virtual_light_map.map_light_dir_offset_strength },
         { "search_radius", sanitized.virtual_light_map.search_radius },
+        { "offset_search_radius", sanitized.virtual_light_map.offset_search_radius },
+        { "opacity_search_radius", sanitized.virtual_light_map.opacity_search_radius },
+        { "enable_offset", sanitized.virtual_light_map.enable_offset },
+        { "enable_opacity", sanitized.virtual_light_map.enable_opacity },
+        { "min_opacity", sanitized.virtual_light_map.min_opacity },
+        { "max_opacity", sanitized.virtual_light_map.max_opacity },
+        { "opacity_boost", sanitized.virtual_light_map.opacity_boost },
         { "grid_subdivide", sanitized.virtual_light_map.grid_subdivide },
         { "light_grid_subdivide", sanitized.virtual_light_map.light_grid_subdivide }
     });

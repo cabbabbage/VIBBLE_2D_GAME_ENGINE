@@ -11,7 +11,7 @@
 
 namespace {
 
-constexpr float MOTION_BLUR_STRENGTH = 0.45f;
+constexpr float MOTION_BLUR_STRENGTH = 0.45f; // fallback when settings unavailable
 
 float compute_asset_screen_height(Asset& asset, float inv_scale) {
     int cached_w = asset.cached_w;
@@ -208,7 +208,12 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
 
     SDL_Texture* previous_final       = asset.get_final_texture();
     SDL_Texture* previous_final_copy  = nullptr;
-    const float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f);
+    float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f);
+    if (const auto* rs = context.reactive_shadow_settings()) {
+        // Map 0..200 frames to 0..1 strength
+        const float s = static_cast<float>(std::clamp(rs->frame_blend_falloff_frames, 0, 200)) / 200.0f;
+        clamped_blur_strength = std::clamp(s, 0.0f, 1.0f);
+    }
     const bool   apply_motion_blur     = previous_final && clamped_blur_strength > 0.0f && !low_quality_mode_;
     if (apply_motion_blur) {
         int    prev_w      = 0;

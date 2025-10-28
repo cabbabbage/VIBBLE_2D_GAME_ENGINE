@@ -262,14 +262,15 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         if (hovered) {
             fill = dm_draw::LightenColor(base, 0.08f);
         }
-        if (selected) {
-            // Selected rows use the accent orange background explicitly
-            fill = DMStyles::AccentButton().bg;
-        }
-
+        // Keep the unique background color for selected items and use an orange outline to highlight.
         dm_draw::DrawBeveledRect(renderer, rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-        const SDL_Color border_col = dm_draw::DarkenColor(base, 0.45f);
-        dm_draw::DrawRoundedOutline(renderer, rect, DMStyles::CornerRadius(), 1, border_col);
+        SDL_Color border_col = dm_draw::DarkenColor(base, 0.45f);
+        int border_thickness = 1;
+        if (selected) {
+            border_col = DMStyles::AccentButton().bg; // orange highlight
+            border_thickness = 2;
+        }
+        dm_draw::DrawRoundedOutline(renderer, rect, DMStyles::CornerRadius(), border_thickness, border_col);
 
         int content_x = rect.x + row_padding + indent_for_level(row.level);
         int content_y = rect.y + row_padding;
@@ -578,14 +579,18 @@ void AnimationListPanel::layout_rows() {
 
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::small_gap();
-    const int width = std::max(0, bounds_.w - padding * 2);
+    const int base_width = std::max(0, bounds_.w - padding * 2);
 
     row_bounds_.assign(display_rows_.size(), SDL_Rect{});
 
     int y = bounds_.y + padding - scroll_offset_;
     for (size_t i = 0; i < display_rows_.size(); ++i) {
-        int row_height = row_height_for_level(display_rows_[i].level);
-        SDL_Rect rect{bounds_.x + padding, y, width, row_height};
+        int level = display_rows_[i].level;
+        int row_height = row_height_for_level(level);
+        // Scale width for derived (smaller) animations so they shrink horizontally as well.
+        const float width_factor = size_factor_for_level(level);
+        int row_width = std::max(1, static_cast<int>(std::round(base_width * width_factor)));
+        SDL_Rect rect{bounds_.x + padding, y, row_width, row_height};
         row_bounds_[i] = rect;
         y += row_height + gap;
     }

@@ -8,22 +8,48 @@ namespace render_pipeline::shading {
 
 struct ReactiveShadowSettings {
     struct VirtualLightMapSettings {
-        float horizontal_falloff = 1.0f;
-        float vertical_falloff   = 1.0f;
+        float horizontal_falloff = 1.0f; // legacy shared falloff (read for backward compat)
+        float vertical_falloff   = 1.0f; // legacy shared falloff (read for backward compat)
+        // New: separate falloffs for offset and opacity
+        float offset_horizontal_falloff = 1.0f;
+        float offset_vertical_falloff   = 1.0f;
+        float opacity_horizontal_falloff = 1.0f;
+        float opacity_vertical_falloff   = 1.0f;
         float max_offset_x       = 0.0f;
         float max_offset_y       = 0.0f;
         float map_light_dir_offset_strength = 0.5f;
-        int   search_radius      = 2;
+        int   search_radius      = 2; // legacy shared search radius (read for backward compat)
+        // New: separate K-neighbor search radii
+        int   offset_search_radius = 2;
+        int   opacity_search_radius = 2;
+        // New: toggles
+        bool  enable_offset = true;
+        bool  enable_opacity = true;
+        // New: opacity bounds and boost
+        float min_opacity = 0.0f;   // 0..1
+        float max_opacity = 1.0f;   // 0..1
+        float opacity_boost = 0.0f; // -1..1 (additive)
         int   grid_subdivide     = 0;
         int   light_grid_subdivide = 1;
 
         bool operator==(const VirtualLightMapSettings& other) const {
             return horizontal_falloff == other.horizontal_falloff &&
                    vertical_falloff == other.vertical_falloff &&
+                   offset_horizontal_falloff == other.offset_horizontal_falloff &&
+                   offset_vertical_falloff == other.offset_vertical_falloff &&
+                   opacity_horizontal_falloff == other.opacity_horizontal_falloff &&
+                   opacity_vertical_falloff == other.opacity_vertical_falloff &&
                    max_offset_x == other.max_offset_x &&
                    max_offset_y == other.max_offset_y &&
                    map_light_dir_offset_strength == other.map_light_dir_offset_strength &&
                    search_radius == other.search_radius &&
+                   offset_search_radius == other.offset_search_radius &&
+                   opacity_search_radius == other.opacity_search_radius &&
+                   enable_offset == other.enable_offset &&
+                   enable_opacity == other.enable_opacity &&
+                   min_opacity == other.min_opacity &&
+                   max_opacity == other.max_opacity &&
+                   opacity_boost == other.opacity_boost &&
                    grid_subdivide == other.grid_subdivide &&
                    light_grid_subdivide == other.light_grid_subdivide;
         }
@@ -89,11 +115,23 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     ReactiveShadowSettings out = raw;
     out.virtual_light_map.horizontal_falloff = clampf(out.virtual_light_map.horizontal_falloff, 0.0f, 10.0f);
     out.virtual_light_map.vertical_falloff   = clampf(out.virtual_light_map.vertical_falloff, 0.0f, 10.0f);
+    out.virtual_light_map.offset_horizontal_falloff = clampf(out.virtual_light_map.offset_horizontal_falloff, 0.0f, 10.0f);
+    out.virtual_light_map.offset_vertical_falloff   = clampf(out.virtual_light_map.offset_vertical_falloff, 0.0f, 10.0f);
+    out.virtual_light_map.opacity_horizontal_falloff = clampf(out.virtual_light_map.opacity_horizontal_falloff, 0.0f, 10.0f);
+    out.virtual_light_map.opacity_vertical_falloff   = clampf(out.virtual_light_map.opacity_vertical_falloff, 0.0f, 10.0f);
     out.virtual_light_map.max_offset_x       = clampf(out.virtual_light_map.max_offset_x, 0.0f, 500.0f);
     out.virtual_light_map.max_offset_y       = clampf(out.virtual_light_map.max_offset_y, 0.0f, 500.0f);
     out.virtual_light_map.map_light_dir_offset_strength =
         clampf(out.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
     out.virtual_light_map.search_radius      = clampi(out.virtual_light_map.search_radius, 0, 64);
+    out.virtual_light_map.offset_search_radius = clampi(out.virtual_light_map.offset_search_radius, 0, 64);
+    out.virtual_light_map.opacity_search_radius = clampi(out.virtual_light_map.opacity_search_radius, 0, 64);
+    out.virtual_light_map.min_opacity = clampf(out.virtual_light_map.min_opacity, 0.0f, 1.0f);
+    out.virtual_light_map.max_opacity = clampf(out.virtual_light_map.max_opacity, 0.0f, 1.0f);
+    if (out.virtual_light_map.max_opacity < out.virtual_light_map.min_opacity) {
+        std::swap(out.virtual_light_map.max_opacity, out.virtual_light_map.min_opacity);
+    }
+    out.virtual_light_map.opacity_boost = clampf(out.virtual_light_map.opacity_boost, -1.0f, 1.0f);
     out.virtual_light_map.grid_subdivide     = clampi(out.virtual_light_map.grid_subdivide, 0, 8);
     if (out.virtual_light_map.grid_subdivide == 0) {
         out.virtual_light_map.grid_subdivide = 1;
@@ -162,6 +200,22 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
 
     out.sampling_weights.static_weight  = 0.0f;
     out.sampling_weights.dynamic_weight = 1.0f;
+    // Back-compat propagation of legacy shared fields if new fields were untouched
+    if ((out.virtual_light_map.offset_horizontal_falloff == 1.0f && out.virtual_light_map.opacity_horizontal_falloff == 1.0f) &&
+        (out.virtual_light_map.horizontal_falloff != 1.0f)) {
+        out.virtual_light_map.offset_horizontal_falloff = out.virtual_light_map.horizontal_falloff;
+        out.virtual_light_map.opacity_horizontal_falloff = out.virtual_light_map.horizontal_falloff;
+    }
+    if ((out.virtual_light_map.offset_vertical_falloff == 1.0f && out.virtual_light_map.opacity_vertical_falloff == 1.0f) &&
+        (out.virtual_light_map.vertical_falloff != 1.0f)) {
+        out.virtual_light_map.offset_vertical_falloff = out.virtual_light_map.vertical_falloff;
+        out.virtual_light_map.opacity_vertical_falloff = out.virtual_light_map.vertical_falloff;
+    }
+    if ((out.virtual_light_map.offset_search_radius == 2 && out.virtual_light_map.opacity_search_radius == 2) &&
+        (out.virtual_light_map.search_radius != 2)) {
+        out.virtual_light_map.offset_search_radius = out.virtual_light_map.search_radius;
+        out.virtual_light_map.opacity_search_radius = out.virtual_light_map.search_radius;
+    }
     return out;
 }
 

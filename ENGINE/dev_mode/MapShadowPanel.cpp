@@ -159,141 +159,172 @@ void MapShadowPanel::render_content(SDL_Renderer* renderer) const {
 
 void MapShadowPanel::build_ui() {
     widget_wrappers_.clear();
-    widget_wrappers_.reserve(16);
+    widget_wrappers_.reserve(24);
     Rows rows;
 
     const auto& vsettings = current_settings_.virtual_light_map;
 
-    horizontal_falloff_ = make_scaled_slider("Horizontal Falloff", 0.0f, 10.0f, vsettings.horizontal_falloff, 100, 2);
-    vertical_falloff_ = make_scaled_slider("Vertical Falloff", 0.0f, 10.0f, vsettings.vertical_falloff, 100, 2);
-    max_offset_x_ = make_scaled_slider("Max Offset X (px)", 0.0f, 500.0f, vsettings.max_offset_x, 100, 2);
-    max_offset_y_ = make_scaled_slider("Max Offset Y (px)", 0.0f, 500.0f, vsettings.max_offset_y, 100, 2);
-    const float initial_sensitivity =
-        std::clamp(current_settings_.opacity_sensitivity_percent, 0.0f, 100.0f);
-    opacity_sensitivity_percent_ = std::make_unique<DMSlider>("Opacity Sensitivity %", 0, 100, static_cast<int>(std::lround(initial_sensitivity)));
-    if (opacity_sensitivity_percent_) {
-        opacity_sensitivity_percent_->set_defer_commit_until_unfocus(false);
+    // Top: Subdivision ticker for number of light cells
+    const int light_cells_value = std::clamp(std::max(1, vsettings.light_grid_subdivide), 1, 8);
+    light_cells_subdivide_ = std::make_unique<DMNumericStepper>("Light Cells", 1, 8, light_cells_value);
+    if (light_cells_subdivide_) {
+        auto stepper_widget = std::make_unique<StepperWidget>(light_cells_subdivide_.get());
+        stepper_widget->set_tooltip("Sets the number of light cells used for reactive shadowing.");
+        rows.push_back({stepper_widget.get()});
+        widget_wrappers_.push_back(std::move(stepper_widget));
     }
 
-    const int blur_frames_value = std::clamp(current_settings_.frame_blend_falloff_frames, 0, 200);
-    frame_blend_falloff_frames_ =
-        std::make_unique<DMSlider>("Motion Blur Frames", 0, 200, blur_frames_value);
-    if (frame_blend_falloff_frames_) {
-        frame_blend_falloff_frames_->set_defer_commit_until_unfocus(false);
-        frame_blend_falloff_frames_->set_value_formatter([](int value,
-                                                             std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
-                                                             -> std::string_view {
-            const int clamped = std::clamp(value, 0, 999);
-            const int written = std::snprintf(buffer.data(), buffer.size(), "%d frames", clamped);
-            if (written <= 0) {
-                return {};
-            }
-            return std::string_view(buffer.data(), static_cast<std::size_t>(written));
-        });
-        frame_blend_falloff_frames_->set_value_parser([](const std::string& text) -> std::optional<int> {
-            try {
-                return std::stoi(text);
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
+    // Section: Offset Settings (collapsible)
+    if (!offset_section_header_btn_) {
+        offset_section_header_btn_ = std::make_unique<DMButton>("Offset Settings", &DMStyles::HeaderButton(), 200, DMButton::height());
+    }
+    auto offset_header = std::make_unique<ButtonWidget>(offset_section_header_btn_.get(), [this]() {
+        this->offset_section_expanded_ = !this->offset_section_expanded_;
+        this->rebuild_ui();
+    });
+    rows.push_back({offset_header.get()});
+    widget_wrappers_.push_back(std::move(offset_header));
+
+    if (offset_section_expanded_) {
+        enable_offset_chk_ = std::make_unique<DMCheckbox>("Enable Offset", vsettings.enable_offset);
+        auto enable_offset_w = std::make_unique<CheckboxWidget>(enable_offset_chk_.get());
+        rows.push_back({enable_offset_w.get()});
+        widget_wrappers_.push_back(std::move(enable_offset_w));
+
+        offset_horizontal_falloff_ = make_scaled_slider("Horizontal Falloff (offset)", 0.0f, 10.0f, vsettings.offset_horizontal_falloff, 100, 2);
+        offset_vertical_falloff_   = make_scaled_slider("Vertical Falloff (offset)", 0.0f, 10.0f, vsettings.offset_vertical_falloff, 100, 2);
+        max_offset_x_ = make_scaled_slider("Max Offset X (px)", 0.0f, 500.0f, vsettings.max_offset_x, 100, 2);
+        max_offset_y_ = make_scaled_slider("Max Offset Y (px)", 0.0f, 500.0f, vsettings.max_offset_y, 100, 2);
+        map_light_dir_strength_ = make_scaled_slider("Directional Offset Strength", 0.0f, 1.0f, vsettings.map_light_dir_offset_strength, 100, 2);
+
+        const int offset_k = std::clamp(vsettings.offset_search_radius, 0, 128);
+        offset_search_radius_step_ = std::make_unique<DMNumericStepper>("K Neighbors (offset)", 0, 128, offset_k);
+
+        const int blur_frames_value = std::clamp(current_settings_.frame_blend_falloff_frames, 0, 200);
+        frame_blend_falloff_frames_ = std::make_unique<DMSlider>("Motion Blur Frames", 0, 200, blur_frames_value);
+        if (frame_blend_falloff_frames_) {
+            frame_blend_falloff_frames_->set_defer_commit_until_unfocus(false);
+            frame_blend_falloff_frames_->set_value_formatter([](int value,
+                std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) -> std::string_view {
+                const int clamped = std::clamp(value, 0, 999);
+                const int written = std::snprintf(buffer.data(), buffer.size(), "%d frames", clamped);
+                if (written <= 0) return {};
+                return std::string_view(buffer.data(), static_cast<std::size_t>(written));
+            });
+            frame_blend_falloff_frames_->set_value_parser([](const std::string& text) -> std::optional<int> {
+                try { return std::stoi(text); } catch (...) { return std::nullopt; }
+            });
+        }
+
+        auto add_slider = [&](std::unique_ptr<DMSlider>& s, const std::string& tip) {
+            if (!s) return;
+            auto w = std::make_unique<SliderWidget>(s.get());
+            w->set_tooltip(tip);
+            rows.push_back({w.get()});
+            widget_wrappers_.push_back(std::move(w));
+        };
+        auto add_stepper = [&](std::unique_ptr<DMNumericStepper>& s, const std::string& tip) {
+            if (!s) return;
+            auto w = std::make_unique<StepperWidget>(s.get());
+            w->set_tooltip(tip);
+            rows.push_back({w.get()});
+            widget_wrappers_.push_back(std::move(w));
+        };
+
+        add_slider(offset_horizontal_falloff_, "Lower: tighter horizontal fade of offset. Higher: spreads horizontally.");
+        add_slider(offset_vertical_falloff_,   "Lower: tighter vertical fade of offset. Higher: spreads vertically.");
+        add_slider(max_offset_x_, "Lower: limits sideways shift. Higher: allows more horizontal movement.");
+        add_slider(max_offset_y_, "Lower: keeps shadows close vertically. Higher: lets them stretch farther up/down.");
+        add_slider(map_light_dir_strength_, "Lower: ignore directional light push. Higher: follow main light direction strongly.");
+        add_stepper(offset_search_radius_step_, "K-neighbor search radius for offset sampling.");
+        add_slider(frame_blend_falloff_frames_, "Lower: no blur. Higher: blend with more previous frames.");
     }
 
-    map_light_dir_strength_ = make_scaled_slider("Directional Offset Strength", 0.0f, 1.0f, vsettings.map_light_dir_offset_strength, 100, 2);
+    // Section: Opacity Settings (collapsible)
+    if (!opacity_section_header_btn_) {
+        opacity_section_header_btn_ = std::make_unique<DMButton>("Opacity Settings", &DMStyles::HeaderButton(), 200, DMButton::height());
+    }
+    auto opacity_header = std::make_unique<ButtonWidget>(opacity_section_header_btn_.get(), [this]() {
+        this->opacity_section_expanded_ = !this->opacity_section_expanded_;
+        this->rebuild_ui();
+    });
+    rows.push_back({opacity_header.get()});
+    widget_wrappers_.push_back(std::move(opacity_header));
 
-    const int search_radius_value = std::clamp(vsettings.search_radius, 0, 128);
-    search_radius_ = std::make_unique<DMSlider>("Search Radius (cells)", 0, 128, search_radius_value);
-    if (search_radius_) {
-        search_radius_->set_defer_commit_until_unfocus(false);
-        search_radius_->set_value_formatter([](int value,
-                                               std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
-                                               -> std::string_view {
-            const int clamped = std::clamp(value, 0, 999);
-            const int written = std::snprintf(buffer.data(), buffer.size(), "%d cells", clamped);
-            if (written <= 0) {
-                return {};
-            }
-            return std::string_view(buffer.data(), static_cast<std::size_t>(written));
-        });
-        search_radius_->set_value_parser([](const std::string& text) -> std::optional<int> {
-            try {
-                return std::stoi(text);
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
+    if (opacity_section_expanded_) {
+        enable_opacity_chk_ = std::make_unique<DMCheckbox>("Enable Opacity", vsettings.enable_opacity);
+        auto enable_opacity_w = std::make_unique<CheckboxWidget>(enable_opacity_chk_.get());
+        rows.push_back({enable_opacity_w.get()});
+        widget_wrappers_.push_back(std::move(enable_opacity_w));
+
+        opacity_horizontal_falloff_ = make_scaled_slider("Horizontal Falloff (opacity)", 0.0f, 10.0f, vsettings.opacity_horizontal_falloff, 100, 2);
+        opacity_vertical_falloff_   = make_scaled_slider("Vertical Falloff (opacity)", 0.0f, 10.0f, vsettings.opacity_vertical_falloff, 100, 2);
+
+        const int opacity_k = std::clamp(vsettings.opacity_search_radius, 0, 128);
+        opacity_search_radius_step_ = std::make_unique<DMNumericStepper>("K Neighbors (opacity)", 0, 128, opacity_k);
+
+        min_opacity_ = make_scaled_slider("Min Opacity", 0.0f, 1.0f, vsettings.min_opacity, 100, 2);
+        max_opacity_ = make_scaled_slider("Max Opacity", 0.0f, 1.0f, vsettings.max_opacity, 100, 2);
+
+        const int boost_percent = static_cast<int>(std::lround(std::clamp(vsettings.opacity_boost, -1.0f, 1.0f) * 100.0f));
+        opacity_boost_percent_ = std::make_unique<DMSlider>("Opacity Boost %", -100, 100, boost_percent);
+        if (opacity_boost_percent_) {
+            opacity_boost_percent_->set_defer_commit_until_unfocus(false);
+            opacity_boost_percent_->set_value_formatter([](int value,
+                std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) -> std::string_view {
+                const int clamped = std::clamp(value, -100, 100);
+                const int written = std::snprintf(buffer.data(), buffer.size(), "%d%%", clamped);
+                if (written <= 0) return {};
+                return std::string_view(buffer.data(), static_cast<std::size_t>(written));
+            });
+            opacity_boost_percent_->set_value_parser([](const std::string& text) -> std::optional<int> {
+                try { return std::stoi(text); } catch (...) { return std::nullopt; }
+            });
+        }
+
+        auto add_slider = [&](std::unique_ptr<DMSlider>& s, const std::string& tip) {
+            if (!s) return;
+            auto w = std::make_unique<SliderWidget>(s.get());
+            w->set_tooltip(tip);
+            rows.push_back({w.get()});
+            widget_wrappers_.push_back(std::move(w));
+        };
+        auto add_stepper = [&](std::unique_ptr<DMNumericStepper>& s, const std::string& tip) {
+            if (!s) return;
+            auto w = std::make_unique<StepperWidget>(s.get());
+            w->set_tooltip(tip);
+            rows.push_back({w.get()});
+            widget_wrappers_.push_back(std::move(w));
+        };
+
+        add_slider(opacity_horizontal_falloff_, "Lower: tighter horizontal fade of opacity.");
+        add_slider(opacity_vertical_falloff_, "Lower: tighter vertical fade of opacity.");
+        add_stepper(opacity_search_radius_step_, "K-neighbor search radius for opacity sampling.");
+        add_slider(min_opacity_, "Minimum opacity clamp (0..100%).");
+        add_slider(max_opacity_, "Maximum opacity clamp (0..100%).");
+        add_slider(opacity_boost_percent_, "Boost or reduce opacity (-100%..100%).");
     }
 
+    // Optional: grid subdivide slider left available for advanced control
     const int grid_subdivide_value = std::clamp(std::max(1, vsettings.grid_subdivide), 0, 8);
     grid_subdivide_ = std::make_unique<DMSlider>("Grid Subdivide", 0, 8, grid_subdivide_value);
     if (grid_subdivide_) {
         grid_subdivide_->set_defer_commit_until_unfocus(false);
         grid_subdivide_->set_value_formatter([](int value,
-                                                std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
-                                                -> std::string_view {
+            std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) -> std::string_view {
             const int clamped = std::clamp(value, 0, 8);
             const int written = std::snprintf(buffer.data(), buffer.size(), "%dx", clamped == 0 ? 1 : clamped);
-            if (written <= 0) {
-                return {};
-            }
+            if (written <= 0) { return {}; }
             return std::string_view(buffer.data(), static_cast<std::size_t>(written));
         });
         grid_subdivide_->set_value_parser([](const std::string& text) -> std::optional<int> {
-            try {
-                return std::stoi(text);
-            } catch (...) {
-                return std::nullopt;
-            }
+            try { return std::stoi(text); } catch (...) { return std::nullopt; }
         });
+        auto w = std::make_unique<SliderWidget>(grid_subdivide_.get());
+        w->set_tooltip("Underlying virtual grid subdivision (advanced).");
+        rows.push_back({w.get()});
+        widget_wrappers_.push_back(std::move(w));
     }
-
-    const int light_grid_subdivide_value =
-        std::clamp(std::max(1, vsettings.light_grid_subdivide), 0, 8);
-    light_grid_subdivide_ =
-        std::make_unique<DMSlider>("Light Grid Subdivide", 0, 8, light_grid_subdivide_value);
-    if (light_grid_subdivide_) {
-        light_grid_subdivide_->set_defer_commit_until_unfocus(false);
-        light_grid_subdivide_->set_value_formatter([](int value,
-                                                      std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
-                                                      -> std::string_view {
-            const int clamped = std::clamp(value, 0, 8);
-            const int written = std::snprintf(buffer.data(), buffer.size(), "%dx", clamped == 0 ? 1 : clamped);
-            if (written <= 0) {
-                return {};
-            }
-            return std::string_view(buffer.data(), static_cast<std::size_t>(written));
-        });
-        light_grid_subdivide_->set_value_parser([](const std::string& text) -> std::optional<int> {
-            try {
-                return std::stoi(text);
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
-    }
-
-    auto add_slider_with_tooltip = [&](std::unique_ptr<DMSlider>& slider, const std::string& help_text) {
-        if (!slider) {
-            return;
-        }
-        auto slider_widget = std::make_unique<SliderWidget>(slider.get());
-        slider_widget->set_tooltip(help_text);
-        rows.push_back({slider_widget.get()});
-        widget_wrappers_.push_back(std::move(slider_widget));
-    };
-
-    add_slider_with_tooltip(horizontal_falloff_, "Lower: tighter horizontal fade. Higher: spreads effect wider.");
-    add_slider_with_tooltip(vertical_falloff_, "Lower: tighter vertical fade. Higher: spreads effect taller.");
-    add_slider_with_tooltip(max_offset_x_, "Lower: limits sideways shift. Higher: allows more horizontal movement.");
-    add_slider_with_tooltip(max_offset_y_, "Lower: keeps shadows close vertically. Higher: lets them stretch farther up/down.");
-    add_slider_with_tooltip(opacity_sensitivity_percent_, "Lower: react to local brightness. Higher: follow scene-wide light levels.");
-    add_slider_with_tooltip(frame_blend_falloff_frames_, "Lower: changes respond instantly. Higher: smooth changes across more frames.");
-    add_slider_with_tooltip(map_light_dir_strength_, "Lower: ignore directional light push. Higher: follow main light direction strongly.");
-    add_slider_with_tooltip(search_radius_, "Lower: sample nearby cells. Higher: gather lighting from a wider area.");
-    add_slider_with_tooltip(grid_subdivide_,
-                            "Lower: fewer grid cells. Higher: subdivide the virtual light map grid for smoother detail.");
-    add_slider_with_tooltip(light_grid_subdivide_,
-                            "Lower: fewer light cells. Higher: subdivide grid for smoother falloff.");
 
     set_rows(rows);
 }
@@ -306,53 +337,61 @@ void MapShadowPanel::rebuild_ui() {
 void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& settings) {
     applying_ui_ = true;
 
-    if (horizontal_falloff_) horizontal_falloff_->set_value(static_cast<int>(std::round(settings.virtual_light_map.horizontal_falloff * 100.0f)));
-    if (vertical_falloff_) vertical_falloff_->set_value(static_cast<int>(std::round(settings.virtual_light_map.vertical_falloff * 100.0f)));
+    if (light_cells_subdivide_) light_cells_subdivide_->set_value(std::clamp(std::max(1, settings.virtual_light_map.light_grid_subdivide), 1, 8));
+    if (enable_offset_chk_) enable_offset_chk_->set_value(settings.virtual_light_map.enable_offset);
+    if (enable_opacity_chk_) enable_opacity_chk_->set_value(settings.virtual_light_map.enable_opacity);
+    if (offset_horizontal_falloff_) offset_horizontal_falloff_->set_value(static_cast<int>(std::round(settings.virtual_light_map.offset_horizontal_falloff * 100.0f)));
+    if (offset_vertical_falloff_)   offset_vertical_falloff_->set_value(static_cast<int>(std::round(settings.virtual_light_map.offset_vertical_falloff * 100.0f)));
+    if (opacity_horizontal_falloff_) opacity_horizontal_falloff_->set_value(static_cast<int>(std::round(settings.virtual_light_map.opacity_horizontal_falloff * 100.0f)));
+    if (opacity_vertical_falloff_)   opacity_vertical_falloff_->set_value(static_cast<int>(std::round(settings.virtual_light_map.opacity_vertical_falloff * 100.0f)));
     if (max_offset_x_) max_offset_x_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_x * 100.0f)));
     if (max_offset_y_) max_offset_y_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_y * 100.0f)));
-    if (opacity_sensitivity_percent_)
-        opacity_sensitivity_percent_->set_value( static_cast<int>(std::lround(std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f))));
     if (frame_blend_falloff_frames_)
         frame_blend_falloff_frames_->set_value(std::clamp(settings.frame_blend_falloff_frames, 0, 200));
     if (map_light_dir_strength_)
         map_light_dir_strength_->set_value(static_cast<int>(std::round(settings.virtual_light_map.map_light_dir_offset_strength * 100.0f)));
-    if (search_radius_) search_radius_->set_value(std::clamp(settings.virtual_light_map.search_radius, 0, 128));
+    if (offset_search_radius_step_) offset_search_radius_step_->set_value(std::clamp(settings.virtual_light_map.offset_search_radius, 0, 128));
+    if (opacity_search_radius_step_) opacity_search_radius_step_->set_value(std::clamp(settings.virtual_light_map.opacity_search_radius, 0, 128));
+    if (min_opacity_) min_opacity_->set_value(static_cast<int>(std::round(std::clamp(settings.virtual_light_map.min_opacity, 0.0f, 1.0f) * 100.0f)));
+    if (max_opacity_) max_opacity_->set_value(static_cast<int>(std::round(std::clamp(settings.virtual_light_map.max_opacity, 0.0f, 1.0f) * 100.0f)));
+    if (opacity_boost_percent_) opacity_boost_percent_->set_value(static_cast<int>(std::lround(std::clamp(settings.virtual_light_map.opacity_boost, -1.0f, 1.0f) * 100.0f)));
     if (grid_subdivide_)
         grid_subdivide_->set_value(std::clamp(std::max(1, settings.virtual_light_map.grid_subdivide), 0, 8));
-    if (light_grid_subdivide_)
-        light_grid_subdivide_->set_value(std::clamp(std::max(1, settings.virtual_light_map.light_grid_subdivide), 0, 8));
     applying_ui_ = false;
 }
 
 MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
     ReactiveShadowSettings settings = current_settings_;
 
-    settings.virtual_light_map.horizontal_falloff = read_scaled_slider(horizontal_falloff_, 100, settings.virtual_light_map.horizontal_falloff);
-    settings.virtual_light_map.vertical_falloff   = read_scaled_slider(vertical_falloff_, 100, settings.virtual_light_map.vertical_falloff);
+    settings.virtual_light_map.offset_horizontal_falloff = read_scaled_slider(offset_horizontal_falloff_, 100, settings.virtual_light_map.offset_horizontal_falloff);
+    settings.virtual_light_map.offset_vertical_falloff   = read_scaled_slider(offset_vertical_falloff_, 100, settings.virtual_light_map.offset_vertical_falloff);
+    settings.virtual_light_map.opacity_horizontal_falloff = read_scaled_slider(opacity_horizontal_falloff_, 100, settings.virtual_light_map.opacity_horizontal_falloff);
+    settings.virtual_light_map.opacity_vertical_falloff   = read_scaled_slider(opacity_vertical_falloff_, 100, settings.virtual_light_map.opacity_vertical_falloff);
     settings.virtual_light_map.max_offset_x       = read_scaled_slider(max_offset_x_, 100, settings.virtual_light_map.max_offset_x);
     settings.virtual_light_map.max_offset_y       = read_scaled_slider(max_offset_y_, 100, settings.virtual_light_map.max_offset_y);
-    if (opacity_sensitivity_percent_) {
-        settings.opacity_sensitivity_percent =
-            static_cast<float>(std::clamp(opacity_sensitivity_percent_->displayed_value(), 0, 100));
-    }
+    if (enable_offset_chk_) settings.virtual_light_map.enable_offset = enable_offset_chk_->value();
+    if (enable_opacity_chk_) settings.virtual_light_map.enable_opacity = enable_opacity_chk_->value();
     if (frame_blend_falloff_frames_) {
         settings.frame_blend_falloff_frames =
             std::clamp(frame_blend_falloff_frames_->displayed_value(), 0, 200);
     }
     settings.virtual_light_map.map_light_dir_offset_strength =
         read_scaled_slider(map_light_dir_strength_, 100, settings.virtual_light_map.map_light_dir_offset_strength);
-    if (search_radius_) {
-        settings.virtual_light_map.search_radius = std::clamp(search_radius_->displayed_value(), 0, 128);
+    if (offset_search_radius_step_) {
+        settings.virtual_light_map.offset_search_radius = std::clamp(offset_search_radius_step_->value(), 0, 128);
     }
+    if (opacity_search_radius_step_) {
+        settings.virtual_light_map.opacity_search_radius = std::clamp(opacity_search_radius_step_->value(), 0, 128);
+    }
+    if (min_opacity_) settings.virtual_light_map.min_opacity = std::clamp(min_opacity_->displayed_value(), 0, 100) / 100.0f;
+    if (max_opacity_) settings.virtual_light_map.max_opacity = std::clamp(max_opacity_->displayed_value(), 0, 100) / 100.0f;
+    if (opacity_boost_percent_) settings.virtual_light_map.opacity_boost = std::clamp(opacity_boost_percent_->displayed_value(), -100, 100) / 100.0f;
     if (grid_subdivide_) {
         int subdivide = std::clamp(grid_subdivide_->displayed_value(), 0, 8);
         settings.virtual_light_map.grid_subdivide = subdivide;
     }
-    if (light_grid_subdivide_) {
-        int subdivide = std::clamp(light_grid_subdivide_->displayed_value(), 0, 8);
-        if (subdivide == 0) {
-            subdivide = 1;
-        }
+    if (light_cells_subdivide_) {
+        int subdivide = std::clamp(light_cells_subdivide_->value(), 1, 8);
         settings.virtual_light_map.light_grid_subdivide = subdivide;
     }
     return settings;
