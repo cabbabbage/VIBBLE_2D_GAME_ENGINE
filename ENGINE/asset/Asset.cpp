@@ -90,12 +90,12 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 
 Asset::~Asset() {
         if (parent) {
-                auto& vec = parent->children;
+                auto& vec = parent->asset_children;
                 vec.erase(std::remove(vec.begin(), vec.end(), this), vec.end());
                 parent = nullptr;
         }
-        for (Asset* c : children) {
-                if (c && c->parent == this) c->parent = nullptr;
+        for (Asset* asset_child : asset_children) {
+                if (asset_child && asset_child->parent == this) asset_child->parent = nullptr;
         }
         clear_downscale_cache();
         clear_render_caches();
@@ -117,7 +117,7 @@ Asset::Asset(const Asset& o)
 , flipped(o.flipped)
 , distance_from_camera(o.distance_from_camera)
  , angle_from_camera(o.angle_from_camera)
-, children(o.children)
+, asset_children(o.asset_children)
 , depth(o.depth)
 , is_shaded(o.is_shaded)
 , dead(o.dead)
@@ -170,7 +170,7 @@ Asset& Asset::operator=(const Asset& o) {
         flipped              = o.flipped;
         distance_from_camera = o.distance_from_camera;
         angle_from_camera = o.angle_from_camera;
-        children             = o.children;
+        asset_children       = o.asset_children;
 	depth                = o.depth;
         is_shaded            = o.is_shaded;
 	dead                 = o.dead;
@@ -232,19 +232,19 @@ void Asset::finalize_setup() {
                         }
                 }
 	}
-	for (Asset* child : children)
-	if (child) child->finalize_setup();
-        #ifdef VIBBLE_DEBUG_ASSET_LOGS
-        if (!children.empty()) {
+        for (Asset* asset_child : asset_children)
+        if (asset_child) asset_child->finalize_setup();
+#ifdef VIBBLE_DEBUG_ASSET_LOGS
+        if (!asset_children.empty()) {
                 std::cout << "[Asset] \"" << (info ? info->name : std::string{"<null>"})
                 << "\" at (" << pos.x << ", " << pos.y
-                << ") has " << children.size() << " child(ren):\n";
-                for (Asset* child : children)
-                if (child && child->info)
-                std::cout << "    - \"" << child->info->name
-                << "\" at (" << child->pos.x << ", " << child->pos.y << ")\n";
+                << ") has " << asset_children.size() << " child(ren):\n";
+                for (Asset* asset_child : asset_children)
+                if (asset_child && asset_child->info)
+                std::cout << "    - \"" << asset_child->info->name
+                << "\" at (" << asset_child->pos.x << ", " << asset_child->pos.y << ")\n";
         }
-        #endif
+#endif
         if (assets_ && !anim_) {
                 anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
                 anim_ = std::make_unique<AnimationUpdate>(this, assets_);
@@ -398,10 +398,10 @@ bool Asset::is_current_animation_looping() const {
 	return anim.loop;
 }
 
-void Asset::add_child(Asset* child) {
-        if (!child || !child->info) return;
+void Asset::add_child(Asset* asset_child) {
+        if (!asset_child || !asset_child->info) return;
         if (info) {
-                for (const auto& ci : info->children) {
+                for (const auto& ci : info->asset_children) {
                         if (!ci.spawn_group.is_object()) {
                                 continue;
                         }
@@ -414,20 +414,20 @@ void Asset::add_child(Asset* child) {
                                 child_spawn_id.clear();
                         }
 
-                        if (!child_spawn_id.empty() && child_spawn_id == child->spawn_id) {
+                        if (!child_spawn_id.empty() && child_spawn_id == asset_child->spawn_id) {
                                 int z_offset = ci.z_offset;
                                 if (ci.placed_on_top_parent && z_offset <= 0) {
                                         z_offset = 1;
                                 }
-                                child->set_z_offset(z_offset);
+                                asset_child->set_z_offset(z_offset);
                                 break;
                         }
                 }
         }
-        child->parent = this;
-        if (!child->get_assets()) child->set_assets(this->assets_);
-        child->set_z_index();
-        children.push_back(child);
+        asset_child->parent = this;
+        if (!asset_child->get_assets()) asset_child->set_assets(this->assets_);
+        asset_child->set_z_index();
+        asset_children.push_back(asset_child);
 }
 
 void Asset::set_assets(Assets* a) {
@@ -749,13 +749,13 @@ void Asset::on_scale_factor_changed() {
         motion_blur_cache_.width  = 0;
         motion_blur_cache_.height = 0;
 
-        if (!children.empty() && info) {
-                for (Asset* child : children) {
-                        if (!child || !child->info) {
+        if (!asset_children.empty() && info) {
+                for (Asset* asset_child : asset_children) {
+                        if (!asset_child || !asset_child->info) {
                                 continue;
                         }
-                        if (child->info.get() == info.get()) {
-                                child->on_scale_factor_changed();
+                        if (asset_child->info.get() == info.get()) {
+                                asset_child->on_scale_factor_changed();
                         }
                 }
         }

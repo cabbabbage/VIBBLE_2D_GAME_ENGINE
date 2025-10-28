@@ -97,7 +97,7 @@ class AssetInfo {
     std::vector<NamedArea> areas;
     std::map<std::string, Animation> animations;
     std::map<std::string, Mapping> mappings;
-    std::vector<ChildInfo> children;
+    std::vector<ChildInfo> asset_children;
     std::string custom_controller_key;
 
 	public:
@@ -123,7 +123,7 @@ class AssetInfo {
     std::string pick_next_animation(const std::string& mapping_id) const;
     int NeighborSearchRadius = 500;
 
-    void set_children(const std::vector<ChildInfo>& children);
+    void set_children(const std::vector<ChildInfo>& asset_children);
 
     void set_lighting(bool is_shaded, const LightSource& shading, int shading_factor, const std::vector<LightSource>& lights);
     void set_shadow_mask_settings(const ShadowMaskSettings& settings);

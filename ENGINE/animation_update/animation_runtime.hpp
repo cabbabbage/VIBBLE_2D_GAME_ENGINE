@@ -34,7 +34,7 @@ public:
     void update();
 
     // Wiring after construction
-    void set_planner(AnimationUpdate* planner) { planner_ = planner; }
+    void set_planner(AnimationUpdate* planner) { planner_iface_ = planner; }
 
     // Query current active path index for an animation
     std::size_t path_index_for(const std::string& anim_id) const;
@@ -66,7 +66,7 @@ private:
     Asset*  self_         = nullptr;
     Assets* assets_owner_ = nullptr;
     vibble::grid::Grid* grid_service_ = nullptr;
-    AnimationUpdate* planner_ = nullptr; // public planner we read plan/intents from
+    AnimationUpdate* planner_iface_ = nullptr; // public planner we read plan/intents from
 
     // Execution state for current plan
     std::size_t stride_index_         = 0;

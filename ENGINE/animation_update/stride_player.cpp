@@ -29,7 +29,7 @@ bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
         stride_index    = 0;
         stride_frame_counter = 0;
         up.switch_to(animation_update::detail::kDefaultAnimation, 0);
-        if (up.planner_) { up.planner_->path_requested = true; }
+        if (up.planner_iface_) { up.planner_iface_->path_requested = true; }
 };
 
     Stride& stride = plan.strides[stride_index];
@@ -52,7 +52,7 @@ bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
     }
 
     if (stride_index == plan.strides.size() - 1 && stride_frame_counter == 0) {
-        if (up.planner_) { up.planner_->path_requested = true; }
+        if (up.planner_iface_) { up.planner_iface_->path_requested = true; }
     }
 
     auto anim_it = self->info->animations.find(self->current_animation);
@@ -119,7 +119,7 @@ bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
         const Stride& next_stride = plan.strides[stride_index];
         up.switch_to(next_stride.animation_id, next_stride.path_index);
         if (stride_index == plan.strides.size() - 1) {
-            if (up.planner_) { up.planner_->path_requested = true; }
+            if (up.planner_iface_) { up.planner_iface_->path_requested = true; }
         }
     }
 

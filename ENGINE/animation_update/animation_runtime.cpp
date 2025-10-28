@@ -75,22 +75,22 @@ AnimationRuntime::AnimationRuntime(Asset* self, Assets* assets)
     : self_(self), assets_owner_(assets), grid_service_(&vibble::grid::global_grid()) {}
 
 void AnimationRuntime::update() {
-    if (!self_ || !self_->info || !planner_) {
+    if (!self_ || !self_->info || !planner_iface_) {
         return;
     }
 
     // Consume any input signal (planner sets this when controllers interacted)
-    const bool got_input = planner_->consume_input_event();
+    const bool got_input = planner_iface_->consume_input_event();
 
     // Follow path plan if present
-    if (!planner_->plan_.strides.empty() &&
-        player_.tick(*this, planner_->plan_, stride_index_, stride_frame_counter_)) {
+    if (!planner_iface_->plan_.strides.empty() &&
+        player_.tick(*this, planner_iface_->plan_, stride_index_, stride_frame_counter_)) {
         just_applied_controller_move_ = false;
         return;
     }
 
     // If controller issued a direct move request, apply it now
-    if (got_input && planner_->has_pending_move()) {
+    if (got_input && planner_iface_->has_pending_move()) {
         apply_pending_move();
         just_applied_controller_move_ = true;
         return;
@@ -124,9 +124,9 @@ void AnimationRuntime::update() {
 }
 
 void AnimationRuntime::apply_pending_move() {
-    if (!planner_ || !self_) return;
+    if (!planner_iface_ || !self_) return;
 
-    const auto req = planner_->consume_move_request();
+    const auto req = planner_iface_->consume_move_request();
     const int  resolution = effective_grid_resolution(std::nullopt);
     const SDL_Point from{ self_->pos.x, self_->pos.y };
     SDL_Point world_delta = convert_delta_to_world(req.delta, resolution);
@@ -165,7 +165,7 @@ void AnimationRuntime::apply_pending_move() {
     }
 
     // Reflect new position as the destination for planners
-    planner_->final_dest = self_->pos;
+    planner_iface_->final_dest = self_->pos;
 
     const std::string resolved = resolve_animation(*self_, req.animation_id);
     if (self_->current_animation != resolved) {
@@ -348,7 +348,6 @@ bool AnimationRuntime::attempt_unstick(SDL_Point from,
     SDL_Point bottom_to   = animation_update::detail::bottom_middle_for(*self_, to);
     SDL_Point push{0, 0};
     std::vector<const Asset*> blocking_neighbors = blockers;
-    const Assets* assets = assets_owner_ ? assets_owner_ : (self_ ? self_->get_assets() : nullptr);
     if (blocking_neighbors.empty()) {
         visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
             if (!neighbor || neighbor == self_ || !neighbor->info) {
@@ -487,13 +486,13 @@ bool AnimationRuntime::attempt_unstick(SDL_Point from,
 }
 
 void AnimationRuntime::mark_progress_toward_checkpoints() {
-    if (!self_ || !self_->info || !planner_) {
+    if (!self_ || !self_->info || !planner_iface_) {
         return;
     }
-    const int visited_thresh = planner_->visited_thresh_;
+    const int visited_thresh = planner_iface_->visited_thresh_;
     const int visited_sq     = visited_thresh * visited_thresh;
-    while (next_checkpoint_index_ < planner_->plan_.sanitized_checkpoints.size()) {
-        const SDL_Point target  = planner_->plan_.sanitized_checkpoints[next_checkpoint_index_];
+    while (next_checkpoint_index_ < planner_iface_->plan_.sanitized_checkpoints.size()) {
+        const SDL_Point target  = planner_iface_->plan_.sanitized_checkpoints[next_checkpoint_index_];
         const int       dist_sq = animation_update::detail::distance_sq(self_->pos, target);
         bool reached = false;
         if (visited_thresh == 0) {
@@ -509,13 +508,13 @@ void AnimationRuntime::mark_progress_toward_checkpoints() {
 }
 
 bool AnimationRuntime::adjust_next_checkpoint(const std::vector<const Asset*>& blockers) {
-    if (!self_ || !self_->info || !planner_) {
+    if (!self_ || !self_->info || !planner_iface_) {
         return false;
     }
     mark_progress_toward_checkpoints();
-    SDL_Point target = (next_checkpoint_index_ < planner_->plan_.sanitized_checkpoints.size())
-                         ? planner_->plan_.sanitized_checkpoints[next_checkpoint_index_]
-                         : planner_->final_dest;
+    SDL_Point target = (next_checkpoint_index_ < planner_iface_->plan_.sanitized_checkpoints.size())
+                         ? planner_iface_->plan_.sanitized_checkpoints[next_checkpoint_index_]
+                         : planner_iface_->final_dest;
     SDL_Point bottom_target = animation_update::detail::bottom_middle_for(*self_, target);
     SDL_Point push{0, 0};
     std::vector<const Asset*> influencing_neighbors;
@@ -579,24 +578,24 @@ bool AnimationRuntime::adjust_next_checkpoint(const std::vector<const Asset*>& b
         add_direction(directions, SDL_Point{ -primary.y, primary.x });
     }
     std::vector<SDL_Point> tail;
-    for (std::size_t i = next_checkpoint_index_ + 1; i < planner_->plan_.sanitized_checkpoints.size(); ++i) {
-        tail.push_back(planner_->plan_.sanitized_checkpoints[i]);
+    for (std::size_t i = next_checkpoint_index_ + 1; i < planner_iface_->plan_.sanitized_checkpoints.size(); ++i) {
+        tail.push_back(planner_iface_->plan_.sanitized_checkpoints[i]);
     }
-    if (tail.empty() || !same_point(tail.back(), planner_->final_dest)) {
-        tail.push_back(planner_->final_dest);
+    if (tail.empty() || !same_point(tail.back(), planner_iface_->final_dest)) {
+        tail.push_back(planner_iface_->final_dest);
     }
     auto try_plan_with_targets = [&](const std::vector<SDL_Point>& targets) {
         if (targets.empty()) return false;
-        auto sanitized = sanitizer_.sanitize(*self_, targets, planner_->visited_thresh_);
+        auto sanitized = sanitizer_.sanitize(*self_, targets, planner_iface_->visited_thresh_);
         if (sanitized.empty()) return false;
-        Plan new_plan = planner_(*self_, sanitized, planner_->visited_thresh_);
+        Plan new_plan = planner_(*self_, sanitized, planner_iface_->visited_thresh_);
         if (new_plan.strides.empty()) return false;
-        planner_->plan_ = std::move(new_plan);
-        planner_->final_dest = planner_->plan_.final_dest;
+        planner_iface_->plan_ = std::move(new_plan);
+        planner_iface_->final_dest = planner_iface_->plan_.final_dest;
         stride_index_ = 0;
         stride_frame_counter_ = 0;
         next_checkpoint_index_ = 0;
-        planner_->path_requested = false;
+        planner_iface_->path_requested = false;
         mark_progress_toward_checkpoints();
         return true;
 };
@@ -641,34 +640,34 @@ bool AnimationRuntime::handle_blocked_path(SDL_Point from,
 }
 
 bool AnimationRuntime::replan_to_destination() {
-    if (!self_ || !self_->info || !planner_) {
+    if (!self_ || !self_->info || !planner_iface_) {
         return false;
     }
-    const int visited_sq = planner_->visited_thresh_ * planner_->visited_thresh_;
-    if (visited_sq > 0 && animation_update::detail::distance_sq(self_->pos, planner_->final_dest) <= visited_sq) {
+    const int visited_sq = planner_iface_->visited_thresh_ * planner_iface_->visited_thresh_;
+    if (visited_sq > 0 && animation_update::detail::distance_sq(self_->pos, planner_iface_->final_dest) <= visited_sq) {
         return false;
     }
     mark_progress_toward_checkpoints();
     std::vector<SDL_Point> checkpoints;
-    for (std::size_t i = next_checkpoint_index_; i < planner_->plan_.sanitized_checkpoints.size(); ++i) {
-        checkpoints.push_back(planner_->plan_.sanitized_checkpoints[i]);
+    for (std::size_t i = next_checkpoint_index_; i < planner_iface_->plan_.sanitized_checkpoints.size(); ++i) {
+        checkpoints.push_back(planner_iface_->plan_.sanitized_checkpoints[i]);
     }
-    if (checkpoints.empty() || !same_point(checkpoints.back(), planner_->final_dest)) {
-        checkpoints.push_back(planner_->final_dest);
+    if (checkpoints.empty() || !same_point(checkpoints.back(), planner_iface_->final_dest)) {
+        checkpoints.push_back(planner_iface_->final_dest);
     }
-    auto sanitized = sanitizer_.sanitize(*self_, checkpoints, planner_->visited_thresh_);
+    auto sanitized = sanitizer_.sanitize(*self_, checkpoints, planner_iface_->visited_thresh_);
     if (sanitized.empty()) {
         return false;
     }
-    Plan new_plan = planner_(*self_, sanitized, planner_->visited_thresh_);
+    Plan new_plan = planner_(*self_, sanitized, planner_iface_->visited_thresh_);
     if (new_plan.strides.empty()) {
         return false;
     }
-    planner_->plan_ = std::move(new_plan);
-    planner_->final_dest = planner_->plan_.final_dest;
+    planner_iface_->plan_ = std::move(new_plan);
+    planner_iface_->final_dest = planner_iface_->plan_.final_dest;
     stride_index_ = 0;
     stride_frame_counter_ = 0;
-    planner_->path_requested = false;
+    planner_iface_->path_requested = false;
     next_checkpoint_index_ = 0;
     mark_progress_toward_checkpoints();
     return true;

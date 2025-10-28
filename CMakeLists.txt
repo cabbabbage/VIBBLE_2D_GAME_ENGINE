@@ -343,7 +343,7 @@ add_executable(manifest_store_tests
     ENGINE/utils/area.cpp
     ENGINE/asset_info_methods/animation_loader.cpp
     ENGINE/asset_info_methods/lighting_loader.cpp
-    ENGINE/asset_info_methods/child_loader.cpp
+    ENGINE/asset_info_methods/asset_child_loader.cpp
     ENGINE/utils/cache_manager.cpp
     ENGINE/utils/generate_faded_mask.cpp
     ENGINE/utils/loading_status_notifier.cpp
@@ -380,7 +380,7 @@ add_executable(asset_info_manifest_tests
     ENGINE/asset/asset_types.cpp
     ENGINE/asset/animation.cpp
     ENGINE/asset_info_methods/lighting_loader.cpp
-    ENGINE/asset_info_methods/child_loader.cpp
+    ENGINE/asset_info_methods/asset_child_loader.cpp
     ENGINE/utils/generate_faded_mask.cpp
     ENGINE/utils/area.cpp
     ENGINE/utils/cache_manager.cpp

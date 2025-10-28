@@ -556,8 +556,8 @@ void AssetList::for_each_candidate(const std::function<void(Asset*)>& f) const {
     auto process_asset = [&](auto&& self, Asset* asset) -> void {
         if (asset == nullptr) return;
         f(asset);
-        for (Asset* child : asset->children) {
-            self(self, child);
+        for (Asset* asset_child : asset->asset_children) {
+            self(self, asset_child);
         }
 };
 

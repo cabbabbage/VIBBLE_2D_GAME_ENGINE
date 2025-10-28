@@ -57,7 +57,7 @@ class Asset {
     bool is_current_animation_locked_in_progress() const;
     bool is_current_animation_last_frame() const;
     bool is_current_animation_looping() const;
-    void add_child(Asset* child);
+    void add_child(Asset* asset_child);
 
     struct ScaleUsageStats {
         float requested_scale = 1.0f;
@@ -123,7 +123,7 @@ class Asset {
     float distance_from_camera = 0.0f;
     float angle_from_camera = 0.0f;
 
-    std::vector<Asset*> children;
+    std::vector<Asset*> asset_children;
     int depth = 0;
     bool is_shaded = false;
     bool dead = false;

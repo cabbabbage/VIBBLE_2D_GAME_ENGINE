@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <numeric>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "asset/Asset.hpp"
 #include "asset/asset_types.hpp"
@@ -314,15 +315,22 @@ void RuntimeLightingSampler::begin_frame() {
 
     if (!assets_) {
         occlusion_cache_.clear();
+        active_chunk_lookup_.clear();
         return;
     }
 
     world::Grid& grid = assets_->world_grid();
     const auto&  active_chunks = grid.active_chunks();
 
+    active_chunk_lookup_.clear();
+    active_chunk_lookup_.reserve(active_chunks.size());
+    for (world::Chunk* chunk : active_chunks) {
+        active_chunk_lookup_.insert(chunk);
+    }
+
     for (auto it = occlusion_cache_.begin(); it != occlusion_cache_.end();) {
         world::Chunk* chunk = it->first;
-        if (std::find(active_chunks.begin(), active_chunks.end(), chunk) == active_chunks.end()) {
+        if (active_chunk_lookup_.find(chunk) == active_chunk_lookup_.end()) {
             it = occlusion_cache_.erase(it);
         } else {
             ++it;

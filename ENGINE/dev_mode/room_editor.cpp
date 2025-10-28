@@ -4586,9 +4586,9 @@ void RoomEditor::respawn_asset_child_spawn_group(Asset* owner, const nlohmann::j
         }
 };
 
-    for (Asset* child : owner->children) {
-        if (child && child->spawn_id == spawn_id) {
-            queue_for_removal(child);
+    for (Asset* asset_child : owner->asset_children) {
+        if (asset_child && asset_child->spawn_id == spawn_id) {
+            queue_for_removal(asset_child);
         }
     }
 
@@ -4603,7 +4603,7 @@ void RoomEditor::respawn_asset_child_spawn_group(Asset* owner, const nlohmann::j
 
     for (Asset* asset : to_remove) {
         if (asset->parent) {
-            auto& siblings = asset->parent->children;
+            auto& siblings = asset->parent->asset_children;
             siblings.erase(std::remove(siblings.begin(), siblings.end(), asset), siblings.end());
             asset->parent = nullptr;
         }
@@ -4635,8 +4635,8 @@ void RoomEditor::respawn_asset_child_spawn_group(Asset* owner, const nlohmann::j
         z_offset = 1;
     }
 
-    std::vector<Asset*> new_children;
-    new_children.reserve(spawned.size());
+    std::vector<Asset*> new_asset_children;
+    new_asset_children.reserve(spawned.size());
     for (auto& uptr : spawned) {
         if (!uptr) {
             continue;
@@ -4646,15 +4646,15 @@ void RoomEditor::respawn_asset_child_spawn_group(Asset* owner, const nlohmann::j
         raw->set_z_offset(z_offset);
         raw->set_hidden(false);
         raw->set_owning_room_name(owner->owning_room_name());
-        new_children.push_back(raw);
+        new_asset_children.push_back(raw);
     }
 
     integrate_spawned_assets(spawned);
-    for (Asset* child : new_children) {
-        if (!child) {
+    for (Asset* asset_child : new_asset_children) {
+        if (!asset_child) {
             continue;
         }
-        owner->children.push_back(child);
+        owner->asset_children.push_back(asset_child);
     }
 }
 

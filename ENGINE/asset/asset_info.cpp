@@ -1,7 +1,7 @@
 #include "asset_info.hpp"
 #include "asset_info_methods/animation_loader.hpp"
 #include "asset/asset_types.hpp"
-#include "asset_info_methods/child_loader.hpp"
+#include "asset_info_methods/asset_child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include <algorithm>
 #include <iomanip>
@@ -1039,7 +1039,7 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
 
 void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
 
-    children = new_children;
+    asset_children = new_children;
 
     nlohmann::json groups = nlohmann::json::array();
     for (const auto& c : new_children) {
