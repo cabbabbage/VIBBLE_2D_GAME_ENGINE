@@ -882,8 +882,6 @@ void AnimationInspectorPanel::announce_focus(FocusTarget target) const {
     }
 }
 
-}
-
 void AnimationInspectorPanel::activate_focus_target(FocusTarget target) {
     switch (target) {
         case FocusTarget::kName:
@@ -934,8 +932,6 @@ void AnimationInspectorPanel::activate_focus_target(FocusTarget target) {
         default:
             break;
     }
-}
-
 }
 
 void AnimationInspectorPanel::refresh_focus_index() const {

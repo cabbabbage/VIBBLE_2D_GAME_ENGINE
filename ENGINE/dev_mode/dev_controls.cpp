@@ -2183,6 +2183,76 @@ void DevControls::configure_header_button_sets() {
 };
     room_buttons.push_back(std::move(regenerate_btn));
 
+    // Add Area: create a room-scoped Area entry and open the Area Tool
+    {
+        MapModeUI::HeaderButtonConfig add_area_btn;
+        add_area_btn.id = "add_area";
+        add_area_btn.label = "Add Area";
+        add_area_btn.momentary = true;
+        add_area_btn.style_override = &DMStyles::CreateButton();
+        add_area_btn.on_toggle = [this](bool) {
+            if (!assets_ || !current_room_) {
+                return;
+            }
+            // Default to a spawning-type area; generate a unique name.
+            const std::string default_type = "spawning";
+            std::string area_name = generate_unique_room_area_name(default_type);
+
+            // Persist a stub immediately into the room JSON (areas array).
+            // This ensures autosave and visibility in room data even before drawing.
+            try {
+                nlohmann::json& root = current_room_->assets_data();
+                if (!root.contains("areas") || !root["areas"].is_array()) {
+                    root["areas"] = nlohmann::json::array();
+                }
+                auto& areas = root["areas"];
+                // Guard against accidental duplicates
+                bool exists = false;
+                for (const auto& entry : areas) {
+                    if (entry.is_object() && entry.value("name", std::string{}) == area_name) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    nlohmann::json stub = nlohmann::json::object({
+                        {"name", area_name},
+                        {"type", default_type},
+                        {"resolution", 3},
+                        {"points", nlohmann::json::array()}
+                    });
+                    areas.push_back(std::move(stub));
+                    current_room_->save_assets_json();
+                    // Invalidate caches that depend on room areas
+                    this->notify_room_area_data_changed();
+                }
+            } catch (...) {
+                // Non-fatal; proceed to open editor regardless
+            }
+
+            // Launch the Area Tool to let the user draw/reshape the polygon
+            if (!asset_area_editor_) {
+                asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
+            }
+            if (asset_area_editor_) {
+                asset_area_editor_->attach_assets(assets_);
+                asset_area_editor_->set_on_saved([this]() {
+                    // When area is saved, ensure caches are refreshed and autosave occurs
+                    this->notify_room_area_data_changed();
+                });
+                if (asset_area_editor_->begin_for_room(current_room_, area_name, default_type)) {
+                    if (map_mode_ui_) {
+                        if (auto* footer = map_mode_ui_->get_footer_bar()) {
+                            std::string label = std::string("Editing Area: ") + area_name;
+                            footer->set_title(label);
+                        }
+                    }
+                }
+            }
+        };
+        room_buttons.push_back(std::move(add_area_btn));
+    }
+
     for (const auto& type : devmode::area_mode::area_types()) {
         MapModeUI::HeaderButtonConfig cfg;
         cfg.id = std::string("area_") + type;
