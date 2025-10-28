@@ -73,6 +73,13 @@ class Asset {
 };
 
     const ScaleUsageStats& last_scale_usage() const { return last_scale_usage_; }
+    struct ScaleVariantState {
+        int   last_variant_index = 0;
+        float hysteresis_min     = 0.0f;
+        float hysteresis_max     = std::numeric_limits<float>::max();
+    };
+
+    const ScaleVariantState& scale_variant_state() const { return scale_variant_state_; }
 
     void set_z_offset(int z);
     void set_shading_group(int x);
@@ -190,13 +197,21 @@ class Asset {
     float        last_scaled_camera_scale_ = -1.0f;
 
     ScaleUsageStats last_scale_usage_{};
+    ScaleVariantState scale_variant_state_{};
 
-    void update_scale_usage(float requested, float texture_scale, float remainder, int variant_index);
+    void update_scale_usage(float requested,
+                            float texture_scale,
+                            float remainder,
+                            int   variant_index,
+                            float hysteresis_min,
+                            float hysteresis_max);
     void clear_render_caches();
     static void destroy_render_cache(RenderTextureCache& cache);
 
     mutable RenderTextureCache shadow_mask_cache_{};
     mutable RenderTextureCache motion_blur_cache_{};
+
+    void reset_scale_variant_state();
 
     TransformSmoothingState translation_smoothing_x_{};
     TransformSmoothingState translation_smoothing_y_{};

@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <SDL.h>
@@ -30,10 +31,27 @@ struct ScaleSelection {
     float requested_scale = 1.0f;
     float stored_scale    = 1.0f;
     float remainder_scale = 1.0f;
+    float hysteresis_min  = 0.0f;
+    float hysteresis_max  = std::numeric_limits<float>::max();
+    int   preload_index   = -1;
 };
 
 struct ScalingLogic {
     using ScaleSteps = std::vector<float>;
+
+    struct HysteresisState {
+        int   last_index = 0;
+        float min_scale  = 0.0f;
+        float max_scale  = std::numeric_limits<float>::max();
+    };
+
+    struct HysteresisOptions {
+        float margin         = 0.05f;
+        float preload_margin = 0.02f;
+    };
+
+    static constexpr float kDefaultHysteresisMargin = 0.05f;
+    static constexpr float kDefaultPreloadMargin    = 0.02f;
 
     static void SetQualityCap(float cap) {
         if (!std::isfinite(cap) || cap <= 0.0f) {
@@ -152,62 +170,128 @@ struct ScalingLogic {
     }
 
     static inline ScaleSelection Choose(float desired_scale) {
-        return Choose(desired_scale, DefaultScaleSteps());
+        return Choose(desired_scale,
+                      DefaultScaleSteps(),
+                      HysteresisState{},
+                      desired_scale,
+                      HysteresisOptions{});
     }
 
     static inline ScaleSelection Choose(float desired_scale, const ScaleSteps& steps) {
-        ScaleSelection result{};
+        return Choose(desired_scale,
+                      steps,
+                      HysteresisState{},
+                      desired_scale,
+                      HysteresisOptions{});
+    }
+
+    static inline ScaleSelection Choose(float desired_scale,
+                                        const ScaleSteps& steps,
+                                        const HysteresisState& state,
+                                        float smoothed_scale,
+                                        HysteresisOptions options = HysteresisOptions{}) {
+        ScaleSelection base = choose_closest(desired_scale, steps);
         if (steps.empty()) {
-            result.requested_scale = std::isfinite(desired_scale) && desired_scale > 0.0f ? desired_scale : 1.0f;
-            result.stored_scale    = 1.0f;
-            result.index           = 0;
-            result.remainder_scale = result.requested_scale;
-            return result;
-        }
-        if (!std::isfinite(desired_scale)) {
-            desired_scale = 1.0f;
-        }
-        if (desired_scale <= 0.0f) {
-            desired_scale = steps.back();
+            return base;
         }
 
-        result.requested_scale = desired_scale;
+        if (!std::isfinite(options.margin) || options.margin < 0.0f) {
+            options.margin = kDefaultHysteresisMargin;
+        }
+        if (!std::isfinite(options.preload_margin) || options.preload_margin < 0.0f) {
+            options.preload_margin = kDefaultPreloadMargin;
+        }
 
-        float best_diff = std::numeric_limits<float>::max();
-        float chosen_scale = steps.front();
-        int   chosen_index = 0;
+        const float safe_smoothed = (std::isfinite(smoothed_scale) && smoothed_scale > 0.0f)
+                                        ? smoothed_scale
+                                        : base.requested_scale;
 
-        const float quality_cap = QualityCap();
-        const bool enforce_cap = std::isfinite(quality_cap) && quality_cap > 0.0f && quality_cap < 0.999f;
-        bool has_allowed = false;
-        if (enforce_cap) {
-            for (float candidate : steps) {
-                if (candidate <= quality_cap + 1e-4f) {
-                    has_allowed = true;
-                    break;
-                }
+        HysteresisState current = state;
+        const int max_index = static_cast<int>(steps.size() - 1);
+        current.last_index = std::clamp(current.last_index, 0, max_index);
+        if (!std::isfinite(current.min_scale) || current.min_scale < 0.0f) {
+            current.min_scale = 0.0f;
+        }
+        if (!std::isfinite(current.max_scale) || current.max_scale < current.min_scale) {
+            current.max_scale = std::numeric_limits<float>::max();
+        }
+
+        int candidate = current.last_index;
+        auto bounds = variant_bounds(steps, candidate, options.margin);
+        float min_bound = bounds.first;
+        float max_bound = bounds.second;
+
+        if (safe_smoothed >= current.min_scale && safe_smoothed <= current.max_scale) {
+            // Stay with previous variant while within hysteresis window.
+            candidate = current.last_index;
+            bounds = variant_bounds(steps, candidate, options.margin);
+            min_bound = bounds.first;
+            max_bound = bounds.second;
+        } else if (safe_smoothed < current.min_scale && candidate < max_index) {
+            do {
+                candidate = std::min(candidate + 1, max_index);
+                bounds = variant_bounds(steps, candidate, options.margin);
+                min_bound = bounds.first;
+                max_bound = bounds.second;
+            } while (safe_smoothed < min_bound && candidate < max_index);
+        } else if (safe_smoothed > current.max_scale && candidate > 0) {
+            do {
+                candidate = std::max(candidate - 1, 0);
+                bounds = variant_bounds(steps, candidate, options.margin);
+                min_bound = bounds.first;
+                max_bound = bounds.second;
+            } while (safe_smoothed > max_bound && candidate > 0);
+        } else {
+            candidate = base.index;
+            bounds = variant_bounds(steps, candidate, options.margin);
+            min_bound = bounds.first;
+            max_bound = bounds.second;
+        }
+
+        if (candidate < base.index) {
+            candidate = base.index;
+            bounds = variant_bounds(steps, candidate, options.margin);
+            min_bound = bounds.first;
+            max_bound = bounds.second;
+        }
+
+        ScaleSelection result = base;
+        result.index = candidate;
+        result.stored_scale = steps[candidate];
+        if (result.stored_scale <= 0.0f) {
+            result.stored_scale = 1.0f;
+        }
+        result.remainder_scale = (result.stored_scale > 0.0f)
+                                     ? (result.requested_scale / result.stored_scale)
+                                     : 1.0f;
+        bounds = variant_bounds(steps, candidate, options.margin);
+        result.hysteresis_min = bounds.first;
+        result.hysteresis_max = bounds.second;
+
+        result.preload_index = -1;
+        float best_distance = std::numeric_limits<float>::max();
+
+        if (candidate < max_index) {
+            const float boundary = 0.5f * (steps[candidate] + steps[candidate + 1]);
+            const float diff = std::fabs(safe_smoothed - boundary);
+            if (diff <= options.preload_margin) {
+                result.preload_index = candidate + 1;
+                best_distance       = diff;
+            }
+        }
+        if (candidate > 0) {
+            const float boundary = 0.5f * (steps[candidate] + steps[candidate - 1]);
+            const float diff = std::fabs(safe_smoothed - boundary);
+            if (diff <= options.preload_margin && diff < best_distance && (candidate - 1) >= base.index) {
+                result.preload_index = candidate - 1;
+                best_distance       = diff;
             }
         }
 
-        for (std::size_t i = 0; i < steps.size(); ++i) {
-            const float candidate = steps[i];
-            if (enforce_cap && has_allowed && candidate > quality_cap + 1e-4f) {
-                continue;
-            }
-            const float diff = std::fabs(candidate - desired_scale);
-            if (diff < best_diff - 1e-4f) {
-                best_diff    = diff;
-                chosen_scale = candidate;
-                chosen_index = static_cast<int>(i);
-            } else if (std::fabs(diff - best_diff) <= 1e-4f && candidate > chosen_scale) {
-                chosen_scale = candidate;
-                chosen_index = static_cast<int>(i);
-            }
+        if (result.preload_index < 0 || result.preload_index > max_index) {
+            result.preload_index = -1;
         }
 
-        result.index        = chosen_index;
-        result.stored_scale = chosen_scale;
-        result.remainder_scale = (chosen_scale > 0.0f) ? (desired_scale / chosen_scale) : 1.0f;
         return result;
     }
 
@@ -289,6 +373,92 @@ struct ScalingLogic {
     }
 
 private:
+    static inline ScaleSelection choose_closest(float desired_scale, const ScaleSteps& steps) {
+        ScaleSelection result{};
+        if (steps.empty()) {
+            result.requested_scale = std::isfinite(desired_scale) && desired_scale > 0.0f ? desired_scale : 1.0f;
+            result.stored_scale    = 1.0f;
+            result.index           = 0;
+            result.remainder_scale = result.requested_scale;
+            return result;
+        }
+        float sanitized = desired_scale;
+        if (!std::isfinite(sanitized)) {
+            sanitized = 1.0f;
+        }
+        if (sanitized <= 0.0f) {
+            sanitized = steps.back();
+        }
+
+        result.requested_scale = sanitized;
+
+        float best_diff    = std::numeric_limits<float>::max();
+        float chosen_scale = steps.front();
+        int   chosen_index = 0;
+
+        const float quality_cap = QualityCap();
+        const bool  enforce_cap = std::isfinite(quality_cap) && quality_cap > 0.0f && quality_cap < 0.999f;
+        bool has_allowed = false;
+        if (enforce_cap) {
+            for (float candidate : steps) {
+                if (candidate <= quality_cap + 1e-4f) {
+                    has_allowed = true;
+                    break;
+                }
+            }
+        }
+
+        for (std::size_t i = 0; i < steps.size(); ++i) {
+            const float candidate = steps[i];
+            if (enforce_cap && has_allowed && candidate > quality_cap + 1e-4f) {
+                continue;
+            }
+            const float diff = std::fabs(candidate - sanitized);
+            if (diff < best_diff - 1e-4f) {
+                best_diff    = diff;
+                chosen_scale = candidate;
+                chosen_index = static_cast<int>(i);
+            } else if (std::fabs(diff - best_diff) <= 1e-4f && candidate > chosen_scale) {
+                chosen_scale = candidate;
+                chosen_index = static_cast<int>(i);
+            }
+        }
+
+        result.index        = chosen_index;
+        result.stored_scale = chosen_scale;
+        result.remainder_scale = (chosen_scale > 0.0f) ? (sanitized / chosen_scale) : 1.0f;
+        return result;
+    }
+
+    static inline std::pair<float, float> variant_bounds(const ScaleSteps& steps,
+                                                         int index,
+                                                         float margin) {
+        if (steps.empty()) {
+            return {0.0f, std::numeric_limits<float>::max()};
+        }
+        const float safe_margin = (std::isfinite(margin) && margin > 0.0f) ? margin : 0.0f;
+        const float current     = steps[std::clamp(index, 0, static_cast<int>(steps.size() - 1))];
+        float min_bound = 0.0f;
+        float max_bound = std::numeric_limits<float>::max();
+
+        if (index + 1 < static_cast<int>(steps.size())) {
+            const float boundary = 0.5f * (current + steps[index + 1]);
+            min_bound = std::max(0.0f, boundary - safe_margin);
+        }
+        if (index > 0) {
+            const float boundary = 0.5f * (current + steps[index - 1]);
+            max_bound = boundary + safe_margin;
+        }
+
+        if (min_bound > max_bound) {
+            const float midpoint = 0.5f * (min_bound + max_bound);
+            min_bound            = std::min(min_bound, midpoint);
+            max_bound            = std::max(max_bound, midpoint);
+        }
+
+        return {min_bound, max_bound};
+    }
+
     struct ProfileEntry {
         ScaleSteps    steps;
         std::uint64_t revision = 0;

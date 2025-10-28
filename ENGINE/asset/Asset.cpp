@@ -15,6 +15,7 @@
 #include <mutex>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <SDL.h>
 
 namespace {
@@ -161,10 +162,12 @@ Asset::Asset(const Asset& o)
 , last_scaled_camera_scale_(-1.0f)
 , last_scale_usage_()
 , final_texture_revision_(o.final_texture_revision_)
+, scale_variant_state_(o.scale_variant_state_)
 {
         clear_downscale_cache();
         clear_render_caches();
         last_scale_usage_ = o.last_scale_usage_;
+        scale_variant_state_ = o.scale_variant_state_;
         cached_grid_residency_    = o.cached_grid_residency_;
         has_cached_grid_residency_ = o.has_cached_grid_residency_;
         translation_smoothing_x_  = o.translation_smoothing_x_;
@@ -218,6 +221,7 @@ Asset& Asset::operator=(const Asset& o) {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = o.last_scale_usage_;
+        scale_variant_state_      = o.scale_variant_state_;
         cached_grid_residency_    = o.cached_grid_residency_;
         has_cached_grid_residency_ = o.has_cached_grid_residency_;
         translation_smoothing_x_  = o.translation_smoothing_x_;
@@ -712,6 +716,7 @@ void Asset::invalidate_downscale_cache() {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = {};
+        reset_scale_variant_state();
 }
 
 void Asset::clear_downscale_cache() {
@@ -741,6 +746,13 @@ void Asset::clear_downscale_cache() {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = {};
+        reset_scale_variant_state();
+}
+
+void Asset::reset_scale_variant_state() {
+        scale_variant_state_.last_variant_index = 0;
+        scale_variant_state_.hysteresis_min     = 0.0f;
+        scale_variant_state_.hysteresis_max     = std::numeric_limits<float>::max();
 }
 
 void Asset::refresh_cached_dimensions() {
@@ -776,6 +788,7 @@ void Asset::refresh_cached_dimensions() {
 void Asset::on_scale_factor_changed() {
         clear_downscale_cache();
         last_scale_usage_ = {};
+        reset_scale_variant_state();
         refresh_cached_dimensions();
 
         shadow_mask_cache_.width  = 0;
@@ -801,7 +814,12 @@ void Asset::on_scale_factor_changed() {
         }
 }
 
-void Asset::update_scale_usage(float requested, float texture_scale, float remainder, int variant_index) {
+void Asset::update_scale_usage(float requested,
+                               float texture_scale,
+                               float remainder,
+                               int   variant_index,
+                               float hysteresis_min,
+                               float hysteresis_max) {
         if (!std::isfinite(requested) || requested <= 0.0f) {
                 requested = 1.0f;
         }
@@ -816,7 +834,15 @@ void Asset::update_scale_usage(float requested, float texture_scale, float remai
         last_scale_usage_.remainder_scale = remainder;
         const int max_index = downscale_cache_.empty() ? 0 : static_cast<int>(downscale_cache_.size() - 1);
         last_scale_usage_.variant_index   = std::clamp(variant_index, 0, max_index);
-
+        scale_variant_state_.last_variant_index = last_scale_usage_.variant_index;
+        if (!std::isfinite(hysteresis_min) || hysteresis_min < 0.0f) {
+                hysteresis_min = 0.0f;
+        }
+        if (!std::isfinite(hysteresis_max) || hysteresis_max <= hysteresis_min) {
+                hysteresis_max = std::numeric_limits<float>::max();
+        }
+        scale_variant_state_.hysteresis_min = hysteresis_min;
+        scale_variant_state_.hysteresis_max = std::max(hysteresis_max, hysteresis_min);
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }
