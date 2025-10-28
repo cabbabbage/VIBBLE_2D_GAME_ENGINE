@@ -31,8 +31,6 @@ struct Chunk {
 
     struct ChunkShadowParameters {
 
-        float scale = 1.0f;
-
         float opacity = 1.0f;
 
         float offset_x_percent = 0.0f;
@@ -41,8 +39,6 @@ struct Chunk {
 
         float offset_x_px = 0.0f;
         float offset_y_px = 0.0f;
-
-        float parallax_intensity_percent = 0.0f;
 };
 
     struct ChunkShadowHistory {
@@ -189,7 +185,6 @@ public:
         float max_offset_y_px         = 48.0f;
 
         float opacity_sensitivity_percent = 50.0f;
-        float parallax_percent        = 0.0f;
         int   frame_blend_falloff_frames = 100;
         float sampling_static_weight  = 0.0f;
         float sampling_dynamic_weight = 1.0f;

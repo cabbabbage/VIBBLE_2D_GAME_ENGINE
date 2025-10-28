@@ -12,11 +12,7 @@ struct ReactiveShadowSettings {
         float vertical_falloff   = 1.0f;
         float max_offset_x       = 0.0f;
         float max_offset_y       = 0.0f;
-        float shadow_scale       = 1.0f;
-        int   min_scale_percent  = 80;
-        int   max_scale_percent  = 120;
         float map_light_dir_offset_strength = 0.5f;
-        float parallax_percent              = 0.0f;
         int   search_radius      = 2;
 
         bool operator==(const VirtualLightMapSettings& other) const {
@@ -24,11 +20,7 @@ struct ReactiveShadowSettings {
                    vertical_falloff == other.vertical_falloff &&
                    max_offset_x == other.max_offset_x &&
                    max_offset_y == other.max_offset_y &&
-                   shadow_scale == other.shadow_scale &&
-                   min_scale_percent == other.min_scale_percent &&
-                   max_scale_percent == other.max_scale_percent &&
                    map_light_dir_offset_strength == other.map_light_dir_offset_strength &&
-                   parallax_percent == other.parallax_percent &&
                    search_radius == other.search_radius;
         }
         bool operator!=(const VirtualLightMapSettings& other) const { return !(*this == other); }
@@ -36,8 +28,6 @@ struct ReactiveShadowSettings {
 
     float opacity_strength  = 1.0f;
     float opacity_sensitivity_percent = 50.0f;
-    float parallax_strength = 1.0f;
-    float scale_strength    = 1.0f;
     int   frame_blend_falloff_frames = 100;
 
     struct ShadowResponseLutEntry {
@@ -76,8 +66,6 @@ struct ReactiveShadowSettings {
         return virtual_light_map == other.virtual_light_map &&
                opacity_strength == other.opacity_strength &&
                opacity_sensitivity_percent == other.opacity_sensitivity_percent &&
-               parallax_strength == other.parallax_strength &&
-               scale_strength == other.scale_strength &&
                frame_blend_falloff_frames == other.frame_blend_falloff_frames &&
                response_lut == other.response_lut &&
                sampling_weights == other.sampling_weights;
@@ -99,20 +87,11 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.virtual_light_map.vertical_falloff   = clampf(out.virtual_light_map.vertical_falloff, 0.0f, 10.0f);
     out.virtual_light_map.max_offset_x       = clampf(out.virtual_light_map.max_offset_x, 0.0f, 500.0f);
     out.virtual_light_map.max_offset_y       = clampf(out.virtual_light_map.max_offset_y, 0.0f, 500.0f);
-    out.virtual_light_map.shadow_scale       = clampf(out.virtual_light_map.shadow_scale, 0.0f, 10.0f);
-    out.virtual_light_map.min_scale_percent = clampi(out.virtual_light_map.min_scale_percent, 10, 500);
-    out.virtual_light_map.max_scale_percent = clampi(out.virtual_light_map.max_scale_percent, 10, 500);
-    if (out.virtual_light_map.min_scale_percent > out.virtual_light_map.max_scale_percent) {
-        std::swap(out.virtual_light_map.min_scale_percent, out.virtual_light_map.max_scale_percent);
-    }
     out.virtual_light_map.map_light_dir_offset_strength =
         clampf(out.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
-    out.virtual_light_map.parallax_percent = clampf(out.virtual_light_map.parallax_percent, 0.0f, 100.0f);
     out.virtual_light_map.search_radius      = clampi(out.virtual_light_map.search_radius, 0, 64);
     out.opacity_strength                     = clampf(out.opacity_strength, 0.0f, 10.0f);
     out.opacity_sensitivity_percent          = clampf(out.opacity_sensitivity_percent, 0.0f, 100.0f);
-    out.parallax_strength                    = clampf(out.parallax_strength, 0.0f, 10.0f);
-    out.scale_strength                       = clampf(out.scale_strength, 0.0f, 10.0f);
     out.frame_blend_falloff_frames = clampi(out.frame_blend_falloff_frames, 0, 200);
 
     auto sanitize_entry = [](ReactiveShadowSettings::ShadowResponseLutEntry entry) {

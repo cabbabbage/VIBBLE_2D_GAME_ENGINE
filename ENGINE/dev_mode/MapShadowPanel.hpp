@@ -70,11 +70,8 @@ private:
     std::unique_ptr<DMSlider> max_offset_x_{};
     std::unique_ptr<DMSlider> max_offset_y_{};
     std::unique_ptr<DMSlider> opacity_sensitivity_percent_{};
-    std::unique_ptr<DMSlider> min_scale_percent_{};
-    std::unique_ptr<DMSlider> max_scale_percent_{};
     std::unique_ptr<DMSlider> frame_blend_falloff_frames_{};
     std::unique_ptr<DMSlider> map_light_dir_strength_{};
-    std::unique_ptr<DMSlider> parallax_percent_{};
     std::unique_ptr<DMSlider> search_radius_{};
 
 };

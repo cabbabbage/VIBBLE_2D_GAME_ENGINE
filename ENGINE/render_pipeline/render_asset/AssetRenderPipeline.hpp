@@ -36,7 +36,6 @@ struct StageContext {
     SDL_Rect      screen_rect{ 0, 0, 0, 0 };
     SDL_FPoint    screen_center{ 0.0f, 0.0f };
     float         reference_screen_height = 1.0f;
-    float         base_shadow_scale       = 1.0f;
     float         base_shadow_opacity     = 204.0f / 255.0f;
     int           screen_width_px         = 0;
     int           screen_height_px        = 0;

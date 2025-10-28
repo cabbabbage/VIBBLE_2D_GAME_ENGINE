@@ -991,7 +991,6 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
             detail_lines.push_back("Shadow Scale: " + format_float(snap->shadow.scale, 3));
             detail_lines.push_back("Shadow Offset X%: " + format_float(snap->shadow.offset_x_percent, 3));
             detail_lines.push_back("Shadow Offset Y%: " + format_float(snap->shadow.offset_y_percent, 3));
-            detail_lines.push_back("Shadow Parallax%: " + format_float(snap->shadow.parallax_intensity_percent, 3));
         }
 
         detail_lines.push_back("");
@@ -1243,11 +1242,8 @@ render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reac
     settings.virtual_light_map.max_offset_x = static_cast<float>( load_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x));
     settings.virtual_light_map.max_offset_y = static_cast<float>( load_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y));
     settings.opacity_sensitivity_percent = static_cast<float>( load_number(make_setting_key("opacity_sensitivity_percent"), settings.opacity_sensitivity_percent));
-    settings.virtual_light_map.min_scale_percent = static_cast<int>(std::lround(load_number( make_setting_key("virtual_light_map.min_scale_percent"), static_cast<double>(settings.virtual_light_map.min_scale_percent))));
-    settings.virtual_light_map.max_scale_percent = static_cast<int>(std::lround(load_number( make_setting_key("virtual_light_map.max_scale_percent"), static_cast<double>(settings.virtual_light_map.max_scale_percent))));
     settings.frame_blend_falloff_frames = static_cast<int>(std::lround(load_number( make_setting_key("frame_blend_falloff_frames"), static_cast<double>(settings.frame_blend_falloff_frames))));
     settings.virtual_light_map.map_light_dir_offset_strength = static_cast<float>(load_number( make_setting_key("virtual_light_map.map_light_dir_offset_strength"), settings.virtual_light_map.map_light_dir_offset_strength));
-    settings.virtual_light_map.parallax_percent = static_cast<float>(load_number( make_setting_key("virtual_light_map.parallax_percent"), settings.virtual_light_map.parallax_percent));
     settings.virtual_light_map.search_radius = static_cast<int>( std::lround(load_number(make_setting_key("virtual_light_map.search_radius"), static_cast<double>(settings.virtual_light_map.search_radius))));
     return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
 }
@@ -1259,11 +1255,8 @@ void MapLightPreviewPanel::persist_reactive_settings_to_dev_settings(const rende
     save_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x);
     save_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y);
     save_number(make_setting_key("opacity_sensitivity_percent"), settings.opacity_sensitivity_percent);
-    save_number(make_setting_key("virtual_light_map.min_scale_percent"), settings.virtual_light_map.min_scale_percent);
-    save_number(make_setting_key("virtual_light_map.max_scale_percent"), settings.virtual_light_map.max_scale_percent);
     save_number(make_setting_key("frame_blend_falloff_frames"), settings.frame_blend_falloff_frames);
     save_number(make_setting_key("virtual_light_map.map_light_dir_offset_strength"), settings.virtual_light_map.map_light_dir_offset_strength);
-    save_number(make_setting_key("virtual_light_map.parallax_percent"), settings.virtual_light_map.parallax_percent);
     save_number(make_setting_key("virtual_light_map.search_radius"), settings.virtual_light_map.search_radius);
 }
 

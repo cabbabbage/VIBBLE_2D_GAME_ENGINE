@@ -83,7 +83,6 @@ const render_pipeline::shading::ReactiveShadowSettings* StageContext::reactive_s
 }
 
 void StageContext::update_projection(Asset& asset) {
-    base_shadow_scale       = 1.0f;
     base_shadow_opacity     = 204.0f / 255.0f;
     screen_rect             = SDL_Rect{ 0, 0, 0, 0 };
     screen_center           = SDL_FPoint{ 0.0f, 0.0f };

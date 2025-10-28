@@ -10,11 +10,62 @@
 
 #include "core/AssetsManager.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
+#include "dev_mode/dm_styles.hpp"
+#include "dev_mode/font_cache.hpp"
 #include "dev_mode/shared/formatting.hpp"
 #include "utils/input.hpp"
 
 namespace {
 constexpr int kDefaultPanelWidth = DockableCollapsible::kDefaultFloatingContentWidth;
+
+class SliderHelpLabel : public Widget {
+public:
+    explicit SliderHelpLabel(std::string text) : text_(std::move(text)) {}
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int  height_for_width(int) const override {
+        const DMLabelStyle& style = DMStyles::Label();
+        int                 lines = 1;
+        for (char c : text_) {
+            if (c == '\n') {
+                ++lines;
+            }
+        }
+        lines = std::max(1, lines);
+        return lines * (style.font_size + DMSpacing::small_gap());
+    }
+    bool handle_event(const SDL_Event&) override { return false; }
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) {
+            return;
+        }
+        const DMLabelStyle& style = DMStyles::Label();
+        const int           line_height = style.font_size + DMSpacing::small_gap();
+        int                 y = rect_.y;
+        std::string         current;
+        auto flush_line = [&](const std::string& line) {
+            if (!line.empty()) {
+                DrawLabelText(renderer, line, rect_.x, y, style);
+            }
+            y += line_height;
+        };
+        for (char c : text_) {
+            if (c == '\n') {
+                flush_line(current);
+                current.clear();
+            } else {
+                current.push_back(c);
+            }
+        }
+        flush_line(current);
+    }
+    bool wants_full_row() const override { return true; }
+
+private:
+    std::string text_;
+    SDL_Rect    rect_{0, 0, 0, 0};
+};
 
 std::unique_ptr<DMSlider> make_scaled_slider(const std::string& label,
                                              float min_value,
@@ -174,51 +225,6 @@ void MapShadowPanel::build_ui() {
         opacity_sensitivity_percent_->set_defer_commit_until_unfocus(false);
     }
 
-    const int min_scale_value = std::clamp(vsettings.min_scale_percent, 10, 500);
-    const int max_scale_value = std::clamp(vsettings.max_scale_percent, 10, 500);
-    min_scale_percent_        = std::make_unique<DMSlider>("Min Scale %", 10, 500, min_scale_value);
-    max_scale_percent_        = std::make_unique<DMSlider>("Max Scale %", 10, 500, max_scale_value);
-    if (min_scale_percent_) {
-        min_scale_percent_->set_defer_commit_until_unfocus(false);
-        min_scale_percent_->set_value_formatter([](int value,
-                                                   std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
-                                                   -> std::string_view {
-            const int clamped = std::clamp(value, 0, 999);
-            const int written = std::snprintf(buffer.data(), buffer.size(), "%d%%", clamped);
-            if (written <= 0) {
-                return {};
-            }
-            return std::string_view(buffer.data(), static_cast<std::size_t>(written));
-        });
-        min_scale_percent_->set_value_parser([](const std::string& text) -> std::optional<int> {
-            try {
-                return std::stoi(text);
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
-    }
-    if (max_scale_percent_) {
-        max_scale_percent_->set_defer_commit_until_unfocus(false);
-        max_scale_percent_->set_value_formatter([](int value,
-                                                   std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
-                                                   -> std::string_view {
-            const int clamped = std::clamp(value, 0, 999);
-            const int written = std::snprintf(buffer.data(), buffer.size(), "%d%%", clamped);
-            if (written <= 0) {
-                return {};
-            }
-            return std::string_view(buffer.data(), static_cast<std::size_t>(written));
-        });
-        max_scale_percent_->set_value_parser([](const std::string& text) -> std::optional<int> {
-            try {
-                return std::stoi(text);
-            } catch (...) {
-                return std::nullopt;
-            }
-        });
-    }
-
     const int blur_frames_value = std::clamp(current_settings_.frame_blend_falloff_frames, 0, 200);
     frame_blend_falloff_frames_ =
         std::make_unique<DMSlider>("Motion Blur Frames", 0, 200, blur_frames_value);
@@ -244,7 +250,6 @@ void MapShadowPanel::build_ui() {
     }
 
     map_light_dir_strength_ = make_scaled_slider("Directional Offset Strength", 0.0f, 1.0f, vsettings.map_light_dir_offset_strength, 100, 2);
-    parallax_percent_ = make_scaled_slider("Parallax %", 0.0f, 100.0f, vsettings.parallax_percent, 100, 1);
 
     const int search_radius_value = std::clamp(vsettings.search_radius, 0, 128);
     search_radius_ = std::make_unique<DMSlider>("Search Radius (cells)", 0, 128, search_radius_value);
@@ -269,26 +274,26 @@ void MapShadowPanel::build_ui() {
         });
     }
 
-    auto add_slider_row = [&](std::unique_ptr<DMSlider>& slider) {
+    auto add_slider_with_help = [&](std::unique_ptr<DMSlider>& slider, const std::string& help_text) {
         if (!slider) {
             return;
         }
-        auto widget = std::make_unique<SliderWidget>(slider.get());
-        rows.push_back({widget.get()});
-        widget_wrappers_.push_back(std::move(widget));
+        auto slider_widget = std::make_unique<SliderWidget>(slider.get());
+        auto help_widget   = std::make_unique<SliderHelpLabel>(help_text);
+        rows.push_back({slider_widget.get()});
+        rows.push_back({help_widget.get()});
+        widget_wrappers_.push_back(std::move(slider_widget));
+        widget_wrappers_.push_back(std::move(help_widget));
 };
 
-    add_slider_row(horizontal_falloff_);
-    add_slider_row(vertical_falloff_);
-    add_slider_row(max_offset_x_);
-    add_slider_row(max_offset_y_);
-    add_slider_row(opacity_sensitivity_percent_);
-    add_slider_row(min_scale_percent_);
-    add_slider_row(max_scale_percent_);
-    add_slider_row(frame_blend_falloff_frames_);
-    add_slider_row(map_light_dir_strength_);
-    add_slider_row(parallax_percent_);
-    add_slider_row(search_radius_);
+    add_slider_with_help(horizontal_falloff_, "Lower: tighter horizontal fade. Higher: spreads effect wider.");
+    add_slider_with_help(vertical_falloff_, "Lower: tighter vertical fade. Higher: spreads effect taller.");
+    add_slider_with_help(max_offset_x_, "Lower: limits sideways shift. Higher: allows more horizontal movement.");
+    add_slider_with_help(max_offset_y_, "Lower: keeps shadows close vertically. Higher: lets them stretch farther up/down.");
+    add_slider_with_help(opacity_sensitivity_percent_, "Lower: react to local brightness. Higher: follow scene-wide light levels.");
+    add_slider_with_help(frame_blend_falloff_frames_, "Lower: changes respond instantly. Higher: smooth changes across more frames.");
+    add_slider_with_help(map_light_dir_strength_, "Lower: ignore directional light push. Higher: follow main light direction strongly.");
+    add_slider_with_help(search_radius_, "Lower: sample nearby cells. Higher: gather lighting from a wider area.");
 
     set_rows(rows);
 }
@@ -307,16 +312,10 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
     if (max_offset_y_) max_offset_y_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_y * 100.0f)));
     if (opacity_sensitivity_percent_)
         opacity_sensitivity_percent_->set_value( static_cast<int>(std::lround(std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f))));
-    if (min_scale_percent_)
-        min_scale_percent_->set_value(std::clamp(settings.virtual_light_map.min_scale_percent, 10, 500));
-    if (max_scale_percent_)
-        max_scale_percent_->set_value(std::clamp(settings.virtual_light_map.max_scale_percent, 10, 500));
     if (frame_blend_falloff_frames_)
         frame_blend_falloff_frames_->set_value(std::clamp(settings.frame_blend_falloff_frames, 0, 200));
     if (map_light_dir_strength_)
         map_light_dir_strength_->set_value(static_cast<int>(std::round(settings.virtual_light_map.map_light_dir_offset_strength * 100.0f)));
-    if (parallax_percent_)
-        parallax_percent_->set_value(static_cast<int>(std::round(settings.virtual_light_map.parallax_percent * 100.0f)));
     if (search_radius_) search_radius_->set_value(std::clamp(settings.virtual_light_map.search_radius, 0, 128));
     applying_ui_ = false;
 }
@@ -332,22 +331,12 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
         settings.opacity_sensitivity_percent =
             static_cast<float>(std::clamp(opacity_sensitivity_percent_->displayed_value(), 0, 100));
     }
-    if (min_scale_percent_) {
-        settings.virtual_light_map.min_scale_percent =
-            std::clamp(min_scale_percent_->displayed_value(), 10, 500);
-    }
-    if (max_scale_percent_) {
-        settings.virtual_light_map.max_scale_percent =
-            std::clamp(max_scale_percent_->displayed_value(), 10, 500);
-    }
     if (frame_blend_falloff_frames_) {
         settings.frame_blend_falloff_frames =
             std::clamp(frame_blend_falloff_frames_->displayed_value(), 0, 200);
     }
     settings.virtual_light_map.map_light_dir_offset_strength =
         read_scaled_slider(map_light_dir_strength_, 100, settings.virtual_light_map.map_light_dir_offset_strength);
-    settings.virtual_light_map.parallax_percent =
-        read_scaled_slider(parallax_percent_, 100, settings.virtual_light_map.parallax_percent);
     if (search_radius_) {
         settings.virtual_light_map.search_radius = std::clamp(search_radius_->displayed_value(), 0, 128);
     }

@@ -3,7 +3,6 @@
 #include "asset/Asset.hpp"
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
-#include "render/camera.hpp"
 #include "world/chunk.hpp"
 
 #include <algorithm>
@@ -11,42 +10,6 @@
 #include <cstddef>
 
 namespace render_pipeline::shading {
-
-namespace {
-
-float compute_parallax_shift(const StageContext& context, const Asset& asset, int height, float weight) {
-    if (!context.lighting || weight <= 0.0f) {
-        return 0.0f;
-    }
-    const camera& cam = context.camera_view();
-    SDL_Point world_pos{ asset.pos.x, asset.pos.y };
-    SDL_Point baseline = cam.map_to_screen(world_pos);
-
-    float asset_scale = 1.0f;
-    if (asset.info && std::isfinite(asset.info->scale_factor) && asset.info->scale_factor >= 0.0f) {
-        asset_scale = asset.info->scale_factor;
-    }
-    const float cam_scale = cam.get_scale();
-    float       inv_scale = 1.0f;
-    if (std::isfinite(cam_scale) && cam_scale > 1e-6f) {
-        inv_scale = 1.0f / cam_scale;
-    }
-
-    int effective_height = height > 0 ? height : context.height;
-    if (effective_height <= 0) {
-        effective_height = 1;
-    }
-    const float asset_screen_height = static_cast<float>(effective_height) * asset_scale * inv_scale;
-    const float reference_height = context.reference_screen_height > 0.0f
-                                       ? context.reference_screen_height
-                                       : 1.0f;
-
-    camera::RenderEffects effects = cam.compute_render_effects(world_pos, asset_screen_height, reference_height);
-    const float parallax_px = effects.parallax_offset_x;
-    return parallax_px * weight;
-}
-
-}
 
 void ClearShadowStateFor(const Asset*) {}
 
@@ -203,17 +166,14 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     }
     SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
 
-    float opacity          = 1.0f;
-    float scale            = 1.0f;
-    float offset_x         = 0.0f;
-    float offset_y         = 0.0f;
-    float parallax_percent = 0.0f;
+    float opacity  = 1.0f;
+    float offset_x = 0.0f;
+    float offset_y = 0.0f;
 
     if (const LightMap* vmap = context.light_map()) {
         if (auto data = vmap->get_shadow_data(context.screen_center)) {
             const auto& shadow = *data;
             opacity = std::clamp(shadow.opacity, 0.0f, 1.0f);
-            scale   = std::max(0.0f, shadow.scale);
             offset_x = shadow.offset_x_px;
             offset_y = shadow.offset_y_px;
             if (std::abs(offset_x) <= 1e-4f && std::abs(shadow.offset_x_percent) > 1e-4f) {
@@ -222,17 +182,11 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
             if (std::abs(offset_y) <= 1e-4f && std::abs(shadow.offset_y_percent) > 1e-4f) {
                 offset_y = static_cast<float>(height) * (shadow.offset_y_percent / 100.0f);
             }
-            parallax_percent = shadow.parallax_intensity_percent;
         } else {
 
             opacity = std::clamp(context.base_shadow_opacity, 0.0f, 1.0f);
-            scale   = std::max(context.base_shadow_scale, 0.0f);
         }
     }
-
-    const float parallax_weight = std::max(0.0f, parallax_percent / 100.0f);
-    const float parallax_shift  = compute_parallax_shift(context, asset, height, parallax_weight);
-    offset_x += parallax_shift;
 
     SDL_Texture* mask_texture = nullptr;
     const auto& scale_usage   = asset.last_scale_usage();
@@ -280,10 +234,8 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         }
     }
 
-    const float scaled_w_f = std::max(static_cast<float>(mask_w) * scale, 1.0f);
-    const float scaled_h_f = std::max(static_cast<float>(mask_h) * scale, 1.0f);
-    const int   scaled_w   = std::max(1, static_cast<int>(std::lround(scaled_w_f)));
-    const int   scaled_h   = std::max(1, static_cast<int>(std::lround(scaled_h_f)));
+    const int scaled_w = std::max(1, mask_w);
+    const int scaled_h = std::max(1, mask_h);
     const float base_center_x = static_cast<float>(width) * 0.5f;
     const float base_center_y = static_cast<float>(height) * 0.5f;
     const float dest_x_f    = base_center_x - static_cast<float>(scaled_w) * 0.5f + offset_x;
