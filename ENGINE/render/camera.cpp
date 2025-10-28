@@ -12,6 +12,8 @@
 namespace {
     constexpr float kDefaultSmoothingDt = 1.0f / 60.0f;
 
+    constexpr float kMinTau = 1e-4f;
+
     TransformSmoothingParams sanitize_params(const TransformSmoothingParams& params) {
         TransformSmoothingParams out = params;
         if (!std::isfinite(out.lerp_rate) || out.lerp_rate < 0.0f) {
@@ -36,6 +38,48 @@ namespace {
             break;
         }
         return out;
+    }
+
+    float rate_from_tau(float tau_seconds) {
+        if (!std::isfinite(tau_seconds) || tau_seconds <= kMinTau) {
+            return 0.0f;
+        }
+        return 1.0f / tau_seconds;
+    }
+
+    float tau_from_rate(float rate) {
+        if (!std::isfinite(rate) || rate <= kMinTau) {
+            return 0.0f;
+        }
+        return 1.0f / rate;
+    }
+
+    TransformSmoothingParams motion_params_from_settings(const camera::RealismSettings& settings) {
+        TransformSmoothingParams params{};
+        if (!settings.smooth_motion_zoom) {
+            params.method = TransformSmoothingMethod::None;
+            return sanitize_params(params);
+        }
+
+        params.method = settings.motion_smoothing_method;
+        switch (params.method) {
+        case TransformSmoothingMethod::Lerp:
+            params.lerp_rate        = rate_from_tau(std::max(settings.motion_smoothing_tau, 0.0f));
+            params.spring_frequency = 0.0f;
+            break;
+        case TransformSmoothingMethod::CriticallyDampedSpring:
+            params.spring_frequency = std::max(0.0f, settings.motion_smoothing_spring_frequency);
+            params.lerp_rate        = 0.0f;
+            break;
+        case TransformSmoothingMethod::None:
+            params.method = TransformSmoothingMethod::None;
+            params.lerp_rate = params.spring_frequency = 0.0f;
+            break;
+        }
+
+        params.max_step       = std::max(0.0f, settings.motion_smoothing_max_step);
+        params.snap_threshold = std::max(0.0f, settings.motion_smoothing_snap_threshold);
+        return sanitize_params(params);
     }
 }
 
@@ -92,9 +136,11 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     steps_total_ = steps_done_ = 0;
     start_scale_ = target_scale_ = scale_;
 
-    center_smoothing_x_.set_params(transform_smoothing::camera_center_params());
-    center_smoothing_y_.set_params(transform_smoothing::camera_center_params());
-    zoom_smoothing_.set_params(transform_smoothing::camera_zoom_params());
+    TransformSmoothingParams center_defaults = transform_smoothing::camera_center_params();
+    TransformSmoothingParams zoom_defaults   = transform_smoothing::camera_zoom_params();
+    center_smoothing_x_.set_params(center_defaults);
+    center_smoothing_y_.set_params(center_defaults);
+    zoom_smoothing_.set_params(zoom_defaults);
     center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
     center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
     zoom_smoothing_.reset(std::max(scale_, 0.0001f));
@@ -103,11 +149,22 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
     last_update_dt_    = kDefaultSmoothingDt;
     smoothing_frame_counter_ = 0;
+
+    settings_.smooth_motion_zoom           = center_defaults.method != TransformSmoothingMethod::None;
+    settings_.motion_smoothing_method      = center_defaults.method;
+    settings_.motion_smoothing_tau         = tau_from_rate(center_defaults.lerp_rate);
+    settings_.motion_smoothing_spring_frequency = center_defaults.spring_frequency;
+    settings_.motion_smoothing_max_step    = center_defaults.max_step;
+    settings_.motion_smoothing_snap_threshold = center_defaults.snap_threshold;
 }
 
 void camera::set_realism_settings(const RealismSettings& settings) {
     settings_ = settings;
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
+    TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
+    center_smoothing_x_.set_params(motion_params);
+    center_smoothing_y_.set_params(motion_params);
+    zoom_smoothing_.set_params(motion_params);
     reset_parallax_smoothing();
 }
 
@@ -602,7 +659,10 @@ camera::RenderEffects camera::compute_render_effects(
     }
 
     if (smoothing_key != 0) {
-        const TransformSmoothingParams raw_params = sanitize_params(settings_.parallax_smoothing);
+        TransformSmoothingParams raw_params = sanitize_params(settings_.parallax_smoothing);
+        if (!settings_.smooth_motion_zoom) {
+            raw_params.method = TransformSmoothingMethod::None;
+        }
         if (raw_params.method != TransformSmoothingMethod::None) {
             auto& entry = smoothing_entries_[smoothing_key];
             entry.parallax.set_params(raw_params);
@@ -701,6 +761,18 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_int("render_quality_percent", settings_.render_quality_percent);
 
+    auto try_read_bool = [&](const char* key, bool& target) {
+        auto it = data.find(key);
+        if (it == data.end()) return;
+        if (it->is_boolean()) {
+            target = it->get<bool>();
+        } else if (it->is_number_integer()) {
+            target = it->get<int>() != 0;
+        }
+    };
+
+    try_read_bool("smooth_motion_zoom", settings_.smooth_motion_zoom);
+
     auto try_read_smoothing_method = [&](const char* key, TransformSmoothingMethod& target) {
         auto it = data.find(key);
         if (it == data.end()) return;
@@ -723,10 +795,16 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     };
 
     try_read_smoothing_method("parallax_smoothing_method", settings_.parallax_smoothing.method);
+    try_read_smoothing_method("motion_smoothing_method", settings_.motion_smoothing_method);
     try_read_float("parallax_smoothing_lerp_rate", settings_.parallax_smoothing.lerp_rate);
     try_read_float("parallax_smoothing_spring_frequency", settings_.parallax_smoothing.spring_frequency);
     try_read_float("parallax_smoothing_max_step", settings_.parallax_smoothing.max_step);
     try_read_float("parallax_smoothing_snap_threshold", settings_.parallax_smoothing.snap_threshold);
+    try_read_float("motion_smoothing_tau", settings_.motion_smoothing_tau);
+    try_read_float("motion_smoothing_spring_frequency", settings_.motion_smoothing_spring_frequency);
+    try_read_float("motion_smoothing_max_step", settings_.motion_smoothing_max_step);
+    try_read_float("motion_smoothing_snap_threshold", settings_.motion_smoothing_snap_threshold);
+    try_read_float("scale_hysteresis_margin", settings_.scale_variant_hysteresis_margin);
 
     if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
         settings_.render_distance = 800.0f;
@@ -772,6 +850,28 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
 
+    settings_.smooth_motion_zoom = settings_.smooth_motion_zoom &&
+        settings_.motion_smoothing_method != TransformSmoothingMethod::None;
+    if (!std::isfinite(settings_.motion_smoothing_tau) || settings_.motion_smoothing_tau < 0.0f) {
+        settings_.motion_smoothing_tau = 0.0f;
+    }
+    if (!std::isfinite(settings_.motion_smoothing_max_step) || settings_.motion_smoothing_max_step < 0.0f) {
+        settings_.motion_smoothing_max_step = 0.0f;
+    }
+    if (!std::isfinite(settings_.motion_smoothing_snap_threshold) || settings_.motion_smoothing_snap_threshold < 0.0f) {
+        settings_.motion_smoothing_snap_threshold = 0.0f;
+    }
+    if (!std::isfinite(settings_.motion_smoothing_spring_frequency) || settings_.motion_smoothing_spring_frequency < 0.0f) {
+        settings_.motion_smoothing_spring_frequency = 0.0f;
+    }
+    if (!std::isfinite(settings_.scale_variant_hysteresis_margin) || settings_.scale_variant_hysteresis_margin < 0.0f) {
+        settings_.scale_variant_hysteresis_margin = 0.05f;
+    }
+    TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
+    center_smoothing_x_.set_params(motion_params);
+    center_smoothing_y_.set_params(motion_params);
+    zoom_smoothing_.set_params(motion_params);
+
     reset_parallax_smoothing();
 }
 
@@ -786,12 +886,23 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["tripod_distance_y"]     = settings_.tripod_distance_y;
     j["min_visible_screen_ratio"] = settings_.min_visible_screen_ratio;
     j["render_quality_percent"]   = settings_.render_quality_percent;
+    j["smooth_motion_zoom"]        = settings_.smooth_motion_zoom;
+    j["motion_smoothing_method"]   = static_cast<int>(settings_.motion_smoothing_method);
+    j["motion_smoothing_tau"]      = settings_.motion_smoothing_tau;
+    j["motion_smoothing_spring_frequency"] = settings_.motion_smoothing_spring_frequency;
+    j["motion_smoothing_max_step"] = settings_.motion_smoothing_max_step;
+    j["motion_smoothing_snap_threshold"] = settings_.motion_smoothing_snap_threshold;
+    j["scale_hysteresis_margin"]   = settings_.scale_variant_hysteresis_margin;
     j["parallax_smoothing_method"] = static_cast<int>(settings_.parallax_smoothing.method);
     j["parallax_smoothing_lerp_rate"] = settings_.parallax_smoothing.lerp_rate;
     j["parallax_smoothing_spring_frequency"] = settings_.parallax_smoothing.spring_frequency;
     j["parallax_smoothing_max_step"] = settings_.parallax_smoothing.max_step;
     j["parallax_smoothing_snap_threshold"] = settings_.parallax_smoothing.snap_threshold;
     return j;
+}
+
+TransformSmoothingParams camera::motion_smoothing_params() const {
+    return motion_params_from_settings(settings_);
 }
 
 int camera::get_render_distance_world_margin() const {

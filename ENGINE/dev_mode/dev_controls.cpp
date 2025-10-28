@@ -19,7 +19,6 @@
 #include "dev_mode/area_mode/edit_room_area_panel.hpp"
 #include "dev_mode/area_mode/area_types.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
-#include "dev_mode/area_config/AreaConfigPanel.hpp"
 #include "asset/asset_info.hpp"
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
@@ -241,6 +240,10 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
                     if (!RoomAreaSerialization::is_supported_kind(kind)) {
                         continue;
                     }
+                    // Optional visibility
+                    if (item.contains("visible") && item["visible"].is_boolean() && !item["visible"].get<bool>()) {
+                        continue;
+                    }
                     const auto& pts = item.contains("points") ? item["points"] : nlohmann::json();
                     if (!pts.is_array() || pts.size() < 3) continue;
 
@@ -278,6 +281,8 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
                             entry.type = !type.empty() ? type : RoomAreaSerialization::to_string(kind);
                             entry.points = std::move(poly);
                             entry.anchor = anchor.world;
+                            entry.z = item.value("z", 0);
+                            entry.visible = true;
                             cached_.push_back(std::move(entry));
                         }
                     } else {
@@ -301,6 +306,8 @@ DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
                             entry.type = !type.empty() ? type : RoomAreaSerialization::to_string(kind);
                             entry.points = std::move(poly);
                             entry.anchor = SDL_Point{ ax, ay };
+                            entry.z = item.value("z", 0);
+                            entry.visible = true;
                             cached_.push_back(std::move(entry));
                         }
                     }
@@ -555,8 +562,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     asset_filter_.set_current_room(current_room_);
     asset_filter_.set_mode_buttons({
         {kModeIdRoom, "Room", mode_ == Mode::RoomEditor},
-        {kModeIdMap, "Map", mode_ == Mode::MapEditor},
-        {kModeIdArea, "Area", mode_ == Mode::AreaMode}
+        {kModeIdMap, "Map", mode_ == Mode::MapEditor}
     });
     asset_filter_.set_mode_changed_callback([this](const std::string& id) {
         if (id == kModeIdMap) {
@@ -576,21 +582,6 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                     footer->set_title(label);
                 }
             }
-        } else if (id == kModeIdArea) {
-            if (this->mode_ == Mode::MapEditor) {
-                exit_map_editor_mode(false, true);
-            }
-            this->set_mode(Mode::AreaMode);
-            if (map_mode_ui_) {
-                map_mode_ui_->set_header_mode(MapModeUI::HeaderMode::Area);
-                if (auto* footer = map_mode_ui_->get_footer_bar()) {
-                    std::string label = std::string("Area Mode — Room: ") +
-                                        (current_room_ ? current_room_->room_name : std::string{});
-                    footer->set_title(label);
-                }
-            }
-            active_area_type_filters_.clear();
-            active_area_type_filters_.insert("all");
         }
         sync_header_button_states();
     });
@@ -960,13 +951,6 @@ void DevControls::update(const Input& input) {
     if (camera_panel_) {
         camera_panel_->update(input, screen_w_, screen_h_);
     }
-    if (area_config_panel_ && area_config_panel_->is_visible()) {
-        const int desired_w = std::max(360, screen_w_ / 3);
-        const int width = std::min(std::max(360, desired_w), std::max(320, screen_w_));
-        SDL_Rect bounds{ std::max(0, screen_w_ - width), 0, width, screen_h_ };
-        area_config_panel_->set_bounds(bounds);
-        area_config_panel_->update(input, screen_w_, screen_h_);
-    }
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->update(input);
     }
@@ -1130,15 +1114,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (consume_modal_event(regenerate_popup_.get(), event, pointer, pointer_relevant, input_)) {
         return;
     }
-    if (area_config_panel_ && area_config_panel_->is_visible()) {
-        if (consume(area_config_panel_->handle_event(event))) {
-            return;
-        }
-        if (pointer_relevant && area_config_panel_->is_point_inside(pointer.x, pointer.y)) {
-            consume(true);
-            return;
-        }
-    }
 
     const bool room_editor_active = can_use_room_editor_ui();
     const bool spawn_panel_visible = room_editor_ && room_editor_->is_spawn_group_panel_visible();
@@ -1260,55 +1235,18 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         }
                     }
                 }
-                // Right click -> open Area Config
+                // Right click -> open Area Info UI with Area sections
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
-                    if (!area_config_panel_) area_config_panel_ = std::make_unique<AreaConfigPanel>();
-                    if (area_config_panel_) {
-                        area_config_panel_->set_on_edit_shape([this](const std::string& name) {
-                            if (!assets_ || !current_room_) return;
-                            if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
-                            if (!asset_area_editor_) return;
-                            asset_area_editor_->attach_assets(assets_);
-                            asset_area_editor_->set_on_saved([this]() { this->notify_room_area_data_changed(); });
-                            // Determine type from current room areas (fallback to "spawning")
-                            std::string type = "spawning";
-                            if (Area* a = current_room_->find_area(name)) {
-                                if (a && !a->get_type().empty()) type = a->get_type();
-                            }
-                            asset_area_editor_->begin_for_room(current_room_, name, type);
-                        });
-                        area_config_panel_->set_on_changed([this]() { this->notify_room_area_data_changed(); });
-                        const int desired_w = std::max(360, screen_w_ / 3);
-                        const int width = std::min(std::max(360, desired_w), std::max(320, screen_w_));
-                        SDL_Rect bounds{ std::max(0, screen_w_ - width), 0, width, screen_h_ };
-                        area_config_panel_->set_bounds(bounds);
-                        area_config_panel_->open(current_room_, hovered.name);
+                    if (room_editor_) {
+                        room_editor_->open_area_info_editor(current_room_, hovered.name);
                         consume(true);
                         return;
                     }
                 }
-                // Double-click left -> open Area Config
+                // Double-click left -> open Area Info UI with Area sections
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks >= 2) {
-                    if (!area_config_panel_) area_config_panel_ = std::make_unique<AreaConfigPanel>();
-                    if (area_config_panel_) {
-                        area_config_panel_->set_on_edit_shape([this](const std::string& name) {
-                            if (!assets_ || !current_room_) return;
-                            if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
-                            if (!asset_area_editor_) return;
-                            asset_area_editor_->attach_assets(assets_);
-                            asset_area_editor_->set_on_saved([this]() { this->notify_room_area_data_changed(); });
-                            std::string type = "spawning";
-                            if (Area* a = current_room_->find_area(name)) {
-                                if (a && !a->get_type().empty()) type = a->get_type();
-                            }
-                            asset_area_editor_->begin_for_room(current_room_, name, type);
-                        });
-                        area_config_panel_->set_on_changed([this]() { this->notify_room_area_data_changed(); });
-                        const int desired_w = std::max(360, screen_w_ / 3);
-                        const int width = std::min(std::max(360, desired_w), std::max(320, screen_w_));
-                        SDL_Rect bounds{ std::max(0, screen_w_ - width), 0, width, screen_h_ };
-                        area_config_panel_->set_bounds(bounds);
-                        area_config_panel_->open(current_room_, hovered.name);
+                    if (room_editor_) {
+                        room_editor_->open_area_info_editor(current_room_, hovered.name);
                         consume(true);
                         return;
                     }
@@ -1686,8 +1624,49 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         if (map_editor_) map_editor_->render(renderer);
     } else if (mode_ == Mode::RoomEditor && room_editor_) {
         room_editor_->render_overlays(renderer);
-        if (area_config_panel_ && area_config_panel_->is_visible()) {
-            area_config_panel_->render(renderer);
+        // Draw room area overlays (always visible in Room mode)
+        if (renderer && assets_ && current_room_) {
+            const camera& cam = assets_->getView();
+            SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+            SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            Uint8 pr=0,pg=0,pb=0,pa=0; SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+
+            auto color_for_type = [](const std::string& type) -> SDL_Color {
+                auto tl = [](std::string s){ std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){return (char)std::tolower(c);}); return s; };
+                std::string lower = tl(type);
+                if (lower.find("impas") != std::string::npos) return SDL_Color{255, 0, 0, 96};
+                if (lower.find("spacing") != std::string::npos) return SDL_Color{0, 200, 0, 96};
+                if (lower.find("trigger") != std::string::npos) return SDL_Color{0, 120, 255, 96};
+                if (lower.find("child") != std::string::npos) return SDL_Color{255, 220, 0, 96};
+                if (lower.find("spawn") != std::string::npos) return SDL_Color{180, 0, 220, 96};
+                return SDL_Color{255, 140, 0, 96};
+            };
+
+            const auto& area_list = room_area_polygons();
+            // Sort by z-index ascending for drawing order
+            std::vector<int> order; order.reserve(area_list.size());
+            for (size_t i = 0; i < area_list.size(); ++i) order.push_back(static_cast<int>(i));
+            std::sort(order.begin(), order.end(), [&](int a, int b){ return area_list[a].z < area_list[b].z; });
+
+            for (int idx : order) {
+                const auto& poly = area_list[idx];
+                if (poly.points.size() < 2) continue;
+                SDL_Color col = color_for_type(poly.type);
+                SDL_SetRenderDrawColor(renderer, col.r, col.g, col.b, col.a);
+                // Outline
+                for (size_t i = 0, n = poly.points.size(); i < n; ++i) {
+                    const SDL_Point& a = poly.points[i];
+                    const SDL_Point& b = poly.points[(i+1) % n];
+                    SDL_FPoint as = cam.map_to_screen(a);
+                    SDL_FPoint bs = cam.map_to_screen(b);
+                    SDL_RenderDrawLine(renderer,
+                                       static_cast<int>(std::lround(as.x)), static_cast<int>(std::lround(as.y)),
+                                       static_cast<int>(std::lround(bs.x)), static_cast<int>(std::lround(bs.y)));
+                }
+            }
+            SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
+            SDL_SetRenderDrawBlendMode(renderer, prev_mode);
         }
     } else if (mode_ == Mode::AreaMode) {
 
@@ -2022,6 +2001,27 @@ bool DevControls::is_room_config_open() const {
 void DevControls::begin_area_edit_for_selected_asset(const std::string& area_name) {
     if (!can_use_room_editor_ui()) return;
     room_editor_->begin_area_edit_for_selected_asset(area_name);
+}
+
+void DevControls::begin_room_area_edit(const std::string& area_name) {
+    // Open AreaOverlayEditor for a room-scoped Area by name in current room
+    if (!assets_ || !current_room_) return;
+    if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
+    if (!asset_area_editor_) return;
+    asset_area_editor_->attach_assets(assets_);
+    asset_area_editor_->set_on_saved([this]() { this->notify_room_area_data_changed(); });
+    std::string type = "spawning";
+    if (Area* a = current_room_->find_area(area_name)) {
+        if (a && !a->get_type().empty()) type = a->get_type();
+    }
+    if (asset_area_editor_->begin_for_room(current_room_, area_name, type)) {
+        if (map_mode_ui_) {
+            if (auto* footer = map_mode_ui_->get_footer_bar()) {
+                std::string label = std::string("Editing Area: ") + area_name;
+                footer->set_title(label);
+            }
+        }
+    }
 }
 
 void DevControls::focus_camera_on_asset(Asset* asset, double zoom_factor, int duration_steps) {

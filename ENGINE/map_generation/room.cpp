@@ -927,4 +927,8 @@ void Room::save_assets_json() const {
                 section[room_name] = assets_json;
                 manifest_writer_(manifest_map_id_, payload);
         }
+        try {
+                std::cout << "[Room] Autosaved assets for room: " << room_name << "\n";
+        } catch (...) {
+        }
 }

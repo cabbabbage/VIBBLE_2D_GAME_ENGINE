@@ -1089,13 +1089,17 @@ struct SpawnGroupConfig::Entry {
             }
 
             if (linked_area_widget_) {
-                rows.push_back({linked_area_widget_.get()});
-                if (show_child_link_options_) {
-                    if (terminate_with_parent_widget_) {
-                        rows.push_back({terminate_with_parent_widget_.get()});
-                    }
-                    if (placed_on_top_parent_widget_) {
-                        rows.push_back({placed_on_top_parent_widget_.get()});
+                const bool has_options = linked_area_option_labels_.size() > 1;
+                const bool has_selection = !linked_area_id_.empty();
+                if (has_options || has_selection) {
+                    rows.push_back({linked_area_widget_.get()});
+                    if (show_child_link_options_) {
+                        if (terminate_with_parent_widget_) {
+                            rows.push_back({terminate_with_parent_widget_.get()});
+                        }
+                        if (placed_on_top_parent_widget_) {
+                            rows.push_back({placed_on_top_parent_widget_.get()});
+                        }
                     }
                 }
             }

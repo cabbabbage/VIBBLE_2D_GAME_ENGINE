@@ -20,6 +20,7 @@
 #include "utils/range_util.hpp"
 #include "utils/text_style.hpp"
 #include "utils/map_grid_settings.hpp"
+#include "utils/transform_smoothing_settings.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -370,6 +371,167 @@ void Assets::apply_camera_runtime_settings() {
     if (scene) {
         const bool low_quality = (effective_percent < 100) && !force_high_quality_rendering_;
         scene->set_low_quality_rendering(low_quality);
+    }
+    update_motion_smoothing_settings(camera_.realism_settings());
+}
+
+TransformSmoothingParams Assets::sanitize_smoothing(const TransformSmoothingParams& params) {
+    TransformSmoothingParams result = params;
+    if (!std::isfinite(result.lerp_rate) || result.lerp_rate < 0.0f) {
+        result.lerp_rate = 0.0f;
+    }
+    if (!std::isfinite(result.spring_frequency) || result.spring_frequency < 0.0f) {
+        result.spring_frequency = 0.0f;
+    }
+    if (!std::isfinite(result.max_step) || result.max_step < 0.0f) {
+        result.max_step = 0.0f;
+    }
+    if (!std::isfinite(result.snap_threshold) || result.snap_threshold < 0.0f) {
+        result.snap_threshold = 0.0f;
+    }
+    switch (result.method) {
+    case TransformSmoothingMethod::None:
+    case TransformSmoothingMethod::Lerp:
+    case TransformSmoothingMethod::CriticallyDampedSpring:
+        break;
+    default:
+        result.method = TransformSmoothingMethod::None;
+        break;
+    }
+    return result;
+}
+
+void Assets::update_motion_smoothing_settings(const camera::RealismSettings& settings) {
+    constexpr float kMinTau = 1e-4f;
+    auto build_translation_params = [&](const camera::RealismSettings& s) {
+        TransformSmoothingParams result{};
+        result.method = s.motion_smoothing_method;
+        switch (result.method) {
+        case TransformSmoothingMethod::Lerp:
+            result.lerp_rate        = (s.motion_smoothing_tau > kMinTau)
+                ? 1.0f / std::max(s.motion_smoothing_tau, kMinTau)
+                : 0.0f;
+            result.spring_frequency = 0.0f;
+            break;
+        case TransformSmoothingMethod::CriticallyDampedSpring:
+            result.spring_frequency = std::max(0.0f, s.motion_smoothing_spring_frequency);
+            result.lerp_rate        = 0.0f;
+            break;
+        case TransformSmoothingMethod::None:
+        default:
+            result.method = TransformSmoothingMethod::None;
+            result.lerp_rate = result.spring_frequency = 0.0f;
+            break;
+        }
+        result.max_step       = std::max(0.0f, s.motion_smoothing_max_step);
+        result.snap_threshold = std::max(0.0f, s.motion_smoothing_snap_threshold);
+        return sanitize_smoothing(result);
+    };
+
+    TransformSmoothingParams desired_motion = build_translation_params(settings);
+    const bool smoothing_enabled = settings.smooth_motion_zoom &&
+        desired_motion.method != TransformSmoothingMethod::None;
+
+    auto params_equal = [](const TransformSmoothingParams& a, const TransformSmoothingParams& b) {
+        constexpr float kEpsilon = 1e-4f;
+        auto close = [](float x, float y) {
+            return std::fabs(x - y) <= kEpsilon;
+        };
+        return a.method == b.method &&
+            close(a.lerp_rate, b.lerp_rate) &&
+            close(a.spring_frequency, b.spring_frequency) &&
+            close(a.max_step, b.max_step) &&
+            close(a.snap_threshold, b.snap_threshold);
+    };
+
+    if (!smoothing_cache_initialized_) {
+        cached_enabled_translation_params_ = sanitize_smoothing(transform_smoothing::asset_translation_params());
+        cached_enabled_scale_params_       = sanitize_smoothing(transform_smoothing::asset_scale_params());
+        cached_enabled_alpha_params_       = sanitize_smoothing(transform_smoothing::asset_alpha_params());
+        last_camera_motion_params_         = sanitize_smoothing(transform_smoothing::camera_center_params());
+        last_asset_translation_params_     = cached_enabled_translation_params_;
+        last_asset_scale_params_           = cached_enabled_scale_params_;
+        last_asset_alpha_params_           = cached_enabled_alpha_params_;
+        smoothing_cache_initialized_       = true;
+    }
+
+    if (smoothing_enabled) {
+        cached_enabled_translation_params_ = desired_motion;
+        if (cached_enabled_scale_params_.method == TransformSmoothingMethod::None) {
+            cached_enabled_scale_params_ = sanitize_smoothing(transform_smoothing::asset_scale_params());
+        }
+        if (cached_enabled_alpha_params_.method == TransformSmoothingMethod::None) {
+            cached_enabled_alpha_params_ = sanitize_smoothing(transform_smoothing::asset_alpha_params());
+        }
+    } else {
+        cached_enabled_translation_params_ = desired_motion;
+    }
+
+    TransformSmoothingParams translation_to_apply = smoothing_enabled
+        ? cached_enabled_translation_params_
+        : TransformSmoothingParams{};
+    TransformSmoothingParams scale_to_apply = smoothing_enabled
+        ? cached_enabled_scale_params_
+        : TransformSmoothingParams{};
+    TransformSmoothingParams alpha_to_apply = smoothing_enabled
+        ? cached_enabled_alpha_params_
+        : TransformSmoothingParams{};
+
+    if (!smoothing_enabled) {
+        translation_to_apply.method = TransformSmoothingMethod::None;
+        translation_to_apply.lerp_rate = translation_to_apply.spring_frequency = 0.0f;
+        translation_to_apply.max_step = translation_to_apply.snap_threshold = 0.0f;
+        scale_to_apply.method = TransformSmoothingMethod::None;
+        scale_to_apply.lerp_rate = scale_to_apply.spring_frequency = 0.0f;
+        scale_to_apply.max_step = scale_to_apply.snap_threshold = 0.0f;
+        alpha_to_apply.method = TransformSmoothingMethod::None;
+        alpha_to_apply.lerp_rate = alpha_to_apply.spring_frequency = 0.0f;
+        alpha_to_apply.max_step = alpha_to_apply.snap_threshold = 0.0f;
+    }
+
+    translation_to_apply = sanitize_smoothing(translation_to_apply);
+    scale_to_apply       = sanitize_smoothing(scale_to_apply);
+    alpha_to_apply       = sanitize_smoothing(alpha_to_apply);
+
+    const bool motion_changed       = !params_equal(desired_motion, last_camera_motion_params_);
+    const bool translation_changed  = !params_equal(translation_to_apply, last_asset_translation_params_);
+    const bool scale_changed        = !params_equal(scale_to_apply, last_asset_scale_params_);
+    const bool alpha_changed        = !params_equal(alpha_to_apply, last_asset_alpha_params_);
+
+    if (motion_changed) {
+        transform_smoothing::set_camera_center_params(desired_motion);
+        transform_smoothing::set_camera_zoom_params(desired_motion);
+        last_camera_motion_params_ = desired_motion;
+    }
+    if (translation_changed) {
+        transform_smoothing::set_asset_translation_params(translation_to_apply);
+        last_asset_translation_params_ = translation_to_apply;
+        if (smoothing_enabled) {
+            cached_enabled_translation_params_ = translation_to_apply;
+        }
+    }
+    if (scale_changed) {
+        transform_smoothing::set_asset_scale_params(scale_to_apply);
+        last_asset_scale_params_ = scale_to_apply;
+        if (smoothing_enabled) {
+            cached_enabled_scale_params_ = scale_to_apply;
+        }
+    }
+    if (alpha_changed) {
+        transform_smoothing::set_asset_alpha_params(alpha_to_apply);
+        last_asset_alpha_params_ = alpha_to_apply;
+        if (smoothing_enabled) {
+            cached_enabled_alpha_params_ = alpha_to_apply;
+        }
+    }
+
+    if (motion_changed || translation_changed || scale_changed || alpha_changed) {
+        for (Asset* asset : all) {
+            if (!asset) {
+                continue;
+            }
+            asset->set_smoothing_params(translation_to_apply, scale_to_apply, alpha_to_apply);
+        }
     }
 }
 
@@ -1644,6 +1806,19 @@ void Assets::focus_camera_on_asset(Asset* a, double zoom_factor, int duration_st
 void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->begin_area_edit_for_selected_asset(area_name);
+    }
+}
+
+void Assets::begin_room_area_edit(const std::string& area_name) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        // New helper to start room-scoped Area edit
+        // We rely on DevControls to resolve current room
+        // and open AreaOverlayEditor in room mode
+        try {
+            // Implemented in DevControls
+            dev_controls_->begin_room_area_edit(area_name);
+        } catch (...) {
+        }
     }
 }
 

@@ -845,6 +845,46 @@ void Asset::update_scale_usage(float requested,
         scale_variant_state_.hysteresis_max = std::max(hysteresis_max, hysteresis_min);
 }
 
+void Asset::set_smoothing_params(const TransformSmoothingParams& translation,
+                                 const TransformSmoothingParams& scale,
+                                 const TransformSmoothingParams& alpha) {
+        auto sanitize = [](const TransformSmoothingParams& params) {
+                TransformSmoothingParams result = params;
+                if (!std::isfinite(result.lerp_rate) || result.lerp_rate < 0.0f) {
+                        result.lerp_rate = 0.0f;
+                }
+                if (!std::isfinite(result.spring_frequency) || result.spring_frequency < 0.0f) {
+                        result.spring_frequency = 0.0f;
+                }
+                if (!std::isfinite(result.max_step) || result.max_step < 0.0f) {
+                        result.max_step = 0.0f;
+                }
+                if (!std::isfinite(result.snap_threshold) || result.snap_threshold < 0.0f) {
+                        result.snap_threshold = 0.0f;
+                }
+                switch (result.method) {
+                case TransformSmoothingMethod::None:
+                case TransformSmoothingMethod::Lerp:
+                case TransformSmoothingMethod::CriticallyDampedSpring:
+                        break;
+                default:
+                        result.method = TransformSmoothingMethod::None;
+                        break;
+                }
+                return result;
+        };
+
+        TransformSmoothingParams translation_params = sanitize(translation);
+        translation_smoothing_x_.set_params(translation_params);
+        translation_smoothing_y_.set_params(translation_params);
+
+        TransformSmoothingParams scale_params = sanitize(scale);
+        scale_smoothing_.set_params(scale_params);
+
+        TransformSmoothingParams alpha_params = sanitize(alpha);
+        alpha_smoothing_.set_params(alpha_params);
+}
+
 void Asset::set_hidden(bool state){ hidden = state; }
 bool  Asset::is_hidden() const { return hidden; }
 

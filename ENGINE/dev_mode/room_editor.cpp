@@ -1786,6 +1786,32 @@ void RoomEditor::open_asset_info_editor_for_asset(Asset* asset) {
     if (info_ui_) info_ui_->set_target_asset(asset);
 }
 
+void RoomEditor::open_area_info_editor(Room* room, const std::string& area_name) {
+    if (!room) return;
+    if (library_ui_) library_ui_->close();
+    clear_active_spawn_group_target();
+    if (room_config_dock_open_) { set_room_config_visible(false); }
+    if (!info_ui_) {
+        info_ui_ = std::make_unique<AssetInfoUI>();
+        if (info_ui_) {
+            info_ui_->set_manifest_store(manifest_store_);
+        }
+        info_ui_->set_header_visibility_callback([this](bool visible) {
+            asset_info_panel_visible_ = visible;
+            if (header_visibility_callback_) {
+                header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+            }
+        });
+    }
+    if (info_ui_) info_ui_->set_assets(assets_);
+    if (info_ui_) {
+        info_ui_->clear_info();
+        info_ui_->open_for_room_area(room, area_name);
+        info_ui_->set_target_asset(nullptr);
+    }
+    active_modal_ = ActiveModal::AssetInfo;
+}
+
 void RoomEditor::set_manifest_store(devmode::core::ManifestStore* store) {
     manifest_store_ = store;
     if (info_ui_) {

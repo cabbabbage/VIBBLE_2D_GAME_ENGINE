@@ -25,6 +25,13 @@ class camera {
         float tripod_distance_y = 0.0f;
         float min_visible_screen_ratio = 0.015f;
         int   render_quality_percent = 100;
+        bool  smooth_motion_zoom = true;
+        TransformSmoothingMethod motion_smoothing_method = TransformSmoothingMethod::CriticallyDampedSpring;
+        float motion_smoothing_tau = 0.12f;
+        float motion_smoothing_spring_frequency = 5.0f;
+        float motion_smoothing_max_step = 8000.0f;
+        float motion_smoothing_snap_threshold = 0.25f;
+        float scale_variant_hysteresis_margin = 0.05f;
         TransformSmoothingParams parallax_smoothing{
             TransformSmoothingMethod::CriticallyDampedSpring,
             0.0f,
@@ -87,6 +94,7 @@ class camera {
     void set_realism_settings(const RealismSettings& settings);
     RealismSettings& realism_settings() { return settings_; }
     const RealismSettings& realism_settings() const { return settings_; }
+    TransformSmoothingParams motion_smoothing_params() const;
 
     void apply_camera_settings(const nlohmann::json& data);
     nlohmann::json camera_settings_to_json() const;

@@ -105,6 +105,7 @@ public:
 
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
     void begin_area_edit_for_selected_asset(const std::string& area_name);
+    void begin_room_area_edit(const std::string& area_name);
 
     devmode::core::ManifestStore* manifest_store();
     const devmode::core::ManifestStore* manifest_store() const;
@@ -195,9 +196,20 @@ private:
     void notify_reactive_shadow_settings_available();
     void sync_dev_controls_current_room(Room* room, bool force_refresh = false);
     void reset_dev_controls_current_room_cache();
+    void update_motion_smoothing_settings(const camera::RealismSettings& settings);
+    static TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params);
 
     friend class SceneRenderer;
     friend class Asset;
+
+    TransformSmoothingParams last_camera_motion_params_{};
+    TransformSmoothingParams last_asset_translation_params_{};
+    TransformSmoothingParams last_asset_scale_params_{};
+    TransformSmoothingParams last_asset_alpha_params_{};
+    TransformSmoothingParams cached_enabled_translation_params_{};
+    TransformSmoothingParams cached_enabled_scale_params_{};
+    TransformSmoothingParams cached_enabled_alpha_params_{};
+    bool smoothing_cache_initialized_ = false;
 
     CurrentRoomFinder* finder_ = nullptr;
     Input* input = nullptr;

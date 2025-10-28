@@ -31,6 +31,8 @@
 #include "asset_sections/Section_Spacing.hpp"
 #include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
+#include "dev_mode/spawn_group_config/SpawnGroupConfig.hpp"
+#include "map_generation/room.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "core/AssetsManager.hpp"
@@ -187,6 +189,7 @@ AssetInfoUI::AssetInfoUI() {
     }
 
     container_.set_header_text_provider([this]() {
+        if (area_mode_ && !area_name_.empty()) return std::string("Area: ") + area_name_;
         return info_ ? info_->name : std::string();
     });
 
@@ -199,7 +202,7 @@ AssetInfoUI::AssetInfoUI() {
             section->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, previous_height});
             y += previous_height + ctx.gap;
         }
-        if (configure_btn_widget_) {
+        if (!area_mode_ && configure_btn_widget_) {
             configure_btn_widget_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()});
             y += DMButton::height() + ctx.gap;
         }
@@ -208,7 +211,7 @@ AssetInfoUI::AssetInfoUI() {
 
     container_.set_render_function([this](SDL_Renderer* renderer) {
         for (auto& section : sections_) section->render(renderer);
-        if (configure_btn_) configure_btn_->render(renderer);
+        if (!area_mode_ && configure_btn_) configure_btn_->render(renderer);
     });
 
     container_.set_on_close([this]() { this->close(); });
@@ -925,6 +928,126 @@ void AssetInfoUI::open_area_editor(const std::string& name) {
     if (!info_ || !assets_) return;
     assets_->begin_area_edit_for_selected_asset(name);
 }
+
+void AssetInfoUI::open_room_area_editor(const std::string& name) {
+    if (!assets_) return;
+    assets_->begin_room_area_edit(name);
+}
+
+void AssetInfoUI::open_for_room_area(Room* room, const std::string& area_name) {
+    area_mode_ = true;
+    area_room_ = room;
+    area_name_ = area_name;
+    clear_info();
+
+    sections_.clear();
+
+    class Section_AreaSettings : public DockableCollapsible {
+    public:
+        AssetInfoUI* ui = nullptr; Room* room = nullptr; std::string name;
+        std::unique_ptr<DMTextBox> name_box; std::unique_ptr<TextBoxWidget> name_widget;
+        std::unique_ptr<DMCheckbox> cb_visible; std::unique_ptr<CheckboxWidget> cb_visible_w;
+        std::unique_ptr<DMCheckbox> cb_scale; std::unique_ptr<CheckboxWidget> cb_scale_w;
+        std::unique_ptr<DMNumericStepper> z_step; std::unique_ptr<StepperWidget> z_step_w;
+        std::unique_ptr<DMButton> btn_edit; std::unique_ptr<ButtonWidget> btn_edit_w;
+        Section_AreaSettings(): DockableCollapsible("Area Settings", false) { set_scroll_enabled(false); }
+        void set_ctx(AssetInfoUI* u, Room* r, const std::string& n){ ui=u; room=r; name=n; }
+        void build() override {
+            Rows rows; if (!name_box) name_box = std::make_unique<DMTextBox>("Area Name", name);
+            if (!name_widget) name_widget = std::make_unique<TextBoxWidget>(name_box.get(), true);
+            rows.push_back({ name_widget.get() });
+            if (!cb_visible) cb_visible = std::make_unique<DMCheckbox>("Visible", true);
+            if (!cb_visible_w) cb_visible_w = std::make_unique<CheckboxWidget>(cb_visible.get());
+            rows.push_back({ cb_visible_w.get() });
+            if (!cb_scale) cb_scale = std::make_unique<DMCheckbox>("Scale to room", false);
+            if (!cb_scale_w) cb_scale_w = std::make_unique<CheckboxWidget>(cb_scale.get());
+            rows.push_back({ cb_scale_w.get() });
+            if (!z_step) z_step = std::make_unique<DMNumericStepper>("Z Index", -1000, 1000, 0);
+            if (!z_step_w) z_step_w = std::make_unique<StepperWidget>(z_step.get());
+            rows.push_back({ z_step_w.get() });
+            if (!btn_edit) btn_edit = std::make_unique<DMButton>("Edit Shape", &DMStyles::CreateButton(), 160, DMButton::height());
+            if (!btn_edit_w) btn_edit_w = std::make_unique<ButtonWidget>(btn_edit.get(), [this](){ if (ui) ui->open_room_area_editor(name); });
+            rows.push_back({ btn_edit_w.get() });
+            set_rows(rows);
+            if (room) {
+                nlohmann::json& root = room->assets_data();
+                if (root.contains("areas") && root["areas"].is_array()) {
+                    for (auto& entry : root["areas"]) {
+                        if (!entry.is_object()) continue; if (entry.value("name", std::string{}) != name) continue;
+                        cb_visible->set_value(entry.value("visible", true));
+                        cb_scale->set_value(entry.value("scale_to_room", false));
+                        z_step->set_value(entry.value("z", 0));
+                        break;
+                    }
+                }
+            }
+        }
+        void update(const Input& input, int w, int h) override {
+            DockableCollapsible::update(input,w,h);
+            if (!room) return;
+            nlohmann::json& root = room->assets_data();
+            if (!root.contains("areas") || !root["areas"].is_array()) return;
+            for (auto& entry : root["areas"]) {
+                if (!entry.is_object()) continue; if (entry.value("name", std::string{}) != name) continue;
+                if (name_box && !name_box->is_editing()) {
+                    std::string desired = name_box->value();
+                    if (!desired.empty() && desired != name) { if (room->rename_area(name, desired)) { name = desired; room->save_assets_json(); } }
+                }
+                entry["visible"] = cb_visible ? cb_visible->value() : true;
+                if (cb_scale && cb_scale->value()) entry["scale_to_room"] = true; else entry.erase("scale_to_room");
+                entry["z"] = z_step ? z_step->value() : 0;
+                room->save_assets_json();
+                break;
+            }
+        }
+    };
+
+    auto area_settings = std::make_unique<Section_AreaSettings>(); area_settings->set_ctx(this, area_room_, area_name_);
+    sections_.push_back(std::move(area_settings));
+
+    class Section_AreaSpawns : public DockableCollapsible {
+    public:
+        Room* room = nullptr; std::string name; std::unique_ptr<SpawnGroupConfig> list;
+        Section_AreaSpawns(): DockableCollapsible("Area Spawn Groups", false) { set_scroll_enabled(true); }
+        void set_ctx(Room* r, const std::string& n){ room=r; name=n; }
+        void build() override {
+            Rows rows; if (!room) { set_rows(rows); return; }
+            if (!list) list = std::make_unique<SpawnGroupConfig>(false);
+            list->set_embedded_mode(true);
+            nlohmann::json* groups_ptr = nullptr;
+            nlohmann::json& root = room->assets_data();
+            if (root.contains("areas") && root["areas"].is_array()) {
+                for (auto& entry : root["areas"]) {
+                    if (!entry.is_object()) continue; if (entry.value("name", std::string{}) != name) continue;
+                    if (!entry.contains("spawn_groups") || !entry["spawn_groups"].is_array()) entry["spawn_groups"] = nlohmann::json::array();
+                    groups_ptr = &entry["spawn_groups"]; break;
+                }
+            }
+            if (groups_ptr) {
+                auto on_change = [this]() { if (room) room->save_assets_json(); };
+                auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&){ if (room) room->save_assets_json(); };
+                SpawnGroupConfig::Callbacks cb{};
+                cb.on_add = [this, groups_ptr]() { if (!groups_ptr) return; nlohmann::json entry = nlohmann::json::object(); entry["position"] = "Random"; entry["min_number"] = 1; entry["max_number"] = 1; entry["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name","null"},{"chance",100}}) }); groups_ptr->push_back(std::move(entry)); if (room) room->save_assets_json(); list->refresh_row_configuration(); };
+                cb.on_delete = [this, groups_ptr](const std::string& id) { if (!groups_ptr) return; if (!groups_ptr->is_array()) return; for (auto it = groups_ptr->begin(); it != groups_ptr->end(); ++it) { if (it->is_object() && it->value("spawn_id", std::string{}) == id) { groups_ptr->erase(it); break; } } if (room) room->save_assets_json(); list->refresh_row_configuration(); };
+                cb.on_reorder = [this](const std::string&, size_t){ if (room) room->save_assets_json(); };
+                SpawnGroupConfig::ConfigureEntryCallback cfg = [](SpawnGroupConfig::EntryController& ctrl, const nlohmann::json&){ ctrl.set_linkable_room_areas_provider({}); ctrl.set_linkable_asset_areas_provider({}); };
+                list->set_callbacks(std::move(cb));
+                list->load(*groups_ptr, std::move(on_change), std::move(on_entry_change), std::move(cfg));
+                list->append_rows(rows);
+            }
+            set_rows(rows);
+        }
+        void update(const Input& input, int w, int h) override { if (list){ list->set_screen_dimensions(w,h); list->update(input,w,h);} DockableCollapsible::update(input,w,h); }
+        void render(SDL_Renderer* r) const override { DockableCollapsible::render(r); if (list) list->render(r); }
+    };
+
+    auto area_spawns = std::make_unique<Section_AreaSpawns>(); area_spawns->set_ctx(area_room_, area_name_);
+    sections_.push_back(std::move(area_spawns));
+
+    open();
+}
+
+void AssetInfoUI::clear_area_context() { area_mode_ = false; area_room_ = nullptr; area_name_.clear(); }
 
 bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& fn) {
     if (!info_) {

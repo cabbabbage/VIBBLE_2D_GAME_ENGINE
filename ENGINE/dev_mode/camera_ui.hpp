@@ -9,6 +9,8 @@ class DMCheckbox;
 class DMButton;
 class CheckboxWidget;
 class ButtonWidget;
+class DMDropdown;
+class DropdownWidget;
 class Input;
 class FloatSliderWidget;
 class SectionLabelWidget;
@@ -58,6 +60,7 @@ private:
 
     std::unique_ptr<SectionLabelWidget> render_section_label_;
     std::unique_ptr<SectionLabelWidget> perspective_section_label_;
+    std::unique_ptr<SectionLabelWidget> smoothing_section_label_;
 
     std::unique_ptr<FloatSliderWidget> render_distance_slider_;
     std::unique_ptr<FloatSliderWidget> tripod_distance_slider_;
@@ -67,6 +70,16 @@ private:
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;
     std::unique_ptr<DiscreteSliderWidget> render_quality_slider_;
+    std::unique_ptr<DMCheckbox> smoothing_checkbox_;
+    std::unique_ptr<CheckboxWidget> smoothing_widget_;
+    std::unique_ptr<DMDropdown> smoothing_method_dropdown_;
+    std::unique_ptr<DropdownWidget> smoothing_method_widget_;
+    std::unique_ptr<FloatSliderWidget> motion_tau_slider_;
+    std::unique_ptr<FloatSliderWidget> motion_stiffness_slider_;
+    std::unique_ptr<FloatSliderWidget> motion_max_step_slider_;
+    std::unique_ptr<FloatSliderWidget> motion_snap_slider_;
+    std::unique_ptr<FloatSliderWidget> parallax_smoothing_slider_;
+    std::unique_ptr<FloatSliderWidget> hysteresis_margin_slider_;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }

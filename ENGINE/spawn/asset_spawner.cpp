@@ -34,6 +34,40 @@ void AssetSpawner::spawn(Room& room) {
         current_room_ = &room;
         map_grid_settings_ = room.map_grid_settings();
         run_spawning(room.planner.get(), spawn_area);
+
+        // Secondary pass: treat Areas as micro-rooms and spawn their local spawn_groups
+        try {
+                nlohmann::json& root = room.assets_data();
+                if (root.is_object() && root.contains("areas") && root["areas"].is_array()) {
+                        for (auto& area_entry : root["areas"]) {
+                                if (!area_entry.is_object()) continue;
+                                auto it = area_entry.find("spawn_groups");
+                                if (it == area_entry.end() || !it->is_array() || it->empty()) continue;
+                                std::string area_name = area_entry.value("name", std::string{});
+                                if (area_name.empty()) continue;
+                                Area* area_ptr = room.find_area(area_name);
+                                if (!area_ptr) continue;
+
+                                std::vector<nlohmann::json> sources;
+                                sources.push_back(nlohmann::json::object());
+                                sources.back()["spawn_groups"] = *it;
+                                std::vector<AssetSpawnPlanner::SourceContext> contexts;
+                                contexts.resize(1);
+                                contexts[0].json_ref = &sources.back();
+                                contexts[0].persist = [&area_entry](const nlohmann::json& src){
+                                        if (src.is_object() && src.contains("spawn_groups") && src["spawn_groups"].is_array()) {
+                                                area_entry["spawn_groups"] = src["spawn_groups"];
+                                        }
+                                };
+
+                                AssetSpawnPlanner area_planner(sources, *area_ptr, *asset_library_, contexts);
+                                run_spawning(&area_planner, *area_ptr);
+                        }
+                }
+        } catch (...) {
+                // Non-fatal; ignore
+        }
+
         current_room_ = nullptr;
         room.add_room_assets(std::move(all_));
 }

@@ -449,13 +449,17 @@ void SceneRenderer::render(){
                 continue;
             }
 
+            const float hysteresis_margin = camera_state
+                ? camera_state->realism_settings().scale_variant_hysteresis_margin
+                : render_pipeline::ScalingLogic::kDefaultHysteresisMargin;
             SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(
                 a,
                 final_tex,
                 fw,
                 fh,
                 static_cast<int>(std::lround(dst.w)),
-                static_cast<int>(std::lround(dst.h)));
+                static_cast<int>(std::lround(dst.h)),
+                hysteresis_margin);
             enqueue_command(a, final_tex, draw_tex, dst);
 
             if (a->info && !a->info->light_sources.empty() && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {

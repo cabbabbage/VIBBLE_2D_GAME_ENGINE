@@ -148,6 +148,21 @@ void ensure_loaded() {
     cached.initialized = true;
 }
 
+void store_params(std::string_view prefix, const TransformSmoothingParams& params) {
+    const std::string base(prefix);
+    const std::string method_key       = base + ".method";
+    const std::string lerp_key         = base + ".lerp_rate";
+    const std::string spring_key       = base + ".spring_frequency";
+    const std::string max_step_key     = base + ".max_step";
+    const std::string snap_key         = base + ".snap_threshold";
+
+    devmode::ui_settings::save_number(method_key, static_cast<int>(params.method));
+    devmode::ui_settings::save_number(lerp_key, params.lerp_rate);
+    devmode::ui_settings::save_number(spring_key, params.spring_frequency);
+    devmode::ui_settings::save_number(max_step_key, params.max_step);
+    devmode::ui_settings::save_number(snap_key, params.snap_threshold);
+}
+
 } // namespace
 
 const TransformSmoothingParams& asset_translation_params() {
@@ -178,6 +193,41 @@ const TransformSmoothingParams& camera_zoom_params() {
     std::lock_guard<std::mutex> lock(cache_mutex());
     ensure_loaded();
     return cache().camera_zoom;
+}
+
+void set_asset_translation_params(const TransformSmoothingParams& params) {
+    std::lock_guard<std::mutex> lock(cache_mutex());
+    ensure_loaded();
+    cache().asset_translation = sanitized(params);
+    store_params("render.smoothing.asset.translation", cache().asset_translation);
+}
+
+void set_asset_scale_params(const TransformSmoothingParams& params) {
+    std::lock_guard<std::mutex> lock(cache_mutex());
+    ensure_loaded();
+    cache().asset_scale = sanitized(params);
+    store_params("render.smoothing.asset.scale", cache().asset_scale);
+}
+
+void set_asset_alpha_params(const TransformSmoothingParams& params) {
+    std::lock_guard<std::mutex> lock(cache_mutex());
+    ensure_loaded();
+    cache().asset_alpha = sanitized(params);
+    store_params("render.smoothing.asset.alpha", cache().asset_alpha);
+}
+
+void set_camera_center_params(const TransformSmoothingParams& params) {
+    std::lock_guard<std::mutex> lock(cache_mutex());
+    ensure_loaded();
+    cache().camera_center = sanitized(params);
+    store_params("render.smoothing.camera.center", cache().camera_center);
+}
+
+void set_camera_zoom_params(const TransformSmoothingParams& params) {
+    std::lock_guard<std::mutex> lock(cache_mutex());
+    ensure_loaded();
+    cache().camera_zoom = sanitized(params);
+    store_params("render.smoothing.camera.zoom", cache().camera_zoom);
 }
 
 void reload_from_settings() {

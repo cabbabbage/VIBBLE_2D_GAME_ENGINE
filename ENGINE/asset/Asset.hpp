@@ -205,6 +205,9 @@ class Asset {
                             int   variant_index,
                             float hysteresis_min,
                             float hysteresis_max);
+    void set_smoothing_params(const TransformSmoothingParams& translation,
+                              const TransformSmoothingParams& scale,
+                              const TransformSmoothingParams& alpha);
     void clear_render_caches();
     static void destroy_render_cache(RenderTextureCache& cache);
 

@@ -73,7 +73,13 @@ public:
 
     SDL_Texture* run(Asset& asset);
     SDL_Texture* regenerateFinalTexture(Asset* asset);
-    SDL_Texture* texture_for_scale(Asset* asset, SDL_Texture* base_tex, int          base_w, int          base_h, int          target_w, int          target_h);
+    SDL_Texture* texture_for_scale(Asset* asset,
+                                   SDL_Texture* base_tex,
+                                   int          base_w,
+                                   int          base_h,
+                                   int          target_w,
+                                   int          target_h,
+                                   float        hysteresis_margin);
 
     void set_low_quality_mode(bool enable);
     bool low_quality_mode() const { return low_quality_mode_; }

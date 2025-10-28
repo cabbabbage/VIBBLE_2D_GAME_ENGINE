@@ -349,8 +349,9 @@ SDL_Texture* AssetRenderPipeline::texture_for_scale(Asset* asset,
                                                     int base_w,
                                                     int base_h,
                                                     int target_w,
-                                                    int target_h) {
-    return render_asset_.texture_for_scale(asset, base_tex, base_w, base_h, target_w, target_h);
+                                                    int target_h,
+                                                    float hysteresis_margin) {
+    return render_asset_.texture_for_scale(asset, base_tex, base_w, base_h, target_w, target_h, hysteresis_margin);
 }
 
 void AssetRenderPipeline::set_low_quality_mode(bool enable) {

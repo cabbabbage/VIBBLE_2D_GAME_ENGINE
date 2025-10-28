@@ -23,21 +23,28 @@ namespace {
 
 constexpr int kRowHeight = 72;
 constexpr int kIndentPerLevel = 12;
-constexpr float kMinSizeFactor = 0.7f;
+constexpr float kMinSizeFactor = 0.45f;
 
 float size_factor_for_level(int level) {
     if (level <= 0) {
         return 1.0f;
     }
-    float factor = 1.0f - 0.1f * static_cast<float>(level);
-    return std::max(kMinSizeFactor, factor);
+    switch (level) {
+        case 1:
+            return 0.8f;
+        case 2:
+            return 0.65f;
+        case 3:
+            return 0.55f;
+        default:
+            return kMinSizeFactor;
+    }
 }
 
 int row_height_for_level(int level) {
     float factor = size_factor_for_level(level);
     int height = static_cast<int>(std::round(kRowHeight * factor));
-    int min_height = static_cast<int>(std::round(kRowHeight * kMinSizeFactor));
-    return std::max(min_height, height);
+    return std::max(1, height);
 }
 
 int indent_for_level(int level) {
@@ -143,6 +150,7 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         }
 
         const DisplayRow& row = display_rows_[i];
+        const float size_factor = size_factor_for_level(row.level);
         const bool selected = selected_animation_id_ && *selected_animation_id_ == row.id;
         const bool hovered = hovered_row_ && *hovered_row_ == i;
         const SDL_Color fill = selected ? selected_bg : (hovered ? hover_bg : idle_bg);
@@ -176,7 +184,7 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
 
         DMLabelStyle label_style = DMStyles::Label();
         label_style.color = style.label.color;
-        label_style.font_size = std::max(10, static_cast<int>(std::round(label_style.font_size * size_factor_for_level(row.level))));
+        label_style.font_size = std::max(1, static_cast<int>(std::round(label_style.font_size * size_factor)));
         DMFontCache::instance().draw_text(renderer, label_style, row.id, content_x, content_y);
 
         std::vector<std::pair<const DMButtonStyle*, std::string>> badges;
@@ -188,11 +196,11 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         }
 
         int badge_x = rect.x + rect.w - row_padding;
-        const int badge_padding = DMSpacing::small_gap();
+        const int badge_padding = std::max(1, static_cast<int>(std::round(DMSpacing::small_gap() * size_factor)));
         for (auto it = badges.rbegin(); it != badges.rend(); ++it) {
             const DMButtonStyle* badge_style = it->first;
             DMLabelStyle badge_label = badge_style->label;
-            badge_label.font_size = std::max(12, badge_label.font_size - 2);
+            badge_label.font_size = std::max(1, static_cast<int>(std::round(std::max(1, badge_label.font_size - 2) * size_factor)));
             SDL_Point badge_size = DMFontCache::instance().measure_text(badge_label, it->second);
             int badge_width = badge_size.x + badge_padding * 2;
             int badge_height = badge_size.y + badge_padding * 2;

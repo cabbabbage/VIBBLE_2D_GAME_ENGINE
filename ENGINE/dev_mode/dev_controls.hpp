@@ -31,7 +31,6 @@ class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
 class RegenerateRoomPopup;
-class AreaConfigPanel;
 
 class DevControls {
 public:
@@ -60,6 +59,8 @@ public:
             std::string type;
             std::vector<SDL_Point> points;
             SDL_Point anchor{0, 0};
+            int z = 0;
+            bool visible = true;
 };
         using PolygonList  = std::vector<Polygon>;
         using Listener     = std::function<void(const PolygonList&, std::size_t)>;
@@ -121,6 +122,7 @@ public:
     bool is_map_light_panel_visible() const;
 
     void begin_area_edit_for_selected_asset(const std::string& area_name);
+    void begin_room_area_edit(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 0);
 
     void reset_click_state();
@@ -250,8 +252,5 @@ private:
     SDL_Point last_area_click_world_{0,0};
 
     RoomAreaCache room_area_cache_;
-
-    // Area Config UI (room-scoped area configuration)
-    std::unique_ptr<AreaConfigPanel> area_config_panel_;
 };
 

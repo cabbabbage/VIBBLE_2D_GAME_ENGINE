@@ -77,7 +77,8 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
                                             int base_w,
                                             int base_h,
                                             int target_w,
-                                            int target_h) {
+                                            int target_h,
+                                            float hysteresis_margin) {
         if (!asset || !base_tex || base_w <= 0 || base_h <= 0 || target_w <= 0 || target_h <= 0) {
                 if (asset) {
                         asset->update_scale_usage(1.0f,
@@ -104,7 +105,9 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
         hysteresis_state.max_scale  = variant_state.hysteresis_max;
 
         render_pipeline::ScalingLogic::HysteresisOptions hysteresis_options{};
-        hysteresis_options.margin         = render_pipeline::ScalingLogic::kDefaultHysteresisMargin;
+        hysteresis_options.margin         = std::isfinite(hysteresis_margin) && hysteresis_margin >= 0.0f
+            ? hysteresis_margin
+            : render_pipeline::ScalingLogic::kDefaultHysteresisMargin;
         hysteresis_options.preload_margin = render_pipeline::ScalingLogic::kDefaultPreloadMargin;
 
         const float smoothed_scale = asset->smoothed_scale();
