@@ -93,6 +93,10 @@ class AssetInfo {
         std::string kind;
         std::unique_ptr<Area> area;
         std::optional<RenderFrame> render_frame;
+        // Attachment metadata (optional): used for asset-bound areas only
+        std::string attachment_subtype; // "asset_child_attachment" or "impassable_attachment"
+        bool        attachment_is_on_top = false; // for child attachments
+        nlohmann::json attachment_child_candidates = nlohmann::json::array();
 };
     std::vector<NamedArea> areas;
     std::map<std::string, Animation> animations;

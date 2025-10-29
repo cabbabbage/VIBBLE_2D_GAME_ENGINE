@@ -107,6 +107,14 @@ class Room {
         bool scale_to_room = false;
         int  original_room_width = 0;
         int  original_room_height = 0;
+        struct OriginRoomMeta {
+            std::string name;
+            int width = 0;
+            int height = 0;
+            SDL_Point anchor{0, 0};
+            bool anchor_relative_to_center = false;
+        };
+        std::optional<OriginRoomMeta> origin_room;
 };
 
     std::vector<NamedArea> areas;

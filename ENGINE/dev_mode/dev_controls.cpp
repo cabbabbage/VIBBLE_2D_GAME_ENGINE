@@ -472,8 +472,9 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     if (room_editor_) {
         room_editor_->set_manifest_store(&manifest_store_);
         room_editor_->set_room_assets_saved_callback([this]() { notify_room_area_data_changed(); });
-        room_editor_->set_header_visibility_callback([this](bool visible) {
-            sliding_headers_hidden_ = visible;
+        // Do not hide the top header when sliding containers open in dev mode
+        room_editor_->set_header_visibility_callback([this](bool /*visible*/) {
+            sliding_headers_hidden_ = false;
             apply_header_suppression();
         });
         room_editor_->set_map_assets_panel_callback([this]() { this->open_map_assets_modal(); });
@@ -530,9 +531,8 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     asset_filter_.initialize();
     asset_filter_.set_state_changed_callback([this]() { refresh_active_asset_filters(); });
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_;
-    asset_filter_.set_enabled(enabled_ && !layers_panel_open && !hide_headers);
+    // Keep header always visible in dev mode
+    asset_filter_.set_enabled(enabled_);
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
     asset_filter_.set_map_info(map_info_json_);
     asset_filter_.set_current_room(current_room_);
@@ -780,9 +780,8 @@ void DevControls::set_enabled(bool enabled) {
         return;
     }
     enabled_ = enabled;
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_;
-    asset_filter_.set_enabled(enabled_ && !layers_panel_open && !hide_headers);
+    // Keep header always visible in dev mode
+    asset_filter_.set_enabled(enabled_);
 
     if (enabled_) {
         const char* msg = "[DevControls] preparing enable flow";
@@ -902,9 +901,9 @@ void DevControls::update(const Input& input) {
     }
     const bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
-    const bool hide_headers = modal_hide || sliding_headers_hidden_;
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    asset_filter_.set_enabled(enabled_ && !layers_panel_open && !hide_headers);
+    const bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
+    // Keep header always visible in dev mode
+    asset_filter_.set_enabled(enabled_);
     apply_header_suppression();
     if (map_mode_ui_) {
         map_mode_ui_->update(input);
@@ -952,7 +951,7 @@ void DevControls::update(const Input& input) {
 
     if (room_editor_ && room_editor_->is_enabled()) {
         SDL_Point pointer{input.getX(), input.getY()};
-        if (!hide_headers && asset_filter_.contains_point(pointer.x, pointer.y)) {
+        if (asset_filter_.contains_point(pointer.x, pointer.y)) {
             room_editor_->clear_highlighted_assets();
         } else if (!hide_headers) {
             DevFooterBar* footer = map_mode_ui_ ? map_mode_ui_->get_footer_bar() : nullptr;
@@ -1022,9 +1021,9 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 
     const bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
-    const bool hide_headers = modal_hide || sliding_headers_hidden_;
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    asset_filter_.set_enabled(enabled_ && !layers_panel_open && !hide_headers);
+    const bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
+    // Keep header always visible in dev mode
+    asset_filter_.set_enabled(enabled_);
     apply_header_suppression();
 
     auto consume = [&](bool used) {
@@ -1034,10 +1033,10 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return used;
 };
 
-    if (!hide_headers && pointer_event && consume(asset_filter_.handle_event(event))) {
+    if (pointer_event && consume(asset_filter_.handle_event(event))) {
         return;
     }
-    if (!hide_headers && pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y)) {
+    if (pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y)) {
         consume(true);
         return;
     }
@@ -1396,7 +1395,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         regenerate_popup_->render(renderer);
     }
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_;
+    const bool hide_headers = modal_headers_hidden_; // ignore sliding windows for header visibility
     if (!hide_headers && !is_modal_blocking_panels() && !layers_panel_open) {
         asset_filter_.render(renderer);
     }
@@ -1892,8 +1891,9 @@ void DevControls::pulse_modal_header() {
 
 void DevControls::apply_header_suppression() {
     if (map_mode_ui_) {
-        map_mode_ui_->set_headers_suppressed(modal_headers_hidden_);
-        map_mode_ui_->set_dev_sliding_headers_hidden(sliding_headers_hidden_);
+        // In dev mode, never suppress headers/footers
+        map_mode_ui_->set_headers_suppressed(false);
+        map_mode_ui_->set_dev_sliding_headers_hidden(false);
     }
 }
 

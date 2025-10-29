@@ -91,6 +91,22 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                 std::mt19937 g(rd());
                 std::shuffle(shuffled_asset_children.begin(), shuffled_asset_children.end(), g);
                 for (auto* asset_child_info : shuffled_asset_children) {
+                        // Skip if the linked area is marked as impassable attachment
+                        bool skip_for_impassable = false;
+                        if (raw->info) {
+                                for (const auto& na : raw->info->areas) {
+                                        if (!na.area) continue;
+                                        if (na.name == asset_child_info->area_name) {
+                                                if (na.attachment_subtype == "impassable_attachment") {
+                                                        skip_for_impassable = true;
+                                                }
+                                                break;
+                                        }
+                                }
+                        }
+                        if (skip_for_impassable) {
+                                continue;
+                        }
                         Area childArea = raw->get_area(asset_child_info->area_name);
                         if (childArea.get_points().empty()) {
                                 vibble::log::debug(std::string{"[Spawn] Skipping child area '"} +

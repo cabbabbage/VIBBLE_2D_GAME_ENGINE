@@ -261,8 +261,12 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
 
     bool consumed = false;
     if (!consumed && use_animation_reference_ && animation_dropdown_) {
+        const int before = animation_dropdown_->selected();
         if (animation_dropdown_->handle_event(e)) {
-            apply_animation_selection();
+            // Only apply when a selection was actually committed/changed
+            if (animation_dropdown_->selected() != before) {
+                apply_animation_selection();
+            }
             consumed = true;
         }
     }
@@ -307,6 +311,9 @@ void SourceConfigPanel::set_source_mode(SourceMode mode) {
 
     if (use_animation_reference_) {
         refresh_animation_options();
+        if (animation_options_.empty()) {
+            update_status("No other animations available to link. Create or duplicate an animation first.");
+        }
         if (!animation_dropdown_) {
             int idx = animation_index_;
             if (idx < 0 && !animation_options_.empty()) {
@@ -829,13 +836,15 @@ void SourceConfigPanel::refresh_animation_options() {
         animation_dropdown_.reset();
         if (!animation_options_.empty()) {
             animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::min(idx, static_cast<int>(animation_options_.size()) - 1));
+            // Ensure the new dropdown inherits current geometry
+            animation_dropdown_->set_rect(dropdown_rect_);
         }
     }
 }
 
 void SourceConfigPanel::apply_animation_selection() {
     if (!use_animation_reference_ || !animation_dropdown_ || animation_options_.empty()) return;
-    int idx = animation_dropdown_->pending_index();
+    int idx = animation_dropdown_->selected();
     idx = std::max(0, std::min(static_cast<int>(animation_options_.size()) - 1, idx));
     if (idx == animation_index_) return;
     animation_index_ = idx;

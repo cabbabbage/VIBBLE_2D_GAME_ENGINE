@@ -1,0 +1,36 @@
+*** Begin Patch
+*** Update File: ENGINE/dev_mode/asset_sections/animation_editor_window/AnimationEditorWindow.cpp
+@@
+ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
+     if (!visible_) return false;
+ 
+     ensure_layout();
+ 
+-    if (handle_header_event(e)) {
++    if (handle_header_event(e)) {
+         return true;
+     }
+@@
+-    if (list_context_menu_ && list_context_menu_->is_open()) {
++    if (list_context_menu_ && list_context_menu_->is_open()) {
+         if (list_context_menu_->handle_event(e)) {
+             return true;
+         }
+@@
+-    if (list_panel_ && list_panel_->handle_event(e)) {
+-        return true;
+-    }
+-
+-    if (inspector_panel_ && selected_animation_id_ && inspector_panel_->handle_event(e)) {
+-        return true;
+-    }
++    // Route events to the inspector first so dropdown overlays get priority.
++    // This avoids the list panel swallowing clicks that belong to expanded dropdowns.
++    if (inspector_panel_ && selected_animation_id_ && inspector_panel_->handle_event(e)) {
++        return true;
++    }
++
++    if (list_panel_ && list_panel_->handle_event(e)) {
++        return true;
++    }
+*** End Patch

@@ -1,4 +1,4 @@
-#include "AnimationEditorWindow.hpp"
+﻿#include "AnimationEditorWindow.hpp"
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -419,7 +419,7 @@ void AnimationEditorWindow::handle_list_context_menu(const std::string& animatio
     select_animation(std::make_optional(animation_id), false);
     std::vector<AnimationListContextMenu::Option> options;
     options.push_back(AnimationListContextMenu::Option{
-        "Rename…",
+        "Rename...",
         [this, animation_id]() { this->prompt_rename_animation(animation_id); },
     });
     options.push_back(AnimationListContextMenu::Option{
@@ -503,10 +503,15 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
 
     ensure_layout();
 
-    if (handle_header_event(e)) {
-        return true;
+    // If any dropdown is currently active (expanded), give it global priority
+    // so option clicks outside local widgets are captured reliably.
+    if (auto* active_dd = DMDropdown::active_dropdown()) {
+        if (active_dd->handle_event(e)) {
+            return true;
+        }
     }
 
+    // First, route to modal frame editor if visible
     if (frame_editor_visible_ && frame_editor_) {
 
         if (frame_editor_->handle_event(e)) {
@@ -514,6 +519,7 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         }
     }
 
+    // Then, give any open context menu first chance
     if (list_context_menu_ && list_context_menu_->is_open()) {
         if (list_context_menu_->handle_event(e)) {
             return true;
@@ -533,11 +539,17 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (list_panel_ && list_panel_->handle_event(e)) {
+    // Route events to the inspector before header/list so dropdown overlays get priority
+    if (inspector_panel_ && selected_animation_id_ && inspector_panel_->handle_event(e)) {
         return true;
     }
 
-    if (inspector_panel_ && selected_animation_id_ && inspector_panel_->handle_event(e)) {
+    // Header (close / add) comes after inspector so overlays can capture clicks
+    if (handle_header_event(e)) {
+        return true;
+    }
+
+    if (list_panel_ && list_panel_->handle_event(e)) {
         return true;
     }
 
@@ -726,11 +738,11 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
             name = asset_root_path_.filename().string();
         }
         if (!name.empty()) {
-            title += " — ";
+            title += " â€” ";
             title += name;
         }
     } else if (!asset_root_path_.empty()) {
-        title += " — ";
+        title += " â€” ";
         title += asset_root_path_.filename().string();
     }
 
@@ -804,7 +816,7 @@ void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) 
 
     std::string title = "Frame Editor";
     if (!frame_editor_animation_id_.empty()) {
-        title += " — ";
+        title += " â€” ";
         title += frame_editor_animation_id_;
     }
     int label_x = frame_editor_modal_header_rect_.x + DMSpacing::panel_padding();

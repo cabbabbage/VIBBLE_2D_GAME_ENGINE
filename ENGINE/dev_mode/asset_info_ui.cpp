@@ -23,6 +23,7 @@
 #include "DockableCollapsible.hpp"
 #include "FloatingPanelLayoutManager.hpp"
 #include "SlidingWindowContainer.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 #include "dm_styles.hpp"
 #include "asset_sections/Section_BasicInfo.hpp"
 #include "asset_sections/Section_Tags.hpp"
@@ -192,6 +193,17 @@ AssetInfoUI::AssetInfoUI() {
     container_.set_on_close([this]() { this->close(); });
 
     container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
+        // Constrain panel between header and footer
+        SDL_Rect usable = FloatingPanelLayoutManager::instance().usableRect();
+        if (usable.w > 0 && usable.h > 0) {
+            int panel_x = screen_w - std::max(screen_w / 3, 320);
+            panel_x = std::clamp(panel_x, 0, screen_w);
+            int panel_w = std::max(0, screen_w - panel_x);
+            SDL_Rect bounds{panel_x, usable.y, panel_w, usable.h};
+            container_.set_panel_bounds_override(bounds);
+        } else {
+            container_.clear_panel_bounds_override();
+        }
         std::vector<bool> previously_expanded;
         std::vector<int> previous_heights;
         previously_expanded.reserve(sections_.size());
@@ -414,6 +426,13 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
 }
 
 bool AssetInfoUI::handle_event(const SDL_Event& e) {
+    // Give active dropdown overlays global priority so option clicks are reliable
+    if (auto* active_dd = DMDropdown::active_dropdown()) {
+        if (active_dd->handle_event(e)) {
+            return true;
+        }
+    }
+
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
     const bool wheel_event = (e.type == SDL_MOUSEWHEEL);
@@ -1044,6 +1063,33 @@ void AssetInfoUI::clear_area_context() {
 
 void AssetInfoUI::rebuild_default_sections() {
     sections_.clear();
+
+    // Zone Asset quick tools section
+    auto add_zone_tools = [this]() {
+        if (!info_) return;
+        std::string t = info_->type;
+        std::transform(t.begin(), t.end(), t.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
+        if (t != std::string{"zone_asset"}) return;
+        class Section_ZoneTools : public DockableCollapsible {
+        public:
+            AssetInfoUI* ui = nullptr;
+            std::unique_ptr<DMButton> btn_edit; std::unique_ptr<ButtonWidget> btn_edit_w;
+            Section_ZoneTools(): DockableCollapsible("Zone Asset", false) { set_scroll_enabled(false); }
+            void set_ui(AssetInfoUI* owner) { ui = owner; }
+            void build() override {
+                Rows rows;
+                if (!btn_edit) btn_edit = std::make_unique<DMButton>("Edit Zone Geometry", &DMStyles::CreateButton(), 200, DMButton::height());
+                if (!btn_edit_w) btn_edit_w = std::make_unique<ButtonWidget>(btn_edit.get(), [this](){ if (ui) ui->open_area_editor("zone"); });
+                rows.push_back({ btn_edit_w.get() });
+                set_rows(rows);
+            }
+        };
+        auto zone = std::make_unique<Section_ZoneTools>();
+        zone->set_ui(this);
+        sections_.push_back(std::move(zone));
+    };
+
+    add_zone_tools();
 
     auto basic = std::make_unique<Section_BasicInfo>();
     basic_info_section_ = basic.get();

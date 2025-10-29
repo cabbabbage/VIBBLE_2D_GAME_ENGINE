@@ -114,7 +114,6 @@ private:
     std::vector<std::unique_ptr<class Widget>> owned_widgets_;
     std::unique_ptr<DMTextBox> name_box_;
     std::unique_ptr<DMNumericStepper> resolution_stepper_;
-    std::unique_ptr<DMCheckbox> scale_to_room_checkbox_;
     std::unique_ptr<SpawnGroupConfig> room_area_spawn_list_;
 
     int crop_left_px_ = 0;
@@ -152,6 +151,6 @@ private:
     std::vector<TrackedCheckboxState> tracked_checkboxes_;
 
     int area_resolution_ = 2;
-    bool scale_area_to_room_ = false;
+    bool scale_area_to_room_ = false; // deprecated UI flag; no longer exposed
 
 };

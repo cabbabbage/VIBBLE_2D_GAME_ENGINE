@@ -461,6 +461,23 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
     if (named.kind.empty()) {
         named.kind = named.type;
     }
+    // Optional attachment metadata passthrough
+    try {
+        if (entry.contains("attachment_subtype") && entry["attachment_subtype"].is_string()) {
+            named.attachment_subtype = entry["attachment_subtype"].get<std::string>();
+        }
+        if (entry.contains("is_on_top") && entry["is_on_top"].is_boolean()) {
+            named.attachment_is_on_top = entry["is_on_top"].get<bool>();
+        } else if (entry.contains("placed_on_top_parent") && entry["placed_on_top_parent"].is_boolean()) {
+            // legacy compatibility if present
+            named.attachment_is_on_top = entry["placed_on_top_parent"].get<bool>();
+        }
+        if (entry.contains("child_candidates") && entry["child_candidates"].is_array()) {
+            named.attachment_child_candidates = entry["child_candidates"];
+        }
+    } catch (...) {
+        // ignore malformed attachment metadata
+    }
     const int resolution = vibble::grid::clamp_resolution(entry.value("resolution", 2));
     named.area = std::make_unique<Area>(name, points, resolution);
     named.area->set_resolution(resolution);
@@ -862,6 +879,19 @@ void AssetInfo::upsert_area_from_editor(const Area& area,
     nlohmann::json entry =
         AreaCodec::encode_entry(*this, area, final_type, final_kind, frame);
 
+    // Preserve attachment-related fields when present
+    if (existing_entry && existing_entry->is_object()) {
+        static const char* kAttachmentKeys[] = {
+            "attachment_subtype", "is_on_top", "child_candidates", "placed_on_top_parent", "z_offset"
+        };
+        for (const char* key : kAttachmentKeys) {
+            auto it = existing_entry->find(key);
+            if (it != existing_entry->end()) {
+                entry[key] = *it;
+            }
+        }
+    }
+
     if (existing_entry) {
         *existing_entry = std::move(entry);
     } else {
@@ -1024,6 +1054,18 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                 if (!filter.empty()) {
                         smooth_scaling = !(filter == "nearest" || filter == "point" || filter == "none");
                 }
+        }
+
+        // Allow raw canvas dimensions in manifest for assets without animations (e.g., zone assets)
+        try {
+                if (data.contains("canvas_width") && data["canvas_width"].is_number_integer()) {
+                        original_canvas_width = std::max(0, data["canvas_width"].get<int>());
+                }
+                if (data.contains("canvas_height") && data["canvas_height"].is_number_integer()) {
+                        original_canvas_height = std::max(0, data["canvas_height"].get<int>());
+                }
+        } catch (...) {
+                // ignore malformed canvas fields
         }
 
         load_children(data);

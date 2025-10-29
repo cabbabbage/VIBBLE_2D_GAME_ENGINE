@@ -419,6 +419,7 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         s.spawn_id = spawn_id;
         s.quantity = quantity;
         s.priority = priority;
+        s.adjust_geometry_to_room = resolve_geometry;
         if (!link_name.empty()) {
             s.link_area_name = link_name;
         }

@@ -528,6 +528,40 @@ void Room::load_named_areas_from_json() {
                         na.scale_to_room = scale_to_room;
                         na.original_room_width = persisted_width;
                         na.original_room_height = persisted_height;
+
+                        try {
+                                if (item.contains("origin_room") && item["origin_room"].is_object()) {
+                                        const auto& orj = item["origin_room"];
+                                        NamedArea::OriginRoomMeta meta;
+                                        meta.name = orj.value("name", std::string{});
+                                        meta.width = orj.value("width", 0);
+                                        meta.height = orj.value("height", 0);
+                                        if (orj.contains("anchor") && orj["anchor"].is_object()) {
+                                                meta.anchor.x = orj["anchor"].value("x", 0);
+                                                meta.anchor.y = orj["anchor"].value("y", 0);
+                                        }
+                                        meta.anchor_relative_to_center = orj.value("anchor_relative_to_center", false);
+                                        na.origin_room = meta;
+                                } else {
+                                        // One-time upgrader: inject origin_room if missing
+                                        nlohmann::json meta = nlohmann::json::object();
+                                        meta["name"] = room_name;
+                                        meta["width"] = room_dims.first;
+                                        meta["height"] = room_dims.second;
+                                        meta["anchor"] = nlohmann::json::object({ {"x", anchor.world.x}, {"y", anchor.world.y} });
+                                        meta["anchor_relative_to_center"] = anchor.relative_to_center;
+                                        item["origin_room"] = meta;
+                                        NamedArea::OriginRoomMeta store;
+                                        store.name = room_name;
+                                        store.width = room_dims.first;
+                                        store.height = room_dims.second;
+                                        store.anchor = anchor.world;
+                                        store.anchor_relative_to_center = anchor.relative_to_center;
+                                        na.origin_room = store;
+                                }
+                        } catch (...) {
+                                // Ignore malformed origin_room metadata
+                        }
                         areas.push_back(std::move(na));
                 }
         } catch (...) {
@@ -686,6 +720,20 @@ void Room::upsert_named_area(const Area& area,
                 entry["scale_to_room"] = true;
                 if (stored_width > 0) entry["origional_width"] = stored_width;
                 if (stored_height > 0) entry["origional_height"] = stored_height;
+        }
+
+        // Persist origin_room metadata next to existing bookkeeping
+        try {
+                auto dims = current_room_dimensions();
+                nlohmann::json origin_meta = nlohmann::json::object();
+                origin_meta["name"] = room_name;
+                origin_meta["width"] = std::max(0, dims.first);
+                origin_meta["height"] = std::max(0, dims.second);
+                origin_meta["anchor"] = nlohmann::json::object({ {"x", anchor.world.x}, {"y", anchor.world.y} });
+                origin_meta["anchor_relative_to_center"] = anchor.relative_to_center;
+                entry["origin_room"] = std::move(origin_meta);
+        } catch (...) {
+                // Non-fatal: ignore failures to persist extended metadata
         }
 
         if (existing_entry) {
