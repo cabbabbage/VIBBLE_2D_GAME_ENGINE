@@ -107,11 +107,15 @@ ResolvedMovement resolve_movement(const AnimationDocument* document, const std::
         bool reverse = payload.value("reverse_source", false);
         bool flip_x = payload.value("flipped_source", false);
         bool flip_y = false;
+        bool flip_movement_x = false;
+        bool flip_movement_y = false;
         if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
             const auto& modifiers = payload["derived_modifiers"];
             reverse = modifiers.value("reverse", reverse);
             flip_x = modifiers.value("flipX", flip_x);
             flip_y = modifiers.value("flipY", false);
+            flip_movement_x = modifiers.value("flipMovementX", flip_movement_x);
+            flip_movement_y = modifiers.value("flipMovementY", flip_movement_y);
         }
 
         std::string reference = source ? source->value("name", std::string{}) : std::string{};
@@ -132,16 +136,20 @@ ResolvedMovement resolve_movement(const AnimationDocument* document, const std::
         result.derived = true;
         result.source_id = reference;
 
-        if (flip_x) result.total_dx = -result.total_dx;
-        if (flip_y) result.total_dy = -result.total_dy;
+        if (flip_movement_x) result.total_dx = -result.total_dx;
+        if (flip_movement_y) result.total_dy = -result.total_dy;
         if (reverse) result.modifiers.push_back("Reverse");
         if (flip_x) result.modifiers.push_back("Flip X");
         if (flip_y) result.modifiers.push_back("Flip Y");
+        if (flip_movement_x) result.modifiers.push_back("Flip Movement X");
+        if (flip_movement_y) result.modifiers.push_back("Flip Movement Y");
 
         result.signature += "|mods:";
         result.signature.push_back(reverse ? '1' : '0');
         result.signature.push_back(flip_x ? '1' : '0');
         result.signature.push_back(flip_y ? '1' : '0');
+        result.signature.push_back(flip_movement_x ? '1' : '0');
+        result.signature.push_back(flip_movement_y ? '1' : '0');
         return result;
     }
 

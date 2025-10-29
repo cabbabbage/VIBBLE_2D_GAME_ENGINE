@@ -1721,7 +1721,10 @@ bool AreaOverlayEditor::persist_current_area() {
             info_->upsert_area_from_editor(area, frame);
             (void)info_->commit_manifest();
         } else if (room_) {
-            // Do not set type for room areas
+            // For room areas, ensure a supported kind by setting a spawn-related type
+            if (area.get_type().empty()) {
+                area.set_type("spawning");
+            }
             if (scale_to_room_checkbox_) {
                 scale_area_to_room_ = scale_to_room_checkbox_->value();
             } else {
@@ -1768,6 +1771,8 @@ bool AreaOverlayEditor::persist_current_area() {
                     if (height > 0) entry["origional_height"] = height;
                     entry["link_to_area"] = true;
                     entry["linked_area"] = area_name_;
+                    // Make the area the sole 100% candidate for this room-level spawn entry
+                    entry["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name", area_name_}, {"chance", 100}}) });
                     devmode::spawn::ensure_spawn_group_entry_defaults(entry, area_name_, default_resolution);
                     groups.push_back(std::move(entry));
                     room_->save_assets_json();
@@ -1785,6 +1790,8 @@ bool AreaOverlayEditor::persist_current_area() {
                     if (existing->value("linked_area", std::string{}) != area_name_) {
                         (*existing)["linked_area"] = area_name_;
                     }
+                    // Force candidates to the area with 100% weight
+                    (*existing)["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name", area_name_}, {"chance", 100}}) });
                     room_->save_assets_json();
                 }
             } catch (...) {
@@ -1982,7 +1989,7 @@ void AreaOverlayEditor::append_room_area_spawn_rows(DockableCollapsible::Rows& r
         entry["position"] = "Random";
         entry["min_number"] = 1;
         entry["max_number"] = 1;
-        entry["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name","null"},{"chance",100}}) });
+        entry["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name","null"},{"chance",0}}) });
         groups_ptr->push_back(std::move(entry));
         if (room_) room_->save_assets_json();
         room_area_spawn_list_->refresh_row_configuration();
@@ -2004,7 +2011,17 @@ void AreaOverlayEditor::append_room_area_spawn_rows(DockableCollapsible::Rows& r
     };
 
     // Don’t allow linking in this context
-    SpawnGroupConfig::ConfigureEntryCallback cfg = [](SpawnGroupConfig::EntryController& ctrl, const nlohmann::json&) {
+    SpawnGroupConfig::ConfigureEntryCallback cfg = [this](SpawnGroupConfig::EntryController& ctrl, const nlohmann::json&) {
+        // Provide area names for search as extra results
+        ctrl.set_area_names_provider([this]() {
+            std::vector<std::string> names;
+            if (!room_) return names;
+            names.reserve(room_->areas.size());
+            for (const auto& na : room_->areas) {
+                if (!na.name.empty()) names.push_back(na.name);
+            }
+            return names;
+        });
         ctrl.set_linkable_room_areas_provider({});
         ctrl.set_linkable_asset_areas_provider({});
     };

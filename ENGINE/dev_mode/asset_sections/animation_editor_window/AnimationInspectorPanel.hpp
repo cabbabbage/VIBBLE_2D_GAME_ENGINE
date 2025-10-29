@@ -122,6 +122,8 @@ class AnimationInspectorPanel {
     mutable bool preview_reverse_ = false;
     mutable bool preview_flip_x_ = false;
     mutable bool preview_flip_y_ = false;
+    mutable bool preview_flip_movement_x_ = false;
+    mutable bool preview_flip_movement_y_ = false;
     mutable std::vector<std::string> preview_modifier_badges_;
     bool rename_pending_ = false;
     bool is_start_animation_ = false;

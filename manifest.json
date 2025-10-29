@@ -4713,184 +4713,6 @@
     },
     "Bomb": {
       "animations": {
-        "backward": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
-          "custom_animation_controller_key": "SRC/assets/Bomb",
-          "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": true,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              1,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              5,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              26,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              26,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              16,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 80
-          },
-          "number_of_frames": 16,
-          "on_end": "SRC/assets/Bomb/default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "SRC/assets/Bomb/default",
-            "path": "SRC/assets/Bomb"
-          },
-          "speed_factor": -4
-        },
         "default": {
           "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
           "custom_animation_controller_key": "SRC/assets/Bomb",
@@ -5037,529 +4859,45 @@
           },
           "speed_factor": -3
         },
-        "forward": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
-          "custom_animation_controller_key": "SRC/assets/Bomb",
+        "left": {
           "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": true,
+          "locked": false,
           "loop": false,
           "movement": [
             [
               0,
               0
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -1,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -5,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -26,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -26,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -16,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
             ]
           ],
           "movement_total": {
             "dx": 0,
-            "dy": -80
-          },
-          "number_of_frames": 16,
-          "on_end": "SRC/assets/Bomb/default",
-          "reverse_source": true,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "backward",
-            "path": "SRC/assets/Bomb"
-          },
-          "speed_factor": -4
-        },
-        "left": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
-          "custom_animation_controller_key": "SRC/assets/Bomb",
-          "flipped_source": true,
-          "has_custom_animation_controller": false,
-          "locked": true,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -1,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -6,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -5,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -26,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -26,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -16,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": -80,
             "dy": 0
           },
-          "number_of_frames": 16,
-          "on_end": "SRC/assets/Bomb/default",
+          "number_of_frames": 1,
+          "on_end": "default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
-            "kind": "animation",
-            "name": "right",
-            "path": ""
+            "kind": "folder",
+            "name": null,
+            "path": "left"
           },
-          "speed_factor": -4
+          "speed_factor": 1
         },
         "right": {
           "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
           "custom_animation_controller_key": "SRC/assets/Bomb",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": false
+          },
           "flipped_source": false,
           "has_custom_animation_controller": false,
           "locked": true,
           "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              1,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              6,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              5,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              26,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              26,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              16,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": 80,
-            "dy": 0
-          },
           "number_of_frames": 16,
           "on_end": "SRC/assets/Bomb/default",
           "reverse_source": false,
@@ -5568,8 +4906,7 @@
             "kind": "animation",
             "name": "default",
             "path": ""
-          },
-          "speed_factor": -4
+          }
         }
       },
       "anti_tags": [],
@@ -16817,9 +16154,9 @@
       "rooms_data": {
         "NewRoom": {
           "display_color": [
-            39,
-            242,
             36,
+            68,
+            242,
             255
           ],
           "name": "NewRoom",
@@ -16828,9 +16165,9 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            85,
-            191,
-            242,
+            96,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 5,
@@ -16902,8 +16239,8 @@
           "curvyness": 3,
           "display_color": [
             242,
-            239,
-            36,
+            114,
+            85,
             255
           ],
           "edge_smoothness": 4,
@@ -16977,9 +16314,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            31,
-            187,
             204,
+            162,
+            31,
             255
           ],
           "edge_smoothness": 4,
@@ -17058,8 +16395,8 @@
           "curvyness": 3,
           "display_color": [
             85,
+            199,
             242,
-            103,
             255
           ],
           "edge_smoothness": 7,
@@ -17138,9 +16475,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            76,
-            31,
-            204,
+            242,
+            36,
+            135,
             255
           ],
           "edge_smoothness": 6,
@@ -17241,9 +16578,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
+            238,
+            36,
             242,
-            197,
-            85,
             255
           ],
           "edge_smoothness": 9,
@@ -17314,9 +16651,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            231,
-            85,
-            242,
+            71,
+            94,
+            204,
             255
           ],
           "edge_smoothness": 8,
@@ -17387,9 +16724,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
+            232,
             242,
             85,
-            185,
             255
           ],
           "edge_smoothness": 6,
@@ -17456,9 +16793,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
+            187,
+            31,
             204,
-            71,
-            131,
             255
           ],
           "edge_smoothness": 6,
@@ -17525,9 +16862,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            85,
-            242,
-            213,
+            31,
+            204,
+            185,
             255
           ],
           "edge_smoothness": 2,
@@ -17576,9 +16913,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            80,
-            204,
-            31,
+            36,
+            242,
+            125,
             255
           ],
           "edge_smoothness": 12,
@@ -17652,9 +16989,9 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            179,
+            133,
             204,
-            51,
+            71,
             255
           ],
           "edge_smoothness": 9,
@@ -17724,9 +17061,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            175,
-            36,
-            242,
+            32,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 7,
@@ -17800,9 +17137,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            204,
-            143,
-            71,
+            242,
+            36,
+            188,
             255
           ],
           "edge_smoothness": 6,
@@ -17880,7 +17217,7 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            116,
+            143,
             36,
             242,
             255
@@ -17992,9 +17329,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            51,
-            86,
+            182,
             204,
+            51,
             255
           ],
           "edge_smoothness": 5,
@@ -18064,9 +17401,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            31,
-            204,
-            70,
+            85,
+            124,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -18134,8 +17471,8 @@
           "curvyness": 3,
           "display_color": [
             242,
-            71,
-            36,
+            85,
+            128,
             255
           ],
           "edge_smoothness": 10,
@@ -18210,8 +17547,8 @@
           "curvyness": 2,
           "display_color": [
             242,
+            130,
             36,
-            103,
             255
           ],
           "edge_smoothness": 5,
@@ -18293,14 +17630,38 @@
             {
               "name": "area_area",
               "points": [],
-              "resolution": 3
+              "resolution": 3,
+              "spawn_groups": [
+                {
+                  "candidates": [
+                    {
+                      "chance": 0,
+                      "name": "null"
+                    }
+                  ],
+                  "max_number": 1,
+                  "min_number": 1,
+                  "position": "Random"
+                },
+                {
+                  "candidates": [
+                    {
+                      "chance": 0,
+                      "name": "null"
+                    }
+                  ],
+                  "max_number": 1,
+                  "min_number": 1,
+                  "position": "Random"
+                }
+              ]
             }
           ],
           "curvyness": 2,
           "display_color": [
-            112,
+            85,
+            214,
             242,
-            36,
             255
           ],
           "edge_smoothness": 101,
@@ -18479,8 +17840,8 @@
             {
               "candidates": [
                 {
-                  "chance": 0,
-                  "name": "null"
+                  "chance": 100,
+                  "name": "area_area"
                 }
               ],
               "display_name": "area_area",
@@ -18529,9 +17890,9 @@
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            36,
+            83,
+            61,
             242,
-            198,
             255
           ],
           "edge_smoothness": 6,
@@ -18601,9 +17962,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            36,
-            242,
-            99,
+            204,
+            138,
+            71,
             255
           ],
           "edge_smoothness": 7,
@@ -18671,9 +18032,9 @@
       "trails_data": {
         "NewTrail": {
           "display_color": [
+            172,
             242,
             85,
-            153,
             255
           ],
           "edge_smoothness": 2,
@@ -18691,9 +18052,9 @@
         "basic": {
           "curvyness": 4,
           "display_color": [
-            36,
             242,
-            113,
+            239,
+            36,
             255
           ],
           "edge_smoothness": 2,

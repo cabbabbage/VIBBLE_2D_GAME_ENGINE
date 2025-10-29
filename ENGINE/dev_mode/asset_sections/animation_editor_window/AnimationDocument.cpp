@@ -72,6 +72,8 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     bool derived_reverse = payload.value("reverse_source", false);
     bool derived_flip_x = payload.value("flipped_source", false);
     bool derived_flip_y = false;
+    bool derived_flip_movement_x = false;
+    bool derived_flip_movement_y = false;
     if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
         const auto& modifiers = payload["derived_modifiers"];
         if (modifiers.contains("reverse")) {
@@ -83,12 +85,20 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
         if (modifiers.contains("flipY")) {
             derived_flip_y = parse_bool(modifiers["flipY"], false);
         }
+        if (modifiers.contains("flipMovementX")) {
+            derived_flip_movement_x = parse_bool(modifiers["flipMovementX"], false);
+        }
+        if (modifiers.contains("flipMovementY")) {
+            derived_flip_movement_y = parse_bool(modifiers["flipMovementY"], false);
+        }
     }
 
     if (derived_from_animation) {
         payload["derived_modifiers"] = nlohmann::json{{"reverse", derived_reverse},
                                                        {"flipX", derived_flip_x},
-                                                       {"flipY", derived_flip_y}};
+                                                       {"flipY", derived_flip_y},
+                                                       {"flipMovementX", derived_flip_movement_x},
+                                                       {"flipMovementY", derived_flip_movement_y}};
         payload.erase("movement");
         payload.erase("movement_total");
         payload.erase("movement_variants");

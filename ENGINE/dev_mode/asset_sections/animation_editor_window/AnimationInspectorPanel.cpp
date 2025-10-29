@@ -782,6 +782,8 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
     self->preview_reverse_ = false;
     self->preview_flip_x_ = false;
     self->preview_flip_y_ = false;
+    self->preview_flip_movement_x_ = false;
+    self->preview_flip_movement_y_ = false;
 
     if (!payload_dump.has_value()) {
         return;
@@ -809,19 +811,27 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
             self->preview_reverse_ = modifiers.value("reverse", self->preview_reverse_);
             self->preview_flip_x_ = modifiers.value("flipX", self->preview_flip_x_);
             self->preview_flip_y_ = modifiers.value("flipY", false);
+            self->preview_flip_movement_x_ = modifiers.value("flipMovementX", false);
+            self->preview_flip_movement_y_ = modifiers.value("flipMovementY", false);
         } else {
             self->preview_flip_y_ = false;
+            self->preview_flip_movement_x_ = false;
+            self->preview_flip_movement_y_ = false;
         }
     } else {
         self->preview_reverse_ = payload.value("reverse_source", false);
         self->preview_flip_x_ = payload.value("flipped_source", false);
         self->preview_flip_y_ = false;
+        self->preview_flip_movement_x_ = false;
+        self->preview_flip_movement_y_ = false;
     }
 
     auto add_badge = [&](const char* text) { self->preview_modifier_badges_.emplace_back(text); };
     if (self->preview_reverse_) add_badge("Reverse");
     if (self->preview_flip_x_) add_badge("Flip X");
     if (self->preview_flip_y_) add_badge("Flip Y");
+    if (self->preview_flip_movement_x_) add_badge("Flip Movement X");
+    if (self->preview_flip_movement_y_) add_badge("Flip Movement Y");
 }
 
 std::vector<AnimationInspectorPanel::FocusTarget> AnimationInspectorPanel::focus_order() const {

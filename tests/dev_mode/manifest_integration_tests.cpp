@@ -132,6 +132,10 @@ TEST_CASE("AnimationDocument preserves derived modifiers for referenced animatio
     CHECK(modifiers.value("reverse", false));
     CHECK(modifiers.value("flipX", false));
     CHECK(modifiers.value("flipY", false));
+    CHECK(modifiers.contains("flipMovementX"));
+    CHECK_FALSE(modifiers.value("flipMovementX", true));
+    CHECK(modifiers.contains("flipMovementY"));
+    CHECK_FALSE(modifiers.value("flipMovementY", true));
     CHECK(parsed.value("reverse_source", false));
     CHECK(parsed.value("flipped_source", false));
     CHECK(!parsed.contains("movement"));
