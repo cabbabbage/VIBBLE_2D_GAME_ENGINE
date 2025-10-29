@@ -1977,6 +1977,7 @@ void DevControls::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& 
     spawned.clear();
     assets_->initialize_active_assets(assets_->getView().get_screen_center());
     assets_->refresh_active_asset_lists();
+    refresh_active_asset_filters();
 }
 
 void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {

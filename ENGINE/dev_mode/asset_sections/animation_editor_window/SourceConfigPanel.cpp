@@ -301,6 +301,9 @@ void SourceConfigPanel::set_source_mode(SourceMode mode) {
     }
 
     use_animation_reference_ = wants_animation;
+    if (use_animation_reference_) {
+        show_import_modal_ = false;
+    }
 
     if (use_animation_reference_) {
         refresh_animation_options();
@@ -395,6 +398,9 @@ void SourceConfigPanel::reload_from_document() {
     cached_asset_root_valid_ = false;
 
     use_animation_reference_ = (current_source_.kind == std::string("animation"));
+    if (use_animation_reference_) {
+        show_import_modal_ = false;
+    }
     refresh_animation_options();
 
     if (use_animation_reference_) {

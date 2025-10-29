@@ -369,9 +369,6 @@ void AssetInfoUI::open()  {
     container_.open();
     apply_camera_override(true);
     for (auto& s : sections_) s->set_expanded(false);
-    if (shading_section_ && info_ && info_->is_shaded) {
-        shading_section_->set_expanded(true);
-    }
 }
 void AssetInfoUI::close() {
     if (!visible_) return;
