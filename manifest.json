@@ -4713,31 +4713,6 @@
     },
     "Bomb": {
       "animations": {
-        "animation": {
-          "flipped_source": false,
-          "locked": false,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 1,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "animation"
-          },
-          "speed_factor": 1
-        },
         "default": {
           "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
           "custom_animation_controller_key": "SRC/assets/Bomb",
@@ -4906,31 +4881,6 @@
             "kind": "folder",
             "name": null,
             "path": "left"
-          },
-          "speed_factor": 1
-        },
-        "ok": {
-          "flipped_source": false,
-          "locked": false,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 1,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "ok"
           },
           "speed_factor": 1
         },
