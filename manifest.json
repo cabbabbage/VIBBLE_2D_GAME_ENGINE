@@ -7816,130 +7816,17 @@
         "backward": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
           "custom_animation_controller_key": "SRC/assets/Frog",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": true
+          },
           "flipped_source": false,
           "has_custom_animation_controller": false,
           "locked": false,
           "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              3,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              3,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              3,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              3,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 40
-          },
           "number_of_frames": 12,
           "on_end": "SRC/assets/Frog/default",
           "reverse_source": true,
@@ -7948,8 +7835,7 @@
             "kind": "animation",
             "name": "SRC/assets/Frog/forward",
             "path": "SRC/assets/Frog"
-          },
-          "speed_factor": -4
+          }
         },
         "default": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
@@ -7960,10 +7846,6 @@
           "locked": false,
           "loop": false,
           "movement": [
-            [
-              0,
-              0
-            ],
             [
               0,
               0
@@ -8126,129 +8008,17 @@
         "left": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
           "custom_animation_controller_key": "SRC/assets/Frog",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
           "flipped_source": true,
           "has_custom_animation_controller": false,
           "locked": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -1,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -1,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": -20,
-            "dy": 0
-          },
+          "loop": false,
           "number_of_frames": 12,
           "on_end": "SRC/assets/Frog/default",
           "reverse_source": false,
@@ -8257,8 +8027,7 @@
             "kind": "animation",
             "name": "SRC/assets/Frog/right",
             "path": "SRC/assets/Frog"
-          },
-          "speed_factor": -4
+          }
         },
         "right": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
@@ -8417,7 +8186,7 @@
       "size_settings": {
         "scale_percentage": 11.0
       },
-      "start": "SRC/assets/Frog/default",
+      "start": "default",
       "tags": [
         "barrel_child",
         "book",
