@@ -773,9 +773,6 @@ void AreaOverlayEditor::setup_resolution_stepper() {
                 resolution_stepper_->set_value(area_resolution_);
             }
             mark_persist_dirty();
-            if (persist_current_area()) {
-                persist_dirty_ = false;
-            }
         } else if (resolution_stepper_) {
             resolution_stepper_->set_value(clamped);
         }
@@ -867,9 +864,10 @@ void AreaOverlayEditor::ensure_toolbox() {
     toolbox_->set_padding(12);
     toolbox_->set_row_gap(10);
     toolbox_->set_col_gap(12);
-    btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
-    btn_geom_  = std::make_unique<DMButton>("Geometry",  &DMStyles::CreateButton(), 180, DMButton::height());
-    btn_delete_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 180, DMButton::height());
+    btn_mask_   = std::make_unique<DMButton>("Mask",     &DMStyles::CreateButton(), 180, DMButton::height());
+    btn_geom_   = std::make_unique<DMButton>("Geometry", &DMStyles::CreateButton(), 180, DMButton::height());
+    btn_save_   = std::make_unique<DMButton>("Save",     &DMStyles::AccentButton(), 180, DMButton::height());
+    btn_delete_ = std::make_unique<DMButton>("Delete",   &DMStyles::DeleteButton(), 180, DMButton::height());
     if (!scale_to_room_checkbox_) {
         scale_to_room_checkbox_ = std::make_unique<DMCheckbox>("Scale area to room", scale_area_to_room_);
     }
@@ -939,13 +937,27 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
         rows.push_back({ owned_widgets_.back().get() });
     }
 
-    if (btn_delete_) {
+    if (btn_save_ || btn_delete_) {
         std::vector<Widget*> manage_row;
-        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_delete_.get(), [this]() {
-            delete_current_area();
-        }));
-        manage_row.push_back(owned_widgets_.back().get());
-        rows.push_back(manage_row);
+        if (btn_save_) {
+            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_save_.get(), [this]() {
+                // Only save when Save is pressed
+                const bool saved = persist_current_area();
+                if (saved) {
+                    persist_dirty_ = false;
+                    // Rebuild rows to ensure spawn groups (for room areas) show embedded
+                    rebuild_toolbox_rows();
+                }
+            }));
+            manage_row.push_back(owned_widgets_.back().get());
+        }
+        if (btn_delete_) {
+            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_delete_.get(), [this]() {
+                delete_current_area();
+            }));
+            manage_row.push_back(owned_widgets_.back().get());
+        }
+        if (!manage_row.empty()) rows.push_back(manage_row);
     }
 
     if (mode_ == Mode::Mask) {
@@ -1385,11 +1397,7 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
-    if (persist_dirty_) {
-        if (persist_current_area()) {
-            persist_dirty_ = false;
-        }
-    }
+    // Do not auto-save; only persist when Save is pressed
 }
 
 bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
@@ -1645,6 +1653,7 @@ bool AreaOverlayEditor::persist_current_area() {
                 handled = true;
             }
         } else if (trimmed != area_name_) {
+            // Defer save until user resolves conflicts; rename is applied as part of save flow
             if (!rename_current_area(desired_name)) {
                 name_box_->set_value(area_name_);
             }
@@ -1680,6 +1689,26 @@ bool AreaOverlayEditor::persist_current_area() {
         }
         return false;
     };
+
+    // Determine final candidate name for conflict checks
+    std::string final_name = area_name_;
+    if (name_box_ && !name_box_->is_editing()) {
+        const std::string desired_name = trim_copy(name_box_->value());
+        if (!desired_name.empty()) {
+            final_name = desired_name;
+        }
+    }
+
+    // Before saving an ASSET area, ensure no ROOM area with same name exists
+    if (info_ && assets_) {
+        if (Room* cr = assets_->current_room()) {
+            auto it = std::find_if(cr->areas.begin(), cr->areas.end(), [&](const Room::NamedArea& na){ return na.name == final_name; });
+            if (it != cr->areas.end()) {
+                assets_->show_dev_notice(std::string("Area name '") + final_name + "' conflicts with a room area. Please rename.", 3000);
+                return false;
+            }
+        }
+    }
 
     // Room area 'type' no longer used; do not assign or infer types for room areas
 
