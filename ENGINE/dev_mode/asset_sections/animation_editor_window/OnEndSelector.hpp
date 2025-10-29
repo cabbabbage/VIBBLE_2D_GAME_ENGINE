@@ -25,6 +25,8 @@ class OnEndSelector {
 
     int preferred_height(int width) const;
 
+    bool allow_out_of_bounds_pointer_events() const;
+
   private:
     void rebuild_options();
     void sync_from_document();

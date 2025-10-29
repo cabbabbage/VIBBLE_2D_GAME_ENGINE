@@ -56,6 +56,8 @@ class SourceConfigPanel {
 
     int preferred_height(int width) const;
 
+    bool allow_out_of_bounds_pointer_events() const;
+
     SourceMode source_mode() const;
     void set_source_mode(SourceMode mode);
     bool use_animation_reference() const { return use_animation_reference_; }

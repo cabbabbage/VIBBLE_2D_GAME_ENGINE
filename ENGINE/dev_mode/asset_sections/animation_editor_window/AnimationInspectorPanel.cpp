@@ -399,8 +399,18 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
             p.x = e.button.x;
             p.y = e.button.y;
         }
-        if (!SDL_PointInRect(&p, &bounds_)) {
-            return false;
+        const bool inside_bounds = SDL_PointInRect(&p, &bounds_) != 0;
+        if (!inside_bounds) {
+            bool allow_out_of_bounds = false;
+            if (source_config_ && source_config_->allow_out_of_bounds_pointer_events()) {
+                allow_out_of_bounds = true;
+            }
+            if (!allow_out_of_bounds && on_end_selector_ && on_end_selector_->allow_out_of_bounds_pointer_events()) {
+                allow_out_of_bounds = true;
+            }
+            if (!allow_out_of_bounds) {
+                return false;
+            }
         }
     }
 

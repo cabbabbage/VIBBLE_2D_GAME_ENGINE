@@ -67,6 +67,10 @@ int OnEndSelector::preferred_height(int) const {
     return kPanelPadding * 2 + DMDropdown::height();
 }
 
+bool OnEndSelector::allow_out_of_bounds_pointer_events() const {
+    return dropdown_ && dropdown_->expanded();
+}
+
 void OnEndSelector::update() {
     layout_dropdown();
     if (!document_ || animation_id_.empty()) {

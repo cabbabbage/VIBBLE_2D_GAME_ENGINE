@@ -286,6 +286,10 @@ int SourceConfigPanel::preferred_height(int) const {
     return height;
 }
 
+bool SourceConfigPanel::allow_out_of_bounds_pointer_events() const {
+    return use_animation_reference_ && animation_dropdown_ && animation_dropdown_->expanded();
+}
+
 SourceConfigPanel::SourceMode SourceConfigPanel::source_mode() const {
     return use_animation_reference_ ? SourceMode::kAnimation : SourceMode::kFrames;
 }

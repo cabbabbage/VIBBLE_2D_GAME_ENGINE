@@ -4713,6 +4713,31 @@
     },
     "Bomb": {
       "animations": {
+        "animation": {
+          "flipped_source": false,
+          "locked": false,
+          "loop": false,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": null,
+            "path": "animation"
+          },
+          "speed_factor": 1
+        },
         "default": {
           "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
           "custom_animation_controller_key": "SRC/assets/Bomb",
@@ -4881,6 +4906,31 @@
             "kind": "folder",
             "name": null,
             "path": "left"
+          },
+          "speed_factor": 1
+        },
+        "ok": {
+          "flipped_source": false,
+          "locked": false,
+          "loop": false,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": null,
+            "path": "ok"
           },
           "speed_factor": 1
         },
@@ -16155,8 +16205,8 @@
         "NewRoom": {
           "display_color": [
             204,
-            141,
-            71,
+            31,
+            105,
             255
           ],
           "name": "NewRoom",
@@ -16165,9 +16215,9 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            226,
+            85,
+            242,
             255
           ],
           "edge_smoothness": 5,
@@ -16238,9 +16288,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            138,
-            204,
-            31,
+            242,
+            85,
+            136,
             255
           ],
           "edge_smoothness": 4,
@@ -16314,9 +16364,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
+            235,
             242,
-            85,
-            125,
+            36,
             255
           ],
           "edge_smoothness": 4,
@@ -16394,9 +16444,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            223,
-            242,
+            141,
             85,
+            242,
             255
           ],
           "edge_smoothness": 7,
@@ -16469,15 +16519,40 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-e96adb33a4d6"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Bomb"
+                }
+              ],
+              "display_name": "Bomb",
+              "dx": 14,
+              "dy": -554,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 2992,
+              "origional_width": 2320,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-c4adf7e7b961"
             }
           ]
         },
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            242,
-            182,
-            85,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 6,
@@ -16578,9 +16653,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            190,
-            242,
+            195,
             36,
+            242,
             255
           ],
           "edge_smoothness": 9,
@@ -16651,9 +16726,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            188,
-            71,
+            118,
             204,
+            31,
             255
           ],
           "edge_smoothness": 8,
@@ -16724,9 +16799,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            36,
-            51,
-            242,
+            31,
+            204,
+            136,
             255
           ],
           "edge_smoothness": 6,
@@ -16794,7 +16869,7 @@
           "curvyness": 2,
           "display_color": [
             204,
-            86,
+            94,
             71,
             255
           ],
@@ -16862,9 +16937,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
-            124,
-            36,
+            204,
+            31,
+            48,
             255
           ],
           "edge_smoothness": 2,
@@ -16913,9 +16988,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            71,
-            153,
-            204,
+            36,
+            137,
+            242,
             255
           ],
           "edge_smoothness": 12,
@@ -16983,15 +17058,40 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-bc0cdcdfd7a9"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "car"
+                }
+              ],
+              "display_name": "car",
+              "dx": 82,
+              "dy": -419,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 2472,
+              "origional_width": 2560,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-4f686defbd76"
             }
           ]
         },
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            204,
-            31,
-            31,
+            94,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 9,
@@ -17061,9 +17161,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            204,
-            176,
-            31,
+            177,
+            242,
+            36,
             255
           ],
           "edge_smoothness": 7,
@@ -17137,9 +17237,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            85,
-            242,
-            176,
+            204,
+            71,
+            173,
             255
           ],
           "edge_smoothness": 6,
@@ -17217,9 +17317,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            51,
-            204,
-            81,
+            34,
+            190,
+            224,
             255
           ],
           "edge_smoothness": 10,
@@ -17329,8 +17429,8 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            218,
-            36,
+            85,
+            114,
             242,
             255
           ],
@@ -17401,8 +17501,8 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            104,
             36,
+            64,
             242,
             255
           ],
@@ -17470,9 +17570,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            36,
-            157,
-            242,
+            204,
+            171,
+            71,
             255
           ],
           "edge_smoothness": 10,
@@ -17546,9 +17646,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
-            192,
-            204,
-            71,
+            242,
+            61,
+            87,
             255
           ],
           "edge_smoothness": 5,
@@ -17630,9 +17730,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            204,
-            31,
-            31,
+            242,
+            36,
+            139,
             255
           ],
           "edge_smoothness": 101,
@@ -17814,8 +17914,8 @@
           "curvyness": 3,
           "display_color": [
             242,
-            114,
-            85,
+            36,
+            237,
             255
           ],
           "edge_smoothness": 6,
@@ -17885,9 +17985,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            85,
-            126,
             242,
+            85,
+            198,
             255
           ],
           "edge_smoothness": 7,
