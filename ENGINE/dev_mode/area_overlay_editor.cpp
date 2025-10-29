@@ -853,6 +853,14 @@ void AreaOverlayEditor::ensure_toolbox() {
     if (toolbox_) return;
     toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
 
+    // Clicking the panel 'X' should close the editor and any embedded UI
+    toolbox_->set_on_close([this]() {
+        if (room_area_spawn_list_) {
+            room_area_spawn_list_->close_embedded_search();
+        }
+        this->cancel();
+    });
+
     toolbox_->set_expanded(true);
 
     toolbox_->set_floating_content_width(372);

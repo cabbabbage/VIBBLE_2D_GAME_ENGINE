@@ -206,7 +206,18 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         return nullptr;
     }
 
-    SDL_Texture* previous_final       = asset.get_final_texture();
+    StageContext context{};
+    context.base_texture = base_frame;
+    context.lighting     = &lighting_;
+    context.width        = width;
+    context.height       = height;
+    context.reusable_final = asset.get_final_texture();
+    context.reactive_shadow_settings_override = low_quality_mode_ ? nullptr : lighting_.reactive_shadow_settings;
+    if (renderer_) {
+        SDL_GetRendererOutputSize(renderer_, &context.screen_width_px, &context.screen_height_px);
+    }
+
+    SDL_Texture* previous_final       = context.reusable_final;
     SDL_Texture* previous_final_copy  = nullptr;
     float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f);
     if (const auto* rs = context.reactive_shadow_settings()) {
@@ -268,16 +279,6 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         }
     }
 
-    StageContext context{};
-    context.base_texture = base_frame;
-    context.lighting     = &lighting_;
-    context.width        = width;
-    context.height       = height;
-    context.reusable_final = asset.get_final_texture();
-    context.reactive_shadow_settings_override = low_quality_mode_ ? nullptr : lighting_.reactive_shadow_settings;
-    if (renderer_) {
-        SDL_GetRendererOutputSize(renderer_, &context.screen_width_px, &context.screen_height_px);
-    }
     context.update_projection(asset);
 
     if (stages_.empty() || !stages_[0].stage) {
