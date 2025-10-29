@@ -95,6 +95,12 @@ private:
     void layout_mode_buttons();
     void layout_filter_checkboxes();
 
+    static FilterState& persistent_state();
+    static bool& persistent_state_initialized_flag();
+    static bool& persistent_state_loaded_flag();
+    static bool& persistent_filters_expanded_flag();
+    static void ensure_persistent_state_loaded();
+
     bool enabled_ = true;
     int screen_w_ = 0;
     int screen_h_ = 0;

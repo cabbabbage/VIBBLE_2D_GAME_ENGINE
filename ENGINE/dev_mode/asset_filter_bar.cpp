@@ -53,42 +53,45 @@ std::string make_method_setting_key(const std::string& method) {
     return key;
 }
 
-AssetFilterBar::FilterState& global_filter_state() {
-    static AssetFilterBar::FilterState state{};
+}
+
+AssetFilterBar::FilterState& AssetFilterBar::persistent_state() {
+    static FilterState state{};
     return state;
 }
 
-bool& global_state_initialized_flag() {
+bool& AssetFilterBar::persistent_state_initialized_flag() {
     static bool initialized = false;
     return initialized;
 }
 
-bool& global_state_loaded_flag() {
+bool& AssetFilterBar::persistent_state_loaded_flag() {
     static bool loaded = false;
     return loaded;
 }
 
-bool& global_filters_expanded_flag() {
+bool& AssetFilterBar::persistent_filters_expanded_flag() {
     static bool expanded = false;
     return expanded;
 }
 
-void ensure_global_state_loaded() {
-    if (global_state_loaded_flag()) {
+void AssetFilterBar::ensure_persistent_state_loaded() {
+    if (persistent_state_loaded_flag()) {
         return;
     }
-    global_state_loaded_flag() = true;
-    global_state_initialized_flag() = devmode::ui_settings::load_bool(kSettingsInitializedKey, false);
-    if (!global_state_initialized_flag()) {
-        global_filter_state().map_assets = true;
-        global_filter_state().current_room = true;
-        global_filters_expanded_flag() = false;
+    persistent_state_loaded_flag() = true;
+    persistent_state_initialized_flag() = devmode::ui_settings::load_bool(kSettingsInitializedKey, false);
+    if (!persistent_state_initialized_flag()) {
+        FilterState& state = persistent_state();
+        state.map_assets = true;
+        state.current_room = true;
+        persistent_filters_expanded_flag() = false;
         return;
     }
-    global_filter_state().map_assets = devmode::ui_settings::load_bool(kSettingsMapAssetsKey, true);
-    global_filter_state().current_room = devmode::ui_settings::load_bool(kSettingsCurrentRoomKey, true);
-    global_filters_expanded_flag() = devmode::ui_settings::load_bool(kSettingsFiltersExpandedKey, false);
-}
+    FilterState& state = persistent_state();
+    state.map_assets = devmode::ui_settings::load_bool(kSettingsMapAssetsKey, true);
+    state.current_room = devmode::ui_settings::load_bool(kSettingsCurrentRoomKey, true);
+    persistent_filters_expanded_flag() = devmode::ui_settings::load_bool(kSettingsFiltersExpandedKey, false);
 }
 
 AssetFilterBar::AssetFilterBar() = default;
@@ -96,10 +99,10 @@ AssetFilterBar::~AssetFilterBar() = default;
 
 AssetFilterBar::FilterState& AssetFilterBar::mutable_state() {
     if (!state_) {
-        ensure_global_state_loaded();
-        state_ = &global_filter_state();
-        has_saved_state_ = global_state_initialized_flag();
-        filters_expanded_ = global_filters_expanded_flag();
+        ensure_persistent_state_loaded();
+        state_ = &persistent_state();
+        has_saved_state_ = persistent_state_initialized_flag();
+        filters_expanded_ = persistent_filters_expanded_flag();
         if (!has_saved_state_) {
             state_->map_assets = true;
             state_->current_room = true;
@@ -920,11 +923,11 @@ void AssetFilterBar::collect_spawn_ids(const nlohmann::json& node, std::unordere
 }
 
 void AssetFilterBar::load_persisted_state() {
-    ensure_global_state_loaded();
+    ensure_persistent_state_loaded();
     FilterState& state_ref = mutable_state();
     state_ref.type_filters.clear();
     state_ref.method_filters.clear();
-    has_saved_state_ = global_state_initialized_flag();
+    has_saved_state_ = persistent_state_initialized_flag();
     if (!has_saved_state_) {
         state_ref.map_assets = true;
         state_ref.current_room = true;
@@ -933,7 +936,7 @@ void AssetFilterBar::load_persisted_state() {
     }
     state_ref.map_assets = devmode::ui_settings::load_bool(kSettingsMapAssetsKey, true);
     state_ref.current_room = devmode::ui_settings::load_bool(kSettingsCurrentRoomKey, true);
-    filters_expanded_ = global_filters_expanded_flag();
+    filters_expanded_ = persistent_filters_expanded_flag();
 }
 
 void AssetFilterBar::persist_state() {
@@ -948,11 +951,11 @@ void AssetFilterBar::persist_state() {
         devmode::ui_settings::save_bool(make_method_setting_key(kv.first), kv.second);
     }
     has_saved_state_ = true;
-    global_state_initialized_flag() = true;
+    persistent_state_initialized_flag() = true;
 }
 
 void AssetFilterBar::persist_filters_expanded() const {
-    global_filters_expanded_flag() = filters_expanded_;
+    persistent_filters_expanded_flag() = filters_expanded_;
     devmode::ui_settings::save_bool(kSettingsFiltersExpandedKey, filters_expanded_);
 }
 
