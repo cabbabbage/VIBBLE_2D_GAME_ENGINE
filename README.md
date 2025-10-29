@@ -51,7 +51,7 @@ Project layout:
 ## Custom Controllers
 
 ### File Layout
-Store controller headers and source files under `ENGINE/custom_controllers/`.
+Store controller headers and source files under `ENGINE/animation_update/custom_controllers/`.
 
 ### Registering a Controller
 1. Implement the controller class (derived from `AssetController`).

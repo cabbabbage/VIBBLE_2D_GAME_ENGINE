@@ -172,6 +172,11 @@ target_link_libraries(engine
         OpenGL::GL
 )
 
+# Link Windows COM/Shell libs for modern file dialogs
+if (WIN32)
+    target_link_libraries(engine PRIVATE Ole32 Shell32)
+endif()
+
 # Faster relinks on MSVC Debug
 if(MSVC)
     target_link_options(engine PRIVATE "$<$<CONFIG:Debug>:/INCREMENTAL>")
@@ -181,6 +186,7 @@ enable_testing()
 
 add_executable(dev_mode_ui_tests
     tests/dev_mode/dev_footer_bar_tests.cpp
+    tests/dev_mode/widgets_tooltip_tests.cpp
     tests/dev_mode/tag_cache_tests.cpp
     tests/dev_mode/asset_info_stub.cpp
     ENGINE/dev_mode/dev_ui_settings.cpp
@@ -217,9 +223,14 @@ target_link_libraries(dev_mode_ui_tests PRIVATE
 target_compile_definitions(dev_mode_ui_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}" ASSET_INFO_ENABLE_TEST_ACCESS)
 add_test(NAME dev_mode_ui_tests COMMAND dev_mode_ui_tests)
 
+set(AREA_SOURCES
+    ENGINE/utils/area.cpp
+    ENGINE/util/grid_math.cpp
+)
+
 add_executable(asset_loader_distance_tests
     tests/core/asset_loader_distance_tests.cpp
-    ENGINE/utils/area.cpp
+    ${AREA_SOURCES}
     ENGINE/core/asset_loader_internal.cpp
 )
 target_include_directories(asset_loader_distance_tests PRIVATE
@@ -236,6 +247,36 @@ target_link_libraries(asset_loader_distance_tests PRIVATE
 )
 target_compile_definitions(asset_loader_distance_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME asset_loader_distance_tests COMMAND asset_loader_distance_tests)
+
+# === camera_refresh_tests ===
+add_executable(camera_refresh_tests
+    tests/core/camera_refresh_tests.cpp
+    ENGINE/render/camera.cpp
+    ENGINE/utils/transform_smoothing_settings.cpp
+    ENGINE/dev_mode/dev_ui_settings.cpp
+    ENGINE/dev_mode/core/dev_json_store.cpp
+    ENGINE/core/find_current_room.cpp
+    ${AREA_SOURCES}
+    ENGINE/utils/range_util.cpp
+    ENGINE/utils/cache_manager.cpp
+)
+target_include_directories(camera_refresh_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests/stubs
+    ${CMAKE_SOURCE_DIR}/external
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/ENGINE/render
+    ${CMAKE_SOURCE_DIR}/ENGINE/utils
+)
+target_link_libraries(camera_refresh_tests PRIVATE
+    SDL2::SDL2
+    SDL2_image::SDL2_image
+    nlohmann_json::nlohmann_json
+    vibble_log
+)
+target_compile_definitions(camera_refresh_tests PRIVATE SDL_MAIN_HANDLED PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+add_test(NAME camera_refresh_tests COMMAND camera_refresh_tests)
+
 
 add_executable(world_grid_chunk_tests
     tests/world/grid_chunk_tests.cpp
@@ -325,7 +366,6 @@ add_executable(manifest_store_tests
     ENGINE/dev_mode/spawn_group_config/widgets/PerimeterWidget.cpp
     ENGINE/dev_mode/spawn_group_config/widgets/EdgeWidget.cpp
     ENGINE/dev_mode/spawn_group_config/widgets/RandomWidget.cpp
-    ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/LinkToAreaButton.cpp
     ENGINE/dev_mode/spawn_group_config/spawn_method_control_widgets/SpawnMethodDropdown.cpp
     ENGINE/dev_mode/DockableCollapsible.cpp
     ENGINE/dev_mode/FloatingDockableManager.cpp
@@ -340,10 +380,10 @@ add_executable(manifest_store_tests
     ENGINE/dev_mode/search_assets.cpp
     ENGINE/utils/map_grid_settings.cpp
     ENGINE/utils/input.cpp
-    ENGINE/utils/area.cpp
+    ${AREA_SOURCES}
     ENGINE/asset_info_methods/animation_loader.cpp
     ENGINE/asset_info_methods/lighting_loader.cpp
-    ENGINE/asset_info_methods/child_loader.cpp
+    ENGINE/asset_info_methods/asset_child_loader.cpp
     ENGINE/utils/cache_manager.cpp
     ENGINE/utils/generate_faded_mask.cpp
     ENGINE/utils/loading_status_notifier.cpp
@@ -380,9 +420,9 @@ add_executable(asset_info_manifest_tests
     ENGINE/asset/asset_types.cpp
     ENGINE/asset/animation.cpp
     ENGINE/asset_info_methods/lighting_loader.cpp
-    ENGINE/asset_info_methods/child_loader.cpp
+    ENGINE/asset_info_methods/asset_child_loader.cpp
     ENGINE/utils/generate_faded_mask.cpp
-    ENGINE/utils/area.cpp
+    ${AREA_SOURCES}
     ENGINE/utils/cache_manager.cpp
     ENGINE/utils/loading_status_notifier.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
@@ -414,8 +454,7 @@ add_test(NAME asset_info_manifest_tests COMMAND asset_info_manifest_tests)
 add_executable(edge_spawner_tests
     tests/spawn/edge_spawner_tests.cpp
     ENGINE/spawn/methods/edge_spawner.cpp
-    ENGINE/utils/area.cpp
-    ENGINE/util/grid_math.cpp
+    ${AREA_SOURCES}
 )
 target_include_directories(edge_spawner_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/external

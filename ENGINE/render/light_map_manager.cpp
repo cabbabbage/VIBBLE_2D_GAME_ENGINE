@@ -127,7 +127,8 @@ std::optional<int> LightMapManager::find_chunk_index(SDL_FPoint world_or_screen_
     world::Chunk* chunk = map->chunk_from_world(search_point);
     if (!chunk && assets_) {
         const camera& cam = assets_->getView();
-        search_point      = cam.screen_to_map({search_point.x, search_point.y});
+        SDL_FPoint mapped = cam.screen_to_map({search_point.x, search_point.y});
+        search_point      = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
         chunk             = map->chunk_from_world(search_point);
     }
     if (!chunk) {

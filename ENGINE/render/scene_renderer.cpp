@@ -19,7 +19,6 @@
 #include <string>
 #include <string_view>
 #include <tuple>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <cstdlib>
@@ -88,7 +87,8 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                   main_light_source_,
                                   assets->player,
                                   nullptr,
-                                  &reactive_shadow_settings_ })
+                                  &reactive_shadow_settings_ }),
+  update_map_light_enabled_(devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true))
 {
     if (map_manifest.is_object()) {
         auto it = map_manifest.find("map_light_data");
@@ -121,6 +121,10 @@ SceneRenderer::~SceneRenderer() {
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
+
+void SceneRenderer::set_update_map_light_enabled(bool enabled) {
+    update_map_light_enabled_ = enabled;
+}
 
 LightMap* SceneRenderer::light_map() {
     return light_map_ ? light_map_.get() : nullptr;
@@ -211,43 +215,85 @@ bool SceneRenderer::shouldRegen(Asset* a){
     return it->second != current_frame;
 }
 
-SDL_Rect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){
-    float base_scale=1.f;
-    if (a && a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor>=0.f) base_scale=a->info->scale_factor;
-    float scaled_fw=(float)fw*base_scale;
-    float scaled_fh=(float)fh*base_scale;
-    float base_sw=scaled_fw*inv_scale;
-    float base_sh=scaled_fh*inv_scale;
+SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){
+    const float world_x = a ? a->smoothed_translation_x() : 0.0f;
+    const float world_y = a ? a->smoothed_translation_y() : 0.0f;
 
-    const camera::RenderEffects ef=assets_->getView().compute_render_effects(SDL_Point{a->pos.x,a->pos.y}, base_sh, ref_sh);
-    float scaled_sw=base_sw*ef.distance_scale;
-    float scaled_sh2=base_sh*ef.distance_scale;
-    float final_h=scaled_sh2*ef.vertical_scale;
+    float base_scale = 1.0f;
+    if (a) {
+        base_scale = a->smoothed_scale();
+        if (!std::isfinite(base_scale) || base_scale <= 0.0f) {
+            base_scale = 1.0f;
+        }
+    }
+    const float scaled_fw = static_cast<float>(fw) * base_scale;
+    const float scaled_fh = static_cast<float>(fh) * base_scale;
+    const float base_sw   = scaled_fw * inv_scale;
+    const float base_sh   = scaled_fh * inv_scale;
 
-    if (scaled_sw<min_w && final_h<min_h) return {0,0,0,0};
+    camera& cam = assets_->getView();
+    const camera::RenderSmoothingKey smoothing_key = a ?
+        reinterpret_cast<camera::RenderSmoothingKey>(a) : 0;
+    camera::RenderEffects ef=cam.compute_render_effects(
+        SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
+        base_sh,
+        ref_sh,
+        smoothing_key);
+    SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ world_x, world_y });
+    ef.screen_position = screen;
+    const float scaled_sw = base_sw * ef.distance_scale;
+    const float scaled_sh2 = base_sh * ef.distance_scale;
+    const float final_h = scaled_sh2 * ef.vertical_scale;
 
-    int sw=std::max(1,(int)std::lround(scaled_sw));
-    int sh=std::max(1,(int)std::lround(final_h));
-    if (sw<min_w && sh<min_h) return {0,0,0,0};
+    const float min_w_f = static_cast<float>(min_w);
+    const float min_h_f = static_cast<float>(min_h);
+    if (scaled_sw < min_w_f && final_h < min_h_f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
 
-    const SDL_Point& cp=ef.screen_position;
-    return SDL_Rect{ cp.x - sw/2, cp.y - sh, sw, sh };
+    float width  = scaled_sw;
+    float height = final_h;
+
+    bool enforced_min = false;
+    if (width < min_w_f) {
+        width = min_w_f;
+        enforced_min = true;
+    }
+    if (height < min_h_f) {
+        height = min_h_f;
+        enforced_min = true;
+    }
+
+    width  = std::max(width, 1.0f);
+    height = std::max(height, 1.0f);
+
+    const float center_x = ef.screen_position.x + ef.parallax_offset_x;
+    const float left     = center_x - width * 0.5f;
+    const float top      = ef.screen_position.y - height;
+
+    if (enforced_min) {
+        width  = static_cast<float>(std::max(1, static_cast<int>(std::lround(width))));
+        height = static_cast<float>(std::max(1, static_cast<int>(std::lround(height))));
+    }
+
+    return SDL_FRect{ left, top, width, height };
 }
 
 void SceneRenderer::render(){
     static int render_call_count=0; ++render_call_count;
+    ++frame_counter_;
 
     SDL_Point orbit_center{ screen_width_ / 2, screen_height_ / 2 };
     main_light_source_.set_screen_orbit_center(orbit_center);
 
-    const camera* camera_state = assets_ ? &assets_->getView() : nullptr;
-    if (camera_state) {
-        main_light_source_.set_direction_reference_world(camera_state->get_screen_center());
+    const camera* camera_state_ptr = assets_ ? &assets_->getView() : nullptr;
+    if (camera_state_ptr) {
+        main_light_source_.set_direction_reference_world(camera_state_ptr->get_screen_center());
     }
 
-    bool should_update_light=true;
-    if (assets_ && assets_->is_dev_mode()){
-        should_update_light=devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true);
+    bool should_update_light = true;
+    if (assets_ && assets_->is_dev_mode()) {
+        should_update_light = update_map_light_enabled_;
     }
 
     if (light_map_ && !chunk_lighting_suspended_){
@@ -301,16 +347,21 @@ void SceneRenderer::render(){
     light_overlay_sources_.clear();
 
     if (!light_map_only_mode_){
-        const auto& camera_state=assets_->getView();
-        const camera::RealismSettings& cam_settings = camera_state.realism_settings();
+        const camera* camera_state = assets_ ? &assets_->getView() : nullptr;
+        const camera::RealismSettings cam_settings = camera_state
+            ? camera_state->realism_settings()
+            : camera::RealismSettings{};
         const int effective_quality_percent = assets_
                                                   ? assets_->effective_render_quality_percent() : cam_settings.render_quality_percent;
         const float quality_percent =
             std::clamp(static_cast<float>(effective_quality_percent), 10.0f, 100.0f);
         render_pipeline::ScalingLogic::SetQualityCap(quality_percent / 100.0f);
 
-        float scale=camera_state.get_scale();
-        float inv_scale=1.f/scale;
+        float scale = camera_state ? camera_state->get_scale() : 1.0f;
+        if (!std::isfinite(scale) || scale <= 0.0f) {
+            scale = 1.0f;
+        }
+        float inv_scale = 1.0f / scale;
         float min_ratio = cam_settings.min_visible_screen_ratio;
         if (!std::isfinite(min_ratio) || min_ratio < 0.0f) {
             min_ratio = kDefaultMinVisibleScreenRatio;
@@ -335,8 +386,6 @@ void SceneRenderer::render(){
         if (player_sh<=0.f) player_sh=1.f;
 
         const auto& active = assets_->getActive();
-        current_active_assets_.clear();
-        current_active_assets_.reserve(active.size());
         texture_commands_.clear();
         texture_commands_.reserve(active.size());
         remaining_commands_.clear();
@@ -346,7 +395,7 @@ void SceneRenderer::render(){
         auto enqueue_command = [&](Asset* asset,
                                    SDL_Texture* final_tex,
                                    SDL_Texture* draw_tex,
-                                   const SDL_Rect& dst_rect) {
+                                   const SDL_FRect& dst_rect) {
             AssetRenderCommand cmd;
             cmd.source_texture      = draw_tex ? draw_tex : final_tex;
             cmd.final_texture       = final_tex;
@@ -355,6 +404,11 @@ void SceneRenderer::render(){
             cmd.highlighted         = asset->is_highlighted();
             cmd.selected            = asset->is_selected();
             cmd.flipped             = asset->flipped;
+            cmd.alpha               = asset ? asset->smoothed_alpha() : 1.0f;
+            if (!std::isfinite(cmd.alpha)) {
+                cmd.alpha = 1.0f;
+            }
+            cmd.alpha = std::clamp(cmd.alpha, 0.0f, 1.0f);
 
             auto& target_commands = (asset->info->type == asset_types::texture) ? texture_commands_ : remaining_commands_;
             target_commands.push_back(std::move(cmd));
@@ -365,9 +419,8 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            current_active_assets_.insert(a);
-            const bool newly = last_active_assets_.find(a) == last_active_assets_.end();
-            if (newly) {
+            const bool is_new = a->last_render_frame_id != frame_counter_ - 1;
+            if (is_new) {
                 SDL_Texture* tex = render_pipeline_.regenerateFinalTexture(a);
                 a->set_final_texture(tex);
             } else if (shouldRegen(a)) {
@@ -381,6 +434,8 @@ void SceneRenderer::render(){
                 continue;
             }
 
+            a->last_render_frame_id = frame_counter_;
+
             int fw = a->cached_w;
             int fh = a->cached_h;
             if (fw == 0 || fh == 0) {
@@ -389,8 +444,8 @@ void SceneRenderer::render(){
                 a->cached_h = fh;
             }
 
-            SDL_Rect dst = get_scaled_position_rect(a, fw, fh, inv_scale, min_w, min_h, player_sh);
-            if (dst.w == 0 && dst.h == 0) {
+            SDL_FRect dst = get_scaled_position_rect(a, fw, fh, inv_scale, min_w, min_h, player_sh);
+            if (dst.w <= 0.0f || dst.h <= 0.0f) {
                 if (a->current_frame) {
                     last_rendered_frames_[a] = a->current_frame;
                 } else {
@@ -399,10 +454,20 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(a, final_tex, fw, fh, dst.w, dst.h);
+            const float hysteresis_margin = camera_state
+                ? camera_state->realism_settings().scale_variant_hysteresis_margin
+                : render_pipeline::ScalingLogic::kDefaultHysteresisMargin;
+            SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(
+                a,
+                final_tex,
+                fw,
+                fh,
+                static_cast<int>(std::lround(dst.w)),
+                static_cast<int>(std::lround(dst.h)),
+                hysteresis_margin);
             enqueue_command(a, final_tex, draw_tex, dst);
 
-            if (a->info && !a->info->light_sources.empty() && dst.w > 0 && dst.h > 0 && fw > 0 && fh > 0) {
+            if (a->info && !a->info->light_sources.empty() && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
                 const std::string canonical_type = asset_types::canonicalize(a->info->type);
                 const bool        punches_overlay =
                     (canonical_type == asset_types::object || canonical_type == asset_types::texture || canonical_type == asset_types::player);
@@ -411,7 +476,12 @@ void SceneRenderer::render(){
                 }
                 LightOverlaySource source;
                 source.asset       = a;
-                source.asset_rect  = dst;
+                source.asset_rect  = SDL_Rect{
+                    static_cast<int>(std::lround(dst.x)),
+                    static_cast<int>(std::lround(dst.y)),
+                    static_cast<int>(std::lround(dst.w)),
+                    static_cast<int>(std::lround(dst.h))
+                };
                 source.base_width  = fw;
                 source.base_height = fh;
                 source.flipped     = a->flipped;
@@ -437,36 +507,40 @@ void SceneRenderer::render(){
                 }
 
                 SDL_Texture* mod_target = cmd.source_texture;
+                const Uint8 alpha_mod = static_cast<Uint8>(std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
                 if (cmd.highlighted) {
                     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
                     SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
-                    SDL_Rect outline = cmd.dst;
-                    outline.x -= 2;
-                    outline.y -= 2;
-                    outline.w += 4;
-                    outline.h += 4;
-                    SDL_RenderFillRect(renderer_, &outline);
+                    SDL_FRect outline = cmd.dst;
+                    outline.x -= 2.0f;
+                    outline.y -= 2.0f;
+                    outline.w += 4.0f;
+                    outline.h += 4.0f;
+                    SDL_RenderFillRectF(renderer_, &outline);
                     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
                     SDL_SetTextureColorMod(mod_target, 255, 200, 200);
                 } else if (cmd.selected) {
                     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
                     SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100);
-                    SDL_Rect outline = cmd.dst;
-                    outline.x -= 2;
-                    outline.y -= 2;
-                    outline.w += 4;
-                    outline.h += 4;
-                    SDL_RenderFillRect(renderer_, &outline);
+                    SDL_FRect outline = cmd.dst;
+                    outline.x -= 2.0f;
+                    outline.y -= 2.0f;
+                    outline.w += 4.0f;
+                    outline.h += 4.0f;
+                    SDL_RenderFillRectF(renderer_, &outline);
                     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
                     SDL_SetTextureColorMod(mod_target, 255, 200, 200);
                 } else {
                     SDL_SetTextureColorMod(mod_target, 255, 255, 255);
                 }
 
-                SDL_RenderCopyEx(renderer_, cmd.source_texture, nullptr, &cmd.dst, 0, nullptr, cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+                SDL_SetTextureAlphaMod(mod_target, alpha_mod);
+                SDL_RenderCopyExF(renderer_, cmd.source_texture, nullptr, &cmd.dst, 0.0, nullptr, cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
                 SDL_SetTextureColorMod(mod_target, 255, 255, 255);
+                SDL_SetTextureAlphaMod(mod_target, 255);
                 if (cmd.uses_scaled_texture && cmd.final_texture) {
                     SDL_SetTextureColorMod(cmd.final_texture, 255, 255, 255);
+                    SDL_SetTextureAlphaMod(cmd.final_texture, 255);
                 }
             }
             SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
@@ -501,15 +575,14 @@ void SceneRenderer::render(){
 
         render_commands(remaining_commands_);
 
-        last_active_assets_.swap(current_active_assets_);
         for (auto it = last_rendered_frames_.begin(); it != last_rendered_frames_.end();) {
-            if (last_active_assets_.find(it->first) == last_active_assets_.end()) {
+            Asset* asset = it->first;
+            if (!asset || asset->last_render_frame_id != frame_counter_) {
                 it = last_rendered_frames_.erase(it);
             } else {
                 ++it;
             }
         }
-        current_active_assets_.clear();
     }
 
     SDL_SetRenderTarget(renderer_,nullptr);
@@ -583,19 +656,19 @@ void SceneRenderer::inject_map_light_sample() {
 
     const camera& cam = assets_->getView();
     const SDL_Point screen_pos = map_light->get_position();
-    const SDL_Point world_pos  = cam.screen_to_map(screen_pos);
+    const SDL_FPoint world_pos  = cam.screen_to_map(screen_pos);
 
     runtime_lighting::ExternalLightSample sample{};
-    sample.position.x = static_cast<float>(world_pos.x);
-    sample.position.y = static_cast<float>(world_pos.y);
+    sample.position.x = world_pos.x;
+    sample.position.y = world_pos.y;
     sample.intensity  = std::clamp(effective_intensity, 0.0f, 1.0f);
     sample.color      = light_color;
 
-    SDL_Point world00 = cam.screen_to_map({0, 0});
-    SDL_Point worldX  = cam.screen_to_map({screen_width_, 0});
-    SDL_Point worldY  = cam.screen_to_map({0, screen_height_});
-    const float span_x = std::abs(static_cast<float>(worldX.x - world00.x));
-    const float span_y = std::abs(static_cast<float>(worldY.y - world00.y));
+    SDL_FPoint world00 = cam.screen_to_map({0, 0});
+    SDL_FPoint worldX  = cam.screen_to_map({screen_width_, 0});
+    SDL_FPoint worldY  = cam.screen_to_map({0, screen_height_});
+    const float span_x = std::abs(worldX.x - world00.x);
+    const float span_y = std::abs(worldY.y - world00.y);
     float       dominant_span = std::max(span_x, span_y);
     if (!(dominant_span > 1e-3f)) {
         dominant_span = static_cast<float>(std::max(screen_width_, screen_height_));
@@ -642,8 +715,16 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
     SDL_SetRenderDrawBlendMode(renderer_, cutout_blend);
-    std::vector<SDL_Vertex> light_vertices;
-    std::vector<int>        light_indices;
+
+    if (darkness_overlay_vertex_capacity_hint_ > darkness_overlay_vertices_.capacity()) {
+        darkness_overlay_vertices_.reserve(darkness_overlay_vertex_capacity_hint_);
+    }
+    if (darkness_overlay_index_capacity_hint_ > darkness_overlay_indices_.capacity()) {
+        darkness_overlay_indices_.reserve(darkness_overlay_index_capacity_hint_);
+    }
+
+    std::size_t frame_max_vertices = 0;
+    std::size_t frame_max_indices  = 0;
 
     for (const LightOverlaySource& source : light_overlay_sources_) {
         Asset* asset = source.asset;
@@ -716,10 +797,24 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
             const int   radial_steps  = 12;
             const float two_pi        = 6.28318530718f;
 
+            const std::size_t desired_vertex_capacity = static_cast<std::size_t>((radial_steps + 1) * (angular_steps + 1));
+            const std::size_t desired_index_capacity  = static_cast<std::size_t>(radial_steps * angular_steps * 6);
+
+            auto& light_vertices = darkness_overlay_vertices_;
+            auto& light_indices  = darkness_overlay_indices_;
+
             light_vertices.clear();
             light_indices.clear();
-            light_vertices.reserve(static_cast<std::size_t>((radial_steps + 1) * (angular_steps + 1)));
-            light_indices.reserve(static_cast<std::size_t>(radial_steps * angular_steps * 6));
+
+            if (desired_vertex_capacity > light_vertices.capacity()) {
+                light_vertices.reserve(desired_vertex_capacity);
+            }
+            if (desired_index_capacity > light_indices.capacity()) {
+                light_indices.reserve(desired_index_capacity);
+            }
+
+            frame_max_vertices = std::max(frame_max_vertices, desired_vertex_capacity);
+            frame_max_indices  = std::max(frame_max_indices, desired_index_capacity);
 
             for (int ring = 0; ring <= radial_steps; ++ring) {
                 const float ring_ratio = static_cast<float>(ring) / static_cast<float>(radial_steps);
@@ -766,6 +861,13 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
                 SDL_RenderFillRect(renderer_, &dst);
             }
         }
+    }
+
+    if (frame_max_vertices > darkness_overlay_vertex_capacity_hint_) {
+        darkness_overlay_vertex_capacity_hint_ = frame_max_vertices;
+    }
+    if (frame_max_indices > darkness_overlay_index_capacity_hint_) {
+        darkness_overlay_index_capacity_hint_ = frame_max_indices;
     }
 
     SDL_SetRenderDrawBlendMode(renderer_, previous_draw_blend);

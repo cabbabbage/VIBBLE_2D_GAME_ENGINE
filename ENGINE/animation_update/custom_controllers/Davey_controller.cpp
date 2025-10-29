@@ -1,8 +1,8 @@
-#include "Davey_controller.hpp"
+﻿#include "Davey_controller.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "custom_controllers/controller_path_utils.hpp"
-#include "custom_controllers/controller_visit_threshold.hpp"
+#include "animation_update/custom_controllers/controller_path_utils.hpp"
+#include "animation_update/custom_controllers/controller_visit_threshold.hpp"
 #include "utils/range_util.hpp"
 
 #include <algorithm>
@@ -31,7 +31,7 @@ void DaveyController::enter_idle(int rest_ratio) {
     orbit_radius_    = 0;
 
     const auto path = controller_paths::idle_path(self_, idle_ratio_);
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
+    self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void DaveyController::enter_pursue(Asset* target) {
@@ -48,7 +48,7 @@ void DaveyController::enter_pursue(Asset* target) {
     orbit_radius_    = 0;
 
     const auto path = controller_paths::pursue_path(self_, target);
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
+    self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void DaveyController::enter_orbit(Asset* center, int radius) {
@@ -70,7 +70,7 @@ void DaveyController::enter_orbit(Asset* center, int radius) {
         return;
     }
 
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
+    self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
 void DaveyController::update(const Input&) {
@@ -133,3 +133,4 @@ void DaveyController::update(const Input&) {
         enter_idle(5);
     }
 }
+

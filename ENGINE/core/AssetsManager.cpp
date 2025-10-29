@@ -20,6 +20,7 @@
 #include "utils/range_util.hpp"
 #include "utils/text_style.hpp"
 #include "utils/map_grid_settings.hpp"
+#include "utils/transform_smoothing_settings.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -68,6 +69,7 @@ TTF_Font* scaling_notice_font() {
 
 constexpr int kQualityOptions[] = {100, 75, 50, 25, 10};
 constexpr int kMinRenderQuality = kQualityOptions[sizeof(kQualityOptions) / sizeof(kQualityOptions[0]) - 1];
+constexpr std::size_t kNonPlayerParallelThreshold = 4;
 
 int align_render_quality_percent(int percent) {
     int best = kQualityOptions[0];
@@ -117,7 +119,8 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
                   SDL_Point{ 10,-10},
                   SDL_Point{ 10,10},
                   SDL_Point{-10, 10}
-              })
+              },
+              0)
       ),
       screen_width(screen_width_),
       screen_height(screen_height_),
@@ -127,6 +130,8 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
       map_path_(std::move(content_root)),
       map_info_path_(map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json"))
 {
+    perf_counter_frequency_ = static_cast<double>(SDL_GetPerformanceFrequency());
+    last_frame_counter_     = SDL_GetPerformanceCounter();
     map_info_json_ = map_manifest;
     if (!map_info_json_.is_object()) {
         map_info_json_ = nlohmann::json::object();
@@ -146,10 +151,18 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     notify_reactive_shadow_settings_available();
     apply_map_light_config();
     apply_map_grid_settings(map_grid_settings_, false);
+    moving_assets_for_grid_.clear();
+    moving_assets_for_grid_.reserve(all.size());
+    pending_static_grid_registration_.clear();
+    movement_commands_buffer_.clear();
+    movement_commands_buffer_.reserve(all.size());
+    grid_registration_buffer_.clear();
+    grid_registration_buffer_.reserve(4);
     for (Asset* a : all) {
         if (!a) continue;
         a->set_assets(this);
     }
+    register_pending_static_assets();
 
     update_filtered_active_assets();
 
@@ -359,6 +372,167 @@ void Assets::apply_camera_runtime_settings() {
         const bool low_quality = (effective_percent < 100) && !force_high_quality_rendering_;
         scene->set_low_quality_rendering(low_quality);
     }
+    update_motion_smoothing_settings(camera_.realism_settings());
+}
+
+TransformSmoothingParams Assets::sanitize_smoothing(const TransformSmoothingParams& params) {
+    TransformSmoothingParams result = params;
+    if (!std::isfinite(result.lerp_rate) || result.lerp_rate < 0.0f) {
+        result.lerp_rate = 0.0f;
+    }
+    if (!std::isfinite(result.spring_frequency) || result.spring_frequency < 0.0f) {
+        result.spring_frequency = 0.0f;
+    }
+    if (!std::isfinite(result.max_step) || result.max_step < 0.0f) {
+        result.max_step = 0.0f;
+    }
+    if (!std::isfinite(result.snap_threshold) || result.snap_threshold < 0.0f) {
+        result.snap_threshold = 0.0f;
+    }
+    switch (result.method) {
+    case TransformSmoothingMethod::None:
+    case TransformSmoothingMethod::Lerp:
+    case TransformSmoothingMethod::CriticallyDampedSpring:
+        break;
+    default:
+        result.method = TransformSmoothingMethod::None;
+        break;
+    }
+    return result;
+}
+
+void Assets::update_motion_smoothing_settings(const camera::RealismSettings& settings) {
+    constexpr float kMinTau = 1e-4f;
+    auto build_translation_params = [&](const camera::RealismSettings& s) {
+        TransformSmoothingParams result{};
+        result.method = s.motion_smoothing_method;
+        switch (result.method) {
+        case TransformSmoothingMethod::Lerp:
+            result.lerp_rate        = (s.motion_smoothing_tau > kMinTau)
+                ? 1.0f / std::max(s.motion_smoothing_tau, kMinTau)
+                : 0.0f;
+            result.spring_frequency = 0.0f;
+            break;
+        case TransformSmoothingMethod::CriticallyDampedSpring:
+            result.spring_frequency = std::max(0.0f, s.motion_smoothing_spring_frequency);
+            result.lerp_rate        = 0.0f;
+            break;
+        case TransformSmoothingMethod::None:
+        default:
+            result.method = TransformSmoothingMethod::None;
+            result.lerp_rate = result.spring_frequency = 0.0f;
+            break;
+        }
+        result.max_step       = std::max(0.0f, s.motion_smoothing_max_step);
+        result.snap_threshold = std::max(0.0f, s.motion_smoothing_snap_threshold);
+        return sanitize_smoothing(result);
+    };
+
+    TransformSmoothingParams desired_motion = build_translation_params(settings);
+    const bool smoothing_enabled = settings.smooth_motion_zoom &&
+        desired_motion.method != TransformSmoothingMethod::None;
+
+    auto params_equal = [](const TransformSmoothingParams& a, const TransformSmoothingParams& b) {
+        constexpr float kEpsilon = 1e-4f;
+        auto close = [](float x, float y) {
+            return std::fabs(x - y) <= kEpsilon;
+        };
+        return a.method == b.method &&
+            close(a.lerp_rate, b.lerp_rate) &&
+            close(a.spring_frequency, b.spring_frequency) &&
+            close(a.max_step, b.max_step) &&
+            close(a.snap_threshold, b.snap_threshold);
+    };
+
+    if (!smoothing_cache_initialized_) {
+        cached_enabled_translation_params_ = sanitize_smoothing(transform_smoothing::asset_translation_params());
+        cached_enabled_scale_params_       = sanitize_smoothing(transform_smoothing::asset_scale_params());
+        cached_enabled_alpha_params_       = sanitize_smoothing(transform_smoothing::asset_alpha_params());
+        last_camera_motion_params_         = sanitize_smoothing(transform_smoothing::camera_center_params());
+        last_asset_translation_params_     = cached_enabled_translation_params_;
+        last_asset_scale_params_           = cached_enabled_scale_params_;
+        last_asset_alpha_params_           = cached_enabled_alpha_params_;
+        smoothing_cache_initialized_       = true;
+    }
+
+    if (smoothing_enabled) {
+        cached_enabled_translation_params_ = desired_motion;
+        if (cached_enabled_scale_params_.method == TransformSmoothingMethod::None) {
+            cached_enabled_scale_params_ = sanitize_smoothing(transform_smoothing::asset_scale_params());
+        }
+        if (cached_enabled_alpha_params_.method == TransformSmoothingMethod::None) {
+            cached_enabled_alpha_params_ = sanitize_smoothing(transform_smoothing::asset_alpha_params());
+        }
+    } else {
+        cached_enabled_translation_params_ = desired_motion;
+    }
+
+    TransformSmoothingParams translation_to_apply = smoothing_enabled
+        ? cached_enabled_translation_params_
+        : TransformSmoothingParams{};
+    TransformSmoothingParams scale_to_apply = smoothing_enabled
+        ? cached_enabled_scale_params_
+        : TransformSmoothingParams{};
+    TransformSmoothingParams alpha_to_apply = smoothing_enabled
+        ? cached_enabled_alpha_params_
+        : TransformSmoothingParams{};
+
+    if (!smoothing_enabled) {
+        translation_to_apply.method = TransformSmoothingMethod::None;
+        translation_to_apply.lerp_rate = translation_to_apply.spring_frequency = 0.0f;
+        translation_to_apply.max_step = translation_to_apply.snap_threshold = 0.0f;
+        scale_to_apply.method = TransformSmoothingMethod::None;
+        scale_to_apply.lerp_rate = scale_to_apply.spring_frequency = 0.0f;
+        scale_to_apply.max_step = scale_to_apply.snap_threshold = 0.0f;
+        alpha_to_apply.method = TransformSmoothingMethod::None;
+        alpha_to_apply.lerp_rate = alpha_to_apply.spring_frequency = 0.0f;
+        alpha_to_apply.max_step = alpha_to_apply.snap_threshold = 0.0f;
+    }
+
+    translation_to_apply = sanitize_smoothing(translation_to_apply);
+    scale_to_apply       = sanitize_smoothing(scale_to_apply);
+    alpha_to_apply       = sanitize_smoothing(alpha_to_apply);
+
+    const bool motion_changed       = !params_equal(desired_motion, last_camera_motion_params_);
+    const bool translation_changed  = !params_equal(translation_to_apply, last_asset_translation_params_);
+    const bool scale_changed        = !params_equal(scale_to_apply, last_asset_scale_params_);
+    const bool alpha_changed        = !params_equal(alpha_to_apply, last_asset_alpha_params_);
+
+    if (motion_changed) {
+        transform_smoothing::set_camera_center_params(desired_motion);
+        transform_smoothing::set_camera_zoom_params(desired_motion);
+        last_camera_motion_params_ = desired_motion;
+    }
+    if (translation_changed) {
+        transform_smoothing::set_asset_translation_params(translation_to_apply);
+        last_asset_translation_params_ = translation_to_apply;
+        if (smoothing_enabled) {
+            cached_enabled_translation_params_ = translation_to_apply;
+        }
+    }
+    if (scale_changed) {
+        transform_smoothing::set_asset_scale_params(scale_to_apply);
+        last_asset_scale_params_ = scale_to_apply;
+        if (smoothing_enabled) {
+            cached_enabled_scale_params_ = scale_to_apply;
+        }
+    }
+    if (alpha_changed) {
+        transform_smoothing::set_asset_alpha_params(alpha_to_apply);
+        last_asset_alpha_params_ = alpha_to_apply;
+        if (smoothing_enabled) {
+            cached_enabled_alpha_params_ = alpha_to_apply;
+        }
+    }
+
+    if (motion_changed || translation_changed || scale_changed || alpha_changed) {
+        for (Asset* asset : all) {
+            if (!asset) {
+                continue;
+            }
+            asset->set_smoothing_params(translation_to_apply, scale_to_apply, alpha_to_apply);
+        }
+    }
 }
 
 void Assets::apply_map_light_config() {
@@ -380,7 +554,23 @@ bool Assets::on_map_light_changed() {
     return true;
 }
 
+void Assets::set_update_map_light_enabled(bool enabled) {
+    if (scene) {
+        scene->set_update_map_light_enabled(enabled);
+    }
+}
+
+bool Assets::update_map_light_enabled() const {
+    return scene ? scene->update_map_light_enabled() : true;
+}
+
 Assets::~Assets() {
+    movement_commands_buffer_.clear();
+    grid_registration_buffer_.clear();
+
+    if (input) {
+        input->clear_screen_to_world_mapper();
+    }
     notify_reactive_shadow_settings_about_to_change();
     delete scene;
     scene = nullptr;
@@ -513,7 +703,18 @@ void Assets::ensure_dev_controls() {
 }
 
 void Assets::set_input(Input* m) {
+    if (input && input != m) {
+        input->clear_screen_to_world_mapper();
+    }
+
     input = m;
+
+    if (input) {
+        input->set_screen_to_world_mapper([this](SDL_Point screen, float parallax_x, float parallax_y) {
+            SDL_FPoint mapped = camera_.screen_to_map(screen, parallax_x, parallax_y);
+            return SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
+        });
+    }
 
     if (dev_controls_) {
         dev_controls_->set_input(m);
@@ -530,8 +731,16 @@ void Assets::set_input(Input* m) {
 
 void Assets::update(const Input& input)
 {
-
-    render_pipeline::ScalingLogic::TickUsageSampling();
+    const std::uint64_t now_counter = SDL_GetPerformanceCounter();
+    float dt = 1.0f / 60.0f;
+    if (last_frame_counter_ != 0 && perf_counter_frequency_ > 0.0) {
+        const double elapsed = static_cast<double>(now_counter - last_frame_counter_) / perf_counter_frequency_;
+        if (std::isfinite(elapsed) && elapsed > 0.0) {
+            dt = static_cast<float>(std::clamp(elapsed, 0.0, 0.25));
+        }
+    }
+    last_frame_counter_    = now_counter;
+    last_frame_dt_seconds_ = dt;
 
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
@@ -539,36 +748,14 @@ void Assets::update(const Input& input)
         std::cout << "[Assets] Chunk preview "
                   << (scene->chunk_preview_enabled() ? "enabled" : "disabled") << " (Ctrl+Q).\n";
     }
-    if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_R)) {
-        const bool enabled = render_pipeline::ScalingLogic::ToggleUsageTracking();
-        if (!enabled) {
-            render_pipeline::ScalingLogic::FlushUsageData();
-        }
-        std::cout << "[Assets] Scaling usage tracking " << (enabled ? "enabled" : "disabled") << " (Ctrl+R).\n";
-        show_dev_notice(enabled ? std::string("Recording scale") : std::string("Stopped recording"));
-    }
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
     Room* active_room = detected_room;
     if (dev_controls_ && dev_controls_->is_enabled()) {
         active_room = dev_controls_->resolve_current_room(detected_room);
     }
+    const bool room_changed = (current_room_ != active_room);
     current_room_ = active_room;
-
-    camera_.update_zoom(active_room, finder_, player);
-
-    {
-        const Area view = camera_.get_camera_area();
-        auto [minx, miny, maxx, maxy] = view.get_bounds();
-        SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
-        world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
-    }
-
-    update_active_assets(camera_.get_screen_center());
-    rebuild_active_assets_if_needed();
-
-    AudioEngine& audio_engine = AudioEngine::instance();
-    audio_engine.set_effect_max_distance(static_cast<float>(std::max(1, camera_.get_render_distance_world_margin())));
 
     dx = dy = 0;
 
@@ -579,29 +766,39 @@ void Assets::update(const Input& input)
         if (player) player->update();
     }
 
+    bool player_moved = false;
     if (player) {
         dx = player->pos.x - start_px;
         dy = player->pos.y - start_py;
-        if (dx != 0 || dy != 0) {
-            camera_.update_zoom(active_room, finder_, player);
-            const Area view = camera_.get_camera_area();
-            auto [minx2, miny2, maxx2, maxy2] = view.get_bounds();
-            SDL_Rect cam_rect2{minx2, miny2, std::max(0, maxx2 - minx2), std::max(0, maxy2 - miny2)};
-            world_grid_.update_active_chunks(cam_rect2, camera_.get_render_distance_world_margin());
-            update_active_assets(camera_.get_screen_center());
-            rebuild_active_assets_if_needed();
-            update_filtered_active_assets();
-        }
+        player_moved = (dx != 0 || dy != 0);
+    }
+
+    const bool zoom_animation_active = camera_.zooming_;
+    const bool camera_refresh_needed = room_changed || player_moved || zoom_animation_active;
+    camera_.update_zoom(current_room_, finder_, player, camera_refresh_needed, last_frame_dt_seconds_);
+
+    const Area view = camera_.get_camera_area();
+    auto [minx, miny, maxx, maxy] = view.get_bounds();
+    SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
+    world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
+
+    update_active_assets(camera_.get_screen_center());
+    const bool rebuilt_active_assets = rebuild_active_assets_if_needed();
+    if (rebuilt_active_assets) {
+        update_filtered_active_assets();
+    }
+
+    AudioEngine& audio_engine = AudioEngine::instance();
+    const float effect_max_distance =
+        static_cast<float>(std::max(1, camera_.get_render_distance_world_margin()));
+    if (!last_audio_effect_max_distance_.has_value() ||
+        *last_audio_effect_max_distance_ != effect_max_distance) {
+        audio_engine.set_effect_max_distance(effect_max_distance);
+        last_audio_effect_max_distance_ = effect_max_distance;
+        std::cout << "[Assets] Audio effect max distance updated to " << effect_max_distance << "\n";
     }
     if (!dev_mode) {
-        constexpr std::size_t kParallelThreshold = 4;
-        non_player_update_buffer_.clear();
-        non_player_update_buffer_.reserve(active_assets.size());
-        for (Asset* asset : active_assets) {
-            if (asset && asset != player) {
-                non_player_update_buffer_.push_back(asset);
-            }
-        }
+        rebuild_non_player_update_buffer_if_needed();
 
         const std::size_t task_count = non_player_update_buffer_.size();
         if (task_count == 1) {
@@ -609,7 +806,7 @@ void Assets::update(const Input& input)
         } else if (task_count > 1) {
 #if defined(__cpp_lib_execution)
             const unsigned hardware_threads = std::max(1u, std::thread::hardware_concurrency());
-            const bool can_parallelize = hardware_threads > 1 && task_count >= kParallelThreshold;
+            const bool can_parallelize = hardware_threads > 1 && task_count >= kNonPlayerParallelThreshold;
             if (can_parallelize) {
                 std::for_each(std::execution::par_unseq,
                               non_player_update_buffer_.begin(),
@@ -631,21 +828,82 @@ void Assets::update(const Input& input)
         }
     }
 
-    for (Asset* asset : all) {
-        if (!asset) {
-            continue;
-        }
-        SDL_Point curr{asset->pos.x, asset->pos.y};
-        if (!asset->has_grid_residency_cache()) {
-            world_grid_.register_asset(asset);
-            asset->cache_grid_residency(curr);
-            continue;
+    register_pending_static_assets();
+
+    if (!moving_assets_for_grid_.empty()) {
+        movement_commands_buffer_.clear();
+        movement_commands_buffer_.reserve(moving_assets_for_grid_.size());
+        grid_registration_buffer_.clear();
+        if (grid_registration_buffer_.capacity() < 4) {
+            grid_registration_buffer_.reserve(4);
         }
 
-        const SDL_Point prev = asset->grid_residency_cache();
-        if (prev.x != curr.x || prev.y != curr.y) {
-            world_grid_.move_asset(asset, prev, curr);
-            asset->cache_grid_residency(curr);
+#if defined(__cpp_lib_execution)
+        if (moving_assets_for_grid_.size() > 1) {
+            std::mutex movement_commands_mutex;
+            std::mutex registration_mutex;
+            std::for_each(std::execution::par_unseq,
+                          moving_assets_for_grid_.begin(),
+                          moving_assets_for_grid_.end(),
+                          [&](Asset* asset) {
+                              if (!asset) {
+                                  return;
+                              }
+                              SDL_Point curr{asset->pos.x, asset->pos.y};
+                              if (!asset->has_grid_residency_cache()) {
+                                  std::lock_guard<std::mutex> reg_lock(registration_mutex);
+                                  grid_registration_buffer_.push_back(asset);
+                                  return;
+                              }
+                              const SDL_Point prev = asset->grid_residency_cache();
+                              if (prev.x == curr.x && prev.y == curr.y) {
+                                  return;
+                              }
+                              GridMovementCommand command{asset, prev, curr};
+                              std::lock_guard<std::mutex> lock(movement_commands_mutex);
+                              movement_commands_buffer_.push_back(command);
+                          });
+        } else
+#endif
+        {
+            for (Asset* asset : moving_assets_for_grid_) {
+                if (!asset) {
+                    continue;
+                }
+                SDL_Point curr{asset->pos.x, asset->pos.y};
+                if (!asset->has_grid_residency_cache()) {
+                    grid_registration_buffer_.push_back(asset);
+                    continue;
+                }
+                const SDL_Point prev = asset->grid_residency_cache();
+                if (prev.x == curr.x && prev.y == curr.y) {
+                    continue;
+                }
+                movement_commands_buffer_.push_back(GridMovementCommand{asset, prev, curr});
+            }
+        }
+
+        if (!grid_registration_buffer_.empty()) {
+            std::sort(grid_registration_buffer_.begin(), grid_registration_buffer_.end());
+            grid_registration_buffer_.erase(
+                std::unique(grid_registration_buffer_.begin(), grid_registration_buffer_.end()),
+                grid_registration_buffer_.end());
+            for (Asset* asset : grid_registration_buffer_) {
+                if (!asset || asset->has_grid_residency_cache()) {
+                    continue;
+                }
+                SDL_Point curr{asset->pos.x, asset->pos.y};
+                world_grid_.register_asset(asset);
+                asset->cache_grid_residency(curr);
+            }
+        }
+
+        for (const GridMovementCommand& command : movement_commands_buffer_) {
+            if (!command.asset) {
+                continue;
+            }
+            world_grid_.move_asset(command.asset, command.previous, command.current);
+            command.asset->cache_grid_residency(command.current);
         }
     }
 
@@ -816,6 +1074,8 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
         std::cerr << "[Assets::addAsset][Exception] " << e.what() << "\n";
     }
 
+    register_pending_static_assets();
+
     initialize_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
     update_filtered_active_assets();
@@ -871,6 +1131,8 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
         std::cerr << "[Assets::spawn_asset][Exception] " << e.what() << "\n";
     }
 
+    register_pending_static_assets();
+
     initialize_active_assets(camera_.get_screen_center());
     rebuild_active_assets_if_needed();
     update_filtered_active_assets();
@@ -885,6 +1147,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
 
 void Assets::mark_active_assets_dirty() {
     active_assets_dirty_.store(true, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
 }
 
 void Assets::notify_light_map_asset_moved(const Asset* asset) {
@@ -903,6 +1166,70 @@ void Assets::notify_light_map_static_assets_changed() {
     if (LightMap* map = light_map()) {
         map->mark_static_cache_dirty();
     }
+}
+
+void Assets::track_asset_for_grid(Asset* asset) {
+    if (!asset || !asset->info) {
+        return;
+    }
+
+    if (asset->info->moving_asset) {
+        if (std::find(moving_assets_for_grid_.begin(), moving_assets_for_grid_.end(), asset) == moving_assets_for_grid_.end()) {
+            moving_assets_for_grid_.push_back(asset);
+        }
+        if (!asset->has_grid_residency_cache()) {
+            SDL_Point curr{asset->pos.x, asset->pos.y};
+            world_grid_.register_asset(asset);
+            asset->cache_grid_residency(curr);
+        }
+        return;
+    }
+
+    if (asset->has_grid_residency_cache()) {
+        return;
+    }
+
+    if (std::find(pending_static_grid_registration_.begin(),
+                  pending_static_grid_registration_.end(),
+                  asset) == pending_static_grid_registration_.end()) {
+        pending_static_grid_registration_.push_back(asset);
+    }
+}
+
+void Assets::untrack_asset_for_grid(Asset* asset) {
+    if (!asset) {
+        return;
+    }
+
+    auto erase_ptr = [asset](auto& vec) {
+        vec.erase(std::remove(vec.begin(), vec.end(), asset), vec.end());
+    };
+
+    erase_ptr(moving_assets_for_grid_);
+    erase_ptr(pending_static_grid_registration_);
+}
+
+void Assets::register_pending_static_assets() {
+    if (pending_static_grid_registration_.empty()) {
+        return;
+    }
+
+    std::vector<Asset*> still_pending;
+    still_pending.reserve(pending_static_grid_registration_.size());
+    for (Asset* asset : pending_static_grid_registration_) {
+        if (!asset) {
+            continue;
+        }
+        if (!asset->has_grid_residency_cache()) {
+            SDL_Point curr{asset->pos.x, asset->pos.y};
+            world_grid_.register_asset(asset);
+            asset->cache_grid_residency(curr);
+        }
+        if (asset && !asset->has_grid_residency_cache()) {
+            still_pending.push_back(asset);
+        }
+    }
+    pending_static_grid_registration_.swap(still_pending);
 }
 
 void Assets::notify_reactive_shadow_settings_about_to_change() {
@@ -928,6 +1255,7 @@ void Assets::initialize_active_assets(SDL_Point center) {
         std::vector<std::string>{},
         SortMode::ZIndexAsc);
     active_assets_dirty_.store(true, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
 }
 
 void Assets::update_active_assets(SDL_Point center) {
@@ -940,15 +1268,16 @@ void Assets::update_active_assets(SDL_Point center) {
     active_asset_list_->set_search_radius(active_search_radius());
     active_asset_list_->update();
     active_assets_dirty_.store(true, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
 }
 
-void Assets::rebuild_active_assets_if_needed() {
+bool Assets::rebuild_active_assets_if_needed() {
     if (!active_asset_list_) {
         initialize_active_assets(camera_.get_screen_center());
     }
 
     if (!active_asset_list_ || !active_assets_dirty_.load(std::memory_order_acquire)) {
-        return;
+        return false;
     }
 
     std::vector<Asset*> new_active_assets;
@@ -1008,6 +1337,47 @@ void Assets::rebuild_active_assets_if_needed() {
     active_static_light_assets_  = std::move(new_static_lights);
     active_moving_light_assets_  = std::move(new_moving_lights);
     active_assets_dirty_.store(false, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
+    rebuild_non_player_update_buffer_if_needed();
+    return true;
+}
+
+void Assets::rebuild_non_player_update_buffer_if_needed() {
+    if (!non_player_update_buffer_dirty_.load(std::memory_order_acquire)) {
+        return;
+    }
+
+#if defined(__cpp_lib_execution)
+    const unsigned hardware_threads = std::max(1u, std::thread::hardware_concurrency());
+    const bool can_parallelize = hardware_threads > 1 && active_assets.size() >= kNonPlayerParallelThreshold;
+    if (can_parallelize) {
+        std::vector<Asset*> rebuilt(active_assets.size());
+        std::atomic_size_t next_index{0};
+        std::for_each(std::execution::par_unseq,
+                      active_assets.begin(),
+                      active_assets.end(),
+                      [&](Asset* asset) {
+                          if (asset && asset != player) {
+                              const std::size_t index = next_index.fetch_add(1, std::memory_order_relaxed);
+                              rebuilt[index] = asset;
+                          }
+                      });
+        const std::size_t final_count = next_index.load(std::memory_order_relaxed);
+        rebuilt.resize(final_count);
+        non_player_update_buffer_ = std::move(rebuilt);
+        non_player_update_buffer_dirty_.store(false, std::memory_order_release);
+        return;
+    }
+#endif
+
+    non_player_update_buffer_.clear();
+    non_player_update_buffer_.reserve(active_assets.size());
+    for (Asset* asset : active_assets) {
+        if (asset && asset != player) {
+            non_player_update_buffer_.push_back(asset);
+        }
+    }
+    non_player_update_buffer_dirty_.store(false, std::memory_order_release);
 }
 
 int Assets::active_search_radius() const {
@@ -1039,6 +1409,7 @@ void Assets::process_removals() {
     for (Asset* asset : pending_removals) {
         render_pipeline::shading::ClearShadowStateFor(asset);
 
+        untrack_asset_for_grid(asset);
         world_grid_.unregister_asset(asset);
         if (asset) {
             asset->clear_grid_residency_cache();
@@ -1077,6 +1448,9 @@ void Assets::process_removals() {
     erase_ptrs(active_static_light_assets_);
     erase_ptrs(active_moving_light_assets_);
     erase_ptrs(filtered_active_assets);
+    erase_ptrs(moving_assets_for_grid_);
+    erase_ptrs(pending_static_grid_registration_);
+    mark_non_player_update_buffer_dirty();
 
     for (Asset* asset : pending_removals) {
         active_moving_light_lookup_.erase(asset);
@@ -1271,6 +1645,19 @@ void Assets::force_shaded_assets_rerender() {
     }
 
     active_assets_dirty_.store(true, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
+}
+
+bool Assets::apply_lighting_grid_subdivide(int subdivisions) {
+    subdivisions = std::max(1, std::min(8, subdivisions));
+    bool changed = world_grid_.set_lighting_subdivisions_per_chunk(subdivisions);
+    if (changed) {
+        if (LightMap* map = light_map()) {
+            map->rebuild(nullptr);
+        }
+        force_shaded_assets_rerender();
+    }
+    return changed;
 }
 
 void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persist_json) {
@@ -1419,6 +1806,19 @@ void Assets::focus_camera_on_asset(Asset* a, double zoom_factor, int duration_st
 void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->begin_area_edit_for_selected_asset(area_name);
+    }
+}
+
+void Assets::begin_room_area_edit(const std::string& area_name) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        // New helper to start room-scoped Area edit
+        // We rely on DevControls to resolve current room
+        // and open AreaOverlayEditor in room mode
+        try {
+            // Implemented in DevControls
+            dev_controls_->begin_room_area_edit(area_name);
+        } catch (...) {
+        }
     }
 }
 

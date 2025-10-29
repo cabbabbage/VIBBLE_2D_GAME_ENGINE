@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <SDL_ttf.h>
 #include "core/AssetsManager.hpp"
+#include "map_generation/room.hpp"
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
 #include "draw_utils.hpp"
@@ -569,6 +570,87 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
     }
 };
 
+struct AssetLibraryUI::RoomAreaTileWidget : public Widget {
+    static constexpr int kPad = 8;
+    AssetLibraryUI* owner = nullptr;
+    std::string room_name;
+    std::string area_name;
+    SDL_Rect rect_{0,0,0,0};
+    bool hovered = false;
+    bool pressed = false;
+    std::function<void(const AreaRef&)> on_click;
+
+    explicit RoomAreaTileWidget(AssetLibraryUI* owner_ptr,
+                                std::string room,
+                                std::string area,
+                                std::function<void(const AreaRef&)> click)
+        : owner(owner_ptr), room_name(std::move(room)), area_name(std::move(area)), on_click(std::move(click)) {}
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return 112; }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (e.type == SDL_MOUSEMOTION) {
+            SDL_Point p{ e.motion.x, e.motion.y };
+            hovered = SDL_PointInRect(&p, &rect_);
+        } else if (e.type == SDL_MOUSEBUTTONDOWN) {
+            SDL_Point p{ e.button.x, e.button.y };
+            if (e.button.button == SDL_BUTTON_LEFT && SDL_PointInRect(&p, &rect_)) {
+                pressed = true;
+                return true;
+            }
+        } else if (e.type == SDL_MOUSEBUTTONUP) {
+            SDL_Point p{ e.button.x, e.button.y };
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                bool was = pressed;
+                pressed = false;
+                if (was && SDL_PointInRect(&p, &rect_)) {
+                    if (on_click) on_click(AreaRef{room_name, area_name});
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void render(SDL_Renderer* r) const override {
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, kTileBG.r, kTileBG.g, kTileBG.b, kTileBG.a);
+        SDL_RenderFillRect(r, &rect_);
+
+        const int pad = kPad;
+        const SDL_Color border = kTileBd;
+        const int tile_radius = std::min(DMStyles::CornerRadius(), std::min(rect_.w, rect_.h) / 2);
+        dm_draw::DrawRoundedOutline(r, rect_, tile_radius, 1, border);
+
+        std::string label = std::string("Area ") + area_name + " — Room " + room_name;
+        TTF_Font* font = load_font(15);
+        SDL_Rect label_rect{ rect_.x + pad, rect_.y + pad, std::max(0, rect_.w - 2*pad), 24 };
+        if (font && label_rect.w > 0) {
+            SDL_Surface* surf = TTF_RenderUTF8_Blended(font, label.c_str(), DMStyles::Label().color);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                SDL_FreeSurface(surf);
+                if (tex) {
+                    int dw=0, dh=0;
+                    SDL_QueryTexture(tex, nullptr, nullptr, &dw, &dh);
+                    if (dw > label_rect.w) dw = label_rect.w;
+                    SDL_Rect dst{ label_rect.x, label_rect.y + std::max(0, (label_rect.h - dh)/2), dw, dh };
+                    SDL_RenderCopy(r, tex, nullptr, &dst);
+                    SDL_DestroyTexture(tex);
+                }
+            }
+        }
+
+        if (hovered) {
+            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_ADD);
+            SDL_SetRenderDrawColor(r, kTileHL.r, kTileHL.g, kTileHL.b, kTileHL.a);
+            SDL_RenderFillRect(r, &rect_);
+        }
+    }
+};
+
 AssetLibraryUI::AssetLibraryUI() {
     floating_ = std::make_unique<DockableCollapsible>("Asset Library", true, 10, 10);
     floating_->set_expanded(false);
@@ -1029,6 +1111,34 @@ void AssetLibraryUI::refresh_tiles(Assets& assets) {
         ));
     }
 
+    // Append Room Areas to tiles
+    if (assets_owner_) {
+        std::vector<std::pair<std::string, std::string>> area_refs;
+        for (Room* room : assets_owner_->rooms()) {
+            if (!room) continue;
+            for (const auto& na : room->areas) {
+                if (na.name.empty() || !na.area) continue;
+                const std::string label = room->room_name + "/" + na.name;
+                if (!search_query_.empty()) {
+                    auto q = trim_whitespace_copy(search_query_);
+                    std::string lowered = vibble::strings::to_lower_copy(label);
+                    std::string lowered_q = vibble::strings::to_lower_copy(q);
+                    if (lowered.find(lowered_q) == std::string::npos) continue;
+                }
+                area_refs.emplace_back(room->room_name, na.name);
+            }
+        }
+        std::sort(area_refs.begin(), area_refs.end());
+        for (const auto& ref : area_refs) {
+            tiles_.push_back(std::make_unique<RoomAreaTileWidget>(
+                this,
+                ref.first,
+                ref.second,
+                [this](const AreaRef& ref){ pending_area_selection_ = ref; close(); }
+            ));
+        }
+    }
+
     rebuild_rows();
 }
 
@@ -1455,6 +1565,15 @@ SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) co
         }
     }
     return nullptr;
+}
+
+std::optional<AssetLibraryUI::AreaRef> AssetLibraryUI::consume_area_selection() {
+    if (pending_area_selection_) {
+        auto out = pending_area_selection_;
+        pending_area_selection_.reset();
+        return out;
+    }
+    return std::nullopt;
 }
 
 void AssetLibraryUI::update(const Input& input,

@@ -309,9 +309,25 @@ void Animation::load(const std::string& trigger,
 			source.name.clear();
 		} catch (...) { source.name.clear(); }
 	}
-	flipped_source = anim_json.value("flipped_source", false);
-	reverse_source = anim_json.value("reverse_source", false);
-	locked         = anim_json.value("locked", false);
+        flipped_source = anim_json.value("flipped_source", false);
+        flip_vertical_source = anim_json.value("flip_vertical_source", false);
+        flip_movement_horizontal = anim_json.value("flip_movement_horizontal", false);
+        flip_movement_vertical = anim_json.value("flip_movement_vertical", false);
+        reverse_source = anim_json.value("reverse_source", false);
+        if (source.kind == "animation" && anim_json.contains("derived_modifiers") &&
+            anim_json["derived_modifiers"].is_object()) {
+                const auto& modifiers = anim_json["derived_modifiers"];
+                reverse_source = modifiers.value("reverse", reverse_source);
+                flipped_source = modifiers.value("flipX", flipped_source);
+                flip_vertical_source = modifiers.value("flipY", flip_vertical_source);
+                flip_movement_horizontal = modifiers.value("flipMovementX", flip_movement_horizontal);
+                flip_movement_vertical = modifiers.value("flipMovementY", flip_movement_vertical);
+        } else if (source.kind != "animation") {
+                flip_vertical_source = false;
+                flip_movement_horizontal = false;
+                flip_movement_vertical = false;
+        }
+        locked         = anim_json.value("locked", false);
 	speed_factor   = anim_json.value("speed_factor", 1.0f);
 	loop      = anim_json.value("loop", false);
 	randomize = anim_json.value("randomize", false);
@@ -876,7 +892,14 @@ void Animation::load(const std::string& trigger,
 
                 free_surface_lists(variant_surfaces);
                 free_surface_lists(mask_surfaces);
-                if (flipped_source && renderer && !frame_cache_.empty()) {
+                if ((flipped_source || flip_vertical_source) && renderer && !frame_cache_.empty()) {
+                        SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
+                        if (flipped_source) {
+                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
+                        }
+                        if (flip_vertical_source) {
+                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
+                        }
                         for (std::size_t frame_index = 0; frame_index < frame_cache_.size(); ++frame_index) {
                                 FrameCache& cache_entry = frame_cache_[frame_index];
                                 for (std::size_t variant_idx = 0; variant_idx < cache_entry.textures.size(); ++variant_idx) {
@@ -906,7 +929,7 @@ void Animation::load(const std::string& trigger,
                                         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
                                         SDL_RenderClear(renderer);
                                         SDL_Rect rect{0, 0, tex_w, tex_h};
-                                        SDL_RenderCopyEx(renderer, src_tex, nullptr, &rect, 0.0, nullptr, SDL_FLIP_HORIZONTAL);
+                                        SDL_RenderCopyEx(renderer, src_tex, nullptr, &rect, 0.0, nullptr, flip_flags);
                                         SDL_SetRenderTarget(renderer, prev_target);
                                         SDL_DestroyTexture(src_tex);
                                         cache_entry.textures[variant_idx] = dst;
@@ -941,7 +964,7 @@ void Animation::load(const std::string& trigger,
                                                         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
                                                         SDL_RenderClear(renderer);
                                                         SDL_Rect rect{0, 0, mask_w, mask_h};
-                                                        SDL_RenderCopyEx(renderer, src_mask, nullptr, &rect, 0.0, nullptr, SDL_FLIP_HORIZONTAL);
+                                                        SDL_RenderCopyEx(renderer, src_mask, nullptr, &rect, 0.0, nullptr, flip_flags);
                                                         SDL_SetRenderTarget(renderer, prev_target_mask);
                                                 } else {
                                                         mask_w = 0;
@@ -977,16 +1000,19 @@ void Animation::load(const std::string& trigger,
                                 if (reverse_source) {
                                         for (auto& path : movement_paths_) {
                                                 std::reverse(path.begin(), path.end());
-                                                for (auto& frame : path) {
-                                                        frame.dx = -frame.dx;
-                                                        frame.dy = -frame.dy;
-                                                }
                                         }
                                 }
-                                if (flipped_source) {
+                                if (flip_movement_horizontal) {
                                         for (auto& path : movement_paths_) {
                                                 for (auto& frame : path) {
                                                         frame.dx = -frame.dx;
+                                                }
+                                        }
+                                }
+                                if (flip_movement_vertical) {
+                                        for (auto& path : movement_paths_) {
+                                                for (auto& frame : path) {
+                                                        frame.dy = -frame.dy;
                                                 }
                                         }
                                 }

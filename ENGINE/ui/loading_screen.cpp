@@ -4,6 +4,7 @@
 #include <sstream>
 #include <random>
 #include <iostream>
+#include <cmath>
 #include "font_paths.hpp"
 namespace fs = std::filesystem;
 
@@ -107,13 +108,13 @@ void LoadingScreen::render_justified_text(TTF_Font* font, const std::string& tex
 	}
 }
 
-void LoadingScreen::render_scaled_center(SDL_Texture* tex, int target_w, int target_h, int cx, int cy) {
-	if (!tex) return; int w,h; SDL_QueryTexture(tex,nullptr,nullptr,&w,&h);
-	if(w<=0||h<=0)return; double ar=(double)w/h;
-	int dw=target_w; int dh=(int)(dw/ar);
-	if(dh>target_h){dh=target_h; dw=(int)(dh*ar);}
-	SDL_Rect dst{cx-dw/2, cy-dh/2, dw, dh};
-	SDL_RenderCopy(renderer_,tex,nullptr,&dst);
+void LoadingScreen::render_scaled_center(SDL_Texture* tex, int target_w, int target_h, int cx, int cy, double angle) {
+        if (!tex) return; int w,h; SDL_QueryTexture(tex,nullptr,nullptr,&w,&h);
+        if(w<=0||h<=0)return; double ar=(double)w/h;
+        int dw=target_w; int dh=(int)(dw/ar);
+        if(dh>target_h){dh=target_h; dw=(int)(dh*ar);}
+        SDL_Rect dst{cx-dw/2, cy-dh/2, dw, dh};
+        SDL_RenderCopyEx(renderer_,tex,nullptr,&dst,angle,nullptr,SDL_FLIP_NONE);
 }
 
 void LoadingScreen::init() {
@@ -124,6 +125,8 @@ void LoadingScreen::init() {
         current_index_ = 0;
         last_switch_time_ = SDL_GetTicks();
         status_text_.clear();
+        rotation_angle_ = 0.0;
+        last_frame_time_ = last_switch_time_;
 }
 
 void LoadingScreen::set_status(std::string status) {
@@ -137,6 +140,10 @@ void LoadingScreen::draw_frame() {
 
         if (!images_.empty()) {
                 Uint32 now = SDL_GetTicks();
+                Uint32 delta = last_frame_time_ ? (now - last_frame_time_) : 0;
+                last_frame_time_ = now;
+                const double rotation_speed = 20.0; // degrees per second
+                rotation_angle_ = std::fmod(rotation_angle_ + (delta * rotation_speed) / 1000.0, 360.0);
                 if (now - last_switch_time_ > 250) {
                         current_index_ = (current_index_ + 1) % images_.size();
                         last_switch_time_ = now;
@@ -186,7 +193,7 @@ void LoadingScreen::draw_frame() {
         }
 
         if (current_texture_) {
-                render_scaled_center(current_texture_, screen_w_ / 3, screen_h_ / 3, screen_w_ / 2, screen_h_ / 2);
+                render_scaled_center(current_texture_, screen_w_ / 3, screen_h_ / 3, screen_w_ / 2, screen_h_ / 2, rotation_angle_);
         }
 
         const bool has_message = !message_.empty();

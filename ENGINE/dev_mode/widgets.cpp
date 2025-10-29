@@ -1,6 +1,7 @@
 #include "widgets.hpp"
 #include "draw_utils.hpp"
 #include "font_cache.hpp"
+#include "dm_icons.hpp"
 #include <SDL_log.h>
 #include <algorithm>
 #include <charconv>
@@ -13,6 +14,7 @@
 #include <system_error>
 #include <unordered_set>
 #include <utility>
+#include <limits>
 
 namespace {
 constexpr int kBoxTopPadding = 8;
@@ -32,6 +34,15 @@ constexpr int kSliderKnobVerticalInset = (kSliderKnobHeight - kSliderTrackThickn
 constexpr int kControlOutlineThickness = 1;
 constexpr int kFocusRingThickness = 2;
 constexpr int kKnobOutlineThickness = 1;
+constexpr int kNumericStepperHeight = 32;
+constexpr int kNumericStepperButtonWidth = 32;
+constexpr int kNumericStepperValueMinWidth = 56;
+constexpr int kTooltipIconSize = 16;
+constexpr int kTooltipIconPadding = 6;
+constexpr int kTooltipHoverDelayMs = 1000;
+constexpr int kTooltipBoxPadding = 6;
+constexpr int kTooltipBoxMargin = 6;
+constexpr int kTooltipCornerRadius = 6;
 
 struct DropdownCandidate {
     int delta;
@@ -100,6 +111,32 @@ void set_slider_scroll_capture(const void* owner, bool capture) {
 bool slider_scroll_captured() {
     return !g_slider_scroll_captures.empty();
 }
+
+DMLabelStyle tooltip_icon_label_style() {
+    const DMLabelStyle& base = DMStyles::Label();
+    return DMLabelStyle{ base.font_path, 14, base.color };
+}
+
+DMLabelStyle tooltip_text_label_style() {
+    const DMLabelStyle& base = DMStyles::Label();
+    return DMLabelStyle{ base.font_path, 14, base.color };
+}
+
+SDL_Color tooltip_icon_background(bool hovered) {
+    return hovered ? DMStyles::ButtonHoverFill() : DMStyles::ButtonBaseFill();
+}
+
+SDL_Color tooltip_icon_border() {
+    return DMStyles::Border();
+}
+
+SDL_Color tooltip_box_background() {
+    return DMStyles::PanelHeader();
+}
+
+SDL_Color tooltip_box_border() {
+    return DMStyles::Border();
+}
 }
 
 bool DMWidgetsSliderScrollCaptured() {
@@ -108,6 +145,171 @@ bool DMWidgetsSliderScrollCaptured() {
 
 void DMWidgetsSetSliderScrollCapture(const void* owner, bool capture) {
     set_slider_scroll_capture(owner, capture);
+}
+
+SDL_Rect DMWidgetTooltipIconRect(const SDL_Rect& bounds) {
+    SDL_Rect icon{
+        bounds.x + std::max(0, bounds.w - kTooltipIconSize - kTooltipIconPadding),
+        bounds.y + kTooltipIconPadding,
+        kTooltipIconSize,
+        kTooltipIconSize
+    };
+    const int min_x = bounds.x + kTooltipIconPadding;
+    const int min_y = bounds.y + kTooltipIconPadding;
+    if (icon.x < min_x) {
+        icon.x = min_x;
+    }
+    if (icon.y < min_y) {
+        icon.y = min_y;
+    }
+    const int max_x = bounds.x + bounds.w;
+    const int max_y = bounds.y + bounds.h;
+    icon.w = std::max(0, std::min(kTooltipIconSize, max_x - icon.x));
+    icon.h = std::max(0, std::min(kTooltipIconSize, max_y - icon.y));
+    return icon;
+}
+
+bool DMWidgetTooltipEnabled(const DMWidgetTooltipState& state) {
+    return state.enabled && !state.text.empty();
+}
+
+void DMWidgetTooltipResetHover(DMWidgetTooltipState& state) {
+    state.icon_hovered = false;
+    state.hover_start_ms = 0;
+}
+
+bool DMWidgetTooltipHandleEvent(const SDL_Event& e, const SDL_Rect& bounds, DMWidgetTooltipState& state) {
+    if (!DMWidgetTooltipEnabled(state)) {
+        return false;
+    }
+    SDL_Rect icon_rect = DMWidgetTooltipIconRect(bounds);
+    if (icon_rect.w <= 0 || icon_rect.h <= 0) {
+        return false;
+    }
+
+    auto point_in_icon = [&](int x, int y) {
+        SDL_Point p{x, y};
+        return SDL_PointInRect(&p, &icon_rect);
+    };
+
+    switch (e.type) {
+    case SDL_MOUSEMOTION: {
+        const bool inside = point_in_icon(e.motion.x, e.motion.y);
+        if (inside) {
+            if (!state.icon_hovered) {
+                state.icon_hovered = true;
+                state.hover_start_ms = SDL_GetTicks();
+            }
+        } else if (state.icon_hovered) {
+            DMWidgetTooltipResetHover(state);
+        }
+        break;
+    }
+    case SDL_MOUSEBUTTONDOWN:
+    case SDL_MOUSEBUTTONUP: {
+        if (point_in_icon(e.button.x, e.button.y)) {
+            return true;
+        }
+        break;
+    }
+    case SDL_MOUSEWHEEL:
+        if (state.icon_hovered) {
+            return true;
+        }
+        break;
+    case SDL_WINDOWEVENT:
+        if (e.window.event == SDL_WINDOWEVENT_LEAVE) {
+            DMWidgetTooltipResetHover(state);
+        }
+        break;
+    default:
+        break;
+    }
+    return false;
+}
+
+bool DMWidgetTooltipShouldDisplay(const DMWidgetTooltipState& state, Uint32 now_ticks) {
+    if (!DMWidgetTooltipEnabled(state) || !state.icon_hovered || state.hover_start_ms == 0) {
+        return false;
+    }
+    const Uint32 elapsed = now_ticks - state.hover_start_ms;
+    return elapsed >= static_cast<Uint32>(kTooltipHoverDelayMs);
+}
+
+void DMWidgetTooltipRender(SDL_Renderer* renderer, const SDL_Rect& bounds, const DMWidgetTooltipState& state) {
+    if (!DMWidgetTooltipEnabled(state)) {
+        return;
+    }
+
+    SDL_Rect icon_rect = DMWidgetTooltipIconRect(bounds);
+    if (icon_rect.w <= 0 || icon_rect.h <= 0) {
+        return;
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    const SDL_Color bg = tooltip_icon_background(state.icon_hovered);
+    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
+    SDL_RenderFillRect(renderer, &icon_rect);
+
+    const SDL_Color border = tooltip_icon_border();
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+    SDL_RenderDrawRect(renderer, &icon_rect);
+
+    const auto icon_style = tooltip_icon_label_style();
+    const std::string icon_text{DMIcons::Info()};
+    SDL_Point glyph = DMFontCache::instance().measure_text(icon_style, icon_text);
+    const int text_x = icon_rect.x + std::max(0, (icon_rect.w - glyph.x) / 2);
+    const int text_y = icon_rect.y + std::max(0, (icon_rect.h - glyph.y) / 2);
+    DMFontCache::instance().draw_text(renderer, icon_style, icon_text, text_x, text_y);
+
+    if (!DMWidgetTooltipShouldDisplay(state, SDL_GetTicks())) {
+        return;
+    }
+
+    const auto text_style = tooltip_text_label_style();
+    SDL_Point text_size = DMFontCache::instance().measure_text(text_style, state.text);
+    const int box_w = text_size.x + kTooltipBoxPadding * 2;
+    const int box_h = text_size.y + kTooltipBoxPadding * 2;
+    const int bounds_right = bounds.x + bounds.w;
+    const int bounds_bottom = bounds.y + bounds.h;
+
+    int box_x = icon_rect.x + icon_rect.w - box_w;
+    box_x = std::clamp(box_x, bounds.x + kTooltipIconPadding, bounds_right - box_w);
+    int box_y = icon_rect.y + icon_rect.h + kTooltipBoxMargin;
+    if (box_y + box_h > bounds_bottom) {
+        box_y = icon_rect.y - kTooltipBoxMargin - box_h;
+    }
+    if (box_y < bounds.y) {
+        box_y = bounds.y;
+        if (box_y + box_h > bounds_bottom) {
+            box_y = bounds_bottom - box_h;
+        }
+    }
+
+    SDL_Rect tooltip_rect{box_x, box_y, box_w, box_h};
+    dm_draw::DrawBeveledRect(renderer, tooltip_rect, kTooltipCornerRadius, 1,
+                             tooltip_box_background(), DMStyles::HighlightColor(), DMStyles::ShadowColor(),
+                             false, DMStyles::HighlightIntensity() * 0.5f, DMStyles::ShadowIntensity() * 0.5f);
+    dm_draw::DrawRoundedOutline(renderer, tooltip_rect, kTooltipCornerRadius, 1, tooltip_box_border());
+
+    const int text_draw_x = tooltip_rect.x + kTooltipBoxPadding;
+    const int text_draw_y = tooltip_rect.y + kTooltipBoxPadding;
+    DMFontCache::instance().draw_text(renderer, text_style, state.text, text_draw_x, text_draw_y);
+}
+
+void Widget::set_tooltip_text(std::string text) {
+    tooltip_state_.text = std::move(text);
+    if (tooltip_state_.text.empty()) {
+        tooltip_state_.enabled = false;
+        DMWidgetTooltipResetHover(tooltip_state_);
+    }
+}
+
+void Widget::set_tooltip_enabled(bool enabled) {
+    tooltip_state_.enabled = enabled && !tooltip_state_.text.empty();
+    if (!tooltip_state_.enabled) {
+        DMWidgetTooltipResetHover(tooltip_state_);
+    }
 }
 
 DMButton::DMButton(const std::string& text, const DMButtonStyle* style, int w, int h)
@@ -136,6 +338,13 @@ void DMButton::set_style(const DMButtonStyle* style) {
     rect_.w = std::max(rect_.w, preferred_width_);
 }
 
+void DMButton::set_tooltip_state(DMWidgetTooltipState* state) {
+    tooltip_state_ = state;
+    if (tooltip_state_) {
+        DMWidgetTooltipResetHover(*tooltip_state_);
+    }
+}
+
 void DMButton::update_preferred_width() {
     if (!style_) {
         preferred_width_ = rect_.w;
@@ -146,6 +355,9 @@ void DMButton::update_preferred_width() {
 }
 
 bool DMButton::handle_event(const SDL_Event& e) {
+    if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
+        return true;
+    }
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         hovered_ = SDL_PointInRect(&p, &rect_);
@@ -182,6 +394,9 @@ void DMButton::render(SDL_Renderer* r) const {
     SDL_Color border = style_->border;
     dm_draw::DrawRoundedOutline( r, rect_, DMStyles::CornerRadius(), kControlOutlineThickness, border);
     draw_label(r, style_->text);
+    if (tooltip_state_) {
+        DMWidgetTooltipRender(r, rect_, *tooltip_state_);
+    }
 }
 
 DMTextBox::DMTextBox(const std::string& label, const std::string& value)
@@ -201,6 +416,13 @@ void DMTextBox::set_value(const std::string& v) {
     }
 }
 
+void DMTextBox::set_tooltip_state(DMWidgetTooltipState* state) {
+    tooltip_state_ = state;
+    if (tooltip_state_) {
+        DMWidgetTooltipResetHover(*tooltip_state_);
+    }
+}
+
 int DMTextBox::height_for_width(int w) const {
     return preferred_height(w);
 }
@@ -210,6 +432,9 @@ void DMTextBox::set_on_height_changed(std::function<void()> cb) {
 }
 
 bool DMTextBox::handle_event(const SDL_Event& e) {
+    if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
+        return true;
+    }
     bool changed = false;
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
@@ -340,6 +565,9 @@ void DMTextBox::render(SDL_Renderer* r) const {
             SDL_SetRenderDrawColor(r, caret.r, caret.g, caret.b, caret.a);
             SDL_RenderDrawLine(r, caret_x, caret_y, caret_x, caret_y + caret_height);
         }
+    }
+    if (tooltip_state_) {
+        DMWidgetTooltipRender(r, rect_, *tooltip_state_);
     }
 }
 
@@ -477,6 +705,13 @@ DMCheckbox::DMCheckbox(const std::string& label, bool value)
 
 void DMCheckbox::set_rect(const SDL_Rect& r) { rect_ = r; }
 
+void DMCheckbox::set_tooltip_state(DMWidgetTooltipState* state) {
+    tooltip_state_ = state;
+    if (tooltip_state_) {
+        DMWidgetTooltipResetHover(*tooltip_state_);
+    }
+}
+
 int DMCheckbox::preferred_width() const {
     const DMCheckboxStyle& st = DMStyles::Checkbox();
     SDL_Point label_size = DMFontCache::instance().measure_text(st.label, label_);
@@ -486,6 +721,9 @@ int DMCheckbox::preferred_width() const {
 }
 
 bool DMCheckbox::handle_event(const SDL_Event& e) {
+    if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
+        return true;
+    }
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         hovered_ = SDL_PointInRect(&p, &rect_);
@@ -525,6 +763,272 @@ void DMCheckbox::render(SDL_Renderer* r) const {
         dm_draw::DrawBeveledRect( r, inner, std::min(DMStyles::CornerRadius(), 3), std::max(0, DMStyles::BevelDepth() - 1), check, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     }
     draw_label(r);
+    if (tooltip_state_) {
+        DMWidgetTooltipRender(r, rect_, *tooltip_state_);
+    }
+}
+
+DMNumericStepper::DMNumericStepper(const std::string& label, int min_value, int max_value, int value)
+    : label_(label) {
+    set_range(min_value, max_value);
+    set_value(value);
+}
+
+int DMNumericStepper::clamp_value(int v) const {
+    if (min_value_ > max_value_) {
+        return v;
+    }
+    return std::max(min_value_, std::min(max_value_, v));
+}
+
+void DMNumericStepper::set_range(int min_value, int max_value) {
+    if (min_value > max_value) {
+        std::swap(min_value, max_value);
+    }
+    min_value_ = min_value;
+    max_value_ = max_value;
+    value_ = clamp_value(value_);
+}
+
+void DMNumericStepper::set_step(int step) {
+    if (step <= 0) {
+        step = 1;
+    }
+    step_ = step;
+}
+
+void DMNumericStepper::set_value(int v) {
+    value_ = clamp_value(v);
+}
+
+void DMNumericStepper::set_rect(const SDL_Rect& r) {
+    rect_ = r;
+    rect_.h = std::max(rect_.h, height());
+    update_layout();
+}
+
+void DMNumericStepper::set_tooltip_state(DMWidgetTooltipState* state) {
+    tooltip_state_ = state;
+    if (tooltip_state_) {
+        DMWidgetTooltipResetHover(*tooltip_state_);
+    }
+}
+
+void DMNumericStepper::update_layout() {
+    label_height_ = compute_label_height(rect_.w);
+
+    const int control_width_min = kNumericStepperButtonWidth * 2 + kNumericStepperValueMinWidth;
+    int control_w = std::min(rect_.w, control_width_min);
+    if (rect_.w < control_width_min) {
+        control_w = std::max(0, rect_.w);
+    }
+
+    int label_gap = DMSpacing::small_gap();
+    int label_w = std::max(0, rect_.w - control_w - label_gap);
+    if (label_w <= 0) {
+        label_gap = 0;
+        label_w = std::max(0, rect_.w - control_w);
+    }
+
+    int label_y = rect_.y + (rect_.h - label_height_) / 2;
+    label_rect_ = SDL_Rect{ rect_.x, label_y, label_w, label_height_ };
+
+    int control_x = rect_.x + rect_.w - control_w;
+    int control_y = rect_.y + (rect_.h - kNumericStepperHeight) / 2;
+    control_rect_ = SDL_Rect{ control_x, control_y, control_w, kNumericStepperHeight };
+
+    int button_space = std::max(0, control_rect_.w - kNumericStepperValueMinWidth);
+    int button_w = button_space / 2;
+    button_w = std::clamp(button_w, 0, kNumericStepperButtonWidth);
+    if (button_w <= 0 && control_rect_.w > 0) {
+        button_w = std::max(0, control_rect_.w / 4);
+    }
+    int value_w = std::max(0, control_rect_.w - button_w * 2);
+    if (value_w <= 0 && control_rect_.w > 0) {
+        value_w = std::max(0, control_rect_.w / 2);
+        button_w = (control_rect_.w - value_w) / 2;
+    }
+
+    dec_rect_ = SDL_Rect{ control_rect_.x, control_rect_.y, button_w, control_rect_.h };
+    value_rect_ = SDL_Rect{ dec_rect_.x + dec_rect_.w, control_rect_.y, value_w, control_rect_.h };
+    inc_rect_ = SDL_Rect{ value_rect_.x + value_rect_.w, control_rect_.y, button_w, control_rect_.h };
+}
+
+void DMNumericStepper::update_hover(SDL_Point p) {
+    hovered_dec_ = SDL_PointInRect(&p, &dec_rect_);
+    hovered_inc_ = SDL_PointInRect(&p, &inc_rect_);
+    hovered_value_ = SDL_PointInRect(&p, &value_rect_);
+}
+
+bool DMNumericStepper::apply_delta(int delta_steps) {
+    if (delta_steps == 0) {
+        return false;
+    }
+    const long long raw = static_cast<long long>(value_) + static_cast<long long>(delta_steps) * static_cast<long long>(step_);
+    int proposed;
+    if (raw > static_cast<long long>(std::numeric_limits<int>::max())) {
+        proposed = std::numeric_limits<int>::max();
+    } else if (raw < static_cast<long long>(std::numeric_limits<int>::min())) {
+        proposed = std::numeric_limits<int>::min();
+    } else {
+        proposed = static_cast<int>(raw);
+    }
+    proposed = clamp_value(proposed);
+    if (proposed == value_) {
+        return false;
+    }
+    commit_value(proposed);
+    return true;
+}
+
+void DMNumericStepper::commit_value(int new_value) {
+    int clamped = clamp_value(new_value);
+    if (clamped == value_) {
+        value_ = clamped;
+        return;
+    }
+    value_ = clamped;
+    if (on_change_) {
+        on_change_(value_);
+    }
+}
+
+bool DMNumericStepper::handle_event(const SDL_Event& e) {
+    if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
+        return true;
+    }
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{ e.motion.x, e.motion.y };
+        update_hover(p);
+    } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        update_hover(p);
+        if (hovered_dec_) {
+            pressed_dec_ = true;
+            return true;
+        }
+        if (hovered_inc_) {
+            pressed_inc_ = true;
+            return true;
+        }
+    } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        update_hover(p);
+        bool used = false;
+        bool had_dec = pressed_dec_;
+        bool had_inc = pressed_inc_;
+        if (pressed_dec_) {
+            bool inside = SDL_PointInRect(&p, &dec_rect_);
+            pressed_dec_ = false;
+            if (inside) {
+                used = apply_delta(-1) || used;
+            }
+        }
+        if (pressed_inc_) {
+            bool inside = SDL_PointInRect(&p, &inc_rect_);
+            pressed_inc_ = false;
+            if (inside) {
+                used = apply_delta(1) || used;
+            }
+        }
+        return used || had_dec || had_inc;
+    } else if (e.type == SDL_MOUSEWHEEL) {
+        SDL_Point mouse{0, 0};
+        SDL_GetMouseState(&mouse.x, &mouse.y);
+        if (!SDL_PointInRect(&mouse, &rect_)) {
+            return false;
+        }
+        int delta = e.wheel.y;
+        if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+            delta = -delta;
+        }
+#if SDL_VERSION_ATLEAST(2,0,18)
+        if (delta == 0) {
+            delta = static_cast<int>(std::round(e.wheel.preciseY));
+        }
+#endif
+    if (delta == 0) {
+        return false;
+    }
+    return apply_delta(delta);
+}
+    return false;
+}
+
+int DMNumericStepper::compute_label_height(int width) const {
+    if (label_.empty()) {
+        return 0;
+    }
+    (void)width;
+    const DMSliderStyle& st = DMStyles::Slider();
+    SDL_Point size = DMFontCache::instance().measure_text(st.label, label_);
+    return size.y;
+}
+
+int DMNumericStepper::preferred_height(int width) const {
+    (void)width;
+    return height();
+}
+
+int DMNumericStepper::height() {
+    return kNumericStepperHeight;
+}
+
+void DMNumericStepper::render(SDL_Renderer* r) const {
+    const DMSliderStyle& slider_style = DMStyles::Slider();
+    if (!label_.empty() && label_rect_.w > 0 && label_rect_.h > 0) {
+        DMFontCache::instance().draw_text(r, slider_style.label, label_, label_rect_.x, label_rect_.y);
+    }
+
+    auto draw_button = [&](const SDL_Rect& rect, bool hovered, bool pressed, std::string_view symbol) {
+        if (rect.w <= 0 || rect.h <= 0) {
+            return;
+        }
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_Color fill = DMStyles::ButtonBaseFill();
+        if (pressed) {
+            fill = DMStyles::ButtonPressedFill();
+        } else if (hovered) {
+            fill = DMStyles::ButtonHoverFill();
+        }
+        const SDL_Color& highlight = DMStyles::HighlightColor();
+        const SDL_Color& shadow = DMStyles::ShadowColor();
+        const int radius = std::min(DMStyles::CornerRadius(), std::min(rect.w, rect.h) / 2);
+        const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(rect.w, rect.h) / 2));
+        dm_draw::DrawBeveledRect( r, rect, radius, bevel, fill, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        dm_draw::DrawRoundedOutline( r, rect, radius, kControlOutlineThickness, DMStyles::Border());
+        if (!symbol.empty()) {
+            std::string text(symbol);
+            SDL_Point size = DMFontCache::instance().measure_text(slider_style.label, text);
+            int text_x = rect.x + (rect.w - size.x) / 2;
+            int text_y = rect.y + (rect.h - size.y) / 2;
+            DMFontCache::instance().draw_text(r, slider_style.label, text, text_x, text_y);
+        }
+    };
+
+    draw_button(dec_rect_, hovered_dec_, pressed_dec_, "-");
+    draw_button(inc_rect_, hovered_inc_, pressed_inc_, "+");
+
+    if (value_rect_.w > 0 && value_rect_.h > 0) {
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_Color fill = hovered_value_ ? DMStyles::TextboxHoverFill() : DMStyles::TextboxBaseFill();
+        const SDL_Color& highlight = DMStyles::HighlightColor();
+        const SDL_Color& shadow = DMStyles::ShadowColor();
+        const int radius = std::min(DMStyles::CornerRadius(), std::min(value_rect_.w, value_rect_.h) / 2);
+        const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(value_rect_.w, value_rect_.h) / 2));
+        dm_draw::DrawBeveledRect( r, value_rect_, radius, bevel, fill, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        SDL_Color border = hovered_value_ ? DMStyles::TextboxHoverOutline() : DMStyles::Border();
+        dm_draw::DrawRoundedOutline( r, value_rect_, radius, kControlOutlineThickness, border);
+
+        std::string value_text = std::to_string(value_);
+        SDL_Point size = DMFontCache::instance().measure_text(slider_style.label, value_text);
+        int text_x = value_rect_.x + (value_rect_.w - size.x) / 2;
+        int text_y = value_rect_.y + (value_rect_.h - size.y) / 2;
+        DMFontCache::instance().draw_text(r, slider_style.label, value_text, text_x, text_y);
+    }
+    if (tooltip_state_) {
+        DMWidgetTooltipRender(r, rect_, *tooltip_state_);
+    }
 }
 
 DMSlider::DMSlider(const std::string& label, int min_val, int max_val, int value)
@@ -623,6 +1127,13 @@ void DMSlider::set_rect(const SDL_Rect& r) {
     rect_.h = (content_rect_.y - rect_.y) + content_rect_.h + kBoxBottomPadding;
 }
 
+void DMSlider::set_tooltip_state(DMWidgetTooltipState* state) {
+    tooltip_state_ = state;
+    if (tooltip_state_) {
+        DMWidgetTooltipResetHover(*tooltip_state_);
+    }
+}
+
 void DMSlider::set_value(int v) {
     int clamped = clamp_value(v);
     value_ = clamped;
@@ -668,6 +1179,9 @@ int DMSlider::value_for_x(int x) const {
 }
 
 bool DMSlider::handle_event(const SDL_Event& e) {
+    if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
+        return true;
+    }
     if (edit_box_) {
         bool was_editing = edit_box_->is_editing();
         bool consumed = edit_box_->handle_event(e);
@@ -851,6 +1365,9 @@ void DMSlider::render(SDL_Renderer* r) const {
         int text_x = vr.x + kSliderValueHorizontalPadding;
         int text_y = vr.y + (vr.h - size.y) / 2;
         DMFontCache::instance().draw_text(r, st.label, value_text, text_x, text_y);
+    }
+    if (tooltip_state_) {
+        DMWidgetTooltipRender(r, rect_, *tooltip_state_);
     }
 }
 
@@ -1056,6 +1573,13 @@ void DMRangeSlider::set_rect(const SDL_Rect& r) {
     if (edit_max_) edit_max_->set_rect(max_value_rect_);
 }
 
+void DMRangeSlider::set_tooltip_state(DMWidgetTooltipState* state) {
+    tooltip_state_ = state;
+    if (tooltip_state_) {
+        DMWidgetTooltipResetHover(*tooltip_state_);
+    }
+}
+
 void DMRangeSlider::set_min_value(int v) {
     min_value_ = std::max(min_, std::min(max_, v));
     if (min_value_ > max_value_) min_value_ = max_value_;
@@ -1109,6 +1633,9 @@ int DMRangeSlider::value_for_x(int x) const {
 }
 
 bool DMRangeSlider::handle_event(const SDL_Event& e) {
+    if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
+        return true;
+    }
     if (edit_min_) {
         bool was_editing = edit_min_->is_editing();
         bool consumed = edit_min_->handle_event(e);
@@ -1455,6 +1982,9 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
         int text_x = std::max(max_value_rect_.x + kSliderValueHorizontalPadding, max_value_rect_.x + max_value_rect_.w - size.x - kSliderValueHorizontalPadding);
         DMFontCache::instance().draw_text(r, st.label, value, text_x, text_y);
     }
+    if (tooltip_state_) {
+        DMWidgetTooltipRender(r, rect_, *tooltip_state_);
+    }
 }
 
 int DMRangeSlider::height() {
@@ -1585,6 +2115,13 @@ void DMDropdown::set_rect(const SDL_Rect& r) {
     rect_.h = (box_rect_.y - rect_.y) + box_rect_.h + kBoxBottomPadding;
 }
 
+void DMDropdown::set_tooltip_state(DMWidgetTooltipState* state) {
+    tooltip_state_ = state;
+    if (tooltip_state_) {
+        DMWidgetTooltipResetHover(*tooltip_state_);
+    }
+}
+
 void DMDropdown::set_selected(int idx) {
     const int clamped = clamp_index(idx);
     const bool changed = clamped != index_;
@@ -1602,6 +2139,9 @@ void DMDropdown::set_selected(int idx) {
 }
 
 bool DMDropdown::handle_event(const SDL_Event& e) {
+    if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
+        return true;
+    }
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         const bool inside_box = SDL_PointInRect(&p, &box_rect_);
@@ -1799,6 +2339,9 @@ void DMDropdown::render(SDL_Renderer* r) const {
         SDL_SetRenderDrawColor(r, arrow_color.r, arrow_color.g, arrow_color.b, arrow_color.a);
         SDL_RenderDrawLine(r, arrow_center_x - arrow_half_width, arrow_center_y - arrow_half_height, arrow_center_x, arrow_center_y + arrow_half_height);
         SDL_RenderDrawLine(r, arrow_center_x + arrow_half_width, arrow_center_y - arrow_half_height, arrow_center_x, arrow_center_y + arrow_half_height);
+    }
+    if (tooltip_state_) {
+        DMWidgetTooltipRender(r, rect_, *tooltip_state_);
     }
 }
 

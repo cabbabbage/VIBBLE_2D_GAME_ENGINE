@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "AnimationDocument.hpp"
+#include "string_utils.hpp"
 
 namespace {
 
@@ -58,6 +59,31 @@ SurfacePtr flip_horizontal(SDL_Surface* surface) {
     return flipped;
 }
 
+SurfacePtr flip_vertical(SDL_Surface* surface) {
+    if (!surface) {
+        return SurfacePtr(nullptr, SDL_FreeSurface);
+    }
+    SurfacePtr flipped = make_surface_ptr(SDL_CreateRGBSurfaceWithFormat(0, surface->w, surface->h, 32, SDL_PIXELFORMAT_RGBA32));
+    if (!flipped) {
+        return SurfacePtr(nullptr, SDL_FreeSurface);
+    }
+
+    if (SDL_MUSTLOCK(surface)) SDL_LockSurface(surface);
+    if (SDL_MUSTLOCK(flipped.get())) SDL_LockSurface(flipped.get());
+
+    const int bytes_per_pixel = 4;
+    for (int y = 0; y < surface->h; ++y) {
+        const Uint8* src_row = static_cast<const Uint8*>(surface->pixels) + y * surface->pitch;
+        Uint8* dst_row = static_cast<Uint8*>(flipped->pixels) + (surface->h - 1 - y) * flipped->pitch;
+        std::memcpy(dst_row, src_row, static_cast<size_t>(surface->w) * bytes_per_pixel);
+    }
+
+    if (SDL_MUSTLOCK(surface)) SDL_UnlockSurface(surface);
+    if (SDL_MUSTLOCK(flipped.get())) SDL_UnlockSurface(flipped.get());
+
+    return flipped;
+}
+
 bool has_numeric_stem(const std::filesystem::path& path) {
     std::string stem = path.stem().string();
     if (stem.empty()) return false;
@@ -96,8 +122,8 @@ SDL_Texture* PreviewProvider::get_preview_texture(SDL_Renderer* renderer, const 
 
     asset_root_ = resolve_asset_root();
 
-    auto payload = document_->animation_payload(animation_id);
-    std::string signature = payload.has_value() ? *payload : std::string{};
+    ResolvedAnimation resolved = resolve_animation(animation_id, 0);
+    std::string signature = resolved.signature.empty() ? std::string{"anim:"} + animation_id : resolved.signature;
 
     auto it = cache_.find(animation_id);
     if (it != cache_.end()) {
@@ -106,7 +132,7 @@ SDL_Texture* PreviewProvider::get_preview_texture(SDL_Renderer* renderer, const 
         }
     }
 
-    std::shared_ptr<SDL_Texture> texture = build_texture(renderer, animation_id);
+    std::shared_ptr<SDL_Texture> texture = build_texture_from_resolved(renderer, resolved);
     if (!texture) {
         cache_.erase(animation_id);
         return nullptr;
@@ -120,9 +146,62 @@ SDL_Texture* PreviewProvider::get_preview_texture(SDL_Renderer* renderer, const 
     return cache_[animation_id].texture.get();
 }
 
-void PreviewProvider::invalidate(const std::string& animation_id) { cache_.erase(animation_id); }
+SDL_Texture* PreviewProvider::get_frame_texture(SDL_Renderer* renderer, const std::string& animation_id, int frame_index) {
+    if (!renderer || animation_id.empty() || frame_index < 0) {
+        return nullptr;
+    }
 
-void PreviewProvider::invalidate_all() { cache_.clear(); }
+    if (!document_) {
+        frame_cache_.erase(animation_id);
+        return nullptr;
+    }
+
+    asset_root_ = resolve_asset_root();
+
+    ResolvedAnimation resolved = resolve_animation(animation_id, 0);
+    std::string signature = resolved.signature.empty() ? std::string{"anim:"} + animation_id : resolved.signature;
+
+    auto it = frame_cache_.find(animation_id);
+    if (it != frame_cache_.end()) {
+        FrameCacheEntry& entry = it->second;
+        if (entry.renderer == renderer && entry.signature == signature) {
+            if (frame_index < static_cast<int>(entry.textures.size())) {
+                const auto& tex = entry.textures[frame_index];
+                if (tex) {
+                    return tex.get();
+                }
+            }
+        }
+    }
+
+    std::vector<std::shared_ptr<SDL_Texture>> textures = build_frame_textures(renderer, resolved);
+    if (textures.empty()) {
+        frame_cache_.erase(animation_id);
+        return nullptr;
+    }
+
+    FrameCacheEntry entry;
+    entry.renderer = renderer;
+    entry.signature = std::move(signature);
+    entry.textures = std::move(textures);
+    auto [stored_it, inserted] = frame_cache_.insert_or_assign(animation_id, std::move(entry));
+    FrameCacheEntry& stored_entry = stored_it->second;
+    if (frame_index < 0 || frame_index >= static_cast<int>(stored_entry.textures.size())) {
+        return nullptr;
+    }
+    const auto& tex = stored_entry.textures[frame_index];
+    return tex ? tex.get() : nullptr;
+}
+
+void PreviewProvider::invalidate(const std::string& animation_id) {
+    cache_.erase(animation_id);
+    frame_cache_.erase(animation_id);
+}
+
+void PreviewProvider::invalidate_all() {
+    cache_.clear();
+    frame_cache_.clear();
+}
 
 std::shared_ptr<SDL_Texture> PreviewProvider::build_texture(SDL_Renderer* renderer,
                                                             const std::string& animation_id, int depth) {
@@ -132,46 +211,184 @@ std::shared_ptr<SDL_Texture> PreviewProvider::build_texture(SDL_Renderer* render
     if (depth > 8) {
         return nullptr;
     }
+    ResolvedAnimation resolved = resolve_animation(animation_id, depth);
+    return build_texture_from_resolved(renderer, resolved);
+}
+
+std::shared_ptr<SDL_Texture> PreviewProvider::build_texture_from_resolved(SDL_Renderer* renderer,
+                                                                         const ResolvedAnimation& resolved) {
+    if (!renderer || resolved.frames.empty()) {
+        return nullptr;
+    }
+
+    const FrameImageRequest& request = resolved.frames.front();
+    if (request.path.empty()) {
+        return nullptr;
+    }
+
+    SurfacePtr surface = load_surface_rgba(request.path);
+    if (!surface) {
+        return nullptr;
+    }
+
+    if (request.flip_x) {
+        SurfacePtr flipped = flip_horizontal(surface.get());
+        if (flipped) {
+            surface = std::move(flipped);
+        }
+    }
+    if (request.flip_y) {
+        SurfacePtr flipped = flip_vertical(surface.get());
+        if (flipped) {
+            surface = std::move(flipped);
+        }
+    }
+
+    SDL_Texture* raw = SDL_CreateTextureFromSurface(renderer, surface.get());
+    if (!raw) {
+        return nullptr;
+    }
+    SDL_SetTextureBlendMode(raw, SDL_BLENDMODE_BLEND);
+    return std::shared_ptr<SDL_Texture>(raw, SDL_DestroyTexture);
+}
+
+std::vector<std::shared_ptr<SDL_Texture>> PreviewProvider::build_frame_textures(SDL_Renderer* renderer,
+                                                                                const ResolvedAnimation& resolved) {
+    std::vector<std::shared_ptr<SDL_Texture>> textures;
+    if (!renderer) {
+        return textures;
+    }
+    if (resolved.frames.empty()) {
+        return textures;
+    }
+
+    textures.reserve(resolved.frames.size());
+    for (const auto& request : resolved.frames) {
+        if (request.path.empty()) {
+            textures.emplace_back();
+            continue;
+        }
+
+        SurfacePtr surface = load_surface_rgba(request.path);
+        if (!surface) {
+            textures.emplace_back();
+            continue;
+        }
+
+        SurfacePtr temp(nullptr, SDL_FreeSurface);
+        SDL_Surface* source_surface = surface.get();
+        if (request.flip_x) {
+            temp = flip_horizontal(surface.get());
+            if (temp) {
+                surface = std::move(temp);
+                source_surface = surface.get();
+            }
+        }
+        if (request.flip_y) {
+            temp = flip_vertical(source_surface);
+            if (temp) {
+                surface = std::move(temp);
+                source_surface = surface.get();
+            }
+        }
+
+        SDL_Texture* raw = SDL_CreateTextureFromSurface(renderer, source_surface);
+        if (!raw) {
+            textures.emplace_back();
+            continue;
+        }
+        SDL_SetTextureBlendMode(raw, SDL_BLENDMODE_BLEND);
+        textures.emplace_back(raw, SDL_DestroyTexture);
+    }
+
+    return textures;
+}
+
+PreviewProvider::ResolvedAnimation PreviewProvider::resolve_animation(const std::string& animation_id, int depth) const {
+    ResolvedAnimation result;
+    result.signature = std::string{"anim:"} + animation_id;
+    if (!document_ || animation_id.empty() || depth > 16) {
+        return result;
+    }
 
     auto payload_dump = document_->animation_payload(animation_id);
-    if (!payload_dump || payload_dump->empty()) {
+    std::string payload_signature = payload_dump.has_value() ? *payload_dump : std::string{};
+
+    if (!payload_dump.has_value() || payload_dump->empty()) {
         std::filesystem::path folder = resolve_asset_root();
-        folder /= animation_id;
-        return load_folder_texture(renderer, folder, 0, false);
+        if (!folder.empty()) {
+            folder /= animation_id;
+        }
+        std::vector<std::filesystem::path> paths = find_frame_sequence(folder, 0);
+        result.frames.reserve(paths.size());
+        for (const auto& path : paths) {
+            result.frames.push_back(FrameImageRequest{path, false, false});
+        }
+        result.signature = std::string{"folder:"} + folder.generic_string();
+        for (const auto& path : paths) {
+            result.signature.push_back('|');
+            result.signature.append(path.filename().generic_string());
+        }
+        return result;
     }
 
     nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
     if (payload.is_discarded() || !payload.is_object()) {
-        return nullptr;
+        result.signature = payload_signature + "|invalid";
+        return result;
     }
 
-    return build_texture_from_payload(renderer, animation_id, payload, depth);
-}
-
-std::shared_ptr<SDL_Texture> PreviewProvider::build_texture_from_payload(SDL_Renderer* renderer,
-                                                                        const std::string& animation_id,
-                                                                        const nlohmann::json& payload, int depth) {
-    const bool flipped = payload.value("flipped_source", false);
-    int frames = payload.value("number_of_frames", 1);
-    if (frames < 0) frames = 0;
-
-    const nlohmann::json* source = nullptr;
-    if (payload.contains("source") && payload["source"].is_object()) {
-        source = &payload["source"];
-    }
-
+    const nlohmann::json* source = payload.contains("source") && payload["source"].is_object() ? &payload["source"] : nullptr;
     std::string kind = source ? source->value("kind", std::string{"folder"}) : std::string{"folder"};
+
+    bool reverse = payload.value("reverse_source", false);
+    bool flip_x = payload.value("flipped_source", false);
+    bool flip_y = false;
+    bool flip_movement_x = false;
+    bool flip_movement_y = false;
+    if (kind == "animation" && payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
+        const auto& modifiers = payload["derived_modifiers"];
+        reverse = modifiers.value("reverse", reverse);
+        flip_x = modifiers.value("flipX", flip_x);
+        flip_y = modifiers.value("flipY", false);
+        flip_movement_x = modifiers.value("flipMovementX", flip_movement_x);
+        flip_movement_y = modifiers.value("flipMovementY", flip_movement_y);
+    }
 
     if (kind == "animation") {
         std::string reference = source ? source->value("name", std::string{}) : std::string{};
         if (reference.empty() && source) {
             reference = source->value("path", std::string{});
         }
+        reference = strings::trim_copy(reference);
         if (reference.empty() || reference == animation_id) {
-            return nullptr;
+            result.signature = payload_signature + "|missing_ref";
+            return result;
         }
-        return build_texture(renderer, reference, depth + 1);
+
+        ResolvedAnimation nested = resolve_animation(reference, depth + 1);
+        result.frames = nested.frames;
+        result.signature = payload_signature + "|child{" + nested.signature + "}";
+
+        if (reverse && !result.frames.empty()) {
+            std::reverse(result.frames.begin(), result.frames.end());
+        }
+        for (auto& frame : result.frames) {
+            frame.flip_x = frame.flip_x ^ flip_x;
+            frame.flip_y = frame.flip_y ^ flip_y;
+        }
+
+        result.signature += "|mods:";
+        result.signature.push_back(reverse ? '1' : '0');
+        result.signature.push_back(flip_x ? '1' : '0');
+        result.signature.push_back(flip_y ? '1' : '0');
+        result.signature.push_back(flip_movement_x ? '1' : '0');
+        result.signature.push_back(flip_movement_y ? '1' : '0');
+        return result;
     }
+
+    int frames = payload.value("number_of_frames", 0);
+    if (frames < 0) frames = 0;
 
     std::string relative_path = source ? source->value("path", std::string{}) : std::string{};
     if (relative_path.empty()) {
@@ -179,7 +396,6 @@ std::shared_ptr<SDL_Texture> PreviewProvider::build_texture_from_payload(SDL_Ren
     }
 
     std::filesystem::path folder = asset_root_;
-
     auto should_treat_as_absolute = [&](const std::filesystem::path& requested) {
         if (requested.is_absolute()) {
             return true;
@@ -204,7 +420,7 @@ std::shared_ptr<SDL_Texture> PreviewProvider::build_texture_from_payload(SDL_Ren
         }
 
         return false;
-};
+    };
 
     std::filesystem::path requested = relative_path;
     if (should_treat_as_absolute(requested)) {
@@ -217,35 +433,27 @@ std::shared_ptr<SDL_Texture> PreviewProvider::build_texture_from_payload(SDL_Ren
         }
     }
 
-    return load_folder_texture(renderer, folder, frames, flipped);
-}
-
-std::shared_ptr<SDL_Texture> PreviewProvider::load_folder_texture(SDL_Renderer* renderer,
-                                                                  const std::filesystem::path& folder, int frames,
-                                                                  bool flipped) const {
-    std::filesystem::path frame_path = find_first_frame(folder, frames);
-    if (frame_path.empty()) {
-        return nullptr;
+    std::vector<std::filesystem::path> paths = find_frame_sequence(folder, frames);
+    result.frames.reserve(paths.size());
+    for (const auto& path : paths) {
+        FrameImageRequest request{path, flip_x, flip_y};
+        result.frames.push_back(request);
+    }
+    if (reverse && !result.frames.empty()) {
+        std::reverse(result.frames.begin(), result.frames.end());
     }
 
-    SurfacePtr surface = load_surface_rgba(frame_path);
-    if (!surface) {
-        return nullptr;
+    result.signature = payload_signature + "|files:";
+    for (const auto& path : paths) {
+        result.signature.append(path.filename().generic_string());
+        result.signature.push_back(';');
     }
-
-    if (flipped) {
-        SurfacePtr flipped_surface = flip_horizontal(surface.get());
-        if (flipped_surface) {
-            surface = std::move(flipped_surface);
-        }
-    }
-
-    SDL_Texture* raw = SDL_CreateTextureFromSurface(renderer, surface.get());
-    if (!raw) {
-        return nullptr;
-    }
-    SDL_SetTextureBlendMode(raw, SDL_BLENDMODE_BLEND);
-    return std::shared_ptr<SDL_Texture>(raw, SDL_DestroyTexture);
+    result.signature.push_back('|');
+    result.signature.append("mods:");
+    result.signature.push_back(reverse ? '1' : '0');
+    result.signature.push_back(flip_x ? '1' : '0');
+    result.signature.push_back(flip_y ? '1' : '0');
+    return result;
 }
 
 std::filesystem::path PreviewProvider::resolve_asset_root() const {
@@ -311,6 +519,82 @@ std::filesystem::path PreviewProvider::find_first_frame(const std::filesystem::p
     });
 
     return numbered.front();
+}
+
+std::vector<std::filesystem::path> PreviewProvider::find_frame_sequence(const std::filesystem::path& folder,
+                                                                        int frames) const {
+    std::vector<std::filesystem::path> sequence;
+    std::error_code ec;
+
+    if (frames > 0) {
+        sequence.reserve(frames);
+        std::filesystem::path fallback;
+        for (int i = 0; i < frames; ++i) {
+            std::filesystem::path candidate = folder / (std::to_string(i) + ".png");
+            if (std::filesystem::exists(candidate, ec)) {
+                sequence.push_back(candidate);
+                if (fallback.empty()) {
+                    fallback = candidate;
+                }
+            } else {
+                sequence.emplace_back();
+            }
+        }
+        if (!fallback.empty()) {
+            for (auto& path : sequence) {
+                if (path.empty()) {
+                    path = fallback;
+                }
+            }
+            return sequence;
+        }
+        sequence.clear();
+    }
+
+    if (!std::filesystem::exists(folder, ec) || !std::filesystem::is_directory(folder, ec)) {
+        return sequence;
+    }
+
+    std::vector<std::filesystem::path> numbered;
+    for (const auto& entry : std::filesystem::directory_iterator(folder, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file(ec)) continue;
+        const std::filesystem::path& path = entry.path();
+        std::string ext = lowercase_copy(path.extension().string());
+        if (ext != ".png") continue;
+        if (!has_numeric_stem(path)) continue;
+        numbered.push_back(path);
+    }
+
+    if (numbered.empty()) {
+        return sequence;
+    }
+
+    std::sort(numbered.begin(), numbered.end(), [](const std::filesystem::path& a, const std::filesystem::path& b) {
+        int lhs = 0;
+        int rhs = 0;
+        try {
+            lhs = std::stoi(a.stem().string());
+        } catch (...) {
+            lhs = 0;
+        }
+        try {
+            rhs = std::stoi(b.stem().string());
+        } catch (...) {
+            rhs = 0;
+        }
+        return lhs < rhs;
+    });
+
+    if (frames > 0) {
+        sequence.reserve(frames);
+        for (int i = 0; i < frames; ++i) {
+            sequence.push_back(numbered[std::min(i, static_cast<int>(numbered.size()) - 1)]);
+        }
+        return sequence;
+    }
+
+    return numbered;
 }
 
 }

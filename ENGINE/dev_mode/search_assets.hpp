@@ -22,6 +22,14 @@ class Input;
 
 class SearchAssets {
 public:
+    struct Result {
+        std::string label;
+        std::string value;
+        bool is_tag = false;
+    };
+
+    using ExtraResultsProvider = std::function<std::vector<Result>()>;
+
     using Callback = std::function<void(const std::string&)>;
     explicit SearchAssets(devmode::core::ManifestStore* manifest_store = nullptr);
     ~SearchAssets();
@@ -43,6 +51,7 @@ public:
     void set_manifest_store(devmode::core::ManifestStore* manifest_store);
     void set_query_for_testing(const std::string& value);
     std::vector<std::pair<std::string, bool>> results_for_testing() const;
+    void set_extra_results_provider(ExtraResultsProvider provider);
 private:
     struct Asset { std::string name; std::vector<std::string> tags; };
     void load_assets();
@@ -58,7 +67,7 @@ private:
     std::vector<std::unique_ptr<ButtonWidget>> button_widgets_;
     Callback cb_;
     std::vector<Asset> all_;
-    std::vector<std::pair<std::string,bool>> results_;
+    std::vector<Result> results_;
     std::string last_query_;
     std::uint64_t tag_data_version_ = 0;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
@@ -72,4 +81,5 @@ private:
     std::string floating_stack_key_;
     bool embedded_ = false;
     SDL_Rect embedded_rect_{0, 0, 0, 0};
+    ExtraResultsProvider extra_results_provider_{};
 };

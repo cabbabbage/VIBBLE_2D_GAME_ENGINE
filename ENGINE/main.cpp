@@ -10,6 +10,7 @@
 #include "asset/asset_types.hpp"
 #include "asset/asset_library.hpp"
 #include "scene_renderer.hpp"
+#include "render_pipeline/ScalingProfileBuilder.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
 #include "core/manifest/manifest_loader.hpp"
@@ -201,6 +202,14 @@ void MainApp::setup() {
                         }
                 }
 
+                render_pipeline::ScalingProfileBuildOptions scaling_options;
+                scaling_options.manifest_root = manifest_root;
+                scaling_options.output_path  = manifest_root / "loading" / "scaling_profiles.json";
+                if (screen_w_ > 0 && screen_h_ > 0) {
+                        scaling_options.screen_aspect = static_cast<double>(screen_w_) / static_cast<double>(screen_h_);
+                }
+                render_pipeline::BuildScalingProfiles(scaling_options);
+
                 loader_ = std::make_unique<AssetLoader>(map_identifier, map_manifest_json, renderer_, content_root, nullptr, asset_library_);
                 loading_status::notify("Spawning assets");
                 auto spawn_begin = std::chrono::steady_clock::now();
@@ -277,35 +286,12 @@ void MainApp::game_loop() {
                 const Uint64 frame_end = SDL_GetPerformanceCounter();
                 const double work_counts = static_cast<double>(frame_end - frame_begin);
                 if (work_counts < target_counts) {
-                        double remaining_counts = target_counts - work_counts;
+                        const double remaining_counts = target_counts - work_counts;
                         idle_counts_accum += remaining_counts;
                         ++idle_frame_counter;
-                        double remaining_ms = (remaining_counts * 1000.0) / perf_frequency;
+                        const double remaining_ms = (remaining_counts * 1000.0) / perf_frequency;
                         if (remaining_ms >= 1.0) {
                                 SDL_Delay(static_cast<Uint32>(remaining_ms));
-                        }
-                        while (true) {
-                                const Uint64 now = SDL_GetPerformanceCounter();
-                                const double elapsed_counts = static_cast<double>(now - frame_begin);
-                                if (elapsed_counts >= target_counts) {
-                                        break;
-                                }
-                                const double sub_remaining_counts = target_counts - elapsed_counts;
-                                const double sub_remaining_ms = (sub_remaining_counts * 1000.0) / perf_frequency;
-                                const int wait_timeout_ms = static_cast<int>(std::ceil(sub_remaining_ms));
-                                if (wait_timeout_ms <= 0) {
-                                        break;
-                                }
-                                SDL_Event wait_event;
-                                if (SDL_WaitEventTimeout(&wait_event, wait_timeout_ms)) {
-                                        if (wait_event.type == SDL_QUIT) {
-                                                quit = true;
-                                        }
-                                        if (input_) input_->handleEvent(wait_event);
-                                        if (game_assets_) game_assets_->handle_sdl_event(wait_event);
-                                } else {
-                                        SDL_PumpEvents();
-                                }
                         }
                 }
                 if (idle_frame_counter >= IDLE_REPORT_INTERVAL) {
@@ -538,6 +524,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         vibble::log::info("[Main] Main menu displayed.");
         std::optional<MapDescriptor> chosen_map;
         bool quit_requested = false;
+        bool should_show_loading_screen = false;
         SDL_Event e;
         bool choosing = true;
         while (choosing) {
@@ -562,6 +549,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                         chosen_map = std::move(*created);
                         vibble::log::info(std::string("[Main] New map created and selected: ") + chosen_map->id);
                         choosing = false;
+                        should_show_loading_screen = true;
                     }
                     continue;
                 }
@@ -571,6 +559,10 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                 chosen_map = std::move(descriptor);
                 vibble::log::info(std::string("[Main] Map selected: ") + chosen_map->id);
                 choosing = false;
+                should_show_loading_screen = true;
+                break;
+            }
+            if (!choosing) {
                 break;
             }
             SDL_SetRenderTarget(renderer, nullptr);
@@ -579,6 +571,9 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
             menu.render();
             SDL_RenderPresent(renderer);
             SDL_Delay(16);
+        }
+        if (should_show_loading_screen) {
+            menu.showLoadingScreen();
         }
         if (quit_requested || !chosen_map) break;
 

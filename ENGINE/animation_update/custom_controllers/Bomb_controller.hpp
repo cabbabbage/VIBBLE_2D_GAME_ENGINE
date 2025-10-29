@@ -1,10 +1,10 @@
-#ifndef BOMB_CONTROLLER_HPP
+﻿#ifndef BOMB_CONTROLLER_HPP
 #define BOMB_CONTROLLER_HPP
 
 #include "asset/asset_controller.hpp"
 
-class Assets;
 class Asset;
+class Assets;
 class Input;
 
 class BombController : public AssetController {
@@ -15,6 +15,9 @@ public:
     void update(const Input& in) override;
 
 private:
+    static bool target_active(Asset* asset);
+    Asset*      resolve_player_target() const;
+
     enum class State { Idle, Pursuing, Detonating };
 
     void enter_idle(int rest_ratio);
@@ -31,3 +34,4 @@ private:
 };
 
 #endif
+

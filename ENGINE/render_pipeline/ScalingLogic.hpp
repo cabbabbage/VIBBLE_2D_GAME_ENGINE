@@ -2,24 +2,20 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <deque>
 #include <fstream>
-#include <iomanip>
 #include <limits>
 #include <mutex>
-#include <sstream>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <SDL.h>
-#include <nlohmann/json.hpp>
 
 namespace render_pipeline {
 
@@ -35,10 +31,27 @@ struct ScaleSelection {
     float requested_scale = 1.0f;
     float stored_scale    = 1.0f;
     float remainder_scale = 1.0f;
+    float hysteresis_min  = 0.0f;
+    float hysteresis_max  = std::numeric_limits<float>::max();
+    int   preload_index   = -1;
 };
 
 struct ScalingLogic {
     using ScaleSteps = std::vector<float>;
+
+    struct HysteresisState {
+        int   last_index = 0;
+        float min_scale  = 0.0f;
+        float max_scale  = std::numeric_limits<float>::max();
+    };
+
+    struct HysteresisOptions {
+        float margin         = 0.05f;
+        float preload_margin = 0.02f;
+    };
+
+    static constexpr float kDefaultHysteresisMargin = 0.05f;
+    static constexpr float kDefaultPreloadMargin    = 0.02f;
 
     static void SetQualityCap(float cap) {
         if (!std::isfinite(cap) || cap <= 0.0f) {
@@ -53,12 +66,14 @@ struct ScalingLogic {
     }
 
     struct ScaleProfile {
-        ScaleSteps          steps;
-        std::uint64_t       revision = 0;
-        bool                had_entry = false;
-        bool                created_entry = false;
+        ScaleSteps    steps;
+        std::uint64_t revision  = 0;
+        bool          had_entry = false;
+        bool          created_entry = false;
+        float         min_scale = 1.0f;
+        float         max_scale = 1.0f;
         bool has_custom_steps() const { return !steps.empty(); }
-};
+    };
 
     static constexpr std::size_t kMaxVariantCount     = 3;
     static constexpr std::size_t kDefaultVariantCount = kMaxVariantCount;
@@ -155,62 +170,128 @@ struct ScalingLogic {
     }
 
     static inline ScaleSelection Choose(float desired_scale) {
-        return Choose(desired_scale, DefaultScaleSteps());
+        return Choose(desired_scale,
+                      DefaultScaleSteps(),
+                      HysteresisState{},
+                      desired_scale,
+                      HysteresisOptions{});
     }
 
     static inline ScaleSelection Choose(float desired_scale, const ScaleSteps& steps) {
-        ScaleSelection result{};
+        return Choose(desired_scale,
+                      steps,
+                      HysteresisState{},
+                      desired_scale,
+                      HysteresisOptions{});
+    }
+
+    static inline ScaleSelection Choose(float desired_scale,
+                                        const ScaleSteps& steps,
+                                        const HysteresisState& state,
+                                        float smoothed_scale,
+                                        HysteresisOptions options = HysteresisOptions{}) {
+        ScaleSelection base = choose_closest(desired_scale, steps);
         if (steps.empty()) {
-            result.requested_scale = std::isfinite(desired_scale) && desired_scale > 0.0f ? desired_scale : 1.0f;
-            result.stored_scale    = 1.0f;
-            result.index           = 0;
-            result.remainder_scale = result.requested_scale;
-            return result;
-        }
-        if (!std::isfinite(desired_scale)) {
-            desired_scale = 1.0f;
-        }
-        if (desired_scale <= 0.0f) {
-            desired_scale = steps.back();
+            return base;
         }
 
-        result.requested_scale = desired_scale;
+        if (!std::isfinite(options.margin) || options.margin < 0.0f) {
+            options.margin = kDefaultHysteresisMargin;
+        }
+        if (!std::isfinite(options.preload_margin) || options.preload_margin < 0.0f) {
+            options.preload_margin = kDefaultPreloadMargin;
+        }
 
-        float best_diff = std::numeric_limits<float>::max();
-        float chosen_scale = steps.front();
-        int   chosen_index = 0;
+        const float safe_smoothed = (std::isfinite(smoothed_scale) && smoothed_scale > 0.0f)
+                                        ? smoothed_scale
+                                        : base.requested_scale;
 
-        const float quality_cap = QualityCap();
-        const bool enforce_cap = std::isfinite(quality_cap) && quality_cap > 0.0f && quality_cap < 0.999f;
-        bool has_allowed = false;
-        if (enforce_cap) {
-            for (float candidate : steps) {
-                if (candidate <= quality_cap + 1e-4f) {
-                    has_allowed = true;
-                    break;
-                }
+        HysteresisState current = state;
+        const int max_index = static_cast<int>(steps.size() - 1);
+        current.last_index = std::clamp(current.last_index, 0, max_index);
+        if (!std::isfinite(current.min_scale) || current.min_scale < 0.0f) {
+            current.min_scale = 0.0f;
+        }
+        if (!std::isfinite(current.max_scale) || current.max_scale < current.min_scale) {
+            current.max_scale = std::numeric_limits<float>::max();
+        }
+
+        int candidate = current.last_index;
+        auto bounds = variant_bounds(steps, candidate, options.margin);
+        float min_bound = bounds.first;
+        float max_bound = bounds.second;
+
+        if (safe_smoothed >= current.min_scale && safe_smoothed <= current.max_scale) {
+            // Stay with previous variant while within hysteresis window.
+            candidate = current.last_index;
+            bounds = variant_bounds(steps, candidate, options.margin);
+            min_bound = bounds.first;
+            max_bound = bounds.second;
+        } else if (safe_smoothed < current.min_scale && candidate < max_index) {
+            do {
+                candidate = std::min(candidate + 1, max_index);
+                bounds = variant_bounds(steps, candidate, options.margin);
+                min_bound = bounds.first;
+                max_bound = bounds.second;
+            } while (safe_smoothed < min_bound && candidate < max_index);
+        } else if (safe_smoothed > current.max_scale && candidate > 0) {
+            do {
+                candidate = std::max(candidate - 1, 0);
+                bounds = variant_bounds(steps, candidate, options.margin);
+                min_bound = bounds.first;
+                max_bound = bounds.second;
+            } while (safe_smoothed > max_bound && candidate > 0);
+        } else {
+            candidate = base.index;
+            bounds = variant_bounds(steps, candidate, options.margin);
+            min_bound = bounds.first;
+            max_bound = bounds.second;
+        }
+
+        if (candidate < base.index) {
+            candidate = base.index;
+            bounds = variant_bounds(steps, candidate, options.margin);
+            min_bound = bounds.first;
+            max_bound = bounds.second;
+        }
+
+        ScaleSelection result = base;
+        result.index = candidate;
+        result.stored_scale = steps[candidate];
+        if (result.stored_scale <= 0.0f) {
+            result.stored_scale = 1.0f;
+        }
+        result.remainder_scale = (result.stored_scale > 0.0f)
+                                     ? (result.requested_scale / result.stored_scale)
+                                     : 1.0f;
+        bounds = variant_bounds(steps, candidate, options.margin);
+        result.hysteresis_min = bounds.first;
+        result.hysteresis_max = bounds.second;
+
+        result.preload_index = -1;
+        float best_distance = std::numeric_limits<float>::max();
+
+        if (candidate < max_index) {
+            const float boundary = 0.5f * (steps[candidate] + steps[candidate + 1]);
+            const float diff = std::fabs(safe_smoothed - boundary);
+            if (diff <= options.preload_margin) {
+                result.preload_index = candidate + 1;
+                best_distance       = diff;
+            }
+        }
+        if (candidate > 0) {
+            const float boundary = 0.5f * (steps[candidate] + steps[candidate - 1]);
+            const float diff = std::fabs(safe_smoothed - boundary);
+            if (diff <= options.preload_margin && diff < best_distance && (candidate - 1) >= base.index) {
+                result.preload_index = candidate - 1;
+                best_distance       = diff;
             }
         }
 
-        for (std::size_t i = 0; i < steps.size(); ++i) {
-            const float candidate = steps[i];
-            if (enforce_cap && has_allowed && candidate > quality_cap + 1e-4f) {
-                continue;
-            }
-            const float diff = std::fabs(candidate - desired_scale);
-            if (diff < best_diff - 1e-4f) {
-                best_diff    = diff;
-                chosen_scale = candidate;
-                chosen_index = static_cast<int>(i);
-            } else if (std::fabs(diff - best_diff) <= 1e-4f && candidate > chosen_scale) {
-                chosen_scale = candidate;
-                chosen_index = static_cast<int>(i);
-            }
+        if (result.preload_index < 0 || result.preload_index > max_index) {
+            result.preload_index = -1;
         }
 
-        result.index        = chosen_index;
-        result.stored_scale = chosen_scale;
-        result.remainder_scale = (chosen_scale > 0.0f) ? (desired_scale / chosen_scale) : 1.0f;
         return result;
     }
 
@@ -230,7 +311,7 @@ struct ScalingLogic {
     }
 
     static inline std::string VariantFolder(const std::string& base, const ScaleSteps& steps, std::size_t index) {
-        return std::filesystem::path(base) .append("scale_" + std::to_string(ScalePercent(steps, index))) .string();
+        return std::filesystem::path(base).append("scale_" + std::to_string(ScalePercent(steps, index))).string();
     }
 
     static inline std::array<int, kDefaultVariantCount> PercentSteps() {
@@ -252,8 +333,8 @@ struct ScalingLogic {
         return percents;
     }
 
-    static inline void ConfigureUsageStorage(const std::filesystem::path& path) {
-        UsageState& state = usage_state();
+    static inline void LoadPrecomputedProfiles(const std::filesystem::path& path = std::filesystem::path()) {
+        ProfilesState& state = profiles_state();
         std::lock_guard<std::mutex> guard(state.mutex);
         if (!path.empty() && path != state.file_path) {
             state.file_path = path;
@@ -262,577 +343,202 @@ struct ScalingLogic {
         ensure_loaded(state);
     }
 
-    static inline void SetUsageTrackingEnabled(bool enabled) {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        ensure_loaded(state);
-        const bool was_enabled = state.enabled;
-        state.enabled          = enabled;
-        if (enabled && !was_enabled) {
-            if (update_new_values_flag(state, true)) {
-
-                save_to_disk(state);
-            }
-        }
-    }
-
-    static inline bool ToggleUsageTracking() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        ensure_loaded(state);
-        const bool new_state = !state.enabled;
-        state.enabled        = new_state;
-        if (new_state) {
-            if (update_new_values_flag(state, true)) {
-                save_to_disk(state);
-            }
-        }
-        return new_state;
-    }
-
-    static inline bool MarkNewValuesPending() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        ensure_loaded(state);
-        const bool previous = state.data.value("new_values", false);
-        if (update_new_values_flag(state, true)) {
-            save_to_disk(state);
-        }
-        return previous;
-    }
-
-    static inline bool ConsumeNewValues() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        ensure_loaded(state);
-        const bool previous = state.data.value("new_values", false);
-        if (update_new_values_flag(state, false)) {
-            save_to_disk(state);
-        }
-        return previous;
-    }
-
-    static inline bool NewValuesPending() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        ensure_loaded(state);
-        return state.data.value("new_values", false);
-    }
-
-    static inline bool HasPendingUsageData() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        ensure_loaded(state);
-        return state.data.value("new_values", false);
-    }
-
-    static inline void ClearPendingUsageData() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        ensure_loaded(state);
-        if (update_new_values_flag(state, false)) {
-            save_to_disk(state);
-        }
-    }
-
-    static inline void ResetAssetUsage(const std::string& asset_key) {
-        if (asset_key.empty()) {
-            return;
-        }
-
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        ensure_loaded(state);
-
-        state.pending_samples.erase(asset_key);
-        state.next_allowed_sample.erase(asset_key);
-        state.queued_assets.erase(asset_key);
-        auto& queue = state.sampling_queue;
-        queue.erase(std::remove(queue.begin(), queue.end(), asset_key), queue.end());
-
-        bool changed = false;
-        if (state.data.contains("assets") && state.data["assets"].is_object()) {
-            auto& assets = state.data["assets"];
-            auto it = assets.find(asset_key);
-            if (it != assets.end()) {
-                assets.erase(it);
-                changed = true;
-            }
-        }
-
-        if (changed) {
-            state.dirty = true;
-            save_to_disk(state);
-        }
-    }
-
-    static inline bool UsageTrackingEnabled() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        return state.enabled;
-    }
-
-    static inline void RecordUsage(const std::string& asset_key, float requested_scale, float stored_scale) {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        if (!state.enabled || asset_key.empty()) {
-            return;
-        }
-        ensure_loaded(state);
-        enqueue_usage_sample(state, asset_key, requested_scale, stored_scale);
-    }
-
-    static inline bool FlushUsageData() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        ensure_loaded(state);
-        const Uint32 now = SDL_GetTicks();
-        const bool merged = process_pending_samples(state, now, true);
-        if (merged || state.dirty) {
-            return save_to_disk(state);
-        }
-        return true;
-    }
-
-    static inline void TickUsageSampling() {
-        UsageState& state = usage_state();
-        std::lock_guard<std::mutex> guard(state.mutex);
-        if (!state.enabled) {
-            return;
-        }
-        ensure_loaded(state);
-        const Uint32 now = SDL_GetTicks();
-        const bool merged = process_pending_samples(state, now, false);
-        if (merged && state.dirty) {
-            save_to_disk(state);
-        }
-    }
-
     static inline ScaleProfile ProfileForAsset(const std::string& asset_key) {
-        UsageState& state = usage_state();
+        ProfilesState& state = profiles_state();
         std::lock_guard<std::mutex> guard(state.mutex);
         ensure_loaded(state);
 
         ScaleProfile profile;
+        profile.had_entry = false;
+        profile.created_entry = false;
+        profile.min_scale = 1.0f;
+        profile.max_scale = 1.0f;
 
-        if (!asset_key.empty() && state.data.contains("assets") && state.data["assets"].is_object()) {
-            const auto& assets = state.data["assets"];
-            auto it = assets.find(asset_key);
-            if (it != assets.end() && it->is_object()) {
+        if (!asset_key.empty()) {
+            auto it = state.entries.find(asset_key);
+            if (it != state.entries.end()) {
                 profile.had_entry = true;
-                const nlohmann::json& entry = *it;
-                if (entry.contains("recommended_percentages") && entry["recommended_percentages"].is_array()) {
-                    for (const auto& value : entry["recommended_percentages"]) {
-                        if (!value.is_number()) {
-                            continue;
-                        }
-                        const float percent = static_cast<float>(value.get<double>());
-                        const float scale   = std::clamp(percent / 100.0f, 0.05f, 2.0f);
-                        profile.steps.push_back(scale);
-                    }
-                }
-                if (entry.contains("revision") && entry["revision"].is_number_unsigned()) {
-                    profile.revision = entry["revision"].get<std::uint64_t>();
-                }
+                profile.steps     = it->second.steps;
+                profile.revision  = it->second.revision;
+                profile.min_scale = it->second.min_scale;
+                profile.max_scale = it->second.max_scale;
+                return profile;
             }
         }
 
-        if (!profile.had_entry) {
-            ensure_assets_container(state);
-            nlohmann::json& entry = state.data["assets"][asset_key];
-            if (!entry.is_object()) {
-                entry = default_asset_entry();
-            }
-
-            const auto& defaults = DefaultScaleSteps();
-            const std::size_t initial_variant_count = kMaxVariantCount;
-            profile.steps.clear();
-            for (std::size_t idx = 0; idx < initial_variant_count && idx < defaults.size(); ++idx) {
-                profile.steps.push_back(defaults[idx]);
-            }
-
-            NormalizeVariantSteps(profile.steps);
-
-            nlohmann::json recommended_json = nlohmann::json::array();
-            for (float step : profile.steps) {
-                recommended_json.push_back(static_cast<int>(std::lround(step * 100.0f)));
-            }
-            entry["recommended_percentages"] = std::move(recommended_json);
-            std::uint64_t revision = entry.value("revision", static_cast<std::uint64_t>(0));
-            revision += 1;
-            entry["revision"]     = revision;
-            entry["last_updated"] = timestamp_now();
-            profile.revision       = revision;
-            profile.created_entry  = true;
-            state.dirty            = true;
-            save_to_disk(state);
-        }
-
-        NormalizeVariantSteps(profile.steps);
-
+        const auto& defaults = DefaultScaleSteps();
+        profile.steps.assign(defaults.begin(), defaults.end());
+        profile.revision = 0;
         return profile;
     }
 
 private:
-    struct UsageState {
-        std::mutex            mutex;
-        bool                  enabled  = false;
-        bool                  loaded   = false;
-        bool                  dirty    = false;
-        std::filesystem::path file_path = std::filesystem::path("loading") / "scaling_profiles.json";
-        nlohmann::json        data      = default_storage();
-        struct Sample {
-            float requested_scale = 1.0f;
-            float stored_scale    = 1.0f;
-};
-        std::unordered_map<std::string, std::vector<Sample>> pending_samples;
-        std::unordered_map<std::string, Uint32>               next_allowed_sample;
-        std::deque<std::string>                               sampling_queue;
-        std::unordered_set<std::string>                       queued_assets;
-};
+    static inline ScaleSelection choose_closest(float desired_scale, const ScaleSteps& steps) {
+        ScaleSelection result{};
+        if (steps.empty()) {
+            result.requested_scale = std::isfinite(desired_scale) && desired_scale > 0.0f ? desired_scale : 1.0f;
+            result.stored_scale    = 1.0f;
+            result.index           = 0;
+            result.remainder_scale = result.requested_scale;
+            return result;
+        }
+        float sanitized = desired_scale;
+        if (!std::isfinite(sanitized)) {
+            sanitized = 1.0f;
+        }
+        if (sanitized <= 0.0f) {
+            sanitized = steps.back();
+        }
 
-    static inline UsageState& usage_state() {
-        static UsageState state;
+        result.requested_scale = sanitized;
+
+        float best_diff    = std::numeric_limits<float>::max();
+        float chosen_scale = steps.front();
+        int   chosen_index = 0;
+
+        const float quality_cap = QualityCap();
+        const bool  enforce_cap = std::isfinite(quality_cap) && quality_cap > 0.0f && quality_cap < 0.999f;
+        bool has_allowed = false;
+        if (enforce_cap) {
+            for (float candidate : steps) {
+                if (candidate <= quality_cap + 1e-4f) {
+                    has_allowed = true;
+                    break;
+                }
+            }
+        }
+
+        for (std::size_t i = 0; i < steps.size(); ++i) {
+            const float candidate = steps[i];
+            if (enforce_cap && has_allowed && candidate > quality_cap + 1e-4f) {
+                continue;
+            }
+            const float diff = std::fabs(candidate - sanitized);
+            if (diff < best_diff - 1e-4f) {
+                best_diff    = diff;
+                chosen_scale = candidate;
+                chosen_index = static_cast<int>(i);
+            } else if (std::fabs(diff - best_diff) <= 1e-4f && candidate > chosen_scale) {
+                chosen_scale = candidate;
+                chosen_index = static_cast<int>(i);
+            }
+        }
+
+        result.index        = chosen_index;
+        result.stored_scale = chosen_scale;
+        result.remainder_scale = (chosen_scale > 0.0f) ? (sanitized / chosen_scale) : 1.0f;
+        return result;
+    }
+
+    static inline std::pair<float, float> variant_bounds(const ScaleSteps& steps,
+                                                         int index,
+                                                         float margin) {
+        if (steps.empty()) {
+            return {0.0f, std::numeric_limits<float>::max()};
+        }
+        const float safe_margin = (std::isfinite(margin) && margin > 0.0f) ? margin : 0.0f;
+        const float current     = steps[std::clamp(index, 0, static_cast<int>(steps.size() - 1))];
+        float min_bound = 0.0f;
+        float max_bound = std::numeric_limits<float>::max();
+
+        if (index + 1 < static_cast<int>(steps.size())) {
+            const float boundary = 0.5f * (current + steps[index + 1]);
+            min_bound = std::max(0.0f, boundary - safe_margin);
+        }
+        if (index > 0) {
+            const float boundary = 0.5f * (current + steps[index - 1]);
+            max_bound = boundary + safe_margin;
+        }
+
+        if (min_bound > max_bound) {
+            const float midpoint = 0.5f * (min_bound + max_bound);
+            min_bound            = std::min(min_bound, midpoint);
+            max_bound            = std::max(max_bound, midpoint);
+        }
+
+        return {min_bound, max_bound};
+    }
+
+    struct ProfileEntry {
+        ScaleSteps    steps;
+        std::uint64_t revision = 0;
+        float         min_scale = 1.0f;
+        float         max_scale = 1.0f;
+    };
+
+    struct ProfilesState {
+        std::filesystem::path file_path;
+        bool                   loaded = false;
+        std::mutex             mutex;
+        std::unordered_map<std::string, ProfileEntry> entries;
+    };
+
+    static inline ProfilesState& profiles_state() {
+        static ProfilesState state;
         return state;
     }
 
-    static inline nlohmann::json default_storage() {
-        nlohmann::json data;
-        data["version"]    = 1;
-        data["assets"]     = nlohmann::json::object();
-        data["new_values"] = false;
-        return data;
-    }
-
-    static inline nlohmann::json default_asset_entry() {
-        nlohmann::json entry;
-        entry["histogram"] = nlohmann::json::array();
-        for (int i = 0; i < kHistogramBucketCount; ++i) {
-            entry["histogram"].push_back(0);
-        }
-        entry["recommended_percentages"] = nlohmann::json::array();
-        entry["revision"]                = 0;
-        entry["last_updated"]            = std::string{};
-        return entry;
-    }
-
-    static inline void ensure_loaded(UsageState& state) {
+    static inline void ensure_loaded(ProfilesState& state) {
         if (state.loaded) {
             return;
         }
         state.loaded = true;
-        state.dirty  = false;
+        state.entries.clear();
+
         if (state.file_path.empty()) {
             state.file_path = std::filesystem::path("loading") / "scaling_profiles.json";
         }
+
         std::ifstream in(state.file_path);
         if (!in.good()) {
-            state.data  = default_storage();
-            state.dirty = true;
             return;
         }
+
+        nlohmann::json root;
         try {
-            nlohmann::json loaded = nlohmann::json::parse(in, nullptr, true, true);
-            if (!loaded.is_object()) {
-                state.data  = default_storage();
-                state.dirty = true;
-            } else {
-                if (!loaded.contains("assets") || !loaded["assets"].is_object()) {
-                    loaded["assets"] = nlohmann::json::object();
-                }
-                state.data = std::move(loaded);
-            }
+            in >> root;
         } catch (...) {
-            state.data  = default_storage();
-            state.dirty = true;
+            return;
         }
 
-        if (!state.data.contains("new_values") || !state.data["new_values"].is_boolean()) {
-            state.data["new_values"] = false;
-            state.dirty               = true;
-        }
-    }
-
-    static inline void ensure_assets_container(UsageState& state) {
-        if (!state.data.contains("assets") || !state.data["assets"].is_object()) {
-            state.data["assets"] = nlohmann::json::object();
-        }
-    }
-
-    static inline void enqueue_usage_sample(UsageState& state,
-                                            const std::string& asset_key,
-                                            float requested_scale,
-                                            float stored_scale) {
-        auto& samples = state.pending_samples[asset_key];
-        samples.push_back(UsageState::Sample{ requested_scale, stored_scale });
-        if (state.queued_assets.insert(asset_key).second) {
-            state.sampling_queue.push_back(asset_key);
-        }
-    }
-
-    static inline bool merge_samples_for_asset(UsageState& state,
-                                               const std::string& asset_key,
-                                               const std::vector<UsageState::Sample>& samples) {
-        if (samples.empty()) {
-            return false;
+        if (!root.is_object()) {
+            return;
         }
 
-        ensure_assets_container(state);
-        auto& assets = state.data["assets"];
-        nlohmann::json& entry = assets[asset_key];
-        if (!entry.is_object()) {
-            entry = default_asset_entry();
+        auto assets_it = root.find("assets");
+        if (assets_it == root.end() || !assets_it->is_object()) {
+            return;
         }
 
-        std::vector<std::uint64_t> histogram = parse_histogram(entry);
-        for (const auto& sample : samples) {
-            const int bucket = histogram_bucket(sample.requested_scale);
-            if (bucket >= 0 && static_cast<std::size_t>(bucket) < histogram.size()) {
-                histogram[static_cast<std::size_t>(bucket)] += 1;
-            }
-        }
-
-        const UsageState::Sample& last_sample = samples.back();
-        const std::vector<int> recommended = compute_recommendations(histogram);
-        const bool changed = update_entry(entry, histogram, recommended, last_sample.requested_scale, last_sample.stored_scale);
-        if (changed) {
-            state.dirty = true;
-        }
-        return changed;
-    }
-
-    static inline bool process_pending_samples(UsageState& state, Uint32 now, bool process_all) {
-        bool merged = false;
-        std::size_t iterations = state.sampling_queue.size();
-        std::size_t processed  = 0;
-
-        while (!state.sampling_queue.empty() && iterations-- > 0) {
-            std::string asset_key = std::move(state.sampling_queue.front());
-            state.sampling_queue.pop_front();
-            state.queued_assets.erase(asset_key);
-
-            auto pending_it = state.pending_samples.find(asset_key);
-            if (pending_it == state.pending_samples.end() || pending_it->second.empty()) {
-                state.pending_samples.erase(asset_key);
+        for (auto it = assets_it->begin(); it != assets_it->end(); ++it) {
+            if (!it.value().is_object()) {
                 continue;
             }
+            ProfileEntry entry;
+            entry.revision = it.value().value("revision", static_cast<std::uint64_t>(0));
+            entry.min_scale = static_cast<float>(it.value().value("min_scale", 1.0));
+            entry.max_scale = static_cast<float>(it.value().value("max_scale", 1.0));
 
-            const Uint32 next_allowed = state.next_allowed_sample[asset_key];
-            const bool eligible = process_all || SDL_TICKS_PASSED(now, next_allowed);
-            if (!eligible) {
-                state.sampling_queue.push_back(asset_key);
-                state.queued_assets.insert(asset_key);
-                continue;
-            }
-
-            merged = merge_samples_for_asset(state, asset_key, pending_it->second) || merged;
-            state.next_allowed_sample[asset_key] = now + kSamplingIntervalMs;
-            state.pending_samples.erase(pending_it);
-            ++processed;
-
-            if (!process_all && processed >= 1) {
-                break;
-            }
-        }
-
-        return merged;
-    }
-
-    static inline std::vector<std::uint64_t> parse_histogram(const nlohmann::json& entry) {
-        std::vector<std::uint64_t> histogram(kHistogramBucketCount, 0);
-        if (entry.contains("histogram") && entry["histogram"].is_array()) {
-            const auto& arr = entry["histogram"];
-            for (std::size_t idx = 0; idx < histogram.size() && idx < arr.size(); ++idx) {
-                if (arr[idx].is_number_unsigned()) {
-                    histogram[idx] = arr[idx].get<std::uint64_t>();
+            if (auto steps_it = it.value().find("recommended_steps"); steps_it != it.value().end() && steps_it->is_array()) {
+                for (const auto& value : *steps_it) {
+                    if (!value.is_number()) {
+                        continue;
+                    }
+                    entry.steps.push_back(static_cast<float>(value.get<double>()));
+                }
+            } else if (auto perc_it = it.value().find("recommended_percentages"); perc_it != it.value().end() && perc_it->is_array()) {
+                for (const auto& value : *perc_it) {
+                    if (!value.is_number()) {
+                        continue;
+                    }
+                    entry.steps.push_back(static_cast<float>(value.get<double>()) / 100.0f);
                 }
             }
-        }
-        return histogram;
-    }
 
-    static inline std::string timestamp_now() {
-        const auto now        = std::chrono::system_clock::now();
-        const auto time_t_now = std::chrono::system_clock::to_time_t(now);
-        std::tm tm{};
-#ifdef _WIN32
-        gmtime_s(&tm, &time_t_now);
-#else
-        gmtime_r(&time_t_now, &tm);
-#endif
-        std::ostringstream oss;
-        oss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
-        return oss.str();
-    }
-
-    static inline int histogram_bucket(float requested_scale) {
-        if (!std::isfinite(requested_scale) || requested_scale <= 0.0f) {
-            return kHistogramBucketCount - 1;
-        }
-        int percent = static_cast<int>(std::lround(requested_scale * 100.0f));
-        percent     = std::clamp(percent, 10, 200);
-        const int bucket = std::clamp((100 - percent) / 10, 0, kHistogramBucketCount - 1);
-        return bucket;
-    }
-
-    static inline std::vector<int> compute_recommendations(const std::vector<std::uint64_t>& histogram) {
-        std::vector<int> result;
-        if (histogram.empty()) {
-            return result;
-        }
-
-        constexpr int kMinPercentSpacing = 5;
-        auto add_percent = [&](int percent) {
-            percent = std::clamp(percent, 10, 200);
-            for (int existing : result) {
-                if (std::abs(existing - percent) < kMinPercentSpacing) {
-                    return false;
-                }
-            }
-            result.push_back(percent);
-            return true;
-};
-
-        bool has_usage = false;
-        for (std::uint64_t value : histogram) {
-            if (value > 0) {
-                has_usage = true;
-                break;
-            }
-        }
-
-        if (!has_usage) {
-            add_percent(100);
-            const auto& defaults = DefaultScaleSteps();
-            for (float step : defaults) {
-                add_percent(static_cast<int>(std::lround(step * 100.0f)));
-                if (result.size() >= kMaxVariantCount) {
-                    break;
-                }
-            }
-            std::sort(result.begin(), result.end(), std::greater<int>());
-            if (result.size() > kMaxVariantCount) {
-                result.resize(kMaxVariantCount);
-            }
-            return result;
-        }
-
-        add_percent(100);
-        struct BucketInfo {
-            int              index;
-            std::uint64_t    count;
-};
-        std::vector<BucketInfo> buckets;
-        buckets.reserve(histogram.size());
-        for (std::size_t idx = 1; idx < histogram.size(); ++idx) {
-            buckets.push_back(BucketInfo{ static_cast<int>(idx), histogram[idx] });
-        }
-        std::sort(buckets.begin(), buckets.end(), [](const BucketInfo& a, const BucketInfo& b) {
-            if (a.count == b.count) {
-                return a.index < b.index;
-            }
-            return a.count > b.count;
-        });
-
-        for (const BucketInfo& bucket : buckets) {
-            if (bucket.count == 0) {
-                break;
-            }
-            const int bucket_center = 100 - bucket.index * 10 - 5;
-            add_percent(bucket_center);
-            if (result.size() >= kMaxVariantCount) {
-                break;
-            }
-        }
-
-        if (result.size() < kMaxVariantCount) {
-            const auto& defaults = DefaultScaleSteps();
-            for (float step : defaults) {
-                add_percent(static_cast<int>(std::lround(step * 100.0f)));
-                if (result.size() >= kMaxVariantCount) {
-                    break;
-                }
-            }
-        }
-
-        std::sort(result.begin(), result.end(), std::greater<int>());
-        if (result.size() > kMaxVariantCount) {
-            result.resize(kMaxVariantCount);
-        }
-        return result;
-    }
-
-    static inline bool update_entry(nlohmann::json& entry,
-                                    const std::vector<std::uint64_t>& histogram,
-                                    const std::vector<int>& recommended,
-                                    float requested_scale,
-                                    float stored_scale) {
-        bool changed = false;
-
-        nlohmann::json hist_json = nlohmann::json::array();
-        for (std::uint64_t value : histogram) {
-            hist_json.push_back(value);
-        }
-        if (!entry.contains("histogram") || entry["histogram"] != hist_json) {
-            entry["histogram"] = std::move(hist_json);
-            changed             = true;
-        }
-
-        nlohmann::json recommended_json = nlohmann::json::array();
-        for (int value : recommended) {
-            recommended_json.push_back(value);
-        }
-        if (!entry.contains("recommended_percentages") || entry["recommended_percentages"] != recommended_json) {
-            entry["recommended_percentages"] = std::move(recommended_json);
-            std::uint64_t revision = entry.value("revision", static_cast<std::uint64_t>(0));
-            entry["revision"]     = revision + 1;
-            entry["last_updated"] = timestamp_now();
-            changed                = true;
-        }
-
-        const int requested_percent = static_cast<int>(std::lround(requested_scale * 100.0f));
-        entry["last_requested_percent"] = requested_percent;
-        entry["last_requested_scale"]   = requested_scale;
-        entry["last_used_texture_scale"] = stored_scale;
-        return changed;
-    }
-
-    static inline bool save_to_disk(UsageState& state) {
-        if (!state.dirty) {
-            return true;
-        }
-        try {
-            if (!state.file_path.empty()) {
-                std::filesystem::create_directories(state.file_path.parent_path());
-            }
-            std::ofstream out(state.file_path);
-            if (!out.good()) {
-                return false;
-            }
-            out << state.data.dump(4);
-            state.dirty = false;
-            return true;
-        } catch (...) {
-            return false;
+            NormalizeVariantSteps(entry.steps);
+            state.entries.emplace(it.key(), std::move(entry));
         }
     }
-
-    static inline bool update_new_values_flag(UsageState& state, bool value) {
-        if (!state.data.contains("new_values") || !state.data["new_values"].is_boolean()) {
-            state.data["new_values"] = false;
-            state.dirty               = true;
-        }
-        const bool current = state.data["new_values"].get<bool>();
-        if (current == value) {
-            return false;
-        }
-        state.data["new_values"] = value;
-        state.dirty               = true;
-        return true;
-    }
-
-    static constexpr Uint32 kSamplingIntervalMs   = 15'000u;
-    static constexpr int    kHistogramBucketCount = 10;
 };
 
 inline SDL_Texture* CreateScaledTexture(SDL_Renderer* renderer,
@@ -915,4 +621,4 @@ inline SDL_Surface* CreateScaledSurface(SDL_Surface* src, float scale) {
     return dst;
 }
 
-}
+} // namespace render_pipeline

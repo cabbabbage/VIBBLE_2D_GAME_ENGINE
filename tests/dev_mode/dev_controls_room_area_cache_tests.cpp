@@ -98,3 +98,46 @@ TEST_CASE("RoomAreaCache resolves room-centered anchors") {
     CHECK_EQ(poly.points[2].x, room_center.x + 22);
     CHECK_EQ(poly.points[2].y, room_center.y - 8);
 }
+
+TEST_CASE("RoomAreaCache scales stored polygons when room resizes") {
+    DevControls::RoomAreaCache cache;
+
+    nlohmann::json room_json;
+    room_json["areas"] = nlohmann::json::array({
+        nlohmann::json{
+            {"name", "spawn"},
+            {"type", "spawn"},
+            {"kind", "Spawn"},
+            {"scale_to_room", true},
+            {"origional_width", 100},
+            {"origional_height", 50},
+            {"anchor", nlohmann::json{{"x", 6}, {"y", -4}}},
+            {"anchor_relative_to_center", true},
+            {"points", nlohmann::json::array({
+                nlohmann::json{{"x", -10}, {"y", -5}},
+                nlohmann::json{{"x", 10}, {"y", -5}},
+                nlohmann::json{{"x", 0}, {"y", 5}}
+            })}
+        }
+    });
+
+    const SDL_Point room_center{64, 128};
+    const std::pair<int, int> room_dims{200, 150};
+
+    const auto& polygons = cache.ensure_from_json(&room_json, room_center, room_dims);
+    REQUIRE_EQ(polygons.size(), 1);
+    const auto& poly = polygons.front();
+
+    const int expected_anchor_x = room_center.x + 12; // 6 * (200 / 100)
+    const int expected_anchor_y = room_center.y - 12; // -4 * (150 / 50)
+    CHECK_EQ(poly.anchor.x, expected_anchor_x);
+    CHECK_EQ(poly.anchor.y, expected_anchor_y);
+
+    REQUIRE_EQ(poly.points.size(), 3);
+    CHECK_EQ(poly.points[0].x, expected_anchor_x - 20);
+    CHECK_EQ(poly.points[0].y, expected_anchor_y - 15);
+    CHECK_EQ(poly.points[1].x, expected_anchor_x + 20);
+    CHECK_EQ(poly.points[1].y, expected_anchor_y - 15);
+    CHECK_EQ(poly.points[2].x, expected_anchor_x);
+    CHECK_EQ(poly.points[2].y, expected_anchor_y + 15);
+}

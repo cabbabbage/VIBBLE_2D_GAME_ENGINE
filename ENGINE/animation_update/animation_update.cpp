@@ -1,8 +1,12 @@
-#include "animation_update.hpp"
+﻿#include "animation_update.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -11,44 +15,225 @@
 #include "asset/animation_frame.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
-#include "animation_update_utils.hpp"
+#include "animation_runtime.hpp"
 #include "core/AssetsManager.hpp"
-#include "core/asset_list.hpp"
+#include "map_generation/room.hpp"
+#include "util/grid.hpp"
 #include "utils/area.hpp"
 
 namespace {
-template <typename Fn>
-bool visit_impassable_neighbors(const Asset& asset, Fn&& fn) {
-    const AssetList* list = asset.get_impassable_naighbors();
-    if (!list) {
-        return false;
-    }
 
-    const auto visit_bucket = [&](const std::vector<Asset*>& bucket) {
-        for (Asset* neighbor : bucket) {
-            if (fn(neighbor)) {
-                return true;
-            }
-        }
-        return false;
+struct PlayableRoomsCacheEntry {
+    const Room* last_containing_room = nullptr;
+    std::unordered_map<const Room*, bool> playable_lookup;
+    std::uintptr_t rooms_identity = 0;
+    std::size_t    rooms_size     = 0;
 };
 
-    if (visit_bucket(list->top_unsorted())) {
+auto& playable_rooms_cache() {
+    static std::unordered_map<const Assets*, PlayableRoomsCacheEntry> cache;
+    return cache;
+}
+
+bool equals_ignore_case(std::string_view value, std::string_view target) {
+    if (value.size() != target.size()) {
+        return false;
+    }
+    for (std::size_t idx = 0; idx < value.size(); ++idx) {
+        if (std::tolower(static_cast<unsigned char>(value[idx])) !=
+            std::tolower(static_cast<unsigned char>(target[idx]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool compute_is_playable_room(const Room& room) {
+    if (!room.room_area) {
+        return false;
+    }
+
+    if (equals_ignore_case(room.room_area->get_type(), "room") ||
+        equals_ignore_case(room.room_area->get_type(), "trail")) {
         return true;
     }
-    if (visit_bucket(list->middle_sorted())) {
+
+    return equals_ignore_case(room.type, "room") || equals_ignore_case(room.type, "trail");
+}
+
+bool is_playable_room_cached(const Room& room, PlayableRoomsCacheEntry& entry) {
+    auto [it, inserted] = entry.playable_lookup.emplace(&room, false);
+    if (inserted) {
+        it->second = compute_is_playable_room(room);
+    }
+    return it->second;
+}
+
+} // namespace
+
+namespace animation_update::detail {
+
+bool should_consider_overlap(const Asset& self, const Asset& other) {
+    if (!self.info || !other.info) {
+        return false;
+    }
+
+    const std::string self_type  = asset_types::canonicalize(self.info->type);
+    const std::string other_type = asset_types::canonicalize(other.info->type);
+
+    if (self_type == asset_types::player || other_type == asset_types::player) {
+        return false;
+    }
+
+    if (self.info->moving_asset && other.info->moving_asset) {
         return true;
     }
-    if (visit_bucket(list->bottom_unsorted())) {
+
+    if (other_type == asset_types::boundary) {
+        return true;
+    }
+
+    if (other_type == asset_types::enemy || other_type == asset_types::npc) {
+        return true;
+    }
+
+    if (self_type == other_type && other_type != asset_types::player) {
         return true;
     }
 
     return false;
 }
+
+int distance_sq(SDL_Point a, SDL_Point b) {
+    const int dx = a.x - b.x;
+    const int dy = a.y - b.y;
+    return dx * dx + dy * dy;
 }
 
+bool segment_hits_area(SDL_Point from, SDL_Point to, const Area& area) {
+    const int steps = std::max(std::abs(to.x - from.x), std::abs(to.y - from.y));
+    if (steps == 0) {
+        return area.contains_point(from);
+    }
+
+    const double step_x = (to.x - from.x) / static_cast<double>(steps);
+    const double step_y = (to.y - from.y) / static_cast<double>(steps);
+
+    for (int i = 0; i <= steps; ++i) {
+        SDL_Point sample{ static_cast<int>(std::round(from.x + step_x * i)),
+                          static_cast<int>(std::round(from.y + step_y * i)) };
+        if (area.contains_point(sample)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos) {
+    Area        area = asset.get_area("collision_area");
+    const auto& pts  = area.get_points();
+    if (pts.empty()) {
+        return pos;
+    }
+
+    SDL_Point bottom = pts.front();
+    for (const SDL_Point& pt : pts) {
+        if (pt.y > bottom.y) {
+            bottom = pt;
+        }
+    }
+
+    const int offset_x = bottom.x - asset.pos.x;
+    const int offset_y = bottom.y - asset.pos.y;
+    return SDL_Point{ pos.x + offset_x, pos.y + offset_y };
+}
+
+SDL_Point frame_world_delta(const AnimationFrame& frame,
+                            const Asset&          asset,
+                            const vibble::grid::Grid& grid) {
+    const int       resolution = vibble::grid::clamp_resolution(asset.grid_resolution);
+    SDL_Point       indices    = grid.convert_resolution(SDL_Point{ frame.dx, frame.dy }, 0, resolution);
+    const SDL_Point origin     = grid.index_to_world(SDL_Point{ 0, 0 }, resolution);
+    const SDL_Point target     = grid.index_to_world(indices, resolution);
+    return SDL_Point{ target.x - origin.x, target.y - origin.y };
+}
+
+bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_point) {
+    if (!assets) {
+        return false;
+    }
+
+    auto& cache_entry = playable_rooms_cache()[assets];
+
+    const std::vector<Room*>& rooms = assets->rooms();
+    const std::uintptr_t identity = rooms.empty() ? 0 : reinterpret_cast<std::uintptr_t>(rooms.data());
+    if (cache_entry.rooms_identity != identity || cache_entry.rooms_size != rooms.size()) {
+        cache_entry.rooms_identity        = identity;
+        cache_entry.rooms_size            = rooms.size();
+        cache_entry.last_containing_room  = nullptr;
+        cache_entry.playable_lookup.clear();
+    }
+
+    auto contains_playable = [&](const Room* room) -> bool {
+        if (!room || !room->room_area) {
+            return false;
+        }
+        if (!is_playable_room_cached(*room, cache_entry)) {
+            return false;
+        }
+        return room->room_area->contains_point(bottom_point);
+    };
+
+    if (cache_entry.last_containing_room && contains_playable(cache_entry.last_containing_room)) {
+        return true;
+    }
+
+    for (const Room* room : rooms) {
+        if (contains_playable(room)) {
+            cache_entry.last_containing_room = room;
+            return true;
+        }
+    }
+
+    cache_entry.last_containing_room = nullptr;
+    return false;
+}
+
+bool segment_leaves_playable_area(const Assets* assets, SDL_Point from, SDL_Point to) {
+    if (!assets) {
+        return false;
+    }
+
+    const bool start_inside = bottom_point_inside_playable_area(assets, from);
+    const bool end_inside   = bottom_point_inside_playable_area(assets, to);
+
+    if (!start_inside || !end_inside) {
+        return true;
+    }
+
+    const int steps = std::max(std::abs(to.x - from.x), std::abs(to.y - from.y));
+    if (steps <= 1) {
+        return false;
+    }
+
+    const double step_x = (to.x - from.x) / static_cast<double>(steps);
+    const double step_y = (to.y - from.y) / static_cast<double>(steps);
+
+    for (int i = 1; i < steps; ++i) {
+        SDL_Point sample{ static_cast<int>(std::round(from.x + step_x * i)),
+                          static_cast<int>(std::round(from.y + step_y * i)) };
+        if (!bottom_point_inside_playable_area(assets, sample)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+} // namespace animation_update::detail
+
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
-    : self_(self), assets_owner_(assets) {
+    : self_(self), assets_owner_(assets), grid_service_(&vibble::grid::global_grid()) {
     if (!assets_owner_ && self_) {
         assets_owner_ = self_->get_assets();
     }
@@ -57,769 +242,109 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets, double)
     : AnimationUpdate(self, assets) {}
 
-void AnimationUpdate::set_animation_now(const std::string& anim_id) {
-    if (!self_ || !self_->info) {
-        return;
-    }
-    if (anim_id.empty()) {
-        return;
-    }
-    if (self_->current_animation == anim_id) {
-        return;
-    }
-    queued_anim_.reset();
-    manual_animation_.reset();
-    switch_to(anim_id);
-}
-
-void AnimationUpdate::set_animation_qued(const std::string& anim_id) {
-    if (queued_anim_ && *queued_anim_ == anim_id) {
-        return;
-    }
-    queued_anim_ = anim_id;
-}
-
-void AnimationUpdate::move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px) {
+void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
+                                int visited_thresh_px,
+                                std::optional<int> checkpoint_resolution,
+                                bool override_non_locked) {
     if (!self_) {
         return;
     }
-    manual_animation_.reset();
-    visited_thresh_ = std::max(0, visited_thresh_px);
+    const int resolution = effective_grid_resolution(checkpoint_resolution);
+    visited_thresh_      = std::max(0, visited_thresh_px);
+    if (resolution > 0) {
+        const int step = vibble::grid::delta(resolution);
+        if (step > 1 && visited_thresh_ > 0) {
+            visited_thresh_ = ((visited_thresh_ + step - 1) / step) * step;
+        }
+    }
     path_requested = false;
 
     std::vector<SDL_Point> absolute;
     absolute.reserve(rel_checkpoints.size());
-    SDL_Point cursor = self_->pos;
+    vibble::grid::Grid& grid_service = grid();
+    SDL_Point           cursor_index = grid_service.world_to_index(self_->pos, resolution);
     for (const SDL_Point& delta : rel_checkpoints) {
-        cursor.x += delta.x;
-        cursor.y += delta.y;
-        absolute.push_back(cursor);
+        SDL_Point delta_indices = grid_service.convert_resolution(delta, 0, resolution);
+        cursor_index.x += delta_indices.x;
+        cursor_index.y += delta_indices.y;
+        SDL_Point next_world = grid_service.index_to_world(cursor_index, resolution);
+        absolute.push_back(next_world);
     }
 
-    plan_ = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_);
+    plan_      = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_);
     final_dest = plan_.final_dest;
-    stride_index_ = 0;
-    stride_frame_counter_ = 0;
-    next_checkpoint_index_ = 0;
-    mark_progress_toward_checkpoints();
+    plan_.override_non_locked = override_non_locked;
 
-    if (plan_.strides.empty()) {
-        if (self_->get_current_animation() != animation_update::detail::kDefaultAnimation) {
-            switch_to(animation_update::detail::kDefaultAnimation);
-        }
+    if (runtime_) {
+        runtime_->reset_plan_progress();
     }
+
+    // Signal executor to re-evaluate plan
+    input_event_ = true;
+}
+
+void AnimationUpdate::move(SDL_Point delta,
+                           const std::string& animation,
+                           bool               resort_z,
+                           bool               override_non_locked) {
+    if (!self_ || !self_->info) {
+        return;
+    }
+    // Do not mutate Asset here; store request for executor
+    pending_move_.delta        = delta;
+    pending_move_.animation_id = animation;
+    pending_move_.resort_z     = resort_z;
+    pending_move_.override_non_locked = override_non_locked;
+    move_pending_              = true;
+    input_event_               = true;
 }
 
 void AnimationUpdate::clear_movement_plan() {
     plan_.strides.clear();
     plan_.sanitized_checkpoints.clear();
     plan_.final_dest = self_ ? self_->pos : SDL_Point{ 0, 0 };
-    final_dest = plan_.final_dest;
-    stride_index_ = 0;
-    stride_frame_counter_ = 0;
-    next_checkpoint_index_ = 0;
-    path_requested = false;
-}
+    plan_.override_non_locked = true;
+    final_dest       = plan_.final_dest;
+    path_requested   = false;
+    input_event_     = true;
 
-void AnimationUpdate::set_manual_animation(const std::string& anim_id, bool loop) {
-    if (!self_ || !self_->info || anim_id.empty()) {
-        return;
+    if (runtime_) {
+        runtime_->reset_plan_progress();
     }
-
-    clear_movement_plan();
-
-    ManualAnimationState desired{ anim_id, loop };
-    if (!manual_animation_ || manual_animation_->id != desired.id || manual_animation_->loop != desired.loop) {
-        manual_animation_ = desired;
-    }
-
-    queued_anim_.reset();
-
-    if (self_->current_animation != desired.id) {
-        switch_to(desired.id, path_index_for(desired.id));
-    }
-}
-
-void AnimationUpdate::clear_manual_animation() {
-    manual_animation_.reset();
-}
-
-void AnimationUpdate::refresh_z_index() {
-    if (self_) {
-        self_->set_z_index();
-    }
-}
-
-void AnimationUpdate::update() {
-    if (!self_ || !self_->info) {
-        return;
-    }
-
-    if (!plan_.strides.empty() && player_.tick(*this, plan_, stride_index_, stride_frame_counter_)) {
-        manual_animation_.reset();
-        return;
-    }
-
-    if (queued_anim_ && self_->is_current_animation_last_frame()) {
-        switch_to(*queued_anim_);
-        queued_anim_.reset();
-        manual_animation_.reset();
-    }
-
-    if (manual_animation_) {
-        const std::string& anim_id = manual_animation_->id;
-        if (self_->current_animation != anim_id) {
-            switch_to(anim_id, path_index_for(anim_id));
-        }
-        if (!advance(self_->current_frame)) {
-            if (manual_animation_->loop) {
-                switch_to(anim_id, path_index_for(anim_id));
-                advance(self_->current_frame);
-            } else {
-                manual_animation_.reset();
-                switch_to(animation_update::detail::kDefaultAnimation);
-                advance(self_->current_frame);
-            }
-        }
-        return;
-    }
-
-    if (self_->get_current_animation() != animation_update::detail::kDefaultAnimation) {
-        if (!advance(self_->current_frame)) {
-            switch_to(animation_update::detail::kDefaultAnimation);
-            advance(self_->current_frame);
-        }
-        return;
-    }
-
-    advance(self_->current_frame);
-}
-
-bool AnimationUpdate::advance(AnimationFrame*& frame) {
-    if (!self_ || !self_->info) {
-        return false;
-    }
-
-    auto it = self_->info->animations.find(self_->current_animation);
-    if (it == self_->info->animations.end()) {
-        return false;
-    }
-
-    Animation& anim = it->second;
-    std::size_t path_index = path_index_for(self_->current_animation);
-    if (!frame) {
-        frame = anim.get_first_frame(path_index);
-        if (!frame) {
-            return false;
-        }
-    }
-
-    if (anim.locked) {
-        self_->static_frame = anim.is_static() || anim.locked;
-        return true;
-    }
-
-    if (frame->next) {
-        frame = frame->next;
-    } else {
-        const bool force_loop_default =
-            self_->current_animation == animation_update::detail::kDefaultAnimation;
-        if (anim.loop || force_loop_default) {
-            frame = anim.get_first_frame(path_index);
-        } else {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void AnimationUpdate::switch_to(const std::string& anim_id, std::size_t path_index) {
-    if (!self_ || !self_->info) {
-        return;
-    }
-
-    auto it = self_->info->animations.find(anim_id);
-    if (it == self_->info->animations.end()) {
-        auto def = self_->info->animations.find(animation_update::detail::kDefaultAnimation);
-        if (def == self_->info->animations.end()) {
-            if (self_->info->animations.empty()) {
-                return;
-            }
-            it = self_->info->animations.begin();
-        } else {
-            it = def;
-        }
-    }
-
-    Animation& anim = it->second;
-    path_index = anim.clamp_path_index(path_index);
-    AnimationFrame* new_frame = anim.get_first_frame(path_index);
-    self_->current_animation = it->first;
-    self_->current_frame = new_frame;
-    self_->static_frame = anim.is_static() || anim.locked;
-    self_->frame_progress = 0.0f;
-    active_paths_[self_->current_animation] = path_index;
 }
 
 std::size_t AnimationUpdate::path_index_for(const std::string& anim_id) const {
-    auto it = active_paths_.find(anim_id);
-    if (it != active_paths_.end()) {
-        return it->second;
+    if (runtime_) {
+        return runtime_->path_index_for(anim_id);
     }
     return 0;
 }
 
-SDL_Point AnimationUpdate::bottom_middle(SDL_Point pos) const {
-    if (!self_ || !self_->info) {
-        return pos;
-    }
-    return animation_update::detail::bottom_middle_for(*self_, pos);
+AnimationUpdate::MoveRequest AnimationUpdate::consume_move_request() {
+    move_pending_ = false;
+    return pending_move_;
 }
 
-bool AnimationUpdate::point_in_impassable(SDL_Point pt, const Asset* ignored) const {
-    if (!self_ || !self_->info) {
-        return false;
-    }
-
-    const Assets* assets = assets_owner_ ? assets_owner_ : (self_ ? self_->get_assets() : nullptr);
-    if (!animation_update::detail::bottom_point_inside_playable_area(assets, pt)) {
-        return true;
-    }
-
-    return visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
-        if (!neighbor || neighbor == self_ || neighbor == ignored || !neighbor->info) {
-            return false;
-        }
-
-        if (neighbor->info->type == asset_types::player) {
-            return false;
-        }
-
-        Area area = neighbor->get_area("impassable");
-        if (area.get_points().empty()) {
-            area = neighbor->get_area("collision_area");
-        }
-        if (area.get_points().empty()) {
-            return false;
-        }
-
-        return area.contains_point(pt);
-    });
+bool AnimationUpdate::consume_input_event() {
+    const bool had = input_event_;
+    input_event_ = false;
+    return had;
 }
 
-bool AnimationUpdate::path_blocked(SDL_Point from,
-                                   SDL_Point to,
-                                   const Asset* ignored,
-                                   std::vector<const Asset*>* blockers) const {
-    if (!self_ || !self_->info) {
-        return false;
+vibble::grid::Grid& AnimationUpdate::grid() const {
+    if (grid_service_) {
+        return *grid_service_;
     }
-
-    const SDL_Point bottom_from = animation_update::detail::bottom_middle_for(*self_, from);
-    const SDL_Point dest_bottom = animation_update::detail::bottom_middle_for(*self_, to);
-
-    const Assets* assets = assets_owner_ ? assets_owner_ : (self_ ? self_->get_assets() : nullptr);
-    if (animation_update::detail::segment_leaves_playable_area(assets, bottom_from, dest_bottom)) {
-        return true;
-    }
-
-    bool blocked = false;
-    visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
-        if (!neighbor || neighbor == self_ || neighbor == ignored || !neighbor->info) {
-            return false;
-        }
-
-        if (neighbor->info->type == asset_types::player) {
-            return false;
-        }
-
-        Area area = neighbor->get_area("impassable");
-        if (area.get_points().empty()) {
-            area = neighbor->get_area("collision_area");
-        }
-
-        if (area.get_points().empty()) {
-            return false;
-        }
-
-        const bool contains_from = area.contains_point(bottom_from);
-        const bool contains_to   = area.contains_point(dest_bottom);
-        const bool touches_segment = animation_update::detail::segment_hits_area(from, to, area);
-
-        bool overlaps = false;
-        if (!contains_from && !contains_to && !touches_segment) {
-            const bool overlap_check = animation_update::detail::should_consider_overlap(*self_, *neighbor);
-            if (overlap_check) {
-                const SDL_Point neighbor_bottom =
-                    animation_update::detail::bottom_middle_for(*neighbor, neighbor->pos);
-                overlaps = animation_update::detail::distance_sq(dest_bottom, neighbor_bottom) <
-                           animation_update::detail::kOverlapDistanceSq;
-            }
-        }
-
-        if (!(contains_from || contains_to || touches_segment || overlaps)) {
-            return false;
-        }
-
-        blocked = true;
-        if (blockers) {
-            const auto it = std::find(blockers->begin(), blockers->end(), neighbor);
-            if (it == blockers->end()) {
-                blockers->push_back(neighbor);
-            }
-        }
-        return false;
-    });
-
-    return blocked;
+    return vibble::grid::global_grid();
 }
 
-bool AnimationUpdate::attempt_unstick(SDL_Point from,
-                                      SDL_Point to,
-                                      const std::vector<const Asset*>& blockers) {
-    if (!self_ || !self_->info) {
-        return false;
+int AnimationUpdate::effective_grid_resolution(std::optional<int> override_resolution) const {
+    if (override_resolution.has_value()) {
+        return vibble::grid::clamp_resolution(*override_resolution);
     }
-
-    SDL_Point bottom_from = animation_update::detail::bottom_middle_for(*self_, from);
-    SDL_Point bottom_to   = animation_update::detail::bottom_middle_for(*self_, to);
-
-    SDL_Point push{0, 0};
-    std::vector<const Asset*> blocking_neighbors = blockers;
-
-    const Assets* assets = assets_owner_ ? assets_owner_ : (self_ ? self_->get_assets() : nullptr);
-
-    if (blocking_neighbors.empty()) {
-        visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
-            if (!neighbor || neighbor == self_ || !neighbor->info) {
-                return false;
-            }
-
-            Area area = neighbor->get_area("impassable");
-            if (area.get_points().empty()) {
-                area = neighbor->get_area("collision_area");
-            }
-            if (area.get_points().empty()) {
-                return false;
-            }
-
-            const bool contains_from = area.contains_point(bottom_from);
-            const bool contains_to   = area.contains_point(bottom_to);
-            const bool touches_segment = animation_update::detail::segment_hits_area(from, to, area);
-
-            bool overlaps = false;
-            if (!contains_from && !contains_to && !touches_segment) {
-                const bool overlap_check = animation_update::detail::should_consider_overlap(*self_, *neighbor);
-                if (overlap_check) {
-                    const SDL_Point neighbor_bottom =
-                        animation_update::detail::bottom_middle_for(*neighbor, neighbor->pos);
-                    overlaps = animation_update::detail::distance_sq(bottom_from, neighbor_bottom) <
-                               animation_update::detail::kOverlapDistanceSq;
-                }
-            }
-
-            if (!(contains_from || contains_to || touches_segment || overlaps)) {
-                return false;
-            }
-
-            SDL_Point center = area.get_center();
-            push.x += bottom_from.x - center.x;
-            push.y += bottom_from.y - center.y;
-            blocking_neighbors.push_back(neighbor);
-            return false;
-        });
-    } else {
-        for (const Asset* neighbor : blocking_neighbors) {
-            if (!neighbor || neighbor == self_ || !neighbor->info) {
-                continue;
-            }
-            Area area = neighbor->get_area("impassable");
-            if (area.get_points().empty()) {
-                area = neighbor->get_area("collision_area");
-            }
-            if (area.get_points().empty()) {
-                continue;
-            }
-            SDL_Point center = area.get_center();
-            push.x += bottom_from.x - center.x;
-            push.y += bottom_from.y - center.y;
-        }
+    if (self_) {
+        return vibble::grid::clamp_resolution(self_->grid_resolution);
     }
-
-    if (push.x == 0 && push.y == 0) {
-        push.x = from.x - to.x;
-        push.y = from.y - to.y;
-    }
-    if (push.x == 0 && push.y == 0) {
-        push.y = -1;
-    }
-
-    SDL_Point primary{ (push.x > 0) ? 1 : (push.x < 0 ? -1 : 0),
-                       (push.y > 0) ? 1 : (push.y < 0 ? -1 : 0) };
-
-    auto add_direction = [&](std::vector<SDL_Point>& dirs, SDL_Point dir) {
-        if (dir.x == 0 && dir.y == 0) {
-            return;
-        }
-        const auto it = std::find_if(dirs.begin(), dirs.end(), [&](const SDL_Point& existing) {
-            return existing.x == dir.x && existing.y == dir.y;
-        });
-        if (it == dirs.end()) {
-            dirs.push_back(dir);
-        }
-};
-
-    std::vector<SDL_Point> directions;
-    if (primary.x == 0 && primary.y == 0) {
-        directions.push_back(SDL_Point{ 1, 0 });
-        directions.push_back(SDL_Point{ -1, 0 });
-        directions.push_back(SDL_Point{ 0, 1 });
-        directions.push_back(SDL_Point{ 0, -1 });
-    } else {
-        add_direction(directions, primary);
-        add_direction(directions, SDL_Point{ primary.x, 0 });
-        add_direction(directions, SDL_Point{ 0, primary.y });
-        add_direction(directions, SDL_Point{ primary.y, -primary.x });
-        add_direction(directions, SDL_Point{ -primary.y, primary.x });
-    }
-
-    const auto inside_disallowed = [&](SDL_Point bottom) {
-        bool blocked = false;
-        if (!animation_update::detail::bottom_point_inside_playable_area(assets, bottom)) {
-            return true;
-        }
-        visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
-            if (!neighbor || neighbor == self_ || !neighbor->info) {
-                return false;
-            }
-            Area area = neighbor->get_area("impassable");
-            if (area.get_points().empty()) {
-                area = neighbor->get_area("collision_area");
-            }
-            if (area.get_points().empty()) {
-                return false;
-            }
-            if (!area.contains_point(bottom)) {
-                return false;
-            }
-            const auto it = std::find(blocking_neighbors.begin(), blocking_neighbors.end(), neighbor);
-            if (it == blocking_neighbors.end()) {
-                blocked = true;
-                return true;
-            }
-            return false;
-        });
-        return blocked;
-};
-
-    const auto inside_any = [&](SDL_Point bottom) {
-        if (!animation_update::detail::bottom_point_inside_playable_area(assets, bottom)) {
-            return false;
-        }
-        bool inside = false;
-        visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
-            if (!neighbor || neighbor == self_ || !neighbor->info) {
-                return false;
-            }
-            Area area = neighbor->get_area("impassable");
-            if (area.get_points().empty()) {
-                area = neighbor->get_area("collision_area");
-            }
-            if (area.get_points().empty()) {
-                return false;
-            }
-            if (area.contains_point(bottom)) {
-                inside = true;
-                return true;
-            }
-            return false;
-        });
-        return inside;
-};
-
-    const int max_steps = 12;
-    for (SDL_Point dir : directions) {
-        SDL_Point candidate = self_->pos;
-        bool      moved     = false;
-
-        for (int step = 0; step < max_steps; ++step) {
-            SDL_Point next{ candidate.x + dir.x, candidate.y + dir.y };
-            if (next.x == candidate.x && next.y == candidate.y) {
-                continue;
-            }
-
-            SDL_Point bottom_next = animation_update::detail::bottom_middle_for(*self_, next);
-            if (inside_disallowed(bottom_next)) {
-                break;
-            }
-
-            candidate = next;
-            moved      = true;
-
-            if (!inside_any(bottom_next)) {
-                break;
-            }
-        }
-
-        if (moved) {
-            self_->pos = candidate;
-            refresh_z_index();
-            return true;
-        }
-    }
-
-    return false;
+    return 0;
 }
 
-void AnimationUpdate::mark_progress_toward_checkpoints() {
-    if (!self_ || !self_->info) {
-        return;
-    }
-
-    const int visited_sq = visited_thresh_ * visited_thresh_;
-    while (next_checkpoint_index_ < plan_.sanitized_checkpoints.size()) {
-        const SDL_Point target = plan_.sanitized_checkpoints[next_checkpoint_index_];
-        const int       dist_sq = animation_update::detail::distance_sq(self_->pos, target);
-
-        bool reached = false;
-        if (visited_thresh_ == 0) {
-            reached = (self_->pos.x == target.x) && (self_->pos.y == target.y);
-        } else {
-            reached = dist_sq <= visited_sq;
-        }
-
-        if (!reached) {
-            break;
-        }
-        ++next_checkpoint_index_;
-    }
-}
-
-namespace {
-bool same_point(SDL_Point lhs, SDL_Point rhs) {
-    return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-}
-
-bool AnimationUpdate::adjust_next_checkpoint(const std::vector<const Asset*>& blockers) {
-    if (!self_ || !self_->info) {
-        return false;
-    }
-
-    mark_progress_toward_checkpoints();
-
-    SDL_Point target = (next_checkpoint_index_ < plan_.sanitized_checkpoints.size()) ? plan_.sanitized_checkpoints[next_checkpoint_index_] : final_dest;
-
-    SDL_Point bottom_target = animation_update::detail::bottom_middle_for(*self_, target);
-
-    SDL_Point push{0, 0};
-    std::vector<const Asset*> influencing_neighbors;
-
-    auto consider_neighbor = [&](const Asset* neighbor) {
-        if (!neighbor || neighbor == self_ || !neighbor->info) {
-            return;
-        }
-        Area area = neighbor->get_area("impassable");
-        if (area.get_points().empty()) {
-            area = neighbor->get_area("collision_area");
-        }
-        if (area.get_points().empty()) {
-            return;
-        }
-
-        bool relevant = area.contains_point(bottom_target) || animation_update::detail::segment_hits_area(self_->pos, target, area);
-
-        if (!relevant) {
-            const bool overlap_check = animation_update::detail::should_consider_overlap(*self_, *neighbor);
-            if (overlap_check) {
-                const SDL_Point neighbor_bottom =
-                    animation_update::detail::bottom_middle_for(*neighbor, neighbor->pos);
-                relevant = animation_update::detail::distance_sq(bottom_target, neighbor_bottom) < animation_update::detail::kOverlapDistanceSq;
-            }
-        }
-
-        if (!relevant) {
-            return;
-        }
-
-        SDL_Point center = area.get_center();
-        push.x += bottom_target.x - center.x;
-        push.y += bottom_target.y - center.y;
-        influencing_neighbors.push_back(neighbor);
-};
-
-    if (!blockers.empty()) {
-        for (const Asset* neighbor : blockers) {
-            consider_neighbor(neighbor);
-        }
-    }
-
-    if (influencing_neighbors.empty()) {
-        visit_impassable_neighbors(*self_, [&](Asset* neighbor) {
-            consider_neighbor(neighbor);
-            return false;
-        });
-    }
-
-    if (push.x == 0 && push.y == 0) {
-        push.x = target.x - self_->pos.x;
-        push.y = target.y - self_->pos.y;
-    }
-    if (push.x == 0 && push.y == 0) {
-        push.y = -1;
-    }
-
-    SDL_Point primary{ (push.x > 0) ? 1 : (push.x < 0 ? -1 : 0),
-                       (push.y > 0) ? 1 : (push.y < 0 ? -1 : 0) };
-
-    auto add_direction = [&](std::vector<SDL_Point>& dirs, SDL_Point dir) {
-        if (dir.x == 0 && dir.y == 0) {
-            return;
-        }
-        const auto it = std::find_if(dirs.begin(), dirs.end(), [&](const SDL_Point& existing) {
-            return existing.x == dir.x && existing.y == dir.y;
-        });
-        if (it == dirs.end()) {
-            dirs.push_back(dir);
-        }
-};
-
-    std::vector<SDL_Point> directions;
-    if (primary.x == 0 && primary.y == 0) {
-        directions.push_back(SDL_Point{ 1, 0 });
-        directions.push_back(SDL_Point{ -1, 0 });
-        directions.push_back(SDL_Point{ 0, 1 });
-        directions.push_back(SDL_Point{ 0, -1 });
-    } else {
-        add_direction(directions, primary);
-        add_direction(directions, SDL_Point{ primary.x, 0 });
-        add_direction(directions, SDL_Point{ 0, primary.y });
-        add_direction(directions, SDL_Point{ primary.y, -primary.x });
-        add_direction(directions, SDL_Point{ -primary.y, primary.x });
-    }
-
-    std::vector<SDL_Point> tail;
-    for (std::size_t i = next_checkpoint_index_ + 1; i < plan_.sanitized_checkpoints.size(); ++i) {
-        tail.push_back(plan_.sanitized_checkpoints[i]);
-    }
-    if (tail.empty() || !same_point(tail.back(), final_dest)) {
-        tail.push_back(final_dest);
-    }
-
-    auto try_plan_with_targets = [&](const std::vector<SDL_Point>& targets) {
-        if (targets.empty()) {
-            return false;
-        }
-        auto sanitized = sanitizer_.sanitize(*self_, targets, visited_thresh_);
-        if (sanitized.empty()) {
-            return false;
-        }
-        Plan new_plan = planner_(*self_, sanitized, visited_thresh_);
-        if (new_plan.strides.empty()) {
-            return false;
-        }
-
-        plan_                  = std::move(new_plan);
-        final_dest             = plan_.final_dest;
-        stride_index_          = 0;
-        stride_frame_counter_  = 0;
-        next_checkpoint_index_ = 0;
-        path_requested         = false;
-        mark_progress_toward_checkpoints();
-        return true;
-};
-
-    const int max_steps = 24;
-    for (SDL_Point dir : directions) {
-        SDL_Point candidate = target;
-
-        for (int step = 0; step < max_steps; ++step) {
-            SDL_Point next{ candidate.x + dir.x, candidate.y + dir.y };
-            if (same_point(next, candidate)) {
-                continue;
-            }
-
-            SDL_Point bottom_next = animation_update::detail::bottom_middle_for(*self_, next);
-            if (point_in_impassable(bottom_next, self_)) {
-                break;
-            }
-
-            candidate = next;
-
-            std::vector<SDL_Point> attempt_targets;
-            attempt_targets.push_back(candidate);
-            auto it_begin = tail.begin();
-            if (!tail.empty() && same_point(tail.front(), candidate)) {
-                ++it_begin;
-            }
-            attempt_targets.insert(attempt_targets.end(), it_begin, tail.end());
-
-            if (try_plan_with_targets(attempt_targets)) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-bool AnimationUpdate::handle_blocked_path(SDL_Point from,
-                                          SDL_Point to,
-                                          const std::vector<const Asset*>& blockers) {
-    bool moved = attempt_unstick(from, to, blockers);
-    if (moved) {
-        mark_progress_toward_checkpoints();
-    }
-
-    if (adjust_next_checkpoint(blockers)) {
-        return true;
-    }
-
-    if (replan_to_destination()) {
-        return true;
-    }
-
-    return moved;
-}
-
-bool AnimationUpdate::replan_to_destination() {
-    if (!self_ || !self_->info) {
-        return false;
-    }
-
-    const int visited_sq = visited_thresh_ * visited_thresh_;
-    if (visited_sq > 0 &&
-        animation_update::detail::distance_sq(self_->pos, final_dest) <= visited_sq) {
-        return false;
-    }
-
-    mark_progress_toward_checkpoints();
-
-    std::vector<SDL_Point> checkpoints;
-    for (std::size_t i = next_checkpoint_index_; i < plan_.sanitized_checkpoints.size(); ++i) {
-        checkpoints.push_back(plan_.sanitized_checkpoints[i]);
-    }
-    if (checkpoints.empty() || !same_point(checkpoints.back(), final_dest)) {
-        checkpoints.push_back(final_dest);
-    }
-
-    auto sanitized = sanitizer_.sanitize(*self_, checkpoints, visited_thresh_);
-    if (sanitized.empty()) {
-        return false;
-    }
-
-    Plan new_plan = planner_(*self_, sanitized, visited_thresh_);
-    if (new_plan.strides.empty()) {
-        return false;
-    }
-
-    plan_                = std::move(new_plan);
-    final_dest           = plan_.final_dest;
-    stride_index_        = 0;
-    stride_frame_counter_ = 0;
-    path_requested       = false;
-    next_checkpoint_index_ = 0;
-    mark_progress_toward_checkpoints();
-    return true;
-}

@@ -151,13 +151,13 @@ TEST_CASE("AssetInfo manifest constructor populates metadata without disk access
 
     CHECK(info.pick_next_animation("looping") == "walk");
 
-    REQUIRE(info.children.size() == 1);
-    CHECK(info.children.front().area_name == "core");
-    CHECK(info.children.front().z_offset == 3);
-    CHECK_FALSE(info.children.front().placed_on_top_parent);
-    REQUIRE(info.children.front().spawn_group.is_object());
-    CHECK(info.children.front().spawn_group.value("display_name", "") == "inline");
-    CHECK(info.children.front().spawn_group.value("spawn_id", "") == "spn-inline");
+    REQUIRE(info.asset_children.size() == 1);
+    CHECK(info.asset_children.front().area_name == "core");
+    CHECK(info.asset_children.front().z_offset == 3);
+    CHECK_FALSE(info.asset_children.front().placed_on_top_parent);
+    REQUIRE(info.asset_children.front().spawn_group.is_object());
+    CHECK(info.asset_children.front().spawn_group.value("display_name", "") == "inline");
+    CHECK(info.asset_children.front().spawn_group.value("spawn_id", "") == "spn-inline");
 
     CHECK(info.light_sources.size() == 1);
     CHECK(info.is_light_source);
@@ -256,12 +256,12 @@ TEST_CASE("AssetInfo commit_manifest persists changes via ManifestStore") {
     CHECK_FALSE(rehydrated->passable);
     CHECK_FALSE(rehydrated->has_tag("passable"));
     CHECK(rehydrated->has_tag("fresh"));
-    REQUIRE(rehydrated->children.size() == 2);
-    CHECK(rehydrated->children[0].area_name == "absolute");
-    CHECK(rehydrated->children[0].spawn_group.value("spawn_id", "") == "spn-abs");
-    CHECK(rehydrated->children[1].area_name == "relative");
-    CHECK(rehydrated->children[1].placed_on_top_parent);
-    CHECK(rehydrated->children[1].spawn_group.value("spawn_id", "") == "spn-rel");
+    REQUIRE(rehydrated->asset_children.size() == 2);
+    CHECK(rehydrated->asset_children[0].area_name == "absolute");
+    CHECK(rehydrated->asset_children[0].spawn_group.value("spawn_id", "") == "spn-abs");
+    CHECK(rehydrated->asset_children[1].area_name == "relative");
+    CHECK(rehydrated->asset_children[1].placed_on_top_parent);
+    CHECK(rehydrated->asset_children[1].spawn_group.value("spawn_id", "") == "spn-rel");
 
     AssetInfo::set_manifest_store_provider({});
     devmode::core::DevJsonStore::instance().flush_all();

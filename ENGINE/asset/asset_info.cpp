@@ -1,7 +1,7 @@
 #include "asset_info.hpp"
 #include "asset_info_methods/animation_loader.hpp"
 #include "asset/asset_types.hpp"
-#include "asset_info_methods/child_loader.hpp"
+#include "asset_info_methods/asset_child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include <algorithm>
 #include <iomanip>
@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "dev_mode/core/manifest_store.hpp"
+#include "util/grid.hpp"
 
 namespace {
 
@@ -460,8 +461,9 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
     if (named.kind.empty()) {
         named.kind = named.type;
     }
-    named.area = std::make_unique<Area>(name, points);
-    named.area->set_resolution(entry.value("resolution", 0));
+    const int resolution = vibble::grid::clamp_resolution(entry.value("resolution", 2));
+    named.area = std::make_unique<Area>(name, points, resolution);
+    named.area->set_resolution(resolution);
     const std::string& applied_type = !named.type.empty() ? named.type : named.kind;
     if (!applied_type.empty()) {
         named.area->set_type(applied_type);
@@ -1039,7 +1041,7 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
 
 void AssetInfo::set_children(const std::vector<ChildInfo>& new_children) {
 
-    children = new_children;
+    asset_children = new_children;
 
     nlohmann::json groups = nlohmann::json::array();
     for (const auto& c : new_children) {

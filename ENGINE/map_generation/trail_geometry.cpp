@@ -216,7 +216,7 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 		for (auto& p : polygon) {
 			pts.push_back(SDL_Point{ p.x, p.y });
 		}
-		Area candidate("trail_candidate", pts);
+                Area candidate("trail_candidate", pts, 3);
 
 		int intersection_count = 0;
 		for (auto& area : existing_areas) {

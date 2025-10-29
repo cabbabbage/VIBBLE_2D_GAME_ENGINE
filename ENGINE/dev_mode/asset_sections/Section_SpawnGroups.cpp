@@ -63,44 +63,9 @@ void Section_SpawnGroups::build() {
     if (info_) {
         std::weak_ptr<AssetInfo> weak_info = info_;
         configure_entry = [weak_info](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
-            entry.set_linkable_asset_areas_provider([weak_info]() {
-                std::vector<SpawnGroupLinkableAreaDescriptor> result;
-                if (auto locked = weak_info.lock()) {
-                    auto canonicalize = [](std::string value) {
-                        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-                            return static_cast<char>(std::tolower(ch));
-                        });
-                        return value;
-};
-                    for (const auto& area : locked->areas) {
-                        const std::string type = canonicalize(!area.type.empty() ? area.type : area.kind);
-                        if (type != "child") continue;
-                        if (!area.name.empty()) {
-                            result.push_back({area.name, area.name, true});
-                        }
-                    }
-                    std::sort(result.begin(), result.end(), [](const auto& lhs, const auto& rhs) {
-                        std::string left = lhs.label;
-                        std::string right = rhs.label;
-                        std::transform(left.begin(), left.end(), left.begin(), [](unsigned char ch) {
-                            return static_cast<char>(std::tolower(ch));
-                        });
-                        std::transform(right.begin(), right.end(), right.begin(), [](unsigned char ch) {
-                            return static_cast<char>(std::tolower(ch));
-                        });
-                        if (left == right) {
-                            return lhs.id < rhs.id;
-                        }
-                        return left < right;
-                    });
-                    result.erase(std::unique(result.begin(), result.end(), [](const auto& a, const auto& b) {
-                        return a.id == b.id;
-                    }), result.end());
-                }
-                return result;
-            });
-            entry.set_linkable_room_areas_provider({});
-};
+            (void)weak_info;
+            // Linked-to-area providers removed; nothing to configure here.
+        };
         list_->load(groups_, on_change, std::move(on_entry_change), std::move(configure_entry));
     } else {
         const nlohmann::json& readonly = groups_;

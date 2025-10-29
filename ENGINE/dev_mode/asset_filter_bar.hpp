@@ -77,6 +77,8 @@ private:
     void load_persisted_state();
     void persist_state();
     void persist_filters_expanded() const;
+    FilterState& mutable_state();
+    const FilterState& state() const;
     void notify_state_changed();
     bool type_filter_enabled(const std::string& type) const;
     bool method_filter_enabled(const std::string& method) const;
@@ -93,6 +95,12 @@ private:
     void layout_mode_buttons();
     void layout_filter_checkboxes();
 
+    static FilterState& persistent_state();
+    static bool& persistent_state_initialized_flag();
+    static bool& persistent_state_loaded_flag();
+    static bool& persistent_filters_expanded_flag();
+    static void ensure_persistent_state_loaded();
+
     bool enabled_ = true;
     int screen_w_ = 0;
     int screen_h_ = 0;
@@ -100,7 +108,7 @@ private:
     Room* current_room_ = nullptr;
 
     std::vector<FilterEntry> entries_;
-    FilterState state_{};
+    FilterState* state_ = nullptr;
     bool has_saved_state_ = false;
     SDL_Rect layout_bounds_{0, 0, 0, 0};
     SDL_Rect mode_bar_rect_{0, 0, 0, 0};

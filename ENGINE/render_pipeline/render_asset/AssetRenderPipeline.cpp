@@ -11,7 +11,7 @@
 
 namespace {
 
-constexpr float MOTION_BLUR_STRENGTH = 0.45f;
+constexpr float MOTION_BLUR_STRENGTH = 0.45f; // fallback when settings unavailable
 
 float compute_asset_screen_height(Asset& asset, float inv_scale) {
     int cached_w = asset.cached_w;
@@ -83,7 +83,6 @@ const render_pipeline::shading::ReactiveShadowSettings* StageContext::reactive_s
 }
 
 void StageContext::update_projection(Asset& asset) {
-    base_shadow_scale       = 1.0f;
     base_shadow_opacity     = 204.0f / 255.0f;
     screen_rect             = SDL_Rect{ 0, 0, 0, 0 };
     screen_center           = SDL_FPoint{ 0.0f, 0.0f };
@@ -125,22 +124,39 @@ void StageContext::update_projection(Asset& asset) {
     }
     reference_screen_height = reference_height;
 
+    const float world_x = asset.smoothed_translation_x();
+    const float world_y = asset.smoothed_translation_y();
     const camera::RenderEffects effects =
-        cam.compute_render_effects(SDL_Point{ asset.pos.x, asset.pos.y }, base_sh, reference_height);
+        cam.compute_render_effects(
+            SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
+            base_sh,
+            reference_height,
+            reinterpret_cast<camera::RenderSmoothingKey>(&asset));
 
-    const float scaled_sw = base_sw * effects.distance_scale;
-    const float scaled_sh = base_sh * effects.distance_scale;
+    const float scaled_sw       = base_sw * effects.distance_scale;
+    const float scaled_sh       = base_sh * effects.distance_scale;
     const float final_visible_h = scaled_sh * effects.vertical_scale;
 
     if (!std::isfinite(scaled_sw) || !std::isfinite(final_visible_h) || scaled_sw <= 0.0f || final_visible_h <= 0.0f) {
         return;
     }
 
-    const int sw = std::max(1, static_cast<int>(std::lround(scaled_sw)));
-    const int sh = std::max(1, static_cast<int>(std::lround(final_visible_h)));
-    const SDL_Point cp = effects.screen_position;
-    screen_rect   = SDL_Rect{ cp.x - sw / 2, cp.y - sh, sw, sh };
-    screen_center = SDL_FPoint{ static_cast<float>(cp.x), static_cast<float>(cp.y - sh / 2) };
+    const float center_x = effects.screen_position.x + effects.parallax_offset_x;
+    const float center_y = effects.screen_position.y;
+
+    const float rect_w = std::max(scaled_sw, 1.0f);
+    const float rect_h = std::max(final_visible_h, 1.0f);
+
+    const float left_f = center_x - rect_w * 0.5f;
+    const float top_f  = center_y - rect_h;
+
+    screen_center = SDL_FPoint{ center_x, center_y - rect_h * 0.5f };
+
+    const int sw = std::max(1, static_cast<int>(std::lround(rect_w)));
+    const int sh = std::max(1, static_cast<int>(std::lround(rect_h)));
+    const int left = static_cast<int>(std::lround(left_f));
+    const int top  = static_cast<int>(std::lround(top_f));
+    screen_rect    = SDL_Rect{ left, top, sw, sh };
 
     if (const LightMap* light_map_sampler = light_map()) {
         const LightMap::SampledBrightness sample =
@@ -190,9 +206,25 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         return nullptr;
     }
 
-    SDL_Texture* previous_final       = asset.get_final_texture();
+    StageContext context{};
+    context.base_texture = base_frame;
+    context.lighting     = &lighting_;
+    context.width        = width;
+    context.height       = height;
+    context.reusable_final = asset.get_final_texture();
+    context.reactive_shadow_settings_override = low_quality_mode_ ? nullptr : lighting_.reactive_shadow_settings;
+    if (renderer_) {
+        SDL_GetRendererOutputSize(renderer_, &context.screen_width_px, &context.screen_height_px);
+    }
+
+    SDL_Texture* previous_final       = context.reusable_final;
     SDL_Texture* previous_final_copy  = nullptr;
-    const float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f);
+    float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f);
+    if (const auto* rs = context.reactive_shadow_settings()) {
+        // Map 0..200 frames to 0..1 strength
+        const float s = static_cast<float>(std::clamp(rs->frame_blend_falloff_frames, 0, 200)) / 200.0f;
+        clamped_blur_strength = std::clamp(s, 0.0f, 1.0f);
+    }
     const bool   apply_motion_blur     = previous_final && clamped_blur_strength > 0.0f && !low_quality_mode_;
     if (apply_motion_blur) {
         int    prev_w      = 0;
@@ -247,16 +279,6 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         }
     }
 
-    StageContext context{};
-    context.base_texture = base_frame;
-    context.lighting     = &lighting_;
-    context.width        = width;
-    context.height       = height;
-    context.reusable_final = asset.get_final_texture();
-    context.reactive_shadow_settings_override = low_quality_mode_ ? nullptr : lighting_.reactive_shadow_settings;
-    if (renderer_) {
-        SDL_GetRendererOutputSize(renderer_, &context.screen_width_px, &context.screen_height_px);
-    }
     context.update_projection(asset);
 
     if (stages_.empty() || !stages_[0].stage) {
@@ -333,8 +355,9 @@ SDL_Texture* AssetRenderPipeline::texture_for_scale(Asset* asset,
                                                     int base_w,
                                                     int base_h,
                                                     int target_w,
-                                                    int target_h) {
-    return render_asset_.texture_for_scale(asset, base_tex, base_w, base_h, target_w, target_h);
+                                                    int target_h,
+                                                    float hysteresis_margin) {
+    return render_asset_.texture_for_scale(asset, base_tex, base_w, base_h, target_w, target_h, hysteresis_margin);
 }
 
 void AssetRenderPipeline::set_low_quality_mode(bool enable) {

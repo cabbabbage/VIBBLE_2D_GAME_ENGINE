@@ -644,26 +644,14 @@ struct SpawnGroupConfig::Entry {
         method_widget_ = std::make_unique<CallbackDropdownWidget>(
             "Spawn Method", method_options_, [this](int index) { on_method_changed(index); }, editable_);
 
-        linked_area_widget_ = std::make_unique<CallbackDropdownWidget>(
-            "Linked Area", std::vector<std::string>{"null"}, [this](int index) { on_linked_area_changed(index); }, editable_);
+        // Deprecated: linked area UI removed. No dropdown or open button.
+        linked_area_widget_.reset();
+        open_area_button_.reset();
+        open_area_widget_.reset();
 
-        open_area_button_ = std::make_unique<DMButton>("Open", &DMStyles::ListButton(), 0, DMButton::height());
-        open_area_widget_ = std::make_unique<ButtonWidget>(open_area_button_.get(), [this]() {
-            if (!open_area_handler_ || area_link_target_.empty()) return;
-            static const std::string kEmptyKey;
-            const std::string& key = stack_key_ ? *stack_key_ : kEmptyKey;
-            open_area_handler_(area_link_target_, key);
-        });
-
-        auto terminate_checkbox = std::make_unique<DMCheckbox>("Terminate with parent", false);
-        terminate_with_parent_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(terminate_checkbox),
-            [this](bool value) { on_terminate_with_parent_changed(value); },
-            editable_);
-
-        auto place_checkbox = std::make_unique<DMCheckbox>("Placed on top parent", false);
-        placed_on_top_parent_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(place_checkbox),
-            [this](bool value) { on_place_on_top_parent_changed(value); },
-            editable_);
+        // Deprecated: child link options removed from UI.
+        terminate_with_parent_widget_.reset();
+        placed_on_top_parent_widget_.reset();
 
         auto enforce_checkbox = std::make_unique<DMCheckbox>("Enforce Spacing", false);
         enforce_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(enforce_checkbox),
@@ -926,28 +914,10 @@ struct SpawnGroupConfig::Entry {
         bool enforce_spacing = entry.is_object() ? entry.value("enforce_spacing", false) : false;
         enforce_widget_->set_value(enforce_spacing);
 
-        bool link_flag = entry.is_object() ? entry.value("link_to_area", false) : false;
-        std::string linked_area = safe_string(entry, "linked_area", std::string{});
-        if (!link_flag || linked_area.empty()) {
-            linked_area_id_.clear();
-        } else {
-            linked_area_id_ = std::move(linked_area);
-        }
-        bool terminate_with_parent = link_flag ? safe_bool(entry, "terminate_with_parent", false) : false;
-        bool place_on_top_parent = link_flag ? safe_bool(entry, "placed_on_top_parent", false) : false;
-
-        refresh_linked_area_options();
-
-        if (terminate_with_parent_widget_) {
-            terminate_with_parent_widget_->set_value(linked_area_is_child_ ? terminate_with_parent : false);
-        }
-        if (placed_on_top_parent_widget_) {
-            placed_on_top_parent_widget_->set_value(linked_area_is_child_ ? place_on_top_parent : false);
-        }
-
-        update_child_link_option_visibility();
-
-        update_area_dropdown_from_provider();
+        // Linked area fields deprecated: ignore any legacy flags/ids and clear internal state.
+        linked_area_id_.clear();
+        linked_area_is_child_ = false;
+        // Ensure no UI exposed for linked-area and no dependent controls are shown.
         update_candidate_graph();
         rebuild_candidate_widgets();
         update_ownership_label();
@@ -1009,10 +979,7 @@ struct SpawnGroupConfig::Entry {
         if (resolve_quantity_widget_) {
             resolve_quantity_widget_->set_editable(editable_ && show_resolve_quantity_widget_);
         }
-        if (linked_area_widget_) {
-            linked_area_widget_->set_editable(editable_);
-        }
-        refresh_linked_area_options();
+        // Linked area UI removed; no dropdown to edit.
         update_priority_button_states();
     }
 
@@ -1089,13 +1056,17 @@ struct SpawnGroupConfig::Entry {
             }
 
             if (linked_area_widget_) {
-                rows.push_back({linked_area_widget_.get()});
-                if (show_child_link_options_) {
-                    if (terminate_with_parent_widget_) {
-                        rows.push_back({terminate_with_parent_widget_.get()});
-                    }
-                    if (placed_on_top_parent_widget_) {
-                        rows.push_back({placed_on_top_parent_widget_.get()});
+                const bool has_options = linked_area_option_labels_.size() > 1;
+                const bool has_selection = !linked_area_id_.empty();
+                if (has_options || has_selection) {
+                    rows.push_back({linked_area_widget_.get()});
+                    if (show_child_link_options_) {
+                        if (terminate_with_parent_widget_) {
+                            rows.push_back({terminate_with_parent_widget_.get()});
+                        }
+                        if (placed_on_top_parent_widget_) {
+                            rows.push_back({placed_on_top_parent_widget_.get()});
+                        }
                     }
                 }
             }
@@ -1235,6 +1206,23 @@ private:
 
     void update_candidate_graph() {
         if (auto* graph = candidate_editor_widget()) {
+            graph->set_search_extra_results_provider([this]() {
+                std::vector<SearchAssets::Result> results;
+                try {
+                    const auto& provider = area_names_provider();
+                    auto names = provider ? provider() : std::vector<std::string>{};
+                    for (const auto& name : names) {
+                        if (name.empty()) continue;
+                        SearchAssets::Result res;
+                        res.label = name + " (Area)";
+                        res.value = name;
+                        res.is_tag = false;
+                        results.push_back(std::move(res));
+                    }
+                } catch (...) {
+                }
+                return results;
+            });
             graph->set_candidates_from_json(entry_view());
             graph->set_on_adjust([this](int index, int delta){
                 if (!editable_) return;
@@ -1459,102 +1447,35 @@ private:
     }
 
     void refresh_linked_area_options() {
+        // Deprecated: linked area options removed.
         linked_area_options_.clear();
         linked_area_option_labels_.clear();
-
-        linked_area_options_.push_back({"", "null", false});
-        linked_area_option_labels_.push_back("null");
-
-        auto append_descriptors = [this](const std::vector<LinkableAreaDescriptor>& descriptors) {
-            for (const auto& descriptor : descriptors) {
-                if (descriptor.label.empty()) continue;
-                linked_area_options_.push_back({descriptor.id, descriptor.label, descriptor.is_child_area});
-                linked_area_option_labels_.push_back(descriptor.label);
-            }
-};
-
-        if (asset_linkable_area_provider_) {
-            append_descriptors(asset_linkable_area_provider_());
+        if (linked_area_widget_) {
+            linked_area_widget_->set_options(std::vector<std::string>{}, 0);
+            linked_area_widget_->set_editable(false);
         }
-        if (room_linkable_area_provider_) {
-            append_descriptors(room_linkable_area_provider_());
-        }
-
-        update_linked_area_dropdown_from_selection();
     }
 
     void update_linked_area_dropdown_from_selection() {
-        int selected_index = 0;
-        linked_area_is_child_ = false;
-        if (!linked_area_id_.empty()) {
-            for (size_t i = 1; i < linked_area_options_.size(); ++i) {
-                if (linked_area_options_[i].id == linked_area_id_) {
-                    selected_index = static_cast<int>(i);
-                    linked_area_is_child_ = linked_area_options_[i].is_child;
-                    break;
-                }
-            }
-            if (selected_index == 0) {
-                linked_area_id_.clear();
-            }
-        }
-
+        // Deprecated: no dropdown to update.
         if (linked_area_widget_) {
-            linked_area_widget_->set_options(linked_area_option_labels_, selected_index);
-            linked_area_widget_->set_editable(editable_);
+            linked_area_widget_->set_options(std::vector<std::string>{}, 0);
+            linked_area_widget_->set_editable(false);
         }
-
-        update_child_link_option_visibility();
+        linked_area_is_child_ = false;
+        linked_area_id_.clear();
         update_area_link_target();
     }
 
     void update_child_link_option_visibility() {
-        bool should_show = !linked_area_id_.empty() && linked_area_is_child_;
-        if (terminate_with_parent_widget_) {
-            terminate_with_parent_widget_->set_editable(editable_ && should_show);
-            if (!should_show) {
-                terminate_with_parent_widget_->set_value(false);
-            }
-        }
-        if (placed_on_top_parent_widget_) {
-            placed_on_top_parent_widget_->set_editable(editable_ && should_show);
-            if (!should_show) {
-                placed_on_top_parent_widget_->set_value(false);
-            }
-        }
-        if (show_child_link_options_ != should_show) {
-            show_child_link_options_ = should_show;
-            if (owner_) owner_->mark_layout_dirty();
-        }
+        // Deprecated: child link options not used.
+        show_child_link_options_ = false;
+        if (terminate_with_parent_widget_) terminate_with_parent_widget_->set_editable(false);
+        if (placed_on_top_parent_widget_) placed_on_top_parent_widget_->set_editable(false);
     }
 
-    void on_linked_area_changed(int index) {
-        if (!editable_) return;
-        if (index <= 0 || index >= static_cast<int>(linked_area_options_.size())) {
-            linked_area_id_.clear();
-            linked_area_is_child_ = false;
-            if (auto* entry = mutable_entry()) {
-                (*entry)["link_to_area"] = false;
-                (*entry).erase("linked_area");
-                (*entry).erase("terminate_with_parent");
-                (*entry).erase("placed_on_top_parent");
-            }
-        } else {
-            const auto& option = linked_area_options_[static_cast<size_t>(index)];
-            linked_area_id_ = option.id;
-            linked_area_is_child_ = option.is_child;
-            if (auto* entry = mutable_entry()) {
-                (*entry)["link_to_area"] = true;
-                (*entry)["linked_area"] = option.id;
-                if (!option.is_child) {
-                    (*entry).erase("terminate_with_parent");
-                    (*entry).erase("placed_on_top_parent");
-                }
-            }
-        }
-        update_child_link_option_visibility();
-        update_area_link_target();
-        notify_change(false, false, false);
+    void on_linked_area_changed(int) {
+        // Deprecated: ignore changes.
     }
 
     void on_min_changed(const std::string& text) {

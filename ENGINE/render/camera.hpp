@@ -3,8 +3,11 @@
 #include <SDL.h>
 #include <algorithm>
 #include <vector>
+#include <cstdint>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 #include "utils/area.hpp"
+#include "utils/transform_smoothing.hpp"
 
 class Asset;
 class Room;
@@ -22,13 +25,27 @@ class camera {
         float tripod_distance_y = 0.0f;
         float min_visible_screen_ratio = 0.015f;
         int   render_quality_percent = 100;
-};
+        bool  smooth_motion_zoom = true;
+        TransformSmoothingMethod motion_smoothing_method = TransformSmoothingMethod::CriticallyDampedSpring;
+        float motion_smoothing_tau = 0.12f;
+        float motion_smoothing_spring_frequency = 5.0f;
+        float motion_smoothing_max_step = 8000.0f;
+        float motion_smoothing_snap_threshold = 0.25f;
+        float scale_variant_hysteresis_margin = 0.05f;
+        TransformSmoothingParams parallax_smoothing{
+            TransformSmoothingMethod::CriticallyDampedSpring,
+            0.0f,
+            6.0f,
+            8000.0f,
+            0.5f};
+    };
 
     struct RenderEffects {
-        SDL_Point screen_position{0, 0};
-        float vertical_scale = 1.0f;
-        float distance_scale = 1.0f;
-};
+        SDL_FPoint screen_position{0.0f, 0.0f};
+        float     parallax_offset_x = 0.0f;
+        float     vertical_scale    = 1.0f;
+        float     distance_scale    = 1.0f;
+    };
 
     camera(int screen_width, int screen_height, const Area& starting_zoom);
 
@@ -54,10 +71,16 @@ class camera {
     const Area& get_base_zoom() const { return base_zoom_; }
     const Area& get_current_view() const { return current_view_; }
 
-    SDL_Point map_to_screen(SDL_Point world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
-    SDL_Point screen_to_map(SDL_Point screen, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
+    SDL_FPoint map_to_screen(SDL_Point world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
+    SDL_FPoint map_to_screen_f(SDL_FPoint world, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
+    SDL_FPoint screen_to_map(SDL_Point screen, float parallax_x = 0.0f, float parallax_y = 0.0f) const;
 
-    RenderEffects compute_render_effects(SDL_Point world, float asset_screen_height, float reference_screen_height) const;
+    using RenderSmoothingKey = std::uintptr_t;
+
+    RenderEffects compute_render_effects(SDL_Point world,
+                                         float asset_screen_height,
+                                         float reference_screen_height,
+                                         RenderSmoothingKey smoothing_key = 0) const;
 
     void set_parallax_enabled(bool e) { parallax_enabled_ = e; }
     bool parallax_enabled() const { return parallax_enabled_; }
@@ -68,9 +91,10 @@ class camera {
     void set_render_areas_enabled(bool enabled) { render_areas_enabled_ = enabled; }
     bool render_areas_enabled() const { return render_areas_enabled_; }
 
-    void set_realism_settings(const RealismSettings& settings) { settings_ = settings; }
+    void set_realism_settings(const RealismSettings& settings);
     RealismSettings& realism_settings() { return settings_; }
     const RealismSettings& realism_settings() const { return settings_; }
+    TransformSmoothingParams motion_smoothing_params() const;
 
     void apply_camera_settings(const nlohmann::json& data);
     nlohmann::json camera_settings_to_json() const;
@@ -82,9 +106,9 @@ class camera {
     void      set_screen_center(SDL_Point p);
     SDL_Point get_screen_center() const { return screen_center_; }
 
-    void update();
+    void update(float dt);
     void set_up_rooms(CurrentRoomFinder* finder);
-    void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player);
+    void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player, bool refresh_requested, float dt);
 
     void pan(const std::vector<SDL_Point>& , int ) {}
     void shake(double , double , int ) {}
@@ -131,5 +155,24 @@ class camera {
     bool       realism_enabled_ = true;
     RealismSettings settings_{};
     bool       render_areas_enabled_ = true;
+
+    TransformSmoothingState center_smoothing_x_{};
+    TransformSmoothingState center_smoothing_y_{};
+    TransformSmoothingState zoom_smoothing_{};
+    SDL_FPoint smoothed_center_{0.0f, 0.0f};
+    float      smoothed_scale_ = 1.0f;
+
+    struct ParallaxZoomSmoothingEntry {
+        TransformSmoothingState parallax;
+        TransformSmoothingState zoom;
+        bool initialized = false;
+        uint64_t last_used_frame = 0;
+    };
+
+    mutable std::unordered_map<RenderSmoothingKey, ParallaxZoomSmoothingEntry> smoothing_entries_{};
+    mutable uint64_t smoothing_frame_counter_ = 0;
+    float last_update_dt_ = 0.0f;
+
+    void reset_parallax_smoothing();
 };
 

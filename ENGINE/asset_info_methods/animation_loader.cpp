@@ -1,5 +1,5 @@
 #include "animation_loader.hpp"
-#include "custom_controllers/Davey_controller.hpp"
+#include "animation_update/custom_controllers/Davey_controller.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
 #include "asset/animation.hpp"
@@ -17,10 +17,10 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
-#include "custom_controllers/Vibble_controller.hpp"
-#include "custom_controllers/Bomb_controller.hpp"
-#include "custom_controllers/Frog_controller.hpp"
-#include "custom_controllers/default_controller.hpp"
+#include "animation_update/custom_controllers/Vibble_controller.hpp"
+#include "animation_update/custom_controllers/Bomb_controller.hpp"
+#include "animation_update/custom_controllers/Frog_controller.hpp"
+#include "animation_update/custom_controllers/default_controller.hpp"
 using nlohmann::json;
 
 void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
@@ -45,11 +45,16 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 return oss.str();
 };
 
-        render_pipeline::ScalingLogic::ConfigureUsageStorage(std::filesystem::path("loading") / "scaling_profiles.json");
-        const bool scaling_refresh_pending = render_pipeline::ScalingLogic::HasPendingUsageData();
+        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(std::filesystem::path("loading") / "scaling_profiles.json");
         const auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info.name);
+        const bool scaling_refresh_pending = false;
+        std::ostringstream range_stream;
+        range_stream << std::fixed << std::setprecision(3) << profile.min_scale
+                     << "…" << std::fixed << std::setprecision(3) << profile.max_scale;
         std::cout << "[AnimationLoader] " << info.name
-                  << " scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false") << ", profile_revision=" << profile.revision << ", profile_steps=" << format_steps(profile.steps) << "\n";
+                  << " profile_revision=" << profile.revision
+                  << ", scale_range=" << range_stream.str()
+                  << ", profile_steps=" << format_steps(profile.steps) << "\n";
         if (profile.created_entry) {
                 std::filesystem::path asset_cache = std::filesystem::path("cache") / info.name / "animations";
                 try {
@@ -100,10 +105,6 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 		if (!anim.frames.empty()) {
 			info.animations[trigger] = std::move(anim);
 		}
-        }
-
-        if (scaling_refresh_pending) {
-                render_pipeline::ScalingLogic::ClearPendingUsageData();
         }
 
         info.moving_asset = false;

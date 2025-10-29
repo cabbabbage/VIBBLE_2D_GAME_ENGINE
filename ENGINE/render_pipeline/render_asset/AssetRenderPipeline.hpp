@@ -36,7 +36,6 @@ struct StageContext {
     SDL_Rect      screen_rect{ 0, 0, 0, 0 };
     SDL_FPoint    screen_center{ 0.0f, 0.0f };
     float         reference_screen_height = 1.0f;
-    float         base_shadow_scale       = 1.0f;
     float         base_shadow_opacity     = 204.0f / 255.0f;
     int           screen_width_px         = 0;
     int           screen_height_px        = 0;
@@ -74,7 +73,13 @@ public:
 
     SDL_Texture* run(Asset& asset);
     SDL_Texture* regenerateFinalTexture(Asset* asset);
-    SDL_Texture* texture_for_scale(Asset* asset, SDL_Texture* base_tex, int          base_w, int          base_h, int          target_w, int          target_h);
+    SDL_Texture* texture_for_scale(Asset* asset,
+                                   SDL_Texture* base_tex,
+                                   int          base_w,
+                                   int          base_h,
+                                   int          target_w,
+                                   int          target_h,
+                                   float        hysteresis_margin);
 
     void set_low_quality_mode(bool enable);
     bool low_quality_mode() const { return low_quality_mode_; }

@@ -16,7 +16,8 @@ inline constexpr std::string_view texture  = "texture";
 inline constexpr std::string_view npc      = "npc";
 inline constexpr std::string_view object   = "object";
 
-inline constexpr std::array<std::string_view, 6> all{ player, boundary, enemy, texture, npc, object };
+inline constexpr std::string_view area    = "area";
+inline constexpr std::array<std::string_view, 7> all{ player, boundary, enemy, texture, npc, object, area };
 
 inline bool is_valid(std::string_view value) {
     return std::find(all.begin(), all.end(), value) != all.end();

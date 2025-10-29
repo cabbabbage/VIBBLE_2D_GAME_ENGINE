@@ -28,6 +28,10 @@
 #include "string_utils.hpp"
 #include "utils/string_utils.hpp"
 
+// For GIF decoding and PNG writing
+#include "utils/stb_image.h"
+#include "utils/stb_image_write.h"
+
 namespace animation_editor {
 
 namespace {
@@ -136,6 +140,34 @@ void SourceConfigPanel::update() {
     } else {
         busy_indicator_ = false;
     }
+
+    // When referencing another animation, keep options in sync with document changes.
+    if (use_animation_reference_ && document_) {
+        auto ids = document_->animation_ids();
+        std::sort(ids.begin(), ids.end());
+        std::string sig;
+        sig.reserve(ids.size() * 8);
+        for (const auto& id : ids) {
+            if (!sig.empty()) sig.push_back('|');
+            sig.append(id);
+        }
+        if (sig != animation_ids_signature_) {
+            animation_ids_signature_.swap(sig);
+            int previous_index = animation_index_;
+            std::string previously_selected = (previous_index >= 0 && previous_index < static_cast<int>(animation_options_.size()))
+                                              ? animation_options_[previous_index]
+                                              : std::string{};
+            refresh_animation_options();
+            // Try to preserve previous selection by name if possible
+            if (!previously_selected.empty() && !animation_options_.empty()) {
+                auto it = std::find(animation_options_.begin(), animation_options_.end(), previously_selected);
+                if (it != animation_options_.end()) {
+                    animation_index_ = static_cast<int>(std::distance(animation_options_.begin(), it));
+                    if (animation_dropdown_) animation_dropdown_->set_selected(animation_index_);
+                }
+            }
+        }
+    }
 }
 
 void SourceConfigPanel::render(SDL_Renderer* renderer) const {
@@ -147,7 +179,6 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 
     dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
-    if (from_animation_checkbox_) from_animation_checkbox_->render(renderer);
     if (use_animation_reference_) {
         if (animation_dropdown_) animation_dropdown_->render(renderer);
     } else {
@@ -229,26 +260,6 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
     }
 
     bool consumed = false;
-    if (from_animation_checkbox_ && from_animation_checkbox_->handle_event(e)) {
-        use_animation_reference_ = from_animation_checkbox_->value();
-
-        if (use_animation_reference_) {
-            refresh_animation_options();
-            if (!animation_options_.empty()) {
-                if (!animation_dropdown_) {
-                    animation_dropdown_ = std::make_unique<DMDropdown>("Select Animation", animation_options_, 0);
-                }
-                animation_index_ = std::max(0, std::min(static_cast<int>(animation_options_.size()) - 1, animation_index_));
-                animation_dropdown_->set_selected(animation_index_ >= 0 ? animation_index_ : 0);
-
-                clean_output_frames();
-                apply_animation_selection();
-            }
-        }
-        layout_controls();
-        consumed = true;
-    }
-
     if (!consumed && use_animation_reference_ && animation_dropdown_) {
         if (animation_dropdown_->handle_event(e)) {
             apply_animation_selection();
@@ -270,11 +281,92 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
 int SourceConfigPanel::preferred_height(int) const {
     const int padding = 6;
     int height = padding;
-    height += DMCheckbox::height();
-    height += padding;
     height += use_animation_reference_ ? DMDropdown::height() : DMButton::height();
     height += padding;
     return height;
+}
+
+bool SourceConfigPanel::allow_out_of_bounds_pointer_events() const {
+    return use_animation_reference_ && animation_dropdown_ && animation_dropdown_->expanded();
+}
+
+SourceConfigPanel::SourceMode SourceConfigPanel::source_mode() const {
+    return use_animation_reference_ ? SourceMode::kAnimation : SourceMode::kFrames;
+}
+
+void SourceConfigPanel::set_source_mode(SourceMode mode) {
+    bool wants_animation = (mode == SourceMode::kAnimation);
+    if (use_animation_reference_ == wants_animation) {
+        return;
+    }
+
+    use_animation_reference_ = wants_animation;
+    if (use_animation_reference_) {
+        show_import_modal_ = false;
+    }
+
+    if (use_animation_reference_) {
+        refresh_animation_options();
+        if (!animation_dropdown_) {
+            int idx = animation_index_;
+            if (idx < 0 && !animation_options_.empty()) {
+                idx = 0;
+            }
+            if (idx >= 0 && !animation_options_.empty()) {
+                idx = std::min(idx, static_cast<int>(animation_options_.size()) - 1);
+            }
+            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::max(0, idx));
+            animation_index_ = animation_dropdown_->selected();
+        } else {
+            int idx = animation_index_;
+            if (!animation_options_.empty()) {
+                idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+            } else {
+                idx = 0;
+            }
+            animation_dropdown_->set_selected(idx);
+            animation_index_ = animation_dropdown_->selected();
+        }
+        if (animation_dropdown_ && !animation_options_.empty()) {
+            clean_output_frames();
+            apply_animation_selection();
+        }
+    } else {
+        animation_index_ = -1;
+    }
+
+    layout_controls();
+}
+
+std::vector<std::string> SourceConfigPanel::summary_badges() const {
+    std::vector<std::string> badges;
+    badges.reserve(4);
+    badges.push_back(use_animation_reference_ ? std::string{"Animation"} : std::string{"Frames"});
+
+    if (use_animation_reference_) {
+        std::string target = strings::trim_copy(current_source_.name.value_or(current_source_.path));
+        if (target.empty() && animation_index_ >= 0 && animation_index_ < static_cast<int>(animation_options_.size())) {
+            target = animation_options_[animation_index_];
+        }
+        if (target.empty()) {
+            target = "Unassigned";
+        }
+        badges.push_back(std::move(target));
+    } else {
+        std::string kind = strings::trim_copy(current_source_.kind);
+        if (!kind.empty() && to_lower_copy(kind) != std::string{"folder"}) {
+            badges.push_back(kind);
+        }
+        std::string display_path = strings::trim_copy(current_source_.path);
+        if (display_path.empty()) {
+            display_path = "Unassigned";
+        }
+        badges.push_back(std::move(display_path));
+    }
+
+    int frames = std::max(1, frame_count_);
+    badges.push_back(std::to_string(frames) + (frames == 1 ? " frame" : " frames"));
+    return badges;
 }
 
 void SourceConfigPanel::reload_from_document() {
@@ -306,6 +398,9 @@ void SourceConfigPanel::reload_from_document() {
     cached_asset_root_valid_ = false;
 
     use_animation_reference_ = (current_source_.kind == std::string("animation"));
+    if (use_animation_reference_) {
+        show_import_modal_ = false;
+    }
     refresh_animation_options();
 
     if (use_animation_reference_) {
@@ -351,11 +446,23 @@ void SourceConfigPanel::apply_source_config(const SourceConfig& config) {
     current_source_ = config;
     payload_["source"] = build_source_json(config);
     update_number_of_frames();
+    if (previous_kind != std::string("animation") && config.kind == std::string("animation")) {
+        clear_derived_fields();
+    }
     commit_payload();
 
     if (previous_kind != std::string("animation") && config.kind == std::string("animation")) {
         clean_output_frames();
     }
+}
+
+void SourceConfigPanel::clear_derived_fields() {
+    ensure_payload_loaded();
+    payload_.erase("movement");
+    payload_.erase("movement_total");
+    payload_.erase("audio");
+    payload_.erase("speed_factor");
+    payload_.erase("rnd_start");
 }
 
 void SourceConfigPanel::update_number_of_frames() {
@@ -626,19 +733,32 @@ void SourceConfigPanel::post_copy_process(const std::vector<std::filesystem::pat
 
 void SourceConfigPanel::layout_controls() {
 
-    if (!from_animation_checkbox_) {
-        from_animation_checkbox_ = std::make_unique<DMCheckbox>("Select frames from animation", use_animation_reference_);
-    } else {
-        from_animation_checkbox_->set_value(use_animation_reference_);
-    }
     if (!source_button_) {
-        source_button_ = std::make_unique<DMButton>("Select Source Frames...", &DMStyles::AccentButton(), 220, DMButton::height());
+        source_button_ = std::make_unique<DMButton>("Upload Frames...", &DMStyles::AccentButton(), 220, DMButton::height());
     }
-    if (use_animation_reference_ && !animation_dropdown_) {
 
+    if (use_animation_reference_) {
         refresh_animation_options();
-        int idx = std::max(0, animation_index_);
-        animation_dropdown_ = std::make_unique<DMDropdown>("Select Animation", animation_options_, idx);
+        if (!animation_dropdown_) {
+            int idx = animation_index_;
+            if (idx < 0 && !animation_options_.empty()) {
+                idx = 0;
+            }
+            if (idx >= 0 && !animation_options_.empty()) {
+                idx = std::min(idx, static_cast<int>(animation_options_.size()) - 1);
+            }
+            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::max(0, idx));
+            animation_index_ = animation_dropdown_->selected();
+        } else {
+            int idx = animation_index_;
+            if (!animation_options_.empty()) {
+                idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+            } else {
+                idx = 0;
+            }
+            animation_dropdown_->set_selected(idx);
+            animation_index_ = animation_dropdown_->selected();
+        }
     }
 
     const int padding = 6;
@@ -646,16 +766,12 @@ void SourceConfigPanel::layout_controls() {
     int x = bounds_.x + padding;
     int y = bounds_.y + padding;
 
-    checkbox_rect_ = SDL_Rect{x, y, inner_w, DMCheckbox::height()};
-    if (from_animation_checkbox_) from_animation_checkbox_->set_rect(checkbox_rect_);
-    y += DMCheckbox::height() + padding;
-
     if (use_animation_reference_) {
         dropdown_rect_ = SDL_Rect{x, y, inner_w, DMDropdown::height()};
         if (animation_dropdown_) animation_dropdown_->set_rect(dropdown_rect_);
         source_button_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
     } else {
-        source_button_rect_ = SDL_Rect{x, y, 220, DMButton::height()};
+        source_button_rect_ = SDL_Rect{x, y, inner_w, DMButton::height()};
         if (source_button_) source_button_->set_rect(source_button_rect_);
         dropdown_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
     }
@@ -673,9 +789,9 @@ void SourceConfigPanel::layout_modal() {
     modal_rect_.x = bounds_.x + (bounds_.w - modal_rect_.w) / 2;
     modal_rect_.y = bounds_.y + (bounds_.h - modal_rect_.h) / 2;
 
-    if (!modal_buttons_[0]) modal_buttons_[0] = std::make_unique<DMButton>("Import From GIF", &DMStyles::HeaderButton(), width - padding * 2, button_height);
-    if (!modal_buttons_[1]) modal_buttons_[1] = std::make_unique<DMButton>("Import From Folder", &DMStyles::HeaderButton(), width - padding * 2, button_height);
-    if (!modal_buttons_[2]) modal_buttons_[2] = std::make_unique<DMButton>("Import PNG Sequence", &DMStyles::HeaderButton(), width - padding * 2, button_height);
+    if (!modal_buttons_[0]) modal_buttons_[0] = std::make_unique<DMButton>("Upload GIF", &DMStyles::HeaderButton(), width - padding * 2, button_height);
+    if (!modal_buttons_[1]) modal_buttons_[1] = std::make_unique<DMButton>("Upload Folder", &DMStyles::HeaderButton(), width - padding * 2, button_height);
+    if (!modal_buttons_[2]) modal_buttons_[2] = std::make_unique<DMButton>("Upload PNG", &DMStyles::HeaderButton(), width - padding * 2, button_height);
 
     int x = modal_rect_.x + padding;
     int y = modal_rect_.y + padding;
@@ -712,7 +828,7 @@ void SourceConfigPanel::refresh_animation_options() {
         int idx = std::max(0, animation_index_);
         animation_dropdown_.reset();
         if (!animation_options_.empty()) {
-            animation_dropdown_ = std::make_unique<DMDropdown>("Select Animation", animation_options_, std::min(idx, static_cast<int>(animation_options_.size()) - 1));
+            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::min(idx, static_cast<int>(animation_options_.size()) - 1));
         }
     }
 }
@@ -815,8 +931,81 @@ void SourceConfigPanel::import_from_gif() {
         return;
     }
 
-    SDL_Log("SourceConfigPanel: GIF import requested for %s, but decoding is not supported in this build.", file->string().c_str());
-    update_status("GIF import not supported");
+    // Read GIF into memory
+    std::vector<unsigned char> bytes;
+    try {
+        std::ifstream in(*file, std::ios::binary);
+        if (!in) {
+            update_status("Failed to open GIF file");
+            return;
+        }
+        in.seekg(0, std::ios::end);
+        std::streamsize sz = in.tellg();
+        in.seekg(0, std::ios::beg);
+        if (sz <= 0) {
+            update_status("GIF file is empty");
+            return;
+        }
+        bytes.resize(static_cast<size_t>(sz));
+        if (!in.read(reinterpret_cast<char*>(bytes.data()), sz)) {
+            update_status("Failed reading GIF file");
+            return;
+        }
+    } catch (const std::exception& ex) {
+        SDL_Log("SourceConfigPanel: failed reading GIF %s: %s", file->string().c_str(), ex.what());
+        update_status("Failed reading GIF");
+        return;
+    }
+
+    int x = 0, y = 0, z = 0, comp = 0;
+    int* delays = nullptr;
+    stbi_uc* data = stbi_load_gif_from_memory(bytes.data(), static_cast<int>(bytes.size()), &delays, &x, &y, &z, &comp, STBI_rgb_alpha);
+    if (!data || x <= 0 || y <= 0 || z <= 0) {
+        if (data) stbi_image_free(data);
+        if (delays) stbi_image_free(delays);
+        update_status("Failed to decode GIF frames");
+        return;
+    }
+
+    std::filesystem::path out_dir;
+    if (!prepare_output_directory(&out_dir)) {
+        stbi_image_free(data);
+        if (delays) stbi_image_free(delays);
+        return;
+    }
+
+    const int channels = 4; // STBI_rgb_alpha
+    const int stride = x * channels;
+    std::vector<std::filesystem::path> written;
+    written.reserve(static_cast<size_t>(z));
+    for (int i = 0; i < z; ++i) {
+        std::filesystem::path dst = out_dir / (std::to_string(i) + ".png");
+        const stbi_uc* frame = data + static_cast<size_t>(i) * static_cast<size_t>(x) * static_cast<size_t>(y) * channels;
+        int ok = 0;
+        try {
+            ok = stbi_write_png(dst.string().c_str(), x, y, channels, frame, stride);
+        } catch (...) {
+            ok = 0;
+        }
+        if (ok) {
+            written.push_back(dst);
+        } else {
+            SDL_Log("SourceConfigPanel: failed writing frame %d to %s", i, dst.string().c_str());
+        }
+    }
+
+    stbi_image_free(data);
+    if (delays) stbi_image_free(delays);
+
+    // Crop and finalize
+    post_copy_process(written);
+
+    SourceConfig config;
+    config.kind = "folder";
+    config.path = animation_id_;
+    config.name.reset();
+    apply_source_config(config);
+    update_status("Imported GIF frames");
 }
 
 void SourceConfigPanel::import_from_png_sequence() {

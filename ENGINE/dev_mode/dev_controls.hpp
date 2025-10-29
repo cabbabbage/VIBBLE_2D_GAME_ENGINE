@@ -16,7 +16,6 @@
 #include "map_grid_panel.hpp"
 #include "asset_filter_bar.hpp"
 #include "trail_editor_suite.hpp"
-#include "dev_mode/pan_and_zoom.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "map_assets_modals.hpp"
 
@@ -31,13 +30,13 @@ class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
 class RegenerateRoomPopup;
+// Legacy chooser removed
 
 class DevControls {
 public:
     enum class Mode {
         RoomEditor,
-        MapEditor,
-        AreaMode
+        MapEditor
 };
 
     DevControls(Assets* owner, int screen_w, int screen_h);
@@ -56,16 +55,19 @@ public:
     struct RoomAreaCache {
         struct Polygon {
             std::string name;
-            std::string type;
             std::vector<SDL_Point> points;
             SDL_Point anchor{0, 0};
+            int z = 0;
+            bool visible = true;
 };
         using PolygonList  = std::vector<Polygon>;
         using Listener     = std::function<void(const PolygonList&, std::size_t)>;
 
         void set_listener(Listener listener);
         void invalidate();
-        const PolygonList& ensure_from_json(const nlohmann::json* root, std::optional<SDL_Point> default_anchor = std::nullopt);
+        const PolygonList& ensure_from_json(const nlohmann::json* root,
+                                            std::optional<SDL_Point> default_anchor = std::nullopt,
+                                            std::optional<std::pair<int, int>> room_dimensions = std::nullopt);
         std::size_t generation() const { return generation_; }
 
     private:
@@ -118,11 +120,14 @@ public:
     bool is_map_light_panel_visible() const;
 
     void begin_area_edit_for_selected_asset(const std::string& area_name);
+    void begin_room_area_edit(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 0);
 
     void reset_click_state();
     void clear_selection();
     void purge_asset(Asset* asset);
+
+    void create_room_area();
 
     void notify_spawn_group_config_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
@@ -162,9 +167,6 @@ private:
     bool is_modal_blocking_panels() const;
     void pulse_modal_header();
     void apply_header_suppression();
-    void clear_area_mode_selection();
-    void set_area_mode_selection(Asset* asset, const std::string& area_name);
-
     void create_trail_template();
 
     void refresh_active_asset_filters();
@@ -229,22 +231,9 @@ private:
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
 
-    class PanAndZoom area_pan_zoom_;
-    std::unique_ptr<class CreateRoomAreaPanel> create_area_panel_;
-    std::unique_ptr<class EditRoomAreaPanel>   edit_area_panel_;
     std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
-    class Asset* area_hovered_asset_ = nullptr;
-
-    class Asset* area_hovered_asset_with_area_ = nullptr;
-    std::string area_hovered_area_name_;
-    class Asset* area_selected_asset_ = nullptr;
-    std::string area_selected_area_name_;
-
-    std::unordered_set<std::string> active_area_type_filters_;
-
-    int hovered_area_index_ = -1;
-    int selected_area_index_ = -1;
-    SDL_Point last_area_click_world_{0,0};
+    std::optional<std::string> selected_room_area_name_;
+    std::optional<std::string> hovered_room_area_name_;
 
     RoomAreaCache room_area_cache_;
 };

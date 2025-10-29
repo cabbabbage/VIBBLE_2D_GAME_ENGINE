@@ -76,8 +76,7 @@
     },
     "Barrel": {
       "animations": {
-        "collision": {
-          "area_name": "collision_area",
+        "animation": {
           "flipped_source": false,
           "locked": false,
           "loop": false,
@@ -85,20 +84,20 @@
             [
               0,
               0
-            ],
-            [
-              0,
-              0
             ]
           ],
-          "number_of_frames": 2,
-          "on_end": "SRC/assets/Barrel/default",
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
             "kind": "folder",
             "name": null,
-            "path": "SRC/assets/Barrel/collision"
+            "path": "animation"
           },
           "speed_factor": 1
         },
@@ -116,6 +115,10 @@
               0
             ]
           ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
           "number_of_frames": 2,
           "on_end": "SRC/assets/Barrel/default",
           "reverse_source": false,
@@ -124,6 +127,31 @@
             "kind": "folder",
             "name": null,
             "path": "SRC/assets/Barrel/default"
+          },
+          "speed_factor": 1
+        },
+        "ok": {
+          "flipped_source": false,
+          "locked": false,
+          "loop": false,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": null,
+            "path": "ok"
           },
           "speed_factor": 1
         }
@@ -142,478 +170,6 @@
         "start"
       ],
       "areas": [
-        {
-          "anchor": {
-            "x": 193,
-            "y": 490
-          },
-          "coordinate_space": {
-            "canvas_height": 44,
-            "canvas_width": 35,
-            "kind": "render_space",
-            "origin": "bottom_center",
-            "pivot": {
-              "x": 17,
-              "y": 44
-            },
-            "scale_at_save": 0.09000000357627869
-          },
-          "kind": "child",
-          "name": "child",
-          "points": [
-            {
-              "x": -22,
-              "y": -489
-            },
-            {
-              "x": -11,
-              "y": -489
-            },
-            {
-              "x": 0,
-              "y": -489
-            },
-            {
-              "x": 11,
-              "y": -489
-            },
-            {
-              "x": 22,
-              "y": -478
-            },
-            {
-              "x": 33,
-              "y": -478
-            },
-            {
-              "x": 44,
-              "y": -478
-            },
-            {
-              "x": 56,
-              "y": -478
-            },
-            {
-              "x": 67,
-              "y": -478
-            },
-            {
-              "x": 78,
-              "y": -478
-            },
-            {
-              "x": 89,
-              "y": -478
-            },
-            {
-              "x": 100,
-              "y": -478
-            },
-            {
-              "x": 111,
-              "y": -467
-            },
-            {
-              "x": 122,
-              "y": -456
-            },
-            {
-              "x": 133,
-              "y": -456
-            },
-            {
-              "x": 122,
-              "y": -456
-            },
-            {
-              "x": 111,
-              "y": -456
-            },
-            {
-              "x": 100,
-              "y": -456
-            },
-            {
-              "x": 89,
-              "y": -456
-            },
-            {
-              "x": 78,
-              "y": -456
-            },
-            {
-              "x": 67,
-              "y": -456
-            },
-            {
-              "x": 56,
-              "y": -456
-            },
-            {
-              "x": 44,
-              "y": -456
-            },
-            {
-              "x": 33,
-              "y": -456
-            },
-            {
-              "x": 22,
-              "y": -456
-            },
-            {
-              "x": 11,
-              "y": -456
-            },
-            {
-              "x": 0,
-              "y": -456
-            },
-            {
-              "x": -11,
-              "y": -456
-            },
-            {
-              "x": -22,
-              "y": -456
-            },
-            {
-              "x": -33,
-              "y": -456
-            },
-            {
-              "x": -44,
-              "y": -456
-            },
-            {
-              "x": -56,
-              "y": -456
-            },
-            {
-              "x": -67,
-              "y": -456
-            },
-            {
-              "x": -78,
-              "y": -456
-            },
-            {
-              "x": -89,
-              "y": -456
-            },
-            {
-              "x": -100,
-              "y": -456
-            },
-            {
-              "x": -111,
-              "y": -456
-            },
-            {
-              "x": -122,
-              "y": -456
-            },
-            {
-              "x": -133,
-              "y": -456
-            },
-            {
-              "x": -122,
-              "y": -467
-            },
-            {
-              "x": -111,
-              "y": -467
-            },
-            {
-              "x": -100,
-              "y": -467
-            },
-            {
-              "x": -89,
-              "y": -478
-            },
-            {
-              "x": -78,
-              "y": -478
-            },
-            {
-              "x": -67,
-              "y": -478
-            },
-            {
-              "x": -56,
-              "y": -478
-            },
-            {
-              "x": -44,
-              "y": -478
-            },
-            {
-              "x": -33,
-              "y": -478
-            }
-          ],
-          "resolution": 0,
-          "schema_version": 2,
-          "type": "child_top_barrel"
-        },
-        {
-          "anchor": {
-            "x": 193,
-            "y": 490
-          },
-          "coordinate_space": {
-            "canvas_height": 44,
-            "canvas_width": 35,
-            "kind": "render_space",
-            "origin": "bottom_center",
-            "pivot": {
-              "x": 17,
-              "y": 44
-            },
-            "scale_at_save": 0.09000000357627869
-          },
-          "kind": "child_top_barrel",
-          "name": "child",
-          "points": [
-            {
-              "x": -44,
-              "y": -489
-            },
-            {
-              "x": -33,
-              "y": -478
-            },
-            {
-              "x": -22,
-              "y": -489
-            },
-            {
-              "x": -11,
-              "y": -489
-            },
-            {
-              "x": 0,
-              "y": -489
-            },
-            {
-              "x": 11,
-              "y": -489
-            },
-            {
-              "x": 22,
-              "y": -489
-            },
-            {
-              "x": 33,
-              "y": -489
-            },
-            {
-              "x": 44,
-              "y": -478
-            },
-            {
-              "x": 56,
-              "y": -478
-            },
-            {
-              "x": 67,
-              "y": -489
-            },
-            {
-              "x": 78,
-              "y": -478
-            },
-            {
-              "x": 89,
-              "y": -478
-            },
-            {
-              "x": 100,
-              "y": -478
-            },
-            {
-              "x": 111,
-              "y": -478
-            },
-            {
-              "x": 122,
-              "y": -478
-            },
-            {
-              "x": 133,
-              "y": -467
-            },
-            {
-              "x": 144,
-              "y": -456
-            },
-            {
-              "x": 156,
-              "y": -456
-            },
-            {
-              "x": 156,
-              "y": -444
-            },
-            {
-              "x": 167,
-              "y": -433
-            },
-            {
-              "x": 156,
-              "y": -433
-            },
-            {
-              "x": 144,
-              "y": -433
-            },
-            {
-              "x": 133,
-              "y": -433
-            },
-            {
-              "x": 122,
-              "y": -433
-            },
-            {
-              "x": 111,
-              "y": -433
-            },
-            {
-              "x": 100,
-              "y": -433
-            },
-            {
-              "x": 89,
-              "y": -433
-            },
-            {
-              "x": 78,
-              "y": -433
-            },
-            {
-              "x": 67,
-              "y": -433
-            },
-            {
-              "x": 56,
-              "y": -433
-            },
-            {
-              "x": 44,
-              "y": -433
-            },
-            {
-              "x": 33,
-              "y": -433
-            },
-            {
-              "x": 22,
-              "y": -433
-            },
-            {
-              "x": 11,
-              "y": -433
-            },
-            {
-              "x": 0,
-              "y": -433
-            },
-            {
-              "x": -11,
-              "y": -433
-            },
-            {
-              "x": -22,
-              "y": -433
-            },
-            {
-              "x": -33,
-              "y": -433
-            },
-            {
-              "x": -44,
-              "y": -433
-            },
-            {
-              "x": -56,
-              "y": -433
-            },
-            {
-              "x": -67,
-              "y": -433
-            },
-            {
-              "x": -78,
-              "y": -433
-            },
-            {
-              "x": -89,
-              "y": -433
-            },
-            {
-              "x": -100,
-              "y": -433
-            },
-            {
-              "x": -111,
-              "y": -433
-            },
-            {
-              "x": -122,
-              "y": -433
-            },
-            {
-              "x": -133,
-              "y": -433
-            },
-            {
-              "x": -144,
-              "y": -433
-            },
-            {
-              "x": -144,
-              "y": -444
-            },
-            {
-              "x": -133,
-              "y": -456
-            },
-            {
-              "x": -122,
-              "y": -467
-            },
-            {
-              "x": -111,
-              "y": -467
-            },
-            {
-              "x": -100,
-              "y": -467
-            },
-            {
-              "x": -89,
-              "y": -478
-            },
-            {
-              "x": -78,
-              "y": -478
-            },
-            {
-              "x": -67,
-              "y": -478
-            },
-            {
-              "x": -56,
-              "y": -478
-            }
-          ],
-          "resolution": 0,
-          "schema_version": 2,
-          "type": "child_top_barrel"
-        },
         {
           "anchor": {
             "x": 193,
@@ -988,299 +544,263 @@
             "y": 490
           },
           "coordinate_space": {
-            "canvas_height": 44,
-            "canvas_width": 35,
+            "canvas_height": 69,
+            "canvas_width": 54,
             "kind": "render_space",
             "origin": "bottom_center",
             "pivot": {
-              "x": 17,
-              "y": 44
+              "x": 27,
+              "y": 69
             },
-            "scale_at_save": 0.09000000357627869
+            "scale_at_save": 0.14000000059604645
           },
-          "kind": "child",
-          "name": "child_area_1_barrel",
+          "kind": "child_top_barrel",
+          "name": "child",
           "points": [
             {
-              "x": -44,
-              "y": -489
+              "x": -79,
+              "y": -464
             },
             {
-              "x": -33,
-              "y": -478
+              "x": -79,
+              "y": -464
             },
             {
-              "x": -22,
-              "y": -489
+              "x": -79,
+              "y": -464
             },
             {
-              "x": -11,
-              "y": -489
+              "x": -79,
+              "y": -464
             },
             {
-              "x": 0,
-              "y": -489
+              "x": -50,
+              "y": -464
             },
             {
-              "x": 11,
-              "y": -489
+              "x": -50,
+              "y": -464
             },
             {
-              "x": 22,
-              "y": -489
+              "x": -50,
+              "y": -464
             },
             {
-              "x": 33,
-              "y": -489
+              "x": -50,
+              "y": -464
             },
             {
-              "x": 44,
-              "y": -478
+              "x": -21,
+              "y": -464
             },
             {
-              "x": 56,
-              "y": -478
+              "x": -21,
+              "y": -464
             },
             {
-              "x": 67,
-              "y": -489
+              "x": -21,
+              "y": -464
             },
             {
-              "x": 78,
-              "y": -478
+              "x": -21,
+              "y": -464
             },
             {
-              "x": 89,
-              "y": -478
+              "x": 7,
+              "y": -464
             },
             {
-              "x": 100,
-              "y": -478
+              "x": 7,
+              "y": -464
             },
             {
-              "x": 111,
-              "y": -478
+              "x": 7,
+              "y": -464
             },
             {
-              "x": 122,
-              "y": -478
+              "x": 7,
+              "y": -464
             },
             {
-              "x": 133,
-              "y": -467
+              "x": 36,
+              "y": -464
             },
             {
-              "x": 144,
-              "y": -456
+              "x": 36,
+              "y": -464
             },
             {
-              "x": 156,
-              "y": -456
+              "x": 36,
+              "y": -464
             },
             {
-              "x": 156,
-              "y": -444
+              "x": 36,
+              "y": -464
             },
             {
-              "x": 167,
-              "y": -433
+              "x": 64,
+              "y": -464
             },
             {
-              "x": 167,
-              "y": -422
+              "x": 64,
+              "y": -464
             },
             {
-              "x": 167,
-              "y": -411
+              "x": 64,
+              "y": -464
             },
             {
-              "x": 167,
-              "y": -400
+              "x": 64,
+              "y": -464
             },
             {
-              "x": 178,
-              "y": -389
+              "x": 93,
+              "y": -464
             },
             {
-              "x": 167,
-              "y": -389
+              "x": 93,
+              "y": -464
             },
             {
-              "x": 156,
-              "y": -389
+              "x": 93,
+              "y": -464
             },
             {
-              "x": 144,
-              "y": -389
+              "x": 93,
+              "y": -436
             },
             {
-              "x": 133,
-              "y": -389
+              "x": 93,
+              "y": -436
             },
             {
-              "x": 122,
-              "y": -389
+              "x": 93,
+              "y": -436
             },
             {
-              "x": 111,
-              "y": -389
+              "x": 93,
+              "y": -436
             },
             {
-              "x": 100,
-              "y": -389
+              "x": 93,
+              "y": -436
             },
             {
-              "x": 89,
-              "y": -389
+              "x": 93,
+              "y": -436
             },
             {
-              "x": 78,
-              "y": -389
+              "x": 64,
+              "y": -436
             },
             {
-              "x": 67,
-              "y": -389
+              "x": 64,
+              "y": -436
             },
             {
-              "x": 56,
-              "y": -389
+              "x": 64,
+              "y": -436
             },
             {
-              "x": 44,
-              "y": -389
+              "x": 64,
+              "y": -436
             },
             {
-              "x": 33,
-              "y": -389
+              "x": 36,
+              "y": -436
             },
             {
-              "x": 22,
-              "y": -389
+              "x": 36,
+              "y": -436
             },
             {
-              "x": 11,
-              "y": -389
+              "x": 36,
+              "y": -436
             },
             {
-              "x": 0,
-              "y": -389
+              "x": 36,
+              "y": -436
             },
             {
-              "x": -11,
-              "y": -389
+              "x": 7,
+              "y": -436
             },
             {
-              "x": -22,
-              "y": -389
+              "x": 7,
+              "y": -436
             },
             {
-              "x": -33,
-              "y": -389
+              "x": 7,
+              "y": -436
             },
             {
-              "x": -44,
-              "y": -389
+              "x": 7,
+              "y": -436
             },
             {
-              "x": -56,
-              "y": -389
+              "x": -21,
+              "y": -436
             },
             {
-              "x": -67,
-              "y": -389
+              "x": -21,
+              "y": -436
             },
             {
-              "x": -78,
-              "y": -389
+              "x": -21,
+              "y": -436
             },
             {
-              "x": -89,
-              "y": -389
+              "x": -21,
+              "y": -436
             },
             {
-              "x": -100,
-              "y": -389
+              "x": -50,
+              "y": -436
             },
             {
-              "x": -111,
-              "y": -389
+              "x": -50,
+              "y": -436
             },
             {
-              "x": -122,
-              "y": -389
+              "x": -50,
+              "y": -436
             },
             {
-              "x": -133,
-              "y": -389
+              "x": -50,
+              "y": -436
             },
             {
-              "x": -144,
-              "y": -389
+              "x": -79,
+              "y": -436
             },
             {
-              "x": -156,
-              "y": -389
+              "x": -79,
+              "y": -436
             },
             {
-              "x": -167,
-              "y": -389
+              "x": -79,
+              "y": -436
             },
             {
-              "x": -156,
-              "y": -400
+              "x": -79,
+              "y": -436
             },
             {
-              "x": -156,
-              "y": -411
+              "x": -79,
+              "y": -436
             },
             {
-              "x": -156,
-              "y": -422
+              "x": -79,
+              "y": -436
             },
             {
-              "x": -144,
-              "y": -433
-            },
-            {
-              "x": -144,
-              "y": -444
-            },
-            {
-              "x": -133,
-              "y": -456
-            },
-            {
-              "x": -122,
-              "y": -467
-            },
-            {
-              "x": -111,
-              "y": -467
-            },
-            {
-              "x": -100,
-              "y": -467
-            },
-            {
-              "x": -89,
-              "y": -478
-            },
-            {
-              "x": -78,
-              "y": -478
-            },
-            {
-              "x": -67,
-              "y": -478
-            },
-            {
-              "x": -56,
-              "y": -478
+              "x": -79,
+              "y": -436
             }
           ],
-          "resolution": 0,
+          "resolution": 2,
           "schema_version": 2,
-          "type": "child"
+          "type": "child_top_barrel"
         }
       ],
       "asset_name": "Barrel",
@@ -1371,7 +891,7 @@
           "spawn_id": "spn-37f623fb75ae"
         }
       ],
-      "start": "SRC/assets/Barrel/collision",
+      "start": "default",
       "tags": [],
       "update_radius": 1000,
       "z_threshold": -10
@@ -5193,184 +4713,6 @@
     },
     "Bomb": {
       "animations": {
-        "backward": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
-          "custom_animation_controller_key": "SRC/assets/Bomb",
-          "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": true,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              1,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              5,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              26,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              26,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              16,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 80
-          },
-          "number_of_frames": 16,
-          "on_end": "SRC/assets/Bomb/default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "SRC/assets/Bomb/default",
-            "path": "SRC/assets/Bomb"
-          },
-          "speed_factor": -4
-        },
         "default": {
           "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
           "custom_animation_controller_key": "SRC/assets/Bomb",
@@ -5517,529 +4859,45 @@
           },
           "speed_factor": -3
         },
-        "forward": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
-          "custom_animation_controller_key": "SRC/assets/Bomb",
+        "left": {
           "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": true,
+          "locked": false,
           "loop": false,
           "movement": [
             [
               0,
               0
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -1,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -5,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -26,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -26,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -16,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
             ]
           ],
           "movement_total": {
             "dx": 0,
-            "dy": -80
-          },
-          "number_of_frames": 16,
-          "on_end": "SRC/assets/Bomb/default",
-          "reverse_source": true,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "backward",
-            "path": "SRC/assets/Bomb"
-          },
-          "speed_factor": -4
-        },
-        "left": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
-          "custom_animation_controller_key": "SRC/assets/Bomb",
-          "flipped_source": true,
-          "has_custom_animation_controller": false,
-          "locked": true,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -1,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -6,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -5,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -26,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -26,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -16,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": -80,
             "dy": 0
           },
-          "number_of_frames": 16,
-          "on_end": "SRC/assets/Bomb/default",
+          "number_of_frames": 1,
+          "on_end": "default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
-            "kind": "animation",
-            "name": "right",
-            "path": ""
+            "kind": "folder",
+            "name": null,
+            "path": "left"
           },
-          "speed_factor": -4
+          "speed_factor": 1
         },
         "right": {
           "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
           "custom_animation_controller_key": "SRC/assets/Bomb",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": false
+          },
           "flipped_source": false,
           "has_custom_animation_controller": false,
           "locked": true,
           "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              1,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              6,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              5,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              26,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              26,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              16,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": 80,
-            "dy": 0
-          },
           "number_of_frames": 16,
           "on_end": "SRC/assets/Bomb/default",
           "reverse_source": false,
@@ -6048,8 +4906,7 @@
             "kind": "animation",
             "name": "default",
             "path": ""
-          },
-          "speed_factor": -4
+          }
         }
       },
       "anti_tags": [],
@@ -8296,7 +7153,7 @@
           "speed_factor": -2
         },
         "default": {
-          "custom_animation_controller_hpp_path": "C:\\Users\\cal_m\\OneDrive\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\ENGINE\\custom_controllers\\Davey_default_controller.hpp",
+          "custom_animation_controller_hpp_path": "C:\\Users\\cal_m\\OneDrive\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\ENGINE\\animation_update\\custom_controllers\\Davey_default_controller.hpp",
           "custom_animation_controller_key": "Davey_default_controller",
           "flipped_source": false,
           "has_custom_animation_controller": true,
@@ -15266,7 +14123,7 @@
           ],
           "movement_total": {
             "dx": 0,
-            "dy": 40
+            "dy": 0
           },
           "number_of_frames": 8,
           "on_end": "SRC/assets/Vibble/default",
@@ -15367,7 +14224,7 @@
             "dy": 0
           },
           "number_of_frames": 8,
-          "on_end": "SRC/assets/Vibble/default",
+          "on_end": "default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
@@ -15419,7 +14276,7 @@
             ]
           ],
           "movement_total": {
-            "dx": 40,
+            "dx": 0,
             "dy": 0
           },
           "number_of_frames": 8,
@@ -16919,10 +15776,22 @@
         "foreshorten_strength": 0.5199999809265137,
         "height_at_zoom1": 486.0,
         "min_visible_screen_ratio": 0.007000000216066837,
+        "motion_smoothing_max_step": 8000.0,
+        "motion_smoothing_method": 2,
+        "motion_smoothing_snap_threshold": 0.25,
+        "motion_smoothing_spring_frequency": 5.0,
+        "motion_smoothing_tau": 0.0,
+        "parallax_smoothing_lerp_rate": 0.0,
+        "parallax_smoothing_max_step": 8000.0,
+        "parallax_smoothing_method": 2,
+        "parallax_smoothing_snap_threshold": 0.5,
+        "parallax_smoothing_spring_frequency": 6.0,
         "parallax_strength": 36.25,
         "realism_enabled": true,
         "render_distance": 1380.0,
         "render_quality_percent": 10,
+        "scale_hysteresis_margin": 0.05000000074505806,
+        "smooth_motion_zoom": true,
         "tripod_distance_y": -1605.0
       },
       "content_root": "MAPS/FORREST",
@@ -17067,10 +15936,12 @@
           ]
         },
         {
+          "bounding_extent": 2000.0,
           "level": 2,
           "max_rooms": 9,
           "min_rooms": 1,
           "name": "layer_2",
+          "ring_radius": 9994.0,
           "rooms": [
             {
               "max_instances": 3,
@@ -17240,12 +16111,10 @@
         "frame_blend_falloff_frames": 15,
         "opacity_sensitivity_percent": 100.0,
         "opacity_strength": 1.0,
-        "parallax_strength": 1.0,
         "sampling_weights": {
           "dynamic_weight": 1.0,
           "static_weight": 0.0
         },
-        "scale_strength": 1.0,
         "shadow_lut": [
           {
             "brightness": 0.0,
@@ -17261,24 +16130,33 @@
           }
         ],
         "virtual_light_map": {
+          "enable_offset": true,
+          "enable_opacity": true,
+          "grid_subdivide": 1,
           "horizontal_falloff": 1.9900000095367432,
+          "light_grid_subdivide": 1,
           "map_light_dir_offset_strength": 0.0,
           "max_offset_x": 93.93000030517578,
           "max_offset_y": 6.46999979019165,
-          "max_scale_percent": 95,
-          "min_scale_percent": 18,
-          "parallax_percent": 4.03000020980835,
+          "max_opacity": 1.0,
+          "min_opacity": 0.0,
+          "offset_horizontal_falloff": 1.9900000095367432,
+          "offset_search_radius": 3,
+          "offset_vertical_falloff": 1.909999966621399,
+          "opacity_boost": 0.0,
+          "opacity_horizontal_falloff": 1.9900000095367432,
+          "opacity_search_radius": 3,
+          "opacity_vertical_falloff": 1.909999966621399,
           "search_radius": 3,
-          "shadow_scale": 1.3600000143051147,
           "vertical_falloff": 1.909999966621399
         }
       },
       "rooms_data": {
         "NewRoom": {
           "display_color": [
-            31,
             204,
-            194,
+            31,
+            105,
             255
           ],
           "name": "NewRoom",
@@ -17287,9 +16165,9 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            204,
-            138,
-            31,
+            226,
+            85,
+            242,
             255
           ],
           "edge_smoothness": 5,
@@ -17360,9 +16238,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            176,
-            204,
-            31,
+            242,
+            85,
+            136,
             255
           ],
           "edge_smoothness": 4,
@@ -17436,9 +16314,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            115,
+            235,
             242,
-            85,
+            36,
             255
           ],
           "edge_smoothness": 4,
@@ -17516,7 +16394,7 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            209,
+            141,
             85,
             242,
             255
@@ -17555,6 +16433,8 @@
               "enforce_spacing": false,
               "max_number": 8,
               "min_number": 4,
+              "origional_height": 2840,
+              "origional_width": 3040,
               "position": "Random",
               "priority": 0,
               "resolution": 5,
@@ -17581,21 +16461,48 @@
               "enforce_spacing": false,
               "max_number": 6,
               "min_number": 2,
+              "origional_height": 2840,
+              "origional_width": 3040,
               "position": "Random",
               "priority": 1,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-e96adb33a4d6"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Bomb"
+                }
+              ],
+              "display_name": "Bomb",
+              "dx": 14,
+              "dy": -554,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 2992,
+              "origional_width": 2320,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-c4adf7e7b961"
             }
           ]
         },
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
+            31,
             204,
-            71,
-            183,
+            31,
             255
           ],
           "edge_smoothness": 6,
@@ -17696,9 +16603,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
+            195,
+            36,
             242,
-            85,
-            116,
             255
           ],
           "edge_smoothness": 9,
@@ -17769,9 +16676,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            85,
-            242,
-            170,
+            118,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 8,
@@ -17842,9 +16749,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            240,
-            242,
-            85,
+            31,
+            204,
+            136,
             255
           ],
           "edge_smoothness": 6,
@@ -17911,9 +16818,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
-            36,
-            143,
-            242,
+            204,
+            94,
+            71,
             255
           ],
           "edge_smoothness": 6,
@@ -17980,9 +16887,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            61,
-            242,
-            69,
+            204,
+            31,
+            48,
             255
           ],
           "edge_smoothness": 2,
@@ -18031,8 +16938,8 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            154,
-            85,
+            36,
+            137,
             242,
             255
           ],
@@ -18101,15 +17008,40 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-bc0cdcdfd7a9"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "car"
+                }
+              ],
+              "display_name": "car",
+              "dx": 82,
+              "dy": -419,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 2472,
+              "origional_width": 2560,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-4f686defbd76"
             }
           ]
         },
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            204,
-            31,
-            114,
+            94,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 9,
@@ -18179,9 +17111,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            36,
-            226,
+            177,
             242,
+            36,
             255
           ],
           "edge_smoothness": 7,
@@ -18255,9 +17187,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            242,
-            115,
-            61,
+            204,
+            71,
+            173,
             255
           ],
           "edge_smoothness": 6,
@@ -18335,9 +17267,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            31,
-            204,
-            86,
+            34,
+            190,
+            224,
             255
           ],
           "edge_smoothness": 10,
@@ -18435,6 +17367,7 @@
               "origional_width": 2149,
               "perimeter_radius": 486,
               "position": "Perimeter",
+              "priority": 2,
               "radius": 580,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
@@ -18446,9 +17379,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            145,
-            204,
-            71,
+            85,
+            114,
+            242,
             255
           ],
           "edge_smoothness": 5,
@@ -18518,9 +17451,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            140,
-            242,
             36,
+            64,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -18588,7 +17521,7 @@
           "curvyness": 3,
           "display_color": [
             204,
-            193,
+            171,
             71,
             255
           ],
@@ -18663,9 +17596,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
-            127,
-            71,
-            204,
+            242,
+            61,
+            87,
             255
           ],
           "edge_smoothness": 5,
@@ -18739,36 +17672,17 @@
         "spawn": {
           "areas": [
             {
-              "anchor": {
-                "x": 0,
-                "y": 0
-              },
-              "anchor_relative_to_center": true,
-              "kind": "Spawn",
-              "name": "spawning_area_new",
-              "points": [
-                {
-                  "x": 388,
-                  "y": -241
-                },
-                {
-                  "x": 530,
-                  "y": 69
-                },
-                {
-                  "x": 154,
-                  "y": 108
-                }
-              ],
-              "resolution": 0,
+              "name": "spawning_area",
+              "points": [],
+              "resolution": 3,
               "type": "spawning"
             }
           ],
           "curvyness": 2,
           "display_color": [
-            68,
-            36,
             242,
+            36,
+            139,
             255
           ],
           "edge_smoothness": 101,
@@ -18950,8 +17864,8 @@
           "curvyness": 3,
           "display_color": [
             242,
-            85,
-            208,
+            36,
+            237,
             255
           ],
           "edge_smoothness": 6,
@@ -19022,8 +17936,8 @@
           "curvyness": 3,
           "display_color": [
             242,
-            166,
-            36,
+            85,
+            198,
             255
           ],
           "edge_smoothness": 7,
@@ -19091,9 +18005,9 @@
       "trails_data": {
         "NewTrail": {
           "display_color": [
+            172,
             242,
             85,
-            153,
             255
           ],
           "edge_smoothness": 2,
@@ -19111,9 +18025,9 @@
         "basic": {
           "curvyness": 4,
           "display_color": [
-            204,
-            80,
-            31,
+            242,
+            239,
+            36,
             255
           ],
           "edge_smoothness": 2,

@@ -34,6 +34,7 @@ public:
     void set_on_add_candidate(std::function<void(const std::string&)> cb);
     void hide_search();
     void update_search(const Input& input);
+    void set_search_extra_results_provider(SearchAssets::ExtraResultsProvider provider);
 
 private:
     struct CandidateInfo {
@@ -93,6 +94,7 @@ private:
     bool collapsed_ = false;
     SDL_Rect content_rect_{0, 0, 0, 0};
     std::unique_ptr<SearchAssets> search_assets_{};
+    SearchAssets::ExtraResultsProvider search_extra_results_provider_{};
     SDL_Rect search_rect_{0, 0, 0, 0};
     int screen_w_ = 0;
     int screen_h_ = 0;

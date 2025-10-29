@@ -52,34 +52,93 @@ std::string make_method_setting_key(const std::string& method) {
     key += canonicalize_method_string(method);
     return key;
 }
+
+}
+
+AssetFilterBar::FilterState& AssetFilterBar::persistent_state() {
+    static FilterState state{};
+    return state;
+}
+
+bool& AssetFilterBar::persistent_state_initialized_flag() {
+    static bool initialized = false;
+    return initialized;
+}
+
+bool& AssetFilterBar::persistent_state_loaded_flag() {
+    static bool loaded = false;
+    return loaded;
+}
+
+bool& AssetFilterBar::persistent_filters_expanded_flag() {
+    static bool expanded = false;
+    return expanded;
+}
+
+void AssetFilterBar::ensure_persistent_state_loaded() {
+    if (persistent_state_loaded_flag()) {
+        return;
+    }
+    persistent_state_loaded_flag() = true;
+    persistent_state_initialized_flag() = devmode::ui_settings::load_bool(kSettingsInitializedKey, false);
+    if (!persistent_state_initialized_flag()) {
+        FilterState& state = persistent_state();
+        state.map_assets = true;
+        state.current_room = true;
+        persistent_filters_expanded_flag() = false;
+        return;
+    }
+    FilterState& state = persistent_state();
+    state.map_assets = devmode::ui_settings::load_bool(kSettingsMapAssetsKey, true);
+    state.current_room = devmode::ui_settings::load_bool(kSettingsCurrentRoomKey, true);
+    persistent_filters_expanded_flag() = devmode::ui_settings::load_bool(kSettingsFiltersExpandedKey, false);
 }
 
 AssetFilterBar::AssetFilterBar() = default;
 AssetFilterBar::~AssetFilterBar() = default;
 
+AssetFilterBar::FilterState& AssetFilterBar::mutable_state() {
+    if (!state_) {
+        ensure_persistent_state_loaded();
+        state_ = &persistent_state();
+        has_saved_state_ = persistent_state_initialized_flag();
+        filters_expanded_ = persistent_filters_expanded_flag();
+        if (!has_saved_state_) {
+            state_->map_assets = true;
+            state_->current_room = true;
+        }
+    }
+    return *state_;
+}
+
+const AssetFilterBar::FilterState& AssetFilterBar::state() const {
+    return const_cast<AssetFilterBar*>(this)->mutable_state();
+}
+
 void AssetFilterBar::initialize() {
     entries_.clear();
     load_persisted_state();
 
+    FilterState& state_ref = mutable_state();
     const bool use_saved_state = has_saved_state_;
 
     FilterEntry map_entry;
     map_entry.id = "map_assets";
     map_entry.kind = FilterKind::MapAssets;
-    const bool map_assets_value = use_saved_state ? state_.map_assets : true;
+    const bool map_assets_value = use_saved_state ? state_ref.map_assets : true;
     map_entry.checkbox = std::make_unique<DMCheckbox>("Map Assets", map_assets_value);
     if (!use_saved_state) {
-        state_.map_assets = map_assets_value;
+        state_ref.map_assets = map_assets_value;
     }
     entries_.push_back(std::move(map_entry));
 
     FilterEntry room_entry;
     room_entry.id = "current_room";
     room_entry.kind = FilterKind::CurrentRoom;
-    const bool current_room_value = use_saved_state ? state_.current_room : true;
+    const bool current_room_value = use_saved_state ? state_ref.current_room : true;
     room_entry.checkbox = std::make_unique<DMCheckbox>("Current Room", current_room_value);
     if (!use_saved_state) {
-        state_.current_room = current_room_value;
+        state_ref.current_room = current_room_value;
     }
     entries_.push_back(std::move(room_entry));
 
@@ -106,7 +165,7 @@ void AssetFilterBar::initialize() {
             checkbox_value = load_method_filter_value(canonical, checkbox_value);
         }
         entry.checkbox = std::make_unique<DMCheckbox>(format_method_label(method), checkbox_value);
-        state_.method_filters[canonical] = checkbox_value;
+        state_ref.method_filters[canonical] = checkbox_value;
         known_methods.insert(canonical);
         entries_.push_back(std::move(entry));
     }
@@ -125,22 +184,22 @@ void AssetFilterBar::initialize() {
             checkbox_value = load_type_filter_value(canonical, checkbox_value);
         }
         entry.checkbox = std::make_unique<DMCheckbox>(format_type_label(type), checkbox_value);
-        state_.type_filters[canonical] = checkbox_value;
+        state_ref.type_filters[canonical] = checkbox_value;
         known_types.insert(canonical);
         entries_.push_back(std::move(entry));
     }
 
     if (use_saved_state) {
-        for (auto it = state_.type_filters.begin(); it != state_.type_filters.end();) {
+        for (auto it = state_ref.type_filters.begin(); it != state_ref.type_filters.end();) {
             if (known_types.find(it->first) == known_types.end()) {
-                it = state_.type_filters.erase(it);
+                it = state_ref.type_filters.erase(it);
             } else {
                 ++it;
             }
         }
-        for (auto it = state_.method_filters.begin(); it != state_.method_filters.end();) {
+        for (auto it = state_ref.method_filters.begin(); it != state_ref.method_filters.end();) {
             if (known_methods.find(it->first) == known_methods.end()) {
-                it = state_.method_filters.erase(it);
+                it = state_ref.method_filters.erase(it);
             } else {
                 ++it;
             }
@@ -458,12 +517,13 @@ void AssetFilterBar::reset() {
                 break;
         }
     }
-    state_.map_assets = true;
-    state_.current_room = true;
-    for (auto& kv : state_.type_filters) {
+    FilterState& state_ref = mutable_state();
+    state_ref.map_assets = true;
+    state_ref.current_room = true;
+    for (auto& kv : state_ref.type_filters) {
         kv.second = default_type_enabled(kv.first);
     }
-    for (auto& kv : state_.method_filters) {
+    for (auto& kv : state_ref.method_filters) {
         kv.second = default_method_enabled(kv.first);
     }
     sync_state_from_ui();
@@ -496,11 +556,12 @@ bool AssetFilterBar::passes(const Asset& asset) const {
         return false;
     }
     const bool is_map_asset = !asset.spawn_id.empty() && map_spawn_ids_.find(asset.spawn_id) != map_spawn_ids_.end();
-    if (is_map_asset && !state_.map_assets) {
+    const FilterState& state_ref = state();
+    if (is_map_asset && !state_ref.map_assets) {
         return false;
     }
     const bool is_room_asset = !asset.spawn_id.empty() && room_spawn_ids_.find(asset.spawn_id) != room_spawn_ids_.end();
-    if (is_room_asset && !state_.current_room) {
+    if (is_room_asset && !state_ref.current_room) {
         return false;
     }
     return true;
@@ -533,6 +594,7 @@ void AssetFilterBar::rebuild_room_spawn_ids() {
 }
 
 void AssetFilterBar::sync_state_from_ui() {
+    FilterState& state_ref = mutable_state();
     for (auto& entry : entries_) {
         if (!entry.checkbox) {
             continue;
@@ -540,16 +602,16 @@ void AssetFilterBar::sync_state_from_ui() {
         const bool value = entry.checkbox->value();
         switch (entry.kind) {
         case FilterKind::MapAssets:
-            state_.map_assets = value;
+            state_ref.map_assets = value;
             break;
         case FilterKind::CurrentRoom:
-            state_.current_room = value;
+            state_ref.current_room = value;
             break;
         case FilterKind::Type:
-            state_.type_filters[entry.id] = value;
+            state_ref.type_filters[entry.id] = value;
             break;
         case FilterKind::SpawnMethod:
-            state_.method_filters[entry.id] = value;
+            state_ref.method_filters[entry.id] = value;
             break;
         }
     }
@@ -747,16 +809,18 @@ void AssetFilterBar::layout_filter_checkboxes() {
 }
 
 bool AssetFilterBar::type_filter_enabled(const std::string& type) const {
-    auto it = state_.type_filters.find(type);
-    if (it == state_.type_filters.end()) {
+    const FilterState& state_ref = state();
+    auto it = state_ref.type_filters.find(type);
+    if (it == state_ref.type_filters.end()) {
         return true;
     }
     return it->second;
 }
 
 bool AssetFilterBar::method_filter_enabled(const std::string& method) const {
-    auto it = state_.method_filters.find(method);
-    if (it == state_.method_filters.end()) {
+    const FilterState& state_ref = state();
+    auto it = state_ref.method_filters.find(method);
+    if (it == state_ref.method_filters.end()) {
         return true;
     }
     return it->second;
@@ -859,34 +923,39 @@ void AssetFilterBar::collect_spawn_ids(const nlohmann::json& node, std::unordere
 }
 
 void AssetFilterBar::load_persisted_state() {
-    state_.type_filters.clear();
-    state_.method_filters.clear();
-    has_saved_state_ = devmode::ui_settings::load_bool(kSettingsInitializedKey, false);
+    ensure_persistent_state_loaded();
+    FilterState& state_ref = mutable_state();
+    state_ref.type_filters.clear();
+    state_ref.method_filters.clear();
+    has_saved_state_ = persistent_state_initialized_flag();
     if (!has_saved_state_) {
-        state_.map_assets = true;
-        state_.current_room = true;
+        state_ref.map_assets = true;
+        state_ref.current_room = true;
         filters_expanded_ = false;
         return;
     }
-    state_.map_assets = devmode::ui_settings::load_bool(kSettingsMapAssetsKey, true);
-    state_.current_room = devmode::ui_settings::load_bool(kSettingsCurrentRoomKey, true);
-    filters_expanded_ = devmode::ui_settings::load_bool(kSettingsFiltersExpandedKey, false);
+    state_ref.map_assets = devmode::ui_settings::load_bool(kSettingsMapAssetsKey, true);
+    state_ref.current_room = devmode::ui_settings::load_bool(kSettingsCurrentRoomKey, true);
+    filters_expanded_ = persistent_filters_expanded_flag();
 }
 
 void AssetFilterBar::persist_state() {
+    FilterState& state_ref = mutable_state();
     devmode::ui_settings::save_bool(kSettingsInitializedKey, true);
-    devmode::ui_settings::save_bool(kSettingsMapAssetsKey, state_.map_assets);
-    devmode::ui_settings::save_bool(kSettingsCurrentRoomKey, state_.current_room);
-    for (const auto& kv : state_.type_filters) {
+    devmode::ui_settings::save_bool(kSettingsMapAssetsKey, state_ref.map_assets);
+    devmode::ui_settings::save_bool(kSettingsCurrentRoomKey, state_ref.current_room);
+    for (const auto& kv : state_ref.type_filters) {
         devmode::ui_settings::save_bool(make_type_setting_key(kv.first), kv.second);
     }
-    for (const auto& kv : state_.method_filters) {
+    for (const auto& kv : state_ref.method_filters) {
         devmode::ui_settings::save_bool(make_method_setting_key(kv.first), kv.second);
     }
     has_saved_state_ = true;
+    persistent_state_initialized_flag() = true;
 }
 
 void AssetFilterBar::persist_filters_expanded() const {
+    persistent_filters_expanded_flag() = filters_expanded_;
     devmode::ui_settings::save_bool(kSettingsFiltersExpandedKey, filters_expanded_);
 }
 

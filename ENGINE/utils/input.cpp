@@ -1,5 +1,7 @@
 #include "input.hpp"
 
+#include <utility>
+
 namespace {
 Input::Button to_button(Uint8 sdl_button) {
     switch (sdl_button) {
@@ -187,6 +189,29 @@ void Input::consumeEvent(const SDL_Event& e) {
     default:
         break;
     }
+}
+
+void Input::set_screen_to_world_mapper(ScreenToWorldFunction fn) {
+    screen_to_world_fn_ = std::move(fn);
+}
+
+void Input::clear_screen_to_world_mapper() {
+    screen_to_world_fn_ = {};
+}
+
+std::optional<SDL_Point> Input::screen_to_world(SDL_Point screen,
+                                                float parallax_x,
+                                                float parallax_y) const {
+    if (!screen_to_world_fn_) {
+        return std::nullopt;
+    }
+    return screen_to_world_fn_(screen, parallax_x, parallax_y);
+}
+
+std::optional<SDL_Point> Input::mouse_world_position(float parallax_x,
+                                                     float parallax_y) const {
+    SDL_Point screen{x_, y_};
+    return screen_to_world(screen, parallax_x, parallax_y);
 }
 
 void Input::refresh_click_buffer_active() {

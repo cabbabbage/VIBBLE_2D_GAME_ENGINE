@@ -77,6 +77,7 @@ public:
 
     void open_asset_info_editor(const std::shared_ptr<AssetInfo>& info);
     void open_asset_info_editor_for_asset(Asset* asset);
+    void open_area_info_editor(Room* room, const std::string& area_name);
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
     bool has_active_modal() const;
@@ -116,6 +117,12 @@ protected:
     void handle_spawn_config_change(const nlohmann::json& entry);
 
 private:
+    // Area drag helpers
+    void begin_area_drag_session(const std::string& area_name, const SDL_Point& world_mouse);
+    void update_area_drag_session(const SDL_Point& world_mouse);
+    void finalize_area_drag_session();
+    nlohmann::json* find_area_entry_json(Room* room, const std::string& area_name) const;
+    void ensure_area_anchor_spawn_entry(Room* room, const std::string& area_name);
     enum class BlockingPanel {
         Camera,
         Lighting,
@@ -158,6 +165,7 @@ private:
     Asset* hit_test_asset(SDL_Point screen_point) const;
     void update_hover_state(Asset* hit);
     void handle_click(const Input& input);
+    std::optional<std::string> find_room_area_at_point(SDL_Point world_point);
     void update_highlighted_assets();
     bool is_ui_blocking_input(int mx, int my) const;
     bool should_enable_mouse_controls() const;
@@ -345,6 +353,14 @@ private:
     std::optional<std::string> active_spawn_group_id_{};
     bool suppress_spawn_group_close_clear_ = false;
     std::unique_ptr<SpawnGroupConfig> spawn_group_panel_{};
+
+    // Area dragging state
+    bool area_dragging_ = false;
+    bool area_drag_moved_ = false;
+    std::string area_drag_name_;
+    int area_drag_resolution_ = 0;
+    SDL_Point area_drag_start_world_{0, 0};
+    SDL_Point area_drag_last_world_{0, 0};
 
     struct SpawnGroupClipboard {
         nlohmann::json entry;

@@ -12,6 +12,8 @@
 #include "utils/area.hpp"
 #include "asset_info.hpp"
 
+#include "utils/transform_smoothing.hpp"
+
 #include "asset_controller.hpp"
 #include "animation_update/animation_update.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
@@ -57,7 +59,7 @@ class Asset {
     bool is_current_animation_locked_in_progress() const;
     bool is_current_animation_last_frame() const;
     bool is_current_animation_looping() const;
-    void add_child(Asset* child);
+    void add_child(Asset* asset_child);
 
     struct ScaleUsageStats {
         float requested_scale = 1.0f;
@@ -71,6 +73,13 @@ class Asset {
 };
 
     const ScaleUsageStats& last_scale_usage() const { return last_scale_usage_; }
+    struct ScaleVariantState {
+        int   last_variant_index = 0;
+        float hysteresis_min     = 0.0f;
+        float hysteresis_max     = std::numeric_limits<float>::max();
+    };
+
+    const ScaleVariantState& scale_variant_state() const { return scale_variant_state_; }
 
     void set_z_offset(int z);
     void set_shading_group(int x);
@@ -103,14 +112,15 @@ class Asset {
     void clear_grid_residency_cache();
     bool has_grid_residency_cache() const;
     SDL_Point grid_residency_cache() const;
-    RenderTextureCache& light_front_cache();
-    RenderTextureCache& light_front_cache() const;
-    RenderTextureCache& light_behind_cache();
-    RenderTextureCache& light_behind_cache() const;
     RenderTextureCache& shadow_mask_cache();
     RenderTextureCache& shadow_mask_cache() const;
     RenderTextureCache& motion_blur_cache();
     RenderTextureCache& motion_blur_cache() const;
+
+    float smoothed_translation_x() const;
+    float smoothed_translation_y() const;
+    float smoothed_scale() const;
+    float smoothed_alpha() const;
     Asset* parent = nullptr;
     std::shared_ptr<AssetInfo> info;
     std::string current_animation;
@@ -123,19 +133,22 @@ class Asset {
     float distance_from_camera = 0.0f;
     float angle_from_camera = 0.0f;
 
-    std::vector<Asset*> children;
+    std::vector<Asset*> asset_children;
     int depth = 0;
     bool is_shaded = false;
     bool dead = false;
     bool static_frame = true;
     int cached_w = 0;
     int cached_h = 0;
+    std::uint64_t last_render_frame_id = 0;
     std::string spawn_id;
     std::string spawn_method;
     std::string owning_room_name_;
     std::unique_ptr<AnimationUpdate> anim_;
+    std::unique_ptr<class AnimationRuntime> anim_runtime_;
         private:
     friend class AnimationUpdate;
+    friend class AnimationRuntime;
     friend class Move;
     friend class AssetInfoUI;
     friend class RenderAsset;
@@ -184,17 +197,32 @@ class Asset {
     float        last_scaled_camera_scale_ = -1.0f;
 
     ScaleUsageStats last_scale_usage_{};
+    ScaleVariantState scale_variant_state_{};
 
-    void update_scale_usage(float requested, float texture_scale, float remainder, int variant_index);
+    void update_scale_usage(float requested,
+                            float texture_scale,
+                            float remainder,
+                            int   variant_index,
+                            float hysteresis_min,
+                            float hysteresis_max);
+    void set_smoothing_params(const TransformSmoothingParams& translation,
+                              const TransformSmoothingParams& scale,
+                              const TransformSmoothingParams& alpha);
     void clear_render_caches();
     static void destroy_render_cache(RenderTextureCache& cache);
 
-    mutable RenderTextureCache light_front_cache_{};
-    mutable RenderTextureCache light_behind_cache_{};
     mutable RenderTextureCache shadow_mask_cache_{};
     mutable RenderTextureCache motion_blur_cache_{};
 
+    void reset_scale_variant_state();
+
+    TransformSmoothingState translation_smoothing_x_{};
+    TransformSmoothingState translation_smoothing_y_{};
+    TransformSmoothingState scale_smoothing_{};
+    TransformSmoothingState alpha_smoothing_{};
+
     std::uint64_t final_texture_revision_ = 0;
+
 };
 
 #endif

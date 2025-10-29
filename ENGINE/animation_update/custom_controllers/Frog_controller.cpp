@@ -1,8 +1,8 @@
-#include "Frog_controller.hpp"
+﻿#include "Frog_controller.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "custom_controllers/controller_path_utils.hpp"
-#include "custom_controllers/controller_visit_threshold.hpp"
+#include "animation_update/custom_controllers/controller_path_utils.hpp"
+#include "animation_update/custom_controllers/controller_visit_threshold.hpp"
 #include "utils/range_util.hpp"
 
 #include <algorithm>
@@ -43,7 +43,7 @@ void FrogController::enter_idle(int rest_ratio) {
     last_run_target_ = nullptr;
     next_run_hop_time_ms_ = 0;
 
-    self_->anim_->move({}, controller_utils::controller_visit_threshold(self_));
+    self_->anim_->auto_move({}, controller_utils::controller_visit_threshold(self_));
     self_->anim_->path_requested = true;
     schedule_next_idle_hop();
 }
@@ -134,7 +134,7 @@ void FrogController::perform_idle_hop() {
 
     std::vector<SDL_Point> path;
     path.push_back(SDL_Point{ destination.x - self_->pos.x, destination.y - self_->pos.y });
-    self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
+    self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
     schedule_next_idle_hop();
 }
 
@@ -157,9 +157,9 @@ void FrogController::perform_run_hop(Asset* threat) {
 
     if (path.empty()) {
         const auto fallback = controller_paths::flee_path(self_, threat);
-        self_->anim_->move(fallback, controller_utils::controller_visit_threshold(self_, fallback));
+        self_->anim_->auto_move(fallback, controller_utils::controller_visit_threshold(self_, fallback));
     } else {
-        self_->anim_->move(path, controller_utils::controller_visit_threshold(self_, path));
+        self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
     }
 
     schedule_next_run_hop();
@@ -305,3 +305,4 @@ SDL_Point FrogController::flee_destination(Asset* threat) {
 
     return controller_paths::clamp_to_radius(origin, desired, radius);
 }
+

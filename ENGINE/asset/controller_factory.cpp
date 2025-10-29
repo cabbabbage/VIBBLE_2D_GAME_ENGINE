@@ -1,11 +1,11 @@
 #include "controller_factory.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "custom_controllers/Davey_controller.hpp"
-#include "custom_controllers/Vibble_controller.hpp"
-#include "custom_controllers/Frog_controller.hpp"
-#include "custom_controllers/Bomb_controller.hpp"
-#include "custom_controllers/default_controller.hpp"
+#include "animation_update/custom_controllers/Davey_controller.hpp"
+#include "animation_update/custom_controllers/Vibble_controller.hpp"
+#include "animation_update/custom_controllers/Frog_controller.hpp"
+#include "animation_update/custom_controllers/Bomb_controller.hpp"
+#include "animation_update/custom_controllers/default_controller.hpp"
 
 ControllerFactory::ControllerFactory(Assets* assets)
 : assets_(assets)

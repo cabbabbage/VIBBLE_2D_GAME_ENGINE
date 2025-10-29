@@ -2,6 +2,8 @@
 
 #include <SDL.h>
 #include <array>
+#include <functional>
+#include <optional>
 #include <vector>
 
 class Input {
@@ -47,6 +49,16 @@ public:
     bool wasScancodePressed(SDL_Scancode sc) const { return keys_pressed_[sc]; }
     bool wasScancodeReleased(SDL_Scancode sc) const { return keys_released_[sc]; }
 
+    using ScreenToWorldFunction = std::function<SDL_Point(SDL_Point, float, float)>;
+    void set_screen_to_world_mapper(ScreenToWorldFunction fn);
+    void clear_screen_to_world_mapper();
+    bool has_screen_to_world_mapper() const { return static_cast<bool>(screen_to_world_fn_); }
+    std::optional<SDL_Point> screen_to_world(SDL_Point screen,
+                                             float parallax_x = 0.0f,
+                                             float parallax_y = 0.0f) const;
+    std::optional<SDL_Point> mouse_world_position(float parallax_x = 0.0f,
+                                                  float parallax_y = 0.0f) const;
+
 private:
     bool buttons_[COUNT] = {false};
     bool prevButtons_[COUNT] = {false};
@@ -67,6 +79,8 @@ private:
     std::vector<SDL_Scancode> pressed_scancode_buffer_;
     std::vector<SDL_Scancode> released_scancode_buffer_;
     std::array<bool, SDL_NUM_SCANCODES> scancode_dirty_flags_{};
+
+    ScreenToWorldFunction screen_to_world_fn_{};
 
     void refresh_click_buffer_active();
     void refresh_button_transition_active();

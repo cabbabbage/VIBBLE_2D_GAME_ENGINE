@@ -96,6 +96,54 @@ TEST_CASE("AnimationDocument saves manifest payloads") {
     fs::remove_all(manifest_path.parent_path());
 }
 
+TEST_CASE("AnimationDocument preserves derived modifiers for referenced animations") {
+    nlohmann::json asset = {
+        {"animations",
+         {
+             {"base",
+              {
+                  {"source", {{"kind", "folder"}, {"path", "base"}}},
+                  {"number_of_frames", 2},
+              }},
+             {"mirror",
+              {
+                  {"source", {{"kind", "animation"}, {"name", "base"}}},
+                  {"reverse_source", true},
+                  {"flipped_source", true},
+                  {"derived_modifiers", {{"reverse", true}, {"flipX", true}, {"flipY", true}}},
+                  {"movement", nlohmann::json::array({nlohmann::json::array({0, 0}), nlohmann::json::array({5, -3})})},
+                  {"audio", {{"name", "clip"}, {"volume", 60}, {"effects", true}}},
+                  {"speed_factor", 3},
+              }},
+         }},
+        {"start", "base"}
+    };
+
+    animation_editor::AnimationDocument document;
+    document.load_from_manifest(asset, std::filesystem::path{}, [](const nlohmann::json&) {});
+
+    auto payload = document.animation_payload("mirror");
+    REQUIRE(payload.has_value());
+    nlohmann::json parsed = nlohmann::json::parse(*payload, nullptr, false);
+    REQUIRE(parsed.is_object());
+    REQUIRE(parsed.contains("derived_modifiers"));
+    const auto& modifiers = parsed["derived_modifiers"];
+    CHECK(modifiers.is_object());
+    CHECK(modifiers.value("reverse", false));
+    CHECK(modifiers.value("flipX", false));
+    CHECK(modifiers.value("flipY", false));
+    CHECK(modifiers.contains("flipMovementX"));
+    CHECK_FALSE(modifiers.value("flipMovementX", true));
+    CHECK(modifiers.contains("flipMovementY"));
+    CHECK_FALSE(modifiers.value("flipMovementY", true));
+    CHECK(parsed.value("reverse_source", false));
+    CHECK(parsed.value("flipped_source", false));
+    CHECK(!parsed.contains("movement"));
+    CHECK(!parsed.contains("movement_total"));
+    CHECK(!parsed.contains("audio"));
+    CHECK(!parsed.contains("speed_factor"));
+}
+
 TEST_CASE("CustomControllerService updates manifest metadata") {
     nlohmann::json manifest = {
         {"assets", {
@@ -119,7 +167,7 @@ TEST_CASE("CustomControllerService updates manifest metadata") {
 
     fs::path project_root = manifest_path.parent_path();
     fs::path engine_dir = project_root / "ENGINE";
-    fs::path controller_dir = engine_dir / "custom_controllers";
+    fs::path controller_dir = engine_dir / "animation_update" / "custom_controllers";
     fs::create_directories(controller_dir);
     fs::create_directories(engine_dir / "asset");
     fs::path asset_root = project_root / "SRC" / "TestAsset";

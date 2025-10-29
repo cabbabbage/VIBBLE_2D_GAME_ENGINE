@@ -14,6 +14,7 @@
 namespace animation_editor {
 
 class AnimationDocument;
+class PreviewProvider;
 class FrameMovementEditor {
   public:
     using CloseCallback = std::function<void()>;
@@ -22,12 +23,22 @@ class FrameMovementEditor {
 
     void set_document(std::shared_ptr<AnimationDocument> document);
     void set_animation_id(const std::string& animation_id);
-    void set_bounds(const SDL_Rect& bounds);
+    void set_layout_sections(const SDL_Rect& mode_controls_bounds,
+                             const SDL_Rect& frame_display_bounds,
+                             const SDL_Rect& frame_list_bounds);
     void set_close_callback(CloseCallback callback);
+    void set_preview_provider(std::shared_ptr<PreviewProvider> provider);
 
     void update();
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
+    void render_frame_list(SDL_Renderer* renderer) const;
+    bool handle_frame_list_event(const SDL_Event& e);
+
+    bool can_select_previous_frame() const;
+    bool can_select_next_frame() const;
+    void select_previous_frame();
+    void select_next_frame();
 
   private:
     void load_frames_from_document();
@@ -39,6 +50,7 @@ class FrameMovementEditor {
     void layout_variant_header();
     void render_variant_header(SDL_Renderer* renderer) const;
     bool handle_variant_header_event(const SDL_Event& e);
+    void layout_frame_list();
     void set_active_variant(int index, bool preserve_view);
     void update_child_frames(bool preserve_view);
     void sync_active_variant_frames();
@@ -67,19 +79,26 @@ class FrameMovementEditor {
     std::unique_ptr<MovementCanvas> canvas_;
     std::unique_ptr<TotalsPanel> totals_panel_;
     std::unique_ptr<FramePropertiesPanel> properties_panel_;
+    std::shared_ptr<PreviewProvider> preview_provider_;
     std::string animation_id_;
-    SDL_Rect bounds_{0, 0, 0, 0};
+    SDL_Rect mode_controls_rect_{0, 0, 0, 0};
+    SDL_Rect frame_display_rect_{0, 0, 0, 0};
+    SDL_Rect frame_list_rect_{0, 0, 0, 0};
     SDL_Rect header_rect_{0, 0, 0, 0};
+    SDL_Rect totals_rect_{0, 0, 0, 0};
+    SDL_Rect properties_rect_{0, 0, 0, 0};
     SDL_Rect add_button_rect_{0, 0, 0, 0};
     std::vector<MovementVariant> variants_;
     std::vector<VariantTabState> variant_tabs_;
     CloseCallback close_callback_;
     std::vector<MovementFrame> frames_;
+    std::vector<SDL_Rect> frame_item_rects_;
     int selected_index_ = 0;
     int active_variant_index_ = 0;
     bool dirty_ = false;
     bool add_button_hovered_ = false;
     bool add_button_pressed_ = false;
+    int hovered_frame_index_ = -1;
 };
 
 }

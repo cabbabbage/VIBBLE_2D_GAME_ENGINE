@@ -31,5 +31,8 @@ class LoadingScreen {
     std::string pick_random_message_from_csv(const std::filesystem::path& csv_path);
     void draw_text(TTF_Font* font, const std::string& txt, int x, int y, SDL_Color col);
     void render_justified_text(TTF_Font* font, const std::string& text, const SDL_Rect& rect, SDL_Color col);
-    void render_scaled_center(SDL_Texture* tex, int target_w, int target_h, int cx, int cy);
+    void render_scaled_center(SDL_Texture* tex, int target_w, int target_h, int cx, int cy, double angle = 0.0);
+
+    double rotation_angle_ = 0.0;
+    Uint32 last_frame_time_ = 0;
 };

@@ -34,6 +34,86 @@ void AssetSpawner::spawn(Room& room) {
         current_room_ = &room;
         map_grid_settings_ = room.map_grid_settings();
         run_spawning(room.planner.get(), spawn_area);
+
+        // Secondary pass: spawn area-local spawn_groups driven by area candidates
+        try {
+                nlohmann::json& root = room.assets_data();
+                // Build selection counts for areas based on room-level spawn groups
+                std::unordered_map<std::string, int> area_selection_counts;
+                if (room.planner) {
+                        const auto& queue = room.planner->get_spawn_queue();
+                        for (const auto& item : queue) {
+                                // Collect area candidates and weights
+                                std::vector<std::string> names;
+                                std::vector<double> weights;
+                                for (const auto& cand : item.candidates) {
+                                        if (!cand.name.empty() && room.find_area(cand.name) != nullptr) {
+                                                names.push_back(cand.name);
+                                                double w = cand.weight;
+                                                if (w < 0.0) w = 0.0;
+                                                weights.push_back(w);
+                                        }
+                                }
+                                if (names.empty()) continue;
+                                // If all weights are zero, use uniform weights
+                                bool any_positive = false;
+                                for (double w : weights) if (w > 0.0) { any_positive = true; break; }
+                                if (!any_positive) {
+                                        std::fill(weights.begin(), weights.end(), 1.0);
+                                }
+                                std::discrete_distribution<size_t> chooser(weights.begin(), weights.end());
+                                for (int i = 0; i < std::max(0, item.quantity); ++i) {
+                                        size_t idx = chooser(rng_);
+                                        if (idx < names.size()) {
+                                                area_selection_counts[names[idx]] += 1;
+                                        }
+                                }
+                        }
+                }
+
+                if (root.is_object() && root.contains("areas") && root["areas"].is_array()) {
+                        // If no area selections were requested, fall back to spawning all areas (legacy behavior)
+                        bool selective = !area_selection_counts.empty();
+                        for (auto& area_entry : root["areas"]) {
+                                if (!area_entry.is_object()) continue;
+                                auto it = area_entry.find("spawn_groups");
+                                if (it == area_entry.end() || !it->is_array() || it->empty()) continue;
+                                std::string area_name = area_entry.value("name", std::string{});
+                                if (area_name.empty()) continue;
+                                Area* area_ptr = room.find_area(area_name);
+                                if (!area_ptr) continue;
+
+                                int times = 1;
+                                if (selective) {
+                                        auto ct = area_selection_counts.find(area_name);
+                                        if (ct == area_selection_counts.end() || ct->second <= 0) {
+                                                continue; // skip areas not selected
+                                        }
+                                        times = ct->second;
+                                }
+
+                                for (int pass = 0; pass < times; ++pass) {
+                                        std::vector<nlohmann::json> sources;
+                                        sources.push_back(nlohmann::json::object());
+                                        sources.back()["spawn_groups"] = *it;
+                                        std::vector<AssetSpawnPlanner::SourceContext> contexts;
+                                        contexts.resize(1);
+                                        contexts[0].json_ref = &sources.back();
+                                        contexts[0].persist = [&area_entry](const nlohmann::json& src){
+                                                if (src.is_object() && src.contains("spawn_groups") && src["spawn_groups"].is_array()) {
+                                                        area_entry["spawn_groups"] = src["spawn_groups"];
+                                                }
+                                        };
+
+                                        AssetSpawnPlanner area_planner(sources, *area_ptr, *asset_library_, contexts);
+                                        run_spawning(&area_planner, *area_ptr);
+                                }
+                        }
+                }
+        } catch (...) {
+                // Non-fatal; ignore
+        }
+
         current_room_ = nullptr;
         room.add_room_assets(std::move(all_));
 }
@@ -110,6 +190,34 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         PercentSpawner percent;
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
+                if (current_room_) {
+                        bool has_area = false;
+                        bool has_asset = false;
+                        for (const auto& c : queue_item.candidates) {
+                                if (c.info) { has_asset = true; break; }
+                                if (!c.name.empty() && current_room_->find_area(c.name) != nullptr) {
+                                        has_area = true;
+                                }
+                        }
+                        if (has_area && !has_asset) {
+                                continue;
+                        }
+                }
+                // If this spawn entry only targets areas (no real asset candidates), skip here;
+                // the secondary pass will spawn area-local groups based on these selections.
+                if (current_room_) {
+                        bool has_area = false;
+                        bool has_asset = false;
+                        for (const auto& c : queue_item.candidates) {
+                                if (c.info) { has_asset = true; break; }
+                                if (!c.name.empty() && current_room_->find_area(c.name) != nullptr) {
+                                        has_area = true;
+                                }
+                        }
+                        if (has_area && !has_asset) {
+                                continue;
+                        }
+                }
                 const std::string& pos = queue_item.position;
 
                 if (current_room_ && !queue_item.link_area_name.empty()) {

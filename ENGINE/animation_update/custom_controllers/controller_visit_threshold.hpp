@@ -1,10 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
 
-#include "custom_controllers/controller_path_utils.hpp"
+#include "animation_update/custom_controllers/controller_path_utils.hpp"
 
 class Asset;
 
@@ -47,4 +47,5 @@ inline int controller_visit_threshold(const Asset* asset) {
 }
 
 }
+
 

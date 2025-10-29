@@ -362,6 +362,10 @@ void MapModeUI::set_button_state(HeaderMode mode, const std::string& id, bool ac
     }
 }
 
+void MapModeUI::register_floating_panel(DockableCollapsible* panel) {
+    track_floating_panel(panel);
+}
+
 void MapModeUI::track_floating_panel(DockableCollapsible* panel) {
     if (!panel) return;
     auto it = std::find(floating_panels_.begin(), floating_panels_.end(), panel);
@@ -541,6 +545,11 @@ void MapModeUI::ensure_panels() {
                    std::function<void()> on_cancel) {
                 this->begin_map_color_sampling(current, std::move(on_sample), std::move(on_cancel));
             });
+        light_panel_->set_update_map_light_callback([this](bool enabled) {
+            if (assets_) {
+                assets_->set_update_map_light_enabled(enabled);
+            }
+        });
     }
     if (!shadow_panel_) {
         shadow_panel_ = std::make_unique<MapShadowPanel>(assets_, kDefaultPanelX + 280, kDefaultPanelY);
@@ -774,19 +783,27 @@ void MapModeUI::configure_footer_buttons() {
 };
 
     if (header_mode_ == HeaderMode::Map) {
-        DevFooterBar::Button layers_btn;
-        layers_btn.id = "layers";
-        layers_btn.label = "Layers";
-        layers_btn.style_override = &DMStyles::WarnButton();
-        layers_btn.active_style_override = &DMStyles::AccentButton();
-        layers_btn.on_toggle = [this](bool active) {
-            if (active) {
-                this->set_active_panel(PanelType::Layers);
-            } else {
-                this->set_active_panel(PanelType::None);
-            }
-};
-        buttons.push_back(std::move(layers_btn));
+        const bool has_layers_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
+                                                  [](const HeaderButtonConfig& cfg) {
+                                                      return cfg.id == "layers";
+                                                  });
+
+        if (!has_layers_button) {
+            DevFooterBar::Button layers_btn;
+            layers_btn.id = "layers";
+            layers_btn.label = "Layers";
+            layers_btn.style_override = &DMStyles::WarnButton();
+            layers_btn.active_style_override = &DMStyles::AccentButton();
+            layers_btn.on_toggle = [this](bool active) {
+                if (active) {
+                    this->set_active_panel(PanelType::Layers);
+                } else {
+                    this->set_active_panel(PanelType::None);
+                }
+            };
+            buttons.push_back(std::move(layers_btn));
+        }
+
         append_custom(map_mode_buttons_, HeaderMode::Map);
 
         const bool has_lights_button = std::any_of(map_mode_buttons_.begin(), map_mode_buttons_.end(),
@@ -848,7 +865,12 @@ void MapModeUI::sync_footer_button_states() {
 void MapModeUI::update_footer_visibility() {
     if (!footer_bar_) return;
     footer_bar_->set_bounds(screen_w_, screen_h_);
-    const bool should_show = !headers_suppressed_ && (footer_always_visible_ || map_mode_active_);
+    // If the footer is configured to be always visible, honor that regardless
+    // of header suppression state. Otherwise, hide the footer only when headers
+    // are fully suppressed (not just temporarily by sliding containers) and
+    // dev map mode is inactive.
+    const bool headers_block_footer = headers_suppressed_ && !sliding_only_header_suppression_;
+    const bool should_show = footer_always_visible_ || (!headers_block_footer && map_mode_active_);
     footer_bar_->set_visible(should_show);
 }
 

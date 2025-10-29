@@ -154,7 +154,7 @@ SDL_Point choose_anchor(Kind kind,
         return default_anchor;
 }
 
-std::vector<SDL_Point> decode_points(const nlohmann::json& entry, SDL_Point anchor) {
+std::vector<SDL_Point> decode_relative_points(const nlohmann::json& entry) {
         std::vector<SDL_Point> pts;
         if (!entry.contains("points") || !entry["points"].is_array()) {
                 return pts;
@@ -164,7 +164,17 @@ std::vector<SDL_Point> decode_points(const nlohmann::json& entry, SDL_Point anch
                 if (!point.is_object()) continue;
                 int x = point.value("x", 0);
                 int y = point.value("y", 0);
-                pts.push_back(SDL_Point{anchor.x + x, anchor.y + y});
+                pts.push_back(SDL_Point{x, y});
+        }
+        return pts;
+}
+
+std::vector<SDL_Point> decode_points(const nlohmann::json& entry, SDL_Point anchor) {
+        std::vector<SDL_Point> pts;
+        auto rel = decode_relative_points(entry);
+        pts.reserve(rel.size());
+        for (const auto& point : rel) {
+                pts.push_back(SDL_Point{anchor.x + point.x, anchor.y + point.y});
         }
         return pts;
 }
@@ -243,7 +253,7 @@ manifest_writer_(std::move(manifest_writer))
                 if (testing) {
                         std::cout << "[Room] Using precomputed area for: " << room_name << "\n";
                 }
-                room_area = std::make_unique<Area>(room_name, precomputed_area->get_points());
+                room_area = std::make_unique<Area>(room_name, precomputed_area->get_points(), 3);
                 if (room_area) room_area->set_type("room");
         } else {
                 int min_w = assets_json.value("min_width", 64);
@@ -284,7 +294,7 @@ manifest_writer_(std::move(manifest_writer))
                         << ", geometry: " << geometry
 			<< ", map radius: " << map_radius << "\n";
 		}
-                room_area = std::make_unique<Area>(room_name, SDL_Point{map_origin.first, map_origin.second}, width, height, geometry, edge_smoothness, map_w, map_h);
+                room_area = std::make_unique<Area>(room_name, SDL_Point{map_origin.first, map_origin.second}, width, height, geometry, edge_smoothness, map_w, map_h, 3);
                 if (room_area) room_area->set_type("room");
 	}
         std::vector<json> json_sources;
@@ -388,10 +398,37 @@ int Room::clamp_int(int v, int lo, int hi) const {
 }
 
 void Room::bounds_to_size(const std::tuple<int,int,int,int>& b, int& w, int& h) const {
-	int minx, miny, maxx, maxy;
-	std::tie(minx, miny, maxx, maxy) = b;
-	w = std::max(0, maxx - minx);
-	h = std::max(0, maxy - miny);
+        int minx, miny, maxx, maxy;
+        std::tie(minx, miny, maxx, maxy) = b;
+        w = std::max(0, maxx - minx);
+        h = std::max(0, maxy - miny);
+}
+
+std::pair<int, int> Room::current_room_dimensions() const {
+        if (room_area) {
+                int w = 0;
+                int h = 0;
+                bounds_to_size(room_area->get_bounds(), w, h);
+                return {w, h};
+        }
+
+        int min_w = assets_json.value("min_width", 0);
+        int max_w = assets_json.value("max_width", min_w);
+        int min_h = assets_json.value("min_height", 0);
+        int max_h = assets_json.value("max_height", min_h);
+        int width = std::max(min_w, max_w);
+        int height = std::max(min_h, max_h);
+
+        if ((width <= 0 || height <= 0) && assets_json.contains("radius")) {
+                int radius = assets_json.value("radius", 0);
+                if (radius > 0) {
+                        int diameter = radius * 2;
+                        if (width <= 0) width = diameter;
+                        if (height <= 0) height = diameter;
+                }
+        }
+
+        return {width, height};
 }
 
 void Room::load_named_areas_from_json() {
@@ -402,6 +439,8 @@ void Room::load_named_areas_from_json() {
 
                 SDL_Point default_anchor = room_area ? room_area->get_center()
                                                      : SDL_Point{map_origin.first, map_origin.second};
+
+                auto room_dims = current_room_dimensions();
 
                 for (auto& item : assets_json["areas"]) {
                         if (!item.is_object()) continue;
@@ -419,28 +458,76 @@ void Room::load_named_areas_from_json() {
 
                         auto anchor = RoomAreaSerialization::resolve_anchor(item, default_anchor, kind);
 
-                        const int resolution = vibble::grid::clamp_resolution(item.value("resolution", 0));
-                        auto pts = RoomAreaSerialization::decode_points(item, anchor.world);
+                        const int resolution = vibble::grid::clamp_resolution(item.value("resolution", 2));
+                        bool scale_to_room = item.value("scale_to_room", false);
+                        const int stored_width = item.value("origional_width", 0);
+                        const int stored_height = item.value("origional_height", 0);
+
+                        auto relative_points = RoomAreaSerialization::decode_relative_points(item);
+
+                        std::vector<SDL_Point> pts;
+                        const int current_width = room_dims.first;
+                        const int current_height = room_dims.second;
+                        const bool can_scale = scale_to_room && stored_width > 0 && stored_height > 0 &&
+                                               current_width > 0 && current_height > 0;
+                        int persisted_width = stored_width;
+                        int persisted_height = stored_height;
+
+                        auto scale_component = [](int value, double factor) {
+                                return static_cast<int>(std::llround(static_cast<double>(value) * factor));
+                        };
+
+                        if (can_scale) {
+                                const double sx = static_cast<double>(current_width) / static_cast<double>(stored_width);
+                                const double sy = static_cast<double>(current_height) / static_cast<double>(stored_height);
+
+                                if (anchor.relative_to_center) {
+                                        anchor.relative_offset.x = scale_component(anchor.relative_offset.x, sx);
+                                        anchor.relative_offset.y = scale_component(anchor.relative_offset.y, sy);
+                                        anchor.world.x = default_anchor.x + anchor.relative_offset.x;
+                                        anchor.world.y = default_anchor.y + anchor.relative_offset.y;
+                                }
+
+                                pts.reserve(relative_points.size());
+                                for (const auto& rel : relative_points) {
+                                        const int dx = scale_component(rel.x, sx);
+                                        const int dy = scale_component(rel.y, sy);
+                                        pts.push_back(SDL_Point{anchor.world.x + dx, anchor.world.y + dy});
+                                }
+                                persisted_width = current_width;
+                                persisted_height = current_height;
+                        } else {
+                                pts = RoomAreaSerialization::decode_points(item, anchor.world);
+                        }
+
                         if (pts.size() < 3) continue;
 
                         RoomAreaSerialization::write_anchor(item, anchor, kind);
                         item["points"] = RoomAreaSerialization::encode_points(pts, anchor.world);
                         item["resolution"] = resolution;
                         item.erase("relative_points");
-                        item.erase("origional_width");
-                        item.erase("origional_height");
                         item.erase("original_width");
                         item.erase("original_height");
+                        if (scale_to_room) {
+                                item["scale_to_room"] = true;
+                                if (persisted_width > 0) item["origional_width"] = persisted_width;
+                                if (persisted_height > 0) item["origional_height"] = persisted_height;
+                        } else {
+                                item.erase("scale_to_room");
+                        }
 
                         NamedArea na;
                         na.name = name;
                         na.type = type;
                         na.kind = RoomAreaSerialization::to_string(kind);
-                        na.area = std::make_unique<Area>(name, pts);
+                        na.area = std::make_unique<Area>(name, pts, resolution);
                         if (na.area) {
                                 na.area->set_resolution(resolution);
                         }
                         if (na.area) na.area->set_type(type);
+                        na.scale_to_room = scale_to_room;
+                        na.original_room_width = persisted_width;
+                        na.original_room_height = persisted_height;
                         areas.push_back(std::move(na));
                 }
         } catch (...) {
@@ -514,7 +601,10 @@ bool Room::rename_area(const std::string& old_name, const std::string& new_name)
         return true;
 }
 
-void Room::upsert_named_area(const Area& area, const std::string& type) {
+void Room::upsert_named_area(const Area& area,
+                             bool scale_to_room,
+                             int original_room_width,
+                             int original_room_height) {
         const std::string area_name = area.get_name();
         if (area_name.empty()) {
                 return;
@@ -532,7 +622,7 @@ void Room::upsert_named_area(const Area& area, const std::string& type) {
                 return;
         }
 
-        std::string effective_type = !type.empty() ? type : area.get_type();
+        std::string effective_type = area.get_type();
         nlohmann::json* existing_entry = nullptr;
         std::string existing_kind;
         for (auto& item : assets_json["areas"]) {
@@ -566,6 +656,20 @@ void Room::upsert_named_area(const Area& area, const std::string& type) {
                 anchor = RoomAreaSerialization::resolve_anchor(*existing_entry, default_anchor, kind);
         }
 
+        bool final_scale_flag = scale_to_room;
+
+        int stored_width = original_room_width;
+        int stored_height = original_room_height;
+        if (existing_entry) {
+                if (stored_width <= 0) stored_width = existing_entry->value("origional_width", 0);
+                if (stored_height <= 0) stored_height = existing_entry->value("origional_height", 0);
+        }
+        if (final_scale_flag) {
+                auto dims = current_room_dimensions();
+                if (stored_width <= 0) stored_width = dims.first;
+                if (stored_height <= 0) stored_height = dims.second;
+        }
+
         nlohmann::json entry = nlohmann::json::object({
                 {"name", area_name},
                 {"points", RoomAreaSerialization::encode_points(pts, anchor.world)},
@@ -577,6 +681,12 @@ void Room::upsert_named_area(const Area& area, const std::string& type) {
         RoomAreaSerialization::write_anchor(entry, anchor, kind);
 
         entry["resolution"] = vibble::grid::clamp_resolution(area.resolution());
+
+        if (final_scale_flag) {
+                entry["scale_to_room"] = true;
+                if (stored_width > 0) entry["origional_width"] = stored_width;
+                if (stored_height > 0) entry["origional_height"] = stored_height;
+        }
 
         if (existing_entry) {
                 *existing_entry = entry;
@@ -815,5 +925,9 @@ void Room::save_assets_json() const {
                 }
                 section[room_name] = assets_json;
                 manifest_writer_(manifest_map_id_, payload);
+        }
+        try {
+                std::cout << "[Room] Autosaved assets for room: " << room_name << "\n";
+        } catch (...) {
         }
 }

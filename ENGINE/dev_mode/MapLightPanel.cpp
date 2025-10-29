@@ -736,6 +736,10 @@ void MapLightPanel::set_reactive_settings(render_pipeline::shading::ReactiveShad
     sync_reactive_settings_shared();
 }
 
+void MapLightPanel::set_update_map_light_callback(std::function<void(bool)> cb) {
+    update_map_light_callback_ = std::move(cb);
+}
+
 nlohmann::json& MapLightPanel::mutable_light() {
     return ensure_light();
 }
@@ -1100,6 +1104,9 @@ void MapLightPanel::load_update_map_light_setting() {
     update_map_light_enabled_ = devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true);
     if (update_map_light_checkbox_) {
         update_map_light_checkbox_->set_value(update_map_light_enabled_);
+    }
+    if (update_map_light_callback_) {
+        update_map_light_callback_(update_map_light_enabled_);
     }
 }
 
@@ -1532,6 +1539,9 @@ bool MapLightPanel::handle_event(const SDL_Event& e) {
             if (current != update_map_light_enabled_) {
                 update_map_light_enabled_ = current;
                 devmode::ui_settings::save_bool(kUpdateMapLightSettingKey, update_map_light_enabled_);
+                if (update_map_light_callback_) {
+                    update_map_light_callback_(update_map_light_enabled_);
+                }
             }
         }
     }

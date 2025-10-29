@@ -25,6 +25,8 @@ class OnEndSelector {
 
     int preferred_height(int width) const;
 
+    bool allow_out_of_bounds_pointer_events() const;
+
   private:
     void rebuild_options();
     void sync_from_document();
@@ -40,6 +42,7 @@ class OnEndSelector {
     std::unique_ptr<DMDropdown> dropdown_;
     mutable bool layout_dirty_ = true;
     std::string payload_signature_;
+    std::string ids_signature_;
 };
 
 }

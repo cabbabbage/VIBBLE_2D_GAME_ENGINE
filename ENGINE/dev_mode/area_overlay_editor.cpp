@@ -6,6 +6,8 @@
 #include "draw_utils.hpp"
 #include "dm_styles.hpp"
 
+#include "spawn_group_config/SpawnGroupConfig.hpp"
+
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
@@ -13,6 +15,9 @@
 #include "render/camera.hpp"
 #include "utils/input.hpp"
 #include "utils/area.hpp"
+#include "util/grid.hpp"
+#include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
+#include "utils/relative_room_position.hpp"
 
 #include <algorithm>
 #include <array>
@@ -75,7 +80,7 @@ namespace {
         return 1.0f;
     }
 
-    static bool should_use_room_center_anchor(const std::string& type, const std::string& name) {
+    static bool should_use_room_center_anchor(const std::string& name) {
         auto matches = [](const std::string& value) {
             if (value.empty()) return false;
             std::string lowered = value;
@@ -85,7 +90,6 @@ namespace {
             return lowered == "trigger" || lowered == "spawning" || lowered == "spawn" ||
                    lowered.find("trigger") != std::string::npos || lowered.find("spawn") != std::string::npos;
 };
-        if (matches(type)) return true;
         return matches(name);
     }
 
@@ -321,6 +325,7 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
     area_name_ = area_name;
     room_area_type_.clear();
     asset_area_type_ = canonical_area_type(area_type);
+    scale_area_to_room_ = false;
     canvas_w_ = cw;
     canvas_h_ = ch;
     mask_origin_x_ = 0;
@@ -342,17 +347,31 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
     applied_crop_left_ = applied_crop_right_ = applied_crop_top_ = applied_crop_bottom_ = -1;
 
     name_box_ = std::make_unique<DMTextBox>("Area Name", area_name_);
+    resolution_stepper_.reset();
+
+    Area* existing_area = nullptr;
+    if (asset && info) {
+        existing_area = info->find_area(area_name_);
+        if (existing_area) {
+            const std::string existing_type = canonical_area_type(existing_area->get_type());
+            if (!existing_type.empty()) {
+                asset_area_type_ = existing_type;
+            }
+        }
+    }
+
+    area_resolution_ = existing_area ? existing_area->resolution() : 2;
+    area_resolution_ = vibble::grid::clamp_resolution(area_resolution_);
+    setup_resolution_stepper();
 
     mask_ = SDL_CreateRGBSurfaceWithFormat(0, canvas_w_, canvas_h_, 32, SDL_PIXELFORMAT_RGBA32);
     if (!mask_) return false;
     clear_mask();
 
-    if (asset && info) {
-        if (Area* existing = info->find_area(area_name_)) {
-            const std::string existing_type = canonical_area_type(existing->get_type());
-            if (!existing_type.empty()) {
-                asset_area_type_ = existing_type;
-            }
+    if (existing_area) {
+        area_resolution_ = vibble::grid::clamp_resolution(existing_area->resolution());
+        if (resolution_stepper_) {
+            resolution_stepper_->set_value(area_resolution_);
         }
     }
     if (asset_area_type_.empty()) {
@@ -379,8 +398,18 @@ bool AreaOverlayEditor::begin_at_point(AssetInfo* info,
 
     saved_since_begin_ = false;
     toolbox_autoplace_done_ = false;
+    persist_dirty_ = false;
+    mask_dirty_ = false;
 
     return true;
+}
+
+bool AreaOverlayEditor::begin_for_room(Room* room, const std::string& area_name) {
+    SDL_Point focus{0, 0};
+    if (room && room->room_area) {
+        focus = room->room_area->get_center();
+    }
+    return begin_for_room(room, area_name, std::string{}, focus);
 }
 
 bool AreaOverlayEditor::begin_for_room(Room* room, const std::string& area_name, const std::string& area_type) {
@@ -404,6 +433,8 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     room_area_type_ = area_type;
     asset_area_type_.clear();
     name_box_ = std::make_unique<DMTextBox>("Area Name", area_name_);
+    resolution_stepper_.reset();
+    scale_area_to_room_ = false;
 
     SDL_Point room_center = focus_world;
     if (room_->room_area) {
@@ -416,7 +447,18 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     if (room_area_type_.empty() && existing_area) {
         room_area_type_ = existing_area->get_type();
     }
-    const bool use_center_anchor = should_use_room_center_anchor(room_area_type_, area_name_);
+
+    auto meta_it = std::find_if(room_->areas.begin(), room_->areas.end(), [&](const Room::NamedArea& na) {
+        return na.name == area_name_;
+    });
+    if (meta_it != room_->areas.end()) {
+        scale_area_to_room_ = meta_it->scale_to_room;
+    }
+
+    area_resolution_ = existing_area ? existing_area->resolution() : 3;
+    area_resolution_ = vibble::grid::clamp_resolution(area_resolution_);
+    setup_resolution_stepper();
+    const bool use_center_anchor = should_use_room_center_anchor(area_name_);
 
     std::vector<SDL_Point> reference_points;
     if (existing_area) {
@@ -502,11 +544,17 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     }
 
     ensure_toolbox();
+    if (scale_to_room_checkbox_) {
+        scale_to_room_checkbox_->set_value(scale_area_to_room_);
+    }
     update_toolbox_title();
+    rebuild_toolbox_rows();
 
     active_ = true;
     saved_since_begin_ = false;
     toolbox_autoplace_done_ = false;
+    persist_dirty_ = false;
+    mask_dirty_ = false;
 
     return true;
 }
@@ -514,6 +562,20 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
 void AreaOverlayEditor::cancel() {
     active_ = false;
     pending_mask_generation_ = false;
+}
+
+void AreaOverlayEditor::mark_persist_dirty() {
+    persist_dirty_ = true;
+}
+
+void AreaOverlayEditor::mark_mask_dirty() {
+    mask_dirty_ = true;
+    mark_persist_dirty();
+}
+
+void AreaOverlayEditor::register_tracked_checkbox(DMCheckbox* checkbox) {
+    if (!checkbox) return;
+    tracked_checkboxes_.push_back(TrackedCheckboxState{checkbox, checkbox->value()});
 }
 
 void AreaOverlayEditor::clear_mask() {
@@ -616,10 +678,11 @@ bool AreaOverlayEditor::compute_overlay_transform(camera& cam, OverlayTransform&
     const int pivot_screen_x = static_cast<int>(std::lround(pivot_local_fx * scale_per_mask_x));
     const int pivot_screen_y = static_cast<int>(std::lround(pivot_local_fy * scale_per_mask_y));
 
-    const SDL_Point anchor_screen = effects.screen_position;
+    const float      anchor_center_x = effects.screen_position.x + effects.parallax_offset_x;
+    const SDL_Point  anchor_screen{ static_cast<int>(std::lround(anchor_center_x)), static_cast<int>(std::lround(effects.screen_position.y)) };
     out.anchor_screen = anchor_screen;
     out.dst = SDL_Rect{
-        anchor_screen.x - pivot_screen_x,
+        static_cast<int>(std::lround(anchor_center_x)) - pivot_screen_x,
         anchor_screen.y - pivot_screen_y,
         dst_w,
         dst_h
@@ -635,7 +698,7 @@ SDL_Point AreaOverlayEditor::resolve_anchor_world() const {
         return SDL_Point{ asset_->pos.x, asset_->pos.y };
     }
     if (room_) {
-        if (should_use_room_center_anchor(room_area_type_, area_name_)) {
+        if (should_use_room_center_anchor(area_name_)) {
             if (room_->room_area) {
                 return room_->room_area->get_center();
             }
@@ -698,6 +761,22 @@ void AreaOverlayEditor::ensure_mask_contains(int lx, int ly, int radius) {
         SDL_DestroyTexture(mask_tex_);
         mask_tex_ = nullptr;
     }
+}
+
+void AreaOverlayEditor::setup_resolution_stepper() {
+    resolution_stepper_ = std::make_unique<DMNumericStepper>("Area Resolution (r)", 0, vibble::grid::kMaxResolution, area_resolution_);
+    resolution_stepper_->set_on_change([this](int new_value) {
+        const int clamped = vibble::grid::clamp_resolution(new_value);
+        if (clamped != area_resolution_) {
+            area_resolution_ = clamped;
+            if (resolution_stepper_) {
+                resolution_stepper_->set_value(area_resolution_);
+            }
+            mark_persist_dirty();
+        } else if (resolution_stepper_) {
+            resolution_stepper_->set_value(clamped);
+        }
+    });
 }
 
 void AreaOverlayEditor::init_mask_from_existing_area() {
@@ -771,16 +850,27 @@ void AreaOverlayEditor::ensure_toolbox() {
     if (toolbox_) return;
     toolbox_ = std::make_unique<DockableCollapsible>("Area Tools", true);
 
+    // Clicking the panel 'X' should close the editor and any embedded UI
+    toolbox_->set_on_close([this]() {
+        if (room_area_spawn_list_) {
+            room_area_spawn_list_->close_embedded_search();
+        }
+        this->cancel();
+    });
+
     toolbox_->set_expanded(true);
 
     toolbox_->set_floating_content_width(372);
     toolbox_->set_padding(12);
     toolbox_->set_row_gap(10);
     toolbox_->set_col_gap(12);
-    btn_mask_  = std::make_unique<DMButton>("Mask",  &DMStyles::CreateButton(), 180, DMButton::height());
-    btn_geom_  = std::make_unique<DMButton>("Geometry",  &DMStyles::CreateButton(), 180, DMButton::height());
-    btn_save_  = std::make_unique<DMButton>("Save",  &DMStyles::CreateButton(), 180, DMButton::height());
-    btn_delete_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 180, DMButton::height());
+    btn_mask_   = std::make_unique<DMButton>("Mask",     &DMStyles::CreateButton(), 180, DMButton::height());
+    btn_geom_   = std::make_unique<DMButton>("Geometry", &DMStyles::CreateButton(), 180, DMButton::height());
+    btn_save_   = std::make_unique<DMButton>("Save",     &DMStyles::AccentButton(), 180, DMButton::height());
+    btn_delete_ = std::make_unique<DMButton>("Delete",   &DMStyles::DeleteButton(), 180, DMButton::height());
+    if (!scale_to_room_checkbox_) {
+        scale_to_room_checkbox_ = std::make_unique<DMCheckbox>("Scale area to room", scale_area_to_room_);
+    }
     update_toolbox_title();
     rebuild_toolbox_rows();
 }
@@ -803,53 +893,71 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
     if (!toolbox_) return;
 
     owned_widgets_.clear();
+    tracked_checkboxes_.clear();
     DockableCollapsible::Rows rows;
 
-    if (btn_save_) {
-
-        std::vector<Widget*> first_row;
-        if (btn_mask_ && asset_) {
-            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_mask_.get(), [this]() {
-                discard_autogen_base();
-                reset_mask_crop_values();
-                pending_mask_generation_ = (asset_ != nullptr);
-                geometry_points_.clear();
-                geometry_dirty_ = false;
-                set_mode(Mode::Mask);
-            }));
-            first_row.push_back(owned_widgets_.back().get());
-        }
-        if (btn_geom_) {
-            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_geom_.get(), [this]() {
-                clear_mask();
-                discard_autogen_base();
-                geometry_points_.clear();
-                geometry_dirty_ = true;
-                set_mode(Mode::Geometry);
-                upload_mask();
-            }));
-            first_row.push_back(owned_widgets_.back().get());
-        }
-        if (!first_row.empty()) rows.push_back(first_row);
-
-        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_save_.get(), [this]() {
-            save_area();
+    std::vector<Widget*> first_row;
+    if (btn_mask_ && asset_) {
+        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_mask_.get(), [this]() {
+            discard_autogen_base();
+            reset_mask_crop_values();
+            pending_mask_generation_ = (asset_ != nullptr);
+            geometry_points_.clear();
+            geometry_dirty_ = false;
+            set_mode(Mode::Mask);
         }));
-        rows.push_back({ owned_widgets_.back().get() });
+        first_row.push_back(owned_widgets_.back().get());
     }
+    if (btn_geom_) {
+        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_geom_.get(), [this]() {
+            clear_mask();
+            discard_autogen_base();
+            geometry_points_.clear();
+            geometry_dirty_ = true;
+            set_mode(Mode::Geometry);
+            upload_mask();
+        }));
+        first_row.push_back(owned_widgets_.back().get());
+    }
+    if (!first_row.empty()) rows.push_back(first_row);
 
     if (name_box_) {
         owned_widgets_.push_back(std::make_unique<TextBoxWidget>(name_box_.get(), true));
         rows.push_back({ owned_widgets_.back().get() });
     }
 
-    if (btn_delete_) {
+    if (resolution_stepper_) {
+        owned_widgets_.push_back(std::make_unique<StepperWidget>(resolution_stepper_.get()));
+        rows.push_back({ owned_widgets_.back().get() });
+    }
+
+    if (room_ && scale_to_room_checkbox_) {
+        owned_widgets_.push_back(std::make_unique<CheckboxWidget>(scale_to_room_checkbox_.get()));
+        register_tracked_checkbox(scale_to_room_checkbox_.get());
+        rows.push_back({ owned_widgets_.back().get() });
+    }
+
+    if (btn_save_ || btn_delete_) {
         std::vector<Widget*> manage_row;
-        owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_delete_.get(), [this]() {
-            delete_current_area();
-        }));
-        manage_row.push_back(owned_widgets_.back().get());
-        rows.push_back(manage_row);
+        if (btn_save_) {
+            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_save_.get(), [this]() {
+                // Only save when Save is pressed
+                const bool saved = persist_current_area();
+                if (saved) {
+                    persist_dirty_ = false;
+                    // Rebuild rows to ensure spawn groups (for room areas) show embedded
+                    rebuild_toolbox_rows();
+                }
+            }));
+            manage_row.push_back(owned_widgets_.back().get());
+        }
+        if (btn_delete_) {
+            owned_widgets_.push_back(std::make_unique<ButtonWidget>(btn_delete_.get(), [this]() {
+                delete_current_area();
+            }));
+            manage_row.push_back(owned_widgets_.back().get());
+        }
+        if (!manage_row.empty()) rows.push_back(manage_row);
     }
 
     if (mode_ == Mode::Mask) {
@@ -870,6 +978,11 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
             owned_widgets_.push_back(std::make_unique<SliderWidget>(crop_bottom_slider_.get()));
             rows.push_back({ owned_widgets_.back().get() });
         }
+    }
+
+    // For room-scoped area editing, append an embedded Spawn Group Config section
+    if (room_ && !area_name_.empty()) {
+        append_room_area_spawn_rows(rows);
     }
 
     toolbox_->set_rows(rows);
@@ -1131,6 +1244,7 @@ bool AreaOverlayEditor::generate_mask_from_asset(SDL_Renderer* renderer) {
     applied_crop_left_ = applied_crop_right_ = applied_crop_top_ = applied_crop_bottom_ = -1;
 
     upload_mask();
+    mark_mask_dirty();
     return true;
 }
 
@@ -1155,6 +1269,7 @@ void AreaOverlayEditor::apply_mask_crop() {
         applied_crop_top_ = top;
         applied_crop_bottom_ = bottom;
         upload_mask();
+        mark_mask_dirty();
         return;
     }
 
@@ -1183,11 +1298,13 @@ void AreaOverlayEditor::apply_mask_crop() {
     applied_crop_bottom_ = bottom;
 
     upload_mask();
+    mark_mask_dirty();
 }
 
 void AreaOverlayEditor::position_toolbox_near_anchor(int screen_w, int screen_h) {
     if (!toolbox_ || !assets_ || !has_anchor_) return;
-    SDL_Point ap = assets_->getView().map_to_screen(anchor_world_);
+    SDL_FPoint ap_f = assets_->getView().map_to_screen(anchor_world_);
+    SDL_Point ap{static_cast<int>(std::lround(ap_f.x)), static_cast<int>(std::lround(ap_f.y))};
     toolbox_->set_work_area(SDL_Rect{0, 0, screen_w, screen_h});
 
     SDL_Rect rect = toolbox_->rect();
@@ -1232,6 +1349,19 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
     }
     if (toolbox_) toolbox_->update(input, screen_w, screen_h);
 
+    if (room_area_spawn_list_) {
+        room_area_spawn_list_->set_screen_dimensions(screen_w, screen_h);
+        // Anchor near toolbox for any floating sub-panels (e.g., search)
+        SDL_Point anchor{0, 0};
+        if (toolbox_) {
+            SDL_Rect r = toolbox_->rect();
+            anchor.x = std::max(16, r.x - 320);
+            anchor.y = std::max(16, r.y + r.h / 4);
+        }
+        room_area_spawn_list_->set_anchor(anchor.x, anchor.y);
+        room_area_spawn_list_->update(input, screen_w, screen_h);
+    }
+
     if (mode_ == Mode::Mask && mask_autogen_base_) {
         int left = crop_left_slider_ ? crop_left_slider_->value() : 0;
         int right = crop_right_slider_ ? crop_right_slider_->value() : 0;
@@ -1243,14 +1373,37 @@ void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
             crop_top_px_ = top;
             crop_bottom_px_ = bottom;
             apply_mask_crop();
+            mark_mask_dirty();
         }
     }
 
+    if (name_box_ && !name_box_->is_editing()) {
+        std::string trimmed = trim_copy(name_box_->value());
+        if (trimmed.empty()) {
+            if (!area_name_.empty()) {
+                mark_persist_dirty();
+            }
+        } else if (trimmed != area_name_) {
+            mark_persist_dirty();
+        }
+    }
+
+    for (auto& tracked : tracked_checkboxes_) {
+        if (!tracked.checkbox) continue;
+        bool value = tracked.checkbox->value();
+        if (value != tracked.last_value) {
+            tracked.last_value = value;
+            mark_persist_dirty();
+        }
+    }
+
+    // Do not auto-save; only persist when Save is pressed
 }
 
 bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
     if (!active_) return false;
     if (toolbox_ && toolbox_->handle_event(e)) return true;
+    if (room_area_spawn_list_ && room_area_spawn_list_->handle_event(e)) return true;
 
     if (e.type == SDL_KEYDOWN) {
         if (e.key.keysym.sym == SDLK_ESCAPE) {
@@ -1317,6 +1470,7 @@ bool AreaOverlayEditor::handle_event(const SDL_Event& e) {
             }
         }
         geometry_dirty_ = true;
+        mark_persist_dirty();
         rebuild_mask_from_geometry();
         upload_mask();
         return true;
@@ -1404,6 +1558,7 @@ void AreaOverlayEditor::render(SDL_Renderer* r) {
     }
 
     if (toolbox_) toolbox_->render(r);
+    if (room_area_spawn_list_) room_area_spawn_list_->render(r);
 }
 
 std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
@@ -1486,19 +1641,36 @@ std::vector<SDL_Point> AreaOverlayEditor::trace_polygon_from_mask() const {
     return out;
 }
 
-void AreaOverlayEditor::save_area() {
-    if (name_box_) {
+bool AreaOverlayEditor::persist_current_area() {
+    bool handled = false;
+
+    if (name_box_ && !name_box_->is_editing()) {
         const std::string desired_name = name_box_->value();
-        if (!rename_current_area(desired_name)) {
-            name_box_->set_value(area_name_);
-            return;
+        std::string trimmed = trim_copy(desired_name);
+        if (trimmed.empty()) {
+            if (!area_name_.empty()) {
+                name_box_->set_value(area_name_);
+                handled = true;
+            }
+        } else if (trimmed != area_name_) {
+            // Defer save until user resolves conflicts; rename is applied as part of save flow
+            if (!rename_current_area(desired_name)) {
+                name_box_->set_value(area_name_);
+            }
+            handled = true;
         }
     }
 
     if (!info_ && !room_) {
-        cancel();
-        return;
+        return handled;
     }
+
+    int resolution_value = vibble::grid::clamp_resolution(area_resolution_);
+    if (resolution_stepper_) {
+        resolution_stepper_->set_value(resolution_value);
+    }
+    area_resolution_ = resolution_value;
+    handled = true;
 
     auto remove_current = [this]() -> bool {
         if (info_) {
@@ -1516,25 +1688,38 @@ void AreaOverlayEditor::save_area() {
             return removed;
         }
         return false;
-};
+    };
 
-    auto determine_room_type = [this]() -> std::string {
-        if (!room_) return std::string{};
-        if (!room_area_type_.empty()) return room_area_type_;
-        if (Area* existing = room_->find_area(area_name_)) {
-            if (!existing->get_type().empty()) return existing->get_type();
+    // Determine final candidate name for conflict checks
+    std::string final_name = area_name_;
+    if (name_box_ && !name_box_->is_editing()) {
+        const std::string desired_name = trim_copy(name_box_->value());
+        if (!desired_name.empty()) {
+            final_name = desired_name;
         }
-        return area_name_;
-};
+    }
+
+    // Before saving an ASSET area, ensure no ROOM area with same name exists
+    if (info_ && assets_) {
+        if (Room* cr = assets_->current_room()) {
+            auto it = std::find_if(cr->areas.begin(), cr->areas.end(), [&](const Room::NamedArea& na){ return na.name == final_name; });
+            if (it != cr->areas.end()) {
+                assets_->show_dev_notice(std::string("Area name '") + final_name + "' conflicts with a room area. Please rename.", 3000);
+                return false;
+            }
+        }
+    }
+
+    // Room area 'type' no longer used; do not assign or infer types for room areas
 
     auto notify_saved = [this]() {
         saved_since_begin_ = true;
         if (on_saved_callback_) {
             on_saved_callback_();
         }
-};
+    };
 
-    auto upsert_area = [this, &determine_room_type](Area& area) {
+    auto upsert_area = [this](Area& area) {
         if (info_) {
             std::string final_type = canonical_area_type(asset_area_type_);
             if (final_type.empty()) {
@@ -1565,21 +1750,94 @@ void AreaOverlayEditor::save_area() {
             info_->upsert_area_from_editor(area, frame);
             (void)info_->commit_manifest();
         } else if (room_) {
-            std::string type = determine_room_type();
-            area.set_type(type);
-            room_area_type_ = type;
-            room_->upsert_named_area(area, type);
+            // For room areas, ensure a supported kind by setting a spawn-related type
+            if (area.get_type().empty()) {
+                area.set_type("spawning");
+            }
+            if (scale_to_room_checkbox_) {
+                scale_area_to_room_ = scale_to_room_checkbox_->value();
+            } else {
+                scale_area_to_room_ = false;
+            }
+            room_->upsert_named_area(area, scale_area_to_room_, 0, 0);
             room_->save_assets_json();
+
+            // Ensure a spawn group entry exists for this room area with Exact positioning
+            try {
+                nlohmann::json& root = room_->assets_data();
+                auto& groups = devmode::spawn::ensure_spawn_groups_array(root);
+
+                // Compute current room dimensions and center
+                int width = 0;
+                int height = 0;
+                if (room_->room_area) {
+                    auto b = room_->room_area->get_bounds();
+                    width = std::max(1, std::get<2>(b) - std::get<0>(b));
+                    height = std::max(1, std::get<3>(b) - std::get<1>(b));
+                }
+
+                // Find existing entry by linked_area name
+                nlohmann::json* existing = nullptr;
+                for (auto& entry : groups) {
+                    if (!entry.is_object()) continue;
+                    const bool linked = entry.value("link_to_area", false);
+                    const std::string linked_area = entry.value("linked_area", std::string{});
+                    const std::string display = entry.value("display_name", std::string{});
+                    if ((linked && linked_area == area_name_) || (!linked && display == area_name_)) {
+                        existing = &entry;
+                        break;
+                    }
+                }
+
+                const int default_resolution = room_->map_grid_settings().resolution;
+                if (!existing) {
+                    nlohmann::json entry = nlohmann::json::object();
+                    entry["display_name"] = area_name_;
+                    entry["position"] = "Exact";
+                    entry["dx"] = 0;
+                    entry["dy"] = 0;
+                    if (width > 0) entry["origional_width"] = width;
+                    if (height > 0) entry["origional_height"] = height;
+                    entry["link_to_area"] = true;
+                    entry["linked_area"] = area_name_;
+                    // Make the area the sole 100% candidate for this room-level spawn entry
+                    entry["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name", area_name_}, {"chance", 100}}) });
+                    devmode::spawn::ensure_spawn_group_entry_defaults(entry, area_name_, default_resolution);
+                    groups.push_back(std::move(entry));
+                    room_->save_assets_json();
+                } else {
+                    // Ensure defaults are present and method is Exact for area anchor
+                    devmode::spawn::ensure_spawn_group_entry_defaults(*existing, area_name_, default_resolution);
+                    if (existing->value("position", std::string{"Random"}) != std::string{"Exact"}) {
+                        (*existing)["position"] = "Exact";
+                    }
+                    if (width > 0 && !existing->contains("origional_width")) (*existing)["origional_width"] = width;
+                    if (height > 0 && !existing->contains("origional_height")) (*existing)["origional_height"] = height;
+                    if (!existing->value("link_to_area", false)) {
+                        (*existing)["link_to_area"] = true;
+                    }
+                    if (existing->value("linked_area", std::string{}) != area_name_) {
+                        (*existing)["linked_area"] = area_name_;
+                    }
+                    // Force candidates to the area with 100% weight
+                    (*existing)["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name", area_name_}, {"chance", 100}}) });
+                    room_->save_assets_json();
+                }
+            } catch (...) {
+                // Non-fatal; ignore spawn group creation errors
+            }
         }
-};
+    };
 
     if (mode_ == Mode::Geometry) {
         if (geometry_points_.size() < 3) {
             if (remove_current()) {
                 notify_saved();
             }
-            cancel();
-            return;
+            handled = true;
+            geometry_dirty_ = false;
+            mask_dirty_ = false;
+            return handled;
         }
 
         std::vector<Area::Point> area_points;
@@ -1598,22 +1856,28 @@ void AreaOverlayEditor::save_area() {
             if (remove_current()) {
                 notify_saved();
             }
-            cancel();
-            return;
+            handled = true;
+            geometry_dirty_ = false;
+            mask_dirty_ = false;
+            return handled;
         }
-        Area area(area_name_, area_points);
+        Area area(area_name_, area_points, resolution_value);
+        area.set_resolution(resolution_value);
         upsert_area(area);
         notify_saved();
-        cancel();
-        return;
+        geometry_dirty_ = false;
+        mask_dirty_ = false;
+        return true;
     }
 
     if (!mask_) {
         if (remove_current()) {
             notify_saved();
         }
-        cancel();
-        return;
+        handled = true;
+        mask_dirty_ = false;
+        geometry_dirty_ = false;
+        return handled;
     }
 
     bool has_alpha = false;
@@ -1646,8 +1910,10 @@ void AreaOverlayEditor::save_area() {
         if (remove_current()) {
             notify_saved();
         }
-        cancel();
-        return;
+        handled = true;
+        mask_dirty_ = false;
+        geometry_dirty_ = false;
+        return handled;
     }
 
     auto polygon = trace_polygon_from_mask();
@@ -1692,12 +1958,105 @@ void AreaOverlayEditor::save_area() {
     }
 
     if (area_points.size() < 3) {
-        cancel();
+        handled = true;
+        mask_dirty_ = false;
+        geometry_dirty_ = false;
+        return handled;
+    }
+
+    Area area(area_name_, area_points, resolution_value);
+    area.set_resolution(resolution_value);
+    upsert_area(area);
+    notify_saved();
+    mask_dirty_ = false;
+    geometry_dirty_ = false;
+    return true;
+}
+
+void AreaOverlayEditor::append_room_area_spawn_rows(DockableCollapsible::Rows& rows) {
+    // Build or refresh an embedded SpawnGroupConfig for the current room area
+    if (!room_ || area_name_.empty()) {
         return;
     }
 
-    Area area(area_name_, area_points);
-    upsert_area(area);
-    notify_saved();
-    cancel();
+    if (!room_area_spawn_list_) room_area_spawn_list_ = std::make_unique<SpawnGroupConfig>(false);
+    if (!room_area_spawn_list_) return;
+
+    room_area_spawn_list_->set_embedded_mode(true);
+
+    // Locate or create the spawn_groups array for this area within room assets JSON
+    nlohmann::json* groups_ptr = nullptr;
+    nlohmann::json& root = room_->assets_data();
+    if (root.contains("areas") && root["areas"].is_array()) {
+        for (auto& entry : root["areas"]) {
+            if (!entry.is_object()) continue;
+            if (entry.value("name", std::string{}) != area_name_) continue;
+            if (!entry.contains("spawn_groups") || !entry["spawn_groups"].is_array()) {
+                entry["spawn_groups"] = nlohmann::json::array();
+            }
+            groups_ptr = &entry["spawn_groups"];
+            break;
+        }
+    }
+
+    if (!groups_ptr) {
+        return;
+    }
+
+    auto on_change = [this]() {
+        if (room_) room_->save_assets_json();
+    };
+    auto on_entry_change = [this](const nlohmann::json&, const SpawnGroupConfig::ChangeSummary&) {
+        if (room_) room_->save_assets_json();
+    };
+
+    SpawnGroupConfig::Callbacks cb{};
+    cb.on_add = [this, groups_ptr]() {
+        if (!groups_ptr) return;
+        if (!groups_ptr->is_array()) return;
+        nlohmann::json entry = nlohmann::json::object();
+        entry["position"] = "Random";
+        entry["min_number"] = 1;
+        entry["max_number"] = 1;
+        entry["candidates"] = nlohmann::json::array({ nlohmann::json::object({{"name","null"},{"chance",0}}) });
+        groups_ptr->push_back(std::move(entry));
+        if (room_) room_->save_assets_json();
+        room_area_spawn_list_->refresh_row_configuration();
+    };
+    cb.on_delete = [this, groups_ptr](const std::string& id) {
+        if (!groups_ptr) return;
+        if (!groups_ptr->is_array()) return;
+        for (auto it = groups_ptr->begin(); it != groups_ptr->end(); ++it) {
+            if (it->is_object() && it->value("spawn_id", std::string{}) == id) {
+                groups_ptr->erase(it);
+                break;
+            }
+        }
+        if (room_) room_->save_assets_json();
+        room_area_spawn_list_->refresh_row_configuration();
+    };
+    cb.on_reorder = [this](const std::string&, size_t) {
+        if (room_) room_->save_assets_json();
+    };
+
+    // Don’t allow linking in this context
+    SpawnGroupConfig::ConfigureEntryCallback cfg = [this](SpawnGroupConfig::EntryController& ctrl, const nlohmann::json&) {
+        // Provide area names for search as extra results
+        ctrl.set_area_names_provider([this]() {
+            std::vector<std::string> names;
+            if (!room_) return names;
+            names.reserve(room_->areas.size());
+            for (const auto& na : room_->areas) {
+                if (!na.name.empty()) names.push_back(na.name);
+            }
+            return names;
+        });
+        ctrl.set_linkable_room_areas_provider({});
+        ctrl.set_linkable_asset_areas_provider({});
+    };
+
+    room_area_spawn_list_->set_callbacks(std::move(cb));
+    room_area_spawn_list_->load(*groups_ptr, std::move(on_change), std::move(on_entry_change), std::move(cfg));
+    room_area_spawn_list_->append_rows(rows);
 }
+

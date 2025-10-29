@@ -9,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -78,6 +79,8 @@ public:
     camera& getView() { return camera_; }
     const camera& getView() const { return camera_; }
 
+    float frame_delta_seconds() const { return last_frame_dt_seconds_; }
+
     void render_overlays(SDL_Renderer* renderer);
     SDL_Renderer* renderer() const;
     void toggle_asset_library();
@@ -102,6 +105,7 @@ public:
 
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
     void begin_area_edit_for_selected_asset(const std::string& area_name);
+    void begin_room_area_edit(const std::string& area_name);
 
     devmode::core::ManifestStore* manifest_store();
     const devmode::core::ManifestStore* manifest_store() const;
@@ -149,8 +153,11 @@ public:
     LightMapManager*       light_map_manager();
     const LightMapManager* light_map_manager() const;
     void force_shaded_assets_rerender();
+    bool apply_lighting_grid_subdivide(int subdivisions);
     void set_map_light_panel_visible(bool visible);
     bool is_map_light_panel_visible() const;
+    void set_update_map_light_enabled(bool enabled);
+    bool update_map_light_enabled() const;
 
     void apply_map_grid_settings(const MapGridSettings& settings, bool persist_json = true);
     int  map_grid_chunk_resolution() const;
@@ -189,9 +196,20 @@ private:
     void notify_reactive_shadow_settings_available();
     void sync_dev_controls_current_room(Room* room, bool force_refresh = false);
     void reset_dev_controls_current_room_cache();
+    void update_motion_smoothing_settings(const camera::RealismSettings& settings);
+    static TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params);
 
     friend class SceneRenderer;
     friend class Asset;
+
+    TransformSmoothingParams last_camera_motion_params_{};
+    TransformSmoothingParams last_asset_translation_params_{};
+    TransformSmoothingParams last_asset_scale_params_{};
+    TransformSmoothingParams last_asset_alpha_params_{};
+    TransformSmoothingParams cached_enabled_translation_params_{};
+    TransformSmoothingParams cached_enabled_scale_params_{};
+    TransformSmoothingParams cached_enabled_alpha_params_{};
+    bool smoothing_cache_initialized_ = false;
 
     CurrentRoomFinder* finder_ = nullptr;
     Input* input = nullptr;
@@ -221,6 +239,11 @@ private:
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;
+    std::atomic<bool> non_player_update_buffer_dirty_{true};
+
+    float      last_frame_dt_seconds_   = 1.0f / 60.0f;
+    double     perf_counter_frequency_  = 0.0;
+    std::uint64_t last_frame_counter_   = 0;
 
     AssetLibrary& library_;
     std::string map_id_;
@@ -232,6 +255,22 @@ private:
     MapGridSettings map_grid_settings_{};
     std::unique_ptr<devmode::core::ManifestStore> manifest_store_fallback_;
     std::unique_ptr<LightMapManager> light_map_manager_;
+    std::optional<float> last_audio_effect_max_distance_{};
+
+    struct GridMovementCommand {
+        Asset* asset = nullptr;
+        SDL_Point previous{0, 0};
+        SDL_Point current{0, 0};
+    };
+
+    void track_asset_for_grid(Asset* asset);
+    void untrack_asset_for_grid(Asset* asset);
+    void register_pending_static_assets();
+
+    std::vector<Asset*> moving_assets_for_grid_;
+    std::vector<Asset*> pending_static_grid_registration_;
+    std::vector<GridMovementCommand> movement_commands_buffer_;
+    std::vector<Asset*> grid_registration_buffer_;
 
     struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;
@@ -249,9 +288,13 @@ private:
 
     std::optional<DevNotice> dev_notice_;
 
-    void rebuild_active_assets_if_needed();
+    bool rebuild_active_assets_if_needed();
+    void rebuild_non_player_update_buffer_if_needed();
     void update_active_assets(SDL_Point center);
     int active_search_radius() const;
+    void mark_non_player_update_buffer_dirty() {
+        non_player_update_buffer_dirty_.store(true, std::memory_order_release);
+    }
 };
 #include "utils/map_grid_settings.hpp"
 

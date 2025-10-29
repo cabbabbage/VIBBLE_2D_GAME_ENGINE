@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class Assets;
@@ -96,6 +97,7 @@ private:
     Assets* assets_ = nullptr;
     std::vector<ExternalLightSample> external_samples_{};
     OcclusionCache                    occlusion_cache_{};
+    std::unordered_set<world::Chunk*> active_chunk_lookup_{};
 };
 
 }

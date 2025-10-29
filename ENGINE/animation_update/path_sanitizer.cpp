@@ -5,7 +5,7 @@
 
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
-#include "animation_update_utils.hpp"
+#include "animation_update.hpp"
 #include "core/asset_list.hpp"
 #include "utils/area.hpp"
 

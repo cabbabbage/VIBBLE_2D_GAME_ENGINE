@@ -31,8 +31,6 @@ struct Chunk {
 
     struct ChunkShadowParameters {
 
-        float scale = 1.0f;
-
         float opacity = 1.0f;
 
         float offset_x_percent = 0.0f;
@@ -42,7 +40,7 @@ struct Chunk {
         float offset_x_px = 0.0f;
         float offset_y_px = 0.0f;
 
-        float parallax_intensity_percent = 0.0f;
+        float scale = 1.0f;
 };
 
     struct ChunkShadowHistory {
@@ -145,6 +143,8 @@ struct Chunk {
     int lighting_rows() const { return lighting_rows_; }
     const std::vector<LightingChunk>& lighting_chunks() const { return lighting_chunks_; }
     std::vector<LightingChunk>& lighting_chunks() { return lighting_chunks_; }
+    void set_lighting_subdivisions(int subdivisions);
+    int  lighting_subdivisions() const { return lighting_subdivisions_; }
     LightingChunk* lighting_chunk_at(int local_i, int local_j);
     const LightingChunk* lighting_chunk_at(int local_i, int local_j) const;
     LightingChunk* lighting_chunk_from_world(SDL_Point world_px);
@@ -174,6 +174,7 @@ private:
     int lighting_step_       = 1;
     int lighting_columns_    = 1;
     int lighting_rows_       = 1;
+    int lighting_subdivisions_ = 0;
     std::vector<LightingChunk> lighting_chunks_{};
 };
 
@@ -183,13 +184,14 @@ class LightMap {
 public:
     struct ShadowSettings {
         int   search_radius_cells     = 1;
+        int   grid_subdivide          = 1;
+        int   requested_grid_subdivide = 1;
         float falloff_horizontal      = 1.0f;
         float falloff_vertical        = 1.0f;
         float max_offset_x_px         = 64.0f;
         float max_offset_y_px         = 48.0f;
 
         float opacity_sensitivity_percent = 50.0f;
-        float parallax_percent        = 0.0f;
         int   frame_blend_falloff_frames = 100;
         float sampling_static_weight  = 0.0f;
         float sampling_dynamic_weight = 1.0f;

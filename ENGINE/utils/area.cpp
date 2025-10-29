@@ -16,29 +16,37 @@
 
 static std::mt19937 rng{std::random_device{}()};
 
-Area::Area(const std::string& name)
-: pos{0, 0}, area_name_(name) {}
+Area::Area(const std::string& name, int resolution)
+: pos{0, 0}, area_name_(name)
+{
+        resolution_ = vibble::grid::clamp_resolution(resolution);
+        apply_resolution_to_points();
+}
 
-Area::Area(const std::string& name, const std::vector<Point>& pts)
+Area::Area(const std::string& name, const std::vector<Point>& pts, int resolution)
 : points(pts), area_name_(name)
 {
+        resolution_ = vibble::grid::clamp_resolution(resolution);
+        apply_resolution_to_points();
+        update_geometry_data();
         if (!points.empty()) {
                 auto [minx, miny, maxx, maxy] = get_bounds();
                 pos.x = (minx + maxx) / 2;
                 pos.y = maxy;
-                update_geometry_data();
         }
 }
 
 Area::Area(const std::string& name, SDL_Point center, int w, int h,
            const std::string& geometry,
            int edge_smoothness,
-           int map_width, int map_height)
+           int map_width, int map_height,
+           int resolution)
 : area_name_(name)
 {
         if (w <= 0 || h <= 0 || map_width <= 0 || map_height <= 0) {
                 throw std::runtime_error("[Area: " + area_name_ + "] Invalid dimensions");
         }
+        resolution_ = vibble::grid::clamp_resolution(resolution);
         if (geometry == "Circle") {
                 generate_circle(center, w / 2, edge_smoothness, map_width, map_height);
         } else if (geometry == "Square") {
@@ -48,10 +56,12 @@ Area::Area(const std::string& name, SDL_Point center, int w, int h,
         } else {
                 throw std::runtime_error("[Area: " + area_name_ + "] Unknown geometry: " + geometry);
         }
-        auto [minx, miny, maxx, maxy] = get_bounds();
-        pos.x = (minx + maxx) / 2;
-        pos.y = maxy;
         update_geometry_data();
+        if (!points.empty()) {
+                auto [minx, miny, maxx, maxy] = get_bounds();
+                pos.x = (minx + maxx) / 2;
+                pos.y = maxy;
+        }
 }
 
 Area::Area(const std::string& name, const std::string& json_path, float )
@@ -66,6 +76,11 @@ Area::Area(const std::string& name, const std::string& json_path, float )
         if (!j.contains("points") || !j["points"].is_array()) {
                 throw std::runtime_error("[Area: " + area_name_ + "] Bad JSON: " + json_path);
         }
+        int resolution = 2;
+        if (j.contains("resolution") && j["resolution"].is_number_integer()) {
+                resolution = j["resolution"].get<int>();
+        }
+        resolution_ = vibble::grid::clamp_resolution(resolution);
         SDL_Point anchor{0, 0};
         if (j.contains("anchor") && j["anchor"].is_object()) {
                 anchor.x = j["anchor"].value("x", 0);
@@ -82,19 +97,21 @@ Area::Area(const std::string& name, const std::string& json_path, float )
         if (points.empty()) {
                 throw std::runtime_error("[Area: " + area_name_ + "] No points loaded");
         }
-        pos.x = anchor.x;
-        pos.y = anchor.y;
+        pos = vibble::grid::snap_world_to_vertex(anchor, resolution_);
+        apply_resolution_to_points();
         update_geometry_data();
 }
 
 void Area::apply_offset(int dx, int dy) {
+        bounds_valid_ = false;
         for (auto& p : points) {
                 p.x += dx;
                 p.y += dy;
         }
         pos.x += dx;
         pos.y += dy;
-	update_geometry_data();
+        apply_resolution_to_points();
+        update_geometry_data();
 }
 
 void Area::align(SDL_Point target) {
@@ -123,13 +140,15 @@ std::tuple<int, int, int, int> Area::get_bounds() const {
 }
 
 void Area::generate_point(SDL_Point center, int map_width, int map_height) {
-	points.clear();
+        points.clear();
         points.emplace_back(SDL_Point{ std::clamp(center.x, 0, map_width), std::clamp(center.y, 0, map_height) });
+        bounds_valid_ = false;
+        apply_resolution_to_points();
 }
 
 void Area::generate_circle(SDL_Point center, int radius, int edge_smoothness, int map_width, int map_height) {
-	int s = std::clamp(edge_smoothness, 0, 100);
-	int count = std::max(12, 6 + s * 2);
+        int s = std::clamp(edge_smoothness, 0, 100);
+        int count = std::max(12, 6 + s * 2);
 	double max_dev = 0.20 * (100 - s) / 100.0;
 	std::uniform_real_distribution<double> dist(1.0 - max_dev, 1.0 + max_dev);
 	points.clear();
@@ -139,15 +158,17 @@ void Area::generate_circle(SDL_Point center, int radius, int edge_smoothness, in
 		double rx = radius * dist(rng), ry = radius * dist(rng);
 		double x = center.x + rx * std::cos(theta);
 		double y = center.y + ry * std::sin(theta);
-		int xi = static_cast<int>(std::round(std::clamp(x, 0.0, static_cast<double>(map_width))));
-		int yi = static_cast<int>(std::round(std::clamp(y, 0.0, static_cast<double>(map_height))));
+                int xi = static_cast<int>(std::round(std::clamp(x, 0.0, static_cast<double>(map_width))));
+                int yi = static_cast<int>(std::round(std::clamp(y, 0.0, static_cast<double>(map_height))));
                 points.emplace_back(SDL_Point{ xi, yi });
-	}
+        }
+        bounds_valid_ = false;
+        apply_resolution_to_points();
 }
 
 void Area::generate_square(SDL_Point center, int w, int h, int edge_smoothness, int map_width, int map_height) {
-	int s = std::clamp(edge_smoothness, 0, 100);
-	double max_dev = 0.25 * (100 - s) / 100.0;
+        int s = std::clamp(edge_smoothness, 0, 100);
+        double max_dev = 0.25 * (100 - s) / 100.0;
 	std::uniform_real_distribution<double> xoff(-max_dev * w, max_dev * w);
 	std::uniform_real_distribution<double> yoff(-max_dev * h, max_dev * h);
 	int half_w = w / 2, half_h = h / 2;
@@ -162,15 +183,19 @@ void Area::generate_square(SDL_Point center, int w, int h, int edge_smoothness, 
                 int y = static_cast<int>(std::round(y0 + yoff(rng)));
                 points.emplace_back(SDL_Point{ std::clamp(x, 0, map_width), std::clamp(y, 0, map_height) });
         }
+        bounds_valid_ = false;
+        apply_resolution_to_points();
 }
 
 void Area::contract(int inset) {
-	if (inset <= 0) return;
+        if (inset <= 0) return;
         for (auto& p : points) {
                 if (p.x > inset) p.x -= inset;
                 if (p.y > inset) p.y -= inset;
         }
-	update_geometry_data();
+        bounds_valid_ = false;
+        apply_resolution_to_points();
+        update_geometry_data();
 }
 
 double Area::get_area() const {
@@ -182,8 +207,10 @@ const std::vector<Area::Point>& Area::get_points() const {
 }
 
 void Area::union_with(const Area& other) {
-	points.insert(points.end(), other.points.begin(), other.points.end());
-	update_geometry_data();
+        points.insert(points.end(), other.points.begin(), other.points.end());
+        bounds_valid_ = false;
+        apply_resolution_to_points();
+        update_geometry_data();
 }
 
 bool Area::contains_point(const Point& pt) const {
@@ -306,28 +333,68 @@ void Area::create_area_texture(SDL_Renderer* renderer) {
 }
 
 void Area::flip_horizontal(std::optional<int> axis_x) {
-	if (points.empty()) return;
-	int cx = axis_x.has_value() ? *axis_x : center_x;
+        if (points.empty()) return;
+        int cx = axis_x.has_value() ? *axis_x : center_x;
         for (auto& p : points) {
                 p.x = 2 * cx - p.x;
         }
         pos.x = 2 * cx - pos.x;
-	update_geometry_data();
+        bounds_valid_ = false;
+        apply_resolution_to_points();
+        update_geometry_data();
 }
 
 void Area::scale(float factor) {
-	if (points.empty() || factor <= 0.0f) return;
-	const int pivot_x = center_x;
-	const int pivot_y = center_y;
+        if (points.empty() || factor <= 0.0f) return;
+        const int pivot_x = center_x;
+        const int pivot_y = center_y;
         for (auto& p : points) {
                 const float dx = static_cast<float>(p.x  - pivot_x);
                 const float dy = static_cast<float>(p.y - pivot_y);
                 p.x  = pivot_x + static_cast<int>(std::lround(dx * factor));
                 p.y = pivot_y + static_cast<int>(std::lround(dy * factor));
         }
+        bounds_valid_ = false;
+        apply_resolution_to_points();
         auto [minx, miny, maxx, maxy] = get_bounds();
         pos.x = (minx + maxx) / 2;
         pos.y = maxy;
-	update_geometry_data();
+        update_geometry_data();
+}
+
+bool Area::apply_resolution_to_points() {
+        const int clamped = vibble::grid::clamp_resolution(resolution_);
+        resolution_ = clamped;
+        bool changed = false;
+        for (auto& p : points) {
+                SDL_Point snapped = vibble::grid::snap_world_to_vertex(p, clamped);
+                if (snapped.x != p.x || snapped.y != p.y) {
+                        p = snapped;
+                        changed = true;
+                }
+        }
+        SDL_Point snapped_pos = vibble::grid::snap_world_to_vertex(pos, clamped);
+        if (snapped_pos.x != pos.x || snapped_pos.y != pos.y) {
+                pos = snapped_pos;
+                changed = true;
+        }
+        if (changed) {
+                bounds_valid_ = false;
+        }
+        return changed;
+}
+
+void Area::set_resolution(int r) {
+        const int clamped = vibble::grid::clamp_resolution(r);
+        if (resolution_ == clamped) {
+                if (apply_resolution_to_points()) {
+                        update_geometry_data();
+                }
+                return;
+        }
+        resolution_ = clamped;
+        if (apply_resolution_to_points()) {
+                update_geometry_data();
+        }
 }
 

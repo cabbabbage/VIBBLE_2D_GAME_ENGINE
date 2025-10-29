@@ -65,16 +65,36 @@ private:
 
     std::vector<std::unique_ptr<Widget>> widget_wrappers_{};
 
-    std::unique_ptr<DMSlider> horizontal_falloff_{};
-    std::unique_ptr<DMSlider> vertical_falloff_{};
+    // Top-level: cells subdivision
+    std::unique_ptr<DMNumericStepper> light_cells_subdivide_{};
+
+    // Collapsible sections state + headers
+    bool offset_section_expanded_ = false;
+    bool opacity_section_expanded_ = false;
+    std::unique_ptr<DMButton> offset_section_header_btn_{};
+    std::unique_ptr<DMButton> opacity_section_header_btn_{};
+
+    // Offset section
+    std::unique_ptr<DMCheckbox> enable_offset_chk_{};
+    std::unique_ptr<DMSlider> offset_horizontal_falloff_{};
+    std::unique_ptr<DMSlider> offset_vertical_falloff_{};
     std::unique_ptr<DMSlider> max_offset_x_{};
     std::unique_ptr<DMSlider> max_offset_y_{};
-    std::unique_ptr<DMSlider> opacity_sensitivity_percent_{};
-    std::unique_ptr<DMSlider> min_scale_percent_{};
-    std::unique_ptr<DMSlider> max_scale_percent_{};
     std::unique_ptr<DMSlider> frame_blend_falloff_frames_{};
     std::unique_ptr<DMSlider> map_light_dir_strength_{};
-    std::unique_ptr<DMSlider> parallax_percent_{};
-    std::unique_ptr<DMSlider> search_radius_{};
+    std::unique_ptr<DMNumericStepper> offset_search_radius_step_{};
+
+    // Opacity section
+    std::unique_ptr<DMCheckbox> enable_opacity_chk_{};
+    std::unique_ptr<DMSlider> opacity_horizontal_falloff_{};
+    std::unique_ptr<DMSlider> opacity_vertical_falloff_{};
+    std::unique_ptr<DMNumericStepper> opacity_search_radius_step_{};
+    std::unique_ptr<DMSlider> min_opacity_{};
+    std::unique_ptr<DMSlider> max_opacity_{};
+    std::unique_ptr<DMSlider> opacity_boost_percent_{};
+
+    // Other existing controls
+    std::unique_ptr<DMSlider> grid_subdivide_{};
+    std::unique_ptr<DMSlider> light_grid_subdivide_{};
 
 };

@@ -1,4 +1,4 @@
-#include "child_loader.hpp"
+#include "asset_child_loader.hpp"
 #include "asset/asset_info.hpp"
 
 using nlohmann::json;
@@ -7,7 +7,7 @@ void ChildLoader::load_children(AssetInfo& info,
                                 const json& data,
                                 const std::string&)
 {
-    info.children.clear();
+    info.asset_children.clear();
     if (!data.contains("spawn_groups") || !data["spawn_groups"].is_array()) {
         return;
     }
@@ -51,6 +51,6 @@ void ChildLoader::load_children(AssetInfo& info,
         }
 
         ci.spawn_group = entry;
-        info.children.emplace_back(std::move(ci));
-    }
+        info.asset_children.emplace_back(std::move(ci));
+}
 }

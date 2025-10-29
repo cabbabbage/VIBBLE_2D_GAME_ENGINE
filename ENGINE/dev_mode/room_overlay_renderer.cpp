@@ -59,7 +59,9 @@ void RenderRoomBoundsOverlay(
         std::vector<SDL_Point> screen_points;
         screen_points.reserve(area_points.size() + 1);
         for (const SDL_Point& world_point : area_points) {
-            screen_points.push_back(cam.map_to_screen(world_point));
+            SDL_FPoint screen_f = cam.map_to_screen(world_point);
+            screen_points.push_back(SDL_Point{static_cast<int>(std::lround(screen_f.x)),
+                                              static_cast<int>(std::lround(screen_f.y))});
         }
         if (screen_points.size() >= 2) {
             const SDL_Point& first = screen_points.front();
@@ -72,7 +74,9 @@ void RenderRoomBoundsOverlay(
         }
     }
 
-    SDL_Point center_screen = cam.map_to_screen(area.get_center());
+    SDL_FPoint center_screen_f = cam.map_to_screen(area.get_center());
+    SDL_Point center_screen{static_cast<int>(std::lround(center_screen_f.x)),
+                            static_cast<int>(std::lround(center_screen_f.y))};
     int arm = compute_center_arm(cam);
     SDL_SetRenderDrawColor(renderer, style.center.r, style.center.g, style.center.b, style.center.a);
     SDL_RenderDrawLine(renderer, center_screen.x - arm, center_screen.y, center_screen.x + arm, center_screen.y);

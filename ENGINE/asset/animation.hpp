@@ -65,6 +65,9 @@ public:
         std::string name;
     } source{};
     bool flipped_source = false;
+    bool flip_vertical_source = false;
+    bool flip_movement_horizontal = false;
+    bool flip_movement_vertical = false;
     bool reverse_source = false;
     bool locked = false;
     float speed_factor = 1.0f;

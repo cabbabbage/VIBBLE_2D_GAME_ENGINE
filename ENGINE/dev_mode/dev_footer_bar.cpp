@@ -245,6 +245,18 @@ const DevFooterBar::Button* DevFooterBar::find_button(const std::string& id) con
     return nullptr;
 }
 
+std::optional<SDL_Rect> DevFooterBar::button_rect(const std::string& id) const {
+    for (const auto& btn : buttons_) {
+        if (btn.id != id) continue;
+        if (!btn.widget) continue;
+        SDL_Rect rect = btn.widget->rect();
+        if (rect.w > 0 && rect.h > 0) {
+            return rect;
+        }
+    }
+    return std::nullopt;
+}
+
 bool DevFooterBar::contains(int x, int y) const {
     if (!visible_) return false;
     SDL_Point p{x, y};

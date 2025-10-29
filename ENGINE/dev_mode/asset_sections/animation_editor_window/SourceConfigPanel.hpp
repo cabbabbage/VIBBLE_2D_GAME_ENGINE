@@ -13,7 +13,6 @@
 
 #include <nlohmann/json.hpp>
 
-class DMCheckbox;
 class DMButton;
 class DMDropdown;
 
@@ -30,6 +29,11 @@ using DMDropdown = ::DMDropdown;
 class SourceConfigPanel {
   public:
     SourceConfigPanel();
+
+    enum class SourceMode {
+        kFrames = 0,
+        kAnimation,
+    };
 
     void set_document(std::shared_ptr<AnimationDocument> document);
     void set_animation_id(const std::string& animation_id);
@@ -51,6 +55,13 @@ class SourceConfigPanel {
     bool handle_event(const SDL_Event& e);
 
     int preferred_height(int width) const;
+
+    bool allow_out_of_bounds_pointer_events() const;
+
+    SourceMode source_mode() const;
+    void set_source_mode(SourceMode mode);
+    bool use_animation_reference() const { return use_animation_reference_; }
+    std::vector<std::string> summary_badges() const;
 
   private:
     struct SourceConfig {
@@ -84,6 +95,7 @@ class SourceConfigPanel {
     void update_status(const std::string& message) const;
     void refresh_animation_options();
     void apply_animation_selection();
+    void clear_derived_fields();
 
     void import_from_folder();
     void import_from_animation();
@@ -113,12 +125,10 @@ class SourceConfigPanel {
     mutable std::filesystem::path cached_asset_root_;
     mutable bool cached_asset_root_valid_ = false;
 
-    std::unique_ptr<DMCheckbox> from_animation_checkbox_;
     std::unique_ptr<DMDropdown> animation_dropdown_;
     std::unique_ptr<DMButton> source_button_;
     std::array<std::unique_ptr<DMButton>, 3> modal_buttons_{};
 
-    SDL_Rect checkbox_rect_{0,0,0,0};
     SDL_Rect dropdown_rect_{0,0,0,0};
     SDL_Rect source_button_rect_{0,0,0,0};
     SDL_Rect modal_rect_{0,0,0,0};
@@ -128,6 +138,7 @@ class SourceConfigPanel {
     bool show_import_modal_ = false;
     std::vector<std::string> animation_options_;
     int animation_index_ = -1;
+    std::string animation_ids_signature_;
 };
 
 }

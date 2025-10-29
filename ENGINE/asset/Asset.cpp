@@ -5,14 +5,17 @@
 #include "core/asset_list.hpp"
 #include "render/camera.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
+#include "animation_update/animation_runtime.hpp"
 #include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
 #include "util/grid.hpp"
+#include "utils/transform_smoothing_settings.hpp"
 #include <iostream>
 #include <random>
 #include <mutex>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <SDL.h>
 
 namespace {
@@ -84,17 +87,30 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
                         current_frame = f;
                 }
         }
+        translation_smoothing_x_.set_params(transform_smoothing::asset_translation_params());
+        translation_smoothing_y_.set_params(transform_smoothing::asset_translation_params());
+        scale_smoothing_.set_params(transform_smoothing::asset_scale_params());
+        alpha_smoothing_.set_params(transform_smoothing::asset_alpha_params());
+
+        translation_smoothing_x_.reset(static_cast<float>(pos.x));
+        translation_smoothing_y_.reset(static_cast<float>(pos.y));
+        const float initial_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f)
+                                        ? info->scale_factor
+                                        : 1.0f;
+        scale_smoothing_.reset(initial_scale);
+        alpha_smoothing_.reset(hidden ? 0.0f : 1.0f);
+
         clear_downscale_cache();
 }
 
 Asset::~Asset() {
         if (parent) {
-                auto& vec = parent->children;
+                auto& vec = parent->asset_children;
                 vec.erase(std::remove(vec.begin(), vec.end(), this), vec.end());
                 parent = nullptr;
         }
-        for (Asset* c : children) {
-                if (c && c->parent == this) c->parent = nullptr;
+        for (Asset* asset_child : asset_children) {
+                if (asset_child && asset_child->parent == this) asset_child->parent = nullptr;
         }
         clear_downscale_cache();
         clear_render_caches();
@@ -116,7 +132,7 @@ Asset::Asset(const Asset& o)
 , flipped(o.flipped)
 , distance_from_camera(o.distance_from_camera)
  , angle_from_camera(o.angle_from_camera)
-, children(o.children)
+, asset_children(o.asset_children)
 , depth(o.depth)
 , is_shaded(o.is_shaded)
 , dead(o.dead)
@@ -146,12 +162,18 @@ Asset::Asset(const Asset& o)
 , last_scaled_camera_scale_(-1.0f)
 , last_scale_usage_()
 , final_texture_revision_(o.final_texture_revision_)
+, scale_variant_state_(o.scale_variant_state_)
 {
         clear_downscale_cache();
         clear_render_caches();
         last_scale_usage_ = o.last_scale_usage_;
+        scale_variant_state_ = o.scale_variant_state_;
         cached_grid_residency_    = o.cached_grid_residency_;
         has_cached_grid_residency_ = o.has_cached_grid_residency_;
+        translation_smoothing_x_  = o.translation_smoothing_x_;
+        translation_smoothing_y_  = o.translation_smoothing_y_;
+        scale_smoothing_          = o.scale_smoothing_;
+        alpha_smoothing_          = o.alpha_smoothing_;
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -169,7 +191,7 @@ Asset& Asset::operator=(const Asset& o) {
         flipped              = o.flipped;
         distance_from_camera = o.distance_from_camera;
         angle_from_camera = o.angle_from_camera;
-        children             = o.children;
+        asset_children       = o.asset_children;
 	depth                = o.depth;
         is_shaded            = o.is_shaded;
 	dead                 = o.dead;
@@ -199,8 +221,13 @@ Asset& Asset::operator=(const Asset& o) {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = o.last_scale_usage_;
+        scale_variant_state_      = o.scale_variant_state_;
         cached_grid_residency_    = o.cached_grid_residency_;
         has_cached_grid_residency_ = o.has_cached_grid_residency_;
+        translation_smoothing_x_  = o.translation_smoothing_x_;
+        translation_smoothing_y_  = o.translation_smoothing_y_;
+        scale_smoothing_          = o.scale_smoothing_;
+        alpha_smoothing_          = o.alpha_smoothing_;
         return *this;
 }
 
@@ -231,21 +258,24 @@ void Asset::finalize_setup() {
                         }
                 }
 	}
-	for (Asset* child : children)
-	if (child) child->finalize_setup();
-        #ifdef VIBBLE_DEBUG_ASSET_LOGS
-        if (!children.empty()) {
+        for (Asset* asset_child : asset_children)
+        if (asset_child) asset_child->finalize_setup();
+#ifdef VIBBLE_DEBUG_ASSET_LOGS
+        if (!asset_children.empty()) {
                 std::cout << "[Asset] \"" << (info ? info->name : std::string{"<null>"})
                 << "\" at (" << pos.x << ", " << pos.y
-                << ") has " << children.size() << " child(ren):\n";
-                for (Asset* child : children)
-                if (child && child->info)
-                std::cout << "    - \"" << child->info->name
-                << "\" at (" << child->pos.x << ", " << child->pos.y << ")\n";
+                << ") has " << asset_children.size() << " child(ren):\n";
+                for (Asset* asset_child : asset_children)
+                if (asset_child && asset_child->info)
+                std::cout << "    - \"" << asset_child->info->name
+                << "\" at (" << asset_child->pos.x << ", " << asset_child->pos.y << ")\n";
         }
-        #endif
+#endif
         if (assets_ && !anim_) {
+                anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
                 anim_ = std::make_unique<AnimationUpdate>(this, assets_);
+                if (anim_runtime_) anim_runtime_->set_planner(anim_.get());
+                if (anim_) anim_->set_runtime(anim_runtime_.get());
         }
         if (assets_ && !controller_) {
                 ControllerFactory cf(assets_);
@@ -335,7 +365,7 @@ void Asset::update() {
             if (def == info->animations.end()) def = info->animations.begin();
             if (def != info->animations.end()) {
                 if (anim_) {
-                    anim_->set_animation_now(def->first);
+                    anim_->move(SDL_Point{ 0, 0 }, def->first);
                 } else {
                     current_animation = def->first;
                     Animation& anim   = def->second;
@@ -355,8 +385,8 @@ void Asset::update() {
         }
     }
 
-    if (!dead && anim_) {
-        anim_->update();
+    if (!dead && anim_runtime_) {
+        anim_runtime_->update();
     }
 
     if (info->moving_asset) {
@@ -368,6 +398,24 @@ void Asset::update() {
             }
         }
     }
+
+    const float dt = assets_ ? assets_->frame_delta_seconds() : (1.0f / 60.0f);
+    translation_smoothing_x_.target = static_cast<float>(pos.x);
+    translation_smoothing_y_.target = static_cast<float>(pos.y);
+
+    float scale_target = 1.0f;
+    if (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) {
+        scale_target = info->scale_factor;
+    }
+    scale_smoothing_.target = scale_target;
+
+    const float alpha_target = hidden ? 0.0f : 1.0f;
+    alpha_smoothing_.target  = alpha_target;
+
+    translation_smoothing_x_.advance(dt);
+    translation_smoothing_y_.advance(dt);
+    scale_smoothing_.advance(dt);
+    alpha_smoothing_.advance(dt);
 }
 
 std::string Asset::get_current_animation() const { return current_animation; }
@@ -394,10 +442,10 @@ bool Asset::is_current_animation_looping() const {
 	return anim.loop;
 }
 
-void Asset::add_child(Asset* child) {
-        if (!child || !child->info) return;
+void Asset::add_child(Asset* asset_child) {
+        if (!asset_child || !asset_child->info) return;
         if (info) {
-                for (const auto& ci : info->children) {
+                for (const auto& ci : info->asset_children) {
                         if (!ci.spawn_group.is_object()) {
                                 continue;
                         }
@@ -410,26 +458,32 @@ void Asset::add_child(Asset* child) {
                                 child_spawn_id.clear();
                         }
 
-                        if (!child_spawn_id.empty() && child_spawn_id == child->spawn_id) {
+                        if (!child_spawn_id.empty() && child_spawn_id == asset_child->spawn_id) {
                                 int z_offset = ci.z_offset;
                                 if (ci.placed_on_top_parent && z_offset <= 0) {
                                         z_offset = 1;
                                 }
-                                child->set_z_offset(z_offset);
+                                asset_child->set_z_offset(z_offset);
                                 break;
                         }
                 }
         }
-        child->parent = this;
-        if (!child->get_assets()) child->set_assets(this->assets_);
-        child->set_z_index();
-        children.push_back(child);
+        asset_child->parent = this;
+        if (!asset_child->get_assets()) asset_child->set_assets(this->assets_);
+        asset_child->set_z_index();
+        asset_children.push_back(asset_child);
 }
 
 void Asset::set_assets(Assets* a) {
     assets_ = a;
+    if (assets_) {
+        assets_->track_asset_for_grid(this);
+    }
     if (assets_ && !anim_) {
+            anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
             anim_ = std::make_unique<AnimationUpdate>(this, assets_);
+            if (anim_runtime_) anim_runtime_->set_planner(anim_.get());
+            if (anim_) anim_->set_runtime(anim_runtime_.get());
     }
     if (!controller_ && assets_) {
             ControllerFactory cf(assets_);
@@ -615,7 +669,7 @@ void Asset::set_shading_group(int x){
 
 Area Asset::get_area(const std::string& name) const {
         if (!info) {
-                return Area(name);
+                return Area(name, 0);
         }
 
         Area* base = info->find_area(name);
@@ -623,7 +677,7 @@ Area Asset::get_area(const std::string& name) const {
                 base = info->find_area(name + "_area");
         }
         if (!base) {
-                return Area(name);
+                return Area(name, 0);
         }
 
         return area_helpers::make_world_area(*info, *base, pos, flipped);
@@ -648,8 +702,6 @@ void Asset::destroy_render_cache(RenderTextureCache& cache) {
 }
 
 void Asset::clear_render_caches() {
-        destroy_render_cache(light_front_cache_);
-        destroy_render_cache(light_behind_cache_);
         destroy_render_cache(shadow_mask_cache_);
         destroy_render_cache(motion_blur_cache_);
         render_pipeline::shading::ClearShadowStateFor(this);
@@ -664,6 +716,7 @@ void Asset::invalidate_downscale_cache() {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = {};
+        reset_scale_variant_state();
 }
 
 void Asset::clear_downscale_cache() {
@@ -693,6 +746,13 @@ void Asset::clear_downscale_cache() {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = {};
+        reset_scale_variant_state();
+}
+
+void Asset::reset_scale_variant_state() {
+        scale_variant_state_.last_variant_index = 0;
+        scale_variant_state_.hysteresis_min     = 0.0f;
+        scale_variant_state_.hysteresis_max     = std::numeric_limits<float>::max();
 }
 
 void Asset::refresh_cached_dimensions() {
@@ -728,30 +788,38 @@ void Asset::refresh_cached_dimensions() {
 void Asset::on_scale_factor_changed() {
         clear_downscale_cache();
         last_scale_usage_ = {};
+        reset_scale_variant_state();
         refresh_cached_dimensions();
 
-        light_front_cache_.width  = 0;
-        light_front_cache_.height = 0;
-        light_behind_cache_.width  = 0;
-        light_behind_cache_.height = 0;
         shadow_mask_cache_.width  = 0;
         shadow_mask_cache_.height = 0;
         motion_blur_cache_.width  = 0;
         motion_blur_cache_.height = 0;
 
-        if (!children.empty() && info) {
-                for (Asset* child : children) {
-                        if (!child || !child->info) {
+        float scale_target = 1.0f;
+        if (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) {
+                scale_target = info->scale_factor;
+        }
+        scale_smoothing_.reset(scale_target);
+
+        if (!asset_children.empty() && info) {
+                for (Asset* asset_child : asset_children) {
+                        if (!asset_child || !asset_child->info) {
                                 continue;
                         }
-                        if (child->info.get() == info.get()) {
-                                child->on_scale_factor_changed();
+                        if (asset_child->info.get() == info.get()) {
+                                asset_child->on_scale_factor_changed();
                         }
                 }
         }
 }
 
-void Asset::update_scale_usage(float requested, float texture_scale, float remainder, int variant_index) {
+void Asset::update_scale_usage(float requested,
+                               float texture_scale,
+                               float remainder,
+                               int   variant_index,
+                               float hysteresis_min,
+                               float hysteresis_max) {
         if (!std::isfinite(requested) || requested <= 0.0f) {
                 requested = 1.0f;
         }
@@ -766,10 +834,55 @@ void Asset::update_scale_usage(float requested, float texture_scale, float remai
         last_scale_usage_.remainder_scale = remainder;
         const int max_index = downscale_cache_.empty() ? 0 : static_cast<int>(downscale_cache_.size() - 1);
         last_scale_usage_.variant_index   = std::clamp(variant_index, 0, max_index);
-
-        if (info) {
-                render_pipeline::ScalingLogic::RecordUsage(info->name, requested, texture_scale);
+        scale_variant_state_.last_variant_index = last_scale_usage_.variant_index;
+        if (!std::isfinite(hysteresis_min) || hysteresis_min < 0.0f) {
+                hysteresis_min = 0.0f;
         }
+        if (!std::isfinite(hysteresis_max) || hysteresis_max <= hysteresis_min) {
+                hysteresis_max = std::numeric_limits<float>::max();
+        }
+        scale_variant_state_.hysteresis_min = hysteresis_min;
+        scale_variant_state_.hysteresis_max = std::max(hysteresis_max, hysteresis_min);
+}
+
+void Asset::set_smoothing_params(const TransformSmoothingParams& translation,
+                                 const TransformSmoothingParams& scale,
+                                 const TransformSmoothingParams& alpha) {
+        auto sanitize = [](const TransformSmoothingParams& params) {
+                TransformSmoothingParams result = params;
+                if (!std::isfinite(result.lerp_rate) || result.lerp_rate < 0.0f) {
+                        result.lerp_rate = 0.0f;
+                }
+                if (!std::isfinite(result.spring_frequency) || result.spring_frequency < 0.0f) {
+                        result.spring_frequency = 0.0f;
+                }
+                if (!std::isfinite(result.max_step) || result.max_step < 0.0f) {
+                        result.max_step = 0.0f;
+                }
+                if (!std::isfinite(result.snap_threshold) || result.snap_threshold < 0.0f) {
+                        result.snap_threshold = 0.0f;
+                }
+                switch (result.method) {
+                case TransformSmoothingMethod::None:
+                case TransformSmoothingMethod::Lerp:
+                case TransformSmoothingMethod::CriticallyDampedSpring:
+                        break;
+                default:
+                        result.method = TransformSmoothingMethod::None;
+                        break;
+                }
+                return result;
+        };
+
+        TransformSmoothingParams translation_params = sanitize(translation);
+        translation_smoothing_x_.set_params(translation_params);
+        translation_smoothing_y_.set_params(translation_params);
+
+        TransformSmoothingParams scale_params = sanitize(scale);
+        scale_smoothing_.set_params(scale_params);
+
+        TransformSmoothingParams alpha_params = sanitize(alpha);
+        alpha_smoothing_.set_params(alpha_params);
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }
@@ -802,10 +915,20 @@ SDL_Point Asset::grid_residency_cache() const {
         return cached_grid_residency_;
 }
 
-Asset::RenderTextureCache& Asset::light_front_cache() { return light_front_cache_; }
-Asset::RenderTextureCache& Asset::light_front_cache() const { return light_front_cache_; }
-Asset::RenderTextureCache& Asset::light_behind_cache() { return light_behind_cache_; }
-Asset::RenderTextureCache& Asset::light_behind_cache() const { return light_behind_cache_; }
+float Asset::smoothed_translation_x() const { return translation_smoothing_x_.value_for_render(); }
+
+float Asset::smoothed_translation_y() const { return translation_smoothing_y_.value_for_render(); }
+
+float Asset::smoothed_scale() const { return scale_smoothing_.value_for_render(); }
+
+float Asset::smoothed_alpha() const {
+        float value = alpha_smoothing_.value_for_render();
+        if (!std::isfinite(value)) {
+                value = hidden ? 0.0f : 1.0f;
+        }
+        return std::clamp(value, 0.0f, 1.0f);
+}
+
 Asset::RenderTextureCache& Asset::shadow_mask_cache() { return shadow_mask_cache_; }
 Asset::RenderTextureCache& Asset::shadow_mask_cache() const { return shadow_mask_cache_; }
 Asset::RenderTextureCache& Asset::motion_blur_cache() { return motion_blur_cache_; }

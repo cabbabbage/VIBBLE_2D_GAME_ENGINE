@@ -12,6 +12,7 @@
 #include "../../PanelLayoutConstants.hpp"
 #include "../../../../dm_styles.hpp"
 #include "../../../../draw_utils.hpp"
+#include "../../PreviewProvider.hpp"
 #include "FramePropertiesPanel.hpp"
 #include "MovementCanvas.hpp"
 #include "TotalsPanel.hpp"
@@ -20,13 +21,15 @@ namespace animation_editor {
 
 namespace {
 
-constexpr int kSidePanelWidth = 240;
 constexpr int kTotalsHeight = 120;
 constexpr int kVariantHeaderPadding = kPanelPadding;
 constexpr int kVariantTabHeight = 28;
 constexpr int kVariantTabSpacing = 6;
 constexpr int kVariantTabWidth = 140;
 constexpr int kVariantCloseSize = 18;
+constexpr int kFrameListBaseSize = 56;
+constexpr int kFrameListMinSize = 36;
+constexpr int kFrameThumbnailPadding = 6;
 
 int clamp_index(int index, int max_value) {
     if (max_value <= 0) return 0;
@@ -144,12 +147,20 @@ void FrameMovementEditor::set_animation_id(const std::string& animation_id) {
     load_frames_from_document();
 }
 
-void FrameMovementEditor::set_bounds(const SDL_Rect& bounds) {
-    bounds_ = bounds;
+void FrameMovementEditor::set_layout_sections(const SDL_Rect& mode_controls_bounds,
+                                              const SDL_Rect& frame_display_bounds,
+                                              const SDL_Rect& frame_list_bounds) {
+    mode_controls_rect_ = mode_controls_bounds;
+    frame_display_rect_ = frame_display_bounds;
+    frame_list_rect_ = frame_list_bounds;
     update_layout();
 }
 
 void FrameMovementEditor::set_close_callback(CloseCallback callback) { close_callback_ = std::move(callback); }
+
+void FrameMovementEditor::set_preview_provider(std::shared_ptr<PreviewProvider> provider) {
+    preview_provider_ = std::move(provider);
+}
 
 void FrameMovementEditor::update() {
     ensure_children();
@@ -179,10 +190,15 @@ void FrameMovementEditor::render(SDL_Renderer* renderer) const {
     if (canvas_) canvas_->render(renderer);
     if (totals_panel_) totals_panel_->render(renderer);
     if (properties_panel_) properties_panel_->render(renderer);
+    render_frame_list(renderer);
 }
 
 bool FrameMovementEditor::handle_event(const SDL_Event& e) {
     if (handle_variant_header_event(e)) {
+        return true;
+    }
+
+    if (handle_frame_list_event(e)) {
         return true;
     }
 
@@ -202,6 +218,7 @@ bool FrameMovementEditor::handle_event(const SDL_Event& e) {
             properties_panel_->set_frames(&frames_);
             properties_panel_->refresh_from_selection();
         }
+        layout_frame_list();
         if (changed) {
             mark_dirty();
         } else {
@@ -221,6 +238,30 @@ bool FrameMovementEditor::handle_event(const SDL_Event& e) {
     }
 
     return consumed;
+}
+
+bool FrameMovementEditor::can_select_previous_frame() const {
+    if (frames_.empty()) return false;
+    return selected_index_ > 0;
+}
+
+bool FrameMovementEditor::can_select_next_frame() const {
+    if (frames_.empty()) return false;
+    return selected_index_ < static_cast<int>(frames_.size()) - 1;
+}
+
+void FrameMovementEditor::select_previous_frame() {
+    selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
+    if (selected_index_ <= 0) return;
+    --selected_index_;
+    synchronize_selection();
+}
+
+void FrameMovementEditor::select_next_frame() {
+    selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
+    if (selected_index_ >= static_cast<int>(frames_.size()) - 1) return;
+    ++selected_index_;
+    synchronize_selection();
 }
 
 void FrameMovementEditor::load_frames_from_document() {
@@ -365,14 +406,8 @@ void FrameMovementEditor::ensure_children() {
     }
     if (!totals_panel_) {
         totals_panel_ = std::make_unique<TotalsPanel>();
-        totals_panel_->set_selected_index(&selected_index_);
-        totals_panel_->set_on_selection_changed([this](int index) {
-            selected_index_ = clamp_index(index, static_cast<int>(frames_.size()));
-            synchronize_selection();
-        });
-    } else {
-        totals_panel_->set_selected_index(&selected_index_);
     }
+    if (totals_panel_) totals_panel_->set_selected_index(&selected_index_);
     if (!properties_panel_) {
         properties_panel_ = std::make_unique<FramePropertiesPanel>();
         properties_panel_->set_frames(&frames_);
@@ -386,25 +421,44 @@ void FrameMovementEditor::ensure_children() {
 }
 
 void FrameMovementEditor::update_layout() {
-    if (bounds_.w <= 0 || bounds_.h <= 0) return;
+    if (canvas_) canvas_->set_bounds(frame_display_rect_);
 
-    header_rect_ = SDL_Rect{bounds_.x, bounds_.y, bounds_.w, kVariantTabHeight + kVariantHeaderPadding * 2};
+    if (mode_controls_rect_.w <= 0 || mode_controls_rect_.h <= 0) {
+        header_rect_ = SDL_Rect{0, 0, 0, 0};
+        totals_rect_ = SDL_Rect{0, 0, 0, 0};
+        properties_rect_ = SDL_Rect{0, 0, 0, 0};
+    } else {
+        int header_height = std::min(mode_controls_rect_.h, kVariantTabHeight + kVariantHeaderPadding * 2);
+        if (header_height < 0) header_height = 0;
+        header_rect_ = SDL_Rect{mode_controls_rect_.x, mode_controls_rect_.y, mode_controls_rect_.w, header_height};
 
-    const int content_top = header_rect_.y + header_rect_.h;
-    const int content_height = std::max(0, bounds_.h - header_rect_.h);
-    const int canvas_width = std::max(0, bounds_.w - kSidePanelWidth - kPanelPadding * 3);
-    const int canvas_height = std::max(0, content_height - kTotalsHeight - kPanelPadding * 3);
+        const int content_x = mode_controls_rect_.x + kPanelPadding;
+        const int content_y = header_rect_.y + header_rect_.h + kPanelPadding;
+        const int content_w = std::max(0, mode_controls_rect_.w - kPanelPadding * 2);
+        const int content_h = std::max(0, mode_controls_rect_.y + mode_controls_rect_.h - content_y - kPanelPadding);
 
-    SDL_Rect canvas_bounds{bounds_.x + kPanelPadding, content_top + kPanelPadding, canvas_width, canvas_height};
-    SDL_Rect totals_bounds{canvas_bounds.x, canvas_bounds.y + canvas_bounds.h + kPanelPadding, canvas_width, kTotalsHeight};
-    SDL_Rect properties_bounds{canvas_bounds.x + canvas_width + kPanelPadding, content_top + kPanelPadding,
-                               kSidePanelWidth, content_height - 2 * kPanelPadding};
+        constexpr int kTwoColumnThreshold = 380;
+        const int column_gap = kPanelPadding;
 
-    if (canvas_) canvas_->set_bounds(canvas_bounds);
-    if (totals_panel_) totals_panel_->set_bounds(totals_bounds);
-    if (properties_panel_) properties_panel_->set_bounds(properties_bounds);
+        if (content_w >= kTwoColumnThreshold) {
+            const int totals_width = std::max(0, (content_w - column_gap) / 2);
+            const int properties_width = std::max(0, content_w - totals_width - column_gap);
+            totals_rect_ = SDL_Rect{content_x, content_y, totals_width, content_h};
+            properties_rect_ = SDL_Rect{content_x + totals_width + column_gap, content_y, properties_width, content_h};
+        } else {
+            const int spacing = (content_h > kPanelPadding) ? kPanelPadding : 0;
+            const int totals_height = std::min(content_h, kTotalsHeight);
+            const int remaining_height = std::max(0, content_h - totals_height - spacing);
+            totals_rect_ = SDL_Rect{content_x, content_y, content_w, totals_height};
+            properties_rect_ = SDL_Rect{content_x, content_y + totals_rect_.h + spacing, content_w, remaining_height};
+        }
+    }
+
+    if (totals_panel_) totals_panel_->set_bounds(totals_rect_);
+    if (properties_panel_) properties_panel_->set_bounds(properties_rect_);
 
     layout_variant_header();
+    layout_frame_list();
 }
 
 void FrameMovementEditor::synchronize_selection() {
@@ -421,6 +475,7 @@ void FrameMovementEditor::mark_dirty() {
         canvas_->set_selected_index(selected_index_);
     }
     if (totals_panel_) totals_panel_->set_frames(frames_);
+    layout_frame_list();
 }
 
 void FrameMovementEditor::layout_variant_header() {
@@ -510,6 +565,83 @@ void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {
     render_tab_text(renderer, "+", add_button_rect_, active_style.text);
 }
 
+void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
+    if (!renderer || frame_list_rect_.w <= 0 || frame_list_rect_.h <= 0) {
+        return;
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    dm_draw::DrawBeveledRect(renderer, frame_list_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(),
+                             DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(),
+                             DMStyles::ShadowIntensity());
+
+    if (frame_item_rects_.empty()) {
+        render_tab_text(renderer, "No Frames", frame_list_rect_, DMStyles::Label().color);
+        return;
+    }
+
+    const DMButtonStyle& list_style = DMStyles::ListButton();
+    const DMButtonStyle& accent_style = DMStyles::AccentButton();
+    SDL_Color text_color = DMStyles::Label().color;
+
+    for (size_t i = 0; i < frame_item_rects_.size(); ++i) {
+        const SDL_Rect& item = frame_item_rects_[i];
+        SDL_Color fill = list_style.bg;
+        if (static_cast<int>(i) == selected_index_) {
+            fill = accent_style.hover_bg;
+        } else if (static_cast<int>(i) == hovered_frame_index_) {
+            fill = accent_style.bg;
+        }
+        SDL_Color fill_color{fill.r, fill.g, fill.b, 235};
+        const int radius = std::min(DMStyles::CornerRadius(), std::min(item.w, item.h) / 2);
+        const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(item.w, item.h) / 2));
+        dm_draw::DrawBeveledRect(renderer, item, radius, bevel, fill_color, fill_color, fill_color, false, 0.0f, 0.0f);
+        dm_draw::DrawRoundedOutline(renderer, item, radius, 1, list_style.border);
+
+        bool rendered_texture = false;
+        if (preview_provider_ && !animation_id_.empty()) {
+            SDL_Texture* texture = preview_provider_->get_frame_texture(renderer, animation_id_, static_cast<int>(i));
+            if (texture) {
+                int tex_w = 0;
+                int tex_h = 0;
+                if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) == 0 && tex_w > 0 && tex_h > 0) {
+                    const int max_w = std::max(1, item.w - kFrameThumbnailPadding * 2);
+                    const int max_h = std::max(1, item.h - kFrameThumbnailPadding * 2);
+                    float scale = std::min(static_cast<float>(max_w) / static_cast<float>(tex_w),
+                                            static_cast<float>(max_h) / static_cast<float>(tex_h));
+                    if (scale <= 0.0f) {
+                        scale = 1.0f;
+                    }
+                    if (scale > 1.0f) {
+                        scale = 1.0f;
+                    }
+                    int draw_w = std::max(1, static_cast<int>(std::round(tex_w * scale)));
+                    int draw_h = std::max(1, static_cast<int>(std::round(tex_h * scale)));
+                    SDL_Rect dst{item.x + (item.w - draw_w) / 2, item.y + (item.h - draw_h) / 2, draw_w, draw_h};
+                    SDL_RenderCopy(renderer, texture, nullptr, &dst);
+                    rendered_texture = true;
+                }
+            }
+        }
+
+        if (!rendered_texture) {
+            render_tab_text(renderer, std::to_string(i + 1), item, text_color);
+        } else {
+            const int badge_padding = 4;
+            const int badge_height = 18;
+            const int badge_width = 28;
+            SDL_Rect badge{item.x + item.w - badge_width - badge_padding,
+                           item.y + item.h - badge_height - badge_padding, badge_width, badge_height};
+            SDL_Color badge_bg = DMStyles::PanelBG();
+            badge_bg.a = 215;
+            const int badge_radius = std::min(DMStyles::CornerRadius(), std::min(badge.w, badge.h) / 2);
+            dm_draw::DrawBeveledRect(renderer, badge, badge_radius, 1, badge_bg, badge_bg, badge_bg, false, 0.0f, 0.0f);
+            dm_draw::DrawRoundedOutline(renderer, badge, badge_radius, 1, list_style.border);
+            render_tab_text(renderer, std::to_string(i + 1), badge, text_color);
+        }
+    }
+}
+
 bool FrameMovementEditor::handle_variant_header_event(const SDL_Event& e) {
     switch (e.type) {
         case SDL_MOUSEMOTION: {
@@ -591,6 +723,109 @@ bool FrameMovementEditor::handle_variant_header_event(const SDL_Event& e) {
     return false;
 }
 
+bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
+    if (frame_list_rect_.w <= 0 || frame_list_rect_.h <= 0) {
+        hovered_frame_index_ = -1;
+        return false;
+    }
+
+    auto index_at_point = [this](SDL_Point p) {
+        for (size_t i = 0; i < frame_item_rects_.size(); ++i) {
+            if (SDL_PointInRect(&p, &frame_item_rects_[i])) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    };
+
+    switch (e.type) {
+        case SDL_MOUSEMOTION: {
+            SDL_Point p{e.motion.x, e.motion.y};
+            hovered_frame_index_ = index_at_point(p);
+            return SDL_PointInRect(&p, &frame_list_rect_) != 0;
+        }
+        case SDL_MOUSEBUTTONDOWN: {
+            if (e.button.button != SDL_BUTTON_LEFT) {
+                break;
+            }
+            SDL_Point p{e.button.x, e.button.y};
+            int index = index_at_point(p);
+            if (index >= 0) {
+                selected_index_ = clamp_index(index, static_cast<int>(frames_.size()));
+                synchronize_selection();
+                return true;
+            }
+            break;
+        }
+        case SDL_MOUSEBUTTONUP: {
+            if (e.button.button != SDL_BUTTON_LEFT) {
+                break;
+            }
+            SDL_Point p{e.button.x, e.button.y};
+            if (index_at_point(p) >= 0) {
+                return true;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+
+    if (e.type == SDL_MOUSEMOTION) {
+        return false;
+    }
+
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        SDL_Point p{e.button.x, e.button.y};
+        return SDL_PointInRect(&p, &frame_list_rect_) != 0;
+    }
+
+    return false;
+}
+
+void FrameMovementEditor::layout_frame_list() {
+    frame_item_rects_.clear();
+    hovered_frame_index_ = -1;
+
+    if (frame_list_rect_.w <= 0 || frame_list_rect_.h <= 0 || frames_.empty()) {
+        return;
+    }
+
+    const int padding = kPanelPadding;
+    const int spacing = kPanelPadding;
+    const int available_width = std::max(0, frame_list_rect_.w - padding * 2);
+    const int available_height = std::max(0, frame_list_rect_.h - padding * 2);
+    if (available_width <= 0 || available_height <= 0) {
+        return;
+    }
+
+    int columns = std::max(1, std::min(static_cast<int>(frames_.size()), available_width / (kFrameListMinSize + spacing)));
+    if (columns == 0) columns = 1;
+    int rows = std::max(1, static_cast<int>((frames_.size() + columns - 1) / columns));
+
+    int item_width = std::max(kFrameListMinSize,
+                              std::min(kFrameListBaseSize, (available_width - spacing * (columns - 1)) / columns));
+    int item_height = std::max(kFrameListMinSize,
+                               std::min(kFrameListBaseSize, (available_height - spacing * (rows - 1)) / rows));
+
+    int used_width = columns * item_width + (columns - 1) * spacing;
+    int used_height = rows * item_height + (rows - 1) * spacing;
+
+    int start_x = frame_list_rect_.x + padding + std::max(0, (available_width - used_width) / 2);
+    int start_y = frame_list_rect_.y + padding + std::max(0, (available_height - used_height) / 2);
+
+    frame_item_rects_.reserve(frames_.size());
+    int index = 0;
+    for (int row = 0; row < rows && index < static_cast<int>(frames_.size()); ++row) {
+        for (int col = 0; col < columns && index < static_cast<int>(frames_.size()); ++col) {
+            SDL_Rect item{start_x + col * (item_width + spacing), start_y + row * (item_height + spacing), item_width,
+                          item_height};
+            frame_item_rects_.push_back(item);
+            ++index;
+        }
+    }
+}
+
 void FrameMovementEditor::set_active_variant(int index, bool preserve_view) {
     if (index < 0 || index >= static_cast<int>(variants_.size())) {
         return;
@@ -620,6 +855,7 @@ void FrameMovementEditor::update_child_frames(bool preserve_view) {
         properties_panel_->set_frames(&frames_);
         properties_panel_->refresh_from_selection();
     }
+    layout_frame_list();
 }
 
 void FrameMovementEditor::sync_active_variant_frames() {

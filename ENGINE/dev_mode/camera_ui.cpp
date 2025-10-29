@@ -18,6 +18,38 @@
 #include "dev_mode/widgets.hpp"
 #include "utils/input.hpp"
 
+namespace {
+    constexpr float kMinTau = 1e-4f;
+
+    float rate_from_tau(float tau) {
+        if (!std::isfinite(tau) || tau <= kMinTau) {
+            return 0.0f;
+        }
+        return 1.0f / tau;
+    }
+
+    float tau_from_rate(float rate) {
+        if (!std::isfinite(rate) || rate <= kMinTau) {
+            return 0.0f;
+        }
+        return 1.0f / rate;
+    }
+
+    int method_to_index(TransformSmoothingMethod method) {
+        switch (method) {
+        case TransformSmoothingMethod::Lerp:
+            return 0;
+        case TransformSmoothingMethod::CriticallyDampedSpring:
+        default:
+            return 1;
+        }
+    }
+
+    TransformSmoothingMethod method_from_index(int idx) {
+        return (idx == 0) ? TransformSmoothingMethod::Lerp : TransformSmoothingMethod::CriticallyDampedSpring;
+    }
+}
+
 class SectionLabelWidget : public Widget {
 public:
     explicit SectionLabelWidget(std::string text)
@@ -86,6 +118,10 @@ public:
 
     void set_rect(const SDL_Rect& r) override {
         if (slider_widget_) slider_widget_->set_rect(r);
+    }
+
+    void set_tooltip(std::string text) {
+        if (slider_widget_) slider_widget_->set_tooltip(std::move(text));
     }
 
     const SDL_Rect& rect() const override {
@@ -252,6 +288,10 @@ public:
         if (slider_widget_) slider_widget_->render(renderer);
     }
 
+    void set_tooltip(std::string text) {
+        if (slider_widget_) slider_widget_->set_tooltip(std::move(text));
+    }
+
 private:
     int clamp_index(int index) const {
         if (values_.empty()) return 0;
@@ -360,11 +400,25 @@ void CameraUIPanel::sync_from_camera() {
     if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(last_settings_.foreshorten_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(last_settings_.distance_scale_strength);
     if (render_quality_slider_) render_quality_slider_->set_value(last_settings_.render_quality_percent);
+    if (smoothing_checkbox_) smoothing_checkbox_->set_value(last_settings_.smooth_motion_zoom);
+    if (smoothing_method_dropdown_) smoothing_method_dropdown_->set_selected(method_to_index(last_settings_.motion_smoothing_method));
+    if (motion_tau_slider_) motion_tau_slider_->set_value(last_settings_.motion_smoothing_tau);
+    if (motion_stiffness_slider_) motion_stiffness_slider_->set_value(last_settings_.motion_smoothing_spring_frequency);
+    if (motion_max_step_slider_) motion_max_step_slider_->set_value(last_settings_.motion_smoothing_max_step);
+    if (motion_snap_slider_) motion_snap_slider_->set_value(last_settings_.motion_smoothing_snap_threshold);
+    if (parallax_smoothing_slider_) {
+        const float slider_value = (last_settings_.parallax_smoothing.method == TransformSmoothingMethod::Lerp)
+            ? tau_from_rate(last_settings_.parallax_smoothing.lerp_rate)
+            : last_settings_.parallax_smoothing.spring_frequency;
+        parallax_smoothing_slider_->set_value(slider_value);
+    }
+    if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(last_settings_.scale_variant_hysteresis_margin);
 }
 
 void CameraUIPanel::build_ui() {
     effects_checkbox_ = std::make_unique<DMCheckbox>("Perspective Effects", true);
     effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
+    effects_widget_->set_tooltip("Enable perspective-based camera effects such as parallax and distance scaling.");
 
     load_button_ = std::make_unique<DMButton>("Load", &DMStyles::HeaderButton(), 110, DMButton::height());
     reset_button_ = std::make_unique<DMButton>("Reset", &DMStyles::HeaderButton(), 110, DMButton::height());
@@ -375,14 +429,59 @@ void CameraUIPanel::build_ui() {
 
     render_section_label_ = std::make_unique<SectionLabelWidget>("Rendering");
     perspective_section_label_ = std::make_unique<SectionLabelWidget>("Perspective");
+    smoothing_section_label_ = std::make_unique<SectionLabelWidget>("Smoothing");
     render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Distance (world units)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
+    render_distance_slider_->set_tooltip("Maximum world-space distance from the camera at which assets are rendered.");
     min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min Visible Screen Ratio", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
+    min_render_size_slider_->set_tooltip("Cull sprites once their on-screen height falls below this fraction of the viewport.");
     tripod_distance_slider_ = std::make_unique<FloatSliderWidget>("Tripod Distance (Y)", -2000.0f, 0.0f, 5.0f, defaults.tripod_distance_y, 0);
+    tripod_distance_slider_->set_tooltip("Offsets the camera's reference tripod on the Y axis to bias parallax.");
     height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Height @ Zoom = 1 (px)", 0.0f, 1000.0f, 1.0f, defaults.height_at_zoom1, 0);
+    height_zoom1_slider_->set_tooltip("Defines the camera height in pixels when zoom is exactly 1.0.");
     parallax_strength_slider_ = std::make_unique<FloatSliderWidget>("Parallax Strength", 0.0f, 100.0f, 0.25f, defaults.parallax_strength, 2);
+    parallax_strength_slider_->set_tooltip("Amount of horizontal parallax offset applied relative to camera panning.");
     foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Foreshortening Strength", 0.0f, 1.0f, 0.01f, defaults.foreshorten_strength, 2);
+    foreshorten_strength_slider_->set_tooltip("Scale applied to vertical stretching to fake depth in the scene.");
     distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scaling Strength", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
+    distance_strength_slider_->set_tooltip("Controls how aggressively distant objects are scaled down.");
     render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
+    render_quality_slider_->set_tooltip("Overrides the percentage used when rendering downscaled textures for performance.");
+
+    smoothing_checkbox_ = std::make_unique<DMCheckbox>("Smooth Motion/Zoom", defaults.smooth_motion_zoom);
+    smoothing_widget_   = std::make_unique<CheckboxWidget>(smoothing_checkbox_.get());
+    smoothing_widget_->set_tooltip("Toggle smoothing for camera motion, zoom, and asset interpolation.");
+
+    const std::vector<std::string> method_options{"Lerp", "Spring"};
+    smoothing_method_dropdown_ = std::make_unique<DMDropdown>(
+        "Method",
+        method_options,
+        method_to_index(defaults.motion_smoothing_method));
+    smoothing_method_widget_ = std::make_unique<DropdownWidget>(smoothing_method_dropdown_.get());
+    smoothing_method_widget_->set_tooltip("Choose the smoothing function applied to motion and parallax.");
+
+    motion_tau_slider_ = std::make_unique<FloatSliderWidget>("Motion Tau (s)", 0.0f, 1.0f, 0.01f, defaults.motion_smoothing_tau, 3);
+    motion_tau_slider_->set_tooltip("Time constant used when the Lerp method is active (smaller reacts faster).");
+    motion_stiffness_slider_ = std::make_unique<FloatSliderWidget>(
+        "Motion Spring Frequency (Hz)", 0.0f, 10.0f, 0.05f, defaults.motion_smoothing_spring_frequency, 2);
+    motion_stiffness_slider_->set_tooltip("Oscillation frequency for critically damped spring smoothing.");
+    motion_max_step_slider_ = std::make_unique<FloatSliderWidget>(
+        "Motion Max Step (units/s)", 0.0f, 12000.0f, 25.0f, defaults.motion_smoothing_max_step, 0);
+    motion_max_step_slider_->set_tooltip("Upper bound on how far smoothing may advance toward the target per second.");
+    motion_snap_slider_ = std::make_unique<FloatSliderWidget>("Motion Snap Threshold", 0.0f, 5.0f, 0.01f, defaults.motion_smoothing_snap_threshold, 2);
+    motion_snap_slider_->set_tooltip("Snap directly to the target when the remaining distance falls below this amount.");
+
+    const float default_parallax_value = (defaults.parallax_smoothing.method == TransformSmoothingMethod::Lerp)
+        ? tau_from_rate(defaults.parallax_smoothing.lerp_rate)
+        : defaults.parallax_smoothing.spring_frequency;
+    parallax_smoothing_slider_ = std::make_unique<FloatSliderWidget>(
+        "Parallax Smoothing", 0.0f, 12.0f, 0.05f, default_parallax_value, 2);
+    parallax_smoothing_slider_->set_tooltip(
+        "Controls smoothing for parallax offsets (seconds for Lerp, frequency for Spring).");
+
+    hysteresis_margin_slider_ = std::make_unique<FloatSliderWidget>(
+        "Scale Variant Hysteresis", 0.0f, 0.5f, 0.005f, defaults.scale_variant_hysteresis_margin, 3);
+    hysteresis_margin_slider_->set_tooltip(
+        "Adjusts the hysteresis margin when choosing between pre-scaled texture variants.");
 
     rebuild_rows();
 }
@@ -398,6 +497,11 @@ void CameraUIPanel::rebuild_rows() {
     rows.push_back({ tripod_distance_slider_.get(), height_zoom1_slider_.get() });
     rows.push_back({ parallax_strength_slider_.get(), foreshorten_strength_slider_.get() });
     rows.push_back({ distance_strength_slider_.get() });
+    rows.push_back({ smoothing_section_label_.get() });
+    rows.push_back({ smoothing_widget_.get(), smoothing_method_widget_.get() });
+    rows.push_back({ motion_tau_slider_.get(), motion_stiffness_slider_.get() });
+    rows.push_back({ motion_max_step_slider_.get(), motion_snap_slider_.get() });
+    rows.push_back({ parallax_smoothing_slider_.get(), hysteresis_margin_slider_.get() });
     rows.push_back({ load_widget_.get(), reset_widget_.get() });
     set_rows(rows);
 }
@@ -414,6 +518,17 @@ void CameraUIPanel::reset_to_defaults() {
     if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(defaults.foreshorten_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(defaults.distance_scale_strength);
     if (render_quality_slider_) render_quality_slider_->set_value(defaults.render_quality_percent);
+    if (smoothing_checkbox_) smoothing_checkbox_->set_value(defaults.smooth_motion_zoom);
+    if (smoothing_method_dropdown_) smoothing_method_dropdown_->set_selected(method_to_index(defaults.motion_smoothing_method));
+    if (motion_tau_slider_) motion_tau_slider_->set_value(defaults.motion_smoothing_tau);
+    if (motion_stiffness_slider_) motion_stiffness_slider_->set_value(defaults.motion_smoothing_spring_frequency);
+    if (motion_max_step_slider_) motion_max_step_slider_->set_value(defaults.motion_smoothing_max_step);
+    if (motion_snap_slider_) motion_snap_slider_->set_value(defaults.motion_smoothing_snap_threshold);
+    const float default_parallax_value = (defaults.parallax_smoothing.method == TransformSmoothingMethod::Lerp)
+        ? tau_from_rate(defaults.parallax_smoothing.lerp_rate)
+        : defaults.parallax_smoothing.spring_frequency;
+    if (parallax_smoothing_slider_) parallax_smoothing_slider_->set_value(default_parallax_value);
+    if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(defaults.scale_variant_hysteresis_margin);
     apply_settings_if_needed();
 }
 
@@ -439,6 +554,16 @@ void CameraUIPanel::apply_settings_if_needed() {
     if (render_quality_slider_) {
         changed = changed || settings.render_quality_percent != prev.render_quality_percent;
     }
+    changed = changed || settings.smooth_motion_zoom != prev.smooth_motion_zoom;
+    changed = changed || settings.motion_smoothing_method != prev.motion_smoothing_method;
+    changed = changed || differs(settings.motion_smoothing_tau, prev.motion_smoothing_tau);
+    changed = changed || differs(settings.motion_smoothing_spring_frequency, prev.motion_smoothing_spring_frequency);
+    changed = changed || differs(settings.motion_smoothing_max_step, prev.motion_smoothing_max_step);
+    changed = changed || differs(settings.motion_smoothing_snap_threshold, prev.motion_smoothing_snap_threshold);
+    changed = changed || differs(settings.scale_variant_hysteresis_margin, prev.scale_variant_hysteresis_margin);
+    changed = changed || settings.parallax_smoothing.method != prev.parallax_smoothing.method ||
+        differs(settings.parallax_smoothing.lerp_rate, prev.parallax_smoothing.lerp_rate) ||
+        differs(settings.parallax_smoothing.spring_frequency, prev.parallax_smoothing.spring_frequency);
 
     if (changed) {
         apply_settings_to_camera(settings, effects_enabled);
@@ -462,7 +587,7 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
 }
 
 camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
-    camera::RealismSettings settings{};
+    camera::RealismSettings settings = last_settings_;
     if (render_distance_slider_) settings.render_distance = std::max(0.0f, render_distance_slider_->value());
     if (min_render_size_slider_) settings.min_visible_screen_ratio = std::clamp(min_render_size_slider_->value(), 0.0f, 0.5f);
     if (tripod_distance_slider_) settings.tripod_distance_y = std::clamp(tripod_distance_slider_->value(), -2000.0f, 2000.0f);
@@ -471,6 +596,33 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     if (foreshorten_strength_slider_) settings.foreshorten_strength = std::max(0.0f, foreshorten_strength_slider_->value());
     if (distance_strength_slider_) settings.distance_scale_strength = std::max(0.0f, distance_strength_slider_->value());
     if (render_quality_slider_) settings.render_quality_percent = render_quality_slider_->value();
+    if (smoothing_checkbox_) settings.smooth_motion_zoom = smoothing_checkbox_->value();
+
+    TransformSmoothingMethod method = settings.motion_smoothing_method;
+    if (smoothing_method_dropdown_) {
+        method = method_from_index(smoothing_method_dropdown_->selected());
+    }
+    settings.motion_smoothing_method = method;
+
+    if (motion_tau_slider_) settings.motion_smoothing_tau = std::max(0.0f, motion_tau_slider_->value());
+    if (motion_stiffness_slider_) settings.motion_smoothing_spring_frequency = std::max(0.0f, motion_stiffness_slider_->value());
+    if (motion_max_step_slider_) settings.motion_smoothing_max_step = std::max(0.0f, motion_max_step_slider_->value());
+    if (motion_snap_slider_) settings.motion_smoothing_snap_threshold = std::max(0.0f, motion_snap_slider_->value());
+
+    if (parallax_smoothing_slider_) {
+        const float slider_value = std::max(0.0f, parallax_smoothing_slider_->value());
+        if (method == TransformSmoothingMethod::Lerp) {
+            settings.parallax_smoothing.lerp_rate = rate_from_tau(slider_value);
+            settings.parallax_smoothing.spring_frequency = 0.0f;
+        } else {
+            settings.parallax_smoothing.spring_frequency = slider_value;
+            settings.parallax_smoothing.lerp_rate = 0.0f;
+        }
+    }
+    settings.parallax_smoothing.method = method;
+    if (hysteresis_margin_slider_) {
+        settings.scale_variant_hysteresis_margin = std::max(0.0f, hysteresis_margin_slider_->value());
+    }
     return settings;
 }
 

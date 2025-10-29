@@ -50,6 +50,9 @@ class AssetInfoUI {
     devmode::core::ManifestStore* manifest_store() const { return manifest_store_; }
     void set_target_asset(class Asset* a);
     class Asset* get_target_asset() const { return target_asset_; }
+    // Open Area Info UI for a room-scoped Area
+    void open_for_room_area(class Room* room, const std::string& area_name);
+    void clear_area_context();
     bool is_point_inside(int x, int y) const;
     SDL_Renderer* get_last_renderer() const { return last_renderer_; }
     void refresh_target_asset_scale();
@@ -62,11 +65,13 @@ class AssetInfoUI {
     void regenerate_shadow_masks();
 
   private:
+    void rebuild_default_sections();
     void layout_widgets(int screen_w, int screen_h) const;
     void apply_camera_override(bool enable);
     float compute_player_screen_height(const class camera& cam) const;
     void save_now() const;
     void open_area_editor(const std::string& name);
+    void open_room_area_editor(const std::string& name);
     bool apply_section_to_assets(AssetInfoSectionId section_id, const std::vector<std::string>& asset_names);
     static const char* section_display_name(AssetInfoSectionId section_id);
     void sync_map_light_panel_visibility(bool want_visible);
@@ -102,4 +107,11 @@ class AssetInfoUI {
     bool forcing_high_quality_rendering_ = false;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     Section_SpawnGroups* spawn_groups_section_ = nullptr;
+
+    // Area context (when showing Area Info instead of Asset Info)
+    bool area_mode_ = false;
+    class Room* area_room_ = nullptr;
+    std::string area_name_;
+    class DockableCollapsible* area_settings_section_ = nullptr;
+    class DockableCollapsible* area_spawns_section_ = nullptr;
 };

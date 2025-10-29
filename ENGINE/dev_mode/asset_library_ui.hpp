@@ -46,6 +46,11 @@ public:
     bool handle_event(const SDL_Event& e);
 
     std::shared_ptr<AssetInfo> consume_selection();
+    struct AreaRef {
+        std::string room_name;
+        std::string area_name;
+    };
+    std::optional<AreaRef> consume_area_selection();
 
 private:
     void ensure_items(AssetLibrary& lib);
@@ -83,6 +88,7 @@ private:
 
     struct AssetTileWidget;
     struct HashtagTileWidget;
+    struct RoomAreaTileWidget;
     std::vector<std::unique_ptr<Widget>> tiles_;
     std::vector<std::string> tag_items_;
     std::unordered_map<std::string, std::vector<std::shared_ptr<AssetInfo>>> tag_asset_lookup_;
@@ -100,6 +106,7 @@ private:
     mutable std::unordered_set<std::string> preview_attempted_;
 
     std::shared_ptr<AssetInfo> pending_selection_{};
+    std::optional<AreaRef> pending_area_selection_{};
 
     bool showing_create_popup_ = false;
     std::string new_asset_name_;

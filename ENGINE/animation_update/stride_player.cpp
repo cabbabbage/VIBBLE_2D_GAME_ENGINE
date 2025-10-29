@@ -1,14 +1,14 @@
-#include "stride_player.hpp"
+﻿#include "stride_player.hpp"
 
 #include <vector>
 
-#include "animation_update.hpp"
+#include "animation_runtime.hpp"
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
 #include "asset/animation_frame.hpp"
-#include "animation_update_utils.hpp"
+#include "animation_update.hpp"
 
-bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
+bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
                         std::size_t& stride_index, int& stride_frame_counter) {
     Asset* self = up.self_;
     if (!self || !self->info) {
@@ -29,7 +29,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
         stride_index    = 0;
         stride_frame_counter = 0;
         up.switch_to(animation_update::detail::kDefaultAnimation, 0);
-        up.path_requested = true;
+        if (up.planner_iface_) { up.planner_iface_->path_requested = true; }
 };
 
     Stride& stride = plan.strides[stride_index];
@@ -52,7 +52,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
     }
 
     if (stride_index == plan.strides.size() - 1 && stride_frame_counter == 0) {
-        up.path_requested = true;
+        if (up.planner_iface_) { up.planner_iface_->path_requested = true; }
     }
 
     auto anim_it = self->info->animations.find(self->current_animation);
@@ -72,9 +72,9 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
     }
 
     AnimationFrame* frame = self->current_frame;
-    SDL_Point from = self->pos;
-    SDL_Point delta{ frame->dx, frame->dy };
-    SDL_Point to{ from.x + delta.x, from.y + delta.y };
+    SDL_Point        from  = self->pos;
+    SDL_Point        delta = animation_update::detail::frame_world_delta(*frame, *self, up.grid());
+    SDL_Point        to{ from.x + delta.x, from.y + delta.y };
 
     if (delta.x != 0 || delta.y != 0) {
         std::vector<const Asset*> blockers;
@@ -119,7 +119,7 @@ bool StridePlayer::tick(AnimationUpdate& up, Plan& plan,
         const Stride& next_stride = plan.strides[stride_index];
         up.switch_to(next_stride.animation_id, next_stride.path_index);
         if (stride_index == plan.strides.size() - 1) {
-            up.path_requested = true;
+            if (up.planner_iface_) { up.planner_iface_->path_requested = true; }
         }
     }
 

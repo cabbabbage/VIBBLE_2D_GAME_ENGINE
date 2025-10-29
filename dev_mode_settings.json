@@ -2,9 +2,9 @@
     "dev": {
         "asset_filter": {
             "current_room": true,
-            "filters_expanded": true,
+            "filters_expanded": false,
             "initialized": true,
-            "map_assets": true,
+            "map_assets": false,
             "methods": {
                 "center": true,
                 "childrandom": true,
@@ -16,7 +16,8 @@
                 "random": true
             },
             "types": {
-                "boundary": true,
+                "area": true,
+                "boundary": false,
                 "enemy": true,
                 "npc": false,
                 "object": true,
@@ -32,6 +33,7 @@
                     "frame_blend_falloff_frames": 15.0,
                     "opacity_sensitivity_percent": 100.0,
                     "virtual_light_map": {
+                        "grid_subdivide": 1.0,
                         "horizontal_falloff": 1.9900000095367432,
                         "map_light_dir_offset_strength": 0.0,
                         "max_offset_x": 93.93000030517578,
@@ -52,17 +54,61 @@
         },
         "lock": {
             "asset_info": {
-                "basic": false
+                "basic": false,
+                "lighting": false
             },
             "camera": {
                 "controls": false
             },
             "lighting": {
-                "map_panel": false,
+                "map_panel": true,
                 "shadow_panel": false
             },
             "map_assets": {
                 "candidates": false
+            }
+        }
+    },
+    "render": {
+        "smoothing": {
+            "asset": {
+                "alpha": {
+                    "lerp_rate": 8.0,
+                    "max_step": 2.0,
+                    "method": 1.0,
+                    "snap_threshold": 0.009999999776482582,
+                    "spring_frequency": 0.0
+                },
+                "scale": {
+                    "lerp_rate": 12.0,
+                    "max_step": 8.0,
+                    "method": 1.0,
+                    "snap_threshold": 0.0010000000474974513,
+                    "spring_frequency": 0.0
+                },
+                "translation": {
+                    "lerp_rate": 0.0,
+                    "max_step": 8000.0,
+                    "method": 2.0,
+                    "snap_threshold": 0.25,
+                    "spring_frequency": 5.0
+                }
+            },
+            "camera": {
+                "center": {
+                    "lerp_rate": 0.0,
+                    "max_step": 8000.0,
+                    "method": 2.0,
+                    "snap_threshold": 0.25,
+                    "spring_frequency": 5.0
+                },
+                "zoom": {
+                    "lerp_rate": 0.0,
+                    "max_step": 4.0,
+                    "method": 2.0,
+                    "snap_threshold": 0.0005000000237487257,
+                    "spring_frequency": 4.0
+                }
             }
         }
     }
