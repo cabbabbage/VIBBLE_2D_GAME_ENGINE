@@ -248,13 +248,18 @@ void SourceConfigPanel::set_source_mode(SourceMode mode) {
         return;
     }
 
-    use_animation_reference_ = wants_animation;
-
-    if (use_animation_reference_) {
+    if (wants_animation) {
         refresh_animation_options();
         if (animation_options_.empty()) {
             update_status("No other animations available to link. Create or duplicate an animation first.");
+            return;
         }
+    }
+
+    use_animation_reference_ = wants_animation;
+
+    if (use_animation_reference_) {
+        refresh_animation_options();  // Refresh again in case of changes
         if (!animation_dropdown_) {
             int idx = animation_index_;
             if (idx < 0 && !animation_options_.empty()) {
@@ -349,6 +354,16 @@ void SourceConfigPanel::reload_from_document() {
 
     use_animation_reference_ = (current_source_.kind == std::string("animation"));
     refresh_animation_options();
+
+    // If we were saved as animation reference but no other animations exist, fall back to frames.
+    if (use_animation_reference_ && animation_options_.empty()) {
+        use_animation_reference_ = false;
+        current_source_.kind = "folder";
+        current_source_.path = animation_id_;
+        current_source_.name.reset();
+        // Commit the change back to the document.
+        apply_source_config(current_source_);
+    }
 
     if (use_animation_reference_) {
         std::string target = current_source_.name.value_or(std::string{});
@@ -995,4 +1010,3 @@ void SourceConfigPanel::import_from_png_sequence() {
 }
 
 }
-
