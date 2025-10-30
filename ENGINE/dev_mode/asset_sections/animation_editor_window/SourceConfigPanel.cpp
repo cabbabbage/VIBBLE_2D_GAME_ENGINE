@@ -1112,8 +1112,20 @@ void SourceConfigPanel::render_animation_preview(SDL_Renderer* renderer) const {
     }
 
     // Get animation parameters
-    float speed_factor = safe_to_int(payload.value("speed_factor", nlohmann::json(1)), 1);
-    if (speed_factor < 0.01f) speed_factor = 0.01f; // Prevent division by zero
+    int fps = 24;
+    try {
+        if (payload.contains("fps")) {
+            const auto& v = payload["fps"];
+            if (v.is_number_integer()) fps = v.get<int>();
+            else if (v.is_number()) fps = static_cast<int>(v.get<double>());
+        }
+    } catch (...) { fps = 24; }
+    if (fps <= 0) {
+        // Legacy fallback from speed_factor
+        int sf = safe_to_int(payload.value("speed_factor", nlohmann::json(1)), 1);
+        if (sf == 0) sf = 1;
+        fps = std::max(1, static_cast<int>(std::lround(24.0 * std::abs(sf))));
+    }
 
     bool reverse = payload.value("reverse_source", false);
     bool flip_x = payload.value("flipped_source", false);
@@ -1136,8 +1148,8 @@ void SourceConfigPanel::render_animation_preview(SDL_Renderer* renderer) const {
         animation_start_time_ = SDL_GetTicks();
     }
 
-    // Calculate frame timing (base 24fps, but can be slower if speed_factor < 1)
-    float effective_fps = 24.0f * fabs(speed_factor);
+    // Calculate frame timing (explicit FPS)
+    float effective_fps = static_cast<float>(fps);
     if (effective_fps < 0.1f) effective_fps = 0.1f; // Minimum frame rate
     float frame_time_ms = 1000.0f / effective_fps;
 
@@ -1145,8 +1157,7 @@ void SourceConfigPanel::render_animation_preview(SDL_Renderer* renderer) const {
     Uint32 elapsed_ms = SDL_GetTicks() - animation_start_time_;
     int total_cycles = static_cast<int>(elapsed_ms / (frame_time_ms * num_frames));
 
-    // For negative speed_factor, we just play at slower speed (not reverse direction)
-    // The reverse flag handles direction reversal
+    // Direction reversal handled by reverse flag alone.
 
     // Calculate current frame
     int raw_frame = static_cast<int>((elapsed_ms % static_cast<int>(frame_time_ms * num_frames)) / frame_time_ms);

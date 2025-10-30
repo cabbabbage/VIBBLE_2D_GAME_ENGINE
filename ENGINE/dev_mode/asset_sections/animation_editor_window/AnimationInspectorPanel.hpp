@@ -155,7 +155,7 @@ class AnimationInspectorPanel {
     // Animation preview timing variables
     mutable Uint32 animation_start_time_ = 0;
     mutable int current_frame_ = 0;
-    mutable float current_speed_factor_ = 1.0f;
+    mutable int current_fps_ = 24;
     mutable int frame_count_ = 1;
 };
 

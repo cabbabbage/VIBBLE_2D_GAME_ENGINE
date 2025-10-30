@@ -114,4 +114,35 @@ class AssetInfoUI {
     std::string area_name_;
     class DockableCollapsible* area_settings_section_ = nullptr;
     class DockableCollapsible* area_spawns_section_ = nullptr;
+
+    // Additional controls under Configure Animations
+    std::unique_ptr<class DMButton> duplicate_btn_;
+    std::unique_ptr<class ButtonWidget> duplicate_btn_widget_;
+    std::unique_ptr<class DMButton> delete_btn_;
+    std::unique_ptr<class ButtonWidget> delete_btn_widget_;
+
+    // Duplicate asset popup state
+    bool showing_duplicate_popup_ = false;
+    std::string duplicate_asset_name_;
+
+    // Delete asset confirmation modal state (mirrors AssetLibraryUI behavior)
+    bool showing_delete_popup_ = false;
+    struct PendingDeleteInfo { std::string name; std::string asset_dir; };
+    std::optional<PendingDeleteInfo> pending_delete_;
+    SDL_Rect delete_modal_rect_{0,0,0,0};
+    SDL_Rect delete_yes_rect_{0,0,0,0};
+    SDL_Rect delete_no_rect_{0,0,0,0};
+    bool delete_yes_hovered_ = false;
+    bool delete_no_hovered_ = false;
+    bool delete_yes_pressed_ = false;
+    bool delete_no_pressed_ = false;
+
+    // Helpers for duplicate/delete flows
+    bool duplicate_current_asset(const std::string& new_name);
+    void request_delete_current_asset();
+    void cancel_delete_request();
+    void confirm_delete_request();
+    void clear_delete_state();
+    bool handle_delete_modal_event(const SDL_Event& e);
+    void update_delete_modal_geometry(int screen_w, int screen_h);
 };

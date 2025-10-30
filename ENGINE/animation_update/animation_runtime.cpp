@@ -207,17 +207,37 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
         return true;
     }
 
-    if (frame->next) {
-        frame = frame->next;
-    } else {
-        const bool force_loop_default = self_->current_animation == animation_update::detail::kDefaultAnimation;
-        if (anim.loop || force_loop_default) {
-            frame = anim.get_first_frame(path_index);
+    // Time-based frame advance to respect desired playback FPS.
+    int target_fps = anim.playback_fps;
+    if (target_fps <= 0) target_fps = 24; // sane default
+    const float frame_interval = 1.0f / static_cast<float>(target_fps);
+    float dt = 0.0f;
+    if (assets_owner_) {
+        dt = assets_owner_->frame_delta_seconds();
+    }
+    if (!(dt > 0.0f)) {
+        dt = 1.0f / 60.0f; // fallback to 60Hz
+    }
+
+    self_->frame_progress += dt;
+    bool advanced_any = false;
+    while (self_->frame_progress >= frame_interval) {
+        self_->frame_progress -= frame_interval;
+        if (frame->next) {
+            frame = frame->next;
+            advanced_any = true;
         } else {
-            return false;
+            const bool force_loop_default = self_->current_animation == animation_update::detail::kDefaultAnimation;
+            if (anim.loop || force_loop_default) {
+                frame = anim.get_first_frame(path_index);
+                advanced_any = true;
+            } else {
+                // Reached end of non-looping animation
+                return false;
+            }
         }
     }
-    return true;
+    return advanced_any || true;
 }
 
 void AnimationRuntime::switch_to(const std::string& anim_id, std::size_t path_index) {

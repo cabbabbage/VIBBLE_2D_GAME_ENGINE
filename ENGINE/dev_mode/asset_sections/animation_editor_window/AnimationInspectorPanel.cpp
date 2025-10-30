@@ -421,8 +421,8 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
             current_frame_ = 0;
         }
 
-        // Calculate frame timing (base 24fps, but can be slower if speed_factor < 1)
-        float effective_fps = 24.0f * current_speed_factor_;
+        // Calculate frame timing (explicit FPS selection)
+        float effective_fps = static_cast<float>(current_fps_);
         if (effective_fps < 0.1f) effective_fps = 0.1f; // Minimum frame rate
         float frame_time_ms = 1000.0f / effective_fps;
 
@@ -907,7 +907,7 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
     self->preview_flip_y_ = false;
     self->preview_flip_movement_x_ = false;
     self->preview_flip_movement_y_ = false;
-    self->current_speed_factor_ = 1.0f;
+    self->current_fps_ = 24;
     self->frame_count_ = 1;
 
     if (!payload_dump.has_value()) {
@@ -951,11 +951,14 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
         self->preview_flip_movement_y_ = false;
     }
 
-    // Extract speed factor
-    int speed = parse_int_field(payload, "speed_factor", 1);
-    speed = std::clamp(speed, -20, 20);
-    if (speed == 0) speed = 1;
-    self->current_speed_factor_ = static_cast<float>(speed);
+    // Extract playback FPS (fallback to legacy speed_factor)
+    int fps = parse_int_field(payload, "fps", 24);
+    if (fps <= 0) {
+        int speed = parse_int_field(payload, "speed_factor", 1);
+        if (speed == 0) speed = 1;
+        fps = std::max(1, static_cast<int>(std::lround(24.0 * std::abs(speed))));
+    }
+    self->current_fps_ = fps;
 
     // Extract frame count
     if (payload.contains("number_of_frames")) {

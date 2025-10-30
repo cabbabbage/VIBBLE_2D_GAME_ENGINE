@@ -327,8 +327,27 @@ void Animation::load(const std::string& trigger,
                 flip_movement_horizontal = false;
                 flip_movement_vertical = false;
         }
+
         locked         = anim_json.value("locked", false);
+	// Legacy speed control: speed_factor (multiplier of base 24fps)
 	speed_factor   = anim_json.value("speed_factor", 1.0f);
+	// New explicit playback FPS; prefer this when present
+	int parsed_fps = 0;
+	try {
+		if (anim_json.contains("fps")) {
+			if (anim_json["fps"].is_number_integer()) parsed_fps = anim_json["fps"].get<int>();
+			else if (anim_json["fps"].is_number()) parsed_fps = static_cast<int>(anim_json["fps"].get<double>());
+		}
+	} catch (...) { parsed_fps = 0; }
+	if (parsed_fps <= 0) {
+		// Fallback to legacy speed_factor if defined; otherwise default 24
+		if (std::isfinite(speed_factor) && speed_factor > 0.0f) {
+			parsed_fps = std::max(1, static_cast<int>(std::lround(24.0f * std::fabs(speed_factor))));
+		} else {
+			parsed_fps = 24;
+		}
+	}
+	playback_fps = parsed_fps;
 	loop      = anim_json.value("loop", false);
 	randomize = anim_json.value("randomize", false);
 	rnd_start = anim_json.value("rnd_start", false);
@@ -400,6 +419,9 @@ void Animation::load(const std::string& trigger,
                 if (it != info.animations.end()) {
                         const Animation& src_anim = it->second;
                         if (!src_anim.frames.empty()) {
+                                // Inherit frame locking and playback FPS from source animation
+                                locked = src_anim.locked;
+                                playback_fps = src_anim.playback_fps;
                                 reused_animation = true;
                                 std::vector<SDL_Texture*> new_frames;
                                 std::vector<FrameCache>   new_caches;
