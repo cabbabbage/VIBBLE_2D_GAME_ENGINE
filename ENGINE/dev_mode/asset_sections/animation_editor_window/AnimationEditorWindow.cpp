@@ -28,7 +28,9 @@
 #include "string_utils.hpp"
 #include "ui/tinyfiledialogs.h"
 #ifdef _WIN32
-#  define NOMINMAX
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
 #  include <windows.h>
 #  include <shobjidl.h>
 #  include <shlwapi.h>
@@ -834,11 +836,15 @@ void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) 
 bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
     bool consumed = false;
     auto handle_button = [&](const std::unique_ptr<DMButton>& button, auto&& callback) {
-        if (button && button->handle_event(e)) {
+        if (!button) return;
+        bool activated = button->handle_event(e);
+        if (!activated) return;
+        // Fire actions only on mouse button release to avoid double-trigger
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             callback();
-            consumed = true;
         }
-};
+        consumed = true;
+    };
 
     handle_button(header_corner_button_, [this]() {
         if (frame_editor_visible_) {
@@ -1229,19 +1235,54 @@ std::vector<std::filesystem::path> AnimationEditorWindow::pick_png_sequence() co
 std::optional<std::string> AnimationEditorWindow::pick_animation_reference() const {
     if (!document_) return std::nullopt;
     auto ids = document_->animation_ids();
-    if (ids.empty()) return std::nullopt;
+    std::vector<std::string> frame_based;
+    frame_based.reserve(ids.size());
+    for (const auto& id : ids) {
+        if (selected_animation_id_ && id == *selected_animation_id_) {
+            continue;
+        }
+        auto payload_text = document_->animation_payload(id);
+        if (!payload_text.has_value()) {
+            continue;
+        }
+        nlohmann::json payload = nlohmann::json::parse(*payload_text, nullptr, false);
+        if (payload.is_discarded() || !payload.is_object()) {
+            continue;
+        }
+        std::string kind = "folder";
+        if (payload.contains("source") && payload["source"].is_object()) {
+            kind = payload["source"].value("kind", std::string{"folder"});
+        }
+        if (vibble::strings::to_lower_copy(kind) == std::string{"animation"}) {
+            continue;
+        }
+        frame_based.push_back(id);
+    }
+
+    if (frame_based.empty()) return std::nullopt;
 
     std::ostringstream oss;
-    oss << "Available animations:\n";
-    for (const auto& id : ids) {
+    oss << "Animations sourced from frames:\n";
+    for (const auto& id : frame_based) {
         oss << " - " << id << "\n";
     }
 
-    const char* result = tinyfd_inputBox("Select Animation", oss.str().c_str(), ids.front().c_str());
+    const char* result = tinyfd_inputBox("Select Animation", oss.str().c_str(), frame_based.front().c_str());
     if (!result) return std::nullopt;
     std::string choice = animation_editor::strings::trim_copy(result);
     if (choice.empty()) return std::nullopt;
-    if (std::find(ids.begin(), ids.end(), choice) == ids.end()) return std::nullopt;
+
+    auto match_it = std::find(frame_based.begin(), frame_based.end(), choice);
+    if (match_it == frame_based.end()) {
+        std::string lowered = vibble::strings::to_lower_copy(choice);
+        match_it = std::find_if(frame_based.begin(), frame_based.end(), [&](const std::string& value) {
+            return vibble::strings::to_lower_copy(value) == lowered;
+        });
+        if (match_it == frame_based.end()) {
+            return std::nullopt;
+        }
+        choice = *match_it;
+    }
     return choice;
 }
 
@@ -1303,4 +1344,3 @@ std::optional<std::filesystem::path> AnimationEditorWindow::pick_audio_file() co
 }
 
 }
-

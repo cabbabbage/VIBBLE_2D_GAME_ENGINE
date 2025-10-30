@@ -70,7 +70,8 @@ public:
     bool flip_movement_vertical = false;
     bool reverse_source = false;
     bool locked = false;
-    float speed_factor = 1.0f;
+    float speed_factor = 1.0f; // legacy; kept for backward-compat parsing
+    int   playback_fps = 24;   // desired playback FPS (>=1). 24 is the engine base.
     int number_of_frames = 0;
     int total_dx = 0;
     int total_dy = 0;

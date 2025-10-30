@@ -687,15 +687,15 @@ void RoomEditor::set_shared_footer_bar(DevFooterBar* footer) {
 void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
     header_visibility_callback_ = std::move(cb);
     if (header_visibility_callback_) {
-        // Keep headers/footers visible even when sliding panels open
+        // Initialize header visibility state (no panels visible at init)
         header_visibility_callback_(false);
     }
     if (room_cfg_ui_) {
         room_cfg_ui_->set_header_visibility_controller([this](bool visible) {
             room_config_panel_visible_ = visible;
             if (header_visibility_callback_) {
-                // Do not suppress headers for sliding containers
-                header_visibility_callback_(false);
+                // Forward actual visibility so outer UI can suppress headers/footers
+                header_visibility_callback_(visible);
             }
         });
     }
@@ -703,8 +703,8 @@ void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
         info_ui_->set_header_visibility_callback([this](bool visible) {
             asset_info_panel_visible_ = visible;
             if (header_visibility_callback_) {
-                // Do not suppress headers for sliding containers
-                header_visibility_callback_(false);
+                // Forward actual visibility so outer UI can suppress headers/footers
+                header_visibility_callback_(visible);
             }
         });
     }

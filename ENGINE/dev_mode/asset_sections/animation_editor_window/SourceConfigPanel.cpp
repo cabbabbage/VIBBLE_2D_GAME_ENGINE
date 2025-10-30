@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "AnimationDocument.hpp"
+#include "PreviewProvider.hpp"
 
 #include "AsyncTaskQueue.hpp"
 #include "CroppingService.hpp"
@@ -72,7 +73,18 @@ SourceConfigPanel::SourceConfigPanel() {
 void SourceConfigPanel::set_document(std::shared_ptr<AnimationDocument> document) {
     document_ = std::move(document);
     cached_asset_root_valid_ = false;
+    if (preview_provider_) {
+        preview_provider_->set_document(document_);
+    }
     reload_from_document();
+}
+
+void SourceConfigPanel::set_override_preview_provider(std::shared_ptr<PreviewProvider> provider) {
+    preview_provider_ = std::move(provider);
+    if (preview_provider_ && document_) {
+        preview_provider_->set_document(document_);
+    }
+    animation_start_time_ = 0; // Reset animation timing
 }
 
 void SourceConfigPanel::set_animation_id(const std::string& animation_id) {
@@ -155,7 +167,10 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 
     if (use_animation_reference_) {
         if (animation_dropdown_) animation_dropdown_->render(renderer);
-        if (animation_browse_button_) animation_browse_button_->render(renderer);
+        if (pick_animation_button_) pick_animation_button_->render(renderer);
+
+        // Render animated preview for SFA animations
+        render_animation_preview(renderer);
     } else {
         for (const auto& button : frame_buttons_) {
             if (button) button->render(renderer);
@@ -182,10 +197,10 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (!consumed && use_animation_reference_ && animation_browse_button_) {
-        if (animation_browse_button_->handle_event(e)) {
+    if (!consumed && use_animation_reference_ && pick_animation_button_ && pick_animation_button_->handle_event(e)) {
+        consumed = true;
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             import_from_animation();
-            consumed = true;
         }
     }
 
@@ -250,7 +265,7 @@ void SourceConfigPanel::set_source_mode(SourceMode mode) {
 
     if (wants_animation) {
         refresh_animation_options();
-        if (animation_options_.empty()) {
+        if (animation_options_.empty() && !animation_picker_) {
             update_status("No other animations available to link. Create or duplicate an animation first.");
             return;
         }
@@ -260,34 +275,41 @@ void SourceConfigPanel::set_source_mode(SourceMode mode) {
 
     if (use_animation_reference_) {
         refresh_animation_options();  // Refresh again in case of changes
-        if (!animation_dropdown_) {
-            int idx = animation_index_;
-            if (idx < 0 && !animation_options_.empty()) {
-                idx = 0;
-            }
-            if (idx >= 0 && !animation_options_.empty()) {
-                idx = std::min(idx, static_cast<int>(animation_options_.size()) - 1);
-            }
-            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::max(0, idx));
-            animation_index_ = animation_dropdown_->selected();
-        } else {
-            int idx = animation_index_;
-            if (!animation_options_.empty()) {
-                idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+        if (!animation_options_.empty()) {
+            if (!animation_dropdown_) {
+                int idx = animation_index_;
+                if (idx < 0 && !animation_options_.empty()) {
+                    idx = 0;
+                }
+                if (idx >= 0 && !animation_options_.empty()) {
+                    idx = std::min(idx, static_cast<int>(animation_options_.size()) - 1);
+                }
+                animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::max(0, idx));
+                animation_index_ = animation_dropdown_->selected();
             } else {
-                idx = 0;
+                int idx = animation_index_;
+                if (!animation_options_.empty()) {
+                    idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+                } else {
+                    idx = 0;
+                }
+                animation_dropdown_->set_selected(idx);
+                animation_index_ = animation_dropdown_->selected();
             }
-            animation_dropdown_->set_selected(idx);
-            animation_index_ = animation_dropdown_->selected();
-        }
-        if (animation_dropdown_ && !animation_options_.empty()) {
-            clean_output_frames();
-            apply_animation_selection();
+            if (animation_dropdown_ && !animation_options_.empty()) {
+                clean_output_frames();
+                apply_animation_selection();
+            }
+        } else if (animation_picker_) {
+            if (!pick_animation_button_) {
+                pick_animation_button_ = std::make_unique<DMButton>("Pick Animation", &DMStyles::AccentButton(), 120, DMButton::height());
+            }
+            // Will apply selection when button is clicked
         }
     } else {
         animation_index_ = -1;
         animation_dropdown_.reset();
-        animation_browse_button_.reset();
+        pick_animation_button_.reset();
     }
 
     layout_controls();
@@ -511,6 +533,15 @@ std::optional<nlohmann::json> SourceConfigPanel::animation_payload(const std::st
     return parsed;
 }
 
+bool SourceConfigPanel::animation_is_frame_based(const std::string& id) const {
+    auto payload = animation_payload(id);
+    if (!payload) {
+        return false;
+    }
+    SourceConfig config = parse_source(*payload);
+    return to_lower_copy(config.kind) != std::string{"animation"};
+}
+
 SourceConfigPanel::SourceConfig SourceConfigPanel::parse_source(const nlohmann::json& payload) const {
     SourceConfig config;
     if (!payload.contains("source") || !payload["source"].is_object()) {
@@ -701,50 +732,54 @@ void SourceConfigPanel::layout_controls() {
 
     if (use_animation_reference_) {
         refresh_animation_options();
-        if (!animation_dropdown_) {
-            int idx = animation_index_;
-            if (idx < 0 && !animation_options_.empty()) {
-                idx = 0;
-            }
-            if (idx >= 0 && !animation_options_.empty()) {
-                idx = std::min(idx, static_cast<int>(animation_options_.size()) - 1);
-            }
-            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::max(0, idx));
-            animation_index_ = animation_dropdown_->selected();
-        } else {
-            int idx = animation_index_;
-            if (!animation_options_.empty()) {
-                idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+        if (!animation_options_.empty()) {
+            if (!animation_dropdown_) {
+                int idx = animation_index_;
+                if (idx < 0 && !animation_options_.empty()) {
+                    idx = 0;
+                }
+                if (idx >= 0 && !animation_options_.empty()) {
+                    idx = std::min(idx, static_cast<int>(animation_options_.size()) - 1);
+                }
+                animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::max(0, idx));
+                animation_index_ = animation_dropdown_->selected();
             } else {
-                idx = 0;
+                int idx = animation_index_;
+                if (!animation_options_.empty()) {
+                    idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+                } else {
+                    idx = 0;
+                }
+                animation_dropdown_->set_selected(idx);
+                animation_index_ = animation_dropdown_->selected();
             }
-            animation_dropdown_->set_selected(idx);
-            animation_index_ = animation_dropdown_->selected();
-        }
 
-        animation_dropdown_rect_ = SDL_Rect{x, y, inner_w, DMDropdown::height()};
-        if (animation_dropdown_) animation_dropdown_->set_rect(animation_dropdown_rect_);
-        y += DMDropdown::height();
+            animation_dropdown_rect_ = SDL_Rect{x, y, inner_w, DMDropdown::height()};
+            if (animation_dropdown_) animation_dropdown_->set_rect(animation_dropdown_rect_);
+            y += DMDropdown::height();
+            pick_animation_button_.reset();
+        } else if (animation_picker_) {
+            animation_dropdown_.reset();
+            if (!pick_animation_button_) {
+                pick_animation_button_ = std::make_unique<DMButton>("Pick Animation", &DMStyles::AccentButton(), inner_w, DMButton::height());
+            }
+            SDL_Rect button_rect{x, y, inner_w, DMButton::height()};
+            pick_animation_button_->set_rect(button_rect);
+            animation_dropdown_rect_ = button_rect;
+            y += DMButton::height();
+        } else {
+            animation_dropdown_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
+            animation_dropdown_.reset();
+            pick_animation_button_.reset();
+        }
 
         for (auto& rect : frame_button_rects_) {
             rect = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
         }
-
-        if (animation_picker_) {
-            y += padding;
-            if (!animation_browse_button_) {
-                animation_browse_button_ = std::make_unique<DMButton>("Browse Animations...", &DMStyles::HeaderButton(), inner_w, DMButton::height());
-            }
-            animation_browse_rect_ = SDL_Rect{x, y, inner_w, DMButton::height()};
-            animation_browse_button_->set_rect(animation_browse_rect_);
-        } else {
-            animation_browse_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
-            animation_browse_button_.reset();
-        }
     } else {
         animation_dropdown_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
-        animation_browse_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
-        animation_browse_button_.reset();
+        animation_dropdown_.reset();
+        pick_animation_button_.reset();
 
         const std::array<const char*, 3> labels = {"Upload GIF", "Upload Folder", "Upload PNG Sequence"};
         const std::array<const DMButtonStyle*, 3> styles = {&DMStyles::AccentButton(), &DMStyles::HeaderButton(), &DMStyles::HeaderButton()};
@@ -778,41 +813,78 @@ void SourceConfigPanel::update_status(const std::string& message) const {
 }
 
 void SourceConfigPanel::refresh_animation_options() {
-    animation_options_.clear();
-    if (!document_) return;
-    auto ids = document_->animation_ids();
-    for (const auto& id : ids) {
-        if (id != animation_id_) {
-            animation_options_.push_back(id);
+    std::vector<std::string> new_options;
+    if (document_) {
+        auto ids = document_->animation_ids();
+        for (const auto& id : ids) {
+            if (id == animation_id_) {
+                continue;
+            }
+            if (!animation_is_frame_based(id)) {
+                continue;
+            }
+            new_options.push_back(id);
         }
     }
-    if (animation_dropdown_) {
 
-        int idx = std::max(0, animation_index_);
-        animation_dropdown_.reset();
-        if (!animation_options_.empty()) {
-            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::min(idx, static_cast<int>(animation_options_.size()) - 1));
-            // Ensure the new dropdown inherits current geometry
-            animation_dropdown_->set_rect(animation_dropdown_rect_);
+    if (new_options == animation_options_) {
+        if (animation_dropdown_ && !animation_options_.empty()) {
+            int idx = std::clamp(animation_index_, 0, static_cast<int>(animation_options_.size()) - 1);
+            animation_dropdown_->set_selected(idx);
         }
+        return;
+    }
+
+    animation_options_ = std::move(new_options);
+
+    if (animation_options_.empty()) {
+        animation_index_ = -1;
+    } else {
+        std::string desired = strings::trim_copy(current_source_.name.value_or(current_source_.path));
+        if (desired.empty() && animation_index_ >= 0 && animation_index_ < static_cast<int>(animation_options_.size())) {
+            desired = animation_options_[animation_index_];
+        }
+
+        int new_index = -1;
+        if (!desired.empty()) {
+            auto it = std::find(animation_options_.begin(), animation_options_.end(), desired);
+            if (it != animation_options_.end()) {
+                new_index = static_cast<int>(std::distance(animation_options_.begin(), it));
+            }
+        }
+        if (new_index < 0) {
+            new_index = 0;
+        }
+        animation_index_ = new_index;
+    }
+
+    if (animation_dropdown_) {
+        animation_dropdown_.reset();
     }
 }
 
 void SourceConfigPanel::apply_animation_selection() {
     if (!use_animation_reference_ || !animation_dropdown_ || animation_options_.empty()) return;
     int idx = animation_dropdown_->selected();
-    idx = std::max(0, std::min(static_cast<int>(animation_options_.size()) - 1, idx));
-    if (idx == animation_index_) return;
-    animation_index_ = idx;
-    const std::string& target = animation_options_[animation_index_];
+    idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+    const std::string& target = animation_options_[idx];
     if (target.empty() || target == animation_id_) return;
+
+    std::string current_target = strings::trim_copy(current_source_.name.value_or(current_source_.path));
+    if (animation_index_ == idx && strings::trim_copy(target) == current_target) {
+        return;
+    }
+
+    animation_index_ = idx;
 
     SourceConfig config;
     config.kind = "animation";
     config.path.clear();
     config.name = target;
     apply_source_config(config);
+    animation_start_time_ = SDL_GetTicks();
     update_status("Linked frames from animation '" + target + "'");
+    if (on_source_changed_) on_source_changed_(animation_id_);
 }
 
 void SourceConfigPanel::import_from_folder() {
@@ -878,7 +950,14 @@ void SourceConfigPanel::import_from_animation() {
     config.path.clear();
     config.name = target;
     apply_source_config(config);
+    animation_start_time_ = SDL_GetTicks();
+    refresh_animation_options();
+    layout_controls();
+    if (animation_dropdown_ && animation_index_ >= 0 && animation_index_ < static_cast<int>(animation_options_.size())) {
+        animation_dropdown_->set_selected(animation_index_);
+    }
     update_status("Linked frames from animation '" + target + "'");
+    if (on_source_changed_) on_source_changed_(animation_id_);
 }
 
 void SourceConfigPanel::import_from_gif() {
@@ -1007,6 +1086,142 @@ void SourceConfigPanel::import_from_png_sequence() {
     config.name.reset();
     apply_source_config(config);
     update_status("Imported PNG sequence");
+}
+
+void SourceConfigPanel::render_animation_preview(SDL_Renderer* renderer) const {
+    if (!renderer || !preview_provider_ || !document_ || !use_animation_reference_ ||
+        animation_index_ < 0 || animation_index_ >= static_cast<int>(animation_options_.size())) {
+        return;
+    }
+
+    const std::string& selected_animation_id = animation_options_[animation_index_];
+
+    // Check if it's an SFA animation (sourced from frames, not from another animation)
+    auto payload_opt = animation_payload(selected_animation_id);
+    if (!payload_opt) return;
+
+    const auto& payload = *payload_opt;
+    std::string source_kind = "folder"; // default
+    if (payload.contains("source") && payload["source"].is_object()) {
+        source_kind = payload["source"].value("kind", std::string{"folder"});
+    }
+
+    if (source_kind == "animation") {
+        // Not SFA, no preview
+        return;
+    }
+
+    // Get animation parameters
+    int fps = 24;
+    try {
+        if (payload.contains("fps")) {
+            const auto& v = payload["fps"];
+            if (v.is_number_integer()) fps = v.get<int>();
+            else if (v.is_number()) fps = static_cast<int>(v.get<double>());
+        }
+    } catch (...) { fps = 24; }
+    if (fps <= 0) {
+        // Legacy fallback from speed_factor
+        int sf = safe_to_int(payload.value("speed_factor", nlohmann::json(1)), 1);
+        if (sf == 0) sf = 1;
+        fps = std::max(1, static_cast<int>(std::lround(24.0 * std::abs(sf))));
+    }
+
+    bool reverse = payload.value("reverse_source", false);
+    bool flip_x = payload.value("flipped_source", false);
+    bool flip_y = false; // Default
+
+    // Check for derived modifiers
+    if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
+        const auto& modifiers = payload["derived_modifiers"];
+        reverse = modifiers.value("reverse", reverse);
+        flip_x = modifiers.value("flipX", flip_x);
+        flip_y = modifiers.value("flipY", false);
+    }
+
+    // Get frame count
+    int num_frames = safe_to_int(payload.value("number_of_frames", nlohmann::json(1)), 1);
+    if (num_frames <= 0) num_frames = 1;
+
+    // Initialize timing if not set
+    if (animation_start_time_ == 0) {
+        animation_start_time_ = SDL_GetTicks();
+    }
+
+    // Calculate frame timing (explicit FPS)
+    float effective_fps = static_cast<float>(fps);
+    if (effective_fps < 0.1f) effective_fps = 0.1f; // Minimum frame rate
+    float frame_time_ms = 1000.0f / effective_fps;
+
+    // Calculate elapsed time since start
+    Uint32 elapsed_ms = SDL_GetTicks() - animation_start_time_;
+    int total_cycles = static_cast<int>(elapsed_ms / (frame_time_ms * num_frames));
+
+    // Direction reversal handled by reverse flag alone.
+
+    // Calculate current frame
+    int raw_frame = static_cast<int>((elapsed_ms % static_cast<int>(frame_time_ms * num_frames)) / frame_time_ms);
+    if (raw_frame >= num_frames) raw_frame = num_frames - 1;
+
+    // Apply reverse direction
+    int current_frame = reverse ? (num_frames - 1 - raw_frame) : raw_frame;
+
+    // Ensure frame bounds
+    if (current_frame < 0) current_frame = 0;
+    if (current_frame >= num_frames) current_frame = num_frames - 1;
+
+    // Get and render the frame
+    SDL_Texture* frame_texture = preview_provider_->get_frame_texture(renderer, selected_animation_id, current_frame);
+    if (!frame_texture) return;
+
+    // Calculate destination rect (centered, maintaining aspect ratio, within dropdown area)
+    int preview_y = animation_dropdown_rect_.y + animation_dropdown_rect_.h + 8; // Below dropdown
+    int max_width = bounds_.w - 16; // Some padding
+    int max_height = bounds_.h - preview_y - 16; // Space from bottom
+
+    if (max_width <= 0 || max_height <= 0) return;
+
+    int tex_w, tex_h;
+    SDL_QueryTexture(frame_texture, nullptr, nullptr, &tex_w, &tex_h);
+
+    if (tex_w <= 0 || tex_h <= 0) return;
+
+    float scale_x = static_cast<float>(max_width) / tex_w;
+    float scale_y = static_cast<float>(max_height) / tex_h;
+    float scale = std::min(std::min(scale_x, scale_y), 1.0f); // Don't upscale
+
+    int draw_w = static_cast<int>(tex_w * scale);
+    int draw_h = static_cast<int>(tex_h * scale);
+
+    int center_x = bounds_.x + bounds_.w / 2;
+    int draw_x = center_x - draw_w / 2;
+    int draw_y = preview_y;
+
+    SDL_Rect dst_rect{draw_x, draw_y, draw_w, draw_h};
+
+    // Set render target if needed for clipping
+    SDL_Rect prev_clip;
+    SDL_RenderGetClipRect(renderer, &prev_clip);
+    // Check if clipping is active by examining the rect
+    bool had_clip = (prev_clip.w > 0 && prev_clip.h > 0 && prev_clip.x >= 0 && prev_clip.y >= 0);
+
+    SDL_Rect clip_rect = {bounds_.x, bounds_.y, bounds_.w, bounds_.h};
+    SDL_RenderSetClipRect(renderer, &clip_rect);
+
+    // Calculate flip flags for SDL_RendererFlip
+    SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
+    if (flip_x) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
+    if (flip_y) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
+
+    // Render with flip effects
+    SDL_RenderCopyEx(renderer, frame_texture, nullptr, &dst_rect, 0.0, nullptr, flip_flags);
+
+    // Remove clip
+    if (had_clip) {
+        SDL_RenderSetClipRect(renderer, &prev_clip);
+    } else {
+        SDL_RenderSetClipRect(renderer, nullptr);
+    }
 }
 
 }

@@ -104,6 +104,8 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
         payload.erase("movement_variants");
         payload.erase("audio");
         payload.erase("speed_factor");
+        payload.erase("fps");
+        payload.erase("locked");
         payload.erase("movement_preview_bounds");
     } else {
         payload.erase("derived_modifiers");
@@ -112,10 +114,23 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     payload["flipped_source"] = derived_flip_x;
 
     if (!derived_from_animation) {
-        int speed_factor = parse_int(payload.contains("speed_factor") ? payload["speed_factor"] : nlohmann::json(1), 1);
-        if (speed_factor == 0) speed_factor = 1;
-        speed_factor = std::clamp(speed_factor, -20, 20);
-        payload["speed_factor"] = speed_factor;
+        // Ensure new explicit FPS exists. Prefer existing 'fps' if provided,
+        // otherwise derive from legacy speed_factor (multiplier of base 24).
+        int fps = 0;
+        try {
+            if (payload.contains("fps")) {
+                const auto& v = payload["fps"];
+                if (v.is_number_integer()) fps = v.get<int>();
+                else if (v.is_number()) fps = static_cast<int>(v.get<double>());
+            }
+        } catch (...) { fps = 0; }
+        if (fps <= 0) {
+            int speed_factor = parse_int(payload.contains("speed_factor") ? payload["speed_factor"] : nlohmann::json(1), 1);
+            if (speed_factor == 0) speed_factor = 1;
+            speed_factor = std::clamp(speed_factor, -20, 20);
+            fps = std::max(1, static_cast<int>(std::lround(24.0 * std::abs(speed_factor))));
+        }
+        payload["fps"] = fps;
     }
 
     int frames = parse_int(payload.contains("number_of_frames") ? payload["number_of_frames"] : nlohmann::json(1), 1);

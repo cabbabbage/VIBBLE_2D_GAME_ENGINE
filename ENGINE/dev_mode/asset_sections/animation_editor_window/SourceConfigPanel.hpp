@@ -19,6 +19,7 @@ class DMDropdown;
 namespace animation_editor {
 
 class AnimationDocument;
+class PreviewProvider;
 class CroppingService;
 class AsyncTaskQueue;
 
@@ -36,6 +37,7 @@ class SourceConfigPanel {
     };
 
     void set_document(std::shared_ptr<AnimationDocument> document);
+    void set_override_preview_provider(std::shared_ptr<PreviewProvider> provider);
     void set_animation_id(const std::string& animation_id);
     void set_bounds(const SDL_Rect& bounds);
     void set_services(std::shared_ptr<CroppingService> cropping, std::shared_ptr<AsyncTaskQueue> tasks);
@@ -82,6 +84,7 @@ class SourceConfigPanel {
     std::optional<nlohmann::json> animation_payload(const std::string& id) const;
     SourceConfig parse_source(const nlohmann::json& payload) const;
     nlohmann::json build_source_json(const SourceConfig& config) const;
+    bool animation_is_frame_based(const std::string& id) const;
     std::filesystem::path resolve_asset_root() const;
     std::filesystem::path animation_output_directory() const;
     bool prepare_output_directory(std::filesystem::path* out_dir) const;
@@ -95,6 +98,7 @@ class SourceConfigPanel {
     void refresh_animation_options();
     void apply_animation_selection();
     void clear_derived_fields();
+    void render_animation_preview(SDL_Renderer* renderer) const;
 
     void import_from_folder();
     void import_from_animation();
@@ -103,6 +107,7 @@ class SourceConfigPanel {
 
   private:
     std::shared_ptr<AnimationDocument> document_;
+    std::shared_ptr<PreviewProvider> preview_provider_;
     std::shared_ptr<CroppingService> cropping_service_;
     std::shared_ptr<AsyncTaskQueue> task_queue_;
     std::string animation_id_;
@@ -125,11 +130,10 @@ class SourceConfigPanel {
     mutable bool cached_asset_root_valid_ = false;
 
     std::unique_ptr<DMDropdown> animation_dropdown_;
-    std::unique_ptr<DMButton> animation_browse_button_;
+    std::unique_ptr<DMButton> pick_animation_button_;
     std::array<std::unique_ptr<DMButton>, 3> frame_buttons_{};
 
     SDL_Rect animation_dropdown_rect_{0,0,0,0};
-    SDL_Rect animation_browse_rect_{0,0,0,0};
     std::array<SDL_Rect, 3> frame_button_rects_{};
 
     bool busy_indicator_ = false;
@@ -137,6 +141,17 @@ class SourceConfigPanel {
     std::vector<std::string> animation_options_;
     int animation_index_ = -1;
     std::string animation_ids_signature_;
+    std::vector<std::string> previous_animation_options_;
+    std::function<void(const std::string&)> on_source_changed_;
+
+    // Animation preview state
+    mutable Uint32 animation_start_time_ = 0;
+    mutable int current_frame_ = 0;
+    mutable float current_speed_factor_ = 1.0f;
+    mutable bool is_sfa_animation_ = false;
+    mutable bool reverse_playback_ = false;
+    mutable bool flip_x_ = false;
+    mutable bool flip_y_ = false;
 };
 
 }

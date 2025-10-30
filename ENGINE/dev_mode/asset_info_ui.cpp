@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 
 #include <nlohmann/json.hpp>
 #include <functional>
@@ -25,6 +26,7 @@
 #include "SlidingWindowContainer.hpp"
 #include "FloatingPanelLayoutManager.hpp"
 #include "dm_styles.hpp"
+#include "dev_mode_utils.hpp"
 #include "asset_sections/Section_BasicInfo.hpp"
 #include "asset_sections/Section_Tags.hpp"
 #include "asset_sections/Section_Lighting.hpp"
@@ -40,6 +42,9 @@
 #include "render/camera.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "search_assets.hpp"
+#include "draw_utils.hpp"
+#include <SDL_ttf.h>
+#include "dev_mode/manifest_spawn_group_utils.hpp"
 
 namespace {
 
@@ -164,6 +169,27 @@ AssetInfoUI::AssetInfoUI() {
         }
     }
 
+    // Duplicate and Delete buttons
+    if (!duplicate_btn_) {
+        duplicate_btn_ = std::make_unique<DMButton>("Duplicate Asset", &DMStyles::HeaderButton(), 220, DMButton::height());
+    }
+    if (!duplicate_btn_widget_) {
+        duplicate_btn_widget_ = std::make_unique<ButtonWidget>(duplicate_btn_.get(), [this]() {
+            if (!info_) return;
+            showing_duplicate_popup_ = true;
+            duplicate_asset_name_.clear();
+        });
+    }
+
+    if (!delete_btn_) {
+        delete_btn_ = std::make_unique<DMButton>("Delete Asset", &DMStyles::DeleteButton(), 220, DMButton::height());
+    }
+    if (!delete_btn_widget_) {
+        delete_btn_widget_ = std::make_unique<ButtonWidget>(delete_btn_.get(), [this]() {
+            this->request_delete_current_asset();
+        });
+    }
+
     container_.set_header_text_provider([this]() {
         if (area_mode_ && !area_name_.empty()) return std::string("Area: ") + area_name_;
         return info_ ? info_->name : std::string();
@@ -178,16 +204,30 @@ AssetInfoUI::AssetInfoUI() {
             section->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, previous_height});
             y += previous_height + ctx.gap;
         }
-        if (!area_mode_ && configure_btn_widget_) {
-            configure_btn_widget_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()});
-            y += DMButton::height() + ctx.gap;
+        if (!area_mode_) {
+            if (configure_btn_widget_) {
+                configure_btn_widget_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()});
+                y += DMButton::height() + ctx.gap;
+            }
+            if (duplicate_btn_widget_) {
+                duplicate_btn_widget_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()});
+                y += DMButton::height() + ctx.gap;
+            }
+            if (delete_btn_widget_) {
+                delete_btn_widget_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()});
+                y += DMButton::height() + ctx.gap;
+            }
         }
         return y;
     });
 
     container_.set_render_function([this](SDL_Renderer* renderer) {
         for (auto& section : sections_) section->render(renderer);
-        if (!area_mode_ && configure_btn_) configure_btn_->render(renderer);
+        if (!area_mode_) {
+            if (configure_btn_) configure_btn_->render(renderer);
+            if (duplicate_btn_) duplicate_btn_->render(renderer);
+            if (delete_btn_) delete_btn_->render(renderer);
+        }
     });
 
     container_.set_on_close([this]() { this->close(); });
@@ -246,6 +286,10 @@ AssetInfoUI::AssetInfoUI() {
         }
         if (configure_btn_widget_ && configure_btn_widget_->handle_event(e)) {
             return true;
+        }
+        if (!area_mode_) {
+            if (duplicate_btn_widget_ && duplicate_btn_widget_->handle_event(e)) return true;
+            if (delete_btn_widget_ && delete_btn_widget_->handle_event(e)) return true;
         }
         return false;
     });
@@ -468,6 +512,45 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
 
     if (!visible_) return false;
 
+    if (showing_delete_popup_) {
+        if (handle_delete_modal_event(e)) {
+            return true;
+        }
+        switch (e.type) {
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+            case SDL_MOUSEMOTION:
+            case SDL_MOUSEWHEEL:
+            case SDL_KEYDOWN:
+            case SDL_TEXTINPUT:
+                return true; // consume inputs while modal is visible
+            default:
+                break;
+        }
+    }
+
+    if (showing_duplicate_popup_) {
+        if (e.type == SDL_KEYDOWN) {
+            if (e.key.keysym.sym == SDLK_RETURN) {
+                if (duplicate_current_asset(duplicate_asset_name_)) {
+                    duplicate_asset_name_.clear();
+                }
+                showing_duplicate_popup_ = false;
+                return true;
+            } else if (e.key.keysym.sym == SDLK_ESCAPE) {
+                showing_duplicate_popup_ = false;
+                duplicate_asset_name_.clear();
+                return true;
+            } else if (e.key.keysym.sym == SDLK_BACKSPACE) {
+                if (!duplicate_asset_name_.empty()) duplicate_asset_name_.pop_back();
+                return true;
+            }
+        } else if (e.type == SDL_TEXTINPUT) {
+            duplicate_asset_name_ += e.text.text;
+            return true;
+        }
+    }
+
     if (animation_editor_window_ && animation_editor_window_->is_visible()) {
         if (animation_editor_window_->handle_event(e)) {
             return true;
@@ -534,6 +617,15 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     container_.update(input, screen_w, screen_h);
 
     layout_widgets(screen_w, screen_h);
+
+    if (showing_delete_popup_) {
+        update_delete_modal_geometry(screen_w, screen_h);
+        SDL_StopTextInput();
+    } else if (showing_duplicate_popup_) {
+        SDL_StartTextInput();
+    } else {
+        SDL_StopTextInput();
+    }
 }
 
 void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
@@ -561,6 +653,118 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         asset_selector_->render(r);
 
     DMDropdown::render_active_options(r);
+
+    // Duplicate asset popup: reuse AssetLibraryUI input style
+    if (showing_duplicate_popup_) {
+        SDL_Rect box{ screen_w/2 - 150, screen_h/2 - 40, 300, 80 };
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        const SDL_Color panel_bg = DMStyles::PanelBG();
+        const SDL_Color& highlight = DMStyles::HighlightColor();
+        const SDL_Color& shadow = DMStyles::ShadowColor();
+        const int corner_radius = DMStyles::CornerRadius();
+        const int bevel_depth = DMStyles::BevelDepth();
+        dm_draw::DrawBeveledRect( r, box, corner_radius, bevel_depth, panel_bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        const SDL_Color panel_border = DMStyles::Border();
+        dm_draw::DrawRoundedOutline( r, box, corner_radius, 1, panel_border);
+
+        SDL_Rect input_rect{ box.x + 8, box.y + 8, box.w - 16, box.h - 16 };
+        const DMTextBoxStyle& textbox = DMStyles::TextBox();
+        dm_draw::DrawBeveledRect( r, input_rect, corner_radius, bevel_depth, textbox.bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        dm_draw::DrawRoundedOutline( r, input_rect, corner_radius, 1, textbox.border);
+
+        const int text_padding = 12 + bevel_depth;
+        const int interior_h = std::max(0, input_rect.h - 2 * bevel_depth);
+        TTF_Font* font = devmode::utils::load_font(18);
+        if (font) {
+            std::string display = duplicate_asset_name_.empty() ? "Enter asset name..." : duplicate_asset_name_;
+            SDL_Color color = duplicate_asset_name_.empty() ? textbox.label.color : textbox.text;
+            int available_w = input_rect.w - 2 * text_padding;
+            if (available_w < 0) available_w = 0;
+            int tw = 0;
+            int th = 0;
+            std::string render_text = display;
+            if (TTF_SizeUTF8(font, render_text.c_str(), &tw, &th) == 0 && tw > available_w) {
+                const std::string ellipsis = "...";
+                std::string base = display;
+                while (!base.empty()) {
+                    base.pop_back();
+                    std::string candidate = base + ellipsis;
+                    if (TTF_SizeUTF8(font, candidate.c_str(), &tw, &th) == 0 && tw <= available_w) {
+                        render_text = std::move(candidate);
+                        break;
+                    }
+                }
+                if (base.empty()) {
+                    render_text = ellipsis;
+                    (void)TTF_SizeUTF8(font, render_text.c_str(), &tw, &th);
+                }
+            } else {
+                (void)TTF_SizeUTF8(font, render_text.c_str(), &tw, &th);
+            }
+
+            SDL_Surface* surf = TTF_RenderUTF8_Blended(font, render_text.c_str(), color);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                SDL_FreeSurface(surf);
+                if (tex) {
+                    const int text_area_h = std::max(0, interior_h - th);
+                    int text_y = input_rect.y + bevel_depth + text_area_h / 2;
+                    text_y = std::max(text_y, input_rect.y + bevel_depth);
+                    text_y = std::min(text_y, input_rect.y + input_rect.h - bevel_depth - th);
+                    SDL_Rect dst{ input_rect.x + text_padding,
+                                  text_y,
+                                  tw,
+                                  th };
+                    SDL_RenderCopy(r, tex, nullptr, &dst);
+                    SDL_DestroyTexture(tex);
+                }
+            }
+        }
+    }
+
+    // Delete confirmation popup
+    if (showing_delete_popup_) {
+        const SDL_Color panel_bg = DMStyles::PanelBG();
+        const SDL_Color& highlight = DMStyles::HighlightColor();
+        const SDL_Color& shadow = DMStyles::ShadowColor();
+        const int corner_radius = DMStyles::CornerRadius();
+        const int bevel_depth = DMStyles::BevelDepth();
+        dm_draw::DrawBeveledRect( r, delete_modal_rect_, corner_radius, bevel_depth, panel_bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        const SDL_Color panel_border = DMStyles::Border();
+        dm_draw::DrawRoundedOutline( r, delete_modal_rect_, corner_radius, 1, panel_border);
+
+        auto render_button = [&](const SDL_Rect& rect, bool hovered, bool pressed, const std::string& caption, const DMButtonStyle& style) {
+            SDL_Color bg = style.bg;
+            if (pressed) bg = style.press_bg; else if (hovered) bg = style.hover_bg;
+            dm_draw::DrawBeveledRect( r, rect, corner_radius, bevel_depth, bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+            dm_draw::DrawRoundedOutline( r, rect, corner_radius, 1, style.border);
+
+            TTF_Font* btn_font = devmode::utils::load_font(style.label.font_size > 0 ? style.label.font_size : 16);
+            if (!btn_font) btn_font = devmode::utils::load_font(16);
+            if (btn_font) {
+                SDL_Surface* text = TTF_RenderUTF8_Blended(btn_font, caption.c_str(), style.text);
+                if (text) {
+                    SDL_Texture* tex = SDL_CreateTextureFromSurface(r, text);
+                    SDL_FreeSurface(text);
+                    if (tex) {
+                        int tw = 0;
+                        int th = 0;
+                        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+                        const int interior_h = std::max(0, rect.h - 2 * bevel_depth);
+                        int text_y = rect.y + bevel_depth + std::max(0, interior_h - th) / 2;
+                        text_y = std::max(text_y, rect.y + bevel_depth);
+                        text_y = std::min(text_y, rect.y + rect.h - bevel_depth - th);
+                        SDL_Rect dst{ rect.x + (rect.w - tw) / 2, text_y, tw, th };
+                        SDL_RenderCopy(r, tex, nullptr, &dst);
+                        SDL_DestroyTexture(tex);
+                    }
+                }
+            }
+        };
+
+        render_button(delete_yes_rect_, delete_yes_hovered_, delete_yes_pressed_, "Yes, delete", DMStyles::DeleteButton());
+        render_button(delete_no_rect_, delete_no_hovered_, delete_no_pressed_, "Cancel", DMStyles::HeaderButton());
+    }
 
     last_renderer_ = r;
 }
@@ -1220,4 +1424,296 @@ void AssetInfoUI::on_animation_document_saved() {
 
     info_->loadAnimations(renderer);
     refresh_loaded_asset_instances();
+}
+
+bool AssetInfoUI::duplicate_current_asset(const std::string& raw_name) {
+    if (!info_) return false;
+    std::string name = devmode::utils::trim_whitespace_copy(raw_name);
+    if (name.empty()) return false;
+    if (!manifest_store_) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Manifest store unavailable; cannot duplicate '%s' to '%s'", info_->name.c_str(), name.c_str());
+        return false;
+    }
+
+    // Begin new asset edit; ensure it does not already exist
+    auto session = manifest_store_->begin_asset_edit(name, true);
+    if (!session) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to begin manifest session for '%s'", name.c_str());
+        return false;
+    }
+    if (!session.is_new_asset()) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Asset '%s' already exists", name.c_str());
+        session.cancel();
+        return false;
+    }
+
+    namespace fs = std::filesystem;
+    fs::path base("SRC");
+    fs::path src_dir;
+    try {
+        const std::string src_dir_str = info_->asset_dir_path();
+        if (!src_dir_str.empty()) src_dir = fs::path(src_dir_str);
+        if (src_dir.empty()) src_dir = base / info_->name;
+    } catch (...) {
+        src_dir.clear();
+    }
+    fs::path dst_dir = base / name;
+
+    try {
+        if (!fs::exists(base)) {
+            fs::create_directories(base);
+        }
+        if (fs::exists(dst_dir)) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Destination directory '%s' already exists", dst_dir.string().c_str());
+            session.cancel();
+            return false;
+        }
+        fs::create_directories(dst_dir);
+
+        // Copy folder content if source exists
+        std::error_code ec;
+        if (!src_dir.empty() && fs::exists(src_dir, ec)) {
+            fs::copy(src_dir, dst_dir, fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+            if (ec) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Some files failed to copy from '%s' to '%s': %s", src_dir.string().c_str(), dst_dir.string().c_str(), ec.message().c_str());
+            }
+        }
+
+        // Build new manifest entry: start from source manifest if available
+        nlohmann::json manifest_entry;
+        if (manifest_store_) {
+            auto view = manifest_store_->get_asset(info_->name);
+            if (view && view.data) {
+                manifest_entry = *view.data;
+            }
+        }
+        if (!manifest_entry.is_object()) manifest_entry = nlohmann::json::object();
+
+        const std::string dst_dir_str = dst_dir.lexically_normal().generic_string();
+        manifest_entry["asset_name"] = name;
+        manifest_entry["asset_directory"] = dst_dir_str;
+        // Maintain animations/tags etc.; update start path if present
+        manifest_entry["start"] = dst_dir_str;
+
+        session.data() = manifest_entry;
+        if (!session.commit()) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to commit manifest entry for '%s'", name.c_str());
+            std::error_code cleanup_ec;
+            fs::remove_all(dst_dir, cleanup_ec);
+            return false;
+        }
+        manifest_store_->flush();
+
+        // Reload asset library and animations
+        if (assets_) {
+            assets_->library().load_all_from_SRC();
+            if (SDL_Renderer* renderer = assets_->renderer()) {
+                assets_->library().ensureAllAnimationsLoaded(renderer);
+            }
+            assets_->show_dev_notice(std::string("Duplicated asset as '") + name + "'");
+        }
+        return true;
+    } catch (const std::exception& e) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Exception duplicating asset '%s' -> '%s': %s", info_->name.c_str(), name.c_str(), e.what());
+        std::error_code cleanup_ec;
+        fs::remove_all(dst_dir, cleanup_ec);
+        return false;
+    }
+}
+
+void AssetInfoUI::request_delete_current_asset() {
+    if (!info_) return;
+    PendingDeleteInfo pending;
+    pending.name = info_->name;
+    pending.asset_dir = info_->asset_dir_path();
+    if (pending.asset_dir.empty() && !info_->name.empty()) {
+        pending.asset_dir = (std::filesystem::path("SRC") / info_->name).lexically_normal().string();
+    }
+    pending_delete_ = std::move(pending);
+    showing_delete_popup_ = true;
+    delete_yes_hovered_ = delete_no_hovered_ = false;
+    delete_yes_pressed_ = delete_no_pressed_ = false;
+}
+
+void AssetInfoUI::cancel_delete_request() {
+    showing_delete_popup_ = false;
+    clear_delete_state();
+}
+
+void AssetInfoUI::confirm_delete_request() {
+    if (!pending_delete_) {
+        clear_delete_state();
+        showing_delete_popup_ = false;
+        return;
+    }
+
+    const PendingDeleteInfo pending = *pending_delete_;
+    const std::string asset_name = pending.name;
+    const std::filesystem::path asset_dir = pending.asset_dir.empty() ? std::filesystem::path("SRC") / asset_name : std::filesystem::path(pending.asset_dir);
+    const std::filesystem::path cache_dir = std::filesystem::path("cache") / asset_name;
+
+    showing_delete_popup_ = false;
+
+    // Remove live instances
+    if (assets_) {
+        assets_->clear_editor_selection();
+        std::vector<Asset*> doomed;
+        doomed.reserve(assets_->all.size());
+        for (Asset* asset : assets_->all) {
+            if (!asset || !asset->info) continue;
+            if (asset->info->name == asset_name) {
+                doomed.push_back(asset);
+            }
+        }
+        for (Asset* asset : doomed) {
+            asset->Delete();
+        }
+    }
+
+    bool manifest_flush_required = false;
+    if (!asset_name.empty()) {
+        if (manifest_store_) {
+            bool removed = manifest_store_->remove_asset(asset_name);
+            if (!removed) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to remove '%s' from manifest", asset_name.c_str());
+            } else {
+                manifest_flush_required = true;
+            }
+        } else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Manifest store unavailable; manifest not updated for '%s'", asset_name.c_str());
+        }
+    }
+
+    auto remove_directory_if_exists = [](const std::filesystem::path& path) {
+        std::error_code ec;
+        if (path.empty()) return true;
+        if (!std::filesystem::exists(path, ec)) return true;
+        std::filesystem::remove_all(path, ec);
+        return !ec;
+    };
+
+    if (!asset_dir.empty()) {
+        const std::string dir_name = asset_dir.filename().string();
+        const bool is_src_root = (dir_name == "SRC" && asset_dir.parent_path().empty());
+        if (!is_src_root) {
+            remove_directory_if_exists(asset_dir);
+        } else {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Refusing to remove root SRC directory");
+        }
+    }
+    if (!asset_name.empty()) {
+        remove_directory_if_exists(cache_dir);
+    }
+
+    if (!asset_name.empty() && manifest_store_) {
+        const nlohmann::json& manifest = manifest_store_->manifest_json();
+        auto maps_it = manifest.find("maps");
+        if (maps_it != manifest.end() && maps_it->is_object()) {
+            for (auto it = maps_it->begin(); it != maps_it->end(); ++it) {
+                nlohmann::json map_entry = *it;
+                if (devmode::manifest_utils::remove_asset_from_spawn_groups(map_entry, asset_name)) {
+                    if (!manifest_store_->update_map_entry(it.key(), map_entry)) {
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to update manifest map entry '%s' while removing '%s'", it.key().c_str(), asset_name.c_str());
+                    } else {
+                        manifest_flush_required = true;
+                    }
+                }
+            }
+        }
+
+        auto assets_it = manifest.find("assets");
+        if (assets_it != manifest.end() && assets_it->is_object()) {
+            for (auto it = assets_it->begin(); it != assets_it->end(); ++it) {
+                const std::string& referenced_asset = it.key();
+                if (referenced_asset == asset_name) continue;
+                auto transaction = manifest_store_->begin_asset_transaction(referenced_asset);
+                if (!transaction) continue;
+                if (devmode::manifest_utils::remove_asset_from_spawn_groups(transaction.data(), asset_name)) {
+                    if (!transaction.finalize()) {
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to update manifest asset entry '%s' while removing '%s'", referenced_asset.c_str(), asset_name.c_str());
+                    } else {
+                        manifest_flush_required = true;
+                    }
+                }
+            }
+        }
+    }
+
+    if (manifest_store_ && manifest_flush_required) {
+        manifest_store_->flush();
+    }
+
+    if (assets_ && !asset_name.empty()) {
+        assets_->library().remove(asset_name);
+        if (SDL_Renderer* renderer = assets_->renderer()) {
+            assets_->library().ensureAllAnimationsLoaded(renderer);
+        }
+    }
+
+    // Close the editor if we just deleted the current asset
+    if (info_ && info_->name == asset_name) {
+        clear_info();
+        close();
+    }
+
+    clear_delete_state();
+}
+
+void AssetInfoUI::clear_delete_state() {
+    pending_delete_.reset();
+    delete_yes_hovered_ = delete_no_hovered_ = false;
+    delete_yes_pressed_ = delete_no_pressed_ = false;
+    delete_modal_rect_ = SDL_Rect{0, 0, 0, 0};
+    delete_yes_rect_ = SDL_Rect{0, 0, 0, 0};
+    delete_no_rect_ = SDL_Rect{0, 0, 0, 0};
+}
+
+void AssetInfoUI::update_delete_modal_geometry(int screen_w, int screen_h) {
+    const int modal_w = 420;
+    const int modal_h = 160;
+    delete_modal_rect_ = SDL_Rect{
+        std::max(0, screen_w / 2 - modal_w / 2), std::max(0, screen_h / 2 - modal_h / 2), modal_w, modal_h };
+    const int button_w = 140;
+    const int button_h = 40;
+    const int button_gap = 20;
+    const int total_w = button_w * 2 + button_gap;
+    const int buttons_x = delete_modal_rect_.x + (delete_modal_rect_.w - total_w) / 2;
+    const int buttons_y = delete_modal_rect_.y + delete_modal_rect_.h - button_h - 20;
+    delete_yes_rect_ = SDL_Rect{ buttons_x, buttons_y, button_w, button_h };
+    delete_no_rect_ = SDL_Rect{ buttons_x + button_w + button_gap, buttons_y, button_w, button_h };
+}
+
+bool AssetInfoUI::handle_delete_modal_event(const SDL_Event& e) {
+    if (!showing_delete_popup_) return false;
+    if (e.type == SDL_MOUSEMOTION) {
+        SDL_Point p{ e.motion.x, e.motion.y };
+        delete_yes_hovered_ = SDL_PointInRect(&p, &delete_yes_rect_);
+        delete_no_hovered_ = SDL_PointInRect(&p, &delete_no_rect_);
+        return SDL_PointInRect(&p, &delete_modal_rect_);
+    }
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        if (SDL_PointInRect(&p, &delete_yes_rect_)) { delete_yes_pressed_ = true; return true; }
+        if (SDL_PointInRect(&p, &delete_no_rect_)) { delete_no_pressed_ = true; return true; }
+        if (SDL_PointInRect(&p, &delete_modal_rect_)) return true;
+        return false;
+    }
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        const bool inside_yes = SDL_PointInRect(&p, &delete_yes_rect_);
+        const bool inside_no  = SDL_PointInRect(&p, &delete_no_rect_);
+        bool consumed = SDL_PointInRect(&p, &delete_modal_rect_);
+        if (inside_yes && delete_yes_pressed_) { delete_yes_pressed_ = false; delete_no_pressed_ = false; confirm_delete_request(); return true; }
+        if (inside_no  && delete_no_pressed_)  { delete_yes_pressed_ = false; delete_no_pressed_ = false; cancel_delete_request();  return true; }
+        delete_yes_pressed_ = false; delete_no_pressed_ = false; return consumed;
+    }
+    if (e.type == SDL_KEYDOWN) {
+        if (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_y || e.key.keysym.sym == SDLK_SPACE) { confirm_delete_request(); return true; }
+        if (e.key.keysym.sym == SDLK_ESCAPE || e.key.keysym.sym == SDLK_n) { cancel_delete_request(); return true; }
+        return true;
+    }
+    if (e.type == SDL_TEXTINPUT) {
+        return true;
+    }
+    return false;
 }

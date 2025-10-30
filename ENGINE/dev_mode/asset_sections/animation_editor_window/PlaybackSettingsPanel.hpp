@@ -13,6 +13,7 @@
 
 class DMCheckbox;
 class DMSlider;
+class DMDropdown;
 
 namespace animation_editor {
 
@@ -44,7 +45,8 @@ class PlaybackSettingsPanel {
         bool flip_movement_vertical = false;
         bool locked = false;
         bool random_start = false;
-        int speed_factor = 1;
+        // New: explicit playback FPS selection
+        int fps = 24;
 
         bool operator==(const PlaybackState& other) const {
             return flipped_source == other.flipped_source &&
@@ -54,7 +56,7 @@ class PlaybackSettingsPanel {
                    flip_movement_vertical == other.flip_movement_vertical &&
                    locked == other.locked &&
                    random_start == other.random_start &&
-                   speed_factor == other.speed_factor;
+                   fps == other.fps;
         }
 
         bool operator!=(const PlaybackState& other) const { return !(*this == other); }
@@ -87,7 +89,8 @@ class PlaybackSettingsPanel {
     std::unique_ptr<DMCheckbox> reverse_checkbox_;
     std::unique_ptr<DMCheckbox> locked_checkbox_;
     std::unique_ptr<DMCheckbox> random_start_checkbox_;
-    std::unique_ptr<DMSlider> speed_slider_;
+    std::unique_ptr<DMSlider> speed_slider_; // legacy UI, no longer used
+    std::unique_ptr<DMDropdown> fps_dropdown_;
 
     PlaybackState state_{};
     PlaybackState document_state_{};

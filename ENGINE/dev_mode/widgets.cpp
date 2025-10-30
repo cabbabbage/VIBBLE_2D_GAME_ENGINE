@@ -1182,6 +1182,29 @@ bool DMSlider::handle_event(const SDL_Event& e) {
     if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
         return true;
     }
+    if (e.type == SDL_KEYDOWN && focused_) {
+        switch (e.key.keysym.sym) {
+        case SDLK_LEFT:
+        case SDLK_a: {
+            apply_interaction_value(display_value() - 1);
+            return true;
+        }
+        case SDLK_RIGHT:
+        case SDLK_d: {
+            apply_interaction_value(display_value() + 1);
+            return true;
+        }
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER: {
+            commit_pending_value();
+            focused_ = false;
+            set_slider_scroll_capture(this, false);
+            return true;
+        }
+        default:
+            break;
+        }
+    }
     if (edit_box_) {
         bool was_editing = edit_box_->is_editing();
         bool consumed = edit_box_->handle_event(e);
@@ -2142,6 +2165,49 @@ bool DMDropdown::handle_event(const SDL_Event& e) {
     if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
         return true;
     }
+    if (e.type == SDL_KEYDOWN && focused_) {
+        switch (e.key.keysym.sym) {
+        case SDLK_UP:
+        case SDLK_w: {
+            if (!has_pending_index_) {
+                pending_index_ = index_;
+                has_pending_index_ = true;
+            }
+            int new_index = pending_index_ - 1;
+            if (new_index < 0) {
+                new_index = static_cast<int>(options_.size()) - 1;
+            }
+            pending_index_ = new_index;
+            hovered_option_index_ = pending_index_;
+            return true;
+        }
+        case SDLK_DOWN:
+        case SDLK_s: {
+            if (!has_pending_index_) {
+                pending_index_ = index_;
+                has_pending_index_ = true;
+            }
+            int new_index = pending_index_ + 1;
+            if (new_index >= static_cast<int>(options_.size())) {
+                new_index = 0;
+            }
+            pending_index_ = new_index;
+            hovered_option_index_ = pending_index_;
+            return true;
+        }
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER: {
+            commit_pending_selection();
+            focused_ = false;
+            has_pending_index_ = false;
+            hovered_option_index_ = -1;
+            if (active_ == this) active_ = nullptr;
+            return true;
+        }
+        default:
+            break;
+        }
+    }
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         const bool inside_box = SDL_PointInRect(&p, &box_rect_);
@@ -2482,4 +2548,3 @@ void DMDropdown::begin_focus() {
     has_pending_index_ = true;
     hovered_option_index_ = pending_index_;
 }
-

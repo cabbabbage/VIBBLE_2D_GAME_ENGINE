@@ -27,6 +27,7 @@
 #include "dev_mode/core/manifest_store.hpp"
 #include "core/manifest/manifest_loader.hpp"
 #include "dev_mode/manifest_spawn_group_utils.hpp"
+#include "dev_mode_utils.hpp"
 #include "tag_library.hpp"
 #include "tag_utils.hpp"
 
@@ -39,39 +40,6 @@ namespace {
     const SDL_Color kTileHL  = dm::rgba(59, 130, 246, 110);
     const SDL_Color kTileBd  = DMStyles::Border();
     namespace fs = std::filesystem;
-
-    TTF_Font* load_font(int size) {
-        static std::unordered_map<int, TTF_Font*> cache;
-        auto it = cache.find(size);
-        if (it != cache.end()) return it->second;
-
-        const DMLabelStyle& label = DMStyles::Label();
-        TTF_Font* font = TTF_OpenFont(label.font_path.c_str(), size);
-        if (!font) {
-            std::cerr << "[AssetLibraryUI] Failed to load font '" << label.font_path
-                      << "' size " << size << ": " << TTF_GetError() << "\n";
-            return nullptr;
-        }
-        cache.emplace(size, font);
-        return font;
-    }
-
-    std::string trim_whitespace_copy(const std::string& value) {
-        auto begin = value.begin();
-        auto end = value.end();
-        while (begin != end && std::isspace(static_cast<unsigned char>(*begin))) {
-            ++begin;
-        }
-        while (end != begin) {
-            auto prev = end;
-            --prev;
-            if (!std::isspace(static_cast<unsigned char>(*prev))) {
-                break;
-            }
-            end = prev;
-        }
-        return std::string(begin, end);
-    }
 
     using vibble::strings::to_lower_copy;
 
@@ -248,7 +216,7 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
 
         const AssetInfo* in = info.get();
         std::string label_text = (in && !in->name.empty()) ? in->name : "(Unnamed)";
-        TTF_Font* label_font = load_font(15);
+        TTF_Font* label_font = devmode::utils::load_font(15);
         std::string render_label = label_text;
         if (label_font && label_rect.w > 0) {
             int tw = 0;
@@ -452,7 +420,7 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
                                preview_top,
                                std::max(0, rect_.w - 2 * pad), std::max(0, preview_bottom - preview_top) };
 
-        TTF_Font* label_font = load_font(17);
+        TTF_Font* label_font = devmode::utils::load_font(17);
         std::string caption = "#" + tag;
         if (label_font && label_rect.w > 0) {
             std::string render_label = caption;
@@ -496,9 +464,9 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
             TTF_Font* icon_font = nullptr;
             int icon_w = 0;
             int icon_h = 0;
-            const int font_sizes[] = { 112, 104, 96, 88, 80, 72, 64, 56, 48, 40, 32, 24 };
+            const int font_sizes[] = {112, 104, 96, 88, 80, 72, 64, 56, 48, 40, 32, 24};
             for (int size : font_sizes) {
-                TTF_Font* candidate = load_font(size);
+                TTF_Font* candidate = devmode::utils::load_font(size);
                 if (!candidate) continue;
                 int tw = 0;
                 int th = 0;
@@ -519,8 +487,10 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
                     if (tex) {
                         int dw = std::min(icon_w, preview_rect.w);
                         int dh = std::min(icon_h, preview_rect.h);
-                        SDL_Rect dst{ preview_rect.x + (preview_rect.w - dw) / 2,
-                                      preview_rect.y + (preview_rect.h - dh) / 2, dw, dh };
+                        SDL_Rect dst{preview_rect.x + (preview_rect.w - dw) / 2,
+                                     preview_rect.y + (preview_rect.h - dh) / 2,
+                                     dw,
+                                     dh};
                         SDL_RenderCopy(r, tex, nullptr, &dst);
                         SDL_DestroyTexture(tex);
                     }
@@ -537,7 +507,7 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
             footer_text = std::to_string(asset_count) + " matching assets";
         }
 
-        TTF_Font* footer_font = load_font(14);
+        TTF_Font* footer_font = devmode::utils::load_font(14);
         if (footer_font && footer_rect.w > 0) {
             SDL_Color footer_color = DMStyles::Label().color;
             if (!resolvable) {
@@ -625,7 +595,7 @@ struct AssetLibraryUI::RoomAreaTileWidget : public Widget {
         dm_draw::DrawRoundedOutline(r, rect_, tile_radius, 1, border);
 
         std::string label = std::string("Area ") + area_name + " — Room " + room_name;
-        TTF_Font* font = load_font(15);
+        TTF_Font* font = devmode::utils::load_font(15);
         SDL_Rect label_rect{ rect_.x + pad, rect_.y + pad, std::max(0, rect_.w - 2*pad), 24 };
         if (font && label_rect.w > 0) {
             SDL_Surface* surf = TTF_RenderUTF8_Blended(font, label.c_str(), DMStyles::Label().color);
@@ -1120,7 +1090,7 @@ void AssetLibraryUI::refresh_tiles(Assets& assets) {
                 if (na.name.empty() || !na.area) continue;
                 const std::string label = room->room_name + "/" + na.name;
                 if (!search_query_.empty()) {
-                    auto q = trim_whitespace_copy(search_query_);
+                    auto q = devmode::utils::trim_whitespace_copy(search_query_);
                     std::string lowered = vibble::strings::to_lower_copy(label);
                     std::string lowered_q = vibble::strings::to_lower_copy(q);
                     if (lowered.find(lowered_q) == std::string::npos) continue;
@@ -1317,7 +1287,7 @@ void AssetLibraryUI::update_delete_modal_geometry(int screen_w, int screen_h) {
 }
 
 bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
-    std::string name = trim_whitespace_copy(raw_name);
+    std::string name = devmode::utils::trim_whitespace_copy(raw_name);
     if (name.empty()) {
         return false;
     }
@@ -1650,7 +1620,7 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 
         const int text_padding = 12 + bevel_depth;
         const int interior_h = std::max(0, input_rect.h - 2 * bevel_depth);
-        TTF_Font* font = load_font(18);
+        TTF_Font* font = devmode::utils::load_font(18);
         if (font) {
             std::string display = new_asset_name_.empty() ? "Enter asset name..." : new_asset_name_;
             SDL_Color color = new_asset_name_.empty() ? textbox.label.color : textbox.text;
@@ -1745,7 +1715,7 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         SDL_Rect text_rect{ box.x + text_margin, box.y + text_margin, box.w - 2 * text_margin, delete_yes_rect_.y - box.y - text_margin - 10 };
         text_rect.w = std::max(0, text_rect.w);
         text_rect.h = std::max(0, text_rect.h);
-        TTF_Font* font = load_font(18);
+        TTF_Font* font = devmode::utils::load_font(18);
         if (font && text_rect.w > 0 && text_rect.h > 0) {
             SDL_Color text_color = DMStyles::Label().color;
             SDL_Surface* surf = TTF_RenderUTF8_Blended_Wrapped(font, message.c_str(), text_color, text_rect.w);
@@ -1775,9 +1745,9 @@ void AssetLibraryUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
             dm_draw::DrawBeveledRect( r, rect, corner_radius, bevel_depth, bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
             dm_draw::DrawRoundedOutline( r, rect, corner_radius, 1, style.border);
 
-            TTF_Font* btn_font = load_font(style.label.font_size > 0 ? style.label.font_size : 16);
+            TTF_Font* btn_font = devmode::utils::load_font(style.label.font_size > 0 ? style.label.font_size : 16);
             if (!btn_font) {
-                btn_font = load_font(16);
+                btn_font = devmode::utils::load_font(16);
             }
             if (btn_font) {
                 SDL_Surface* text = TTF_RenderUTF8_Blended(btn_font, caption.c_str(), style.text);

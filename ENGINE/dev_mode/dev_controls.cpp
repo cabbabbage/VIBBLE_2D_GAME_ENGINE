@@ -472,9 +472,9 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     if (room_editor_) {
         room_editor_->set_manifest_store(&manifest_store_);
         room_editor_->set_room_assets_saved_callback([this]() { notify_room_area_data_changed(); });
-        // Do not hide the top header when sliding containers open in dev mode
-        room_editor_->set_header_visibility_callback([this](bool /*visible*/) {
-            sliding_headers_hidden_ = false;
+        // Hide top header/footer while sliding containers are visible
+        room_editor_->set_header_visibility_callback([this](bool visible) {
+            sliding_headers_hidden_ = visible;
             apply_header_suppression();
         });
         room_editor_->set_map_assets_panel_callback([this]() { this->open_map_assets_modal(); });
@@ -899,9 +899,9 @@ void DevControls::update(const Input& input) {
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->update(input);
     }
-    const bool modal_hide = is_modal_blocking_panels();
+    bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
-    const bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
+    bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
     // Keep header always visible in dev mode
     asset_filter_.set_enabled(enabled_);
     apply_header_suppression();
@@ -924,7 +924,7 @@ void DevControls::update(const Input& input) {
 
     asset_filter_.ensure_layout();
 
-    SDL_Rect header_rect = asset_filter_.header_rect();
+    // Gather current sliding container rects before deciding header visibility
     SDL_Rect layout_rect = asset_filter_.layout_bounds();
     SDL_Rect footer_rect{0, 0, 0, 0};
     std::vector<SDL_Rect> sliding_rects;
@@ -940,6 +940,9 @@ void DevControls::update(const Input& input) {
             footer_rect = footer->rect();
         }
     }
+    modal_hide = is_modal_blocking_panels();
+    hide_headers = modal_hide || sliding_headers_hidden_ || !sliding_rects.empty();
+    SDL_Rect header_rect = hide_headers ? SDL_Rect{0, 0, 0, 0} : asset_filter_.header_rect();
     SDL_Rect usable_rect = FloatingPanelLayoutManager::instance().computeUsableRect(
         SDL_Rect{0, 0, screen_w_, screen_h_},
         header_rect,
@@ -985,8 +988,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (!enabled_) return;
 
     asset_filter_.ensure_layout();
-
-    SDL_Rect header_rect = asset_filter_.header_rect();
+    SDL_Rect header_rect{0, 0, 0, 0};
     SDL_Rect layout_rect = asset_filter_.layout_bounds();
     SDL_Rect footer_rect{0, 0, 0, 0};
     std::vector<SDL_Rect> sliding_rects;
@@ -1002,6 +1004,9 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             footer_rect = footer->rect();
         }
     }
+    const bool modal_hide_pre = is_modal_blocking_panels();
+    const bool hide_headers_pre = modal_hide_pre || sliding_headers_hidden_ || !sliding_rects.empty();
+    header_rect = hide_headers_pre ? SDL_Rect{0, 0, 0, 0} : asset_filter_.header_rect();
     SDL_Rect usable_rect = FloatingPanelLayoutManager::instance().computeUsableRect(
         SDL_Rect{0, 0, screen_w_, screen_h_},
         header_rect,
@@ -1021,7 +1026,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 
     const bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
-    const bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
+    const bool hide_headers = modal_hide || sliding_headers_hidden_ || !sliding_rects.empty();
     // Keep header always visible in dev mode
     asset_filter_.set_enabled(enabled_);
     apply_header_suppression();
@@ -1396,7 +1401,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     const bool hide_headers = modal_headers_hidden_; // ignore sliding windows for header visibility
-    if (!hide_headers && !is_modal_blocking_panels() && !layers_panel_open) {
+    if (!hide_headers && !is_modal_blocking_panels()) {
         asset_filter_.render(renderer);
     }
 }
@@ -1891,9 +1896,10 @@ void DevControls::pulse_modal_header() {
 
 void DevControls::apply_header_suppression() {
     if (map_mode_ui_) {
-        // In dev mode, never suppress headers/footers
-        map_mode_ui_->set_headers_suppressed(false);
-        map_mode_ui_->set_dev_sliding_headers_hidden(false);
+        // Suppress headers when modals or sliding containers request it
+        const bool modal_hide = is_modal_blocking_panels();
+        map_mode_ui_->set_headers_suppressed(modal_hide);
+        map_mode_ui_->set_dev_sliding_headers_hidden(sliding_headers_hidden_);
     }
 }
 
@@ -2876,5 +2882,3 @@ bool DevControls::persist_map_info_to_disk() {
     }
     return map_saved;
 }
-
-
