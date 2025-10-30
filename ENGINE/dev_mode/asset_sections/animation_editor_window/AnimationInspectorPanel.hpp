@@ -131,6 +131,12 @@ class AnimationInspectorPanel {
     FocusTarget current_focus_target_ = FocusTarget::kNone;
     bool source_uses_animation_ = false;
 
+    // Animation preview state
+    mutable Uint32 animation_start_time_ = 0;
+    mutable int current_frame_ = 0;
+    mutable float current_speed_factor_ = 1.0f;
+    mutable int frame_count_ = 1;
+
     std::shared_ptr<CroppingService> cropping_service_;
     std::shared_ptr<AsyncTaskQueue> task_queue_;
     PathPicker folder_picker_;
@@ -145,4 +151,3 @@ class AnimationInspectorPanel {
 };
 
 }
-

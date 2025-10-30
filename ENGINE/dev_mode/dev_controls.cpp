@@ -1396,7 +1396,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     const bool hide_headers = modal_headers_hidden_; // ignore sliding windows for header visibility
-    if (!hide_headers && !is_modal_blocking_panels() && !layers_panel_open) {
+    if (!hide_headers && !is_modal_blocking_panels()) {
         asset_filter_.render(renderer);
     }
 }
@@ -2876,5 +2876,3 @@ bool DevControls::persist_map_info_to_disk() {
     }
     return map_saved;
 }
-
-

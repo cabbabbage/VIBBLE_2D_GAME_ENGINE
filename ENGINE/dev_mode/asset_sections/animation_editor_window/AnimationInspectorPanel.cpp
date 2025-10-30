@@ -95,6 +95,67 @@ bool is_pointer_event(const SDL_Event& e) {
     }
 }
 
+bool parse_bool_value(const nlohmann::json& value, bool fallback) {
+    if (value.is_boolean()) {
+        return value.get<bool>();
+    }
+    if (value.is_number_integer()) {
+        return value.get<int>() != 0;
+    }
+    if (value.is_number_float()) {
+        return value.get<double>() != 0.0;
+    }
+    if (value.is_string()) {
+        std::string text = value.get<std::string>();
+        std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+        if (text == "true" || text == "1" || text == "yes" || text == "on") {
+            return true;
+        }
+        if (text == "false" || text == "0" || text == "no" || text == "off") {
+            return false;
+        }
+    }
+    return fallback;
+}
+
+bool parse_bool_field(const nlohmann::json& payload, const char* key, bool fallback) {
+    if (!payload.is_object()) {
+        return fallback;
+    }
+    if (!payload.contains(key)) {
+        return fallback;
+    }
+    return parse_bool_value(payload.at(key), fallback);
+}
+
+int parse_int_value(const nlohmann::json& value, int fallback) {
+    if (value.is_number_integer()) {
+        return value.get<int>();
+    }
+    if (value.is_number()) {
+        return static_cast<int>(value.get<double>());
+    }
+    if (value.is_string()) {
+        try {
+            return std::stoi(value.get<std::string>());
+        } catch (...) {
+        }
+    }
+    return fallback;
+}
+
+int parse_int_field(const nlohmann::json& payload, const char* key, int fallback) {
+    if (!payload.is_object()) {
+        return fallback;
+    }
+    if (!payload.contains(key)) {
+        return fallback;
+    }
+    return parse_int_value(payload.at(key), fallback);
+}
+
 void render_badge(SDL_Renderer* renderer, const SDL_Rect& rect, const DMButtonStyle& style, const std::string& text) {
     if (!renderer || rect.w <= 0 || rect.h <= 0 || text.empty()) {
         return;
@@ -351,7 +412,37 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     }
 
     if (preview_provider_) {
-        SDL_Texture* texture = preview_provider_->get_preview_texture(renderer, animation_id_);
+        // Calculate current animation frame based on time
+        SDL_Texture* texture = nullptr;
+        if (animation_start_time_ == 0) {
+            animation_start_time_ = SDL_GetTicks();
+            current_frame_ = 0;
+        }
+
+        // Calculate frame timing (base 24fps, but can be slower if speed_factor < 1)
+        float effective_fps = 24.0f * current_speed_factor_;
+        if (effective_fps < 0.1f) effective_fps = 0.1f; // Minimum frame rate
+        float frame_time_ms = 1000.0f / effective_fps;
+
+        // Calculate elapsed time since start
+        Uint32 elapsed_ms = SDL_GetTicks() - animation_start_time_;
+        int total_cycles = static_cast<int>(elapsed_ms / (frame_time_ms * frame_count_));
+
+        // For negative speed_factor, we just play at slower speed (not reverse direction)
+        // The reverse flag handles direction reversal
+        int raw_frame = static_cast<int>((elapsed_ms % static_cast<int>(frame_time_ms * frame_count_)) / frame_time_ms);
+        if (raw_frame >= frame_count_) raw_frame = frame_count_ - 1;
+
+        // Apply reverse direction if needed
+        current_frame_ = preview_reverse_ ? (frame_count_ - 1 - raw_frame) : raw_frame;
+
+        // Ensure frame bounds
+        if (current_frame_ < 0) current_frame_ = 0;
+        if (current_frame_ >= frame_count_) current_frame_ = frame_count_ - 1;
+
+        // Get frame texture
+        texture = preview_provider_->get_frame_texture(renderer, animation_id_, current_frame_);
+
         if (texture) {
             int tex_w = 0;
             int tex_h = 0;
@@ -364,7 +455,14 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
             int draw_h = static_cast<int>(tex_h * scale);
             SDL_Rect dst{preview_rect_.x + (preview_rect_.w - draw_w) / 2, preview_rect_.y + (preview_rect_.h - draw_h) / 2,
                          draw_w, draw_h};
-            SDL_RenderCopy(renderer, texture, nullptr, &dst);
+
+            // Calculate flip flags for SDL_RendererFlip
+            SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
+            if (preview_flip_x_) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
+            if (preview_flip_y_) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
+
+            // Render with flip effects
+            SDL_RenderCopyEx(renderer, texture, nullptr, &dst, 0.0, nullptr, flip_flags);
         } else {
             const DMLabelStyle& style = DMStyles::Label();
             SDL_Color color = style.color;
@@ -794,6 +892,8 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
     self->preview_flip_y_ = false;
     self->preview_flip_movement_x_ = false;
     self->preview_flip_movement_y_ = false;
+    self->current_speed_factor_ = 1.0f;
+    self->frame_count_ = 1;
 
     if (!payload_dump.has_value()) {
         return;
@@ -834,6 +934,18 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
         self->preview_flip_y_ = false;
         self->preview_flip_movement_x_ = false;
         self->preview_flip_movement_y_ = false;
+    }
+
+    // Extract speed factor
+    int speed = parse_int_field(payload, "speed_factor", 1);
+    speed = std::clamp(speed, -20, 20);
+    if (speed == 0) speed = 1;
+    self->current_speed_factor_ = static_cast<float>(speed);
+
+    // Extract frame count
+    if (payload.contains("number_of_frames")) {
+        self->frame_count_ = parse_int_field(payload, "number_of_frames", 1);
+        if (self->frame_count_ <= 0) self->frame_count_ = 1;
     }
 
     auto add_badge = [&](const char* text) { self->preview_modifier_badges_.emplace_back(text); };
