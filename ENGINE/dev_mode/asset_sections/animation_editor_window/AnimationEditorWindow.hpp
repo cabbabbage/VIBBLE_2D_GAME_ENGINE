@@ -89,6 +89,15 @@ class AnimationEditorWindow {
     std::optional<std::string> pick_animation_reference() const;
     std::optional<std::filesystem::path> pick_audio_file() const;
 
+    void handle_controller_button_click();
+    void update_controller_button_label();
+    bool does_controller_exist() const;
+    std::string sanitize_asset_name(const std::string& name) const;
+    std::string generate_controller_key(const std::string& asset_name) const;
+    std::string generate_class_name(const std::string& asset_name) const;
+    void add_controller();
+    void open_controller();
+
   private:
     bool visible_ = false;
     SDL_Rect bounds_{0, 0, 0, 0};
@@ -105,6 +114,7 @@ class AnimationEditorWindow {
     std::unique_ptr<AnimationListContextMenu> list_context_menu_;
     std::unique_ptr<DMButton> header_corner_button_;
     std::unique_ptr<DMButton> add_button_;
+    std::unique_ptr<DMButton> controller_button_;
     SDL_Rect header_rect_{0, 0, 0, 0};
     SDL_Rect list_rect_{0, 0, 0, 0};
     SDL_Rect inspector_rect_{0, 0, 0, 0};
@@ -129,4 +139,3 @@ class AnimationEditorWindow {
 };
 
 }
-
