@@ -4799,29 +4799,25 @@
           "speed_factor": 1
         },
         "right": {
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": false
+          },
           "flipped_source": false,
           "locked": false,
           "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 1,
+          "number_of_frames": 16,
           "on_end": "default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "right"
-          },
-          "speed_factor": 1
+            "kind": "animation",
+            "name": "default",
+            "path": ""
+          }
         }
       },
       "anti_tags": [],

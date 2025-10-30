@@ -533,6 +533,15 @@ std::optional<nlohmann::json> SourceConfigPanel::animation_payload(const std::st
     return parsed;
 }
 
+bool SourceConfigPanel::animation_is_frame_based(const std::string& id) const {
+    auto payload = animation_payload(id);
+    if (!payload) {
+        return false;
+    }
+    SourceConfig config = parse_source(*payload);
+    return to_lower_copy(config.kind) != std::string{"animation"};
+}
+
 SourceConfigPanel::SourceConfig SourceConfigPanel::parse_source(const nlohmann::json& payload) const {
     SourceConfig config;
     if (!payload.contains("source") || !payload["source"].is_object()) {
@@ -808,40 +817,71 @@ void SourceConfigPanel::refresh_animation_options() {
     if (document_) {
         auto ids = document_->animation_ids();
         for (const auto& id : ids) {
-            if (id != animation_id_) {
-                // Include all animations to allow chaining of animation references
-                new_options.push_back(id);
+            if (id == animation_id_) {
+                continue;
             }
+            if (!animation_is_frame_based(id)) {
+                continue;
+            }
+            new_options.push_back(id);
         }
     }
-    if (animation_dropdown_) {
 
-        int idx = std::max(0, animation_index_);
-        animation_dropdown_.reset();
-        if (!animation_options_.empty()) {
-            animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::min(idx, static_cast<int>(animation_options_.size()) - 1));
-            // Ensure the new dropdown inherits current geometry
-            animation_dropdown_->set_rect(animation_dropdown_rect_);
+    if (new_options == animation_options_) {
+        if (animation_dropdown_ && !animation_options_.empty()) {
+            int idx = std::clamp(animation_index_, 0, static_cast<int>(animation_options_.size()) - 1);
+            animation_dropdown_->set_selected(idx);
         }
+        return;
+    }
+
+    animation_options_ = std::move(new_options);
+
+    if (animation_options_.empty()) {
+        animation_index_ = -1;
+    } else {
+        std::string desired = strings::trim_copy(current_source_.name.value_or(current_source_.path));
+        if (desired.empty() && animation_index_ >= 0 && animation_index_ < static_cast<int>(animation_options_.size())) {
+            desired = animation_options_[animation_index_];
+        }
+
+        int new_index = -1;
+        if (!desired.empty()) {
+            auto it = std::find(animation_options_.begin(), animation_options_.end(), desired);
+            if (it != animation_options_.end()) {
+                new_index = static_cast<int>(std::distance(animation_options_.begin(), it));
+            }
+        }
+        if (new_index < 0) {
+            new_index = 0;
+        }
+        animation_index_ = new_index;
+    }
+
+    if (animation_dropdown_) {
+        animation_dropdown_.reset();
     }
 }
 
 void SourceConfigPanel::apply_animation_selection() {
     if (!use_animation_reference_ || !animation_dropdown_ || animation_options_.empty()) return;
     int idx = animation_dropdown_->selected();
-    idx = std::max(0, std::min(static_cast<int>(animation_options_.size()) - 1, idx));
-    if (idx == animation_index_) return;
-    animation_index_ = idx;
-    const std::string& target = animation_options_[animation_index_];
+    idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
+    const std::string& target = animation_options_[idx];
     if (target.empty() || target == animation_id_) return;
+
+    std::string current_target = strings::trim_copy(current_source_.name.value_or(current_source_.path));
+    if (animation_index_ == idx && strings::trim_copy(target) == current_target) {
+        return;
+    }
+
+    animation_index_ = idx;
 
     SourceConfig config;
     config.kind = "animation";
     config.path.clear();
     config.name = target;
     apply_source_config(config);
-    animation_options_ = {target};
-    animation_index_ = 0;
     animation_start_time_ = SDL_GetTicks();
     update_status("Linked frames from animation '" + target + "'");
     if (on_source_changed_) on_source_changed_(animation_id_);
@@ -910,7 +950,14 @@ void SourceConfigPanel::import_from_animation() {
     config.path.clear();
     config.name = target;
     apply_source_config(config);
+    animation_start_time_ = SDL_GetTicks();
+    refresh_animation_options();
+    layout_controls();
+    if (animation_dropdown_ && animation_index_ >= 0 && animation_index_ < static_cast<int>(animation_options_.size())) {
+        animation_dropdown_->set_selected(animation_index_);
+    }
     update_status("Linked frames from animation '" + target + "'");
+    if (on_source_changed_) on_source_changed_(animation_id_);
 }
 
 void SourceConfigPanel::import_from_gif() {

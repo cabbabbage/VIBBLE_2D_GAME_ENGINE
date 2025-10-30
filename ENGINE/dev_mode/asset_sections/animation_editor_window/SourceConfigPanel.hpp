@@ -84,6 +84,7 @@ class SourceConfigPanel {
     std::optional<nlohmann::json> animation_payload(const std::string& id) const;
     SourceConfig parse_source(const nlohmann::json& payload) const;
     nlohmann::json build_source_json(const SourceConfig& config) const;
+    bool animation_is_frame_based(const std::string& id) const;
     std::filesystem::path resolve_asset_root() const;
     std::filesystem::path animation_output_directory() const;
     bool prepare_output_directory(std::filesystem::path* out_dir) const;
