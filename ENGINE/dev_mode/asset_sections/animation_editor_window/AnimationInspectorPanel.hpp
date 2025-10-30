@@ -17,6 +17,7 @@ struct SDL_Renderer;
 
 class DMButton;
 class DMTextBox;
+class DMSlider;
 
 namespace animation_editor {
 
@@ -30,6 +31,7 @@ class PreviewProvider;
 class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
+class PreviewTimeline;
 
 using DMButton = ::DMButton;
 using DMTextBox = ::DMTextBox;
@@ -132,10 +134,11 @@ class AnimationInspectorPanel {
     bool source_uses_animation_ = false;
 
     // Animation preview state
-    mutable Uint32 animation_start_time_ = 0;
-    mutable int current_frame_ = 0;
-    mutable float current_speed_factor_ = 1.0f;
-    mutable int frame_count_ = 1;
+    std::unique_ptr<PreviewTimeline> preview_timeline_;
+    std::unique_ptr<DMButton> preview_play_button_;
+    std::unique_ptr<DMSlider> preview_scrub_slider_;
+    mutable SDL_Rect preview_controls_rect_{0, 0, 0, 0};
+    mutable bool was_playing_before_scrub_ = false;
 
     std::shared_ptr<CroppingService> cropping_service_;
     std::shared_ptr<AsyncTaskQueue> task_queue_;
@@ -148,6 +151,12 @@ class AnimationInspectorPanel {
     AnimationNavigateCallback navigate_to_animation_callback_;
     std::shared_ptr<AudioImporter> audio_importer_;
     AudioFilePicker audio_file_picker_;
+
+    // Animation preview timing variables
+    mutable Uint32 animation_start_time_ = 0;
+    mutable int current_frame_ = 0;
+    mutable float current_speed_factor_ = 1.0f;
+    mutable int frame_count_ = 1;
 };
 
 }

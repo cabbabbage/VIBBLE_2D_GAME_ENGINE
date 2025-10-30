@@ -17,6 +17,7 @@
 #include "OnEndSelector.hpp"
 #include "PlaybackSettingsPanel.hpp"
 #include "PreviewProvider.hpp"
+#include "PreviewTimeline.hpp"
 #include "SourceConfigPanel.hpp"
 #include "string_utils.hpp"
 #include "dm_styles.hpp"
@@ -311,6 +312,7 @@ int AnimationInspectorPanel::height_for_width(int width) const {
     }
 
     total += item_gap;
+    total += DMButton::height(); // controls height
     total += kPreviewHeight;
 
     bool added_section = false;
@@ -634,6 +636,17 @@ void AnimationInspectorPanel::rebuild_widgets() {
         return;
     }
 
+    if (!preview_timeline_) {
+        preview_timeline_ = std::make_unique<PreviewTimeline>();
+    }
+    if (!preview_play_button_) {
+        preview_play_button_ = std::make_unique<DMButton>("▶️", &DMStyles::AccentButton(), 40, DMButton::height());
+    }
+    if (!preview_scrub_slider_) {
+        preview_scrub_slider_ = std::make_unique<DMSlider>("", 0, 0, 0); // Will set range later
+        // Snapping to int is default behavior for DMSlider
+    }
+
     if (!name_box_) {
         name_box_ = std::make_unique<DMTextBox>("Animation ID", animation_id_);
     } else {
@@ -803,6 +816,8 @@ void AnimationInspectorPanel::layout_widgets() const {
     y += source_height;
     y += item_gap;
 
+    self->preview_controls_rect_ = SDL_Rect{x, y, width, DMButton::height()};
+    y += DMButton::height();
     self->preview_rect_ = SDL_Rect{x, y, width, kPreviewHeight};
     y += kPreviewHeight;
 

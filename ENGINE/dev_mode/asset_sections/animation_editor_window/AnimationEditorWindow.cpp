@@ -28,7 +28,9 @@
 #include "string_utils.hpp"
 #include "ui/tinyfiledialogs.h"
 #ifdef _WIN32
-#  define NOMINMAX
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
 #  include <windows.h>
 #  include <shobjidl.h>
 #  include <shlwapi.h>
@@ -1303,4 +1305,3 @@ std::optional<std::filesystem::path> AnimationEditorWindow::pick_audio_file() co
 }
 
 }
-
