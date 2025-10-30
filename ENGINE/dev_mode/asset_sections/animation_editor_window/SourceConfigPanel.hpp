@@ -129,6 +129,7 @@ class SourceConfigPanel {
     mutable bool cached_asset_root_valid_ = false;
 
     std::unique_ptr<DMDropdown> animation_dropdown_;
+    std::unique_ptr<DMButton> pick_animation_button_;
     std::array<std::unique_ptr<DMButton>, 3> frame_buttons_{};
 
     SDL_Rect animation_dropdown_rect_{0,0,0,0};
