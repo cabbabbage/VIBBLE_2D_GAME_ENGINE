@@ -899,9 +899,9 @@ void DevControls::update(const Input& input) {
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->update(input);
     }
-    const bool modal_hide = is_modal_blocking_panels();
+    bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
-    const bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
+    bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
     // Keep header always visible in dev mode
     asset_filter_.set_enabled(enabled_);
     apply_header_suppression();
@@ -940,8 +940,8 @@ void DevControls::update(const Input& input) {
             footer_rect = footer->rect();
         }
     }
-    const bool modal_hide = is_modal_blocking_panels();
-    const bool hide_headers = modal_hide || sliding_headers_hidden_ || !sliding_rects.empty();
+    modal_hide = is_modal_blocking_panels();
+    hide_headers = modal_hide || sliding_headers_hidden_ || !sliding_rects.empty();
     SDL_Rect header_rect = hide_headers ? SDL_Rect{0, 0, 0, 0} : asset_filter_.header_rect();
     SDL_Rect usable_rect = FloatingPanelLayoutManager::instance().computeUsableRect(
         SDL_Rect{0, 0, screen_w_, screen_h_},

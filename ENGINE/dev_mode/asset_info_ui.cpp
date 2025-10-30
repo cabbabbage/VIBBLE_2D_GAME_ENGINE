@@ -674,7 +674,7 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 
         const int text_padding = 12 + bevel_depth;
         const int interior_h = std::max(0, input_rect.h - 2 * bevel_depth);
-        TTF_Font* font = load_font(18);
+        TTF_Font* font = devmode::utils::load_font(18);
         if (font) {
             std::string display = duplicate_asset_name_.empty() ? "Enter asset name..." : duplicate_asset_name_;
             SDL_Color color = duplicate_asset_name_.empty() ? textbox.label.color : textbox.text;
@@ -739,8 +739,8 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
             dm_draw::DrawBeveledRect( r, rect, corner_radius, bevel_depth, bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
             dm_draw::DrawRoundedOutline( r, rect, corner_radius, 1, style.border);
 
-            TTF_Font* btn_font = load_font(style.label.font_size > 0 ? style.label.font_size : 16);
-            if (!btn_font) btn_font = load_font(16);
+            TTF_Font* btn_font = devmode::utils::load_font(style.label.font_size > 0 ? style.label.font_size : 16);
+            if (!btn_font) btn_font = devmode::utils::load_font(16);
             if (btn_font) {
                 SDL_Surface* text = TTF_RenderUTF8_Blended(btn_font, caption.c_str(), style.text);
                 if (text) {
