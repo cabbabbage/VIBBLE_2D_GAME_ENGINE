@@ -40,6 +40,9 @@ public:
     void set_filters_expanded(bool expanded);
     bool filters_expanded() const { return filters_expanded_; }
 
+    void set_header_suppressed(bool suppressed) { header_suppressed_ = suppressed; }
+    bool header_suppressed() const { return header_suppressed_; }
+
     void refresh_layout();
     void ensure_layout();
 
@@ -126,5 +129,5 @@ private:
     std::function<void(const std::string&)> on_mode_selected_{};
     std::unique_ptr<class DMButton> filter_toggle_button_;
     bool filters_expanded_ = false;
+    bool header_suppressed_ = false;
 };
-
