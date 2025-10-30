@@ -642,8 +642,9 @@ void MapModeUI::ensure_panels() {
         rooms_list_container_ = std::make_unique<SlidingWindowContainer>();
         rooms_list_container_->set_header_visible(true);
         rooms_list_container_->set_scrollbar_visible(true);
-        rooms_list_container_->set_header_visibility_controller([this](bool visible) {
-            this->set_sliding_headers_hidden(visible);
+        // Keep headers/footers visible when sliding containers open
+        rooms_list_container_->set_header_visibility_controller([this](bool) {
+            /* no-op: do not suppress headers */
         });
         rooms_list_container_->set_close_button_enabled(false);
     }
@@ -671,8 +672,9 @@ void MapModeUI::ensure_panels() {
         layer_controls_container_ = std::make_unique<SlidingWindowContainer>();
         layer_controls_container_->set_header_visible(true);
         layer_controls_container_->set_scrollbar_visible(true);
-        layer_controls_container_->set_header_visibility_controller([this](bool visible) {
-            this->set_sliding_headers_hidden(visible);
+        // Keep headers/footers visible when sliding containers open
+        layer_controls_container_->set_header_visibility_controller([this](bool) {
+            /* no-op: do not suppress headers */
         });
         layer_controls_container_->set_close_button_enabled(false);
         layer_controls_container_->set_blocks_editor_interactions(true);
@@ -1103,7 +1105,7 @@ bool MapModeUI::handle_event(const SDL_Event& e) {
     }
 
     bool footer_used = false;
-    if (!headers_suppressed_ && footer_bar_ && footer_bar_->visible()) {
+    if (footer_bar_ && footer_bar_->visible()) {
         footer_used = footer_bar_->handle_event(e);
     }
     if (footer_used) {
@@ -1566,8 +1568,9 @@ void MapModeUI::ensure_room_configurator() {
         room_configurator_ = std::make_unique<RoomConfigurator>();
     }
     if (room_configurator_) {
-        room_configurator_->set_header_visibility_controller([this](bool visible) {
-            this->set_sliding_headers_hidden(visible);
+        // Keep headers/footers visible when sliding containers open
+        room_configurator_->set_header_visibility_controller([this](bool) {
+            /* no-op: do not suppress headers */
         });
         room_configurator_->set_on_close([this]() {
             active_room_config_key_.clear();
@@ -1594,8 +1597,9 @@ void MapModeUI::ensure_room_configurator() {
         if (room_config_container_) {
             room_config_container_->set_header_visible(true);
             room_config_container_->set_scrollbar_visible(true);
-            room_config_container_->set_header_visibility_controller([this](bool visible) {
-                this->set_sliding_headers_hidden(visible);
+            // Keep headers/footers visible when sliding containers open
+            room_config_container_->set_header_visibility_controller([this](bool) {
+                /* no-op: do not suppress headers */
             });
             room_config_container_->set_blocks_editor_interactions(false);
         }

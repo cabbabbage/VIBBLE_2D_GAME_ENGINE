@@ -9,6 +9,7 @@
 #include "font_cache.hpp"
 #include "widgets.hpp"
 #include "utils/input.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 
 namespace {
 constexpr int kScrollbarWidth = 10;
@@ -538,9 +539,12 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
         desired.y = std::clamp(desired.y, 0, max_y);
         panel_ = desired;
     } else {
+        const auto usable = FloatingPanelLayoutManager::instance().usableRect();
+        int panel_y = usable.y;
+        int panel_h = std::max(0, screen_h - usable.y);
         int panel_x = (screen_w * 2) / 3;
         int panel_w = screen_w - panel_x;
-        panel_ = SDL_Rect{panel_x, 0, panel_w, screen_h};
+        panel_ = SDL_Rect{panel_x, panel_y, panel_w, panel_h};
     }
 
     const int padding = DMSpacing::panel_padding();
@@ -733,4 +737,3 @@ void SlidingWindowContainer::update_editor_interaction_block_state() {
         editor_interaction_blocker_(should_block);
     }
 }
-

@@ -19,6 +19,7 @@
 #include "utils/input.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "util/grid.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 
 class SpawnGroupLabelWidget : public Widget {
 public:
@@ -865,6 +866,46 @@ struct SpawnGroupConfig::Entry {
             owner_->mark_layout_dirty();
         }
 
+        // Determine if this entry contains a Zone Asset candidate to adjust label accordingly
+        auto is_zone_asset_name = [store = owner_ ? owner_->manifest_store_ : nullptr](const std::string& name) -> bool {
+            if (!store || name.empty()) return false;
+            try {
+                auto view = store->get_asset(name);
+                if (!view || !view.data || !view.data->is_object()) return false;
+                std::string t = view.data->value("asset_type", std::string{});
+                std::transform(t.begin(), t.end(), t.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
+                return t == std::string{"zone_asset"};
+            } catch (...) { return false; }
+        };
+        bool has_zone_asset = false;
+        try {
+            if (entry.contains("candidates") && entry["candidates"].is_array()) {
+                for (const auto& c : entry["candidates"]) {
+                    if (!c.is_object()) continue;
+                    const std::string name = c.value("name", std::string{});
+                    if (!name.empty() && name.front() != '#') {
+                        if (is_zone_asset_name(name)) { has_zone_asset = true; break; }
+                    }
+                }
+            }
+        } catch (...) {}
+
+        static const char* kAdjustLabel = "Adjust to Room";
+        static const char* kResolveLabel = "Resolve geometry to room size";
+        if (resolve_geometry_widget_) {
+            // Recreate the checkbox if label needs to change (per-entry)
+            bool want_adjust = has_zone_asset;
+            if (use_adjust_label_ != want_adjust) {
+                auto geometry_checkbox = std::make_unique<DMCheckbox>(want_adjust ? kAdjustLabel : kResolveLabel, false);
+                resolve_geometry_widget_ = std::make_unique<CallbackCheckboxWidget>(
+                    std::move(geometry_checkbox),
+                    [this](bool value) { on_resolve_geometry_changed(value); },
+                    editable_);
+                if (owner_) owner_->mark_layout_dirty();
+                use_adjust_label_ = want_adjust;
+            }
+        }
+
         const bool geometry_flag = safe_bool(entry, "resolve_geometry_to_room_size", show_resolve_geometry_widget_);
         const bool quantity_flag = safe_bool(entry, "resolve_quantity_to_room_size", false);
 
@@ -1598,6 +1639,7 @@ private:
     bool editable_ = false;
     bool expanded_state_ = false;
     bool use_exact_quantity_ = false;
+    bool use_adjust_label_ = false;
     std::string current_method_ = kDefaultMethod;
 
     std::unique_ptr<DMButton> toggle_button_{};

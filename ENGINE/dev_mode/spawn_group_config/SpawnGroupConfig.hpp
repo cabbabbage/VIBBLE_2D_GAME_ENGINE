@@ -16,6 +16,7 @@
 
 class Input;
 class SpawnGroupLabelWidget;
+namespace devmode::core { class ManifestStore; }
 
 struct SpawnGroupLinkableAreaDescriptor {
     std::string id;
@@ -98,6 +99,7 @@ public:
     void set_embedded_mode(bool embedded);
 
     void set_default_resolution(int resolution);
+    void set_manifest_store(class devmode::core::ManifestStore* store) { manifest_store_ = store; }
 
     void expand_group(const std::string& id);
     void collapse_group(const std::string& id);
@@ -180,6 +182,7 @@ private:
 
     DragState drag_state_{};
     Entry* current_entry_ = nullptr;
+    class devmode::core::ManifestStore* manifest_store_ = nullptr;
 
     Entry* find_entry_by_id(const std::string& id);
     void begin_drag(size_t index, int pointer_y);

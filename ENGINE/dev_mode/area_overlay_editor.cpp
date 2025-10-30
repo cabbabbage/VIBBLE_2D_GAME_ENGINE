@@ -17,6 +17,7 @@
 #include "utils/area.hpp"
 #include "util/grid.hpp"
 #include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 #include "utils/relative_room_position.hpp"
 
 #include <algorithm>
@@ -544,9 +545,7 @@ bool AreaOverlayEditor::begin_for_room(Room* room,
     }
 
     ensure_toolbox();
-    if (scale_to_room_checkbox_) {
-        scale_to_room_checkbox_->set_value(scale_area_to_room_);
-    }
+    // Deprecated: scale-to-room is handled at spawn-group; no UI sync here
     update_toolbox_title();
     rebuild_toolbox_rows();
 
@@ -868,9 +867,7 @@ void AreaOverlayEditor::ensure_toolbox() {
     btn_geom_   = std::make_unique<DMButton>("Geometry", &DMStyles::CreateButton(), 180, DMButton::height());
     btn_save_   = std::make_unique<DMButton>("Save",     &DMStyles::AccentButton(), 180, DMButton::height());
     btn_delete_ = std::make_unique<DMButton>("Delete",   &DMStyles::DeleteButton(), 180, DMButton::height());
-    if (!scale_to_room_checkbox_) {
-        scale_to_room_checkbox_ = std::make_unique<DMCheckbox>("Scale area to room", scale_area_to_room_);
-    }
+    // Deprecated: remove legacy Scale area to room checkbox
     update_toolbox_title();
     rebuild_toolbox_rows();
 }
@@ -931,11 +928,7 @@ void AreaOverlayEditor::rebuild_toolbox_rows() {
         rows.push_back({ owned_widgets_.back().get() });
     }
 
-    if (room_ && scale_to_room_checkbox_) {
-        owned_widgets_.push_back(std::make_unique<CheckboxWidget>(scale_to_room_checkbox_.get()));
-        register_tracked_checkbox(scale_to_room_checkbox_.get());
-        rows.push_back({ owned_widgets_.back().get() });
-    }
+    // Deprecated: scale-to-room UI removed from Area Toolbox
 
     if (btn_save_ || btn_delete_) {
         std::vector<Widget*> manage_row;
@@ -1754,11 +1747,8 @@ bool AreaOverlayEditor::persist_current_area() {
             if (area.get_type().empty()) {
                 area.set_type("spawning");
             }
-            if (scale_to_room_checkbox_) {
-                scale_area_to_room_ = scale_to_room_checkbox_->value();
-            } else {
-                scale_area_to_room_ = false;
-            }
+            // Deprecated: always persist absolute geometry; spawn-group handles resizing
+            scale_area_to_room_ = false;
             room_->upsert_named_area(area, scale_area_to_room_, 0, 0);
             room_->save_assets_json();
 
@@ -1825,6 +1815,86 @@ bool AreaOverlayEditor::persist_current_area() {
                 }
             } catch (...) {
                 // Non-fatal; ignore spawn group creation errors
+            }
+
+            // Create or update a Zone Asset manifest entry for this area
+            try {
+                if (assets_) {
+                    // Compute origin room dimensions
+                    int width = 0;
+                    int height = 0;
+                    if (room_->room_area) {
+                        auto b = room_->room_area->get_bounds();
+                        width = std::max(1, std::get<2>(b) - std::get<0>(b));
+                        height = std::max(1, std::get<3>(b) - std::get<1>(b));
+                    }
+
+                    auto sanitize = [](std::string s) {
+                        for (char& ch : s) {
+                            unsigned char u = static_cast<unsigned char>(ch);
+                            if (!std::isalnum(u)) ch = '_';
+                            else ch = static_cast<char>(std::tolower(u));
+                        }
+                        return s;
+                    };
+
+                    std::string zone_name = std::string("zone_") + sanitize(room_->room_name) + std::string("_") + sanitize(area_name_);
+
+                    // Build a minimal AssetInfo context so AreaCodec can encode the polygon
+                    nlohmann::json zmeta = nlohmann::json::object();
+                    zmeta["asset_name"] = zone_name;
+                    zmeta["asset_type"] = "zone_asset";
+                    zmeta["size_settings"] = nlohmann::json::object({ {"scale_percentage", 100.0} });
+                    zmeta["canvas_width"] = width;
+                    zmeta["canvas_height"] = height;
+
+                    AssetInfo tmp_info(zone_name, zmeta);
+                    // Normalize area name to 'zone' inside the asset manifest
+                    Area zone_area_copy("zone", area.get_points(), area.resolution());
+                    zone_area_copy.set_type("zone");
+                    nlohmann::json encoded = AssetInfo::AreaCodec::encode_entry(tmp_info, zone_area_copy, "zone", "zone_asset", std::nullopt);
+
+                    nlohmann::json payload = nlohmann::json::object();
+                    payload["asset_name"] = zone_name;
+                    payload["asset_type"] = "zone_asset";
+                    payload["size_settings"] = zmeta["size_settings"];
+                    payload["canvas_width"] = width;
+                    payload["canvas_height"] = height;
+                    payload["areas"] = nlohmann::json::array({ encoded });
+                    payload["spawn_groups"] = nlohmann::json::array();
+                    payload["origin_room"] = nlohmann::json::object({
+                        {"name", room_->room_name},
+                        {"width", width},
+                        {"height", height}
+                    });
+
+                    // Persist into manifest store (with de-dup if needed)
+                    if (auto* store = assets_->manifest_store()) {
+                        // De-duplicate asset name if collision occurs
+                        if (auto existing = store->resolve_asset_name(zone_name)) {
+                            int idx = 2;
+                            std::string base = zone_name;
+                            while (store->resolve_asset_name(base + std::string("_") + std::to_string(idx))) {
+                                ++idx;
+                            }
+                            zone_name = base + std::string("_") + std::to_string(idx);
+                            if (assets_) assets_->show_dev_notice(std::string("Zone asset exists; using '") + zone_name + "'", 2500);
+                            // Update payload's asset_name to final unique name
+                            payload["asset_name"] = zone_name;
+                        }
+
+                        auto session = store->begin_asset_edit(zone_name, /*create_if_missing=*/true);
+                        if (session) {
+                            session.data() = payload;
+                            (void)session.commit();
+                            store->flush();
+                        }
+                        // Refresh AssetLibrary so the Zone Asset becomes visible immediately
+                        assets_->library().load_all_from_SRC();
+                    }
+                }
+            } catch (...) {
+                // Ignore manifest write failures in editor path
             }
         }
     };

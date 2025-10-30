@@ -22,6 +22,7 @@
 #include "dev_mode/dev_footer_bar.hpp"
 #include "room_config/room_configurator.hpp"
 #include "dev_mode/FloatingDockableManager.hpp"
+#include "FloatingPanelLayoutManager.hpp"
 #include "dev_mode/widgets.hpp"
 #include "dm_styles.hpp"
 #include "room_overlay_renderer.hpp"
@@ -656,7 +657,8 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
 
     if (spawn_group_panel_) {
         spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
-        spawn_group_panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        // Constrain to area between header and footer
+        spawn_group_panel_->set_work_area(FloatingPanelLayoutManager::instance().usableRect());
         update_spawn_group_config_anchor();
     }
 
@@ -685,13 +687,15 @@ void RoomEditor::set_shared_footer_bar(DevFooterBar* footer) {
 void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
     header_visibility_callback_ = std::move(cb);
     if (header_visibility_callback_) {
-        header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+        // Keep headers/footers visible even when sliding panels open
+        header_visibility_callback_(false);
     }
     if (room_cfg_ui_) {
         room_cfg_ui_->set_header_visibility_controller([this](bool visible) {
             room_config_panel_visible_ = visible;
             if (header_visibility_callback_) {
-                header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+                // Do not suppress headers for sliding containers
+                header_visibility_callback_(false);
             }
         });
     }
@@ -699,7 +703,8 @@ void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
         info_ui_->set_header_visibility_callback([this](bool visible) {
             asset_info_panel_visible_ = visible;
             if (header_visibility_callback_) {
-                header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
+                // Do not suppress headers for sliding containers
+                header_visibility_callback_(false);
             }
         });
     }
@@ -3283,7 +3288,8 @@ void RoomEditor::ensure_room_configurator() {
             }
         });
         room_cfg_ui_->set_bounds(room_config_bounds_);
-        room_cfg_ui_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
+        // Constrain to area between header and footer
+        room_cfg_ui_->set_work_area(FloatingPanelLayoutManager::instance().usableRect());
         room_cfg_ui_->set_blocks_editor_interactions(false);
         room_cfg_ui_->set_on_close([this]() {
             if (!suppress_room_config_selection_clear_) {
@@ -3298,7 +3304,16 @@ void RoomEditor::ensure_room_configurator() {
                     pulse_active_modal_header();
                     return;
                 }
-                open_spawn_group_editor_by_id(spawn_id);
+                // Show the docked configurator and focus the requested spawn group entry
+                set_room_config_visible(true);
+                if (room_cfg_ui_) {
+                    room_cfg_ui_->focus_spawn_group(spawn_id);
+                }
+                // Ensure any legacy floating panel stays closed
+                if (spawn_group_panel_) {
+                    spawn_group_panel_->close();
+                    spawn_group_panel_->set_visible(false);
+                }
             },
             [this](const std::string& spawn_id) {
                 delete_spawn_group_internal(spawn_id);
@@ -3426,11 +3441,13 @@ void RoomEditor::update_room_config_bounds() {
     const int max_width = std::max(320, available_width);
     const int desired_width = std::max(360, screen_w_ / 3);
     const int width = std::min(max_width, desired_width);
-    const int height = std::max(1, screen_h_);
+    // Fit between header and footer using the current usable rect
+    SDL_Rect usable = FloatingPanelLayoutManager::instance().usableRect();
+    const int height = std::max(1, usable.h > 0 ? usable.h : screen_h_);
     const int max_x = std::max(0, screen_w_ - width);
     const int desired_x = screen_w_ - width;
     const int x = std::clamp(desired_x, 0, max_x);
-    const int y = 0;
+    const int y = usable.h > 0 ? usable.y : 0;
     room_config_bounds_ = SDL_Rect{x, y, width, height};
     if (room_cfg_ui_ && room_config_dock_open_) {
         room_cfg_ui_->set_bounds(room_config_bounds_);
@@ -4618,35 +4635,16 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
         return;
     }
 
-    ensure_spawn_group_config_ui();
-    if (!spawn_group_panel_) {
-        return;
+    // Prefer embedded, docked behavior: show Room Config panel and focus the target spawn group
+    set_room_config_visible(true);
+    if (room_cfg_ui_) {
+        room_cfg_ui_->focus_spawn_group(spawn_id);
     }
-
-    active_spawn_group_id_ = spawn_id;
-
-    refresh_spawn_group_config_ui();
-
-    SDL_Point anchor = spawn_groups_anchor_point();
-    spawn_group_panel_->set_anchor(anchor.x, anchor.y);
-    spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
-    spawn_group_panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-
-    FloatingDockableManager::instance().open_floating(
-        "Spawn Group Config",
-        spawn_group_panel_.get(),
-        [this]() {
-            if (!spawn_group_panel_) {
-                return;
-            }
-            spawn_group_panel_->set_visible(false);
-        });
-
-    spawn_group_panel_->set_visible(true);
-    spawn_group_panel_->set_expanded(true);
-    spawn_group_panel_->request_open_spawn_group(spawn_id, anchor.x, anchor.y);
-    Input dummy;
-    spawn_group_panel_->update(dummy, screen_w_, screen_h_);
+    // Ensure any legacy floating panel is closed/hidden
+    if (spawn_group_panel_) {
+        spawn_group_panel_->close();
+        spawn_group_panel_->set_visible(false);
+    }
 }
 
 void RoomEditor::reopen_room_configurator() {

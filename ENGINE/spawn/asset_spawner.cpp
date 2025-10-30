@@ -188,7 +188,11 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         PerimeterSpawner perimeter;
         EdgeSpawner edge;
         PercentSpawner percent;
-        for (auto& queue_item : spawn_queue_) {
+    struct ZoneSpawnRecord { Asset* asset = nullptr; const Area* region = nullptr; bool adjust = false; };
+    std::vector<ZoneSpawnRecord> zone_spawns;
+    zone_spawns.reserve(16);
+
+    for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
                 if (current_room_) {
                         bool has_area = false;
@@ -292,6 +296,11 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                         }
                                         ctx.checker().register_asset(result, enforce_spacing, true);
                                         occupancy.set_occupied(vertex, true);
+                                        // Collect zone assets for secondary pass
+                                        if (candidate.info && candidate.info->type == std::string("zone_asset")) {
+                                                const Area* region_area = ctx.clip_area() ? ctx.clip_area() : &area;
+                                                zone_spawns.push_back(ZoneSpawnRecord{ result, region_area, queue_item.adjust_geometry_to_room });
+                                        }
                                         placed = true;
                                         break;
                                 }
@@ -314,8 +323,72 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 } else {
                         random.spawn(queue_item, &area, ctx);
                 }
+
+                // If last spawn was a zone asset, capture it
+                if (!ctx.all_assets().empty()) {
+                        Asset* last = ctx.all_assets().back().get();
+                        if (last && last->info && last->info->type == std::string("zone_asset")) {
+                                const Area* region_area = ctx.clip_area() ? ctx.clip_area() : &area;
+                                zone_spawns.push_back(ZoneSpawnRecord{ last, region_area, queue_item.adjust_geometry_to_room });
+                        }
+                }
         }
         checker_.reset_session();
+
+        // Secondary pass for Zone Assets
+        if (!zone_spawns.empty()) {
+                for (const auto& rec : zone_spawns) {
+                        if (!rec.asset || !rec.asset->info) continue;
+                        auto info = rec.asset->info;
+                        // Resolve the zone world area
+                        Area zone_world = rec.asset->get_area("zone");
+                        if (zone_world.get_points().size() < 3) {
+                                continue;
+                        }
+                        const Area* region_area = rec.region ? rec.region : &area;
+                        // Adjust to region if requested
+                        if (rec.adjust && region_area) {
+                                auto b = region_area->get_bounds();
+                                const int region_w = std::max(1, std::get<2>(b) - std::get<0>(b));
+                                const int region_h = std::max(1, std::get<3>(b) - std::get<1>(b));
+                                const int origin_w = std::max(1, info->original_canvas_width);
+                                const int origin_h = std::max(1, info->original_canvas_height);
+                                const double sx = static_cast<double>(region_w) / static_cast<double>(origin_w);
+                                const double sy = static_cast<double>(region_h) / static_cast<double>(origin_h);
+                                std::vector<SDL_Point> adjusted;
+                                adjusted.reserve(zone_world.get_points().size());
+                                const SDL_Point anchor = rec.asset->pos;
+                                for (const auto& p : zone_world.get_points()) {
+                                        const int dx = p.x - anchor.x;
+                                        const int dy = p.y - anchor.y;
+                                        const int nx = anchor.x + static_cast<int>(std::llround(static_cast<double>(dx) * sx));
+                                        const int ny = anchor.y + static_cast<int>(std::llround(static_cast<double>(dy) * sy));
+                                        adjusted.push_back(SDL_Point{nx, ny});
+                                }
+                                Area adjusted_world(zone_world.get_name(), adjusted, zone_world.resolution());
+                                adjusted_world.set_type(zone_world.get_type());
+                                zone_world = std::move(adjusted_world);
+                        }
+
+                        // Build area lookup for this asset's named areas in world space
+                        std::unordered_map<std::string, Area> area_lookup;
+                        for (const auto& named : info->areas) {
+                                if (!named.area) continue;
+                                try {
+                                        Area world_area = rec.asset->get_area(named.name);
+                                        if (world_area.get_points().size() >= 3) {
+                                                area_lookup.insert_or_assign(named.name, std::move(world_area));
+                                        }
+                                } catch (...) {
+                                }
+                        }
+
+                        std::vector<nlohmann::json> sources;
+                        sources.push_back(info->spawn_groups_payload());
+                        AssetSpawnPlanner planner2(sources, zone_world, *asset_library_);
+                        spawn_children(zone_world, area_lookup, &planner2);
+                }
+        }
 }
 
 void AssetSpawner::run_edge_spawning(const Area& area) {

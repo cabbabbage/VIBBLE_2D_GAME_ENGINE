@@ -1,0 +1,44 @@
+        std::vector<std::string> badges = source_config_ ? source_config_->summary_badges() : std::vector<std::string>{};
+        badges.insert(badges.end(), preview_modifier_badges_.begin(), preview_modifier_badges_.end());
+        render_summary_badges(renderer, source_summary_rect_, badges);
+    }
+
+    if (source_config_ && source_rect_.h > 0 && source_rect_.w > 0) {
+        source_config_->render(renderer);
+    }
+
+    dm_draw::DrawBeveledRect( renderer, preview_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+
+    y += item_gap;
+
+    int source_height = 0;
+    if (source_config_) {
+        source_height = source_config_->preferred_height(content_width);
+        self->source_rect_ = SDL_Rect{x, y, width, source_height};
+        source_config_->set_bounds(self->source_rect_);
+    } else {
+        self->source_rect_ = SDL_Rect{x, y, width, 0};
+    }
+    y += source_height;
+
+    int source_height = 0;
+    if (source_config_) {
+        source_height = source_config_->preferred_height(content_width);
+        self->source_rect_ = SDL_Rect{x, y, width, source_height};
+        source_config_->set_bounds(self->source_rect_);
+    } else {
+        self->source_rect_ = SDL_Rect{x, y, width, 0};
+    }
+    y += source_height;
+    y += item_gap;
+    if (source_config_) {
+        source_height = source_config_->preferred_height(content_width);
+        self->source_rect_ = SDL_Rect{x, y, width, source_height};
+        source_config_->set_bounds(self->source_rect_);
+    } else {
+        self->source_rect_ = SDL_Rect{x, y, width, 0};
+    }
+    y += source_height;
+    y += item_gap;
+
+    self->preview_rect_ = SDL_Rect{x, y, width, kPreviewHeight};

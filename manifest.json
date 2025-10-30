@@ -4714,152 +4714,6 @@
     "Bomb": {
       "animations": {
         "default": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
-          "custom_animation_controller_key": "SRC/assets/Bomb",
-          "end_path": null,
-          "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": true,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 16,
-          "on_end": "SRC/assets/Bomb/default",
-          "path": null,
-          "reverse_source": false,
-          "rnd_start": true,
-          "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "SRC/assets/Bomb/default"
-          },
-          "speed_factor": -1
-        },
-        "explosion": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
-          "custom_animation_controller_key": "SRC/assets/Bomb",
-          "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": true,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 8,
-          "on_end": "end",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "SRC/assets/Bomb/explosion"
-          },
-          "speed_factor": -3
-        },
-        "left": {
           "flipped_source": false,
           "locked": false,
           "loop": false,
@@ -4880,123 +4734,53 @@
           "source": {
             "kind": "folder",
             "name": null,
-            "path": "left"
+            "path": "default"
           },
           "speed_factor": 1
         },
         "right": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Bomb",
-          "custom_animation_controller_key": "SRC/assets/Bomb",
-          "derived_modifiers": {
-            "flipMovementX": false,
-            "flipMovementY": false,
-            "flipX": false,
-            "flipY": false,
-            "reverse": false
-          },
           "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": true,
+          "locked": false,
           "loop": false,
-          "number_of_frames": 16,
-          "on_end": "SRC/assets/Bomb/default",
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
-            "kind": "animation",
-            "name": "default",
-            "path": ""
-          }
+            "kind": "folder",
+            "name": null,
+            "path": "right"
+          },
+          "speed_factor": 1
         }
       },
       "anti_tags": [],
+      "asset_directory": "SRC/Bomb",
       "asset_name": "Bomb",
-      "asset_type": "enemy",
-      "can_invert": true,
-      "custom_controller_key": "Bomb_controller",
-      "duplicatable": false,
-      "duplication_interval_max": 60,
-      "duplication_interval_min": 30,
-      "has_shading": true,
-      "impassable_area": null,
-      "layout": {
-        "__view": {
-          "geometry": "1920x1009+-36+69",
-          "xview": 0.0,
-          "yview": 0.0,
-          "zoom": 1.0
-        }
-      },
-      "lighting_info": [
-        {
-          "apex_speed_bias": 0,
-          "behind": false,
-          "factor": 100,
-          "falloff": 0,
-          "has_light_source": true,
-          "light_intensity": 250,
-          "offset_x": 0,
-          "offset_y": 0,
-          "radius": 89,
-          "x_radius": 76,
-          "y_radius": 70
-        }
-      ],
-      "mappings": {},
-      "max_child_depth": 2,
-      "min_child_depth": 0,
-      "min_distance_all": 254,
-      "min_same_type_distance": 466,
+      "asset_type": "Object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
-      "render_radius": 1000,
-      "rnd_spawn_max": 400,
-      "rnd_spawn_min": 300,
-      "shading_opacity_multiplier": 1.0,
-      "shading_parallax_amount": 0.0,
-      "shading_screen_brightness_multiplier": 1.0,
-      "shadow_mask_settings": {
-        "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
-        "expansion_ratio": 0.800000011920929,
-        "falloff_exponent": 1.0499999523162842,
-        "falloff_start": 0.0
-      },
+      "render_radius": 0,
       "size_settings": {
-        "scale_percentage": 25.0
+        "scale_percentage": 100.0
       },
-      "spawn_groups": [],
       "start": "default",
-      "tags": [
-        "bluff",
-        "bone",
-        "book",
-        "flowers",
-        "grave",
-        "graveyard",
-        "green",
-        "grey",
-        "impassable",
-        "library",
-        "light",
-        "man-made",
-        "meadow",
-        "medium",
-        "moving",
-        "mushroom",
-        "orange",
-        "passable",
-        "purple",
-        "red",
-        "scary",
-        "skull",
-        "still",
-        "tall",
-        "white",
-        "wood",
-        "yellow"
-      ],
-      "update_radius": 1000,
-      "z_threshold": 0
+      "tags": [],
+      "update_radius": 0
     },
     "Bone": {
       "animations": {
@@ -8032,130 +7816,17 @@
         "backward": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
           "custom_animation_controller_key": "SRC/assets/Frog",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": true
+          },
           "flipped_source": false,
           "has_custom_animation_controller": false,
           "locked": false,
           "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              3,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              3,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              3,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              3,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              4,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 40
-          },
           "number_of_frames": 12,
           "on_end": "SRC/assets/Frog/default",
           "reverse_source": true,
@@ -8164,8 +7835,7 @@
             "kind": "animation",
             "name": "SRC/assets/Frog/forward",
             "path": "SRC/assets/Frog"
-          },
-          "speed_factor": -4
+          }
         },
         "default": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
@@ -8176,10 +7846,6 @@
           "locked": false,
           "loop": false,
           "movement": [
-            [
-              0,
-              0
-            ],
             [
               0,
               0
@@ -8342,129 +8008,17 @@
         "left": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
           "custom_animation_controller_key": "SRC/assets/Frog",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
           "flipped_source": true,
           "has_custom_animation_controller": false,
           "locked": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -1,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -1,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": -20,
-            "dy": 0
-          },
+          "loop": false,
           "number_of_frames": 12,
           "on_end": "SRC/assets/Frog/default",
           "reverse_source": false,
@@ -8473,8 +8027,7 @@
             "kind": "animation",
             "name": "SRC/assets/Frog/right",
             "path": "SRC/assets/Frog"
-          },
-          "speed_factor": -4
+          }
         },
         "right": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
@@ -8633,7 +8186,7 @@
       "size_settings": {
         "scale_percentage": 11.0
       },
-      "start": "SRC/assets/Frog/default",
+      "start": "default",
       "tags": [
         "barrel_child",
         "book",
@@ -15761,6 +15314,104 @@
       },
       "start": "SRC/assets/vigil/default",
       "tags": []
+    },
+    "zone_spawn_area_area": {
+      "areas": [
+        {
+          "anchor": {
+            "x": 900,
+            "y": 1800
+          },
+          "coordinate_space": {
+            "canvas_height": 1800,
+            "canvas_width": 1800,
+            "kind": "canonical",
+            "origin": "bottom_center",
+            "scale_at_save": 1.0
+          },
+          "kind": "zone_asset",
+          "name": "zone",
+          "points": [
+            {
+              "x": 11836,
+              "y": 10536
+            },
+            {
+              "x": 11892,
+              "y": 10784
+            },
+            {
+              "x": 11652,
+              "y": 10616
+            }
+          ],
+          "resolution": 3,
+          "schema_version": 2,
+          "type": "zone"
+        }
+      ],
+      "asset_name": "zone_spawn_area_area",
+      "asset_type": "zone_asset",
+      "canvas_height": 1800,
+      "canvas_width": 1800,
+      "origin_room": {
+        "height": 1800,
+        "name": "spawn",
+        "width": 1800
+      },
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "spawn_groups": []
+    },
+    "zone_spawn_area_area_2": {
+      "areas": [
+        {
+          "anchor": {
+            "x": 900,
+            "y": 1800
+          },
+          "coordinate_space": {
+            "canvas_height": 1800,
+            "canvas_width": 1800,
+            "kind": "canonical",
+            "origin": "bottom_center",
+            "scale_at_save": 1.0
+          },
+          "kind": "zone_asset",
+          "name": "zone",
+          "points": [
+            {
+              "x": 11836,
+              "y": 10536
+            },
+            {
+              "x": 11892,
+              "y": 10784
+            },
+            {
+              "x": 11652,
+              "y": 10616
+            }
+          ],
+          "resolution": 3,
+          "schema_version": 2,
+          "type": "zone"
+        }
+      ],
+      "asset_name": "zone_spawn_area_area_2",
+      "asset_type": "zone_asset",
+      "canvas_height": 1800,
+      "canvas_width": 1800,
+      "origin_room": {
+        "height": 1800,
+        "name": "spawn",
+        "width": 1800
+      },
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "spawn_groups": []
     }
   },
   "maps": {
@@ -16154,8 +15805,8 @@
       "rooms_data": {
         "NewRoom": {
           "display_color": [
-            242,
-            85,
+            36,
+            114,
             242,
             255
           ],
@@ -16165,9 +15816,9 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            104,
             242,
-            61,
+            85,
+            242,
             255
           ],
           "edge_smoothness": 5,
@@ -16238,9 +15889,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            242,
+            133,
             36,
-            70,
+            242,
             255
           ],
           "edge_smoothness": 4,
@@ -16262,10 +15913,6 @@
                 {
                   "chance": 0,
                   "name": "null"
-                },
-                {
-                  "chance": 70,
-                  "name": "Bomb"
                 },
                 {
                   "chance": 30,
@@ -16314,9 +15961,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            36,
-            84,
             242,
+            91,
+            36,
             255
           ],
           "edge_smoothness": 4,
@@ -16394,9 +16041,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            204,
-            149,
-            31,
+            36,
+            242,
+            62,
             255
           ],
           "edge_smoothness": 7,
@@ -16475,10 +16122,6 @@
                 {
                   "chance": 0,
                   "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Bomb"
                 }
               ],
               "display_name": "Bomb",
@@ -16501,9 +16144,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
+            112,
             242,
-            85,
-            125,
+            36,
             255
           ],
           "edge_smoothness": 6,
@@ -16578,10 +16221,6 @@
                 {
                   "chance": 0,
                   "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Bomb"
                 }
               ],
               "display_name": "Bomb",
@@ -16604,9 +16243,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            129,
-            31,
-            204,
+            70,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 9,
@@ -16677,9 +16316,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            207,
-            242,
-            36,
+            31,
+            204,
+            127,
             255
           ],
           "edge_smoothness": 8,
@@ -16750,9 +16389,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            85,
-            114,
             242,
+            180,
+            36,
             255
           ],
           "edge_smoothness": 6,
@@ -16819,9 +16458,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
-            85,
-            229,
+            175,
             242,
+            85,
             255
           ],
           "edge_smoothness": 6,
@@ -16888,9 +16527,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
             85,
-            185,
+            242,
+            205,
             255
           ],
           "edge_smoothness": 2,
@@ -16939,9 +16578,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            77,
-            204,
-            31,
+            242,
+            36,
+            66,
             255
           ],
           "edge_smoothness": 12,
@@ -17041,9 +16680,9 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            184,
-            242,
-            85,
+            204,
+            82,
+            71,
             255
           ],
           "edge_smoothness": 9,
@@ -17113,9 +16752,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
+            31,
+            195,
             204,
-            71,
-            87,
             255
           ],
           "edge_smoothness": 7,
@@ -17189,8 +16828,8 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            181,
-            36,
+            149,
+            85,
             242,
             255
           ],
@@ -17269,9 +16908,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            71,
-            204,
-            99,
+            85,
+            126,
+            242,
             255
           ],
           "edge_smoothness": 10,
@@ -17381,9 +17020,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            78,
-            36,
+            164,
             242,
+            36,
             255
           ],
           "edge_smoothness": 5,
@@ -17453,9 +17092,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            51,
-            115,
-            204,
+            232,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -17522,9 +17161,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            85,
-            242,
-            193,
+            204,
+            51,
+            159,
             255
           ],
           "edge_smoothness": 10,
@@ -17598,9 +17237,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
+            105,
             242,
-            36,
-            227,
+            85,
             255
           ],
           "edge_smoothness": 5,
@@ -17682,14 +17321,15 @@
             {
               "name": "area_area",
               "points": [],
-              "resolution": 3
+              "resolution": 3,
+              "spawn_groups": []
             }
           ],
           "curvyness": 2,
           "display_color": [
-            85,
-            242,
-            185,
+            31,
+            190,
+            204,
             255
           ],
           "edge_smoothness": 101,
@@ -17792,10 +17432,6 @@
                 {
                   "chance": 0,
                   "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Bomb"
                 }
               ],
               "display_name": "Bomb",
@@ -17864,15 +17500,63 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-d65ed240a55d"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 100,
+                  "name": "area_area"
+                }
+              ],
+              "display_name": "area_area",
+              "dx": 0,
+              "dy": 0,
+              "enforce_spacing": false,
+              "link_to_area": true,
+              "linked_area": "area_area",
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 1800,
+              "origional_width": 1800,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-9b777ba67e09"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "zone_spawn_area_area_2"
+                }
+              ],
+              "display_name": "zone_spawn_area_area_2",
+              "dx": -27,
+              "dy": -292,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 1800,
+              "origional_width": 1800,
+              "position": "Exact",
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-59d6d737e1c1"
             }
           ]
         },
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            224,
-            173,
-            79,
+            242,
+            175,
+            85,
             255
           ],
           "edge_smoothness": 6,
@@ -17943,8 +17627,8 @@
           "curvyness": 3,
           "display_color": [
             31,
+            139,
             204,
-            127,
             255
           ],
           "edge_smoothness": 7,

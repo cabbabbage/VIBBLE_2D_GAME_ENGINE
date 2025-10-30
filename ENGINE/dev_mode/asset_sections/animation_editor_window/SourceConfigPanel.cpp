@@ -2,7 +2,6 @@
 
 #include <SDL.h>
 #include <SDL_log.h>
-#include <SDL_ttf.h>
 
 #include <algorithm>
 #include <cctype>
@@ -64,36 +63,6 @@ int safe_to_int(const nlohmann::json& value, int fallback) {
     return fallback;
 }
 
-void render_button_label(SDL_Renderer* renderer, const SDL_Rect& rect, const std::string& text) {
-    if (!renderer || text.empty()) {
-        return;
-    }
-
-    const DMLabelStyle& style = DMStyles::Label();
-    TTF_Font* font = style.open_font();
-    if (!font) {
-        return;
-    }
-
-    SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), style.color);
-    if (!surface) {
-        TTF_CloseFont(font);
-        return;
-    }
-
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    if (texture) {
-        int x = rect.x + std::max(0, (rect.w - surface->w) / 2);
-        int y = rect.y + std::max(0, (rect.h - surface->h) / 2);
-        SDL_Rect dst{x, y, surface->w, surface->h};
-        SDL_RenderCopy(renderer, texture, nullptr, &dst);
-        SDL_DestroyTexture(texture);
-    }
-
-    SDL_FreeSurface(surface);
-    TTF_CloseFont(font);
-}
-
 }
 
 SourceConfigPanel::SourceConfigPanel() {
@@ -123,7 +92,12 @@ void SourceConfigPanel::set_services(std::shared_ptr<CroppingService> cropping, 
 
 void SourceConfigPanel::set_folder_picker(PathPicker picker) { folder_picker_ = std::move(picker); }
 
-void SourceConfigPanel::set_animation_picker(AnimationPicker picker) { animation_picker_ = std::move(picker); }
+void SourceConfigPanel::set_animation_picker(AnimationPicker picker) {
+    animation_picker_ = std::move(picker);
+    if (use_animation_reference_) {
+        layout_controls();
+    }
+}
 
 void SourceConfigPanel::set_gif_picker(PathPicker picker) { gif_picker_ = std::move(picker); }
 
@@ -181,8 +155,11 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
 
     if (use_animation_reference_) {
         if (animation_dropdown_) animation_dropdown_->render(renderer);
+        if (animation_browse_button_) animation_browse_button_->render(renderer);
     } else {
-        if (source_button_) source_button_->render(renderer);
+        for (const auto& button : frame_buttons_) {
+            if (button) button->render(renderer);
+        }
     }
 
     if (busy_indicator_) {
@@ -192,44 +169,30 @@ void SourceConfigPanel::render(SDL_Renderer* renderer) const {
         SDL_SetRenderDrawColor(renderer, 0xc0, 0x9a, 0x2b, 255);
         SDL_RenderFillRect(renderer, &indicator);
     }
-
-    if (show_import_modal_) {
-
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, 10, 10, 14, 180);
-        SDL_RenderFillRect(renderer, &bounds_);
-
-        dm_draw::DrawBeveledRect( renderer, modal_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-
-        for (const auto& btn : modal_buttons_) {
-            if (btn) btn->render(renderer);
-        }
-    }
 }
 
 bool SourceConfigPanel::handle_event(const SDL_Event& e) {
     if (bounds_.w <= 0 || bounds_.h <= 0) return false;
 
-    if (show_import_modal_) {
-
-        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
-            show_import_modal_ = false;
-            return true;
+    bool consumed = false;
+    if (!consumed && use_animation_reference_ && animation_dropdown_) {
+        if (animation_dropdown_->handle_event(e)) {
+            apply_animation_selection();
+            consumed = true;
         }
+    }
 
-        if (e.type == SDL_MOUSEBUTTONDOWN) {
-            SDL_Point p{e.button.x, e.button.y};
-            bool inside = SDL_PointInRect(&p, &modal_rect_) != 0;
-            if (!inside) {
-                show_import_modal_ = false;
-                return true;
-            }
+    if (!consumed && use_animation_reference_ && animation_browse_button_) {
+        if (animation_browse_button_->handle_event(e)) {
+            import_from_animation();
+            consumed = true;
         }
+    }
 
-        for (size_t i = 0; i < modal_buttons_.size(); ++i) {
-            auto& btn = modal_buttons_[i];
-            if (btn && btn->handle_event(e)) {
-
+    if (!consumed && !use_animation_reference_) {
+        for (size_t i = 0; i < frame_buttons_.size(); ++i) {
+            auto& button = frame_buttons_[i];
+            if (button && button->handle_event(e)) {
                 switch (i) {
                     case 0:
                         import_from_gif();
@@ -243,35 +206,9 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
                     default:
                         break;
                 }
-                show_import_modal_ = false;
-                return true;
+                consumed = true;
+                break;
             }
-        }
-
-        if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
-            SDL_Point p;
-            if (e.type == SDL_MOUSEMOTION) { p = SDL_Point{e.motion.x, e.motion.y}; } else { p = SDL_Point{e.button.x, e.button.y}; }
-            if (SDL_PointInRect(&p, &modal_rect_) != 0) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    bool consumed = false;
-    if (!consumed && use_animation_reference_ && animation_dropdown_) {
-        if (animation_dropdown_->handle_event(e)) {
-            apply_animation_selection();
-            consumed = true;
-        }
-    }
-
-    if (!consumed && !use_animation_reference_ && source_button_) {
-        if (source_button_->handle_event(e)) {
-            show_import_modal_ = true;
-            layout_modal();
-            consumed = true;
         }
     }
 
@@ -281,7 +218,18 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
 int SourceConfigPanel::preferred_height(int) const {
     const int padding = 6;
     int height = padding;
-    height += use_animation_reference_ ? DMDropdown::height() : DMButton::height();
+    if (use_animation_reference_) {
+        height += DMDropdown::height();
+        if (animation_picker_) {
+            height += padding + DMButton::height();
+        }
+    } else {
+        const int button_count = static_cast<int>(frame_buttons_.size());
+        if (button_count > 0) {
+            height += button_count * DMButton::height();
+            height += std::max(0, button_count - 1) * padding;
+        }
+    }
     height += padding;
     return height;
 }
@@ -300,13 +248,18 @@ void SourceConfigPanel::set_source_mode(SourceMode mode) {
         return;
     }
 
-    use_animation_reference_ = wants_animation;
-    if (use_animation_reference_) {
-        show_import_modal_ = false;
+    if (wants_animation) {
+        refresh_animation_options();
+        if (animation_options_.empty()) {
+            update_status("No other animations available to link. Create or duplicate an animation first.");
+            return;
+        }
     }
 
+    use_animation_reference_ = wants_animation;
+
     if (use_animation_reference_) {
-        refresh_animation_options();
+        refresh_animation_options();  // Refresh again in case of changes
         if (!animation_dropdown_) {
             int idx = animation_index_;
             if (idx < 0 && !animation_options_.empty()) {
@@ -333,6 +286,8 @@ void SourceConfigPanel::set_source_mode(SourceMode mode) {
         }
     } else {
         animation_index_ = -1;
+        animation_dropdown_.reset();
+        animation_browse_button_.reset();
     }
 
     layout_controls();
@@ -398,10 +353,17 @@ void SourceConfigPanel::reload_from_document() {
     cached_asset_root_valid_ = false;
 
     use_animation_reference_ = (current_source_.kind == std::string("animation"));
-    if (use_animation_reference_) {
-        show_import_modal_ = false;
-    }
     refresh_animation_options();
+
+    // If we were saved as animation reference but no other animations exist, fall back to frames.
+    if (use_animation_reference_ && animation_options_.empty()) {
+        use_animation_reference_ = false;
+        current_source_.kind = "folder";
+        current_source_.path = animation_id_;
+        current_source_.name.reset();
+        // Commit the change back to the document.
+        apply_source_config(current_source_);
+    }
 
     if (use_animation_reference_) {
         std::string target = current_source_.name.value_or(std::string{});
@@ -732,10 +694,10 @@ void SourceConfigPanel::post_copy_process(const std::vector<std::filesystem::pat
 }
 
 void SourceConfigPanel::layout_controls() {
-
-    if (!source_button_) {
-        source_button_ = std::make_unique<DMButton>("Upload Frames...", &DMStyles::AccentButton(), 220, DMButton::height());
-    }
+    const int padding = 6;
+    const int inner_w = std::max(0, bounds_.w - padding * 2);
+    int x = bounds_.x + padding;
+    int y = bounds_.y + padding;
 
     if (use_animation_reference_) {
         refresh_animation_options();
@@ -759,46 +721,47 @@ void SourceConfigPanel::layout_controls() {
             animation_dropdown_->set_selected(idx);
             animation_index_ = animation_dropdown_->selected();
         }
-    }
 
-    const int padding = 6;
-    const int inner_w = std::max(0, bounds_.w - padding * 2);
-    int x = bounds_.x + padding;
-    int y = bounds_.y + padding;
+        animation_dropdown_rect_ = SDL_Rect{x, y, inner_w, DMDropdown::height()};
+        if (animation_dropdown_) animation_dropdown_->set_rect(animation_dropdown_rect_);
+        y += DMDropdown::height();
 
-    if (use_animation_reference_) {
-        dropdown_rect_ = SDL_Rect{x, y, inner_w, DMDropdown::height()};
-        if (animation_dropdown_) animation_dropdown_->set_rect(dropdown_rect_);
-        source_button_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
+        for (auto& rect : frame_button_rects_) {
+            rect = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
+        }
+
+        if (animation_picker_) {
+            y += padding;
+            if (!animation_browse_button_) {
+                animation_browse_button_ = std::make_unique<DMButton>("Browse Animations...", &DMStyles::HeaderButton(), inner_w, DMButton::height());
+            }
+            animation_browse_rect_ = SDL_Rect{x, y, inner_w, DMButton::height()};
+            animation_browse_button_->set_rect(animation_browse_rect_);
+        } else {
+            animation_browse_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
+            animation_browse_button_.reset();
+        }
     } else {
-        source_button_rect_ = SDL_Rect{x, y, inner_w, DMButton::height()};
-        if (source_button_) source_button_->set_rect(source_button_rect_);
-        dropdown_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
-    }
-}
+        animation_dropdown_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
+        animation_browse_rect_ = SDL_Rect{bounds_.x, bounds_.y, 0, 0};
+        animation_browse_button_.reset();
 
-void SourceConfigPanel::layout_modal() {
+        const std::array<const char*, 3> labels = {"Upload GIF", "Upload Folder", "Upload PNG Sequence"};
+        const std::array<const DMButtonStyle*, 3> styles = {&DMStyles::AccentButton(), &DMStyles::HeaderButton(), &DMStyles::HeaderButton()};
 
-    const int padding = 8;
-    const int width = std::min(400, std::max(240, bounds_.w - 40));
-    const int button_height = DMButton::height();
-    const int rows = 3;
-    const int modal_h = padding * 2 + rows * button_height + (rows - 1) * padding;
-    modal_rect_.w = width;
-    modal_rect_.h = modal_h;
-    modal_rect_.x = bounds_.x + (bounds_.w - modal_rect_.w) / 2;
-    modal_rect_.y = bounds_.y + (bounds_.h - modal_rect_.h) / 2;
-
-    if (!modal_buttons_[0]) modal_buttons_[0] = std::make_unique<DMButton>("Upload GIF", &DMStyles::HeaderButton(), width - padding * 2, button_height);
-    if (!modal_buttons_[1]) modal_buttons_[1] = std::make_unique<DMButton>("Upload Folder", &DMStyles::HeaderButton(), width - padding * 2, button_height);
-    if (!modal_buttons_[2]) modal_buttons_[2] = std::make_unique<DMButton>("Upload PNG", &DMStyles::HeaderButton(), width - padding * 2, button_height);
-
-    int x = modal_rect_.x + padding;
-    int y = modal_rect_.y + padding;
-    for (auto& btn : modal_buttons_) {
-        if (btn) {
-            btn->set_rect(SDL_Rect{x, y, width - padding * 2, button_height});
-            y += button_height + padding;
+        for (size_t i = 0; i < frame_buttons_.size(); ++i) {
+            if (!frame_buttons_[i]) {
+                frame_buttons_[i] = std::make_unique<DMButton>(labels[i], styles[i], inner_w, DMButton::height());
+            } else {
+                frame_buttons_[i]->set_text(labels[i]);
+                frame_buttons_[i]->set_style(styles[i]);
+            }
+            frame_button_rects_[i] = SDL_Rect{x, y, inner_w, DMButton::height()};
+            frame_buttons_[i]->set_rect(frame_button_rects_[i]);
+            y += DMButton::height();
+            if (i + 1 < frame_buttons_.size()) {
+                y += padding;
+            }
         }
     }
 }
@@ -829,13 +792,15 @@ void SourceConfigPanel::refresh_animation_options() {
         animation_dropdown_.reset();
         if (!animation_options_.empty()) {
             animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::min(idx, static_cast<int>(animation_options_.size()) - 1));
+            // Ensure the new dropdown inherits current geometry
+            animation_dropdown_->set_rect(animation_dropdown_rect_);
         }
     }
 }
 
 void SourceConfigPanel::apply_animation_selection() {
     if (!use_animation_reference_ || !animation_dropdown_ || animation_options_.empty()) return;
-    int idx = animation_dropdown_->pending_index();
+    int idx = animation_dropdown_->selected();
     idx = std::max(0, std::min(static_cast<int>(animation_options_.size()) - 1, idx));
     if (idx == animation_index_) return;
     animation_index_ = idx;
@@ -1045,4 +1010,3 @@ void SourceConfigPanel::import_from_png_sequence() {
 }
 
 }
-

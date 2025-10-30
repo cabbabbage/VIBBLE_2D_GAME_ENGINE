@@ -91,7 +91,6 @@ class SourceConfigPanel {
     void copy_sequence_to_output(const std::vector<std::filesystem::path>& files, const std::filesystem::path& out_dir) const;
     void post_copy_process(const std::vector<std::filesystem::path>& out_files) const;
     void layout_controls();
-    void layout_modal();
     void update_status(const std::string& message) const;
     void refresh_animation_options();
     void apply_animation_selection();
@@ -126,16 +125,15 @@ class SourceConfigPanel {
     mutable bool cached_asset_root_valid_ = false;
 
     std::unique_ptr<DMDropdown> animation_dropdown_;
-    std::unique_ptr<DMButton> source_button_;
-    std::array<std::unique_ptr<DMButton>, 3> modal_buttons_{};
+    std::unique_ptr<DMButton> animation_browse_button_;
+    std::array<std::unique_ptr<DMButton>, 3> frame_buttons_{};
 
-    SDL_Rect dropdown_rect_{0,0,0,0};
-    SDL_Rect source_button_rect_{0,0,0,0};
-    SDL_Rect modal_rect_{0,0,0,0};
+    SDL_Rect animation_dropdown_rect_{0,0,0,0};
+    SDL_Rect animation_browse_rect_{0,0,0,0};
+    std::array<SDL_Rect, 3> frame_button_rects_{};
 
     bool busy_indicator_ = false;
     bool use_animation_reference_ = false;
-    bool show_import_modal_ = false;
     std::vector<std::string> animation_options_;
     int animation_index_ = -1;
     std::string animation_ids_signature_;
