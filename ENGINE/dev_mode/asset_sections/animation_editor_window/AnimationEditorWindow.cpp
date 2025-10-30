@@ -836,11 +836,15 @@ void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) 
 bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
     bool consumed = false;
     auto handle_button = [&](const std::unique_ptr<DMButton>& button, auto&& callback) {
-        if (button && button->handle_event(e)) {
+        if (!button) return;
+        bool activated = button->handle_event(e);
+        if (!activated) return;
+        // Fire actions only on mouse button release to avoid double-trigger
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             callback();
-            consumed = true;
         }
-};
+        consumed = true;
+    };
 
     handle_button(header_corner_button_, [this]() {
         if (frame_editor_visible_) {

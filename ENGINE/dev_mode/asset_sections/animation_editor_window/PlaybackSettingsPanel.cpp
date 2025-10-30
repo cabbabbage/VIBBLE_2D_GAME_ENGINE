@@ -199,7 +199,8 @@ void PlaybackSettingsPanel::render(SDL_Renderer* renderer) const {
     render_checkbox(flip_vertical_checkbox_, show_flip_controls);
     render_checkbox(flip_movement_horizontal_checkbox_, show_flip_controls);
     render_checkbox(flip_movement_vertical_checkbox_, show_flip_controls);
-    render_checkbox(reverse_checkbox_, true);
+    // Only show reverse when derived from another animation
+    render_checkbox(reverse_checkbox_, derived_from_animation_);
     render_checkbox(locked_checkbox_, true);
     if (!derived_from_animation_ && random_start_checkbox_ && (!locked_checkbox_ || !locked_checkbox_->value())) {
         random_start_checkbox_->render(renderer);
@@ -236,7 +237,8 @@ bool PlaybackSettingsPanel::handle_event(const SDL_Event& e) {
     handle_checkbox_if_visible(flip_vertical_checkbox_, show_flip);
     handle_checkbox_if_visible(flip_movement_horizontal_checkbox_, show_flip);
     handle_checkbox_if_visible(flip_movement_vertical_checkbox_, show_flip);
-    handle_checkbox(reverse_checkbox_);
+    // Only handle reverse when visible (derived from animation)
+    handle_checkbox_if_visible(reverse_checkbox_, derived_from_animation_);
     handle_checkbox(locked_checkbox_);
     if (!derived_from_animation_ && (!locked_checkbox_ || !locked_checkbox_->value())) {
         handle_checkbox(random_start_checkbox_);
@@ -314,7 +316,8 @@ void PlaybackSettingsPanel::layout_widgets() const {
     place_checkbox(flip_vertical_checkbox_.get(), show_flip_controls, placed_any_checkbox);
     place_checkbox(flip_movement_horizontal_checkbox_.get(), show_flip_controls, placed_any_checkbox);
     place_checkbox(flip_movement_vertical_checkbox_.get(), show_flip_controls, placed_any_checkbox);
-    place_checkbox(reverse_checkbox_.get(), true, placed_any_checkbox);
+    // Only place reverse checkbox when using a source animation
+    place_checkbox(reverse_checkbox_.get(), derived_from_animation_, placed_any_checkbox);
     place_checkbox(locked_checkbox_.get(), true, placed_any_checkbox);
 
     if (derived_from_animation_) {
@@ -386,7 +389,12 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::read_controls() cons
         if (flip_movement_vertical_checkbox_)
             state.flip_movement_vertical = flip_movement_vertical_checkbox_->value();
     }
-    if (reverse_checkbox_) state.reverse_source = reverse_checkbox_->value();
+    // Reverse applies only to animations derived from another animation
+    if (derived_from_animation_) {
+        if (reverse_checkbox_) state.reverse_source = reverse_checkbox_->value();
+    } else {
+        state.reverse_source = false;
+    }
     if (locked_checkbox_) state.locked = locked_checkbox_->value();
     if (!derived_from_animation_) {
         // Preserve stored flip flags when controls are hidden.
@@ -555,10 +563,12 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::payload_to_state(con
         state.random_start = false;
     }
 
+    bool source_is_animation = false;
     if (payload.contains("source") && payload["source"].is_object()) {
         const nlohmann::json& source = payload["source"];
         std::string kind = source.value("kind", std::string{});
         if (kind == "animation") {
+            source_is_animation = true;
             if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
                 const auto& modifiers = payload["derived_modifiers"];
                 state.reverse_source = parse_bool_field(modifiers, "reverse", state.reverse_source);
@@ -568,6 +578,11 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::payload_to_state(con
                 state.flip_movement_vertical = parse_bool_field(modifiers, "flipMovementY", false);
             }
         }
+    }
+
+    // Ensure reverse is disabled for frame-sourced animations
+    if (!source_is_animation) {
+        state.reverse_source = false;
     }
 
     int speed = parse_int_field(payload, "speed_factor", 1);

@@ -4713,6 +4713,52 @@
     },
     "Bomb": {
       "animations": {
+        "animation": {
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": false,
+          "locked": false,
+          "loop": false,
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "animation_2",
+            "path": ""
+          }
+        },
+        "animation_2": {
+          "flipped_source": false,
+          "locked": false,
+          "loop": false,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": null,
+            "path": "animation_2"
+          },
+          "speed_factor": 1
+        },
         "default": {
           "flipped_source": false,
           "locked": false,
@@ -4797,6 +4843,27 @@
             "path": "default"
           },
           "speed_factor": 1
+        },
+        "left": {
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": true
+          },
+          "flipped_source": false,
+          "locked": false,
+          "loop": false,
+          "number_of_frames": 16,
+          "on_end": "default",
+          "reverse_source": true,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "default",
+            "path": ""
+          }
         },
         "right": {
           "derived_modifiers": {
