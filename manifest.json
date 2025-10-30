@@ -4818,26 +4818,6 @@
             "name": "default",
             "path": ""
           }
-        },
-        "right": {
-          "derived_modifiers": {
-            "flipMovementX": false,
-            "flipMovementY": false,
-            "flipX": false,
-            "flipY": false,
-            "reverse": false
-          },
-          "flipped_source": false,
-          "loop": false,
-          "number_of_frames": 16,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "default",
-            "path": ""
-          }
         }
       },
       "anti_tags": [],

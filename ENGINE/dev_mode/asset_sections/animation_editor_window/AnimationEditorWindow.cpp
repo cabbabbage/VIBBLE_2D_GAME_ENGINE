@@ -326,6 +326,9 @@ void AnimationEditorWindow::configure_list_panel() {
     list_panel_->set_on_context_menu([this](const std::string& animation_id, const SDL_Point& location) {
         this->handle_list_context_menu(animation_id, location);
     });
+    list_panel_->set_on_delete_animation([this](const std::string& animation_id) {
+        this->delete_animation_with_confirmation(animation_id);
+    });
     list_panel_->set_selected_animation_id(selected_animation_id_);
 }
 

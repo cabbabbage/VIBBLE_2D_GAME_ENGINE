@@ -84,7 +84,6 @@ class AnimationInspectorPanel {
         kNone = -1,
         kName = 0,
         kStart,
-        kDelete,
         kSourceFrames,
         kSourceAnimation,
     };
@@ -105,7 +104,6 @@ class AnimationInspectorPanel {
     std::unique_ptr<AudioPanel> audio_panel_;
     std::unique_ptr<DMTextBox> name_box_;
     std::unique_ptr<DMButton> start_button_;
-    std::unique_ptr<DMButton> delete_button_;
     std::unique_ptr<DMButton> source_frames_button_;
     std::unique_ptr<DMButton> source_animation_button_;
     std::string animation_id_;
