@@ -69,6 +69,23 @@ void FrameEditor::set_preview_provider(std::shared_ptr<PreviewProvider> provider
     }
 }
 
+void FrameEditor::set_frame_changed_callback(FrameChangedCallback callback) {
+    frame_changed_callback_ = std::move(callback);
+    ensure_children();
+    if (movement_editor_) {
+        movement_editor_->set_frame_changed_callback([this](int index) {
+            if (frame_changed_callback_) {
+                frame_changed_callback_(index);
+            }
+        });
+    }
+}
+
+int FrameEditor::selected_index() const {
+    if (!movement_editor_) return 0;
+    return movement_editor_->selected_index();
+}
+
 void FrameEditor::update() {
     ensure_children();
     update_button_styles();
@@ -246,12 +263,22 @@ void FrameEditor::ensure_children() {
         movement_editor_->set_animation_id(animation_id_);
         movement_editor_->set_grid_resolution_r(grid_resolution_r_);
         movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
+        movement_editor_->set_frame_changed_callback([this](int index) {
+            if (frame_changed_callback_) {
+                frame_changed_callback_(index);
+            }
+        });
     } else {
         movement_editor_->set_preview_provider(preview_provider_);
         movement_editor_->set_document(document_);
         movement_editor_->set_animation_id(animation_id_);
         movement_editor_->set_grid_resolution_r(grid_resolution_r_);
         movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
+        movement_editor_->set_frame_changed_callback([this](int index) {
+            if (frame_changed_callback_) {
+                frame_changed_callback_(index);
+            }
+        });
     }
     update_button_styles();
     update_navigation_styles();

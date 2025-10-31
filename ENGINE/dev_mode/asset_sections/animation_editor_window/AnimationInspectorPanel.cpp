@@ -416,36 +416,50 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     }
 
     if (preview_provider_) {
-        // Calculate current animation frame based on time
+        // Determine which frame to render: external scrub takes priority
         SDL_Texture* texture = nullptr;
-        if (animation_start_time_ == 0) {
-            animation_start_time_ = SDL_GetTicks();
-            current_frame_ = 0;
+
+        int frame_to_render = 0;
+        if (scrub_mode_) {
+            // Clamp external scrub frame to valid range
+            if (frame_count_ <= 0) {
+                frame_count_ = 1;
+            }
+            int clamped = scrub_frame_;
+            if (clamped < 0) clamped = 0;
+            if (clamped >= frame_count_) clamped = frame_count_ - 1;
+            frame_to_render = clamped;
+            // Keep internal current_frame_ in sync for any internal consumers
+            current_frame_ = frame_to_render;
+        } else {
+            // Calculate current animation frame based on time
+            if (animation_start_time_ == 0) {
+                animation_start_time_ = SDL_GetTicks();
+                current_frame_ = 0;
+            }
+
+            // Calculate frame timing (explicit FPS selection)
+            float effective_fps = static_cast<float>(current_fps_);
+            if (effective_fps < 0.1f) effective_fps = 0.1f; // Minimum frame rate
+            float frame_time_ms = 1000.0f / effective_fps;
+
+            // Calculate elapsed time since start
+            Uint32 elapsed_ms = SDL_GetTicks() - animation_start_time_;
+
+            int raw_frame = static_cast<int>((elapsed_ms % static_cast<int>(frame_time_ms * frame_count_)) / frame_time_ms);
+            if (raw_frame >= frame_count_) raw_frame = frame_count_ - 1;
+
+            // Apply reverse direction if needed
+            current_frame_ = preview_reverse_ ? (frame_count_ - 1 - raw_frame) : raw_frame;
+
+            // Ensure frame bounds
+            if (current_frame_ < 0) current_frame_ = 0;
+            if (current_frame_ >= frame_count_) current_frame_ = frame_count_ - 1;
+            frame_to_render = current_frame_;
         }
 
-        // Calculate frame timing (explicit FPS selection)
-        float effective_fps = static_cast<float>(current_fps_);
-        if (effective_fps < 0.1f) effective_fps = 0.1f; // Minimum frame rate
-        float frame_time_ms = 1000.0f / effective_fps;
-
-        // Calculate elapsed time since start
-        Uint32 elapsed_ms = SDL_GetTicks() - animation_start_time_;
-        int total_cycles = static_cast<int>(elapsed_ms / (frame_time_ms * frame_count_));
-
-        // For negative speed_factor, we just play at slower speed (not reverse direction)
-        // The reverse flag handles direction reversal
-        int raw_frame = static_cast<int>((elapsed_ms % static_cast<int>(frame_time_ms * frame_count_)) / frame_time_ms);
-        if (raw_frame >= frame_count_) raw_frame = frame_count_ - 1;
-
-        // Apply reverse direction if needed
-        current_frame_ = preview_reverse_ ? (frame_count_ - 1 - raw_frame) : raw_frame;
-
-        // Ensure frame bounds
-        if (current_frame_ < 0) current_frame_ = 0;
-        if (current_frame_ >= frame_count_) current_frame_ = frame_count_ - 1;
-
         // Get frame texture
-        texture = preview_provider_->get_frame_texture(renderer, animation_id_, current_frame_);
+        texture = preview_provider_->get_frame_texture(renderer, animation_id_, frame_to_render);
 
         if (texture) {
             int tex_w = 0;
@@ -489,6 +503,14 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     if (audio_panel_) audio_panel_->render(renderer);
 
     SDL_RenderSetClipRect(renderer, nullptr);
+}
+
+void AnimationInspectorPanel::set_scrub_mode(bool enable) {
+    scrub_mode_ = enable;
+}
+
+void AnimationInspectorPanel::set_scrub_frame(int frame) {
+    scrub_frame_ = frame;
 }
 
 bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {

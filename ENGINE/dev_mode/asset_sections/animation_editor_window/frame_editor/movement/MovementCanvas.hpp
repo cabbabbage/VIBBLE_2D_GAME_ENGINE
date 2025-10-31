@@ -37,10 +37,11 @@ class MovementCanvas {
     void fit_view_to_content();
     void pan_view(float delta_x, float delta_y);
     void apply_zoom(float scale_delta);
+    void apply_frame_move_from_base(int index, const SDL_FPoint& new_position,
+                                    const std::vector<SDL_FPoint>& base_positions);
     void update_selection_from_mouse();
     SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
     SDL_FPoint screen_to_world(SDL_Point screen) const;
-    float snap_to_grid(float value) const;
 
   private:
     SDL_Rect bounds_{0, 0, 0, 0};
@@ -56,6 +57,7 @@ class MovementCanvas {
     SDL_Point last_mouse_{0, 0};
     SDL_Point drag_last_mouse_{0, 0};
     SDL_FPoint drag_target_world_{0.0f, 0.0f};
+    std::vector<SDL_FPoint> drag_base_positions_;
     float grid_resolution_ = 1.0f;  // Snap to whole units by default
 };
 

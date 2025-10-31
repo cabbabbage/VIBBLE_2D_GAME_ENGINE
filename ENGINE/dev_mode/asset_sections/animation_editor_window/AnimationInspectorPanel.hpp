@@ -70,6 +70,10 @@ class AnimationInspectorPanel {
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
 
+    // External scrub control (used by FrameEditor modal)
+    void set_scrub_mode(bool enable);
+    void set_scrub_frame(int frame);
+
   private:
     void rebuild_widgets();
     void refresh_totals();
@@ -155,6 +159,10 @@ class AnimationInspectorPanel {
     mutable int current_frame_ = 0;
     mutable int current_fps_ = 24;
     mutable int frame_count_ = 1;
+
+    // External scrub state
+    bool scrub_mode_ = false;
+    int scrub_frame_ = 0;
 
     // Scrolling variables
     mutable int content_height_ = 0;

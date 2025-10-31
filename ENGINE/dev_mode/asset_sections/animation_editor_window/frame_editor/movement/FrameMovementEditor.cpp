@@ -12,6 +12,7 @@
 #include "../../PanelLayoutConstants.hpp"
 #include "../../../../dm_styles.hpp"
 #include "../../../../draw_utils.hpp"
+#include "../../../../widgets.hpp"
 #include "../../PreviewProvider.hpp"
 #include "FramePropertiesPanel.hpp"
 #include "MovementCanvas.hpp"
@@ -141,11 +142,17 @@ std::vector<MovementFrame> default_variant_frames() {
 FrameMovementEditor::FrameMovementEditor() { ensure_children(); }
 
 void FrameMovementEditor::set_document(std::shared_ptr<AnimationDocument> document) {
+    if (document_ == document && !frames_.empty()) {
+        return;
+    }
     document_ = std::move(document);
     load_frames_from_document();
 }
 
 void FrameMovementEditor::set_animation_id(const std::string& animation_id) {
+    if (animation_id_ == animation_id && !frames_.empty()) {
+        return;
+    }
     animation_id_ = animation_id;
     load_frames_from_document();
 }
@@ -193,6 +200,11 @@ void FrameMovementEditor::update() {
             mark_dirty();
         }
     }
+    if (smooth_button_) {
+        bool can_smooth = frames_.size() > 2;
+        const DMButtonStyle& style = can_smooth ? DMStyles::AccentButton() : DMStyles::HeaderButton();
+        smooth_button_->set_style(&style);
+    }
 
     if (dirty_) {
         apply_changes();
@@ -202,6 +214,9 @@ void FrameMovementEditor::update() {
 
 void FrameMovementEditor::render(SDL_Renderer* renderer) const {
     render_variant_header(renderer);
+    if (smooth_button_ && smooth_button_rect_.w > 0 && smooth_button_rect_.h > 0) {
+        smooth_button_->render(renderer);
+    }
     if (canvas_) canvas_->render(renderer);
     if (totals_panel_) totals_panel_->render(renderer);
     if (properties_panel_) properties_panel_->render(renderer);
@@ -213,6 +228,15 @@ void FrameMovementEditor::render_canvas_only(SDL_Renderer* renderer) const {
 }
 
 bool FrameMovementEditor::handle_event(const SDL_Event& e) {
+    if (smooth_button_ && smooth_button_rect_.w > 0 && smooth_button_rect_.h > 0) {
+        if (smooth_button_->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                smooth_frames();
+            }
+            return true;
+        }
+    }
+
     if (handle_variant_header_event(e)) {
         return true;
     }
@@ -428,6 +452,10 @@ void FrameMovementEditor::ensure_children() {
         totals_panel_ = std::make_unique<TotalsPanel>();
     }
     if (totals_panel_) totals_panel_->set_selected_index(&selected_index_);
+    if (!smooth_button_) {
+        smooth_button_ =
+            std::make_unique<DMButton>("Smooth", &DMStyles::AccentButton(), kVariantTabWidth, DMButton::height());
+    }
     // Remove frame properties panel entirely (requested)
     if (properties_panel_) {
         properties_panel_.reset();
@@ -461,6 +489,7 @@ void FrameMovementEditor::update_layout() {
     // properties panel removed
 
     layout_variant_header();
+    if (smooth_button_) smooth_button_->set_rect(smooth_button_rect_);
     layout_frame_list();
 }
 
@@ -468,6 +497,9 @@ void FrameMovementEditor::synchronize_selection() {
     selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
     if (canvas_) canvas_->set_selected_index(selected_index_);
     if (properties_panel_) properties_panel_->refresh_from_selection();
+    if (frame_changed_callback_) {
+        frame_changed_callback_(selected_index_);
+    }
 }
 
 void FrameMovementEditor::mark_dirty() {
@@ -486,6 +518,7 @@ void FrameMovementEditor::layout_variant_header() {
         variant_tabs_.assign(variants_.size(), VariantTabState{});
     }
 
+    smooth_button_rect_ = SDL_Rect{0, 0, 0, 0};
     if (header_rect_.w <= 0 || header_rect_.h <= 0) {
         add_button_rect_ = SDL_Rect{0, 0, 0, 0};
         return;
@@ -508,6 +541,72 @@ void FrameMovementEditor::layout_variant_header() {
     }
 
     add_button_rect_ = SDL_Rect{x, y, kVariantTabHeight, kVariantTabHeight};
+
+    if (smooth_button_) {
+        const int after_add = add_button_rect_.x + add_button_rect_.w + kVariantTabSpacing;
+        const int right_edge = header_rect_.x + header_rect_.w - kVariantHeaderPadding;
+        const int available = std::max(0, right_edge - after_add);
+        int button_width = smooth_button_->preferred_width();
+        button_width = std::min(button_width, available);
+        if (button_width > 0) {
+            smooth_button_rect_ = SDL_Rect{right_edge - button_width, y, button_width, kVariantTabHeight};
+        }
+    }
+}
+
+void FrameMovementEditor::smooth_frames() {
+    const size_t frame_count = frames_.size();
+    if (frame_count <= 2) {
+        return;
+    }
+
+    const int steps = static_cast<int>(frame_count) - 1;
+    int total_dx = 0;
+    int total_dy = 0;
+    for (size_t i = 1; i < frame_count; ++i) {
+        total_dx += static_cast<int>(std::lround(frames_[i].dx));
+        total_dy += static_cast<int>(std::lround(frames_[i].dy));
+    }
+
+    auto distribute = [steps](int total) {
+        std::vector<int> increments(std::max(steps, 0), 0);
+        if (steps <= 0) return increments;
+        int base = total / steps;
+        int remainder = total - base * steps;
+        int adjust = (remainder > 0) ? 1 : (remainder < 0 ? -1 : 0);
+        int remainder_abs = std::abs(remainder);
+        for (int i = 0; i < steps; ++i) {
+            increments[i] = base;
+            if (remainder_abs > 0) {
+                increments[i] += adjust;
+                --remainder_abs;
+            }
+        }
+        return increments;
+    };
+
+    std::vector<int> dx_steps = distribute(total_dx);
+    std::vector<int> dy_steps = distribute(total_dy);
+
+    bool changed = false;
+    frames_[0].dx = 0.0f;
+    frames_[0].dy = 0.0f;
+    for (int i = 1; i <= steps; ++i) {
+        float new_dx = static_cast<float>(dx_steps[i - 1]);
+        float new_dy = static_cast<float>(dy_steps[i - 1]);
+        if (std::fabs(frames_[i].dx - new_dx) > 0.001f || std::fabs(frames_[i].dy - new_dy) > 0.001f) {
+            changed = true;
+        }
+        frames_[i].dx = new_dx;
+        frames_[i].dy = new_dy;
+    }
+
+    if (!changed) {
+        return;
+    }
+
+    mark_dirty();
+    synchronize_selection();
 }
 
 void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {

@@ -519,14 +519,6 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
 
     ensure_layout();
 
-    // If any dropdown is currently active (expanded), give it global priority
-    // so option clicks outside local widgets are captured reliably.
-    if (auto* active_dd = DMDropdown::active_dropdown()) {
-        if (active_dd->handle_event(e)) {
-            return true;
-        }
-    }
-
     // First, route to modal frame editor if visible
     if (frame_editor_visible_ && frame_editor_) {
         if (frame_editor_->handle_event(e)) {
@@ -546,6 +538,26 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
             int mx = 0, my = 0; SDL_GetMouseState(&mx, &my);
             SDL_Point p{mx, my};
             if (SDL_PointInRect(&p, &frame_editor_modal_rect_)) {
+                return true;
+            }
+        }
+        // While modal is open, consume all keyboard/text input so underlying panels don't react.
+        if (e.type == SDL_KEYDOWN) {
+            if (e.key.keysym.sym == SDLK_ESCAPE) {
+                close_frame_editor();
+            }
+            return true;
+        }
+        if (e.type == SDL_KEYUP || e.type == SDL_TEXTINPUT) {
+            return true;
+        }
+    }
+
+    // If any dropdown is currently active (expanded), give it global priority
+    // so option clicks outside local widgets are captured reliably. Disabled while modal is open.
+    if (!frame_editor_visible_) {
+        if (auto* active_dd = DMDropdown::active_dropdown()) {
+            if (active_dd->handle_event(e)) {
                 return true;
             }
         }
@@ -904,6 +916,17 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
     frame_editor_->set_document(document_);
     frame_editor_->set_animation_id(animation_id);
     frame_editor_->set_bounds(frame_editor_rect_);
+    // Sync inspector preview with movement editor selection
+    if (inspector_panel_) {
+        inspector_panel_->set_scrub_mode(true);
+        inspector_panel_->set_scrub_frame(frame_editor_->selected_index());
+    }
+    // Forward frame selection changes to inspector
+    frame_editor_->set_frame_changed_callback([this](int frame) {
+        if (inspector_panel_) {
+            inspector_panel_->set_scrub_frame(frame);
+        }
+    });
     frame_editor_visible_ = true;
     // Capture mouse while modal is open to ensure focus stays with the editor
     SDL_CaptureMouse(SDL_TRUE);
@@ -913,6 +936,9 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
 void AnimationEditorWindow::close_frame_editor() {
     frame_editor_visible_ = false;
     frame_editor_animation_id_.clear();
+    if (inspector_panel_) {
+        inspector_panel_->set_scrub_mode(false);
+    }
     set_status_message("Movement updated.", 180);
     SDL_CaptureMouse(SDL_FALSE);
     update_corner_button();
