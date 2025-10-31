@@ -5,10 +5,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <optional>
 #include <sstream>
-#include <iostream>
 #include <string>
 #include <utility>
 #include <unordered_set>
@@ -115,6 +117,7 @@ AnimationEditorWindow::AnimationEditorWindow() {
     header_corner_button_ =
         std::make_unique<DMButton>(std::string(DMIcons::Close()), &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
+    controller_button_ = std::make_unique<DMButton>("Add Controller", &DMStyles::CreateButton(), 140, DMButton::height());
     layout_dirty_ = true;
     update_corner_button();
 }
@@ -214,6 +217,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     if (list_panel_) list_panel_->set_document(document_);
     if (inspector_panel_) inspector_panel_->set_document(document_);
     ensure_selection_valid();
+    update_controller_button_label();
     std::string asset_label = info->name.empty() ? std::string("asset") : info->name;
     set_status_message("Loaded " + asset_label, 240);
     auto_save_pending_ = false;
@@ -253,13 +257,14 @@ void AnimationEditorWindow::layout_children() {
     int y = header_rect_.y + header_gap;
     int left_x = header_rect_.x + padding;
 
-    if (header_corner_button_) {
-        int width = header_corner_button_->rect().w;
-        header_corner_button_->set_rect(SDL_Rect{left_x, y, width, DMButton::height()});
-        left_x += width + button_gap;
-    }
+
     if (add_button_) {
         add_button_->set_rect(SDL_Rect{left_x, y, add_button_->rect().w, DMButton::height()});
+        left_x += add_button_->rect().w + button_gap;
+    }
+
+    if (controller_button_) {
+        controller_button_->set_rect(SDL_Rect{left_x, y, controller_button_->rect().w, DMButton::height()});
     }
 
     const int status_padding = DMSpacing::panel_padding();
@@ -325,6 +330,9 @@ void AnimationEditorWindow::configure_list_panel() {
     });
     list_panel_->set_on_context_menu([this](const std::string& animation_id, const SDL_Point& location) {
         this->handle_list_context_menu(animation_id, location);
+    });
+    list_panel_->set_on_delete_animation([this](const std::string& animation_id) {
+        this->delete_animation_with_confirmation(animation_id);
     });
     list_panel_->set_selected_animation_id(selected_animation_id_);
 }
@@ -441,13 +449,19 @@ void AnimationEditorWindow::handle_list_context_menu(const std::string& animatio
     set_status_message("Context menu for '" + animation_id + "'.", 90);
 }
 
-void AnimationEditorWindow::update(const Input& input, int, int) {
+void AnimationEditorWindow::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_) return;
 
-    auto& mutable_input = const_cast<Input&>(input);
-    mutable_input.consumeAllMouseButtons();
-    mutable_input.consumeMotion();
-    mutable_input.consumeScroll();
+    // Only consume input if the mouse is within the window bounds to allow interaction with other UIs
+    int mouse_x, mouse_y;
+    SDL_GetMouseState(&mouse_x, &mouse_y);
+    if (mouse_x >= bounds_.x && mouse_x < bounds_.x + bounds_.w &&
+        mouse_y >= bounds_.y && mouse_y < bounds_.y + bounds_.h) {
+        auto& mutable_input = const_cast<Input&>(input);
+        mutable_input.consumeAllMouseButtons();
+        mutable_input.consumeMotion();
+        mutable_input.consumeScroll();
+    }
 
     ensure_layout();
 
@@ -566,21 +580,28 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONUP) {
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
         SDL_Point p;
         if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
         else { p.x = e.button.x; p.y = e.button.y; }
-        if (frame_editor_visible_) {
 
+        if (list_context_menu_ && e.type == SDL_MOUSEBUTTONDOWN) {
+            list_context_menu_->close();
+        }
+
+        if (frame_editor_visible_) {
             if (!SDL_PointInRect(&p, &frame_editor_modal_rect_)) {
                 if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
                     close_frame_editor();
                 }
                 return true;
             }
-            return true;
+            // Inside modal, continue to handle
         } else if (SDL_PointInRect(&p, &bounds_)) {
             return true;
+        } else {
+            // Outside bounds, do not consume
+            return false;
         }
     }
 
@@ -590,24 +611,12 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         SDL_GetMouseState(&mx, &my);
         SDL_Point p{mx, my};
         if (frame_editor_visible_) {
-
             return true;
         }
         if (SDL_PointInRect(&p, &bounds_)) {
             return true;
         }
-        return true;
-    }
-
-    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
-        if (list_context_menu_) {
-            list_context_menu_->close();
-        }
-        return true;
-    }
-
-    if (e.type == SDL_MOUSEMOTION) {
-        return true;
+        return false;
     }
 
     return false;
@@ -748,8 +757,9 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
         title += asset_root_path_.filename().string();
     }
 
-    if (!frame_editor_visible_ && header_corner_button_) header_corner_button_->render(renderer);
+
     if (add_button_) add_button_->render(renderer);
+    if (controller_button_) controller_button_->render(renderer);
 
     int label_x = header_rect_.x + DMSpacing::panel_padding();
     if (!frame_editor_visible_ && header_corner_button_) {
@@ -757,6 +767,9 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
     }
     if (add_button_) {
         label_x = std::max(label_x, add_button_->rect().x + add_button_->rect().w + DMSpacing::small_gap());
+    }
+    if (controller_button_) {
+        label_x = std::max(label_x, controller_button_->rect().x + controller_button_->rect().w + DMSpacing::small_gap());
     }
     render_label(renderer, title, label_x, header_rect_.y + DMSpacing::small_gap());
 }
@@ -846,15 +859,14 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
         consumed = true;
     };
 
-    handle_button(header_corner_button_, [this]() {
-        if (frame_editor_visible_) {
+    if (frame_editor_visible_) {
+        handle_button(header_corner_button_, [this]() {
             close_frame_editor();
-        } else {
-            visible_ = false;
-        }
-    });
+        });
+    }
     if (!frame_editor_visible_) {
         handle_button(add_button_, [this]() { create_animation_via_prompt(); });
+        handle_button(controller_button_, [this]() { handle_controller_button_click(); });
     }
     return consumed;
 }
@@ -1134,6 +1146,210 @@ std::optional<std::filesystem::path> AnimationEditorWindow::pick_folder() const 
 #endif
 }
 
+void AnimationEditorWindow::handle_controller_button_click() {
+    if (does_controller_exist()) {
+        open_controller();
+    } else {
+        add_controller();
+    }
+}
+
+void AnimationEditorWindow::update_controller_button_label() {
+    if (!controller_button_) return;
+    if (does_controller_exist()) {
+        controller_button_->set_text("Open Controller");
+    } else {
+        controller_button_->set_text("Add Controller");
+    }
+}
+
+bool AnimationEditorWindow::does_controller_exist() const {
+    auto info_ptr = info_.lock();
+    if (!info_ptr) return false;
+    std::string sanitized = sanitize_asset_name(info_ptr->name);
+    if (sanitized.empty()) return false;
+    std::string key = generate_controller_key(sanitized);
+
+    // Check file existence
+    std::filesystem::path controller_dir = "ENGINE/animation_update/custom_controllers";
+    std::filesystem::path hpp_path = controller_dir / (key + ".hpp");
+    return std::filesystem::exists(hpp_path);
+}
+
+std::string AnimationEditorWindow::sanitize_asset_name(const std::string& name) const {
+    if (name.empty()) return "";
+    std::string sanitized;
+    for (char c : name) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_') {
+            sanitized += c;
+        } else {
+            sanitized += '_';
+        }
+    }
+    // Remove leading/trailing underscores
+    sanitized.erase(0, sanitized.find_first_not_of('_'));
+    sanitized.erase(sanitized.find_last_not_of('_') + 1);
+    return sanitized;
+}
+
+std::string AnimationEditorWindow::generate_controller_key(const std::string& asset_name) const {
+    return asset_name + "_controller";
+}
+
+std::string AnimationEditorWindow::generate_class_name(const std::string& asset_name) const {
+    if (asset_name.empty()) return "";
+    std::string class_name = asset_name;
+    // Capitalize first letter
+    if (!class_name.empty()) {
+        class_name[0] = std::toupper(static_cast<unsigned char>(class_name[0]));
+    }
+    return class_name + "Controller";
+}
+
+void AnimationEditorWindow::add_controller() {
+    auto info_ptr = info_.lock();
+    if (!info_ptr) {
+        set_status_message("No asset selected.", 180);
+        return;
+    }
+    std::string sanitized = sanitize_asset_name(info_ptr->name);
+    if (sanitized.empty()) {
+        set_status_message("Invalid asset name.", 180);
+        return;
+    }
+    std::string key = generate_controller_key(sanitized);
+    std::string class_name = generate_class_name(sanitized);
+
+    std::filesystem::path controller_dir = "ENGINE/animation_update/custom_controllers";
+    std::filesystem::path hpp_path = controller_dir / (key + ".hpp");
+    std::filesystem::path cpp_path = controller_dir / (key + ".cpp");
+
+    if (std::filesystem::exists(hpp_path)) {
+        set_status_message("Controller already exists.", 180);
+        update_controller_button_label();
+        return;
+    }
+
+    // Generate .hpp
+    std::string hpp_content = "// " + key + ".hpp\n"
+                              "#pragma once\n"
+                              "#include \"asset/asset_controller.hpp\"\n"
+                              "\n"
+                              "class Assets;\n"
+                              "class Asset;\n"
+                              "class Input;\n"
+                              "\n"
+                              "class " + class_name + " : public AssetController {\n"
+                              "public:\n"
+                              "    " + class_name + "(Assets* assets, Asset* self);\n"
+                              "    ~" + class_name + "() override = default;\n"
+                              "\n"
+                              "    // One-time setup after construction (choose default anim, etc.)\n"
+                              "    void init();\n"
+                              "\n"
+                              "    // Per-frame behavior\n"
+                              "    void update(const Input& in) override;\n"
+                              "\n"
+                              "private:\n"
+                              "    Assets* assets_ = nullptr;\n"
+                              "    Asset*  self_   = nullptr;\n"
+                              "};\n";
+
+    // Generate .cpp
+    std::string cpp_content = "// " + key + ".cpp\n"
+                              "#include \"" + key + ".hpp\"\n"
+                              "\n"
+                              "#include \"asset/Asset.hpp\"\n"
+                              "#include \"asset/animation.hpp\"\n"
+                              "#include \"asset/asset_info.hpp\"\n"
+                              "#include \"animation_update/animation_update.hpp\"\n"
+                              "#include \"utils/range_util.hpp\"\n"
+                              "#include <string>\n"
+                              "\n"
+                              "" + class_name + "::" + class_name + "(Assets* assets, Asset* self)\n"
+                              "    : assets_(assets), self_(self) {}\n"
+                              "\n"
+                              "void " + class_name + "::init() {\n"
+                              "    if (!self_ || !self_->info || !self_->anim_) return;\n"
+                              "\n"
+                              "    const std::string default_anim{ animation_update::detail::kDefaultAnimation };\n"
+                              "\n"
+                              "    // If the asset defines a default animation, start it.\n"
+                              "    auto it = self_->info->animations.find(default_anim);\n"
+                              "    if (it != self_->info->animations.end() && !it->second.frames.empty()) {\n"
+                              "        self_->anim_->move(SDL_Point{0, 0}, default_anim);\n"
+                              "    }\n"
+                              "}\n"
+                              "\n"
+                              "void " + class_name + "::update(const Input& ) {\n"
+                              "    if (!self_ || !self_->info || !self_->anim_) return;\n"
+                              "\n"
+                              "    // Keep the asset on its default animation if nothing else is driving it.\n"
+                              "    const std::string default_anim{ animation_update::detail::kDefaultAnimation };\n"
+                              "    auto it = self_->info->animations.find(default_anim);\n"
+                              "    if (it == self_->info->animations.end() || it->second.frames.empty()) return;\n"
+                              "\n"
+                              "    if (self_->current_animation != default_anim || self_->current_frame == nullptr) {\n"
+                              "        self_->anim_->move(SDL_Point{0, 0}, default_anim);\n"
+                              "    }\n"
+                              "}\n";
+
+    // Write files
+    std::ofstream hpp_file(hpp_path);
+    if (!hpp_file) {
+        set_status_message("Failed to create .hpp file.", 180);
+        return;
+    }
+    hpp_file << hpp_content;
+    hpp_file.close();
+
+    std::ofstream cpp_file(cpp_path);
+    if (!cpp_file) {
+        set_status_message("Failed to create .cpp file.", 180);
+        return;
+    }
+    cpp_file << cpp_content;
+    cpp_file.close();
+
+    // Note: For the controller to be used, add: #include "animation_update/custom_controllers/" + key + ".hpp"
+    // And in create_by_key: if (key == "\"" + key + "\") return std::make_unique<" + class_name + ">(assets_, self);
+
+    // Set custom_controller_key in asset
+    info_ptr->custom_controller_key = key;
+    // Assume this gets persisted when manifest is committed
+
+    set_status_message("Controller created.", 240);
+    update_controller_button_label();
+}
+
+void AnimationEditorWindow::open_controller() {
+    auto info_ptr = info_.lock();
+    if (!info_ptr) {
+        set_status_message("No asset selected.", 180);
+        return;
+    }
+    std::string sanitized = sanitize_asset_name(info_ptr->name);
+    if (sanitized.empty()) {
+        set_status_message("Invalid asset name.", 180);
+        return;
+    }
+    std::string key = generate_controller_key(sanitized);
+    std::filesystem::path controller_dir = "ENGINE/animation_update/custom_controllers";
+    std::filesystem::path hpp_path = controller_dir / (key + ".hpp");
+    if (!std::filesystem::exists(hpp_path)) {
+        set_status_message("Controller file does not exist.", 180);
+        return;
+    }
+    // Open with default editor
+    std::string cmd = "cmd /c start \"\" \"" + hpp_path.string() + "\"";
+    int result = std::system(cmd.c_str());
+    if (result != 0) {
+        set_status_message("Failed to open controller file.", 180);
+    } else {
+        set_status_message("Opened controller file.", 120);
+    }
+}
+
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_gif() const {
     std::string default_path = asset_root_path_.empty() ? std::string{} : asset_root_path_.string();
 #ifdef _WIN32
@@ -1253,7 +1469,7 @@ std::optional<std::string> AnimationEditorWindow::pick_animation_reference() con
         if (payload.contains("source") && payload["source"].is_object()) {
             kind = payload["source"].value("kind", std::string{"folder"});
         }
-        if (vibble::strings::to_lower_copy(kind) == std::string{"animation"}) {
+        if (animation_editor::strings::to_lower_copy(kind) == std::string{"animation"}) {
             continue;
         }
         frame_based.push_back(id);
@@ -1274,9 +1490,9 @@ std::optional<std::string> AnimationEditorWindow::pick_animation_reference() con
 
     auto match_it = std::find(frame_based.begin(), frame_based.end(), choice);
     if (match_it == frame_based.end()) {
-        std::string lowered = vibble::strings::to_lower_copy(choice);
+        std::string lowered = animation_editor::strings::to_lower_copy(choice);
         match_it = std::find_if(frame_based.begin(), frame_based.end(), [&](const std::string& value) {
-            return vibble::strings::to_lower_copy(value) == lowered;
+            return animation_editor::strings::to_lower_copy(value) == lowered;
         });
         if (match_it == frame_based.end()) {
             return std::nullopt;

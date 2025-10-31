@@ -435,7 +435,7 @@ void AssetFilterBar::render(SDL_Renderer* renderer) const {
 }
 
 bool AssetFilterBar::handle_event(const SDL_Event& event) {
-    if (!enabled_) {
+    if (!enabled_ || header_suppressed_) {
         return false;
     }
     ensure_layout();
@@ -958,4 +958,3 @@ void AssetFilterBar::persist_filters_expanded() const {
     persistent_filters_expanded_flag() = filters_expanded_;
     devmode::ui_settings::save_bool(kSettingsFiltersExpandedKey, filters_expanded_);
 }
-

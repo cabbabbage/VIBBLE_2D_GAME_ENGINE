@@ -371,6 +371,9 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
 
     layout_widgets();
 
+    // Set clip rect to bounds to prevent rendering outside
+    SDL_RenderSetClipRect(renderer, &bounds_);
+
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
@@ -378,7 +381,6 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
 
     if (name_box_) name_box_->render(renderer);
     if (start_button_) start_button_->render(renderer);
-    if (delete_button_) delete_button_->render(renderer);
 
     if (is_start_animation_) {
         const DMLabelStyle& style = DMStyles::Label();
@@ -485,6 +487,8 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     if (movement_summary_) movement_summary_->render(renderer);
     if (on_end_selector_) on_end_selector_->render(renderer);
     if (audio_panel_) audio_panel_->render(renderer);
+
+    SDL_RenderSetClipRect(renderer, nullptr);
 }
 
 bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
@@ -574,8 +578,6 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
             clicked = FocusTarget::kName;
         } else if (start_button_ && SDL_PointInRect(&p, &start_button_->rect())) {
             clicked = FocusTarget::kStart;
-        } else if (delete_button_ && SDL_PointInRect(&p, &delete_button_->rect())) {
-            clicked = FocusTarget::kDelete;
         } else if (source_frames_button_ && SDL_PointInRect(&p, &source_frames_button_->rect())) {
             clicked = FocusTarget::kSourceFrames;
         } else if (source_animation_button_ && SDL_PointInRect(&p, &source_animation_button_->rect())) {
@@ -595,12 +597,7 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (delete_button_ && delete_button_->handle_event(e)) {
-        handled = true;
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            activate_focus_target(FocusTarget::kDelete);
-        }
-    }
+
 
     auto handle_button = [&](DMButton* button, FocusTarget target) {
         if (!button) {
@@ -626,6 +623,18 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
 
     if (was_editing && name_box_ && !name_box_->is_editing()) {
         rename_pending_ = true;
+    }
+
+    if (e.type == SDL_MOUSEWHEEL) {
+        int mx, my;
+        SDL_GetMouseState(&mx, &my);
+        SDL_Point mouse{mx, my};
+        if (SDL_PointInRect(&mouse, &bounds_)) {
+            scroll_ -= e.wheel.y * 20;
+            scroll_ = std::clamp(scroll_, 0, max_scroll_);
+            layout_dirty_ = true;
+            handled = true;
+        }
     }
 
     return handled;
@@ -655,10 +664,6 @@ void AnimationInspectorPanel::rebuild_widgets() {
 
     if (!start_button_) {
         start_button_ = std::make_unique<DMButton>("Set as Start", &DMStyles::AccentButton(), kHeaderButtonWidth, DMButton::height());
-    }
-
-    if (!delete_button_) {
-        delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), kHeaderButtonWidth, DMButton::height());
     }
 
     if (!source_config_) {
@@ -730,11 +735,11 @@ void AnimationInspectorPanel::layout_widgets() const {
     const int content_width = width;
     const int x = bounds_.x + padding;
     int y = bounds_.y + padding;
+    int content_y = y - scroll_;
 
     const int button_height = DMButton::height();
     int action_buttons = 0;
     if (start_button_) ++action_buttons;
-    if (delete_button_) ++action_buttons;
     int action_width = 0;
     if (action_buttons > 0) {
         action_width = action_buttons * kHeaderButtonWidth + std::max(0, action_buttons - 1) * button_gap;
@@ -750,10 +755,6 @@ void AnimationInspectorPanel::layout_widgets() const {
         SDL_Rect rect{next_button_x, y, kHeaderButtonWidth, button_height};
         start_button_->set_rect(rect);
         next_button_x += kHeaderButtonWidth + button_gap;
-    }
-    if (delete_button_) {
-        SDL_Rect rect{next_button_x, y, kHeaderButtonWidth, button_height};
-        delete_button_->set_rect(rect);
     }
 
     int name_left = x;
@@ -774,7 +775,8 @@ void AnimationInspectorPanel::layout_widgets() const {
     y += header_height;
     self->header_rect_ = SDL_Rect{bounds_.x, bounds_.y, bounds_.w, y - bounds_.y};
 
-    y += item_gap;
+    const int content_top = y + item_gap;
+    content_y = content_top - scroll_;
 
     const int selector_height = DMButton::height();
     const int selector_gap = DMSpacing::small_gap();
@@ -797,57 +799,61 @@ void AnimationInspectorPanel::layout_widgets() const {
     std::vector<std::string> badges = source_config_ ? source_config_->summary_badges() : std::vector<std::string>{};
     badges.insert(badges.end(), preview_modifier_badges_.begin(), preview_modifier_badges_.end());
     if (!badges.empty()) {
-        self->source_summary_rect_ = SDL_Rect{x, y, width, selector_height};
-        y += selector_height;
+        self->source_summary_rect_ = SDL_Rect{x, content_y, width, selector_height};
+        content_y += selector_height;
     } else {
-        self->source_summary_rect_ = SDL_Rect{x, y, width, 0};
+        self->source_summary_rect_ = SDL_Rect{x, content_y, width, 0};
     }
 
-    y += item_gap;
+    content_y += item_gap;
 
     int source_height = 0;
     if (source_config_) {
         source_height = source_config_->preferred_height(content_width);
-        self->source_rect_ = SDL_Rect{x, y, width, source_height};
+        self->source_rect_ = SDL_Rect{x, content_y, width, source_height};
         source_config_->set_bounds(self->source_rect_);
     } else {
-        self->source_rect_ = SDL_Rect{x, y, width, 0};
+        self->source_rect_ = SDL_Rect{x, content_y, width, 0};
     }
-    y += source_height;
-    y += item_gap;
+    content_y += source_height;
+    content_y += item_gap;
 
-    self->preview_controls_rect_ = SDL_Rect{x, y, width, DMButton::height()};
-    y += DMButton::height();
-    self->preview_rect_ = SDL_Rect{x, y, width, kPreviewHeight};
-    y += kPreviewHeight;
+    self->preview_controls_rect_ = SDL_Rect{x, content_y, width, DMButton::height()};
+    content_y += DMButton::height();
+    self->preview_rect_ = SDL_Rect{x, content_y, width, kPreviewHeight};
+    content_y += kPreviewHeight;
 
     bool placed_section = false;
     auto assign_section = [&](auto* widget, SDL_Rect& rect) {
         if (!widget) {
-            rect = SDL_Rect{x, y, width, 0};
+            rect = SDL_Rect{x, content_y, width, 0};
             return;
         }
         int section_height = widget->preferred_height(content_width);
         if (section_height <= 0) {
-            rect = SDL_Rect{x, y, width, 0};
+            rect = SDL_Rect{x, content_y, width, 0};
             widget->set_bounds(rect);
             return;
         }
         if (!placed_section) {
-            y += item_gap;
+            content_y += item_gap;
             placed_section = true;
         } else {
-            y += section_gap;
+            content_y += section_gap;
         }
-        rect = SDL_Rect{x, y, width, section_height};
+        rect = SDL_Rect{x, content_y, width, section_height};
         widget->set_bounds(rect);
-        y += section_height;
+        content_y += section_height;
     };
 
     assign_section(playback_settings_.get(), playback_rect_);
     assign_section(movement_summary_.get(), movement_rect_);
     assign_section(on_end_selector_.get(), on_end_rect_);
     assign_section(audio_panel_.get(), audio_rect_);
+
+    self->content_height_ = content_y + padding - bounds_.y;
+    self->max_scroll_ = std::max(0, self->content_height_ - bounds_.h);
+    self->scroll_ = std::clamp(self->scroll_, 0, self->max_scroll_);
 
     refresh_focus_index();
 }
@@ -978,7 +984,6 @@ std::vector<AnimationInspectorPanel::FocusTarget> AnimationInspectorPanel::focus
     std::vector<FocusTarget> order;
     if (name_box_) order.push_back(FocusTarget::kName);
     if (start_button_) order.push_back(FocusTarget::kStart);
-    if (delete_button_) order.push_back(FocusTarget::kDelete);
     if (source_frames_button_) order.push_back(FocusTarget::kSourceFrames);
     if (source_animation_button_) order.push_back(FocusTarget::kSourceAnimation);
     return order;
@@ -1017,9 +1022,6 @@ void AnimationInspectorPanel::announce_focus(FocusTarget target) const {
         case FocusTarget::kStart:
             status_callback_("Focus: Mark animation as start. Press Enter or Space to apply.");
             break;
-        case FocusTarget::kDelete:
-            status_callback_("Focus: Delete animation. Press Enter or Space to remove.");
-            break;
         case FocusTarget::kSourceFrames:
             status_callback_("Focus: Select frame-based source mode. Press Enter or Space to choose.");
             break;
@@ -1048,14 +1050,7 @@ void AnimationInspectorPanel::activate_focus_target(FocusTarget target) {
                 status_callback_("Animation marked as start animation.");
             }
             break;
-        case FocusTarget::kDelete:
-            if (document_) {
-                document_->delete_animation(animation_id_);
-            }
-            if (status_callback_) {
-                status_callback_("Animation deleted from the document.");
-            }
-            break;
+
         case FocusTarget::kSourceFrames:
             if (source_config_) {
                 source_config_->set_source_mode(SourceConfigPanel::SourceMode::kFrames);

@@ -588,6 +588,19 @@
             ],
             "revision": 1136050567334716886
         },
+        "area_area": {
+            "max_scale": 0.9090908765792847,
+            "min_scale": 0.9090908765792847,
+            "recommended_percentages": [
+                100,
+                91
+            ],
+            "recommended_steps": [
+                1.0,
+                0.9090908765792847
+            ],
+            "revision": 6174486505559524793
+        },
         "candle": {
             "max_scale": 0.06818182021379471,
             "min_scale": 0.051948051899671555,
@@ -752,9 +765,22 @@
                 0.3636363744735718
             ],
             "revision": 754842267035425758
+        },
+        "zone_spawn_area_area_2": {
+            "max_scale": 0.9090908765792847,
+            "min_scale": 0.9090908765792847,
+            "recommended_percentages": [
+                100,
+                91
+            ],
+            "recommended_steps": [
+                1.0,
+                0.9090908765792847
+            ],
+            "revision": 2835005892505863127
         }
     },
-    "generated_at": "2025-10-30T21:42:10Z",
-    "screen_aspect": 1.6,
+    "generated_at": "2025-10-31T00:55:06Z",
+    "screen_aspect": 1.7777777777777777,
     "version": 2
 }

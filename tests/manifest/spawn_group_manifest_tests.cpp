@@ -1,3 +1,4 @@
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 #include <algorithm>
@@ -248,4 +249,3 @@ TEST_CASE("Section_SpawnGroups synchronizes AssetInfo spawn_groups payload") {
     devmode::core::DevJsonStore::instance().flush_all();
     fs::remove_all(manifest_path.parent_path());
 }
-

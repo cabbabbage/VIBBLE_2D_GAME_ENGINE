@@ -24,5 +24,10 @@ inline std::string trim_copy(std::string_view value) {
     return std::string(value.substr(start, end - start));
 }
 
+inline std::string to_lower_copy(std::string_view value) {
+    std::string result = std::string(value);
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c){ return std::tolower(c); });
+    return result;
 }
 
+}

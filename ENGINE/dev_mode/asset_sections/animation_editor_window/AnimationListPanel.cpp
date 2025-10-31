@@ -14,6 +14,7 @@
 #include "AnimationDocument.hpp"
 #include "PreviewProvider.hpp"
 #include "string_utils.hpp"
+#include "dm_icons.hpp"
 #include "dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/font_cache.hpp"
@@ -211,6 +212,10 @@ void AnimationListPanel::set_on_context_menu(
     on_context_menu_ = std::move(callback);
 }
 
+void AnimationListPanel::set_on_delete_animation(std::function<void(const std::string&)> callback) {
+    on_delete_animation_ = std::move(callback);
+}
+
 void AnimationListPanel::update() {
     rebuild_rows();
     if (layout_dirty_) {
@@ -301,6 +306,26 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         label_style.font_size = std::max(1, static_cast<int>(std::round(label_style.font_size * size_factor)));
         DMFontCache::instance().draw_text(renderer, label_style, row.id, content_x, content_y);
 
+        // Draw delete button (X) in top-right corner
+        const int delete_button_size = 16;
+        const int delete_x = rect.x + rect.w - row_padding - delete_button_size;
+        const int delete_y = rect.y + row_padding;
+        SDL_Rect delete_rect{delete_x, delete_y, delete_button_size, delete_button_size};
+
+        // Style the delete button - use DeleteButton style but smaller
+        const DMButtonStyle& delete_style = DMStyles::DeleteButton();
+        SDL_Color delete_bg = hovered_delete_row_ && *hovered_delete_row_ == i ? delete_style.hover_bg : delete_style.bg;
+        dm_draw::DrawBeveledRect(renderer, delete_rect, DMStyles::CornerRadius(), 1, delete_bg,
+                                DMStyles::HighlightColor(), DMStyles::ShadowColor(),
+                                false, DMStyles::HighlightIntensity() * 0.5f, DMStyles::ShadowIntensity() * 0.5f);
+
+        DMLabelStyle delete_label_style{delete_style.label.font_path, 12, delete_style.text};
+        std::string delete_text{DMIcons::Close()};
+        SDL_Point delete_size = DMFontCache::instance().measure_text(delete_label_style, delete_text);
+        int delete_text_x = delete_rect.x + (delete_rect.w - delete_size.x) / 2;
+        int delete_text_y = delete_rect.y + (delete_rect.h - delete_size.y) / 2;
+        DMFontCache::instance().draw_text(renderer, delete_label_style, delete_text, delete_text_x, delete_text_y);
+
         std::vector<std::pair<const DMButtonStyle*, std::string>> badges;
         if (row.missing_source) {
             badges.emplace_back(&DMStyles::DeleteButton(), std::string{"(missing source)"});
@@ -354,10 +379,25 @@ bool AnimationListPanel::handle_event(const SDL_Event& e) {
         SDL_Point p = event_point(e);
         if (!SDL_PointInRect(&p, &bounds_)) {
             hovered_row_.reset();
+            hovered_delete_row_.reset();
             return false;
         }
         hovered_row_ = row_index_at_point(p);
-        return hovered_row_.has_value();
+
+        // Check if hovering over delete button
+        hovered_delete_row_.reset();
+        if (hovered_row_) {
+            const SDL_Rect& rect = row_bounds_[*hovered_row_];
+            const int delete_button_size = 16;
+            const int delete_x = rect.x + rect.w - DMSpacing::small_gap() - delete_button_size;
+            const int delete_y = rect.y + DMSpacing::small_gap();
+            SDL_Rect delete_rect{delete_x, delete_y, delete_button_size, delete_button_size};
+            if (SDL_PointInRect(&p, &delete_rect)) {
+                hovered_delete_row_ = *hovered_row_;
+            }
+        }
+
+        return hovered_row_.has_value() || hovered_delete_row_.has_value();
     }
 
     if (e.type == SDL_MOUSEBUTTONDOWN) {
@@ -380,7 +420,23 @@ bool AnimationListPanel::handle_event(const SDL_Event& e) {
         }
 
         const std::string& animation_id = display_rows_.at(*index).id;
+
+        // Check if clicking on delete button (left click only)
         if (e.button.button == SDL_BUTTON_LEFT) {
+            const SDL_Rect& rect = row_bounds_[*index];
+            const int delete_button_size = 16;
+            const int delete_x = rect.x + rect.w - DMSpacing::small_gap() - delete_button_size;
+            const int delete_y = rect.y + DMSpacing::small_gap();
+            SDL_Rect delete_rect{delete_x, delete_y, delete_button_size, delete_button_size};
+            if (SDL_PointInRect(&p, &delete_rect)) {
+                // Clicked on delete button - call delete callback
+                if (on_delete_animation_) {
+                    on_delete_animation_(animation_id);
+                }
+                return true;
+            }
+
+            // Clicked on row - select it
             if (!selected_animation_id_ || *selected_animation_id_ != animation_id) {
                 selected_animation_id_ = animation_id;
                 scroll_selection_into_view();

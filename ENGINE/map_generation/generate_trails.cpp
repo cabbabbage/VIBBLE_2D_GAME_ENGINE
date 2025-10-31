@@ -108,7 +108,7 @@ trail_colors_(std::move(reserved_colors))
                 std::cout << "[GenerateTrails] Loaded " << available_assets_.size() << " trail templates\n";
         }
         if (available_assets_.empty()) {
-                throw std::runtime_error("[GenerateTrails] No trail templates found in map_info.json");
+                throw std::runtime_error("[GenerateTrails] No trail templates found in trails_data");
         }
 }
 

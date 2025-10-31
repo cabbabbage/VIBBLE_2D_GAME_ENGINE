@@ -4805,26 +4805,6 @@
             "flipMovementY": false,
             "flipX": false,
             "flipY": false,
-            "reverse": true
-          },
-          "flipped_source": false,
-          "loop": false,
-          "number_of_frames": 16,
-          "on_end": "default",
-          "reverse_source": true,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "default",
-            "path": ""
-          }
-        },
-        "right": {
-          "derived_modifiers": {
-            "flipMovementX": false,
-            "flipMovementY": false,
-            "flipX": false,
-            "flipY": false,
             "reverse": false
           },
           "flipped_source": false,

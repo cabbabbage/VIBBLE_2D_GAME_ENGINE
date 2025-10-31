@@ -265,52 +265,18 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
     std::unordered_map<std::string, AssetScaleRange> ranges;
 
     auto process_map = [&](const std::string& map_name, const json& map_entry) {
-        std::filesystem::path content_root;
-        if (map_entry.is_object()) {
-            auto it = map_entry.find("content_root");
-            if (it != map_entry.end() && it->is_string()) {
-                content_root = std::filesystem::path(it->get<std::string>());
-            }
-        }
-        if (content_root.empty()) {
-            content_root = std::filesystem::path("MAPS") / map_name;
-        }
-        if (content_root.is_relative()) {
-            if (!options.manifest_root.empty()) {
-                content_root = options.manifest_root / content_root;
-            } else {
-                content_root = std::filesystem::path(content_root).lexically_normal();
-            }
-        }
-        content_root = content_root.lexically_normal();
-        const std::filesystem::path map_info_path = content_root / "map_info.json";
-
-        std::ifstream map_info_stream(map_info_path);
-        if (!map_info_stream.is_open()) {
-            vibble::log::warn(std::string("[ScalingProfileBuilder] Missing map_info.json for map '") + map_name + "' at " + map_info_path.string());
+        if (!map_entry.is_object()) {
+            vibble::log::warn(std::string("[ScalingProfileBuilder] Map entry for '") + map_name + "' is not an object.");
             return;
         }
 
-        json map_info;
-        try {
-            map_info_stream >> map_info;
-        } catch (const std::exception& ex) {
-            vibble::log::warn(std::string("[ScalingProfileBuilder] Failed to parse map_info.json for map '") + map_name + "': " + ex.what());
-            return;
-        }
-
-        if (!map_info.is_object()) {
-            vibble::log::warn(std::string("[ScalingProfileBuilder] map_info.json for map '") + map_name + "' is not an object.");
-            return;
-        }
-
-        json rooms_data  = map_info.value("rooms_data", json::object());
-        json trails_data = map_info.value("trails_data", json::object());
-        json map_assets  = map_info.value("map_assets_data", json::object());
-        json layers      = map_info.value("map_layers", json::array());
+        json rooms_data  = map_entry.value("rooms_data", json::object());
+        json trails_data = map_entry.value("trails_data", json::object());
+        json map_assets  = map_entry.value("map_assets_data", json::object());
+        json layers      = map_entry.value("map_layers", json::array());
 
         const json* rooms_data_ptr = rooms_data.is_object() ? &rooms_data : nullptr;
-        const double min_edge      = map_layers::min_edge_distance_from_map_info(map_info);
+        const double min_edge      = map_layers::min_edge_distance_from_map_info(map_entry);
         map_layers::LayerRadiiResult radii = map_layers::compute_layer_radii(layers, rooms_data_ptr, min_edge);
         const double map_radius = radii.map_radius;
 

@@ -396,7 +396,20 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (pointer_inside_panel || scroll_dragging_ || scrollbar_dragging_) {
+    // When header is hidden, don't consume input at all (allow clicks to pass through to underlying elements)
+    bool should_consume_input = false;
+    if (scroll_dragging_ || scrollbar_dragging_) {
+        should_consume_input = true;
+    } else if (pointer_inside_panel) {
+        if (!header_visible_) {
+            // Header is hidden - don't consume any input, allowing interaction with elements underneath
+            should_consume_input = false;
+        } else {
+            should_consume_input = true;
+        }
+    }
+
+    if (should_consume_input) {
         return true;
     }
 
