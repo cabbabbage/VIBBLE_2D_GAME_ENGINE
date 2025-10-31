@@ -1026,9 +1026,10 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 
     const bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
-    const bool hide_headers = modal_hide || sliding_headers_hidden_ || !sliding_rects.empty();
+    const bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
     // Keep header always visible in dev mode
     asset_filter_.set_enabled(enabled_);
+    asset_filter_.set_header_suppressed(hide_headers);
     apply_header_suppression();
 
     auto consume = [&](bool used) {
@@ -1041,7 +1042,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     if (pointer_event && consume(asset_filter_.handle_event(event))) {
         return;
     }
-    if (pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y)) {
+    if (pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y) && !asset_filter_.header_suppressed()) {
         consume(true);
         return;
     }
