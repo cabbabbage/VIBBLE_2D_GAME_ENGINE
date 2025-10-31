@@ -11,11 +11,14 @@
 #include "TotalsPanel.hpp"
 #include "FramePropertiesPanel.hpp"
 
+class DMButton;
+
 namespace animation_editor {
 
 class AnimationDocument;
 class PreviewProvider;
-class DMButton;
+
+using DMButton = ::DMButton;
 class FrameMovementEditor {
   public:
     using CloseCallback = std::function<void()>;

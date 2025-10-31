@@ -40,6 +40,19 @@ int clamp_index(int index, int max_value) {
     return std::clamp(index, 0, max_value - 1);
 }
 
+void sanitize_frames(std::vector<MovementFrame>& frames) {
+    if (frames.empty()) {
+        frames.push_back(MovementFrame{});
+    }
+    if (frames.empty()) return;
+    frames.front().dx = 0.0f;
+    frames.front().dy = 0.0f;
+    for (auto& frame : frames) {
+        if (!std::isfinite(frame.dx)) frame.dx = 0.0f;
+        if (!std::isfinite(frame.dy)) frame.dy = 0.0f;
+    }
+}
+
 std::vector<MovementFrame> parse_movement_frames(const nlohmann::json& payload) {
     std::vector<MovementFrame> frames;
     if (!payload.is_array()) {
@@ -70,6 +83,7 @@ std::vector<MovementFrame> parse_movement_frames(const nlohmann::json& payload) 
     }
     frames.front().dx = 0.0f;
     frames.front().dy = 0.0f;
+    sanitize_frames(frames);
     return frames;
 }
 
@@ -252,9 +266,10 @@ bool FrameMovementEditor::handle_event(const SDL_Event& e) {
 
     bool consumed = false;
     if (canvas_ && canvas_->handle_event(e)) {
-        const auto& updated_frames = canvas_->frames();
+        auto updated_frames = canvas_->frames();
+        sanitize_frames(updated_frames);
         bool changed = !frames_equal(frames_, updated_frames);
-        frames_ = updated_frames;
+        frames_ = std::move(updated_frames);
         selected_index_ = canvas_->selected_index();
         if (totals_panel_) totals_panel_->set_frames(frames_);
         if (properties_panel_) {
@@ -376,6 +391,7 @@ void FrameMovementEditor::load_frames_from_document() {
     }
 
     frames_ = variants_[active_variant_index_].frames;
+    sanitize_frames(frames_);
     selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
     variant_tabs_.resize(variants_.size());
 
@@ -503,6 +519,7 @@ void FrameMovementEditor::synchronize_selection() {
 }
 
 void FrameMovementEditor::mark_dirty() {
+    sanitize_frames(frames_);
     sync_active_variant_frames();
     dirty_ = true;
     if (canvas_) {
@@ -556,56 +573,100 @@ void FrameMovementEditor::layout_variant_header() {
 
 void FrameMovementEditor::smooth_frames() {
     const size_t frame_count = frames_.size();
-    if (frame_count <= 2) {
+    if (frame_count <= 1) {
         return;
     }
 
     const int steps = static_cast<int>(frame_count) - 1;
-    int total_dx = 0;
-    int total_dy = 0;
-    for (size_t i = 1; i < frame_count; ++i) {
-        total_dx += static_cast<int>(std::lround(frames_[i].dx));
-        total_dy += static_cast<int>(std::lround(frames_[i].dy));
+    if (steps <= 0) {
+        return;
     }
 
-    auto distribute = [steps](int total) {
-        std::vector<int> increments(std::max(steps, 0), 0);
+    auto build_even_increments = [steps](float total) {
+        std::vector<float> increments(std::max(steps, 0), 0.0f);
         if (steps <= 0) return increments;
-        int base = total / steps;
-        int remainder = total - base * steps;
-        int adjust = (remainder > 0) ? 1 : (remainder < 0 ? -1 : 0);
-        int remainder_abs = std::abs(remainder);
-        for (int i = 0; i < steps; ++i) {
-            increments[i] = base;
-            if (remainder_abs > 0) {
-                increments[i] += adjust;
-                --remainder_abs;
-            }
+        float previous_target = 0.0f;
+        for (int i = 1; i <= steps; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(steps);
+            const float target = total * t;
+            increments[i - 1] = target - previous_target;
+            previous_target = target;
         }
         return increments;
     };
 
-    std::vector<int> dx_steps = distribute(total_dx);
-    std::vector<int> dy_steps = distribute(total_dy);
+    auto adjust_to_integer_totals = [](const std::vector<float>& raw, float total) {
+        std::vector<float> result(raw.size(), 0.0f);
+        std::vector<std::pair<float, int>> positives;
+        std::vector<std::pair<float, int>> negatives;
+        int rounded_sum = 0;
+        for (size_t i = 0; i < raw.size(); ++i) {
+            float rounded = std::round(raw[i]);
+            result[i] = rounded;
+            rounded_sum += static_cast<int>(rounded);
+            float fractional = raw[i] - rounded;
+            if (fractional > 0.0f) {
+                positives.emplace_back(fractional, static_cast<int>(i));
+            } else if (fractional < 0.0f) {
+                negatives.emplace_back(fractional, static_cast<int>(i));
+            }
+        }
+
+        const int expected = static_cast<int>(std::lround(total));
+        int diff = expected - rounded_sum;
+        if (diff > 0) {
+            std::sort(positives.begin(), positives.end(),
+                      [](const auto& a, const auto& b) { return a.first > b.first; });
+            int applied = 0;
+            for (; applied < diff && applied < static_cast<int>(positives.size()); ++applied) {
+                result[positives[applied].second] += 1.0f;
+            }
+            for (; applied < diff && applied < static_cast<int>(result.size()); ++applied) {
+                result[applied] += 1.0f;
+            }
+        } else if (diff < 0) {
+            diff = -diff;
+            std::sort(negatives.begin(), negatives.end(),
+                      [](const auto& a, const auto& b) { return a.first < b.first; });
+            int applied = 0;
+            for (; applied < diff && applied < static_cast<int>(negatives.size()); ++applied) {
+                result[negatives[applied].second] -= 1.0f;
+            }
+            for (; applied < diff && applied < static_cast<int>(result.size()); ++applied) {
+                result[applied] -= 1.0f;
+            }
+        }
+        return result;
+    };
+
+    float total_dx = 0.0f;
+    float total_dy = 0.0f;
+    for (size_t i = 1; i < frame_count; ++i) {
+        total_dx += std::isfinite(frames_[i].dx) ? frames_[i].dx : 0.0f;
+        total_dy += std::isfinite(frames_[i].dy) ? frames_[i].dy : 0.0f;
+    }
+
+    std::vector<float> raw_dx = build_even_increments(total_dx);
+    std::vector<float> raw_dy = build_even_increments(total_dy);
+    std::vector<float> new_dx = adjust_to_integer_totals(raw_dx, total_dx);
+    std::vector<float> new_dy = adjust_to_integer_totals(raw_dy, total_dy);
 
     bool changed = false;
     frames_[0].dx = 0.0f;
     frames_[0].dy = 0.0f;
     for (int i = 1; i <= steps; ++i) {
-        float new_dx = static_cast<float>(dx_steps[i - 1]);
-        float new_dy = static_cast<float>(dy_steps[i - 1]);
-        if (std::fabs(frames_[i].dx - new_dx) > 0.001f || std::fabs(frames_[i].dy - new_dy) > 0.001f) {
+        float dx = std::isfinite(new_dx[i - 1]) ? new_dx[i - 1] : 0.0f;
+        float dy = std::isfinite(new_dy[i - 1]) ? new_dy[i - 1] : 0.0f;
+        if (std::fabs(frames_[i].dx - dx) > 0.001f || std::fabs(frames_[i].dy - dy) > 0.001f) {
             changed = true;
         }
-        frames_[i].dx = new_dx;
-        frames_[i].dy = new_dy;
+        frames_[i].dx = dx;
+        frames_[i].dy = dy;
     }
 
-    if (!changed) {
-        return;
+    if (changed) {
+        mark_dirty();
     }
-
-    mark_dirty();
     synchronize_selection();
 }
 
@@ -939,6 +1000,7 @@ void FrameMovementEditor::set_active_variant(int index, bool preserve_view) {
     sync_active_variant_frames();
     active_variant_index_ = index;
     frames_ = variants_[active_variant_index_].frames;
+    sanitize_frames(frames_);
     selected_index_ = 0;
     update_child_frames(preserve_view);
     layout_variant_header();
@@ -978,6 +1040,7 @@ void FrameMovementEditor::add_new_variant() {
     variants_.push_back(std::move(variant));
     active_variant_index_ = static_cast<int>(variants_.size() - 1);
     frames_ = variants_.back().frames;
+    sanitize_frames(frames_);
     selected_index_ = 0;
     variant_tabs_.resize(variants_.size());
     update_child_frames(false);
@@ -1004,6 +1067,7 @@ void FrameMovementEditor::delete_variant(int index) {
         active_variant_index_ = static_cast<int>(variants_.size()) - 1;
     }
     frames_ = variants_[active_variant_index_].frames;
+    sanitize_frames(frames_);
     selected_index_ = 0;
     variant_tabs_.resize(variants_.size());
     update_child_frames(false);

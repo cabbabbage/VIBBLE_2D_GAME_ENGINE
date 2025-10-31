@@ -23,12 +23,27 @@ SDL_Color with_alpha(SDL_Color c, Uint8 alpha) {
     return c;
 }
 
-SDL_FPoint round_point_to_pixel(SDL_FPoint p) {
-    return SDL_FPoint{static_cast<float>(std::round(p.x)), static_cast<float>(std::round(p.y))};
+float snap_scalar(float value, float step) {
+    if (std::isnan(value) || std::isinf(value)) {
+        return 0.0f;
+    }
+    float effective_step = step;
+    if (effective_step <= 0.0f) {
+        effective_step = 1.0f;
+    } else {
+        effective_step = std::max(1.0f, effective_step);
+    }
+    const float scaled = value / effective_step;
+    return static_cast<float>(std::round(scaled)) * effective_step;
 }
 
-float round_delta_to_pixel(float value) {
-    return static_cast<float>(std::round(value));
+SDL_FPoint snap_point(SDL_FPoint p, float step) {
+    return SDL_FPoint{snap_scalar(p.x, step), snap_scalar(p.y, step)};
+}
+
+float minimum_grid_step(float pixels_per_unit) {
+    const float denom = std::max(1.0f, pixels_per_unit);
+    return 1.0f / denom;
 }
 
 }
@@ -36,7 +51,8 @@ float round_delta_to_pixel(float value) {
 MovementCanvas::MovementCanvas() = default;
 
 void MovementCanvas::set_grid_resolution(float resolution) {
-    grid_resolution_ = std::max(0.1f, resolution);  // Minimum 0.1 to prevent division by zero
+    const float min_step = minimum_grid_step(pixels_per_unit_);
+    grid_resolution_ = std::max(min_step, resolution);
 }
 
 void MovementCanvas::set_bounds(const SDL_Rect& bounds) {
@@ -190,7 +206,7 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
                 drag_target_world_.y += dy_units;
                 drag_last_mouse_ = current;
 
-                SDL_FPoint rounded_target = round_point_to_pixel(drag_target_world_);
+                SDL_FPoint rounded_target = snap_point(drag_target_world_, grid_resolution_);
                 drag_target_world_ = rounded_target;
 
                 std::vector<SDL_FPoint> fallback_positions;
@@ -233,7 +249,7 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
                     if (selected_index_ > 0) {
                         std::vector<SDL_FPoint> base_positions = positions_;
                         SDL_FPoint world = screen_to_world(SDL_Point{e.button.x, e.button.y});
-                        world = round_point_to_pixel(world);
+                        world = snap_point(world, grid_resolution_);
                         apply_frame_move_from_base(selected_index_, world, base_positions);
                         drag_target_world_ = world;
                     }
@@ -358,14 +374,14 @@ void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new
     frames_.front().dy = 0.0f;
 
     SDL_FPoint prev_abs = base_positions[index - 1];
-    frames_[index].dx = round_delta_to_pixel(new_position.x - prev_abs.x);
-    frames_[index].dy = round_delta_to_pixel(new_position.y - prev_abs.y);
+    frames_[index].dx = snap_scalar(new_position.x - prev_abs.x, grid_resolution_);
+    frames_[index].dy = snap_scalar(new_position.y - prev_abs.y, grid_resolution_);
 
     SDL_FPoint last_abs = new_position;
     for (int j = index + 1; j < static_cast<int>(frames_.size()); ++j) {
         const SDL_FPoint desired = base_positions[j];
-        frames_[j].dx = round_delta_to_pixel(desired.x - last_abs.x);
-        frames_[j].dy = round_delta_to_pixel(desired.y - last_abs.y);
+        frames_[j].dx = snap_scalar(desired.x - last_abs.x, grid_resolution_);
+        frames_[j].dy = snap_scalar(desired.y - last_abs.y, grid_resolution_);
         last_abs = desired;
     }
 
