@@ -175,18 +175,7 @@ void MainApp::setup() {
                 }
                 content_root = resolved_root.string();
 
-                const fs::path map_info_path = resolved_root / "map_info.json";
-                if (!fs::exists(map_info_path)) {
-                        std::ofstream map_info_stream(map_info_path);
-                        if (map_info_stream.is_open()) {
-                                map_info_stream << map_manifest_json.dump(2);
-                                if (!map_info_stream.good()) {
-                                        vibble::log::warn(std::string("[MainApp] Failed to write map_info.json for '") + map_identifier + "'.");
-                                }
-                        } else {
-                                vibble::log::warn(std::string("[MainApp] Unable to create map_info.json for '") + map_identifier + "'.");
-                        }
-                }
+
 
                 if (manifest_updated) {
                         try {
@@ -460,19 +449,7 @@ std::optional<MapDescriptor> create_new_map_interactively() {
 
         map_info["content_root"] = (fs::path("MAPS") / *sanitized).generic_string();
 
-        const fs::path map_info_path = map_dir / "map_info.json";
-        if (!fs::exists(map_info_path)) {
-            std::ofstream map_info_stream(map_info_path);
-            if (map_info_stream.is_open()) {
-                map_info_stream << map_info.dump(2);
-                if (!map_info_stream.good()) {
-                    std::string msg = std::string("Failed to write map_info.json for new map.");
-                    tinyfd_messageBox("Warning", msg.c_str(), "ok", "warning", 0);
-                }
-            } else {
-                tinyfd_messageBox("Warning", "Unable to create map_info.json for new map.", "ok", "warning", 0);
-            }
-        }
+
 
         if (!manifest_store.update_map_entry(*sanitized, map_info)) {
             tinyfd_messageBox("Error Creating Map", "Failed to update manifest for new map.", "ok", "error", 0);

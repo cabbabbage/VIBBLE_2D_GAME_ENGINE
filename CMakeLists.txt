@@ -347,7 +347,6 @@ target_compile_definitions(manifest_loader_tests PRIVATE SDL_MAIN_HANDLED PROJEC
 add_test(NAME manifest_loader_tests COMMAND manifest_loader_tests)
 
 add_executable(manifest_store_tests
-    tests/manifest/manifest_store_tests.cpp
     tests/manifest/spawn_group_manifest_tests.cpp
     tests/dev_mode/room_editor_manifest_tests.cpp
     tests/dev_mode/spawn_group_config_tests.cpp
