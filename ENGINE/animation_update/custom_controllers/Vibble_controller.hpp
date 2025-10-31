@@ -38,6 +38,8 @@ private:
     float dashingPower = 20;
     float dashingTime = 0.2;
     float dashingCooldown = 1;
+    std::chrono::steady_clock::time_point dashEndTime;
+    std::chrono::steady_clock::time_point cooldownEndTime;
 };
 
 #endif

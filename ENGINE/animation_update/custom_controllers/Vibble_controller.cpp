@@ -31,10 +31,17 @@ void VibbleController::movement(const Input& input) {
 
     const int stride_count = sprint ? kSprintMultiplier : 1;
 
-    if(dash) Dash();
+    if(dash && canDash == true) {
+        Dash();
+    }
 
-    dx_ = raw_x * kWalkSpeed * stride_count;
-    dy_ = raw_y * kWalkSpeed * stride_count;
+    float speedMultiplier = kWalkSpeed;
+    if(isDashing) {
+        speedMultiplier *= dashingPower;
+    }
+
+    dx_ = raw_x * speedMultiplier * stride_count;
+    dy_ = raw_y * speedMultiplier * stride_count;
 
     const std::string animation_id = animation_for_direction(raw_x, raw_y);
 
@@ -43,8 +50,19 @@ void VibbleController::movement(const Input& input) {
 }
 
 void VibbleController::update(const Input& input) {
-    dx_ = dy_ = 0;
+    using namespace std::chrono;
+    auto now = steady_clock::now();
 
+    if(isDashing && now >= dashEndTime) {
+        isDashing = false;
+        cooldownEndTime = now + duration_cast<steady_clock::duration>(duration<float>(dashingCooldown));
+    }
+
+    if(!canDash && !isDashing && now >= cooldownEndTime) {
+        canDash = true;
+    }
+
+    dx_ = dy_ = 0;
     movement(input);
 }
 
@@ -106,23 +124,12 @@ std::string VibbleController::animation_for_direction(int raw_x, int raw_y) cons
 }
 
 void VibbleController::Dash() {
+    if(!canDash) return;
+    // Starting our dash
     canDash = false;
     isDashing = true;
-    /**
-     * Set gravity to 0 theres gravity, 
-     * Set velocity(transform.x * dashingPower, 0f);
-     * Keep dashing for dashingTime: waitForSeconds(dashingTime)
-     * Set gravity back to original
-     */
-    if(get_dx() > 0) { }
-    int temp_speed = kWalkSpeed;
-    kWalkSpeed = kWalkSpeed * dashingPower;
-    
-
-    isDashing = false;
-    /**
-     * WaitForSeconds(dashingCooldown)
-     */
-    canDash = true;
+    dashEndTime = std::chrono::steady_clock::now() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<float>(dashingTime)
+    ); // Ending dash within update and setting the bools back
     };
 
