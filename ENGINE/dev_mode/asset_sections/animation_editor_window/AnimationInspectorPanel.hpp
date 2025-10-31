@@ -155,6 +155,11 @@ class AnimationInspectorPanel {
     mutable int current_frame_ = 0;
     mutable int current_fps_ = 24;
     mutable int frame_count_ = 1;
+
+    // Scrolling variables
+    mutable int content_height_ = 0;
+    mutable int scroll_ = 0;
+    mutable int max_scroll_ = 0;
 };
 
 }

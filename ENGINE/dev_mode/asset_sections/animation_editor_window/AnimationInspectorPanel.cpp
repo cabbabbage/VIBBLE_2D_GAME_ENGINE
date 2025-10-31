@@ -371,6 +371,9 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
 
     layout_widgets();
 
+    // Set clip rect to bounds to prevent rendering outside
+    SDL_RenderSetClipRect(renderer, &bounds_);
+
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
@@ -484,6 +487,8 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     if (movement_summary_) movement_summary_->render(renderer);
     if (on_end_selector_) on_end_selector_->render(renderer);
     if (audio_panel_) audio_panel_->render(renderer);
+
+    SDL_RenderSetClipRect(renderer, nullptr);
 }
 
 bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
@@ -620,6 +625,18 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
         rename_pending_ = true;
     }
 
+    if (e.type == SDL_MOUSEWHEEL) {
+        int mx, my;
+        SDL_GetMouseState(&mx, &my);
+        SDL_Point mouse{mx, my};
+        if (SDL_PointInRect(&mouse, &bounds_)) {
+            scroll_ -= e.wheel.y * 20;
+            scroll_ = std::clamp(scroll_, 0, max_scroll_);
+            layout_dirty_ = true;
+            handled = true;
+        }
+    }
+
     return handled;
 }
 
@@ -718,6 +735,7 @@ void AnimationInspectorPanel::layout_widgets() const {
     const int content_width = width;
     const int x = bounds_.x + padding;
     int y = bounds_.y + padding;
+    int content_y = y - scroll_;
 
     const int button_height = DMButton::height();
     int action_buttons = 0;
@@ -757,7 +775,8 @@ void AnimationInspectorPanel::layout_widgets() const {
     y += header_height;
     self->header_rect_ = SDL_Rect{bounds_.x, bounds_.y, bounds_.w, y - bounds_.y};
 
-    y += item_gap;
+    const int content_top = y + item_gap;
+    content_y = content_top - scroll_;
 
     const int selector_height = DMButton::height();
     const int selector_gap = DMSpacing::small_gap();
@@ -780,57 +799,61 @@ void AnimationInspectorPanel::layout_widgets() const {
     std::vector<std::string> badges = source_config_ ? source_config_->summary_badges() : std::vector<std::string>{};
     badges.insert(badges.end(), preview_modifier_badges_.begin(), preview_modifier_badges_.end());
     if (!badges.empty()) {
-        self->source_summary_rect_ = SDL_Rect{x, y, width, selector_height};
-        y += selector_height;
+        self->source_summary_rect_ = SDL_Rect{x, content_y, width, selector_height};
+        content_y += selector_height;
     } else {
-        self->source_summary_rect_ = SDL_Rect{x, y, width, 0};
+        self->source_summary_rect_ = SDL_Rect{x, content_y, width, 0};
     }
 
-    y += item_gap;
+    content_y += item_gap;
 
     int source_height = 0;
     if (source_config_) {
         source_height = source_config_->preferred_height(content_width);
-        self->source_rect_ = SDL_Rect{x, y, width, source_height};
+        self->source_rect_ = SDL_Rect{x, content_y, width, source_height};
         source_config_->set_bounds(self->source_rect_);
     } else {
-        self->source_rect_ = SDL_Rect{x, y, width, 0};
+        self->source_rect_ = SDL_Rect{x, content_y, width, 0};
     }
-    y += source_height;
-    y += item_gap;
+    content_y += source_height;
+    content_y += item_gap;
 
-    self->preview_controls_rect_ = SDL_Rect{x, y, width, DMButton::height()};
-    y += DMButton::height();
-    self->preview_rect_ = SDL_Rect{x, y, width, kPreviewHeight};
-    y += kPreviewHeight;
+    self->preview_controls_rect_ = SDL_Rect{x, content_y, width, DMButton::height()};
+    content_y += DMButton::height();
+    self->preview_rect_ = SDL_Rect{x, content_y, width, kPreviewHeight};
+    content_y += kPreviewHeight;
 
     bool placed_section = false;
     auto assign_section = [&](auto* widget, SDL_Rect& rect) {
         if (!widget) {
-            rect = SDL_Rect{x, y, width, 0};
+            rect = SDL_Rect{x, content_y, width, 0};
             return;
         }
         int section_height = widget->preferred_height(content_width);
         if (section_height <= 0) {
-            rect = SDL_Rect{x, y, width, 0};
+            rect = SDL_Rect{x, content_y, width, 0};
             widget->set_bounds(rect);
             return;
         }
         if (!placed_section) {
-            y += item_gap;
+            content_y += item_gap;
             placed_section = true;
         } else {
-            y += section_gap;
+            content_y += section_gap;
         }
-        rect = SDL_Rect{x, y, width, section_height};
+        rect = SDL_Rect{x, content_y, width, section_height};
         widget->set_bounds(rect);
-        y += section_height;
+        content_y += section_height;
     };
 
     assign_section(playback_settings_.get(), playback_rect_);
     assign_section(movement_summary_.get(), movement_rect_);
     assign_section(on_end_selector_.get(), on_end_rect_);
     assign_section(audio_panel_.get(), audio_rect_);
+
+    self->content_height_ = content_y + padding - bounds_.y;
+    self->max_scroll_ = std::max(0, self->content_height_ - bounds_.h);
+    self->scroll_ = std::clamp(self->scroll_, 0, self->max_scroll_);
 
     refresh_focus_index();
 }
