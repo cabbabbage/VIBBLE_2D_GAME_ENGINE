@@ -412,10 +412,12 @@ void FrameMovementEditor::ensure_children() {
         properties_panel_ = std::make_unique<FramePropertiesPanel>();
         properties_panel_->set_frames(&frames_);
         properties_panel_->set_selected_index(&selected_index_);
+        properties_panel_->set_canvas(canvas_.get());
         properties_panel_->set_on_frame_changed([this]() { mark_dirty(); });
     } else {
         properties_panel_->set_frames(&frames_);
         properties_panel_->set_selected_index(&selected_index_);
+        properties_panel_->set_canvas(canvas_.get());
     }
     update_layout();
 }
@@ -929,4 +931,3 @@ std::string FrameMovementEditor::generate_variant_name() const {
 }
 
 }
-

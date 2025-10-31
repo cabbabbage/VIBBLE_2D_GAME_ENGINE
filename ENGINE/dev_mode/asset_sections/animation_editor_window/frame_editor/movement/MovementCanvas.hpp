@@ -22,6 +22,8 @@ class MovementCanvas {
     const std::vector<MovementFrame>& frames() const { return frames_; }
     void set_selected_index(int index);
     int selected_index() const { return selected_index_; }
+    void set_grid_resolution(float resolution);
+    float grid_resolution() const { return grid_resolution_; }
 
     void update();
     void render(SDL_Renderer* renderer) const;
@@ -35,6 +37,7 @@ class MovementCanvas {
     void update_selection_from_mouse();
     SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
     SDL_FPoint screen_to_world(SDL_Point screen) const;
+    float snap_to_grid(float value) const;
 
   private:
     SDL_Rect bounds_{0, 0, 0, 0};
@@ -50,7 +53,7 @@ class MovementCanvas {
     SDL_Point last_mouse_{0, 0};
     SDL_Point drag_last_mouse_{0, 0};
     SDL_FPoint drag_target_world_{0.0f, 0.0f};
+    float grid_resolution_ = 1.0f;  // Snap to whole units by default
 };
 
 }
-

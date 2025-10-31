@@ -27,6 +27,10 @@ SDL_Color with_alpha(SDL_Color c, Uint8 alpha) {
 
 MovementCanvas::MovementCanvas() = default;
 
+void MovementCanvas::set_grid_resolution(float resolution) {
+    grid_resolution_ = std::max(0.1f, resolution);  // Minimum 0.1 to prevent division by zero
+}
+
 void MovementCanvas::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
     fit_view_to_content();
@@ -157,8 +161,8 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
                 drag_last_mouse_ = current;
 
                 const SDL_FPoint prev_world = positions_[selected_index_ - 1];
-                frames_[selected_index_].dx = drag_target_world_.x - prev_world.x;
-                frames_[selected_index_].dy = drag_target_world_.y - prev_world.y;
+                frames_[selected_index_].dx = snap_to_grid(drag_target_world_.x - prev_world.x);
+                frames_[selected_index_].dy = snap_to_grid(drag_target_world_.y - prev_world.y);
                 rebuild_path();
             } else if (panning_) {
                 pan_view(static_cast<float>(e.motion.xrel), static_cast<float>(e.motion.yrel));
@@ -290,6 +294,11 @@ void MovementCanvas::apply_zoom(float scale_delta) {
     center_world_.y += anchor_world.y - new_anchor_world.y;
 }
 
+float MovementCanvas::snap_to_grid(float value) const {
+    if (grid_resolution_ <= 0.0f) return value;
+    return std::round(value / grid_resolution_) * grid_resolution_;
+}
+
 void MovementCanvas::update_selection_from_mouse() {
     if (!SDL_PointInRect(&last_mouse_, &bounds_) || positions_.empty()) {
         hovered_index_ = -1;
@@ -328,4 +337,3 @@ SDL_FPoint MovementCanvas::screen_to_world(SDL_Point screen) const {
 }
 
 }
-

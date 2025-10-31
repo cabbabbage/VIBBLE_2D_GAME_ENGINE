@@ -6,9 +6,11 @@
 
 struct SDL_Renderer;
 
+#include "MovementCanvas.hpp"
+
 namespace animation_editor {
 
-struct MovementFrame;
+class MovementCanvas;
 
 class FramePropertiesPanel {
   public:
@@ -17,6 +19,7 @@ class FramePropertiesPanel {
     void set_bounds(const SDL_Rect& bounds);
     void set_frames(std::vector<MovementFrame>* frames);
     void set_selected_index(int* selected_index);
+    void set_canvas(MovementCanvas* canvas);
     void set_on_frame_changed(std::function<void()> callback);
     void refresh_from_selection();
     bool take_dirty_flag();
@@ -33,13 +36,20 @@ class FramePropertiesPanel {
   private:
     SDL_Rect bounds_{0, 0, 0, 0};
     SDL_Rect resort_toggle_rect_{0, 0, 0, 0};
+    SDL_Rect grid_down_rect_{0, 0, 0, 0};
+    SDL_Rect grid_up_rect_{0, 0, 0, 0};
+    SDL_Rect grid_display_rect_{0, 0, 0, 0};
     std::vector<MovementFrame>* frames_ = nullptr;
+    MovementCanvas* canvas_ = nullptr;
     int* selected_index_ = nullptr;
     MovementFrame cached_frame_{};
     int cached_index_ = -1;
     bool dirty_ = false;
+    bool grid_down_hovered_ = false;
+    bool grid_down_pressed_ = false;
+    bool grid_up_hovered_ = false;
+    bool grid_up_pressed_ = false;
     std::function<void()> on_frame_changed_;
 };
 
 }
-

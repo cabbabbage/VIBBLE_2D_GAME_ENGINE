@@ -29,6 +29,7 @@ class Input;
 class DevControls;
 class AssetInfo;
 class Global_Light_Source;
+class QuickTaskPopup;
 namespace devmode::core {
 class ManifestStore;
 }
@@ -215,6 +216,7 @@ private:
     Input* input = nullptr;
     DevControls* dev_controls_ = nullptr;
     Room* dev_controls_last_room_ = nullptr;
+    std::unique_ptr<QuickTaskPopup> quick_task_popup_;
     camera camera_;
     SceneRenderer* scene = nullptr;
     int screen_width;
@@ -297,4 +299,3 @@ private:
     }
 };
 #include "utils/map_grid_settings.hpp"
-

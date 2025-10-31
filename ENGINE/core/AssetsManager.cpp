@@ -21,6 +21,7 @@
 #include "utils/text_style.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "utils/transform_smoothing_settings.hpp"
+#include "quick_task_popup.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -165,6 +166,12 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     register_pending_static_assets();
 
     update_filtered_active_assets();
+
+    // Initialize quick task popup
+    quick_task_popup_ = std::make_unique<QuickTaskPopup>();
+    if (manifest_store_fallback_) {
+        quick_task_popup_->set_manifest_store(manifest_store_fallback_.get());
+    }
 
 }
 
@@ -576,6 +583,7 @@ Assets::~Assets() {
     scene = nullptr;
     delete finder_;
     delete dev_controls_;
+    // quick_task_popup_ is unique_ptr, auto-deleted
 }
 
 AssetLibrary& Assets::library() {
@@ -747,6 +755,22 @@ void Assets::update(const Input& input)
         scene->toggle_chunk_preview();
         std::cout << "[Assets] Chunk preview "
                   << (scene->chunk_preview_enabled() ? "enabled" : "disabled") << " (Ctrl+Q).\n";
+    }
+
+    // Quick Task popup Ctrl+T hotkey
+    if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_T) && quick_task_popup_) {
+        if (quick_task_popup_->is_open()) {
+            quick_task_popup_->close();
+        } else {
+            quick_task_popup_->open();
+        }
+        std::cout << "[Assets] Quick Task popup "
+                  << (quick_task_popup_->is_open() ? "opened" : "closed") << " (Ctrl+T).\n";
+    }
+
+    // Update popup
+    if (quick_task_popup_) {
+        quick_task_popup_->update();
     }
 
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
@@ -1472,6 +1496,11 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         dev_controls_->render_overlays(renderer);
     }
 
+    // Render quick task popup
+    if (quick_task_popup_) {
+        quick_task_popup_->render(renderer);
+    }
+
     if (!renderer) {
         return;
     }
@@ -1792,6 +1821,13 @@ void Assets::clear_editor_selection() {
 }
 
 void Assets::handle_sdl_event(const SDL_Event& e) {
+    // Handle quick task popup first (if open)
+    if (quick_task_popup_ && quick_task_popup_->is_open()) {
+        if (quick_task_popup_->handle_event(e)) {
+            return; // Popup consumed the event
+        }
+    }
+
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->handle_sdl_event(e);
     }
@@ -1876,4 +1912,3 @@ void Assets::set_editor_current_room(Room* room) {
         sync_dev_controls_current_room(room, true);
     }
 }
-
