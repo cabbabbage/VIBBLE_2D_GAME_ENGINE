@@ -5,11 +5,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <optional>
 #include <sstream>
-#include <iostream>
 #include <string>
 #include <utility>
 #include <unordered_set>
@@ -1322,7 +1323,31 @@ void AnimationEditorWindow::add_controller() {
 }
 
 void AnimationEditorWindow::open_controller() {
-    set_status_message("Open Controller not implemented yet.", 180);
+    auto info_ptr = info_.lock();
+    if (!info_ptr) {
+        set_status_message("No asset selected.", 180);
+        return;
+    }
+    std::string sanitized = sanitize_asset_name(info_ptr->name);
+    if (sanitized.empty()) {
+        set_status_message("Invalid asset name.", 180);
+        return;
+    }
+    std::string key = generate_controller_key(sanitized);
+    std::filesystem::path controller_dir = "ENGINE/animation_update/custom_controllers";
+    std::filesystem::path hpp_path = controller_dir / (key + ".hpp");
+    if (!std::filesystem::exists(hpp_path)) {
+        set_status_message("Controller file does not exist.", 180);
+        return;
+    }
+    // Open with default editor
+    std::string cmd = "cmd /c start \"\" \"" + hpp_path.string() + "\"";
+    int result = std::system(cmd.c_str());
+    if (result != 0) {
+        set_status_message("Failed to open controller file.", 180);
+    } else {
+        set_status_message("Opened controller file.", 120);
+    }
 }
 
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_gif() const {
