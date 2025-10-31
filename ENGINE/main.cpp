@@ -581,8 +581,11 @@ int main(int argc, char* argv[]) {
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
                 vibble::log::error(std::string("SDL_Init failed: ") + SDL_GetError()); return 1;
         }
-        if (SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2") != SDL_TRUE) {
-                SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+        // Prefer the highest quality texture filtering globally
+        if (SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best") != SDL_TRUE) {
+                if (SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2") != SDL_TRUE) {
+                        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+                }
         }
         vibble::log::info("[Main] Requested high quality texture filtering.");
         if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {

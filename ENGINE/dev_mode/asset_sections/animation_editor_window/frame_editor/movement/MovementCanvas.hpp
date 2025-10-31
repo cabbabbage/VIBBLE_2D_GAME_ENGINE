@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <vector>
+#include <algorithm>
 struct SDL_Renderer;
 
 namespace animation_editor {
@@ -23,6 +24,8 @@ class MovementCanvas {
     void set_selected_index(int index);
     int selected_index() const { return selected_index_; }
     void set_grid_resolution(float resolution);
+    // Convenience: set grid spacing in pixels (converted using pixels_per_unit_)
+    void set_grid_spacing_pixels(int px) { set_grid_resolution(static_cast<float>(px) / std::max(1.0f, pixels_per_unit_)); }
     float grid_resolution() const { return grid_resolution_; }
 
     void update();

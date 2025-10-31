@@ -16,12 +16,15 @@
 #include "FramePropertiesPanel.hpp"
 #include "MovementCanvas.hpp"
 #include "TotalsPanel.hpp"
+// grid resolution constants
+#include "util/grid.hpp"
 
 namespace animation_editor {
 
 namespace {
 
-constexpr int kTotalsHeight = 120;
+// Keep totals compact to avoid wasting vertical space
+constexpr int kTotalsHeight = 28;
 constexpr int kVariantHeaderPadding = kPanelPadding;
 constexpr int kVariantTabHeight = 28;
 constexpr int kVariantTabSpacing = 6;
@@ -162,6 +165,18 @@ void FrameMovementEditor::set_preview_provider(std::shared_ptr<PreviewProvider> 
     preview_provider_ = std::move(provider);
 }
 
+void FrameMovementEditor::set_grid_pixels(int px) {
+    grid_pixels_px_ = std::max(1, px);
+    if (canvas_) {
+        canvas_->set_grid_spacing_pixels(grid_pixels_px_);
+    }
+}
+
+void FrameMovementEditor::set_grid_resolution_r(int r) {
+    grid_resolution_r_ = std::clamp(r, 0, vibble::grid::kMaxResolution);
+    set_grid_pixels(1 << grid_resolution_r_);
+}
+
 void FrameMovementEditor::update() {
     ensure_children();
     if (canvas_) {
@@ -191,6 +206,10 @@ void FrameMovementEditor::render(SDL_Renderer* renderer) const {
     if (totals_panel_) totals_panel_->render(renderer);
     if (properties_panel_) properties_panel_->render(renderer);
     render_frame_list(renderer);
+}
+
+void FrameMovementEditor::render_canvas_only(SDL_Renderer* renderer) const {
+    if (canvas_) canvas_->render(renderer);
 }
 
 bool FrameMovementEditor::handle_event(const SDL_Event& e) {
@@ -403,21 +422,15 @@ void FrameMovementEditor::apply_changes() {
 void FrameMovementEditor::ensure_children() {
     if (!canvas_) {
         canvas_ = std::make_unique<MovementCanvas>();
+        canvas_->set_grid_spacing_pixels(grid_pixels_px_);
     }
     if (!totals_panel_) {
         totals_panel_ = std::make_unique<TotalsPanel>();
     }
     if (totals_panel_) totals_panel_->set_selected_index(&selected_index_);
-    if (!properties_panel_) {
-        properties_panel_ = std::make_unique<FramePropertiesPanel>();
-        properties_panel_->set_frames(&frames_);
-        properties_panel_->set_selected_index(&selected_index_);
-        properties_panel_->set_canvas(canvas_.get());
-        properties_panel_->set_on_frame_changed([this]() { mark_dirty(); });
-    } else {
-        properties_panel_->set_frames(&frames_);
-        properties_panel_->set_selected_index(&selected_index_);
-        properties_panel_->set_canvas(canvas_.get());
+    // Remove frame properties panel entirely (requested)
+    if (properties_panel_) {
+        properties_panel_.reset();
     }
     update_layout();
 }
@@ -438,26 +451,14 @@ void FrameMovementEditor::update_layout() {
         const int content_y = header_rect_.y + header_rect_.h + kPanelPadding;
         const int content_w = std::max(0, mode_controls_rect_.w - kPanelPadding * 2);
         const int content_h = std::max(0, mode_controls_rect_.y + mode_controls_rect_.h - content_y - kPanelPadding);
-
-        constexpr int kTwoColumnThreshold = 380;
-        const int column_gap = kPanelPadding;
-
-        if (content_w >= kTwoColumnThreshold) {
-            const int totals_width = std::max(0, (content_w - column_gap) / 2);
-            const int properties_width = std::max(0, content_w - totals_width - column_gap);
-            totals_rect_ = SDL_Rect{content_x, content_y, totals_width, content_h};
-            properties_rect_ = SDL_Rect{content_x + totals_width + column_gap, content_y, properties_width, content_h};
-        } else {
-            const int spacing = (content_h > kPanelPadding) ? kPanelPadding : 0;
-            const int totals_height = std::min(content_h, kTotalsHeight);
-            const int remaining_height = std::max(0, content_h - totals_height - spacing);
-            totals_rect_ = SDL_Rect{content_x, content_y, content_w, totals_height};
-            properties_rect_ = SDL_Rect{content_x, content_y + totals_rect_.h + spacing, content_w, remaining_height};
-        }
+        // Compact single-column: totals only
+        const int totals_height = std::min(content_h, kTotalsHeight);
+        totals_rect_ = SDL_Rect{content_x, content_y, content_w, totals_height};
+        properties_rect_ = SDL_Rect{0, 0, 0, 0};
     }
 
     if (totals_panel_) totals_panel_->set_bounds(totals_rect_);
-    if (properties_panel_) properties_panel_->set_bounds(properties_rect_);
+    // properties panel removed
 
     layout_variant_header();
     layout_frame_list();

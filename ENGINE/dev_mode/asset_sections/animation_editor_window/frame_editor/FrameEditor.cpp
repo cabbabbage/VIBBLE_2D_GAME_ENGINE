@@ -7,11 +7,13 @@
 #include "../../../widgets.hpp"
 #include "../PreviewProvider.hpp"
 #include "movement/FrameMovementEditor.hpp"
+// grid resolution constants
+#include "util/grid.hpp"
 
 namespace animation_editor {
 namespace {
 constexpr int kTabButtonWidth = 140;
-constexpr int kModeControlsPreferredHeight = 240;
+constexpr int kModeControlsPreferredHeight = 180;
 constexpr int kModeControlsMinHeight = 160;
 constexpr int kFrameDisplayWidth = 640;
 constexpr int kFrameDisplayHeight = 360;
@@ -70,6 +72,16 @@ void FrameEditor::set_preview_provider(std::shared_ptr<PreviewProvider> provider
 void FrameEditor::update() {
     ensure_children();
     update_button_styles();
+    // Pull grid resolution (r) and propagate if changed
+    if (grid_stepper_) {
+        grid_resolution_r_ = std::clamp(grid_stepper_->value(), 0, vibble::grid::kMaxResolution);
+    }
+    if (grid_resolution_r_ != last_applied_grid_resolution_r_) {
+        if (movement_editor_) {
+            movement_editor_->set_grid_resolution_r(grid_resolution_r_);
+        }
+        last_applied_grid_resolution_r_ = grid_resolution_r_;
+    }
     if (movement_editor_) {
         movement_editor_->update();
     }
@@ -93,10 +105,16 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         }
     }
 
+    if (grid_stepper_) {
+        grid_stepper_->render(renderer);
+    }
+
     if (movement_editor_) {
         if (active_mode_ == Mode::Movement) {
             movement_editor_->render(renderer);
         } else {
+            // In other modes, still show the preview grid/canvas for context
+            movement_editor_->render_canvas_only(renderer);
             movement_editor_->render_frame_list(renderer);
         }
     }
@@ -107,6 +125,9 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
 
 bool FrameEditor::handle_event(const SDL_Event& e) {
     ensure_children();
+    if (grid_stepper_ && grid_stepper_->handle_event(e)) {
+        return true;
+    }
     for (size_t i = 0; i < mode_buttons_.size(); ++i) {
         auto& button = mode_buttons_[i];
         if (button && button->handle_event(e)) {
@@ -115,22 +136,51 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (prev_frame_button_ && prev_frame_button_->handle_event(e)) {
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && movement_editor_ &&
+    // Always feed events to the buttons for proper hover/press visuals
+    bool prev_consumed = prev_frame_button_ ? prev_frame_button_->handle_event(e) : false;
+    bool next_consumed = next_frame_button_ ? next_frame_button_->handle_event(e) : false;
+
+    // Robust click handling for navigation regardless of DMButton internals
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{e.button.x, e.button.y};
+        if (SDL_PointInRect(&p, &prev_button_rect_) && movement_editor_ &&
             movement_editor_->can_select_previous_frame()) {
             movement_editor_->select_previous_frame();
             update_navigation_styles();
+            return true;
         }
-        return true;
-    }
-
-    if (next_frame_button_ && next_frame_button_->handle_event(e)) {
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && movement_editor_ &&
+        if (SDL_PointInRect(&p, &next_button_rect_) && movement_editor_ &&
             movement_editor_->can_select_next_frame()) {
             movement_editor_->select_next_frame();
             update_navigation_styles();
+            return true;
         }
-        return true;
+    }
+    // Consume pointer interactions over the nav buttons
+    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN) {
+        SDL_Point p;
+        if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
+        else { p.x = e.button.x; p.y = e.button.y; }
+        if (SDL_PointInRect(&p, &prev_button_rect_) || SDL_PointInRect(&p, &next_button_rect_)) {
+            return true;
+        }
+    }
+
+    // Keyboard navigation for frames
+    if (e.type == SDL_KEYDOWN && movement_editor_) {
+        if (e.key.keysym.sym == SDLK_LEFT) {
+            if (movement_editor_->can_select_previous_frame()) {
+                movement_editor_->select_previous_frame();
+                update_navigation_styles();
+                return true;
+            }
+        } else if (e.key.keysym.sym == SDLK_RIGHT) {
+            if (movement_editor_->can_select_next_frame()) {
+                movement_editor_->select_next_frame();
+                update_navigation_styles();
+                return true;
+            }
+        }
     }
 
     if (active_mode_ == Mode::Movement && movement_editor_ && movement_editor_->handle_event(e)) {
@@ -149,6 +199,18 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
             return true;
         }
     }
+    // If the event is inside any of our interactive bounds, consume it by default
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
+        SDL_Point p;
+        if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
+        else { p.x = e.button.x; p.y = e.button.y; }
+        if (SDL_PointInRect(&p, &header_rect_) || SDL_PointInRect(&p, &mode_controls_rect_) ||
+            SDL_PointInRect(&p, &frame_display_rect_) || SDL_PointInRect(&p, &frame_list_rect_) ||
+            SDL_PointInRect(&p, &prev_button_rect_) || SDL_PointInRect(&p, &next_button_rect_) ||
+            SDL_PointInRect(&p, &grid_stepper_rect_)) {
+            return true;
+        }
+    }
     return false;
 }
 
@@ -159,6 +221,10 @@ void FrameEditor::ensure_children() {
         if (!mode_buttons_[i]) {
             mode_buttons_[i] = std::make_unique<DMButton>(labels[i], &default_style, kTabButtonWidth, DMButton::height());
         }
+    }
+
+    if (!grid_stepper_) {
+        grid_stepper_ = std::make_unique<DMNumericStepper>("Grid Resolution (r)", 0, vibble::grid::kMaxResolution, grid_resolution_r_);
     }
 
     if (!prev_frame_button_) {
@@ -178,11 +244,13 @@ void FrameEditor::ensure_children() {
         movement_editor_->set_preview_provider(preview_provider_);
         movement_editor_->set_document(document_);
         movement_editor_->set_animation_id(animation_id_);
+        movement_editor_->set_grid_resolution_r(grid_resolution_r_);
         movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
     } else {
         movement_editor_->set_preview_provider(preview_provider_);
         movement_editor_->set_document(document_);
         movement_editor_->set_animation_id(animation_id_);
+        movement_editor_->set_grid_resolution_r(grid_resolution_r_);
         movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
     }
     update_button_styles();
@@ -195,7 +263,7 @@ void FrameEditor::update_layout() {
     int gap_mode_display = DMSpacing::small_gap();
     int gap_display_list = DMSpacing::small_gap();
 
-    int header_height = DMButton::height() + DMSpacing::small_gap() * 2;
+    int header_height = std::max(DMButton::height(), DMNumericStepper::height()) + DMSpacing::small_gap() * 2;
     int mode_controls_height = kModeControlsPreferredHeight;
     int frame_list_height = kFrameListPreferredHeight;
     const int display_height = kFrameDisplayHeight;
@@ -254,6 +322,14 @@ void FrameEditor::update_layout() {
             button_x += kTabButtonWidth + DMSpacing::small_gap();
         }
     }
+
+    // Place grid stepper on the right side of the header
+    const int stepper_w = 220;
+    int stepper_h = DMNumericStepper::height();
+    int stepper_x = header_rect_.x + header_rect_.w - stepper_w - DMSpacing::small_gap();
+    int stepper_y = header_rect_.y + (header_rect_.h - stepper_h) / 2;
+    grid_stepper_rect_ = SDL_Rect{stepper_x, stepper_y, stepper_w, stepper_h};
+    if (grid_stepper_) grid_stepper_->set_rect(grid_stepper_rect_);
 
     mode_controls_rect_ = SDL_Rect{header_rect_.x, header_rect_.y + header_rect_.h + gap_header_mode, header_rect_.w,
                                    std::max(0, mode_controls_height)};

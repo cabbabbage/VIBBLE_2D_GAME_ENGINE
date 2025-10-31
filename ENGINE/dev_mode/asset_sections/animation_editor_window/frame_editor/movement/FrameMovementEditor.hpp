@@ -40,6 +40,13 @@ class FrameMovementEditor {
     void select_previous_frame();
     void select_next_frame();
 
+    // Grid control (pixels per grid intersection in the preview)
+    void set_grid_pixels(int px);
+    int grid_pixels() const { return grid_pixels_px_; }
+    void set_grid_resolution_r(int r);
+    int grid_resolution_r() const { return grid_resolution_r_; }
+    void render_canvas_only(SDL_Renderer* renderer) const;
+
   private:
     void load_frames_from_document();
     void apply_changes();
@@ -99,6 +106,8 @@ class FrameMovementEditor {
     bool add_button_hovered_ = false;
     bool add_button_pressed_ = false;
     int hovered_frame_index_ = -1;
+    int grid_pixels_px_ = 1 << 5; // default 32px
+    int grid_resolution_r_ = 5;
 };
 
 }

@@ -4788,6 +4788,17 @@
             "dx": 0,
             "dy": 0
           },
+          "movement_variants": [
+            {
+              "movement": [
+                [
+                  0,
+                  0
+                ]
+              ],
+              "name": "Alternative 1"
+            }
+          ],
           "number_of_frames": 16,
           "on_end": "default",
           "reverse_source": false,
@@ -4831,9 +4842,20 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
-      "size_settings": {
-        "scale_percentage": 100.0
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
       },
+      "size_settings": {
+        "scale_percentage": 8.0
+      },
+      "spawn_groups": [],
       "start": "default",
       "tags": [],
       "update_radius": 0

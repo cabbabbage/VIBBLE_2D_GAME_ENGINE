@@ -81,23 +81,38 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
     SDL_RenderDrawLine(renderer, bounds_.x, static_cast<int>(origin_screen.y), bounds_.x + bounds_.w, static_cast<int>(origin_screen.y));
     SDL_RenderDrawLine(renderer, static_cast<int>(origin_screen.x), bounds_.y, static_cast<int>(origin_screen.x), bounds_.y + bounds_.h);
 
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 25);
-    if (scale >= 8.0f) {
-        const float units_visible_x = bounds_.w / scale;
-        const float units_visible_y = bounds_.h / scale;
-        const int start_x = static_cast<int>(std::floor(center_world_.x - units_visible_x));
-        const int end_x = static_cast<int>(std::ceil(center_world_.x + units_visible_x));
-        const int start_y = static_cast<int>(std::floor(center_world_.y - units_visible_y));
-        const int end_y = static_cast<int>(std::ceil(center_world_.y + units_visible_y));
-        for (int x = start_x; x <= end_x; ++x) {
-            SDL_FPoint a = world_to_screen(SDL_FPoint{static_cast<float>(x), static_cast<float>(start_y - 1)});
-            SDL_FPoint b = world_to_screen(SDL_FPoint{static_cast<float>(x), static_cast<float>(end_y + 1)});
-            SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x), static_cast<int>(b.y));
-        }
-        for (int y = start_y; y <= end_y; ++y) {
-            SDL_FPoint a = world_to_screen(SDL_FPoint{static_cast<float>(start_x - 1), static_cast<float>(y)});
-            SDL_FPoint b = world_to_screen(SDL_FPoint{static_cast<float>(end_x + 1), static_cast<float>(y)});
-            SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x), static_cast<int>(b.y));
+    // Draw snapped grid based on current grid_resolution_ (in world units)
+    {
+        const float step_units = std::max(0.0f, grid_resolution_);
+        const float pixel_step = (step_units <= 0.0f) ? 0.0f : step_units * scale;
+        if (pixel_step >= 8.0f) {
+            const float units_visible_x = bounds_.w / scale;
+            const float units_visible_y = bounds_.h / scale;
+            // Find the first grid multiple just before the visible range
+            const float start_world_x = center_world_.x - units_visible_x;
+            const float end_world_x = center_world_.x + units_visible_x;
+            const float start_world_y = center_world_.y - units_visible_y;
+            const float end_world_y = center_world_.y + units_visible_y;
+
+            auto first_multiple_at_or_below = [&](float v) {
+                if (step_units <= 0.0f) return v;
+                return std::floor(v / step_units) * step_units;
+            };
+
+            float gx = first_multiple_at_or_below(start_world_x) - step_units; // pad one cell
+            float gy = first_multiple_at_or_below(start_world_y) - step_units;
+
+            SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 25);
+            for (; gx <= end_world_x + step_units; gx += step_units) {
+                SDL_FPoint a = world_to_screen(SDL_FPoint{gx, start_world_y - step_units});
+                SDL_FPoint b = world_to_screen(SDL_FPoint{gx, end_world_y + step_units});
+                SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x), static_cast<int>(b.y));
+            }
+            for (; gy <= end_world_y + step_units; gy += step_units) {
+                SDL_FPoint a = world_to_screen(SDL_FPoint{start_world_x - step_units, gy});
+                SDL_FPoint b = world_to_screen(SDL_FPoint{end_world_x + step_units, gy});
+                SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x), static_cast<int>(b.y));
+            }
         }
     }
 
@@ -151,22 +166,25 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
             last_mouse_.y = e.motion.y;
             bool inside = within_bounds(e.motion.x, e.motion.y);
 
-            if (dragging_frame_ && selected_index_ > 0) {
-                const float scale = pixels_per_unit_ * zoom_;
-                SDL_Point current{e.motion.x, e.motion.y};
-                float dx_units = (current.x - drag_last_mouse_.x) / scale;
-                float dy_units = -(current.y - drag_last_mouse_.y) / scale;
-                drag_target_world_.x += dx_units;
-                drag_target_world_.y += dy_units;
-                drag_last_mouse_ = current;
+        if (dragging_frame_ && selected_index_ > 0) {
+            const float scale = pixels_per_unit_ * zoom_;
+            SDL_Point current{e.motion.x, e.motion.y};
+            float dx_units = (current.x - drag_last_mouse_.x) / scale;
+            float dy_units = -(current.y - drag_last_mouse_.y) / scale;
+            drag_target_world_.x += dx_units;
+            drag_target_world_.y += dy_units;
+            drag_last_mouse_ = current;
 
-                const SDL_FPoint prev_world = positions_[selected_index_ - 1];
-                frames_[selected_index_].dx = snap_to_grid(drag_target_world_.x - prev_world.x);
-                frames_[selected_index_].dy = snap_to_grid(drag_target_world_.y - prev_world.y);
-                rebuild_path();
-            } else if (panning_) {
-                pan_view(static_cast<float>(e.motion.xrel), static_cast<float>(e.motion.yrel));
-            }
+            const SDL_FPoint prev_world = positions_[selected_index_ - 1];
+            // Snap the drag target to grid before applying
+            const float snapped_x = snap_to_grid(drag_target_world_.x);
+            const float snapped_y = snap_to_grid(drag_target_world_.y);
+            frames_[selected_index_].dx = (snapped_x - prev_world.x);
+            frames_[selected_index_].dy = (snapped_y - prev_world.y);
+            rebuild_path();
+        } else if (panning_) {
+            pan_view(static_cast<float>(e.motion.xrel), static_cast<float>(e.motion.yrel));
+        }
 
             update_selection_from_mouse();
             return dragging_frame_ || panning_ || inside;
@@ -185,6 +203,18 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
                         dragging_frame_ = true;
                         drag_last_mouse_ = SDL_Point{e.button.x, e.button.y};
                         drag_target_world_ = positions_[selected_index_];
+                    }
+                } else {
+                    // Single-click in empty space sets the current frame's point (if not the first frame)
+                    if (selected_index_ > 0) {
+                        SDL_FPoint world = screen_to_world(SDL_Point{e.button.x, e.button.y});
+                        // Snap to grid for consistent placement
+                        world.x = snap_to_grid(world.x);
+                        world.y = snap_to_grid(world.y);
+                        const SDL_FPoint prev_world = positions_[selected_index_ - 1];
+                        frames_[selected_index_].dx = (world.x - prev_world.x);
+                        frames_[selected_index_].dy = (world.y - prev_world.y);
+                        rebuild_path();
                     }
                 }
                 return true;

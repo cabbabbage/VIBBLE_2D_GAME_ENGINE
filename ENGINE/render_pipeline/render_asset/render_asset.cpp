@@ -63,6 +63,10 @@ bool rerender_scaled_texture(SDL_Renderer* renderer,
                 return false;
         }
 
+        // Force highest quality filtering when re-rendering the scaled texture
+#if SDL_VERSION_ATLEAST(2,0,12)
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+#endif
         SDL_Rect dst{0, 0, dst_w, dst_h};
         const int copy_result = SDL_RenderCopy(renderer, source, nullptr, &dst);
 
