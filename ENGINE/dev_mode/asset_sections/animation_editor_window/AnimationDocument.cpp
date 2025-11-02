@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <fstream>
 #include <nlohmann/json.hpp>
 
@@ -555,5 +556,23 @@ void AnimationDocument::rebuild_animation_cache() {
 
 void AnimationDocument::mark_dirty() const { dirty_ = true; }
 
+double AnimationDocument::scale_percentage() const {
+    try {
+        if (!base_data_.is_object()) return 100.0;
+        const auto it = base_data_.find("size_settings");
+        if (it == base_data_.end() || !it->is_object()) return 100.0;
+        const auto& ss = *it;
+        if (ss.contains("scale_percentage")) {
+            const auto& v = ss["scale_percentage"];
+            if (v.is_number()) {
+                double pct = v.get<double>();
+                if (!std::isfinite(pct) || pct <= 0.0) return 100.0;
+                return pct;
+            }
+        }
+    } catch (...) {
+    }
+    return 100.0;
 }
 
+}

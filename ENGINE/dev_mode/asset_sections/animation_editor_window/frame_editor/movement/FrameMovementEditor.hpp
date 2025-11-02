@@ -46,11 +46,6 @@ class FrameMovementEditor {
     void select_previous_frame();
     void select_next_frame();
 
-    // Grid control (pixels per grid intersection in the preview)
-    void set_grid_pixels(int px);
-    int grid_pixels() const { return grid_pixels_px_; }
-    void set_grid_resolution_r(int r);
-    int grid_resolution_r() const { return grid_resolution_r_; }
     void render_canvas_only(SDL_Renderer* renderer) const;
 
     int selected_index() const { return selected_index_; }
@@ -96,6 +91,7 @@ class FrameMovementEditor {
     std::unique_ptr<TotalsPanel> totals_panel_;
     std::unique_ptr<FramePropertiesPanel> properties_panel_;
     std::unique_ptr<DMButton> smooth_button_;
+    std::unique_ptr<DMButton> show_anim_button_;
     std::shared_ptr<PreviewProvider> preview_provider_;
     std::string animation_id_;
     SDL_Rect mode_controls_rect_{0, 0, 0, 0};
@@ -106,6 +102,7 @@ class FrameMovementEditor {
     SDL_Rect properties_rect_{0, 0, 0, 0};
     SDL_Rect add_button_rect_{0, 0, 0, 0};
     SDL_Rect smooth_button_rect_{0, 0, 0, 0};
+    SDL_Rect show_anim_button_rect_{0, 0, 0, 0};
     std::vector<MovementVariant> variants_;
     std::vector<VariantTabState> variant_tabs_;
     CloseCallback close_callback_;
@@ -117,8 +114,7 @@ class FrameMovementEditor {
     bool add_button_hovered_ = false;
     bool add_button_pressed_ = false;
     int hovered_frame_index_ = -1;
-    int grid_pixels_px_ = 1 << 5; // default 32px
-    int grid_resolution_r_ = 5;
+    bool show_animation_ = false;
     FrameChangedCallback frame_changed_callback_;
 };
 

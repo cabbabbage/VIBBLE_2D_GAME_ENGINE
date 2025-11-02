@@ -236,7 +236,11 @@ void MainMenu::showLoadingScreen() {
 		}
 	}
 	SDL_RenderPresent(renderer_);
-	SDL_PumpEvents();
+	// Keep the OS message queue responsive but ignore gameplay/menu input
+	SDL_Event ev;
+	while (SDL_PollEvent(&ev)) {
+		// Intentionally discard all input while the loading screen is up
+	}
 	if (temp_bg && bg) SDL_DestroyTexture(bg);
 }
 

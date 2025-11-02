@@ -17,8 +17,6 @@
 #include "FramePropertiesPanel.hpp"
 #include "MovementCanvas.hpp"
 #include "TotalsPanel.hpp"
-// grid resolution constants
-#include "util/grid.hpp"
 
 namespace animation_editor {
 
@@ -186,18 +184,6 @@ void FrameMovementEditor::set_preview_provider(std::shared_ptr<PreviewProvider> 
     preview_provider_ = std::move(provider);
 }
 
-void FrameMovementEditor::set_grid_pixels(int px) {
-    grid_pixels_px_ = std::max(1, px);
-    if (canvas_) {
-        canvas_->set_grid_spacing_pixels(grid_pixels_px_);
-    }
-}
-
-void FrameMovementEditor::set_grid_resolution_r(int r) {
-    grid_resolution_r_ = std::clamp(r, 0, vibble::grid::kMaxResolution);
-    set_grid_pixels(1 << grid_resolution_r_);
-}
-
 void FrameMovementEditor::update() {
     ensure_children();
     if (canvas_) {
@@ -205,6 +191,20 @@ void FrameMovementEditor::update() {
         if (selected_index_ != canvas_->selected_index()) {
             selected_index_ = canvas_->selected_index();
             synchronize_selection();
+        }
+        // Hovering over points in the canvas highlights the corresponding frame in the list
+        int hover = canvas_->hovered_index();
+        if (hover >= 0 && hover < static_cast<int>(frames_.size())) {
+            hovered_frame_index_ = hover;
+        }
+        // Keep overlay context synchronized
+        if (preview_provider_) {
+            float pct = 100.0f;
+            if (document_) {
+                pct = static_cast<float>(document_->scale_percentage());
+            }
+            canvas_->set_animation_context(preview_provider_, animation_id_, pct);
+            canvas_->set_show_animation_overlay(show_animation_);
         }
     }
     if (totals_panel_) totals_panel_->update();
@@ -219,6 +219,10 @@ void FrameMovementEditor::update() {
         const DMButtonStyle& style = can_smooth ? DMStyles::AccentButton() : DMStyles::HeaderButton();
         smooth_button_->set_style(&style);
     }
+    if (show_anim_button_) {
+        const DMButtonStyle& style = show_animation_ ? DMStyles::AccentButton() : DMStyles::HeaderButton();
+        show_anim_button_->set_style(&style);
+    }
 
     if (dirty_) {
         apply_changes();
@@ -231,6 +235,9 @@ void FrameMovementEditor::render(SDL_Renderer* renderer) const {
     if (smooth_button_ && smooth_button_rect_.w > 0 && smooth_button_rect_.h > 0) {
         smooth_button_->render(renderer);
     }
+    if (show_anim_button_ && show_anim_button_rect_.w > 0 && show_anim_button_rect_.h > 0) {
+        show_anim_button_->render(renderer);
+    }
     if (canvas_) canvas_->render(renderer);
     if (totals_panel_) totals_panel_->render(renderer);
     if (properties_panel_) properties_panel_->render(renderer);
@@ -242,6 +249,15 @@ void FrameMovementEditor::render_canvas_only(SDL_Renderer* renderer) const {
 }
 
 bool FrameMovementEditor::handle_event(const SDL_Event& e) {
+    if (show_anim_button_ && show_anim_button_rect_.w > 0 && show_anim_button_rect_.h > 0) {
+        if (show_anim_button_->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                show_animation_ = !show_animation_;
+                if (canvas_) canvas_->set_show_animation_overlay(show_animation_);
+            }
+            return true;
+        }
+    }
     if (smooth_button_ && smooth_button_rect_.w > 0 && smooth_button_rect_.h > 0) {
         if (smooth_button_->handle_event(e)) {
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
@@ -462,7 +478,6 @@ void FrameMovementEditor::apply_changes() {
 void FrameMovementEditor::ensure_children() {
     if (!canvas_) {
         canvas_ = std::make_unique<MovementCanvas>();
-        canvas_->set_grid_spacing_pixels(grid_pixels_px_);
     }
     if (!totals_panel_) {
         totals_panel_ = std::make_unique<TotalsPanel>();
@@ -471,6 +486,9 @@ void FrameMovementEditor::ensure_children() {
     if (!smooth_button_) {
         smooth_button_ =
             std::make_unique<DMButton>("Smooth", &DMStyles::AccentButton(), kVariantTabWidth, DMButton::height());
+    }
+    if (!show_anim_button_) {
+        show_anim_button_ = std::make_unique<DMButton>("Show Animation", &DMStyles::HeaderButton(), kVariantTabWidth, DMButton::height());
     }
     // Remove frame properties panel entirely (requested)
     if (properties_panel_) {
@@ -506,6 +524,7 @@ void FrameMovementEditor::update_layout() {
 
     layout_variant_header();
     if (smooth_button_) smooth_button_->set_rect(smooth_button_rect_);
+    if (show_anim_button_) show_anim_button_->set_rect(show_anim_button_rect_);
     layout_frame_list();
 }
 
@@ -559,115 +578,81 @@ void FrameMovementEditor::layout_variant_header() {
 
     add_button_rect_ = SDL_Rect{x, y, kVariantTabHeight, kVariantTabHeight};
 
-    if (smooth_button_) {
+    if (smooth_button_ || show_anim_button_) {
         const int after_add = add_button_rect_.x + add_button_rect_.w + kVariantTabSpacing;
         const int right_edge = header_rect_.x + header_rect_.w - kVariantHeaderPadding;
-        const int available = std::max(0, right_edge - after_add);
-        int button_width = smooth_button_->preferred_width();
-        button_width = std::min(button_width, available);
-        if (button_width > 0) {
-            smooth_button_rect_ = SDL_Rect{right_edge - button_width, y, button_width, kVariantTabHeight};
+        int available = std::max(0, right_edge - after_add);
+        int smooth_w = smooth_button_ ? std::min(smooth_button_->preferred_width(), available) : 0;
+        int show_w = show_anim_button_ ? std::min(show_anim_button_->preferred_width(), std::max(0, available - smooth_w - kVariantTabSpacing)) : 0;
+        int offset_x = right_edge;
+        if (smooth_w > 0) {
+            offset_x -= smooth_w;
+            smooth_button_rect_ = SDL_Rect{offset_x, y, smooth_w, kVariantTabHeight};
+            offset_x -= kVariantTabSpacing;
+        } else {
+            smooth_button_rect_ = SDL_Rect{0, 0, 0, 0};
+        }
+        if (show_w > 0) {
+            offset_x -= show_w;
+            show_anim_button_rect_ = SDL_Rect{offset_x, y, show_w, kVariantTabHeight};
+        } else {
+            show_anim_button_rect_ = SDL_Rect{0, 0, 0, 0};
         }
     }
 }
 
 void FrameMovementEditor::smooth_frames() {
     const size_t frame_count = frames_.size();
-    if (frame_count <= 1) {
+    if (frame_count <= 2) {
         return;
     }
 
-    const int steps = static_cast<int>(frame_count) - 1;
-    if (steps <= 0) {
-        return;
-    }
+    sanitize_frames(frames_);
+    const std::vector<MovementFrame> original_frames = frames_;
 
-    auto build_even_increments = [steps](float total) {
-        std::vector<float> increments(std::max(steps, 0), 0.0f);
-        if (steps <= 0) return increments;
-        float previous_target = 0.0f;
-        for (int i = 1; i <= steps; ++i) {
-            const float t = static_cast<float>(i) / static_cast<float>(steps);
-            const float target = total * t;
-            increments[i - 1] = target - previous_target;
-            previous_target = target;
-        }
-        return increments;
-    };
-
-    auto adjust_to_integer_totals = [](const std::vector<float>& raw, float total) {
-        std::vector<float> result(raw.size(), 0.0f);
-        std::vector<std::pair<float, int>> positives;
-        std::vector<std::pair<float, int>> negatives;
-        int rounded_sum = 0;
-        for (size_t i = 0; i < raw.size(); ++i) {
-            float rounded = std::round(raw[i]);
-            result[i] = rounded;
-            rounded_sum += static_cast<int>(rounded);
-            float fractional = raw[i] - rounded;
-            if (fractional > 0.0f) {
-                positives.emplace_back(fractional, static_cast<int>(i));
-            } else if (fractional < 0.0f) {
-                negatives.emplace_back(fractional, static_cast<int>(i));
-            }
-        }
-
-        const int expected = static_cast<int>(std::lround(total));
-        int diff = expected - rounded_sum;
-        if (diff > 0) {
-            std::sort(positives.begin(), positives.end(),
-                      [](const auto& a, const auto& b) { return a.first > b.first; });
-            int applied = 0;
-            for (; applied < diff && applied < static_cast<int>(positives.size()); ++applied) {
-                result[positives[applied].second] += 1.0f;
-            }
-            for (; applied < diff && applied < static_cast<int>(result.size()); ++applied) {
-                result[applied] += 1.0f;
-            }
-        } else if (diff < 0) {
-            diff = -diff;
-            std::sort(negatives.begin(), negatives.end(),
-                      [](const auto& a, const auto& b) { return a.first < b.first; });
-            int applied = 0;
-            for (; applied < diff && applied < static_cast<int>(negatives.size()); ++applied) {
-                result[negatives[applied].second] -= 1.0f;
-            }
-            for (; applied < diff && applied < static_cast<int>(result.size()); ++applied) {
-                result[applied] -= 1.0f;
-            }
-        }
-        return result;
-    };
-
-    float total_dx = 0.0f;
-    float total_dy = 0.0f;
+    double total_dx = 0.0;
+    double total_dy = 0.0;
     for (size_t i = 1; i < frame_count; ++i) {
-        total_dx += std::isfinite(frames_[i].dx) ? frames_[i].dx : 0.0f;
-        total_dy += std::isfinite(frames_[i].dy) ? frames_[i].dy : 0.0f;
+        const double dx = std::isfinite(frames_[i].dx) ? static_cast<double>(frames_[i].dx) : 0.0;
+        const double dy = std::isfinite(frames_[i].dy) ? static_cast<double>(frames_[i].dy) : 0.0;
+        total_dx += dx;
+        total_dy += dy;
     }
 
-    std::vector<float> raw_dx = build_even_increments(total_dx);
-    std::vector<float> raw_dy = build_even_increments(total_dy);
-    std::vector<float> new_dx = adjust_to_integer_totals(raw_dx, total_dx);
-    std::vector<float> new_dy = adjust_to_integer_totals(raw_dy, total_dy);
+    const size_t steps = frame_count - 1;
+    if (steps == 0) {
+        return;
+    }
 
-    bool changed = false;
     frames_[0].dx = 0.0f;
     frames_[0].dy = 0.0f;
-    for (int i = 1; i <= steps; ++i) {
-        float dx = std::isfinite(new_dx[i - 1]) ? new_dx[i - 1] : 0.0f;
-        float dy = std::isfinite(new_dy[i - 1]) ? new_dy[i - 1] : 0.0f;
-        if (std::fabs(frames_[i].dx - dx) > 0.001f || std::fabs(frames_[i].dy - dy) > 0.001f) {
-            changed = true;
-        }
-        frames_[i].dx = dx;
-        frames_[i].dy = dy;
+
+    int accum_x = 0;
+    int accum_y = 0;
+    for (size_t i = 1; i < frame_count; ++i) {
+        const double t = static_cast<double>(i) / static_cast<double>(steps);
+        const double target_x = total_dx * t;
+        const double target_y = total_dy * t;
+
+        int rounded_x = (i == steps) ? static_cast<int>(std::lround(total_dx))
+                                     : static_cast<int>(std::lround(target_x));
+        int rounded_y = (i == steps) ? static_cast<int>(std::lround(total_dy))
+                                     : static_cast<int>(std::lround(target_y));
+
+        const int dx = rounded_x - accum_x;
+        const int dy = rounded_y - accum_y;
+        accum_x = rounded_x;
+        accum_y = rounded_y;
+
+        frames_[i].dx = static_cast<float>(dx);
+        frames_[i].dy = static_cast<float>(dy);
     }
 
-    if (changed) {
+    if (!frames_equal(frames_, original_frames)) {
         mark_dirty();
+    } else {
+        synchronize_selection();
     }
-    synchronize_selection();
 }
 
 void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {

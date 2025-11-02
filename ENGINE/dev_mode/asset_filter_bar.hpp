@@ -18,6 +18,8 @@ class Room;
 class AssetFilterBar {
 public:
     using StateChangedCallback = std::function<void()>;
+    using ExtraRenderer = std::function<void(SDL_Renderer*, const SDL_Rect&)>;
+    using ExtraEventHandler = std::function<bool(const SDL_Event&, const SDL_Rect&)>;
     struct ModeButtonConfig {
         std::string id;
         std::string label;
@@ -52,6 +54,15 @@ public:
 
     const SDL_Rect& header_rect() const { return header_rect_; }
     const SDL_Rect& layout_bounds() const { return layout_bounds_; }
+    // Reserve a fixed-width accessory region at the right side of header,
+    // to keep mode buttons from overlapping with external controls.
+    void set_right_accessory_width(int width) { right_accessory_width_ = std::max(0, width); layout_dirty_ = true; }
+    int right_accessory_width() const { return right_accessory_width_; }
+
+    // Optional extra content panel shown at the bottom of the expanded filters area
+    void set_extra_panel_height(int height) { extra_panel_height_ = std::max(0, height); layout_dirty_ = true; }
+    void set_extra_panel_renderer(ExtraRenderer renderer) { extra_renderer_ = std::move(renderer); }
+    void set_extra_panel_event_handler(ExtraEventHandler handler) { extra_event_handler_ = std::move(handler); }
 
     void reset();
 
@@ -130,4 +141,9 @@ private:
     std::unique_ptr<class DMButton> filter_toggle_button_;
     bool filters_expanded_ = false;
     bool header_suppressed_ = false;
+    int right_accessory_width_ = 0;
+    int extra_panel_height_ = 0;
+    SDL_Rect extra_panel_rect_{0,0,0,0};
+    ExtraRenderer extra_renderer_{};
+    ExtraEventHandler extra_event_handler_{};
 };

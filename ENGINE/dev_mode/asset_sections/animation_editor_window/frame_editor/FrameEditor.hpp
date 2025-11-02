@@ -9,7 +9,6 @@
 #include <SDL.h>
 
 class DMButton;
-class DMNumericStepper;
 
 namespace animation_editor {
 
@@ -18,7 +17,6 @@ class FrameMovementEditor;
 class PreviewProvider;
 
 using DMButton = ::DMButton;
-using DMNumericStepper = ::DMNumericStepper;
 
 class FrameEditor {
   public:
@@ -60,7 +58,6 @@ class FrameEditor {
     std::array<std::unique_ptr<DMButton>, 3> mode_buttons_;
     std::unique_ptr<DMButton> prev_frame_button_;
     std::unique_ptr<DMButton> next_frame_button_;
-    std::unique_ptr<DMNumericStepper> grid_stepper_;
     SDL_Rect bounds_{0, 0, 0, 0};
     SDL_Rect header_rect_{0, 0, 0, 0};
     SDL_Rect mode_controls_rect_{0, 0, 0, 0};
@@ -68,14 +65,10 @@ class FrameEditor {
     SDL_Rect frame_list_rect_{0, 0, 0, 0};
     SDL_Rect prev_button_rect_{0, 0, 0, 0};
     SDL_Rect next_button_rect_{0, 0, 0, 0};
-    SDL_Rect grid_stepper_rect_{0, 0, 0, 0};
     std::string animation_id_;
     CloseCallback close_callback_;
     FrameChangedCallback frame_changed_callback_;
     Mode active_mode_ = Mode::Movement;
-    int grid_resolution_r_ = 5; // default r=5 => 32px grid
-    int last_applied_grid_resolution_r_ = 5;
 };
 
 }
-

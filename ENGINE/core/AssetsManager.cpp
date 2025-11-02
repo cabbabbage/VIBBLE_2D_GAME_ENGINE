@@ -1858,6 +1858,17 @@ void Assets::begin_room_area_edit(const std::string& area_name) {
     }
 }
 
+void Assets::begin_frame_editor_session(Asset* asset,
+                                        std::shared_ptr<animation_editor::AnimationDocument> document,
+                                        std::shared_ptr<animation_editor::PreviewProvider> preview,
+                                        const std::string& animation_id,
+                                        animation_editor::AnimationEditorWindow* host_to_toggle) {
+    ensure_dev_controls();
+    if (dev_controls_) {
+        dev_controls_->begin_frame_editor_session(asset, std::move(document), std::move(preview), animation_id, host_to_toggle);
+    }
+}
+
 devmode::core::ManifestStore* Assets::manifest_store() {
     if (dev_controls_) {
         auto& store = dev_controls_->manifest_store();

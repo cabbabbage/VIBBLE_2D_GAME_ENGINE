@@ -319,6 +319,9 @@ void AssetInfoUI::set_assets(Assets* a) {
     }
     assets_ = a;
     set_manifest_store(assets_ ? assets_->manifest_store() : nullptr);
+    if (animation_editor_window_) {
+        animation_editor_window_->set_assets(assets_);
+    }
     if (visible_) {
         apply_camera_override(true);
     }
@@ -338,6 +341,9 @@ void AssetInfoUI::set_manifest_store(devmode::core::ManifestStore* store) {
 void AssetInfoUI::set_target_asset(Asset* a) {
     target_asset_ = a;
     validate_target_asset();
+    if (animation_editor_window_) {
+        animation_editor_window_->set_target_asset(target_asset_);
+    }
 }
 
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {

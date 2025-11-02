@@ -45,6 +45,7 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
+#include "core/AssetsManager.hpp"
 
 namespace {
 
@@ -907,6 +908,13 @@ void AnimationEditorWindow::set_status_message(const std::string& message, int f
 }
 
 void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
+    // New behavior: launch in-world frame editor session via DevControls/Assets and hide this window
+    if (assets_ && target_asset_) {
+        assets_->begin_frame_editor_session(target_asset_, document_, preview_provider_, animation_id, this);
+        set_visible(false);
+        return;
+    }
+    // Fallback to legacy modal if assets not wired
     if (!frame_editor_) {
         frame_editor_ = std::make_unique<FrameEditor>();
         frame_editor_->set_close_callback([this]() { this->close_frame_editor(); });
@@ -916,19 +924,14 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
     frame_editor_->set_document(document_);
     frame_editor_->set_animation_id(animation_id);
     frame_editor_->set_bounds(frame_editor_rect_);
-    // Sync inspector preview with movement editor selection
     if (inspector_panel_) {
         inspector_panel_->set_scrub_mode(true);
         inspector_panel_->set_scrub_frame(frame_editor_->selected_index());
     }
-    // Forward frame selection changes to inspector
     frame_editor_->set_frame_changed_callback([this](int frame) {
-        if (inspector_panel_) {
-            inspector_panel_->set_scrub_frame(frame);
-        }
+        if (inspector_panel_) inspector_panel_->set_scrub_frame(frame);
     });
     frame_editor_visible_ = true;
-    // Capture mouse while modal is open to ensure focus stays with the editor
     SDL_CaptureMouse(SDL_TRUE);
     update_corner_button();
 }

@@ -114,6 +114,29 @@ void MainApp::setup() {
         std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
         try {
+                // While loading, render the loading screen (if provided) and
+                // keep pumping/discarding OS events to avoid "Not Responding".
+                std::unique_ptr<loading_status::ScopedNotifier> scoped_loading_notifier;
+                if (loading_screen_ && renderer_) {
+                        scoped_loading_notifier = std::make_unique<loading_status::ScopedNotifier>([this](const std::string& status) {
+                                try {
+                                        loading_screen_->set_status(status);
+                                        loading_screen_->draw_frame();
+                                        SDL_RenderPresent(renderer_);
+                                } catch (...) {
+                                        // Best-effort only; ignore rendering errors during load
+                                }
+                                SDL_Event ev;
+                                while (SDL_PollEvent(&ev)) {
+                                        // Intentionally discard all input events during blocking load
+                                }
+                        });
+                        // Draw an initial loading frame and pump events once
+                        loading_screen_->set_status("Preparing...");
+                        loading_screen_->draw_frame();
+                        SDL_RenderPresent(renderer_);
+                        SDL_Event ev; while (SDL_PollEvent(&ev)) {}
+                }
                 nlohmann::json map_manifest_json = nlohmann::json::object();
                 std::string content_root;
                 const std::string map_identifier = map_descriptor_.id.empty() ? map_path_ : map_descriptor_.id;
@@ -470,9 +493,20 @@ std::optional<MapDescriptor> create_new_map_interactively() {
 void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h, bool rebuild_cache) {
     (void)window;
 
+    // Present a black screen immediately and keep the window responsive
+    if (renderer) {
+        SDL_SetRenderTarget(renderer, nullptr);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        SDL_RenderPresent(renderer);
+        SDL_Event ev; while (SDL_PollEvent(&ev)) {}
+    }
+
     manifest::ManifestData manifest_data;
     try {
         manifest_data = manifest::load_manifest();
+        // Pump and discard input after a potentially heavy step
+        SDL_Event ev; while (SDL_PollEvent(&ev)) {}
     } catch (const std::exception& ex) {
         vibble::log::error(std::string("[Main] Failed to load manifest: ") + ex.what());
         return;
@@ -483,9 +517,11 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
     std::shared_ptr<AssetLibrary> shared_asset_library = std::make_shared<AssetLibrary>(false);
     vibble::log::info("[Main] Preparing asset metadata cache...");
     shared_asset_library->load_all_from_SRC();
+    { SDL_Event ev; while (SDL_PollEvent(&ev)) {} }
     vibble::log::info(std::string("[Main] Asset metadata cache ready for ") + std::to_string(shared_asset_library->all().size()) + " asset(s).");
     vibble::log::info("[Main] Loading cached asset resources...");
     shared_asset_library->loadAllAnimations(renderer);
+    { SDL_Event ev; while (SDL_PollEvent(&ev)) {} }
     vibble::log::info("[Main] Cached asset resources loaded.");
 
     while (true) {
