@@ -11,13 +11,18 @@
 #include "TotalsPanel.hpp"
 #include "FramePropertiesPanel.hpp"
 
+class DMButton;
+
 namespace animation_editor {
 
 class AnimationDocument;
 class PreviewProvider;
+
+using DMButton = ::DMButton;
 class FrameMovementEditor {
   public:
     using CloseCallback = std::function<void()>;
+    using FrameChangedCallback = std::function<void(int)>;
 
     FrameMovementEditor();
 
@@ -28,6 +33,7 @@ class FrameMovementEditor {
                              const SDL_Rect& frame_list_bounds);
     void set_close_callback(CloseCallback callback);
     void set_preview_provider(std::shared_ptr<PreviewProvider> provider);
+    void set_frame_changed_callback(FrameChangedCallback callback) { frame_changed_callback_ = std::move(callback); }
 
     void update();
     void render(SDL_Renderer* renderer) const;
@@ -39,6 +45,10 @@ class FrameMovementEditor {
     bool can_select_next_frame() const;
     void select_previous_frame();
     void select_next_frame();
+
+    void render_canvas_only(SDL_Renderer* renderer) const;
+
+    int selected_index() const { return selected_index_; }
 
   private:
     void load_frames_from_document();
@@ -57,6 +67,7 @@ class FrameMovementEditor {
     void add_new_variant();
     void delete_variant(int index);
     std::string generate_variant_name() const;
+    void smooth_frames();
 
   private:
     struct MovementVariant {
@@ -79,6 +90,8 @@ class FrameMovementEditor {
     std::unique_ptr<MovementCanvas> canvas_;
     std::unique_ptr<TotalsPanel> totals_panel_;
     std::unique_ptr<FramePropertiesPanel> properties_panel_;
+    std::unique_ptr<DMButton> smooth_button_;
+    std::unique_ptr<DMButton> show_anim_button_;
     std::shared_ptr<PreviewProvider> preview_provider_;
     std::string animation_id_;
     SDL_Rect mode_controls_rect_{0, 0, 0, 0};
@@ -88,6 +101,8 @@ class FrameMovementEditor {
     SDL_Rect totals_rect_{0, 0, 0, 0};
     SDL_Rect properties_rect_{0, 0, 0, 0};
     SDL_Rect add_button_rect_{0, 0, 0, 0};
+    SDL_Rect smooth_button_rect_{0, 0, 0, 0};
+    SDL_Rect show_anim_button_rect_{0, 0, 0, 0};
     std::vector<MovementVariant> variants_;
     std::vector<VariantTabState> variant_tabs_;
     CloseCallback close_callback_;
@@ -99,6 +114,8 @@ class FrameMovementEditor {
     bool add_button_hovered_ = false;
     bool add_button_pressed_ = false;
     int hovered_frame_index_ = -1;
+    bool show_animation_ = false;
+    FrameChangedCallback frame_changed_callback_;
 };
 
 }

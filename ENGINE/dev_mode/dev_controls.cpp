@@ -11,11 +11,13 @@
 #include "dev_mode/map_editor.hpp"
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"
+#include "dev_mode/frame_editor_session.hpp"
 #include "FloatingPanelLayoutManager.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
+#include "dev_mode/dev_ui_settings.hpp"
 #include "asset/asset_info.hpp"
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
@@ -61,6 +63,7 @@
 #include <iostream>
 #include <random>
 #include <nlohmann/json.hpp>
+#include <SDL_ttf.h>
 
 using devmode::sdl::event_point;
 using devmode::sdl::is_pointer_event;
@@ -81,6 +84,31 @@ void dev_mode_trace(const std::string& message) {
 constexpr const char* kModeIdRoom = "room";
 constexpr const char* kModeIdMap = "map";
 constexpr int kPopupOutlineThickness = 1;
+
+// Grid header settings keys
+constexpr const char* kGridOverlayEnabledKey = "dev.grid.overlay.enabled";
+constexpr const char* kGridSnapEnabledKey    = "dev.grid.snap.enabled";
+constexpr const char* kGridCellSizePxKey     = "dev.grid.cell_size_px";
+
+void draw_simple_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
+    if (!renderer) return;
+    const DMLabelStyle& style = DMStyles::Label();
+    TTF_Font* font = style.open_font();
+    if (!font) return;
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), style.color);
+    if (!surf) {
+        TTF_CloseFont(font);
+        return;
+    }
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+    if (tex) {
+        SDL_Rect dst{x, y, surf->w, surf->h};
+        SDL_RenderCopy(renderer, tex, nullptr, &dst);
+        SDL_DestroyTexture(tex);
+    }
+    SDL_FreeSurface(surf);
+    TTF_CloseFont(font);
+}
 
 bool is_trail_room(const Room* room) {
     if (!room || room->type.empty()) {
@@ -468,6 +496,11 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     const char* ctor_start = "[DevControls] ctor start";
     dev_mode_trace(ctor_start);
     std::cout << ctor_start << "\n";
+    // Load grid header settings
+    grid_overlay_enabled_ = devmode::ui_settings::load_bool(kGridOverlayEnabledKey, false);
+    snap_to_grid_enabled_ = devmode::ui_settings::load_bool(kGridSnapEnabledKey, false);
+    // Initialize cell size from map grid settings if available later; default to 2^0 = 1
+    grid_cell_size_px_ = 1;
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
     if (room_editor_) {
         room_editor_->set_manifest_store(&manifest_store_);
@@ -487,6 +520,32 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     map_grid_regen_cb_ = [this]() { this->regenerate_map_grid_assets(); };
     apply_header_suppression();
+    // Build controls for grid features (Grid | Snap | Resolution)
+    grid_overlay_checkbox_   = std::make_unique<DMCheckbox>("Grid", grid_overlay_enabled_);
+    grid_snap_toggle_btn_    = std::make_unique<DMButton>("Snap", &DMStyles::HeaderButton(), 72, DMButton::height());
+    // Resolution stepper uses same range as map grid (0..kMaxResolution)
+    grid_resolution_stepper_ = std::make_unique<DMNumericStepper>("Grid Resolution (r)", 0, vibble::grid::kMaxResolution, 0);
+    grid_resolution_stepper_->set_on_change([this](int new_r){
+        // Clamp and apply to map grid settings, then update derived cell size for overlay
+        const int clamped_r = std::clamp(new_r, 0, vibble::grid::kMaxResolution);
+        // Persist into map info if available
+        if (map_info_json_) {
+            ensure_map_grid_settings(*map_info_json_);
+            nlohmann::json& section = (*map_info_json_)["map_grid_settings"];
+            MapGridSettings settings = MapGridSettings::from_json(&section);
+            settings.resolution = clamped_r;
+            settings.clamp();
+            settings.apply_to_json(section);
+            if (map_grid_save_cb_) {
+                map_grid_save_cb_();
+            }
+            // Derive pixel cell size from resolution
+            grid_cell_size_px_ = settings.spacing();
+        } else {
+            // Fallback: derive pixel size directly if no map info yet
+            grid_cell_size_px_ = vibble::grid::delta(clamped_r);
+        }
+    });
     camera_panel_ = std::make_unique<CameraUIPanel>(assets_, 72, 72);
     if (camera_panel_) {
         camera_panel_->close();
@@ -536,6 +595,102 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
     asset_filter_.set_map_info(map_info_json_);
     asset_filter_.set_current_room(current_room_);
+    // Provide extra panel content under filters: Grid | Snap | Resolution
+    asset_filter_.set_extra_panel_height(std::max(DMButton::height(), DMNumericStepper::height()) + DMSpacing::item_gap() * 2);
+    asset_filter_.set_extra_panel_renderer([this](SDL_Renderer* renderer, const SDL_Rect& area) {
+        if (!renderer) return;
+        const int gap = DMSpacing::item_gap();
+        const int btn_h = std::max(DMButton::height(), DMNumericStepper::height());
+        const int toggle_w = 72;
+        const int stepper_w_min = 220;
+        int y = area.y + std::max(0, (area.h - btn_h) / 2);
+        int x = area.x + gap;
+        grid_toggle_rect_ = SDL_Rect{ x, y, toggle_w, btn_h }; x += toggle_w + gap;
+        grid_snap_rect_   = SDL_Rect{ x, y, toggle_w, btn_h }; x += toggle_w + gap;
+        // Stepper takes the remaining width (at least min width)
+        int remaining = std::max(0, area.x + area.w - gap - x);
+        int stepper_w = std::max(stepper_w_min, remaining);
+        grid_stepper_rect_ = SDL_Rect{ x, y, stepper_w, btn_h };
+        if (grid_overlay_checkbox_) {
+            grid_overlay_checkbox_->set_value(grid_overlay_enabled_);
+            grid_overlay_checkbox_->set_rect(grid_toggle_rect_);
+            grid_overlay_checkbox_->render(renderer);
+        }
+        if (grid_snap_toggle_btn_) {
+            grid_snap_toggle_btn_->set_style(snap_to_grid_enabled_ ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+            grid_snap_toggle_btn_->set_rect(grid_snap_rect_);
+            grid_snap_toggle_btn_->render(renderer);
+        }
+        if (grid_resolution_stepper_) {
+            // Keep stepper value in sync with map grid settings each frame
+            int r_value = 0;
+            if (map_info_json_) {
+                const nlohmann::json* section = nullptr;
+                auto it = map_info_json_->find("map_grid_settings");
+                if (it != map_info_json_->end() && it->is_object()) {
+                    section = &(*it);
+                }
+                MapGridSettings settings = MapGridSettings::from_json(section);
+                r_value = settings.resolution;
+            }
+            grid_resolution_stepper_->set_value(r_value);
+            grid_resolution_stepper_->set_rect(grid_stepper_rect_);
+            grid_resolution_stepper_->render(renderer);
+        }
+    });
+    asset_filter_.set_extra_panel_event_handler([this](const SDL_Event& event, const SDL_Rect& area) -> bool {
+        // Only care about pointer interactions inside panel area
+        bool pointer_event = (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL);
+        SDL_Point p{0,0};
+        if (pointer_event) {
+            if (event.type == SDL_MOUSEMOTION) { p = SDL_Point{event.motion.x, event.motion.y}; }
+            else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) { p = SDL_Point{event.button.x, event.button.y}; }
+            else { int mx=0,my=0; SDL_GetMouseState(&mx,&my); p = SDL_Point{mx,my}; }
+            if (!SDL_PointInRect(&p, &area)) {
+                // Ignore pointer events outside the extra panel
+                // Still allow key modifiers to affect +/- if pointer is inside buttons
+                return false;
+            }
+        }
+        auto handle_click = [&](DMButton* btn) -> bool {
+            if (!btn) return false;
+            if (btn->handle_event(event)) {
+                if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
+                    return true;
+                }
+                return true;
+            }
+            return false;
+        };
+        bool used = false;
+        // Update layout against latest area values
+        const int gap = DMSpacing::item_gap();
+        const int btn_h = std::max(DMButton::height(), DMNumericStepper::height());
+        const int toggle_w = 72;
+        int y = area.y + std::max(0, (area.h - btn_h) / 2);
+        int x = area.x + gap;
+        grid_toggle_rect_ = SDL_Rect{ x, y, toggle_w, btn_h }; x += toggle_w + gap;
+        grid_snap_rect_   = SDL_Rect{ x, y, toggle_w, btn_h }; x += toggle_w + gap;
+        int remaining = std::max(0, area.x + area.w - gap - x);
+        grid_stepper_rect_ = SDL_Rect{ x, y, remaining, btn_h };
+        if (grid_overlay_checkbox_)    grid_overlay_checkbox_->set_rect(grid_toggle_rect_);
+        if (grid_snap_toggle_btn_)     grid_snap_toggle_btn_->set_rect(grid_snap_rect_);
+        if (grid_resolution_stepper_)  grid_resolution_stepper_->set_rect(grid_stepper_rect_);
+        // Grid checkbox
+        if (grid_overlay_checkbox_ && grid_overlay_checkbox_->handle_event(event)) {
+            grid_overlay_enabled_ = grid_overlay_checkbox_->value();
+            devmode::ui_settings::save_bool(kGridOverlayEnabledKey, grid_overlay_enabled_);
+            used = true;
+        } else if (handle_click(grid_snap_toggle_btn_.get())) {
+            snap_to_grid_enabled_ = !snap_to_grid_enabled_;
+            devmode::ui_settings::save_bool(kGridSnapEnabledKey, snap_to_grid_enabled_);
+            used = true;
+        } else if (grid_resolution_stepper_ && grid_resolution_stepper_->handle_event(event)) {
+            // DMNumericStepper will invoke set_on_change; we consider event handled
+            used = true;
+        }
+        return used;
+    });
     asset_filter_.set_mode_buttons({
         {kModeIdRoom, "Room", mode_ == Mode::RoomEditor},
         {kModeIdMap, "Map", mode_ == Mode::MapEditor}
@@ -599,6 +754,17 @@ void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCall
         map_mode_ui_->set_map_grid_callbacks(map_grid_save_cb_, map_grid_regen_cb_);
     }
     asset_filter_.set_map_info(map_info_json_);
+    // Sync header stepper and cell size from current map grid settings
+    if (map_info_json_) {
+        ensure_map_grid_settings(*map_info_json_);
+        const nlohmann::json& section = (*map_info_json_)["map_grid_settings"];
+        MapGridSettings settings = MapGridSettings::from_json(&section);
+        settings.clamp();
+        grid_cell_size_px_ = settings.spacing();
+        if (grid_resolution_stepper_) {
+            grid_resolution_stepper_->set_value(settings.resolution);
+        }
+    }
     configure_header_button_sets();
 }
 
@@ -628,6 +794,8 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (map_assets_modal_) map_assets_modal_->set_screen_dimensions(width, height);
     if (boundary_assets_modal_) boundary_assets_modal_->set_screen_dimensions(width, height);
 
+    // No right-accessory reservation; grid controls now live in expanded panel
+    asset_filter_.set_right_accessory_width(0);
     asset_filter_.ensure_layout();
     SDL_Rect usable = FloatingPanelLayoutManager::instance().computeUsableRect(
         bounds,
@@ -873,6 +1041,8 @@ void DevControls::update(const Input& input) {
             toggle_camera_panel();
         }
     }
+
+    // No keyboard shortcuts for grid header fields in this scope
     pointer_over_camera_panel_ =
         camera_panel_ && camera_panel_->is_visible() && camera_panel_->is_point_inside(input.getX(), input.getY());
     if (mode_ == Mode::MapEditor) {
@@ -968,6 +1138,10 @@ void DevControls::update(const Input& input) {
     }
 
     sync_header_button_states();
+    // Update in-world frame editor session
+    if (frame_editor_session_ && frame_editor_session_->is_active()) {
+        frame_editor_session_->update(input);
+    }
 }
 
 void DevControls::update_ui(const Input& input) {
@@ -1039,6 +1213,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return used;
 };
 
+    // Route the rest of header events to AssetFilterBar;
+    // extra grid panel events are handled via its extra event handler.
     if (pointer_event && consume(asset_filter_.handle_event(event))) {
         return;
     }
@@ -1103,6 +1279,13 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 
     if (camera_panel_ && camera_panel_->is_visible()) {
         if (consume(camera_panel_->handle_event(event))) {
+            return;
+        }
+    }
+
+    // Route events to in-world frame editor session before footer/map UI, but do not swallow outside panels
+    if (frame_editor_session_ && frame_editor_session_->is_active()) {
+        if (consume(frame_editor_session_->handle_event(event))) {
             return;
         }
     }
@@ -1249,6 +1432,10 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         if (asset_area_editor_ && asset_area_editor_->is_active()) {
             asset_area_editor_->render(renderer);
         }
+        // Frame editor session (in-world)
+        if (frame_editor_session_ && frame_editor_session_->is_active()) {
+            frame_editor_session_->render(renderer);
+        }
         // Draw room area overlays (always visible in Room mode)
         if (renderer && assets_ && current_room_) {
             const camera& cam = assets_->getView();
@@ -1386,6 +1573,81 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
     }
+    // Render grid overlay if enabled
+    if (grid_overlay_enabled_ && assets_) {
+        const camera& cam = assets_->getView();
+        SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+        SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
+        SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+        // Grid colors (reduced alpha)
+        SDL_Color minor{0, 255, 255, 48};
+        SDL_Color major{0, 255, 255, 80};
+
+        // Calculate visible world bounds
+        SDL_FPoint top_left_world = cam.screen_to_map(SDL_Point{0, 0});
+        SDL_FPoint bottom_right_world = cam.screen_to_map(SDL_Point{screen_w_, screen_h_});
+
+        // Calculate grid lines using map grid resolution when available
+        int cell = grid_cell_size_px_;
+        if (map_info_json_) {
+            const nlohmann::json* section = nullptr;
+            auto it = map_info_json_->find("map_grid_settings");
+            if (it != map_info_json_->end() && it->is_object()) {
+                section = &(*it);
+            }
+            MapGridSettings settings = MapGridSettings::from_json(section);
+            settings.clamp();
+            cell = settings.spacing();
+        }
+        cell = std::max(1, cell);
+        if (cell > 0) {
+            const int major_interval = 8; // major line every N cells
+            // Vertical lines
+            float start_x = std::floor(top_left_world.x / cell) * cell;
+            for (float x = start_x; x <= bottom_right_world.x + cell; x += cell) {
+                // Compute parallax-adjusted screen coordinates
+                SDL_Point world_start{ static_cast<int>(std::lround(x)), static_cast<int>(std::lround(top_left_world.y)) };
+                SDL_Point world_end  { static_cast<int>(std::lround(x)), static_cast<int>(std::lround(bottom_right_world.y)) };
+                SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
+                SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
+                camera::RenderEffects eff_start = cam.compute_render_effects(world_start, 1.0f, 1.0f);
+                camera::RenderEffects eff_end   = cam.compute_render_effects(world_end,   1.0f, 1.0f);
+                int sx0 = static_cast<int>(std::lround(screen_start.x + eff_start.parallax_offset_x));
+                int sy0 = static_cast<int>(std::lround(screen_start.y));
+                int sx1 = static_cast<int>(std::lround(screen_end.x   + eff_end.parallax_offset_x));
+                int sy1 = static_cast<int>(std::lround(screen_end.y));
+                const bool is_major = (static_cast<long long>(std::llround(x)) % (cell * major_interval) == 0);
+                SDL_Color c = is_major ? major : minor;
+                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                SDL_RenderDrawLine(renderer, sx0, sy0, sx1, sy1);
+            }
+
+            // Horizontal lines
+            float start_y = std::floor(top_left_world.y / cell) * cell;
+            for (float y = start_y; y <= bottom_right_world.y + cell; y += cell) {
+                SDL_Point world_start{ static_cast<int>(std::lround(top_left_world.x)),     static_cast<int>(std::lround(y)) };
+                SDL_Point world_end  { static_cast<int>(std::lround(bottom_right_world.x)), static_cast<int>(std::lround(y)) };
+                SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
+                SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
+                camera::RenderEffects eff_start = cam.compute_render_effects(world_start, 1.0f, 1.0f);
+                camera::RenderEffects eff_end   = cam.compute_render_effects(world_end,   1.0f, 1.0f);
+                int sx0 = static_cast<int>(std::lround(screen_start.x + eff_start.parallax_offset_x));
+                int sy0 = static_cast<int>(std::lround(screen_start.y));
+                int sx1 = static_cast<int>(std::lround(screen_end.x   + eff_end.parallax_offset_x));
+                int sy1 = static_cast<int>(std::lround(screen_end.y));
+                const bool is_major = (static_cast<long long>(std::llround(y)) % (cell * major_interval) == 0);
+                SDL_Color c = is_major ? major : minor;
+                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                SDL_RenderDrawLine(renderer, sx0, sy0, sx1, sy1);
+            }
+        }
+
+        SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
+        SDL_SetRenderDrawBlendMode(renderer, prev_mode);
+    }
+
     if (map_mode_ui_) map_mode_ui_->render(renderer);
     if (map_assets_modal_ && map_assets_modal_->visible()) {
         map_assets_modal_->render(renderer);
@@ -1394,6 +1656,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         boundary_assets_modal_->render(renderer);
     }
     if (trail_suite_) trail_suite_->render(renderer);
+    if (frame_editor_session_ && frame_editor_session_->is_active()) {
+        // Panels are rendered as part of render(); nothing to do here.
+    }
     if (camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
     }
@@ -1404,8 +1669,37 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     const bool hide_headers = modal_headers_hidden_; // ignore sliding windows for header visibility
     asset_filter_.set_header_suppressed(hide_headers);
     if (!hide_headers && !is_modal_blocking_panels()) {
+        // Render header and expanded filters (extra Grid panel is rendered inside AssetFilterBar)
+        asset_filter_.set_right_accessory_width(0);
         asset_filter_.render(renderer);
     }
+}
+
+void DevControls::begin_frame_editor_session(Asset* asset,
+                                             std::shared_ptr<animation_editor::AnimationDocument> document,
+                                             std::shared_ptr<animation_editor::PreviewProvider> preview,
+                                             const std::string& animation_id,
+                                             animation_editor::AnimationEditorWindow* host_to_toggle) {
+    if (!asset || !assets_ || animation_id.empty()) return;
+    if (!frame_editor_session_) frame_editor_session_ = std::make_unique<FrameEditorSession>();
+    // Snapshot grid overlay and force ON (non-persistent)
+    frame_editor_prev_grid_overlay_ = grid_overlay_enabled_;
+    grid_overlay_enabled_ = true;
+    frame_editor_session_->begin(assets_, asset, std::move(document), std::move(preview), animation_id, host_to_toggle, [this]() {
+        // Restore grid overlay when session ends
+        this->grid_overlay_enabled_ = this->frame_editor_prev_grid_overlay_;
+    });
+}
+
+void DevControls::end_frame_editor_session() {
+    if (frame_editor_session_) {
+        frame_editor_session_->end();
+    }
+    grid_overlay_enabled_ = frame_editor_prev_grid_overlay_;
+}
+
+bool DevControls::is_frame_editor_session_active() const {
+    return frame_editor_session_ && frame_editor_session_->is_active();
 }
 
 void DevControls::toggle_asset_library() {
@@ -1694,6 +1988,19 @@ void DevControls::configure_header_button_sets() {
             sync_header_button_states();
 };
         map_buttons.push_back(std::move(grid_btn));
+    }
+
+    {
+        MapModeUI::HeaderButtonConfig grid_overlay_btn;
+        grid_overlay_btn.id = "map_grid_overlay";
+        grid_overlay_btn.label = "Grid Overlay";
+        grid_overlay_btn.active = grid_overlay_enabled_;
+        grid_overlay_btn.on_toggle = [this](bool active) {
+            grid_overlay_enabled_ = active;
+            devmode::ui_settings::save_bool(kGridOverlayEnabledKey, active);
+            sync_header_button_states();
+        };
+        map_buttons.push_back(std::move(grid_overlay_btn));
     }
 
     {

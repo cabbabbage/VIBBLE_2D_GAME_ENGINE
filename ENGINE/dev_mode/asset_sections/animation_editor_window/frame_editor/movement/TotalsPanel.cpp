@@ -56,28 +56,30 @@ void TotalsPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(
+        renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(),
+        DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
-    SDL_Color button_text = DMStyles::Label().color;
+    SDL_Color text = DMStyles::Label().color;
 
-    const int text_padding = 12;
-    int text_x = bounds_.x + text_padding;
-    int text_y = bounds_.y + text_padding;
+    const int padding = 6;
+    int x = bounds_.x + padding;
+    int y = bounds_.y + padding;
 
     const int frame_count = static_cast<int>(frames_.size());
     int selected = selected_index_ ? *selected_index_ : 0;
     selected = std::clamp(selected, 0, std::max(0, frame_count - 1));
 
-    render_totals_label(renderer, "Frames: " + std::to_string(frame_count), text_x, text_y, button_text);
-    text_y += 22;
-    render_totals_label(renderer, "Selected: " + std::to_string(selected), text_x, text_y, button_text);
-    text_y += 22;
-    render_totals_label(renderer, "Total ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))), text_x, text_y, button_text);
-    text_y += 22;
-    render_totals_label(renderer, "Total ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))), text_x, text_y, button_text);
+    const int dx = static_cast<int>(std::lround(total_dx_));
+    const int dy = static_cast<int>(std::lround(total_dy_));
+
+    std::string line = "F " + std::to_string(frame_count) + " | Sel " + std::to_string(selected) +
+                       " | dX " + std::to_string(dx) + " dY " + std::to_string(dy);
+    render_totals_label(renderer, line, x, y, text);
 }
 
 bool TotalsPanel::handle_event(const SDL_Event& e) {
+    (void)e;
     return false;
 }
 

@@ -24,6 +24,15 @@
                 "player": true,
                 "texture": true
             }
+        },
+        "grid": {
+            "cell_size_px": 35.0,
+            "overlay": {
+                "enabled": true
+            },
+            "snap": {
+                "enabled": false
+            }
         }
     },
     "dev_ui": {

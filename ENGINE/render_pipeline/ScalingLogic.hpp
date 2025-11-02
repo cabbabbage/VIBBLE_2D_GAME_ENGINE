@@ -572,6 +572,11 @@ inline SDL_Texture* CreateScaledTexture(SDL_Renderer* renderer,
     SDL_SetTextureScaleMode(scaled, SDL_ScaleModeBest);
 #endif
 
+    // Ensure the highest quality sampling for the downscale pass
+#if SDL_VERSION_ATLEAST(2,0,12)
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+#endif
+
     SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
     SDL_SetRenderTarget(renderer, scaled);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);

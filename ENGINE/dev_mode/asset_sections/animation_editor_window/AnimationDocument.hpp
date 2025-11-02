@@ -36,6 +36,9 @@ class AnimationDocument {
     const std::filesystem::path& info_path() const { return info_path_; }
     const std::filesystem::path& asset_root() const { return asset_root_; }
 
+    // Returns the base scale percentage for the asset (default 100.0)
+    double scale_percentage() const;
+
   private:
     void load_from_json_object(const nlohmann::json& root);
     void ensure_document_initialized();

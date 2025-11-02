@@ -8,28 +8,40 @@
 
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
+#include "../../PreviewProvider.hpp"
 
 namespace animation_editor {
 
 namespace {
 
-constexpr float kMinZoom = 0.2f;
-constexpr float kMaxZoom = 6.0f;
+constexpr float kMinZoom = 0.125f;
+constexpr float kMaxZoom = 32.0f;
 constexpr int kPointRadius = 6;
 constexpr int kHoverRadius = 12;
+constexpr int kMajorGridInterval = 32;
+constexpr Uint8 kMinorGridAlpha = 22;
+constexpr Uint8 kMajorGridAlpha = 55;
+constexpr Uint8 kAxisAlpha = 170;
 
 SDL_Color with_alpha(SDL_Color c, Uint8 alpha) {
     c.a = alpha;
     return c;
 }
 
+SDL_FPoint round_point_to_pixel(SDL_FPoint p) {
+    return SDL_FPoint{static_cast<float>(std::round(p.x)), static_cast<float>(std::round(p.y))};
 }
 
-MovementCanvas::MovementCanvas() = default;
-
-void MovementCanvas::set_grid_resolution(float resolution) {
-    grid_resolution_ = std::max(0.1f, resolution);  // Minimum 0.1 to prevent division by zero
+float round_delta_to_pixel(float value) {
+    if (!std::isfinite(value)) {
+        return 0.0f;
+    }
+    return static_cast<float>(std::round(value));
 }
+
+}
+
+MovementCanvas::MovementCanvas() : zoom_(16.0f) {}
 
 void MovementCanvas::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
@@ -45,8 +57,15 @@ void MovementCanvas::set_frames(const std::vector<MovementFrame>& frames, bool p
         frames_[0].dx = 0.0f;
         frames_[0].dy = 0.0f;
     }
+    drag_base_positions_.clear();
+    dragging_frame_ = false;
     selected_index_ = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
     rebuild_path();
+    if (selected_index_ >= 0 && selected_index_ < static_cast<int>(positions_.size())) {
+        drag_target_world_ = positions_[selected_index_];
+    } else {
+        drag_target_world_ = SDL_FPoint{0.0f, 0.0f};
+    }
     if (!preserve_view) {
         fit_view_to_content();
     }
@@ -71,33 +90,32 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
 
     dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
-    SDL_Color border = DMStyles::AccentButton().hover_bg;
+    render_pixel_grid(renderer);
 
-    const float scale = pixels_per_unit_ * zoom_;
-    const SDL_FPoint center_px{bounds_.x + bounds_.w / 2.0f, bounds_.y + bounds_.h / 2.0f};
-
-    SDL_FPoint origin_screen = world_to_screen(SDL_FPoint{0.0f, 0.0f});
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 40);
-    SDL_RenderDrawLine(renderer, bounds_.x, static_cast<int>(origin_screen.y), bounds_.x + bounds_.w, static_cast<int>(origin_screen.y));
-    SDL_RenderDrawLine(renderer, static_cast<int>(origin_screen.x), bounds_.y, static_cast<int>(origin_screen.x), bounds_.y + bounds_.h);
-
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 25);
-    if (scale >= 8.0f) {
-        const float units_visible_x = bounds_.w / scale;
-        const float units_visible_y = bounds_.h / scale;
-        const int start_x = static_cast<int>(std::floor(center_world_.x - units_visible_x));
-        const int end_x = static_cast<int>(std::ceil(center_world_.x + units_visible_x));
-        const int start_y = static_cast<int>(std::floor(center_world_.y - units_visible_y));
-        const int end_y = static_cast<int>(std::ceil(center_world_.y + units_visible_y));
-        for (int x = start_x; x <= end_x; ++x) {
-            SDL_FPoint a = world_to_screen(SDL_FPoint{static_cast<float>(x), static_cast<float>(start_y - 1)});
-            SDL_FPoint b = world_to_screen(SDL_FPoint{static_cast<float>(x), static_cast<float>(end_y + 1)});
-            SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x), static_cast<int>(b.y));
+    // Optional animation overlay anchored at current frame's bottom-center on the grid
+    if (show_animation_overlay_ && preview_provider_) {
+        SDL_Texture* tex = nullptr;
+        if (!animation_id_.empty()) {
+            tex = preview_provider_->get_frame_texture(renderer, animation_id_, std::max(0, selected_index_));
         }
-        for (int y = start_y; y <= end_y; ++y) {
-            SDL_FPoint a = world_to_screen(SDL_FPoint{static_cast<float>(start_x - 1), static_cast<float>(y)});
-            SDL_FPoint b = world_to_screen(SDL_FPoint{static_cast<float>(end_x + 1), static_cast<float>(y)});
-            SDL_RenderDrawLine(renderer, static_cast<int>(a.x), static_cast<int>(a.y), static_cast<int>(b.x), static_cast<int>(b.y));
+        if (tex) {
+            int tw = 0, th = 0;
+            if (SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th) == 0 && tw > 0 && th > 0) {
+                const float scale = pixels_per_unit_ * zoom_;
+                const float scale_factor = (base_scale_percentage_ <= 0.0f) ? 1.0f : (base_scale_percentage_ / 100.0f);
+                const float dst_w_px = static_cast<float>(tw) * scale_factor * scale;
+                const float dst_h_px = static_cast<float>(th) * scale_factor * scale;
+                SDL_FPoint anchor_world = SDL_FPoint{0.0f, 0.0f};
+                if (selected_index_ >= 0 && selected_index_ < static_cast<int>(positions_.size())) {
+                    anchor_world = positions_[selected_index_];
+                }
+                SDL_FPoint anchor_screen = world_to_screen(anchor_world);
+                // Bottom-center alignment: top-left = (anchor.x - half width, anchor.y - height)
+                const int left   = static_cast<int>(std::round(anchor_screen.x - dst_w_px * 0.5f));
+                const int top    = static_cast<int>(std::round(anchor_screen.y - dst_h_px));
+                SDL_Rect dst{ left, top, static_cast<int>(std::round(dst_w_px)), static_cast<int>(std::round(dst_h_px)) };
+                SDL_RenderCopy(renderer, tex, nullptr, &dst);
+            }
         }
     }
 
@@ -137,6 +155,74 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
     }
 }
 
+void MovementCanvas::render_pixel_grid(SDL_Renderer* renderer) const {
+    if (!renderer) return;
+    if (bounds_.w <= 0 || bounds_.h <= 0) return;
+
+    const float scale = pixels_per_unit_ * zoom_;
+    if (!std::isfinite(scale) || scale <= 0.0f) return;
+
+    const SDL_FPoint center_px{bounds_.x + bounds_.w / 2.0f, bounds_.y + bounds_.h / 2.0f};
+    const float half_units_x = bounds_.w / (2.0f * scale);
+    const float half_units_y = bounds_.h / (2.0f * scale);
+
+    const int start_x = static_cast<int>(std::floor(center_world_.x - half_units_x)) - 1;
+    const int end_x = static_cast<int>(std::ceil(center_world_.x + half_units_x)) + 1;
+    const int start_y = static_cast<int>(std::floor(center_world_.y - half_units_y)) - 1;
+    const int end_y = static_cast<int>(std::ceil(center_world_.y + half_units_y)) + 1;
+
+    const float left = static_cast<float>(bounds_.x);
+    const float right = static_cast<float>(bounds_.x + bounds_.w);
+    const float top = static_cast<float>(bounds_.y);
+    const float bottom = static_cast<float>(bounds_.y + bounds_.h);
+
+    SDL_Color base = DMStyles::AccentButton().hover_bg;
+
+    auto draw_vertical = [&](int x, Uint8 alpha) {
+        float screen_x = center_px.x + (static_cast<float>(x) - center_world_.x) * scale;
+        if (screen_x < left - 1.0f || screen_x > right + 1.0f) return;
+        SDL_Color color = with_alpha(base, alpha);
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+        const int sx = static_cast<int>(std::round(screen_x));
+        SDL_RenderDrawLine(renderer, sx, static_cast<int>(top), sx, static_cast<int>(bottom));
+    };
+
+    auto draw_horizontal = [&](int y, Uint8 alpha) {
+        float screen_y = center_px.y - (static_cast<float>(y) - center_world_.y) * scale;
+        if (screen_y < top - 1.0f || screen_y > bottom + 1.0f) return;
+        SDL_Color color = with_alpha(base, alpha);
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+        const int sy = static_cast<int>(std::round(screen_y));
+        SDL_RenderDrawLine(renderer, static_cast<int>(left), sy, static_cast<int>(right), sy);
+    };
+
+    for (int x = start_x; x <= end_x; ++x) {
+        if (x == 0) continue;
+        const bool major = (kMajorGridInterval > 0) && (x % kMajorGridInterval == 0);
+        draw_vertical(x, major ? kMajorGridAlpha : kMinorGridAlpha);
+    }
+    for (int y = start_y; y <= end_y; ++y) {
+        if (y == 0) continue;
+        const bool major = (kMajorGridInterval > 0) && (y % kMajorGridInterval == 0);
+        draw_horizontal(y, major ? kMajorGridAlpha : kMinorGridAlpha);
+    }
+
+    SDL_Color axis = DMStyles::AccentButton().press_bg;
+    axis = with_alpha(axis, kAxisAlpha);
+    float axis_x = center_px.x + (0.0f - center_world_.x) * scale;
+    if (axis_x >= left - 1.0f && axis_x <= right + 1.0f) {
+        int sx = static_cast<int>(std::round(axis_x));
+        SDL_SetRenderDrawColor(renderer, axis.r, axis.g, axis.b, axis.a);
+        SDL_RenderDrawLine(renderer, sx, static_cast<int>(top), sx, static_cast<int>(bottom));
+    }
+    float axis_y = center_px.y - (0.0f - center_world_.y) * scale;
+    if (axis_y >= top - 1.0f && axis_y <= bottom + 1.0f) {
+        int sy = static_cast<int>(std::round(axis_y));
+        SDL_SetRenderDrawColor(renderer, axis.r, axis.g, axis.b, axis.a);
+        SDL_RenderDrawLine(renderer, static_cast<int>(left), sy, static_cast<int>(right), sy);
+    }
+}
+
 bool MovementCanvas::handle_event(const SDL_Event& e) {
     if (frames_.empty()) return false;
 
@@ -154,16 +240,27 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
             if (dragging_frame_ && selected_index_ > 0) {
                 const float scale = pixels_per_unit_ * zoom_;
                 SDL_Point current{e.motion.x, e.motion.y};
-                float dx_units = (current.x - drag_last_mouse_.x) / scale;
-                float dy_units = -(current.y - drag_last_mouse_.y) / scale;
+                const float dx_units = (current.x - drag_last_mouse_.x) / scale;
+                const float dy_units = -(current.y - drag_last_mouse_.y) / scale;
                 drag_target_world_.x += dx_units;
                 drag_target_world_.y += dy_units;
                 drag_last_mouse_ = current;
 
-                const SDL_FPoint prev_world = positions_[selected_index_ - 1];
-                frames_[selected_index_].dx = snap_to_grid(drag_target_world_.x - prev_world.x);
-                frames_[selected_index_].dy = snap_to_grid(drag_target_world_.y - prev_world.y);
-                rebuild_path();
+                SDL_FPoint rounded_target = round_point_to_pixel(drag_target_world_);
+                drag_target_world_ = rounded_target;
+
+                std::vector<SDL_FPoint> fallback_positions;
+                const std::vector<SDL_FPoint>* base_positions = nullptr;
+                if (drag_base_positions_.size() == frames_.size()) {
+                    base_positions = &drag_base_positions_;
+                } else {
+                    fallback_positions = positions_;
+                    base_positions = &fallback_positions;
+                }
+                apply_frame_move_from_base(selected_index_, rounded_target, *base_positions);
+                if (selected_index_ >= 0 && selected_index_ < static_cast<int>(positions_.size())) {
+                    drag_target_world_ = positions_[selected_index_];
+                }
             } else if (panning_) {
                 pan_view(static_cast<float>(e.motion.xrel), static_cast<float>(e.motion.yrel));
             }
@@ -179,13 +276,19 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
             last_mouse_.y = e.button.y;
             if (e.button.button == SDL_BUTTON_LEFT) {
                 update_selection_from_mouse();
-                if (hovered_index_ >= 0) {
-                    selected_index_ = hovered_index_;
-                    if (selected_index_ > 0) {
-                        dragging_frame_ = true;
-                        drag_last_mouse_ = SDL_Point{e.button.x, e.button.y};
-                        drag_target_world_ = positions_[selected_index_];
-                    }
+                if (hovered_index_ >= 0 && hovered_index_ == selected_index_ && selected_index_ > 0) {
+                    // Begin dragging only if clicking the currently selected point
+                    dragging_frame_ = true;
+                    drag_last_mouse_ = SDL_Point{e.button.x, e.button.y};
+                    drag_target_world_ = positions_[selected_index_];
+                    drag_base_positions_ = positions_;
+                } else if (selected_index_ > 0) {
+                    // Set current frame's point to the clicked position without changing selection
+                    std::vector<SDL_FPoint> base_positions = positions_;
+                    SDL_FPoint world = screen_to_world(SDL_Point{e.button.x, e.button.y});
+                    world = round_point_to_pixel(world);
+                    apply_frame_move_from_base(selected_index_, world, base_positions);
+                    drag_target_world_ = world;
                 }
                 return true;
             }
@@ -197,8 +300,11 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
             break;
         }
         case SDL_MOUSEBUTTONUP: {
-            if (e.button.button == SDL_BUTTON_LEFT && dragging_frame_) {
-                dragging_frame_ = false;
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                if (dragging_frame_) {
+                    dragging_frame_ = false;
+                    drag_base_positions_.clear();
+                }
                 return true;
             }
             if ((e.button.button == SDL_BUTTON_RIGHT || e.button.button == SDL_BUTTON_MIDDLE) && panning_) {
@@ -208,11 +314,24 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
             break;
         }
         case SDL_MOUSEWHEEL: {
-            if (!within_bounds(last_mouse_.x, last_mouse_.y)) {
+            int mx = 0, my = 0;
+            SDL_GetMouseState(&mx, &my);
+            last_mouse_.x = mx;
+            last_mouse_.y = my;
+            if (!within_bounds(mx, my)) {
                 return false;
             }
-            apply_zoom(static_cast<float>(e.wheel.y));
-            return true;
+            int wheel_y = e.wheel.y;
+#if SDL_VERSION_ATLEAST(2,0,18)
+            if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+                wheel_y = -wheel_y;
+            }
+#endif
+            if (wheel_y != 0) {
+                apply_zoom(static_cast<float>(wheel_y));
+                return true;
+            }
+            return false;
         }
         default:
             break;
@@ -241,7 +360,10 @@ void MovementCanvas::rebuild_path() {
 void MovementCanvas::fit_view_to_content() {
     if (positions_.empty() || bounds_.w <= 0 || bounds_.h <= 0) {
         center_world_ = SDL_FPoint{0.0f, 0.0f};
-        zoom_ = 1.0f;
+        if (!std::isfinite(zoom_) || zoom_ <= 0.0f) {
+            zoom_ = 16.0f;
+        }
+        zoom_ = std::clamp(zoom_, kMinZoom, kMaxZoom);
         return;
     }
 
@@ -256,9 +378,12 @@ void MovementCanvas::fit_view_to_content() {
         max_y = std::max(max_y, pos.y);
     }
 
-    if (std::isinf(min_x) || std::isinf(min_y)) {
+    if (!std::isfinite(min_x) || !std::isfinite(min_y)) {
         center_world_ = SDL_FPoint{0.0f, 0.0f};
-        zoom_ = 1.0f;
+        if (!std::isfinite(zoom_) || zoom_ <= 0.0f) {
+            zoom_ = 16.0f;
+        }
+        zoom_ = std::clamp(zoom_, kMinZoom, kMaxZoom);
         return;
     }
 
@@ -273,8 +398,12 @@ void MovementCanvas::fit_view_to_content() {
 
     const float scale_x = bounds_.w / (total_extent_x * pixels_per_unit_);
     const float scale_y = bounds_.h / (total_extent_y * pixels_per_unit_);
-    const float fit_zoom = std::max(kMinZoom, std::min(kMaxZoom, std::min(scale_x, scale_y)));
-    zoom_ = std::clamp(fit_zoom, kMinZoom, kMaxZoom);
+    const float fit_zoom = std::min(scale_x, scale_y);
+    if (std::isfinite(fit_zoom) && fit_zoom > 0.0f) {
+        zoom_ = std::clamp(fit_zoom, kMinZoom, kMaxZoom);
+    } else {
+        zoom_ = std::clamp(zoom_, kMinZoom, kMaxZoom);
+    }
 }
 
 void MovementCanvas::pan_view(float delta_x, float delta_y) {
@@ -294,9 +423,36 @@ void MovementCanvas::apply_zoom(float scale_delta) {
     center_world_.y += anchor_world.y - new_anchor_world.y;
 }
 
-float MovementCanvas::snap_to_grid(float value) const {
-    if (grid_resolution_ <= 0.0f) return value;
-    return std::round(value / grid_resolution_) * grid_resolution_;
+void MovementCanvas::set_animation_context(std::shared_ptr<PreviewProvider> provider,
+                                           const std::string& animation_id,
+                                           float scale_percentage) {
+    preview_provider_ = std::move(provider);
+    animation_id_ = animation_id;
+    base_scale_percentage_ = std::isfinite(scale_percentage) && scale_percentage > 0.0f ? scale_percentage : 100.0f;
+}
+
+void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new_position,
+                                                const std::vector<SDL_FPoint>& base_positions) {
+    if (index <= 0) return;
+    if (static_cast<size_t>(index) >= frames_.size()) return;
+    if (base_positions.size() != frames_.size()) return;
+
+    frames_.front().dx = 0.0f;
+    frames_.front().dy = 0.0f;
+
+    SDL_FPoint prev_abs = base_positions[index - 1];
+    frames_[index].dx = round_delta_to_pixel(new_position.x - prev_abs.x);
+    frames_[index].dy = round_delta_to_pixel(new_position.y - prev_abs.y);
+
+    SDL_FPoint last_abs = new_position;
+    for (int j = index + 1; j < static_cast<int>(frames_.size()); ++j) {
+        const SDL_FPoint desired = base_positions[j];
+        frames_[j].dx = round_delta_to_pixel(desired.x - last_abs.x);
+        frames_[j].dy = round_delta_to_pixel(desired.y - last_abs.y);
+        last_abs = desired;
+    }
+
+    rebuild_path();
 }
 
 void MovementCanvas::update_selection_from_mouse() {

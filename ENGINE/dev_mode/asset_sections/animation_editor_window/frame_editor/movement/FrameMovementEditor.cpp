@@ -12,6 +12,7 @@
 #include "../../PanelLayoutConstants.hpp"
 #include "../../../../dm_styles.hpp"
 #include "../../../../draw_utils.hpp"
+#include "../../../../widgets.hpp"
 #include "../../PreviewProvider.hpp"
 #include "FramePropertiesPanel.hpp"
 #include "MovementCanvas.hpp"
@@ -21,7 +22,8 @@ namespace animation_editor {
 
 namespace {
 
-constexpr int kTotalsHeight = 120;
+// Keep totals compact to avoid wasting vertical space
+constexpr int kTotalsHeight = 28;
 constexpr int kVariantHeaderPadding = kPanelPadding;
 constexpr int kVariantTabHeight = 28;
 constexpr int kVariantTabSpacing = 6;
@@ -34,6 +36,19 @@ constexpr int kFrameThumbnailPadding = 6;
 int clamp_index(int index, int max_value) {
     if (max_value <= 0) return 0;
     return std::clamp(index, 0, max_value - 1);
+}
+
+void sanitize_frames(std::vector<MovementFrame>& frames) {
+    if (frames.empty()) {
+        frames.push_back(MovementFrame{});
+    }
+    if (frames.empty()) return;
+    frames.front().dx = 0.0f;
+    frames.front().dy = 0.0f;
+    for (auto& frame : frames) {
+        if (!std::isfinite(frame.dx)) frame.dx = 0.0f;
+        if (!std::isfinite(frame.dy)) frame.dy = 0.0f;
+    }
 }
 
 std::vector<MovementFrame> parse_movement_frames(const nlohmann::json& payload) {
@@ -66,6 +81,7 @@ std::vector<MovementFrame> parse_movement_frames(const nlohmann::json& payload) 
     }
     frames.front().dx = 0.0f;
     frames.front().dy = 0.0f;
+    sanitize_frames(frames);
     return frames;
 }
 
@@ -138,11 +154,17 @@ std::vector<MovementFrame> default_variant_frames() {
 FrameMovementEditor::FrameMovementEditor() { ensure_children(); }
 
 void FrameMovementEditor::set_document(std::shared_ptr<AnimationDocument> document) {
+    if (document_ == document && !frames_.empty()) {
+        return;
+    }
     document_ = std::move(document);
     load_frames_from_document();
 }
 
 void FrameMovementEditor::set_animation_id(const std::string& animation_id) {
+    if (animation_id_ == animation_id && !frames_.empty()) {
+        return;
+    }
     animation_id_ = animation_id;
     load_frames_from_document();
 }
@@ -170,6 +192,20 @@ void FrameMovementEditor::update() {
             selected_index_ = canvas_->selected_index();
             synchronize_selection();
         }
+        // Hovering over points in the canvas highlights the corresponding frame in the list
+        int hover = canvas_->hovered_index();
+        if (hover >= 0 && hover < static_cast<int>(frames_.size())) {
+            hovered_frame_index_ = hover;
+        }
+        // Keep overlay context synchronized
+        if (preview_provider_) {
+            float pct = 100.0f;
+            if (document_) {
+                pct = static_cast<float>(document_->scale_percentage());
+            }
+            canvas_->set_animation_context(preview_provider_, animation_id_, pct);
+            canvas_->set_show_animation_overlay(show_animation_);
+        }
     }
     if (totals_panel_) totals_panel_->update();
     if (properties_panel_) {
@@ -177,6 +213,15 @@ void FrameMovementEditor::update() {
         if (properties_panel_->take_dirty_flag()) {
             mark_dirty();
         }
+    }
+    if (smooth_button_) {
+        bool can_smooth = frames_.size() > 2;
+        const DMButtonStyle& style = can_smooth ? DMStyles::AccentButton() : DMStyles::HeaderButton();
+        smooth_button_->set_style(&style);
+    }
+    if (show_anim_button_) {
+        const DMButtonStyle& style = show_animation_ ? DMStyles::AccentButton() : DMStyles::HeaderButton();
+        show_anim_button_->set_style(&style);
     }
 
     if (dirty_) {
@@ -187,13 +232,41 @@ void FrameMovementEditor::update() {
 
 void FrameMovementEditor::render(SDL_Renderer* renderer) const {
     render_variant_header(renderer);
+    if (smooth_button_ && smooth_button_rect_.w > 0 && smooth_button_rect_.h > 0) {
+        smooth_button_->render(renderer);
+    }
+    if (show_anim_button_ && show_anim_button_rect_.w > 0 && show_anim_button_rect_.h > 0) {
+        show_anim_button_->render(renderer);
+    }
     if (canvas_) canvas_->render(renderer);
     if (totals_panel_) totals_panel_->render(renderer);
     if (properties_panel_) properties_panel_->render(renderer);
     render_frame_list(renderer);
 }
 
+void FrameMovementEditor::render_canvas_only(SDL_Renderer* renderer) const {
+    if (canvas_) canvas_->render(renderer);
+}
+
 bool FrameMovementEditor::handle_event(const SDL_Event& e) {
+    if (show_anim_button_ && show_anim_button_rect_.w > 0 && show_anim_button_rect_.h > 0) {
+        if (show_anim_button_->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                show_animation_ = !show_animation_;
+                if (canvas_) canvas_->set_show_animation_overlay(show_animation_);
+            }
+            return true;
+        }
+    }
+    if (smooth_button_ && smooth_button_rect_.w > 0 && smooth_button_rect_.h > 0) {
+        if (smooth_button_->handle_event(e)) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                smooth_frames();
+            }
+            return true;
+        }
+    }
+
     if (handle_variant_header_event(e)) {
         return true;
     }
@@ -209,9 +282,10 @@ bool FrameMovementEditor::handle_event(const SDL_Event& e) {
 
     bool consumed = false;
     if (canvas_ && canvas_->handle_event(e)) {
-        const auto& updated_frames = canvas_->frames();
+        auto updated_frames = canvas_->frames();
+        sanitize_frames(updated_frames);
         bool changed = !frames_equal(frames_, updated_frames);
-        frames_ = updated_frames;
+        frames_ = std::move(updated_frames);
         selected_index_ = canvas_->selected_index();
         if (totals_panel_) totals_panel_->set_frames(frames_);
         if (properties_panel_) {
@@ -333,6 +407,7 @@ void FrameMovementEditor::load_frames_from_document() {
     }
 
     frames_ = variants_[active_variant_index_].frames;
+    sanitize_frames(frames_);
     selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
     variant_tabs_.resize(variants_.size());
 
@@ -408,16 +483,16 @@ void FrameMovementEditor::ensure_children() {
         totals_panel_ = std::make_unique<TotalsPanel>();
     }
     if (totals_panel_) totals_panel_->set_selected_index(&selected_index_);
-    if (!properties_panel_) {
-        properties_panel_ = std::make_unique<FramePropertiesPanel>();
-        properties_panel_->set_frames(&frames_);
-        properties_panel_->set_selected_index(&selected_index_);
-        properties_panel_->set_canvas(canvas_.get());
-        properties_panel_->set_on_frame_changed([this]() { mark_dirty(); });
-    } else {
-        properties_panel_->set_frames(&frames_);
-        properties_panel_->set_selected_index(&selected_index_);
-        properties_panel_->set_canvas(canvas_.get());
+    if (!smooth_button_) {
+        smooth_button_ =
+            std::make_unique<DMButton>("Smooth", &DMStyles::AccentButton(), kVariantTabWidth, DMButton::height());
+    }
+    if (!show_anim_button_) {
+        show_anim_button_ = std::make_unique<DMButton>("Show Animation", &DMStyles::HeaderButton(), kVariantTabWidth, DMButton::height());
+    }
+    // Remove frame properties panel entirely (requested)
+    if (properties_panel_) {
+        properties_panel_.reset();
     }
     update_layout();
 }
@@ -438,28 +513,18 @@ void FrameMovementEditor::update_layout() {
         const int content_y = header_rect_.y + header_rect_.h + kPanelPadding;
         const int content_w = std::max(0, mode_controls_rect_.w - kPanelPadding * 2);
         const int content_h = std::max(0, mode_controls_rect_.y + mode_controls_rect_.h - content_y - kPanelPadding);
-
-        constexpr int kTwoColumnThreshold = 380;
-        const int column_gap = kPanelPadding;
-
-        if (content_w >= kTwoColumnThreshold) {
-            const int totals_width = std::max(0, (content_w - column_gap) / 2);
-            const int properties_width = std::max(0, content_w - totals_width - column_gap);
-            totals_rect_ = SDL_Rect{content_x, content_y, totals_width, content_h};
-            properties_rect_ = SDL_Rect{content_x + totals_width + column_gap, content_y, properties_width, content_h};
-        } else {
-            const int spacing = (content_h > kPanelPadding) ? kPanelPadding : 0;
-            const int totals_height = std::min(content_h, kTotalsHeight);
-            const int remaining_height = std::max(0, content_h - totals_height - spacing);
-            totals_rect_ = SDL_Rect{content_x, content_y, content_w, totals_height};
-            properties_rect_ = SDL_Rect{content_x, content_y + totals_rect_.h + spacing, content_w, remaining_height};
-        }
+        // Compact single-column: totals only
+        const int totals_height = std::min(content_h, kTotalsHeight);
+        totals_rect_ = SDL_Rect{content_x, content_y, content_w, totals_height};
+        properties_rect_ = SDL_Rect{0, 0, 0, 0};
     }
 
     if (totals_panel_) totals_panel_->set_bounds(totals_rect_);
-    if (properties_panel_) properties_panel_->set_bounds(properties_rect_);
+    // properties panel removed
 
     layout_variant_header();
+    if (smooth_button_) smooth_button_->set_rect(smooth_button_rect_);
+    if (show_anim_button_) show_anim_button_->set_rect(show_anim_button_rect_);
     layout_frame_list();
 }
 
@@ -467,9 +532,13 @@ void FrameMovementEditor::synchronize_selection() {
     selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
     if (canvas_) canvas_->set_selected_index(selected_index_);
     if (properties_panel_) properties_panel_->refresh_from_selection();
+    if (frame_changed_callback_) {
+        frame_changed_callback_(selected_index_);
+    }
 }
 
 void FrameMovementEditor::mark_dirty() {
+    sanitize_frames(frames_);
     sync_active_variant_frames();
     dirty_ = true;
     if (canvas_) {
@@ -485,6 +554,7 @@ void FrameMovementEditor::layout_variant_header() {
         variant_tabs_.assign(variants_.size(), VariantTabState{});
     }
 
+    smooth_button_rect_ = SDL_Rect{0, 0, 0, 0};
     if (header_rect_.w <= 0 || header_rect_.h <= 0) {
         add_button_rect_ = SDL_Rect{0, 0, 0, 0};
         return;
@@ -507,6 +577,82 @@ void FrameMovementEditor::layout_variant_header() {
     }
 
     add_button_rect_ = SDL_Rect{x, y, kVariantTabHeight, kVariantTabHeight};
+
+    if (smooth_button_ || show_anim_button_) {
+        const int after_add = add_button_rect_.x + add_button_rect_.w + kVariantTabSpacing;
+        const int right_edge = header_rect_.x + header_rect_.w - kVariantHeaderPadding;
+        int available = std::max(0, right_edge - after_add);
+        int smooth_w = smooth_button_ ? std::min(smooth_button_->preferred_width(), available) : 0;
+        int show_w = show_anim_button_ ? std::min(show_anim_button_->preferred_width(), std::max(0, available - smooth_w - kVariantTabSpacing)) : 0;
+        int offset_x = right_edge;
+        if (smooth_w > 0) {
+            offset_x -= smooth_w;
+            smooth_button_rect_ = SDL_Rect{offset_x, y, smooth_w, kVariantTabHeight};
+            offset_x -= kVariantTabSpacing;
+        } else {
+            smooth_button_rect_ = SDL_Rect{0, 0, 0, 0};
+        }
+        if (show_w > 0) {
+            offset_x -= show_w;
+            show_anim_button_rect_ = SDL_Rect{offset_x, y, show_w, kVariantTabHeight};
+        } else {
+            show_anim_button_rect_ = SDL_Rect{0, 0, 0, 0};
+        }
+    }
+}
+
+void FrameMovementEditor::smooth_frames() {
+    const size_t frame_count = frames_.size();
+    if (frame_count <= 2) {
+        return;
+    }
+
+    sanitize_frames(frames_);
+    const std::vector<MovementFrame> original_frames = frames_;
+
+    double total_dx = 0.0;
+    double total_dy = 0.0;
+    for (size_t i = 1; i < frame_count; ++i) {
+        const double dx = std::isfinite(frames_[i].dx) ? static_cast<double>(frames_[i].dx) : 0.0;
+        const double dy = std::isfinite(frames_[i].dy) ? static_cast<double>(frames_[i].dy) : 0.0;
+        total_dx += dx;
+        total_dy += dy;
+    }
+
+    const size_t steps = frame_count - 1;
+    if (steps == 0) {
+        return;
+    }
+
+    frames_[0].dx = 0.0f;
+    frames_[0].dy = 0.0f;
+
+    int accum_x = 0;
+    int accum_y = 0;
+    for (size_t i = 1; i < frame_count; ++i) {
+        const double t = static_cast<double>(i) / static_cast<double>(steps);
+        const double target_x = total_dx * t;
+        const double target_y = total_dy * t;
+
+        int rounded_x = (i == steps) ? static_cast<int>(std::lround(total_dx))
+                                     : static_cast<int>(std::lround(target_x));
+        int rounded_y = (i == steps) ? static_cast<int>(std::lround(total_dy))
+                                     : static_cast<int>(std::lround(target_y));
+
+        const int dx = rounded_x - accum_x;
+        const int dy = rounded_y - accum_y;
+        accum_x = rounded_x;
+        accum_y = rounded_y;
+
+        frames_[i].dx = static_cast<float>(dx);
+        frames_[i].dy = static_cast<float>(dy);
+    }
+
+    if (!frames_equal(frames_, original_frames)) {
+        mark_dirty();
+    } else {
+        synchronize_selection();
+    }
 }
 
 void FrameMovementEditor::render_variant_header(SDL_Renderer* renderer) const {
@@ -839,6 +985,7 @@ void FrameMovementEditor::set_active_variant(int index, bool preserve_view) {
     sync_active_variant_frames();
     active_variant_index_ = index;
     frames_ = variants_[active_variant_index_].frames;
+    sanitize_frames(frames_);
     selected_index_ = 0;
     update_child_frames(preserve_view);
     layout_variant_header();
@@ -878,6 +1025,7 @@ void FrameMovementEditor::add_new_variant() {
     variants_.push_back(std::move(variant));
     active_variant_index_ = static_cast<int>(variants_.size() - 1);
     frames_ = variants_.back().frames;
+    sanitize_frames(frames_);
     selected_index_ = 0;
     variant_tabs_.resize(variants_.size());
     update_child_frames(false);
@@ -904,6 +1052,7 @@ void FrameMovementEditor::delete_variant(int index) {
         active_variant_index_ = static_cast<int>(variants_.size()) - 1;
     }
     frames_ = variants_[active_variant_index_].frames;
+    sanitize_frames(frames_);
     selected_index_ = 0;
     variant_tabs_.resize(variants_.size());
     update_child_frames(false);

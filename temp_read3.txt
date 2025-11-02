@@ -1,0 +1,250 @@
+#include "dev_controls.hpp"
+
+#include <SDL.h>
+#include <fstream>
+#include <sstream>
+#include <array>
+#include <cmath>
+#include <cctype>
+#include <numeric>
+
+#include "dev_mode/map_editor.hpp"
+#include "dev_mode/room_editor.hpp"
+#include "dev_mode/map_mode_ui.hpp"
+#include "FloatingPanelLayoutManager.hpp"
+#include "dev_mode/dev_footer_bar.hpp"
+#include "dev_mode/camera_ui.hpp"
+#include "dev_mode/sdl_pointer_utils.hpp"
+#include "dev_mode/area_overlay_editor.hpp"
+#include "dev_mode/dev_ui_settings.hpp"
+#include "asset/asset_info.hpp"
+#include "dm_styles.hpp"
+#include "draw_utils.hpp"
+#include "room_overlay_renderer.hpp"
+#include "widgets.hpp"
+#include "dev_controls_persistence.hpp"
+#include "render/global_light_source.hpp"
+#include "map_generation/map_layers_geometry.hpp"
+
+#include "asset/Asset.hpp"
+#include "asset/asset_types.hpp"
+#include "asset/asset_utils.hpp"
+#include "core/AssetsManager.hpp"
+#include "render/camera.hpp"
+#include "map_generation/room.hpp"
+#include "spawn/asset_spawn_planner.hpp"
+#include "spawn/asset_spawner.hpp"
+#include "spawn/check.hpp"
+#include "spawn/methods/center_spawner.hpp"
+#include "spawn/methods/exact_spawner.hpp"
+#include "spawn/methods/perimeter_spawner.hpp"
+#include "spawn/methods/edge_spawner.hpp"
+#include "spawn/methods/percent_spawner.hpp"
+#include "spawn/methods/random_spawner.hpp"
+#include "utils/map_grid_settings.hpp"
+#include "spawn/spawn_context.hpp"
+#include "utils/area.hpp"
+#include "util/grid.hpp"
+#include "util/grid_occupancy.hpp"
+#include "utils/input.hpp"
+#include "utils/string_utils.hpp"
+#include "utils/display_color.hpp"
+
+#include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <tuple>
+#include <cctype>
+#include <string>
+#include <vector>
+#include <optional>
+#include <iostream>
+#include <random>
+#include <nlohmann/json.hpp>
+#include <SDL_ttf.h>
+
+using devmode::sdl::event_point;
+using devmode::sdl::is_pointer_event;
+
+namespace {
+
+using vibble::strings::to_lower_copy;
+
+void dev_mode_trace(const std::string& message) {
+    try {
+        std::ofstream log("dev_mode_trace.log", std::ios::app);
+        log << message << '\n';
+    } catch (...) {
+
+    }
+}
+
+constexpr const char* kModeIdRoom = "room";
+constexpr const char* kModeIdMap = "map";
+constexpr int kPopupOutlineThickness = 1;
+
+// Map grid overlay settings keys
+constexpr const char* kMapGridOverlayEnabledKey = "dev.map_grid_overlay.enabled";
+constexpr const char* kMapGridOverlayResolutionKey = "dev.map_grid_overlay.resolution";
+
+void draw_simple_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
+    if (!renderer) return;
+    const DMLabelStyle& style = DMStyles::Label();
+    TTF_Font* font = style.open_font();
+    if (!font) return;
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), style.color);
+    if (!surf) {
+        TTF_CloseFont(font);
+        return;
+    }
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+    if (tex) {
+        SDL_Rect dst{x, y, surf->w, surf->h};
+        SDL_RenderCopy(renderer, tex, nullptr, &dst);
+        SDL_DestroyTexture(tex);
+    }
+    SDL_FreeSurface(surf);
+    TTF_CloseFont(font);
+}
+
+bool is_trail_room(const Room* room) {
+    if (!room || room->type.empty()) {
+        return false;
+    }
+    return to_lower_copy(room->type) == "trail";
+}
+
+template <class Modal>
+bool consume_modal_event(Modal* modal,
+                         const SDL_Event& event,
+                         const SDL_Point& pointer,
+                         bool pointer_relevant,
+                         Input* input) {
+    if (!modal || !modal->visible()) {
+        return false;
+    }
+    if (modal->handle_event(event)) {
+        if (input) {
+            input->consumeEvent(event);
+        }
+        return true;
+    }
+    if (pointer_relevant && modal->is_point_inside(pointer.x, pointer.y)) {
+        if (input) {
+            input->consumeEvent(event);
+        }
+        return true;
+    }
+    return false;
+}
+
+std::string normalize_area_name_base(const std::string& raw) {
+    if (raw.empty()) {
+        return std::string{"area"};
+    }
+
+    std::string result;
+    result.reserve(raw.size());
+    bool last_was_separator = false;
+    for (char ch : raw) {
+        unsigned char uch = static_cast<unsigned char>(ch);
+        if (std::isalnum(uch) != 0) {
+            result.push_back(static_cast<char>(std::tolower(uch)));
+            last_was_separator = false;
+        } else if (ch == '_' || ch == '-' || std::isspace(uch)) {
+            if (!last_was_separator && !result.empty()) {
+                result.push_back('_');
+                last_was_separator = true;
+            }
+        }
+    }
+
+    while (!result.empty() && result.back() == '_') {
+        result.pop_back();
+    }
+
+    if (result.empty()) {
+        return std::string{"area"};
+    }
+
+    return result;
+}
+
+std::string canonicalize_asset_area_type(std::string raw) {
+    auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
+    raw.erase(raw.begin(), std::find_if(raw.begin(), raw.end(), [&](unsigned char ch) { return !is_space(ch); }));
+    raw.erase(std::find_if(raw.rbegin(), raw.rend(), [&](unsigned char ch) { return !is_space(ch); }).base(), raw.end());
+    std::transform(raw.begin(), raw.end(), raw.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return raw;
+}
+
+bool is_known_asset_area_type(const std::string& type) {
+    static const std::array<const char*, 4> kKnownTypes = {
+        "impassable",
+        "trigger",
+        "child",
+        "spawning"
+};
+    for (const char* known : kKnownTypes) {
+        if (type == known) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string make_unique_asset_area_name(const AssetInfo& info, const std::string& preferred) {
+    std::unordered_set<std::string> used_names;
+    for (const auto& entry : info.areas) {
+        if (!entry.name.empty()) {
+            used_names.insert(entry.name);
+        }
+    }
+
+    std::string base = normalize_area_name_base(preferred);
+    if (base.size() < 5 || base.substr(base.size() - 5) != "_area") {
+        base += "_area";
+    }
+
+    std::string candidate = base;
+    int suffix = 1;
+    while (used_names.count(candidate) > 0) {
+        candidate = base + "_" + std::to_string(suffix++);
+    }
+
+    return candidate;
+}
+
+}
+
+void DevControls::RoomAreaCache::set_listener(Listener listener) {
+    listener_ = std::move(listener);
+}
+
+void DevControls::RoomAreaCache::invalidate() {
+    dirty_ = true;
+}
+
+const DevControls::RoomAreaCache::PolygonList&
+DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
+                                             std::optional<SDL_Point> default_anchor,
+                                             std::optional<std::pair<int, int>> room_dimensions) {
+    if (root != last_source_) {
+        dirty_ = true;
+    }
+    if (!dirty_) {
+        return cached_;
+    }
+    cached_.clear();
+    last_source_ = root;
+    if (root) {
+        try {
+            if (root->contains("areas") && (*root)["areas"].is_array()) {
+                const int target_width = room_dimensions ? std::max(0, room_dimensions->first) : 0;
+                const int target_height = room_dimensions ? std::max(0, room_dimensions->second) : 0;
+                auto scale_component = [](int value, double factor) {
+                    return static_cast<int>(std::llround(static_cast<double>(value) * factor));
+                };

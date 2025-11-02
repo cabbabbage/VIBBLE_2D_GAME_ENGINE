@@ -144,6 +144,20 @@ public:
 
     void filter_active_assets(std::vector<Asset*>& assets) const;
 
+    // Grid controls (header-only scope)
+    bool is_grid_overlay_enabled() const { return grid_overlay_enabled_; }
+    bool is_snap_to_grid_enabled() const { return snap_to_grid_enabled_; }
+    int  grid_cell_size_px() const { return grid_cell_size_px_; }
+
+    // Frame Editor session controls
+    void begin_frame_editor_session(Asset* asset,
+                                    std::shared_ptr<class animation_editor::AnimationDocument> document,
+                                    std::shared_ptr<class animation_editor::PreviewProvider> preview,
+                                    const std::string& animation_id,
+                                    class animation_editor::AnimationEditorWindow* host_to_toggle);
+    void end_frame_editor_session();
+    bool is_frame_editor_session_active() const;
+
 private:
     bool can_use_room_editor_ui() const;
     void enter_map_editor_mode();
@@ -236,5 +250,24 @@ private:
     std::optional<std::string> hovered_room_area_name_;
 
     RoomAreaCache room_area_cache_;
-};
 
+    // Grid header state
+    bool grid_overlay_enabled_ = false;
+    bool snap_to_grid_enabled_ = false;
+    int  grid_cell_size_px_ = 8; // pixels per cell
+
+    // Grid header controls
+    std::unique_ptr<class DMCheckbox> grid_overlay_checkbox_;
+    std::unique_ptr<class DMButton>   grid_snap_toggle_btn_;
+    // Standard ticker for grid resolution (r)
+    std::unique_ptr<class DMNumericStepper> grid_resolution_stepper_;
+    // Cached layout of header controls for event handling
+    SDL_Rect grid_toggle_rect_{0,0,0,0};
+    SDL_Rect grid_snap_rect_{0,0,0,0};
+    SDL_Rect grid_stepper_rect_{0,0,0,0};
+    SDL_Rect grid_label_rect_{0,0,0,0};
+
+    // In-world frame editor session
+    std::unique_ptr<class FrameEditorSession> frame_editor_session_;
+    bool frame_editor_prev_grid_overlay_ = false;
+};

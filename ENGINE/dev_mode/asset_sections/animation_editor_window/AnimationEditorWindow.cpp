@@ -45,6 +45,7 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
+#include "core/AssetsManager.hpp"
 
 namespace {
 
@@ -519,19 +520,47 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
 
     ensure_layout();
 
-    // If any dropdown is currently active (expanded), give it global priority
-    // so option clicks outside local widgets are captured reliably.
-    if (auto* active_dd = DMDropdown::active_dropdown()) {
-        if (active_dd->handle_event(e)) {
+    // First, route to modal frame editor if visible
+    if (frame_editor_visible_ && frame_editor_) {
+        if (frame_editor_->handle_event(e)) {
+            return true;
+        }
+        // If the event occurs inside the modal bounds, consume it so underlying panels
+        // cannot interfere with the frame editor's interactions.
+        if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
+            SDL_Point p;
+            if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
+            else { p.x = e.button.x; p.y = e.button.y; }
+            if (SDL_PointInRect(&p, &frame_editor_modal_rect_)) {
+                return true;
+            }
+        }
+        if (e.type == SDL_MOUSEWHEEL) {
+            int mx = 0, my = 0; SDL_GetMouseState(&mx, &my);
+            SDL_Point p{mx, my};
+            if (SDL_PointInRect(&p, &frame_editor_modal_rect_)) {
+                return true;
+            }
+        }
+        // While modal is open, consume all keyboard/text input so underlying panels don't react.
+        if (e.type == SDL_KEYDOWN) {
+            if (e.key.keysym.sym == SDLK_ESCAPE) {
+                close_frame_editor();
+            }
+            return true;
+        }
+        if (e.type == SDL_KEYUP || e.type == SDL_TEXTINPUT) {
             return true;
         }
     }
 
-    // First, route to modal frame editor if visible
-    if (frame_editor_visible_ && frame_editor_) {
-
-        if (frame_editor_->handle_event(e)) {
-            return true;
+    // If any dropdown is currently active (expanded), give it global priority
+    // so option clicks outside local widgets are captured reliably. Disabled while modal is open.
+    if (!frame_editor_visible_) {
+        if (auto* active_dd = DMDropdown::active_dropdown()) {
+            if (active_dd->handle_event(e)) {
+                return true;
+            }
         }
     }
 
@@ -596,7 +625,8 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
                 }
                 return true;
             }
-            // Inside modal, continue to handle
+            // Inside modal, we already routed to the frame editor; consume to prevent bleed-through
+            return true;
         } else if (SDL_PointInRect(&p, &bounds_)) {
             return true;
         } else {
@@ -611,6 +641,7 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         SDL_GetMouseState(&mx, &my);
         SDL_Point p{mx, my};
         if (frame_editor_visible_) {
+            // Always consume wheel while modal is open so it doesn't scroll other panels
             return true;
         }
         if (SDL_PointInRect(&p, &bounds_)) {
@@ -877,6 +908,13 @@ void AnimationEditorWindow::set_status_message(const std::string& message, int f
 }
 
 void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
+    // New behavior: launch in-world frame editor session via DevControls/Assets and hide this window
+    if (assets_ && target_asset_) {
+        assets_->begin_frame_editor_session(target_asset_, document_, preview_provider_, animation_id, this);
+        set_visible(false);
+        return;
+    }
+    // Fallback to legacy modal if assets not wired
     if (!frame_editor_) {
         frame_editor_ = std::make_unique<FrameEditor>();
         frame_editor_->set_close_callback([this]() { this->close_frame_editor(); });
@@ -886,14 +924,26 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
     frame_editor_->set_document(document_);
     frame_editor_->set_animation_id(animation_id);
     frame_editor_->set_bounds(frame_editor_rect_);
+    if (inspector_panel_) {
+        inspector_panel_->set_scrub_mode(true);
+        inspector_panel_->set_scrub_frame(frame_editor_->selected_index());
+    }
+    frame_editor_->set_frame_changed_callback([this](int frame) {
+        if (inspector_panel_) inspector_panel_->set_scrub_frame(frame);
+    });
     frame_editor_visible_ = true;
+    SDL_CaptureMouse(SDL_TRUE);
     update_corner_button();
 }
 
 void AnimationEditorWindow::close_frame_editor() {
     frame_editor_visible_ = false;
     frame_editor_animation_id_.clear();
+    if (inspector_panel_) {
+        inspector_panel_->set_scrub_mode(false);
+    }
     set_status_message("Movement updated.", 180);
+    SDL_CaptureMouse(SDL_FALSE);
     update_corner_button();
 }
 

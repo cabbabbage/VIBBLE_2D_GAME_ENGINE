@@ -11,7 +11,7 @@
 namespace animation_editor {
 namespace {
 constexpr int kTabButtonWidth = 140;
-constexpr int kModeControlsPreferredHeight = 240;
+constexpr int kModeControlsPreferredHeight = 180;
 constexpr int kModeControlsMinHeight = 160;
 constexpr int kFrameDisplayWidth = 640;
 constexpr int kFrameDisplayHeight = 360;
@@ -67,6 +67,23 @@ void FrameEditor::set_preview_provider(std::shared_ptr<PreviewProvider> provider
     }
 }
 
+void FrameEditor::set_frame_changed_callback(FrameChangedCallback callback) {
+    frame_changed_callback_ = std::move(callback);
+    ensure_children();
+    if (movement_editor_) {
+        movement_editor_->set_frame_changed_callback([this](int index) {
+            if (frame_changed_callback_) {
+                frame_changed_callback_(index);
+            }
+        });
+    }
+}
+
+int FrameEditor::selected_index() const {
+    if (!movement_editor_) return 0;
+    return movement_editor_->selected_index();
+}
+
 void FrameEditor::update() {
     ensure_children();
     update_button_styles();
@@ -97,6 +114,8 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         if (active_mode_ == Mode::Movement) {
             movement_editor_->render(renderer);
         } else {
+            // In other modes, still show the preview grid/canvas for context
+            movement_editor_->render_canvas_only(renderer);
             movement_editor_->render_frame_list(renderer);
         }
     }
@@ -115,22 +134,55 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (prev_frame_button_ && prev_frame_button_->handle_event(e)) {
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && movement_editor_ &&
+    // Always feed events to the buttons for proper hover/press visuals
+    if (prev_frame_button_) {
+        prev_frame_button_->handle_event(e);
+    }
+    if (next_frame_button_) {
+        next_frame_button_->handle_event(e);
+    }
+
+    // Robust click handling for navigation regardless of DMButton internals
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{e.button.x, e.button.y};
+        if (SDL_PointInRect(&p, &prev_button_rect_) && movement_editor_ &&
             movement_editor_->can_select_previous_frame()) {
             movement_editor_->select_previous_frame();
             update_navigation_styles();
+            return true;
         }
-        return true;
-    }
-
-    if (next_frame_button_ && next_frame_button_->handle_event(e)) {
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && movement_editor_ &&
+        if (SDL_PointInRect(&p, &next_button_rect_) && movement_editor_ &&
             movement_editor_->can_select_next_frame()) {
             movement_editor_->select_next_frame();
             update_navigation_styles();
+            return true;
         }
-        return true;
+    }
+    // Consume pointer interactions over the nav buttons
+    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN) {
+        SDL_Point p;
+        if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
+        else { p.x = e.button.x; p.y = e.button.y; }
+        if (SDL_PointInRect(&p, &prev_button_rect_) || SDL_PointInRect(&p, &next_button_rect_)) {
+            return true;
+        }
+    }
+
+    // Keyboard navigation for frames
+    if (e.type == SDL_KEYDOWN && movement_editor_) {
+        if (e.key.keysym.sym == SDLK_LEFT) {
+            if (movement_editor_->can_select_previous_frame()) {
+                movement_editor_->select_previous_frame();
+                update_navigation_styles();
+                return true;
+            }
+        } else if (e.key.keysym.sym == SDLK_RIGHT) {
+            if (movement_editor_->can_select_next_frame()) {
+                movement_editor_->select_next_frame();
+                update_navigation_styles();
+                return true;
+            }
+        }
     }
 
     if (active_mode_ == Mode::Movement && movement_editor_ && movement_editor_->handle_event(e)) {
@@ -146,6 +198,17 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
         if (close_callback_) {
             close_callback_();
+            return true;
+        }
+    }
+    // If the event is inside any of our interactive bounds, consume it by default
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
+        SDL_Point p;
+        if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
+        else { p.x = e.button.x; p.y = e.button.y; }
+        if (SDL_PointInRect(&p, &header_rect_) || SDL_PointInRect(&p, &mode_controls_rect_) ||
+            SDL_PointInRect(&p, &frame_display_rect_) || SDL_PointInRect(&p, &frame_list_rect_) ||
+            SDL_PointInRect(&p, &prev_button_rect_) || SDL_PointInRect(&p, &next_button_rect_)) {
             return true;
         }
     }
@@ -179,11 +242,21 @@ void FrameEditor::ensure_children() {
         movement_editor_->set_document(document_);
         movement_editor_->set_animation_id(animation_id_);
         movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
+        movement_editor_->set_frame_changed_callback([this](int index) {
+            if (frame_changed_callback_) {
+                frame_changed_callback_(index);
+            }
+        });
     } else {
         movement_editor_->set_preview_provider(preview_provider_);
         movement_editor_->set_document(document_);
         movement_editor_->set_animation_id(animation_id_);
         movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
+        movement_editor_->set_frame_changed_callback([this](int index) {
+            if (frame_changed_callback_) {
+                frame_changed_callback_(index);
+            }
+        });
     }
     update_button_styles();
     update_navigation_styles();

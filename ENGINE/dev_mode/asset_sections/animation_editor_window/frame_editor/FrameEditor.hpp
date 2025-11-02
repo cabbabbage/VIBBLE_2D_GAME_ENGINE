@@ -27,6 +27,7 @@ class FrameEditor {
 };
 
     using CloseCallback = std::function<void()>;
+    using FrameChangedCallback = std::function<void(int)>;
 
     FrameEditor();
     ~FrameEditor();
@@ -36,6 +37,8 @@ class FrameEditor {
     void set_bounds(const SDL_Rect& bounds);
     void set_close_callback(CloseCallback callback);
     void set_preview_provider(std::shared_ptr<PreviewProvider> provider);
+    void set_frame_changed_callback(FrameChangedCallback callback);
+    int selected_index() const;
 
     void update();
     void render(SDL_Renderer* renderer) const;
@@ -64,8 +67,8 @@ class FrameEditor {
     SDL_Rect next_button_rect_{0, 0, 0, 0};
     std::string animation_id_;
     CloseCallback close_callback_;
+    FrameChangedCallback frame_changed_callback_;
     Mode active_mode_ = Mode::Movement;
 };
 
 }
-

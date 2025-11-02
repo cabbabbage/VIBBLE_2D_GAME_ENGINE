@@ -54,6 +54,10 @@ class AnimationEditorWindow {
 
     void set_on_document_saved(std::function<void()> callback);
 
+    // Wiring to in-world frame editor session
+    void set_assets(class Assets* assets) { assets_ = assets; }
+    void set_target_asset(class Asset* asset) { target_asset_ = asset; }
+
   private:
     void layout_children();
     void ensure_layout() const;
@@ -136,6 +140,10 @@ class AnimationEditorWindow {
     devmode::core::ManifestStore::AssetTransaction manifest_transaction_;
     std::string manifest_asset_key_;
     bool using_manifest_store_ = false;
+
+    // For in-world frame editor session
+    class Assets* assets_ = nullptr;
+    class Asset* target_asset_ = nullptr;
 };
 
 }
