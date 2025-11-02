@@ -8,6 +8,7 @@
 #include <iostream>
 #include <fstream>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -131,4 +132,3 @@ void info (const std::string& message) { log_line_impl(Level::Info,  message); }
 void debug(const std::string& message) { log_line_impl(Level::Debug, message); }
 
 }
-
