@@ -40,6 +40,7 @@
 #include <utility>
 #include <stdexcept>
 #include <cmath>
+#include <cstdlib>
 #include "utils/log.hpp"
 namespace fs = std::filesystem;
 
@@ -114,6 +115,15 @@ void MainApp::setup() {
         std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
         try {
+                // Elevate log level to DEBUG during load if requested
+                struct ScopedLogLevel { vibble::log::Level prev; explicit ScopedLogLevel(vibble::log::Level next): prev(vibble::log::level()) { vibble::log::set_level(next); } ~ScopedLogLevel(){ vibble::log::set_level(prev);} };
+                std::unique_ptr<ScopedLogLevel> loader_debug_guard;
+                if (const char* v = std::getenv("VIBBLE_LOADER_DEBUG")) {
+                        if (*v && (*v == '1' || *v == 'y' || *v == 'Y' || *v == 't' || *v == 'T' || std::tolower(static_cast<unsigned char>(*v)) == 'd')) {
+                                loader_debug_guard = std::make_unique<ScopedLogLevel>(vibble::log::Level::Debug);
+                                vibble::log::info("[MainApp] VIBBLE_LOADER_DEBUG enabled; log level set to DEBUG during loading.");
+                        }
+                }
                 // While loading, render the loading screen (if provided) and
                 // keep pumping/discarding OS events to avoid "Not Responding".
                 std::unique_ptr<loading_status::ScopedNotifier> scoped_loading_notifier;
@@ -222,7 +232,11 @@ void MainApp::setup() {
                 }
                 render_pipeline::BuildScalingProfiles(scaling_options);
 
+                vibble::log::info("[MainApp] Constructing AssetLoader...");
+                auto loader_begin = std::chrono::steady_clock::now();
                 loader_ = std::make_unique<AssetLoader>(map_identifier, map_manifest_json, renderer_, content_root, nullptr, asset_library_);
+                auto loader_end = std::chrono::steady_clock::now();
+                vibble::log::info(std::string("[MainApp] AssetLoader constructed in ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(loader_end - loader_begin).count()) + "ms");
                 loading_status::notify("Spawning assets");
                 auto spawn_begin = std::chrono::steady_clock::now();
                 world::Grid world_grid{};

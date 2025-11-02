@@ -28,6 +28,32 @@ Project layout:
 - `MAPS/`: map layouts and spawn definitions referenced by the manifest.
 - `loading/`: splash art and copy for the loading screen.
 
+### Loader Debugging
+
+To diagnose hangs during map loading or asset spawning, enable detailed logs:
+
+- Set `VIBBLE_LOADER_DEBUG=1` to temporarily elevate log level to `DEBUG` during the loading phase only.
+- Alternatively, set `VIBBLE_LOG_LEVEL=debug` to enable debug logs globally.
+- To mirror logs to a file, set `VIBBLE_LOG_FILE=engine.log` (and optionally `VIBBLE_LOG_APPEND=1` to append instead of overwrite).
+
+Windows (PowerShell):
+
+```
+$env:VIBBLE_LOADER_DEBUG = "1"
+$env:VIBBLE_LOG_FILE     = "engine.log"
+```
+
+Windows (cmd.exe):
+
+```
+set VIBBLE_LOADER_DEBUG=1
+set VIBBLE_LOG_FILE=engine.log
+```
+
+Notes:
+- The loading screen pumps OS events to keep the window responsive during load.
+- Loader logs include timing for map parse, audio init, room creation, animation preload, and asset extraction/registration.
+
 ---
 
 ## Developer Mode

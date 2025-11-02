@@ -274,14 +274,24 @@ std::filesystem::path MainMenu::resolve_manifest_path(const std::string& forward
 }
 
 std::filesystem::path MainMenu::firstImageIn(const fs::path& folder) const {
-	if (!fs::exists(folder) || !fs::is_directory(folder)) return {};
-	for (const auto& e : fs::directory_iterator(folder)) {
-		if (!e.is_regular_file()) continue;
-		std::string ext = e.path().extension().string();
-		for (auto& c : ext) c = char(::tolower(c));
-		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") return e.path();
-	}
-	return {};
+    if (!fs::exists(folder) || !fs::is_directory(folder)) return {};
+    // Prefer PNG to avoid optional JPEG plugin dependency at runtime
+    fs::path png_candidate;
+    fs::path jpg_candidate;
+    for (const auto& e : fs::directory_iterator(folder)) {
+        if (!e.is_regular_file()) continue;
+        std::string ext = e.path().extension().string();
+        for (auto& c : ext) c = char(::tolower(c));
+        if (ext == ".png") {
+            png_candidate = e.path();
+            break;
+        }
+        if (ext == ".jpg" || ext == ".jpeg") {
+            if (jpg_candidate.empty()) jpg_candidate = e.path();
+        }
+    }
+    if (!png_candidate.empty()) return png_candidate;
+    return jpg_candidate;
 }
 
 SDL_Rect MainMenu::coverDst(SDL_Texture* tex) const {

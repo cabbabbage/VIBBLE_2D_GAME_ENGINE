@@ -45,7 +45,7 @@ map_path_(std::move(content_root)),
 renderer_(renderer),
 manifest_store_(manifest_store)
 {
-        vibble::log::info(std::string("[AssetLoader] Start for map '") + map_id_ + "'.");
+        vibble::log::info(std::string("[AssetLoader] Start for map '") + map_id_ + "' at root '" + map_path_ + "'.");
         using_shared_asset_library_ = (shared_asset_library != nullptr);
         if (using_shared_asset_library_) {
                 asset_library_ = shared_asset_library;
@@ -53,6 +53,7 @@ manifest_store_(manifest_store)
                 owned_asset_library_ = std::make_unique<AssetLibrary>();
                 asset_library_ = owned_asset_library_.get();
         }
+        vibble::log::info(std::string("[AssetLoader] Asset library mode: ") + (using_shared_asset_library_ ? "shared" : "owned"));
 
         const auto overall_begin = std::chrono::steady_clock::now();
 
@@ -60,11 +61,14 @@ manifest_store_(manifest_store)
         loading_status::notify("Loading map data");
         load_map_json(map_manifest);
         const auto map_end = std::chrono::steady_clock::now();
-        vibble::log::debug(std::string("[AssetLoader] Map JSON parsed for '") + map_id_ + "'.");
+        vibble::log::info(std::string("[AssetLoader] Map JSON parsed in ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(map_end - map_begin).count()) + "ms");
 
         const nlohmann::json& audio_manifest = map_info_json_.contains("audio") ? map_info_json_.at("audio") : nlohmann::json::object();
         try {
+                const auto audio_begin = std::chrono::steady_clock::now();
                 AudioEngine::instance().init(map_id_, audio_manifest, map_path_);
+                const auto audio_end = std::chrono::steady_clock::now();
+                vibble::log::info(std::string("[AssetLoader] Audio initialized in ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(audio_end - audio_begin).count()) + "ms");
         } catch (const std::exception& ex) {
                 vibble::log::error(std::string("[AssetLoader] Audio init failed: ") + ex.what());
         } catch (...) {
@@ -76,6 +80,7 @@ manifest_store_(manifest_store)
         const auto library_end = std::chrono::steady_clock::now();
         if (asset_library_) {
                 vibble::log::info(std::string("[AssetLoader] Asset library ready with ") + std::to_string(asset_library_->all().size()) + " known assets");
+                vibble::log::debug(std::string("[AssetLoader] Asset library phase took ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(library_end - library_begin).count()) + "ms");
         }
 
         const auto rooms_begin = std::chrono::steady_clock::now();
@@ -88,7 +93,7 @@ manifest_store_(manifest_store)
                 vibble::log::error("[AssetLoader] loadRooms failed with unknown error.");
         }
         const auto rooms_end = std::chrono::steady_clock::now();
-        vibble::log::info(std::string("[AssetLoader] Rooms created: ") + std::to_string(rooms_.size()));
+        vibble::log::info(std::string("[AssetLoader] Rooms created: ") + std::to_string(rooms_.size()) + " in " + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(rooms_end - rooms_begin).count()) + "ms");
         loading_status::notify("Loading assets");
     {
         const auto preload_begin = std::chrono::steady_clock::now();

@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -25,6 +26,16 @@ vibble::log::Level& global_level() {
 std::atomic<bool>& env_init_flag() {
     static std::atomic<bool> f{false};
     return f;
+}
+
+std::unique_ptr<std::ofstream>& file_sink() {
+    static std::unique_ptr<std::ofstream> f{};
+    return f;
+}
+
+bool& append_mode_flag() {
+    static bool append = false;
+    return append;
 }
 
 std::chrono::steady_clock::time_point& time_origin() {
@@ -50,6 +61,18 @@ void init_from_env_once() {
     if (const char* v = std::getenv("VIBBLE_LOG_LEVEL")) {
         global_level() = parse_level_env(v);
     }
+    // Optional file sink for logs
+    const char* file = std::getenv("VIBBLE_LOG_FILE");
+    if (file && *file) {
+        const char* append = std::getenv("VIBBLE_LOG_APPEND");
+        append_mode_flag() = (append && (*append == '1' || *append == 'y' || *append == 'Y' || *append == 't' || *append == 'T'));
+        std::ios_base::openmode mode = std::ios::out;
+        if (append_mode_flag()) mode |= std::ios::app; else mode |= std::ios::trunc;
+        auto ofs = std::make_unique<std::ofstream>(file, mode);
+        if (ofs->good()) {
+            file_sink() = std::move(ofs);
+        }
+    }
 }
 
 const char* level_tag(vibble::log::Level level) {
@@ -72,8 +95,15 @@ void log_line_impl(vibble::log::Level level, const std::string& message) {
     const double secs = duration_cast<duration<double>>(now - time_origin()).count();
     std::lock_guard<std::mutex> lock(log_mutex());
     std::ostream& os = (level == vibble::log::Level::Error) ? std::cerr : std::cout;
-    os << '[' << level_tag(level) << "] +" << std::fixed << std::setprecision(3) << secs << "s: " << message << '\n';
+    const std::string line = std::string("[") + level_tag(level) + "] +" +
+        [&]() { std::ostringstream ss; ss.setf(std::ios::fixed); ss << std::setprecision(3) << secs; return ss.str(); }() +
+        "s: " + message + '\n';
+    os << line;
     os.flush();
+    if (file_sink()) {
+        (*file_sink()) << line;
+        file_sink()->flush();
+    }
 }
 
 }
