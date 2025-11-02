@@ -30,6 +30,11 @@ class DevControls;
 class AssetInfo;
 class Global_Light_Source;
 class QuickTaskPopup;
+namespace animation_editor {
+class AnimationDocument;
+class PreviewProvider;
+class AnimationEditorWindow;
+}
 namespace devmode::core {
 class ManifestStore;
 }
@@ -109,10 +114,10 @@ public:
     void begin_room_area_edit(const std::string& area_name);
     // In-world frame editor session for animation frames
     void begin_frame_editor_session(Asset* asset,
-                                    std::shared_ptr<class animation_editor::AnimationDocument> document,
-                                    std::shared_ptr<class animation_editor::PreviewProvider> preview,
+                                    std::shared_ptr<animation_editor::AnimationDocument> document,
+                                    std::shared_ptr<animation_editor::PreviewProvider> preview,
                                     const std::string& animation_id,
-                                    class animation_editor::AnimationEditorWindow* host_to_toggle);
+                                    animation_editor::AnimationEditorWindow* host_to_toggle);
 
     devmode::core::ManifestStore* manifest_store();
     const devmode::core::ManifestStore* manifest_store() const;

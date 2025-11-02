@@ -31,6 +31,11 @@ class MapModeUI;
 class CameraUIPanel;
 class RegenerateRoomPopup;
 // Legacy chooser removed
+namespace animation_editor {
+class AnimationDocument;
+class PreviewProvider;
+class AnimationEditorWindow;
+}
 
 class DevControls {
 public:
@@ -151,10 +156,10 @@ public:
 
     // Frame Editor session controls
     void begin_frame_editor_session(Asset* asset,
-                                    std::shared_ptr<class animation_editor::AnimationDocument> document,
-                                    std::shared_ptr<class animation_editor::PreviewProvider> preview,
+                                    std::shared_ptr<animation_editor::AnimationDocument> document,
+                                    std::shared_ptr<animation_editor::PreviewProvider> preview,
                                     const std::string& animation_id,
-                                    class animation_editor::AnimationEditorWindow* host_to_toggle);
+                                    animation_editor::AnimationEditorWindow* host_to_toggle);
     void end_frame_editor_session();
     bool is_frame_editor_session_active() const;
 
