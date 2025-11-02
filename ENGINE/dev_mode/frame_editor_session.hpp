@@ -76,14 +76,14 @@ private:
     std::vector<SDL_FPoint> rel_positions_;
 
     // UI widgets
-    std::unique_ptr<DMButton> btn_back_;
-    std::unique_ptr<DMButton> btn_movement_;
-    std::unique_ptr<DMButton> btn_children_;
-    std::unique_ptr<DMButton> btn_attacking_;
-    std::unique_ptr<DMButton> btn_prev_;
-    std::unique_ptr<DMButton> btn_next_;
-    std::unique_ptr<DMButton> btn_smooth_;
-    std::unique_ptr<DMButton> btn_show_anim_;
+    mutable std::unique_ptr<DMButton> btn_back_;
+    mutable std::unique_ptr<DMButton> btn_movement_;
+    mutable std::unique_ptr<DMButton> btn_children_;
+    mutable std::unique_ptr<DMButton> btn_attacking_;
+    mutable std::unique_ptr<DMButton> btn_prev_;
+    mutable std::unique_ptr<DMButton> btn_next_;
+    mutable std::unique_ptr<DMButton> btn_smooth_;
+    mutable std::unique_ptr<DMButton> btn_show_anim_;
 
     // UI layout (computed each frame)
     mutable SDL_Rect directory_rect_{0,0,0,0};
@@ -91,7 +91,7 @@ private:
     mutable std::vector<SDL_Rect> thumb_rects_;
 
 private:
-    void ensure_widgets();
+    void ensure_widgets() const;
     void rebuild_layout() const;
     void apply_frame_move_from_base(int index, SDL_FPoint desired_rel, const std::vector<SDL_FPoint>& base_rel);
     void rebuild_rel_positions();

@@ -13,6 +13,7 @@
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
+#include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode/widgets.hpp"
 #include "render/camera.hpp"
 #include "utils/input.hpp"
@@ -27,8 +28,6 @@ using animation_editor::AnimationDocument;
 using animation_editor::PreviewProvider;
 
 namespace {
-
-SDL_Color with_alpha(SDL_Color c, Uint8 a){ c.a = a; return c; }
 
 inline SDL_Point round_point(SDL_FPoint p) {
     return SDL_Point{ static_cast<int>(std::lround(p.x)), static_cast<int>(std::lround(p.y)) };
@@ -245,7 +244,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
                                                        rel_positions_[i].y + anchor_world.y });
         const bool is_current = static_cast<int>(i) == selected_index_;
         const int r = is_current ? 6 : 4;
-        SDL_Color c = is_current ? DMStyles::AccentButton().hover_bg : with_alpha(DMStyles::AccentButton().bg, 128);
+        SDL_Color c = is_current ? DMStyles::AccentButton().hover_bg : devmode::utils::with_alpha(DMStyles::AccentButton().bg, 128);
         SDL_Point cp = round_point(p);
         SDL_Rect dot{ cp.x - r, cp.y - r, r * 2, r * 2 };
         SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
@@ -315,7 +314,7 @@ void FrameEditorSession::set_grid_overlay_enabled_transient(bool enabled) {
     (void)enabled; // DevControls handles drawing; we rely on caller to toggle
 }
 
-void FrameEditorSession::ensure_widgets() {
+void FrameEditorSession::ensure_widgets() const {
     const DMButtonStyle& header = DMStyles::HeaderButton();
     const DMButtonStyle& tab_active = DMStyles::AccentButton();
     const int bw = 96;
@@ -336,7 +335,7 @@ void FrameEditorSession::rebuild_layout() const {
     const int screen_w = assets_->renderer() ? assets_->getView().get_current_view().width() : 0; // not used for clamp heavily
     (void)screen_w;
     SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
-    SDL_FPoint anchor_screen = cam.map_to_screen_f(anchor_world);
+    SDL_FPoint anchor_screen = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
 
     const int dir_w = 480;
     const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
@@ -508,7 +507,7 @@ void FrameEditorSession::update_asset_preview_frame() const {
     while (f && f->next && idx < selected_index_) { f = f->next; ++idx; }
     target_->current_frame = f ? f : anim.get_first_frame();
     target_->static_frame = anim.frames.size() <= 1;
-    target_->frame_progress = 0.0f;
+    target_->set_frame_progress(0.0f);
 }
 
 FrameEditorSession::MovementFrame FrameEditorSession::clamp_frame(const MovementFrame& in) {

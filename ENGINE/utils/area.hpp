@@ -53,6 +53,9 @@ class Area {
     void set_cached_texture(SDL_Texture* texture);
     void create_area_texture(SDL_Renderer* renderer);
 
+    int width() const { auto [minx, miny, maxx, maxy] = get_bounds(); return maxx - minx; }
+    int height() const { auto [minx, miny, maxx, maxy] = get_bounds(); return maxy - miny; }
+
 	public:
     void flip_horizontal(std::optional<int> axis_x = std::nullopt);
     void scale(float factor);

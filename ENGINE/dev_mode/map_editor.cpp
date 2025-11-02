@@ -4,6 +4,7 @@
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
+#include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode_color_utils.hpp"
 #include "room_overlay_renderer.hpp"
 #include "render/camera.hpp"
@@ -30,10 +31,6 @@ float display_color_luminance(SDL_Color color) {
     return static_cast<float>(0.2126 * static_cast<double>(color.r) / 255.0 + 0.7152 * static_cast<double>(color.g) / 255.0 + 0.0722 * static_cast<double>(color.b) / 255.0);
 }
 
-SDL_Color with_alpha(SDL_Color color, Uint8 alpha) {
-    color.a = alpha;
-    return color;
-}
 }
 
 MapEditor::MapEditor(Assets* owner)
@@ -392,8 +389,8 @@ void MapEditor::render_room_label(SDL_Renderer* renderer, Room* room, SDL_FPoint
 
     label_rects_.emplace_back(room, bg_rect);
 
-    SDL_Color bg_color = with_alpha(lighten(base_color, 0.08f), 205);
-    SDL_Color border_color = with_alpha(darken(base_color, 0.3f), 235);
+    SDL_Color bg_color = devmode::utils::with_alpha(lighten(base_color, 0.08f), 205);
+    SDL_Color border_color = devmode::utils::with_alpha(darken(base_color, 0.3f), 235);
 
     const int radius = std::min(DMStyles::CornerRadius(), std::min(bg_rect.w, bg_rect.h) / 2);
     const int bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(bg_rect.w, bg_rect.h) / 2));
