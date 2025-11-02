@@ -128,8 +128,7 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
       world_grid_(std::move(world_grid)),
       library_(library),
       map_id_(map_id),
-      map_path_(std::move(content_root)),
-      map_info_path_(map_path_.empty() ? std::string{} : (map_path_ + "/map_info.json"))
+      map_path_(std::move(content_root))
 {
     perf_counter_frequency_ = static_cast<double>(SDL_GetPerformanceFrequency());
     last_frame_counter_     = SDL_GetPerformanceCounter();

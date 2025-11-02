@@ -135,7 +135,6 @@ public:
     nlohmann::json& map_info_json() { return map_info_json_; }
     const nlohmann::json& map_info_json() const { return map_info_json_; }
     const std::string& map_path() const { return map_path_; }
-    const std::string& map_info_path() const { return map_info_path_; }
     const std::string& map_id() const { return map_id_; }
     world::Grid& world_grid() { return world_grid_; }
     const world::Grid& world_grid() const { return world_grid_; }
@@ -261,7 +260,6 @@ private:
     AssetLibrary& library_;
     std::string map_id_;
     std::string map_path_;
-    std::string map_info_path_;
     nlohmann::json map_info_json_;
     std::unique_ptr<AssetList> active_asset_list_;
     std::atomic<bool> active_assets_dirty_{true};

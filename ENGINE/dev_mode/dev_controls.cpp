@@ -2516,7 +2516,7 @@ void DevControls::regenerate_boundary_spawn_group(const nlohmann::json& entry) {
     nlohmann::json root = nlohmann::json::object();
     root["spawn_groups"] = nlohmann::json::array();
     root["spawn_groups"].push_back(entry);
-    std::string source = assets_->map_info_path();
+    std::string source = assets_->map_id();
     if (!source.empty()) {
         source += "::map_boundary_data";
     }
