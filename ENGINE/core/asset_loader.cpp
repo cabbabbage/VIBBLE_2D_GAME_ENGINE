@@ -59,11 +59,11 @@ manifest_store_(manifest_store)
 
         const auto map_begin = std::chrono::steady_clock::now();
         loading_status::notify("Loading map data");
-        load_map_json(map_manifest);
+        load_from_manifest(map_manifest);
         const auto map_end = std::chrono::steady_clock::now();
         vibble::log::info(std::string("[AssetLoader] Map JSON parsed in ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(map_end - map_begin).count()) + "ms");
 
-        const nlohmann::json& audio_manifest = map_info_json_.contains("audio") ? map_info_json_.at("audio") : nlohmann::json::object();
+        const nlohmann::json& audio_manifest = map_manifest_json_.contains("audio") ? map_manifest_json_.at("audio") : nlohmann::json::object();
         try {
                 const auto audio_begin = std::chrono::steady_clock::now();
                 AudioEngine::instance().init(map_id_, audio_manifest, map_path_);
@@ -227,13 +227,14 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
 }
 
 void AssetLoader::loadRooms() {
-        const double min_edge_distance = map_layers::min_edge_distance_from_map_info(map_info_json_);
-        GenerateRooms generator(map_layers_, map_center_x_, map_center_y_, map_id_, map_info_json_, min_edge_distance, manifest_store_);
+        vibble::log::info("[AssetLoader] Starting room generation for map '" + map_id_ + "'");
+        const double min_edge_distance = map_layers::min_edge_distance_from_map_manifest(map_manifest_json_);
+        GenerateRooms generator(map_layers_, map_center_x_, map_center_y_, map_id_, map_manifest_json_, min_edge_distance, manifest_store_);
         nlohmann::json empty_boundary = nlohmann::json::object();
         nlohmann::json empty_rooms    = nlohmann::json::object();
         nlohmann::json empty_trails   = nlohmann::json::object();
         nlohmann::json empty_assets   = nlohmann::json::object();
-        map_grid_settings_ = MapGridSettings::from_json(map_info_json_.contains("map_grid_settings") ? &map_info_json_["map_grid_settings"] : nullptr);
+        map_grid_settings_ = MapGridSettings::from_json(map_manifest_json_.contains("map_grid_settings") ? &map_manifest_json_["map_grid_settings"] : nullptr);
         MapGridSettings grid_settings = map_grid_settings_;
         nlohmann::json& map_assets_json = map_assets_data_ ? *map_assets_data_ : empty_assets;
         auto room_ptrs = generator.build( asset_library_, map_radius_, layer_radii_, map_boundary_data_ ? *map_boundary_data_ : empty_boundary, rooms_data_        ? *rooms_data_        : empty_rooms, trails_data_       ? *trails_data_       : empty_trails, map_assets_json, grid_settings);
@@ -241,6 +242,11 @@ void AssetLoader::loadRooms() {
                 rooms_.push_back(up.get());
                 all_rooms_.push_back(std::move(up));
 	}
+        if (rooms_.empty()) {
+                vibble::log::error("[AssetLoader] Room generation failed: no rooms created for map '" + map_id_ + "'");
+        } else {
+                vibble::log::info("[AssetLoader] Room generation completed successfully: " + std::to_string(rooms_.size()) + " rooms created");
+        }
         vibble::log::debug(std::string("[AssetLoader] loadRooms: rooms_=") + std::to_string(rooms_.size()));
 }
 
@@ -368,35 +374,35 @@ std::vector<const Area*> AssetLoader::getAllRoomAndTrailAreas() const {
         return areas;
 }
 
-void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
-        map_info_json_ = map_manifest;
-        if (!map_info_json_.is_object()) {
-                map_info_json_ = nlohmann::json::object();
+void AssetLoader::load_from_manifest(const nlohmann::json& map_manifest) {
+        map_manifest_json_ = map_manifest;
+        if (!map_manifest_json_.is_object()) {
+                map_manifest_json_ = nlohmann::json::object();
         }
 
-        ensure_map_grid_settings(map_info_json_);
+        ensure_map_grid_settings(map_manifest_json_);
 
-        map_assets_data_   = &map_info_json_["map_assets_data"];
+        map_assets_data_   = &map_manifest_json_["map_assets_data"];
         if (!map_assets_data_->is_object()) *map_assets_data_ = nlohmann::json::object();
-        map_boundary_data_ = &map_info_json_["map_boundary_data"];
+        map_boundary_data_ = &map_manifest_json_["map_boundary_data"];
         if (!map_boundary_data_->is_object()) *map_boundary_data_ = nlohmann::json::object();
-        rooms_data_        = &map_info_json_["rooms_data"];
+        rooms_data_        = &map_manifest_json_["rooms_data"];
         if (!rooms_data_->is_object()) *rooms_data_ = nlohmann::json::object();
-        trails_data_       = &map_info_json_["trails_data"];
+        trails_data_       = &map_manifest_json_["trails_data"];
         if (!trails_data_->is_object()) *trails_data_ = nlohmann::json::object();
 
-        auto layers_it = map_info_json_.find("map_layers");
+        auto layers_it = map_manifest_json_.find("map_layers");
         map_layers::LayerRadiiResult radii_result;
         const nlohmann::json* rooms_data_ptr = rooms_data_;
-        if (layers_it != map_info_json_.end()) {
-                const double min_edge = map_layers::min_edge_distance_from_map_info(map_info_json_);
+        if (layers_it != map_manifest_json_.end()) {
+                const double min_edge = map_layers::min_edge_distance_from_map_manifest(map_manifest_json_);
                 radii_result = map_layers::compute_layer_radii(*layers_it, rooms_data_ptr, min_edge);
         }
 
         map_radius_   = radii_result.map_radius;
         map_center_x_ = map_center_y_ = map_radius_;
         layer_radii_  = radii_result.layer_radii;
-        if (layers_it != map_info_json_.end() && layers_it->is_array()) {
+        if (layers_it != map_manifest_json_.end() && layers_it->is_array()) {
                 for (std::size_t idx = 0; idx < layers_it->size(); ++idx) {
                         auto& layer_entry = (*layers_it)[idx];
                         if (!layer_entry.is_object()) {
@@ -408,10 +414,10 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
                         layer_entry["bounding_extent"] = extent_value;
                 }
         }
-        map_info_json_["map_layers_settings"]["min_edge_distance"] = radii_result.min_edge_distance;
+        map_manifest_json_["map_layers_settings"]["min_edge_distance"] = radii_result.min_edge_distance;
         map_layers_.clear();
 
-        if (layers_it != map_info_json_.end() && layers_it->is_array()) {
+        if (layers_it != map_manifest_json_.end() && layers_it->is_array()) {
                 map_layers_.reserve(layers_it->size());
                 size_t index = 0;
                 for (const auto& layer_entry : *layers_it) {
@@ -454,6 +460,5 @@ void AssetLoader::load_map_json(const nlohmann::json& map_manifest) {
                 }
         }
 
-        vibble::log::debug(std::string("[AssetLoader] load_map_json: map_radius_=") + std::to_string(map_radius_) + " layers=" + std::to_string(map_layers_.size()));
+        vibble::log::debug(std::string("[AssetLoader] load_from_manifest: map_radius_=") + std::to_string(map_radius_) + " layers=" + std::to_string(map_layers_.size()));
 }
-

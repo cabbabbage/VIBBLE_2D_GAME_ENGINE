@@ -6,6 +6,8 @@
 #include "map_generation/map_layers_geometry.hpp"
 #include "utils/log.hpp"
 
+#include <memory>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -259,8 +261,14 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
         return false;
     }
 
-    AssetLibrary library(true);
-    const auto& asset_lookup = library.all();
+    // Use provided asset library if available, otherwise create a new one
+    std::unique_ptr<AssetLibrary> owned_library;
+    const AssetLibrary* library_ptr = options.asset_library;
+    if (!library_ptr) {
+        owned_library = std::make_unique<AssetLibrary>(true);
+        library_ptr = owned_library.get();
+    }
+    const auto& asset_lookup = library_ptr->all();
 
     std::unordered_map<std::string, AssetScaleRange> ranges;
 
@@ -276,7 +284,7 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
         json layers      = map_entry.value("map_layers", json::array());
 
         const json* rooms_data_ptr = rooms_data.is_object() ? &rooms_data : nullptr;
-        const double min_edge      = map_layers::min_edge_distance_from_map_info(map_entry);
+        const double min_edge      = map_layers::min_edge_distance_from_map_manifest(map_entry);
         map_layers::LayerRadiiResult radii = map_layers::compute_layer_radii(layers, rooms_data_ptr, min_edge);
         const double map_radius = radii.map_radius;
 

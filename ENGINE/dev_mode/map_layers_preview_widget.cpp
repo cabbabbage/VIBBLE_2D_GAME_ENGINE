@@ -200,7 +200,8 @@ void MapLayersPreviewWidget::set_selected_layer(int index) {
         return;
     }
     selected_layer_index_ = index;
-    mark_dirty();
+    // Don't mark dirty on selection changes - only on data changes
+    request_geometry_update();
 }
 
 void MapLayersPreviewWidget::set_layer_diagnostics(const std::vector<int>& invalid_layers,
@@ -398,7 +399,7 @@ void MapLayersPreviewWidget::rebuild_visuals() {
 
     double min_edge_distance = map_layers::kDefaultMinEdgeDistance;
     if (map_info_ && map_info_->is_object()) {
-        min_edge_distance = map_layers::min_edge_distance_from_map_info(*map_info_);
+        min_edge_distance = map_layers::min_edge_distance_from_map_manifest(*map_info_);
     }
     const map_layers::LayerRadiiResult radii = map_layers::compute_layer_radii(layers, rooms_info, min_edge_distance);
     min_edge_distance_ = radii.min_edge_distance;
@@ -439,110 +440,26 @@ void MapLayersPreviewWidget::rebuild_visuals() {
 
         const auto rooms_it = layer_json.find("rooms");
         if (rooms_it != layer_json.end() && rooms_it->is_array()) {
-            struct RoomSpec {
-                std::string name;
-                int min_instances = 0;
-                int max_instances = 0;
-};
-            std::vector<RoomSpec> room_specs;
-            room_specs.reserve(rooms_it->size());
+            // Preview requirement: show all configured room types once per layer,
+            // so users see the complete set instead of a random subset.
             for (const auto& candidate : *rooms_it) {
                 if (!candidate.is_object()) {
                     continue;
                 }
-                RoomSpec spec;
-                spec.name = candidate.value("name", std::string());
-                spec.min_instances = std::max(0, candidate.value("min_instances", 0));
-                spec.max_instances = std::max(spec.min_instances, candidate.value("max_instances", spec.min_instances));
-                room_specs.push_back(std::move(spec));
-            }
-
-            if (!room_specs.empty()) {
-                struct Allocation {
-                    RoomSpec spec;
-                    int count = 0;
-                    int max_count = 0;
-};
-
-                std::vector<Allocation> allocations;
-                allocations.reserve(room_specs.size());
-                int sum_min_instances = 0;
-                int sum_max_instances = 0;
-                for (auto& spec : room_specs) {
-                    Allocation alloc;
-                    alloc.spec = std::move(spec);
-                    alloc.count = alloc.spec.min_instances;
-                    alloc.max_count = std::max(alloc.spec.min_instances, alloc.spec.max_instances);
-                    sum_min_instances += alloc.count;
-                    sum_max_instances += alloc.max_count;
-                    allocations.push_back(std::move(alloc));
+                const std::string name = candidate.value("name", std::string());
+                if (name.empty()) {
+                    continue;
                 }
-                sum_max_instances = std::max(sum_max_instances, sum_min_instances);
-
-                int min_total = std::max(visual.min_rooms, sum_min_instances);
-                if (visual.min_rooms <= 0 && sum_min_instances > 0) {
-                    min_total = sum_min_instances;
+                RoomVisual room;
+                room.layer_index = visual.index;
+                room.key = name;
+                room.display_name = display_name_for_room(room.key);
+                room.color = room_color(room.key);
+                room.extent = map_layers::room_extent_from_rooms_data(rooms_info, room.key);
+                if (!(room.extent > 0.0)) {
+                    room.extent = 1.0;
                 }
-                int max_total = visual.max_rooms;
-                if (max_total <= 0) {
-                    max_total = sum_max_instances;
-                } else if (sum_max_instances > 0) {
-                    max_total = std::min(max_total, sum_max_instances);
-                }
-                if (max_total < min_total) {
-                    max_total = std::max(min_total, sum_max_instances);
-                }
-                if (max_total < min_total) {
-                    max_total = min_total;
-                }
-
-                int target_total = min_total;
-                if (max_total > min_total) {
-                    std::uniform_int_distribution<int> total_dist(min_total, max_total);
-                    target_total = total_dist(rng);
-                }
-                target_total = std::clamp(target_total, min_total, std::max(min_total, max_total));
-                target_total = std::min(target_total, std::max(sum_max_instances, min_total));
-
-                int remaining = std::max(0, target_total - sum_min_instances);
-                while (remaining > 0) {
-                    std::vector<std::size_t> expandable;
-                    expandable.reserve(allocations.size());
-                    for (std::size_t idx = 0; idx < allocations.size(); ++idx) {
-                        if (allocations[idx].count < allocations[idx].max_count) {
-                            expandable.push_back(idx);
-                        }
-                    }
-                    if (expandable.empty()) {
-                        break;
-                    }
-                    std::uniform_int_distribution<std::size_t> pick(0, expandable.size() - 1);
-                    std::size_t chosen = expandable[pick(rng)];
-                    ++allocations[chosen].count;
-                    --remaining;
-                }
-
-                int total_instances = 0;
-                for (const auto& alloc : allocations) {
-                    total_instances += alloc.count;
-                }
-
-                if (total_instances > 0) {
-                    for (const auto& alloc : allocations) {
-                        for (int n = 0; n < alloc.count; ++n) {
-                            RoomVisual room;
-                            room.layer_index = visual.index;
-                            room.key = alloc.spec.name;
-                            room.display_name = display_name_for_room(room.key);
-                            room.color = room_color(room.key);
-                            room.extent = map_layers::room_extent_from_rooms_data(rooms_info, room.key);
-                            if (!(room.extent > 0.0)) {
-                                room.extent = 1.0;
-                            }
-                            visual.rooms.push_back(std::move(room));
-                        }
-                    }
-                }
+                visual.rooms.push_back(std::move(room));
             }
         }
         if (visual.index == 0) {
@@ -1109,4 +1026,3 @@ void MapLayersPreviewWidget::render_room_legend(SDL_Renderer* renderer) const {
         }
     }
 }
-

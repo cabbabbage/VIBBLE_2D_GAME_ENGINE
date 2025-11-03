@@ -1249,6 +1249,15 @@ private:
         if (auto* graph = candidate_editor_widget()) {
             graph->set_search_extra_results_provider([this]() {
                 std::vector<SearchAssets::Result> results;
+                // Always include an explicit null candidate option
+                {
+                    SearchAssets::Result null_res;
+                    null_res.label = "null";
+                    null_res.value = "null";
+                    null_res.is_tag = false;
+                    results.push_back(std::move(null_res));
+                }
+                // Also include room area names as selectable candidates
                 try {
                     const auto& provider = area_names_provider();
                     auto names = provider ? provider() : std::vector<std::string>{};
@@ -1467,18 +1476,21 @@ private:
                 (*entry)["max_number"] = quantity;
                 (*entry)["quantity"] = quantity;
                 (*entry).erase("edge_inset_percent");
+        } else {
+            int min_number = safe_int(*entry, "min_number", kDefaultMinNumber);
+            int max_number = safe_int(*entry, "max_number", std::max(min_number, kDefaultMaxNumber));
+            if (max_number < min_number) max_number = min_number;
+            (*entry)["min_number"] = min_number;
+            (*entry)["max_number"] = max_number;
+            if (method == "Edge") {
+                (*entry)["edge_inset_percent"] = kEdgeInsetDefault;
+            } else if (method == "Perimeter") {
+                (*entry)["radius"] = kPerimeterRadiusSliderMin;
+                (*entry)["perimeter_radius"] = kPerimeterRadiusSliderMin;
             } else {
-                int min_number = safe_int(*entry, "min_number", kDefaultMinNumber);
-                int max_number = safe_int(*entry, "max_number", std::max(min_number, kDefaultMaxNumber));
-                if (max_number < min_number) max_number = min_number;
-                (*entry)["min_number"] = min_number;
-                (*entry)["max_number"] = max_number;
-                if (method == "Edge") {
-                    (*entry)["edge_inset_percent"] = kEdgeInsetDefault;
-                } else {
-                    (*entry).erase("edge_inset_percent");
-                }
+                (*entry).erase("edge_inset_percent");
             }
+        }
             current_method_ = method;
             use_exact_quantity_ = (method == "Exact" || method == "Exact Position");
             notify_change(method != previous, true, false);

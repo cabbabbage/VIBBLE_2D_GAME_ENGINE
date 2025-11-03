@@ -322,17 +322,17 @@ double map_radius_from_map_info(const nlohmann::json& map_info) {
     if (rooms_it != map_info.end() && rooms_it->is_object()) {
         rooms_data_ptr = &(*rooms_it);
     }
-    const double min_edge = min_edge_distance_from_map_info(map_info);
+    const double min_edge = min_edge_distance_from_map_manifest(map_info);
     const LayerRadiiResult result = compute_layer_radii(*layers_it, rooms_data_ptr, min_edge);
     return result.map_radius;
 }
 
-double min_edge_distance_from_map_info(const nlohmann::json& map_info) {
-    if (!map_info.is_object()) {
+double min_edge_distance_from_map_manifest(const nlohmann::json& map_manifest) {
+    if (!map_manifest.is_object()) {
         return static_cast<double>(kDefaultMinEdgeDistance);
     }
-    const auto settings_it = map_info.find("map_layers_settings");
-    if (settings_it == map_info.end() || !settings_it->is_object()) {
+    const auto settings_it = map_manifest.find("map_layers_settings");
+    if (settings_it == map_manifest.end() || !settings_it->is_object()) {
         return static_cast<double>(kDefaultMinEdgeDistance);
     }
     const auto value_it = settings_it->find("min_edge_distance");
@@ -389,4 +389,3 @@ RadialLayout compute_radial_layout(double base_radius,
 }
 
 }
-

@@ -228,6 +228,23 @@ public:
         }
     }
 
+    bool handle_event(const SDL_Event& e) override {
+        bool used = DockableCollapsible::handle_event(e);
+        if (!entry_ || !expanded_) {
+            return used;
+        }
+
+        if (grid_resolution_slider_ && grid_resolution_slider_->handle_event(e)) {
+            used = true;
+            if (entry_) {
+                (*entry_)["grid_resolution"] = grid_resolution_slider_->value();
+                notify_save(false);
+            }
+        }
+
+        return used;
+    }
+
     void update(const Input& input, int screen_w, int screen_h) override {
         screen_w_ = std::max(screen_w, 0);
         screen_h_ = std::max(screen_h, 0);
@@ -305,6 +322,22 @@ private:
         if (instructions_label_) {
             instructions_label_->set_subtle(true);
             rows.push_back({instructions_label_.get()});
+        }
+
+        // Add grid resolution slider for boundary assets
+        if (!grid_resolution_slider_) {
+            constexpr int kMinResolution = 0;
+            constexpr int kMaxResolution = 10; // Assuming same range as grid
+            int current_resolution = 3; // Default resolution
+            if (entry_ && entry_->contains("grid_resolution")) {
+                current_resolution = entry_->value("grid_resolution", 3);
+            }
+            grid_resolution_slider_ = std::make_unique<DMSlider>("Grid Resolution (2^r px)", kMinResolution, kMaxResolution, current_resolution);
+        }
+        if (grid_resolution_slider_) {
+            auto grid_slider_widget = std::make_unique<SliderWidget>(grid_resolution_slider_.get());
+            rows.push_back({grid_slider_widget.get()});
+            widgets_.push_back(std::move(grid_slider_widget));
         }
 
         if (pie_widget_) {
@@ -399,6 +432,8 @@ private:
     std::unique_ptr<LabelWidget> candidates_header_{};
     std::unique_ptr<LabelWidget> instructions_label_{};
     std::unique_ptr<CandidateEditorPieGraphWidget> pie_widget_{};
+    std::unique_ptr<DMSlider> grid_resolution_slider_{};
+    std::vector<std::unique_ptr<Widget>> widgets_{};
 };
 
 }
@@ -550,4 +585,3 @@ void SingleSpawnGroupModal::ensure_visible_position() {
 
     position_initialized_ = true;
 }
-

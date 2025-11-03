@@ -357,6 +357,15 @@ MapLayersPanel::MapLayersPanel(int x, int y)
 
     set_close_button_on_left(true);
     set_close_button_enabled(true);
+    // Ensure the panel's close button also closes any right-hand sliding containers.
+    set_on_close([this]() {
+        if (rooms_list_container_) {
+            rooms_list_container_->close();
+        }
+        if (layer_controls_container_) {
+            layer_controls_container_->close();
+        }
+    });
     set_expanded(true);
     set_visible(false);
 }
@@ -1610,7 +1619,7 @@ void MapLayersPanel::sync_min_edge_textbox() {
     if (controller_) {
         value = static_cast<int>(std::lround(controller_->min_edge_distance()));
     } else if (map_info_) {
-        value = static_cast<int>(std::lround(map_layers::min_edge_distance_from_map_info(*map_info_)));
+        value = static_cast<int>(std::lround(map_layers::min_edge_distance_from_map_manifest(*map_info_)));
     }
     value = std::clamp(value, 0, static_cast<int>(map_layers::kMinEdgeDistanceMax));
     min_edge_value_ = value;
@@ -1794,4 +1803,3 @@ void MapLayersPanel::render_min_edge_input(SDL_Renderer* renderer, const SDL_Rec
         DrawLabelText(renderer, min_edge_note_, min_edge_note_rect_.x, min_edge_note_rect_.y, style);
     }
 }
-

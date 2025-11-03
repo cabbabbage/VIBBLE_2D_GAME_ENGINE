@@ -50,6 +50,13 @@ class FrameMovementEditor {
 
     int selected_index() const { return selected_index_; }
 
+    // Tools integration
+    void set_show_animation(bool show);
+    bool show_animation() const { return show_animation_; }
+    void apply_smoothing();
+    std::pair<int,int> total_displacement() const;
+    void set_total_displacement(int dx, int dy);
+
   private:
     void load_frames_from_document();
     void apply_changes();
@@ -90,6 +97,7 @@ class FrameMovementEditor {
     std::unique_ptr<MovementCanvas> canvas_;
     std::unique_ptr<TotalsPanel> totals_panel_;
     std::unique_ptr<FramePropertiesPanel> properties_panel_;
+    // Controls moved to external tools panel
     std::unique_ptr<DMButton> smooth_button_;
     std::unique_ptr<DMButton> show_anim_button_;
     std::shared_ptr<PreviewProvider> preview_provider_;
@@ -114,7 +122,7 @@ class FrameMovementEditor {
     bool add_button_hovered_ = false;
     bool add_button_pressed_ = false;
     int hovered_frame_index_ = -1;
-    bool show_animation_ = false;
+    bool show_animation_ = true;
     FrameChangedCallback frame_changed_callback_;
 };
 

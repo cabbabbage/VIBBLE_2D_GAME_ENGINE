@@ -26,6 +26,22 @@ using map_layers::clamp_candidate_max;
 using map_layers::clamp_candidate_min;
 }
 
+namespace map_layers {
+inline double min_edge_distance_from_map_info(const json& map_info) {
+    // Fallback extractor: read integer setting "min_edge_distance" from map_layers_settings
+    // and return it as double; fall back to the library default when missing/invalid.
+    if (!map_info.is_object()) {
+        return static_cast<double>(kDefaultMinEdgeDistance);
+    }
+    const auto it = map_info.find("map_layers_settings");
+    if (it == map_info.end() || !it->is_object()) {
+        return static_cast<double>(kDefaultMinEdgeDistance);
+    }
+    int stored = it->value("min_edge_distance", kDefaultMinEdgeDistance);
+    return static_cast<double>(stored);
+}
+}
+
 void MapLayersController::bind(json* map_info, std::string map_path) {
     map_info_ = map_info;
     static_cast<void>(map_path);
@@ -150,7 +166,7 @@ double MapLayersController::min_edge_distance() const {
     if (!map_info_) {
         return static_cast<double>(map_layers::kDefaultMinEdgeDistance);
     }
-    return map_layers::min_edge_distance_from_map_info(*map_info_);
+    return map_layers::min_edge_distance_from_map_manifest(*map_info_);
 }
 
 bool MapLayersController::set_min_edge_distance(double value) {
@@ -531,7 +547,7 @@ void MapLayersController::ensure_map_settings() {
     if (!map_info_) {
         return;
     }
-    double sanitized = map_layers::min_edge_distance_from_map_info(*map_info_);
+    double sanitized = map_layers::min_edge_distance_from_map_manifest(*map_info_);
     auto& settings = (*map_info_)["map_layers_settings"];
     if (!settings.is_object()) {
         settings = json::object();
@@ -746,4 +762,3 @@ void MapLayersController::ensure_spawn_room_data(const std::string& previous_nam
     spawn_entry["is_spawn"] = true;
     rooms_data[kSpawnRoomName] = std::move(spawn_entry);
 }
-

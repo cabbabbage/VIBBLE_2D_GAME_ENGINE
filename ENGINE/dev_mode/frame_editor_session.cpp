@@ -108,6 +108,23 @@ void FrameEditorSession::begin(Assets* assets,
     target_->set_hidden(false);
 
     ensure_widgets();
+    // Initialize panel positions near the asset anchor (screen-space)
+    {
+        const camera& cam = assets_->getView();
+        SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
+        SDL_FPoint anchor_screen = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
+
+        const int dir_w = 480;
+        const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
+        dir_pos_.x = static_cast<int>(std::round(anchor_screen.x - dir_w/2.0f));
+        dir_pos_.y = static_cast<int>(std::round(anchor_screen.y - 120.0f));
+
+        const int nav_h = 90;
+        const int nav_w = 560;
+        const int movement_strip_extra = (mode_==Mode::Movement ? (DMButton::height()+10) : 8) + 6;
+        nav_pos_.x = static_cast<int>(std::round(anchor_screen.x - nav_w/2.0f));
+        nav_pos_.y = dir_pos_.y + dir_h + movement_strip_extra;
+    }
     active_ = true;
 }
 
@@ -154,6 +171,81 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     ensure_widgets();
     rebuild_layout();
 
+    auto clamp_panel_pos = [&](int& x, int& y, int w, int h) {
+        int sw = 0, sh = 0;
+        if (assets_ && assets_->renderer()) {
+            SDL_GetRendererOutputSize(assets_->renderer(), &sw, &sh);
+        }
+        if (sw > 0 && sh > 0) {
+            x = std::clamp(x, 0, std::max(0, sw - w));
+            y = std::clamp(y, 0, std::max(0, sh - h));
+        }
+    };
+
+    auto point_in_any_thumb = [&](const SDL_Point& p) -> bool {
+        for (const auto& r : thumb_rects_) {
+            if (r.w > 0 && r.h > 0 && SDL_PointInRect(&p, &r)) return true;
+        }
+        return false;
+    };
+
+    // Handle dragging (motion and release)
+    if (dragging_dir_ || dragging_nav_) {
+        if (e.type == SDL_MOUSEMOTION) {
+            if (dragging_dir_) {
+                dir_pos_.x = e.motion.x - drag_offset_dir_.x;
+                dir_pos_.y = e.motion.y - drag_offset_dir_.y;
+                const int dir_w = 480;
+                const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
+                clamp_panel_pos(dir_pos_.x, dir_pos_.y, dir_w, dir_h);
+            } else if (dragging_nav_) {
+                nav_pos_.x = e.motion.x - drag_offset_nav_.x;
+                nav_pos_.y = e.motion.y - drag_offset_nav_.y;
+                const int nav_w = 560;
+                const int nav_h = 90;
+                clamp_panel_pos(nav_pos_.x, nav_pos_.y, nav_w, nav_h);
+            }
+            rebuild_layout();
+            return true; // consume while dragging
+        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            dragging_dir_ = false;
+            dragging_nav_ = false;
+            return true; // consume mouse up at end of drag
+        }
+    }
+
+    // Begin dragging on mouse down if inside panel backgrounds, avoiding interactive controls
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        // Directory panel drag: avoid buttons inside
+        bool over_dir = SDL_PointInRect(&p, &directory_rect_);
+        if (over_dir) {
+            bool over_button = false;
+            const DMButton* buttons[] = { btn_back_.get(), btn_movement_.get(), btn_children_.get(), btn_attacking_.get() };
+            for (const DMButton* b : buttons) {
+                if (!b) continue; const SDL_Rect& r = b->rect();
+                if (SDL_PointInRect(&p, &r)) { over_button = true; break; }
+            }
+            if (!over_button) {
+                dragging_dir_ = true;
+                drag_offset_dir_ = SDL_Point{ p.x - directory_rect_.x, p.y - directory_rect_.y };
+                return true;
+            }
+        }
+        // Nav panel drag: avoid prev/next buttons and thumbnails
+        if (SDL_PointInRect(&p, &nav_rect_)) {
+            bool over_nav_ctrl = false;
+            if (btn_prev_) { const SDL_Rect& r = btn_prev_->rect(); if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true; }
+            if (!over_nav_ctrl && btn_next_) { const SDL_Rect& r = btn_next_->rect(); if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true; }
+            if (!over_nav_ctrl) over_nav_ctrl = point_in_any_thumb(p);
+            if (!over_nav_ctrl) {
+                dragging_nav_ = true;
+                drag_offset_nav_ = SDL_Point{ p.x - nav_rect_.x, p.y - nav_rect_.y };
+                return true;
+            }
+        }
+    }
+
     auto handle_button = [&](std::unique_ptr<DMButton>& btn, auto&& on_click) -> bool {
         if (!btn) return false;
         if (!btn->handle_event(e)) return false;
@@ -182,8 +274,9 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     if (handle_button(btn_prev_, [this]() { this->select_frame(std::max(0, this->selected_index_ - 1)); })) return true;
     if (handle_button(btn_next_, [this]() { this->select_frame(this->selected_index_ + 1); })) return true;
 
-    // Thumbnails
+    // Thumbnails (skip if we were dragging)
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+        if (dragging_dir_ || dragging_nav_) return true;
         SDL_Point p{e.button.x, e.button.y};
         for (size_t i = 0; i < thumb_rects_.size(); ++i) {
             if (SDL_PointInRect(&p, &thumb_rects_[i])) {
@@ -334,14 +427,10 @@ void FrameEditorSession::rebuild_layout() const {
     const camera& cam = assets_->getView();
     const int screen_w = assets_->renderer() ? assets_->getView().get_current_view().width() : 0; // not used for clamp heavily
     (void)screen_w;
-    SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
-    SDL_FPoint anchor_screen = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
-
+    (void)cam; // anchor-based layout replaced by draggable screen-space positions
     const int dir_w = 480;
     const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
-    directory_rect_ = SDL_Rect{ static_cast<int>(std::round(anchor_screen.x - dir_w/2.0f)),
-                                static_cast<int>(std::round(anchor_screen.y - 120.0f)),
-                                dir_w, dir_h };
+    directory_rect_ = SDL_Rect{ dir_pos_.x, dir_pos_.y, dir_w, dir_h };
     // Place buttons inside
     int x = directory_rect_.x + DMSpacing::small_gap();
     int y = directory_rect_.y + DMSpacing::small_gap();
@@ -359,8 +448,7 @@ void FrameEditorSession::rebuild_layout() const {
     // Navigation panel under tool strip
     const int nav_h = 90;
     const int nav_w = 560;
-    int nav_y = directory_rect_.y + directory_rect_.h + (mode_==Mode::Movement ? (DMButton::height()+10) : 8) + 6;
-    nav_rect_ = SDL_Rect{ static_cast<int>(std::round(anchor_screen.x - nav_w/2.0f)), nav_y, nav_w, nav_h };
+    nav_rect_ = SDL_Rect{ nav_pos_.x, nav_pos_.y, nav_w, nav_h };
     const int prev_w = 40, next_w = 40;
     if (btn_prev_) btn_prev_->set_rect(SDL_Rect{ nav_rect_.x + 6, nav_rect_.y + (nav_rect_.h - 40)/2, prev_w, 40 });
     if (btn_next_) btn_next_->set_rect(SDL_Rect{ nav_rect_.x + nav_rect_.w - next_w - 6, nav_rect_.y + (nav_rect_.h - 40)/2, next_w, 40 });

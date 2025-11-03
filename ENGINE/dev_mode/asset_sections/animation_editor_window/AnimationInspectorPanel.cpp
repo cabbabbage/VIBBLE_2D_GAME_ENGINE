@@ -364,6 +364,14 @@ void AnimationInspectorPanel::update() {
     if (audio_panel_) audio_panel_->update();
 }
 
+void AnimationInspectorPanel::apply_dropdown_selections() {
+    if (source_config_) {
+        // Currently only SourceConfigPanel hosts dropdowns that require committing
+        // selection back into the document (e.g., Source Animation selector).
+        source_config_->commit_animation_dropdown_selection();
+    }
+}
+
 void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) {
         return;
@@ -652,10 +660,15 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
         SDL_GetMouseState(&mx, &my);
         SDL_Point mouse{mx, my};
         if (SDL_PointInRect(&mouse, &bounds_)) {
-            scroll_ -= e.wheel.y * 20;
-            scroll_ = std::clamp(scroll_, 0, max_scroll_);
-            layout_dirty_ = true;
-            handled = true;
+            // Don't consume mouse wheel events over the source config area if dropdown is expanded
+            bool over_source_config = source_config_ && SDL_PointInRect(&mouse, &source_rect_);
+            bool dropdown_expanded = source_config_ && source_config_->allow_out_of_bounds_pointer_events();
+            if (!(over_source_config && dropdown_expanded)) {
+                scroll_ -= e.wheel.y * 20;
+                scroll_ = std::clamp(scroll_, 0, max_scroll_);
+                layout_dirty_ = true;
+                handled = true;
+            }
         }
     }
 
@@ -821,8 +834,12 @@ void AnimationInspectorPanel::layout_widgets() const {
     std::vector<std::string> badges = source_config_ ? source_config_->summary_badges() : std::vector<std::string>{};
     badges.insert(badges.end(), preview_modifier_badges_.begin(), preview_modifier_badges_.end());
     if (!badges.empty()) {
-        self->source_summary_rect_ = SDL_Rect{x, content_y, width, selector_height};
-        content_y += selector_height;
+        // Ensure badges don't overlap with the source mode buttons when scrolled
+        int button_bottom = y - item_gap; // y is after buttons + item_gap, so button_bottom = y - item_gap
+        int min_badge_y = button_bottom + item_gap;
+        int badge_y = std::max(content_y, min_badge_y);
+        self->source_summary_rect_ = SDL_Rect{x, badge_y, width, selector_height};
+        content_y = badge_y + selector_height;
     } else {
         self->source_summary_rect_ = SDL_Rect{x, content_y, width, 0};
     }

@@ -8,6 +8,7 @@ struct ShadowMaskSettings {
     float falloff_start   = 0.0f;
     float falloff_exponent = 1.05f;
     float alpha_multiplier = 1.0f;
+    int chunk_resolution = 3;
 };
 
 inline ShadowMaskSettings SanitizeShadowMaskSettings(const ShadowMaskSettings& settings) {

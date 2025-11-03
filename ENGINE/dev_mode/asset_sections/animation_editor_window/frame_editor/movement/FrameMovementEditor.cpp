@@ -22,8 +22,8 @@ namespace animation_editor {
 
 namespace {
 
-// Keep totals compact to avoid wasting vertical space
-constexpr int kTotalsHeight = 28;
+// Totals panel moved to ToolsPanel; hide internal strip
+constexpr int kTotalsHeight = 0;
 constexpr int kVariantHeaderPadding = kPanelPadding;
 constexpr int kVariantTabHeight = 28;
 constexpr int kVariantTabSpacing = 6;
@@ -214,15 +214,7 @@ void FrameMovementEditor::update() {
             mark_dirty();
         }
     }
-    if (smooth_button_) {
-        bool can_smooth = frames_.size() > 2;
-        const DMButtonStyle& style = can_smooth ? DMStyles::AccentButton() : DMStyles::HeaderButton();
-        smooth_button_->set_style(&style);
-    }
-    if (show_anim_button_) {
-        const DMButtonStyle& style = show_animation_ ? DMStyles::AccentButton() : DMStyles::HeaderButton();
-        show_anim_button_->set_style(&style);
-    }
+    // Smooth and show toggles are managed by ToolsPanel
 
     if (dirty_) {
         apply_changes();
@@ -232,12 +224,7 @@ void FrameMovementEditor::update() {
 
 void FrameMovementEditor::render(SDL_Renderer* renderer) const {
     render_variant_header(renderer);
-    if (smooth_button_ && smooth_button_rect_.w > 0 && smooth_button_rect_.h > 0) {
-        smooth_button_->render(renderer);
-    }
-    if (show_anim_button_ && show_anim_button_rect_.w > 0 && show_anim_button_rect_.h > 0) {
-        show_anim_button_->render(renderer);
-    }
+    // No local controls rendered here (moved to ToolsPanel)
     if (canvas_) canvas_->render(renderer);
     if (totals_panel_) totals_panel_->render(renderer);
     if (properties_panel_) properties_panel_->render(renderer);
@@ -245,27 +232,10 @@ void FrameMovementEditor::render(SDL_Renderer* renderer) const {
 }
 
 void FrameMovementEditor::render_canvas_only(SDL_Renderer* renderer) const {
-    if (canvas_) canvas_->render(renderer);
+    if (canvas_) canvas_->render_background(renderer);
 }
 
 bool FrameMovementEditor::handle_event(const SDL_Event& e) {
-    if (show_anim_button_ && show_anim_button_rect_.w > 0 && show_anim_button_rect_.h > 0) {
-        if (show_anim_button_->handle_event(e)) {
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                show_animation_ = !show_animation_;
-                if (canvas_) canvas_->set_show_animation_overlay(show_animation_);
-            }
-            return true;
-        }
-    }
-    if (smooth_button_ && smooth_button_rect_.w > 0 && smooth_button_rect_.h > 0) {
-        if (smooth_button_->handle_event(e)) {
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                smooth_frames();
-            }
-            return true;
-        }
-    }
 
     if (handle_variant_header_event(e)) {
         return true;
@@ -482,14 +452,10 @@ void FrameMovementEditor::ensure_children() {
     if (!totals_panel_) {
         totals_panel_ = std::make_unique<TotalsPanel>();
     }
-    if (totals_panel_) totals_panel_->set_selected_index(&selected_index_);
-    if (!smooth_button_) {
-        smooth_button_ =
-            std::make_unique<DMButton>("Smooth", &DMStyles::AccentButton(), kVariantTabWidth, DMButton::height());
+    if (totals_panel_) {
+        totals_panel_->set_selected_index(&selected_index_);
     }
-    if (!show_anim_button_) {
-        show_anim_button_ = std::make_unique<DMButton>("Show Animation", &DMStyles::HeaderButton(), kVariantTabWidth, DMButton::height());
-    }
+    // Controls moved to external tools panel
     // Remove frame properties panel entirely (requested)
     if (properties_panel_) {
         properties_panel_.reset();
@@ -523,8 +489,9 @@ void FrameMovementEditor::update_layout() {
     // properties panel removed
 
     layout_variant_header();
-    if (smooth_button_) smooth_button_->set_rect(smooth_button_rect_);
-    if (show_anim_button_) show_anim_button_->set_rect(show_anim_button_rect_);
+    // Local control rects cleared; ToolsPanel owns controls
+    smooth_button_rect_ = SDL_Rect{0,0,0,0};
+    show_anim_button_rect_ = SDL_Rect{0,0,0,0};
     layout_frame_list();
 }
 
@@ -578,26 +545,14 @@ void FrameMovementEditor::layout_variant_header() {
 
     add_button_rect_ = SDL_Rect{x, y, kVariantTabHeight, kVariantTabHeight};
 
-    if (smooth_button_ || show_anim_button_) {
+    if (false) {
         const int after_add = add_button_rect_.x + add_button_rect_.w + kVariantTabSpacing;
         const int right_edge = header_rect_.x + header_rect_.w - kVariantHeaderPadding;
         int available = std::max(0, right_edge - after_add);
-        int smooth_w = smooth_button_ ? std::min(smooth_button_->preferred_width(), available) : 0;
-        int show_w = show_anim_button_ ? std::min(show_anim_button_->preferred_width(), std::max(0, available - smooth_w - kVariantTabSpacing)) : 0;
+        int smooth_w = 0;
+        int show_w = 0;
         int offset_x = right_edge;
-        if (smooth_w > 0) {
-            offset_x -= smooth_w;
-            smooth_button_rect_ = SDL_Rect{offset_x, y, smooth_w, kVariantTabHeight};
-            offset_x -= kVariantTabSpacing;
-        } else {
-            smooth_button_rect_ = SDL_Rect{0, 0, 0, 0};
-        }
-        if (show_w > 0) {
-            offset_x -= show_w;
-            show_anim_button_rect_ = SDL_Rect{offset_x, y, show_w, kVariantTabHeight};
-        } else {
-            show_anim_button_rect_ = SDL_Rect{0, 0, 0, 0};
-        }
+        (void)offset_x; (void)available; (void)after_add; (void)right_edge; (void)smooth_w; (void)show_w;
     }
 }
 
@@ -1076,6 +1031,42 @@ std::string FrameMovementEditor::generate_variant_name() const {
             return candidate;
         }
         ++suffix;
+    }
+}
+
+void FrameMovementEditor::set_show_animation(bool show) {
+    show_animation_ = show;
+    if (canvas_) canvas_->set_show_animation_overlay(show_animation_);
+}
+
+void FrameMovementEditor::apply_smoothing() {
+    smooth_frames();
+}
+
+std::pair<int,int> FrameMovementEditor::total_displacement() const {
+    int dx = 0, dy = 0;
+    for (size_t i = 1; i < frames_.size(); ++i) {
+        dx += static_cast<int>(std::lround(frames_[i].dx));
+        dy += static_cast<int>(std::lround(frames_[i].dy));
+    }
+    return {dx, dy};
+}
+
+void FrameMovementEditor::set_total_displacement(int target_dx, int target_dy) {
+    if (frames_.empty()) return;
+    double cur_dx = 0.0;
+    double cur_dy = 0.0;
+    for (size_t i = 1; i < frames_.size(); ++i) {
+        cur_dx += std::isfinite(frames_[i].dx) ? frames_[i].dx : 0.0;
+        cur_dy += std::isfinite(frames_[i].dy) ? frames_[i].dy : 0.0;
+    }
+    const double need_dx = static_cast<double>(target_dx) - cur_dx;
+    const double need_dy = static_cast<double>(target_dy) - cur_dy;
+    const size_t last = frames_.size() > 0 ? frames_.size() - 1 : 0;
+    if (last >= 1) {
+        frames_[last].dx = static_cast<float>(std::lround(frames_[last].dx + need_dx));
+        frames_[last].dy = static_cast<float>(std::lround(frames_[last].dy + need_dy));
+        mark_dirty();
     }
 }
 

@@ -232,6 +232,9 @@ private:
     bool sanitize_perimeter_spawn_groups(nlohmann::json& groups);
     std::optional<PerimeterOverlay> compute_perimeter_overlay_for_drag();
     std::optional<PerimeterOverlay> compute_perimeter_overlay_for_spawn(const std::string& spawn_id);
+    // Edge helper overlay: returns inset polygon path in world coords
+    std::optional<std::vector<SDL_Point>> compute_edge_path_for_drag();
+    std::optional<std::vector<SDL_Point>> compute_edge_path_for_spawn(const std::string& spawn_id);
     void add_spawn_group_internal();
     bool delete_spawn_group_internal(const std::string& spawn_id);
     bool remove_spawn_group_by_id(const std::string& spawn_id);

@@ -559,6 +559,11 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     if (!frame_editor_visible_) {
         if (auto* active_dd = DMDropdown::active_dropdown()) {
             if (active_dd->handle_event(e)) {
+                // Ensure any selection made via the global dropdown overlay
+                // is propagated into the inspector panels.
+                if (inspector_panel_) {
+                    inspector_panel_->apply_dropdown_selections();
+                }
                 return true;
             }
         }

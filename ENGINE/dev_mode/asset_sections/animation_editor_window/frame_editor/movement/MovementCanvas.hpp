@@ -30,6 +30,8 @@ class MovementCanvas {
 
     void update();
     void render(SDL_Renderer* renderer) const;
+    // Render only the background grid and optional context (no points/path)
+    void render_background(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
 
     void set_animation_context(std::shared_ptr<PreviewProvider> provider,

@@ -60,6 +60,9 @@ class SourceConfigPanel {
 
     bool allow_out_of_bounds_pointer_events() const;
 
+    // Commit any pending animation dropdown selection to the document/source config.
+    void commit_animation_dropdown_selection();
+
     SourceMode source_mode() const;
     void set_source_mode(SourceMode mode);
     bool use_animation_reference() const { return use_animation_reference_; }

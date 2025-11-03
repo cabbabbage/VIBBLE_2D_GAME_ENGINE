@@ -68,11 +68,6 @@ using devmode::spawn::generate_spawn_id;
 
 namespace {
 
-constexpr int kLabelPadding = 6;
-constexpr int kLabelVerticalOffset = 32;
-const SDL_Color kLabelBg{32, 32, 32, 200};
-const SDL_Color kLabelBorder{255, 255, 255, 96};
-const SDL_Color kLabelText{240, 240, 240, 255};
 constexpr int kClipboardNudge = 16;
 constexpr float kCameraScaleEpsilon = 1e-4f;
 
@@ -102,18 +97,7 @@ std::string trim_copy_room_editor(const std::string& input) {
     return result;
 }
 
-float display_color_luminance(SDL_Color color) {
-    return static_cast<float>(0.2126 * static_cast<double>(color.r) / 255.0 + 0.7152 * static_cast<double>(color.g) / 255.0 + 0.0722 * static_cast<double>(color.b) / 255.0);
-}
 
-bool colors_equal(SDL_Color lhs, SDL_Color rhs) {
-    return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b && lhs.a == rhs.a;
-}
-
-SDL_Color with_alpha(SDL_Color color, Uint8 alpha) {
-    color.a = alpha;
-    return color;
-}
 
 std::string sanitize_room_key_local(const std::string& input) {
     std::string out;
@@ -1777,6 +1761,68 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
             const int cross = std::max(6, radius_px / 4);
             SDL_RenderDrawLine(renderer, screen_center.x - cross, screen_center.y, screen_center.x + cross, screen_center.y);
             SDL_RenderDrawLine(renderer, screen_center.x, screen_center.y - cross, screen_center.x, screen_center.y + cross);
+        }
+
+        // Edge-path helper overlay (dashed) similar to perimeter overlay
+        auto draw_dashed_polyline_world = [&](const std::vector<SDL_Point>& path, SDL_Color color) {
+            if (path.size() < 2) return;
+            const camera& cam = assets_->getView();
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 210);
+            const int dash = 8;
+            const int gap  = 6;
+            for (size_t i = 0; i + 1 < path.size(); ++i) {
+                SDL_Point a = path[i];
+                SDL_Point b = path[i + 1];
+                const double dx = static_cast<double>(b.x - a.x);
+                const double dy = static_cast<double>(b.y - a.y);
+                const double len = std::hypot(dx, dy);
+                if (len <= 1e-6) continue;
+                const int total = static_cast<int>(std::lround(len));
+                double ux = dx / len;
+                double uy = dy / len;
+                int cursor = 0;
+                bool draw = true;
+                while (cursor < total) {
+                    int seg = draw ? dash : gap;
+                    int end = std::min(total, cursor + seg);
+                    if (draw) {
+                        // draw segment from cursor..end
+                        SDL_FPoint s_world{ static_cast<float>(a.x + ux * cursor), static_cast<float>(a.y + uy * cursor) };
+                        SDL_FPoint e_world{ static_cast<float>(a.x + ux * end),    static_cast<float>(a.y + uy * end) };
+                        SDL_FPoint s_screen_f = cam.map_to_screen_f(s_world);
+                        SDL_FPoint e_screen_f = cam.map_to_screen_f(e_world);
+                        SDL_Point s{ static_cast<int>(std::lround(s_screen_f.x)), static_cast<int>(std::lround(s_screen_f.y)) };
+                        SDL_Point e{ static_cast<int>(std::lround(e_screen_f.x)), static_cast<int>(std::lround(e_screen_f.y)) };
+                        SDL_RenderDrawLine(renderer, s.x, s.y, e.x, e.y);
+                    }
+                    cursor = end;
+                    draw = !draw;
+                }
+            }
+        };
+
+        auto edge_path = compute_edge_path_for_drag();
+        if (!edge_path) {
+            std::string edge_spawn_id;
+            if (hovered_asset_ && hovered_asset_->spawn_method == "Edge" && !hovered_asset_->spawn_id.empty()) {
+                edge_spawn_id = hovered_asset_->spawn_id;
+            } else {
+                for (Asset* asset : selected_assets_) {
+                    if (!asset) continue;
+                    if (asset->spawn_method == "Edge" && !asset->spawn_id.empty()) {
+                        edge_spawn_id = asset->spawn_id;
+                        break;
+                    }
+                }
+            }
+            if (!edge_spawn_id.empty()) {
+                edge_path = compute_edge_path_for_spawn(edge_spawn_id);
+            }
+        }
+        if (edge_path && !edge_path->empty()) {
+            SDL_Color color = DMStyles::AccentButton().hover_bg;
+            draw_dashed_polyline_world(*edge_path, color);
         }
     }
     if (room_cfg_ui_ && room_cfg_ui_->visible()) {
@@ -4493,6 +4539,57 @@ std::optional<RoomEditor::PerimeterOverlay> RoomEditor::compute_perimeter_overla
     return overlay;
 }
 
+std::optional<std::vector<SDL_Point>> RoomEditor::compute_edge_path_for_drag() {
+    if (!dragging_) return std::nullopt;
+    if (drag_mode_ != DragMode::Edge) return std::nullopt;
+    const Area* area = drag_edge_area_ ? drag_edge_area_ : (current_room_ ? current_room_->room_area.get() : nullptr);
+    if (!area) return std::nullopt;
+    SDL_Point center = drag_edge_center_;
+    int inset = static_cast<int>(std::lround(drag_edge_inset_percent_));
+    inset = std::clamp(inset, 0, 200);
+    const auto& pts = area->get_points();
+    if (pts.size() < 2) return std::nullopt;
+    const double scale = std::clamp(static_cast<double>(inset) / 100.0, 0.0, 2.0);
+    std::vector<SDL_Point> path;
+    path.reserve(pts.size() + 1);
+    for (const auto& p : pts) {
+        const double vx = static_cast<double>(p.x - center.x);
+        const double vy = static_cast<double>(p.y - center.y);
+        SDL_Point q{ static_cast<int>(std::lround(center.x + vx * scale)),
+                     static_cast<int>(std::lround(center.y + vy * scale)) };
+        path.push_back(q);
+    }
+    if (!path.empty()) path.push_back(path.front());
+    return path;
+}
+
+std::optional<std::vector<SDL_Point>> RoomEditor::compute_edge_path_for_spawn(const std::string& spawn_id) {
+    if (spawn_id.empty() || !current_room_) return std::nullopt;
+    nlohmann::json* entry = find_spawn_entry(spawn_id);
+    if (!entry) return std::nullopt;
+    std::string method = entry->value("position", std::string{});
+    if (method == "Exact Position") method = "Exact";
+    if (method != "Edge") return std::nullopt;
+    const Area* area = find_edge_area_for_entry(*entry);
+    if (!area) return std::nullopt;
+    SDL_Point center = area->get_center();
+    int inset = std::clamp(entry->value("edge_inset_percent", 100), 0, 200);
+    const auto& pts = area->get_points();
+    if (pts.size() < 2) return std::nullopt;
+    const double scale = std::clamp(static_cast<double>(inset) / 100.0, 0.0, 2.0);
+    std::vector<SDL_Point> path;
+    path.reserve(pts.size() + 1);
+    for (const auto& p : pts) {
+        const double vx = static_cast<double>(p.x - center.x);
+        const double vy = static_cast<double>(p.y - center.y);
+        SDL_Point q{ static_cast<int>(std::lround(center.x + vx * scale)),
+                     static_cast<int>(std::lround(center.y + vy * scale)) };
+        path.push_back(q);
+    }
+    if (!path.empty()) path.push_back(path.front());
+    return path;
+}
+
 void RoomEditor::add_spawn_group_internal() {
     if (!current_room_) return;
     auto& root = current_room_->assets_data();
@@ -5446,4 +5543,3 @@ double RoomEditor::edge_length_along_direction(const Area& area,
     }
     return best;
 }
-

@@ -216,8 +216,14 @@ bool SceneRenderer::shouldRegen(Asset* a){
 }
 
 SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){
-    const float world_x = a ? a->smoothed_translation_x() : 0.0f;
-    const float world_y = a ? a->smoothed_translation_y() : 0.0f;
+    float world_x = a ? a->smoothed_translation_x() : 0.0f;
+    float world_y = a ? a->smoothed_translation_y() : 0.0f;
+
+    // In dev mode, bypass translation smoothing so editor drags are visible immediately.
+    if (assets_ && assets_->is_dev_mode()) {
+        world_x = a ? static_cast<float>(a->pos.x) : 0.0f;
+        world_y = a ? static_cast<float>(a->pos.y) : 0.0f;
+    }
 
     float base_scale = 1.0f;
     if (a) {

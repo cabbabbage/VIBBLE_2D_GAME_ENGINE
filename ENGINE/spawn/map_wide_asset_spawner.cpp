@@ -154,9 +154,9 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
         assets.clear();
     }
 
-    const int resolution = vibble::grid::clamp_resolution(grid_settings_.resolution);
+    // Enforce a fixed grid resolution for map-wide placement, independent of preview settings
+    const int resolution = 9;
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
-    grid_service.set_default_resolution(resolution);
     vibble::grid::Occupancy occupancy(sweep_area, resolution, grid_service);
 
     for (const auto& asset_uptr : global_assets) {

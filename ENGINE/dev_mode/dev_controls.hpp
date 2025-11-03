@@ -13,7 +13,6 @@
 #include <nlohmann/json_fwd.hpp>
 
 #include "MapLightPanel.hpp"
-#include "map_grid_panel.hpp"
 #include "asset_filter_bar.hpp"
 #include "trail_editor_suite.hpp"
 #include "dev_mode/core/manifest_store.hpp"
@@ -230,7 +229,7 @@ private:
     std::unique_ptr<MapEditor> map_editor_;
     nlohmann::json* map_info_json_ = nullptr;
     MapLightPanel::SaveCallback map_light_save_cb_;
-    MapGridPanel::SaveCallback map_grid_save_cb_;
+    MapLightPanel::SaveCallback map_grid_save_cb_;
     std::function<void()> map_grid_regen_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;
     std::unique_ptr<CameraUIPanel> camera_panel_;
@@ -262,15 +261,10 @@ private:
     int  grid_cell_size_px_ = 8; // pixels per cell
 
     // Grid header controls
-    std::unique_ptr<class DMCheckbox> grid_overlay_checkbox_;
-    std::unique_ptr<class DMButton>   grid_snap_toggle_btn_;
     // Standard ticker for grid resolution (r)
     std::unique_ptr<class DMNumericStepper> grid_resolution_stepper_;
     // Cached layout of header controls for event handling
-    SDL_Rect grid_toggle_rect_{0,0,0,0};
-    SDL_Rect grid_snap_rect_{0,0,0,0};
     SDL_Rect grid_stepper_rect_{0,0,0,0};
-    SDL_Rect grid_label_rect_{0,0,0,0};
 
     // In-world frame editor session
     std::unique_ptr<class FrameEditorSession> frame_editor_session_;

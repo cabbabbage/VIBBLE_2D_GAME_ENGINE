@@ -520,9 +520,6 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     map_grid_regen_cb_ = [this]() { this->regenerate_map_grid_assets(); };
     apply_header_suppression();
-    // Build controls for grid features (Grid | Snap | Resolution)
-    grid_overlay_checkbox_   = std::make_unique<DMCheckbox>("Grid", grid_overlay_enabled_);
-    grid_snap_toggle_btn_    = std::make_unique<DMButton>("Snap", &DMStyles::HeaderButton(), 72, DMButton::height());
     // Resolution stepper uses same range as map grid (0..kMaxResolution)
     grid_resolution_stepper_ = std::make_unique<DMNumericStepper>("Grid Resolution (r)", 0, vibble::grid::kMaxResolution, 0);
     grid_resolution_stepper_->set_on_change([this](int new_r){
@@ -595,32 +592,19 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
     asset_filter_.set_map_info(map_info_json_);
     asset_filter_.set_current_room(current_room_);
-    // Provide extra panel content under filters: Grid | Snap | Resolution
-    asset_filter_.set_extra_panel_height(std::max(DMButton::height(), DMNumericStepper::height()) + DMSpacing::item_gap() * 2);
+    // Provide extra panel content under filters: Grid Resolution
+    asset_filter_.set_extra_panel_height(DMNumericStepper::height() + DMSpacing::item_gap() * 2);
     asset_filter_.set_extra_panel_renderer([this](SDL_Renderer* renderer, const SDL_Rect& area) {
         if (!renderer) return;
         const int gap = DMSpacing::item_gap();
-        const int btn_h = std::max(DMButton::height(), DMNumericStepper::height());
-        const int toggle_w = 72;
+        const int stepper_h = DMNumericStepper::height();
         const int stepper_w_min = 220;
-        int y = area.y + std::max(0, (area.h - btn_h) / 2);
+        int y = area.y + std::max(0, (area.h - stepper_h) / 2);
         int x = area.x + gap;
-        grid_toggle_rect_ = SDL_Rect{ x, y, toggle_w, btn_h }; x += toggle_w + gap;
-        grid_snap_rect_   = SDL_Rect{ x, y, toggle_w, btn_h }; x += toggle_w + gap;
-        // Stepper takes the remaining width (at least min width)
+        // Stepper takes the full width
         int remaining = std::max(0, area.x + area.w - gap - x);
         int stepper_w = std::max(stepper_w_min, remaining);
-        grid_stepper_rect_ = SDL_Rect{ x, y, stepper_w, btn_h };
-        if (grid_overlay_checkbox_) {
-            grid_overlay_checkbox_->set_value(grid_overlay_enabled_);
-            grid_overlay_checkbox_->set_rect(grid_toggle_rect_);
-            grid_overlay_checkbox_->render(renderer);
-        }
-        if (grid_snap_toggle_btn_) {
-            grid_snap_toggle_btn_->set_style(snap_to_grid_enabled_ ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
-            grid_snap_toggle_btn_->set_rect(grid_snap_rect_);
-            grid_snap_toggle_btn_->render(renderer);
-        }
+        grid_stepper_rect_ = SDL_Rect{ x, y, stepper_w, stepper_h };
         if (grid_resolution_stepper_) {
             // Keep stepper value in sync with map grid settings each frame
             int r_value = 0;
@@ -648,44 +632,20 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
             else { int mx=0,my=0; SDL_GetMouseState(&mx,&my); p = SDL_Point{mx,my}; }
             if (!SDL_PointInRect(&p, &area)) {
                 // Ignore pointer events outside the extra panel
-                // Still allow key modifiers to affect +/- if pointer is inside buttons
                 return false;
             }
         }
-        auto handle_click = [&](DMButton* btn) -> bool {
-            if (!btn) return false;
-            if (btn->handle_event(event)) {
-                if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
-                    return true;
-                }
-                return true;
-            }
-            return false;
-        };
         bool used = false;
         // Update layout against latest area values
         const int gap = DMSpacing::item_gap();
-        const int btn_h = std::max(DMButton::height(), DMNumericStepper::height());
-        const int toggle_w = 72;
-        int y = area.y + std::max(0, (area.h - btn_h) / 2);
+        const int stepper_h = DMNumericStepper::height();
+        int y = area.y + std::max(0, (area.h - stepper_h) / 2);
         int x = area.x + gap;
-        grid_toggle_rect_ = SDL_Rect{ x, y, toggle_w, btn_h }; x += toggle_w + gap;
-        grid_snap_rect_   = SDL_Rect{ x, y, toggle_w, btn_h }; x += toggle_w + gap;
+        // Stepper takes the full width
         int remaining = std::max(0, area.x + area.w - gap - x);
-        grid_stepper_rect_ = SDL_Rect{ x, y, remaining, btn_h };
-        if (grid_overlay_checkbox_)    grid_overlay_checkbox_->set_rect(grid_toggle_rect_);
-        if (grid_snap_toggle_btn_)     grid_snap_toggle_btn_->set_rect(grid_snap_rect_);
+        grid_stepper_rect_ = SDL_Rect{ x, y, remaining, stepper_h };
         if (grid_resolution_stepper_)  grid_resolution_stepper_->set_rect(grid_stepper_rect_);
-        // Grid checkbox
-        if (grid_overlay_checkbox_ && grid_overlay_checkbox_->handle_event(event)) {
-            grid_overlay_enabled_ = grid_overlay_checkbox_->value();
-            devmode::ui_settings::save_bool(kGridOverlayEnabledKey, grid_overlay_enabled_);
-            used = true;
-        } else if (handle_click(grid_snap_toggle_btn_.get())) {
-            snap_to_grid_enabled_ = !snap_to_grid_enabled_;
-            devmode::ui_settings::save_bool(kGridSnapEnabledKey, snap_to_grid_enabled_);
-            used = true;
-        } else if (grid_resolution_stepper_ && grid_resolution_stepper_->handle_event(event)) {
+        if (grid_resolution_stepper_ && grid_resolution_stepper_->handle_event(event)) {
             // DMNumericStepper will invoke set_on_change; we consider event handled
             used = true;
         }
@@ -751,7 +711,6 @@ void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCall
     if (map_mode_ui_) {
         map_mode_ui_->set_light_save_callback(map_light_save_cb_);
         map_mode_ui_->set_map_context(map_info_json_, map_path_);
-        map_mode_ui_->set_map_grid_callbacks(map_grid_save_cb_, map_grid_regen_cb_);
     }
     asset_filter_.set_map_info(map_info_json_);
     // Sync header stepper and cell size from current map grid settings
@@ -877,7 +836,6 @@ void DevControls::set_map_context(nlohmann::json* map_info, const std::string& m
     if (map_mode_ui_) {
         map_mode_ui_->set_map_context(map_info, map_path);
         map_mode_ui_->set_light_save_callback(map_light_save_cb_);
-        map_mode_ui_->set_map_grid_callbacks(map_grid_save_cb_, map_grid_regen_cb_);
     }
     if (rooms_ && assets_) {
         const std::string map_id = assets_->map_id();
@@ -1179,7 +1137,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
     const bool modal_hide_pre = is_modal_blocking_panels();
-    const bool hide_headers_pre = modal_hide_pre || sliding_headers_hidden_ || !sliding_rects.empty();
+    const bool layers_panel_open_pre = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
+    const bool hide_headers_pre = modal_hide_pre || sliding_headers_hidden_ || !sliding_rects.empty() || layers_panel_open_pre;
     header_rect = hide_headers_pre ? SDL_Rect{0, 0, 0, 0} : asset_filter_.header_rect();
     SDL_Rect usable_rect = FloatingPanelLayoutManager::instance().computeUsableRect(
         SDL_Rect{0, 0, screen_w_, screen_h_},
@@ -1199,8 +1158,10 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
 
     const bool modal_hide = is_modal_blocking_panels();
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     modal_headers_hidden_ = modal_hide;
-    const bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
+    // Also suppress header when the Layers panel is open, to avoid intercepting clicks
+    const bool hide_headers = modal_hide || layers_panel_open; // keep header visible unless a modal blocks panels or layers is open
     // Keep header always visible in dev mode
     asset_filter_.set_enabled(enabled_);
     asset_filter_.set_header_suppressed(hide_headers);
@@ -1213,10 +1174,21 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return used;
 };
 
-    // Route the rest of header events to AssetFilterBar;
+    // If Layers panel is open, allow ESC to close it and consume the key so main menu does not open
+    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+        if (layers_panel_open && map_mode_ui_) {
+            map_mode_ui_->toggle_layers_panel();
+            consume(true);
+            return;
+        }
+    }
+
+    // Route the rest of header events to AssetFilterBar only when header is not suppressed;
     // extra grid panel events are handled via its extra event handler.
-    if (pointer_event && consume(asset_filter_.handle_event(event))) {
-        return;
+    if (!asset_filter_.header_suppressed()) {
+        if (pointer_event && consume(asset_filter_.handle_event(event))) {
+            return;
+        }
     }
     if (pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y) && !asset_filter_.header_suppressed()) {
         consume(true);
@@ -1424,6 +1396,81 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (!enabled_) return;
 
+    // Render grid overlay if enabled (moved to beginning to render behind UI)
+    if (grid_overlay_enabled_ && assets_) {
+        const camera& cam = assets_->getView();
+        SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+        SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
+        SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+        // Grid colors (reduced alpha)
+        SDL_Color minor{0, 255, 255, 48};
+        SDL_Color major{0, 255, 255, 80};
+
+        // Calculate visible world bounds
+        SDL_FPoint top_left_world = cam.screen_to_map(SDL_Point{0, 0});
+        SDL_FPoint bottom_right_world = cam.screen_to_map(SDL_Point{screen_w_, screen_h_});
+
+        // Calculate grid lines using map grid resolution when available
+        int cell = grid_cell_size_px_;
+        if (map_info_json_) {
+            const nlohmann::json* section = nullptr;
+            auto it = map_info_json_->find("map_grid_settings");
+            if (it != map_info_json_->end() && it->is_object()) {
+                section = &(*it);
+            }
+            MapGridSettings settings = MapGridSettings::from_json(section);
+            settings.clamp();
+            cell = settings.spacing();
+        }
+        cell = std::max(1, cell);
+        if (cell > 0) {
+            const int major_interval = 8; // major line every N cells
+            // Vertical lines
+            float start_x = std::floor(top_left_world.x / cell) * cell;
+            for (float x = start_x; x <= bottom_right_world.x + cell; x += cell) {
+                // Compute parallax-adjusted screen coordinates
+                SDL_Point world_start{ static_cast<int>(std::lround(x)), static_cast<int>(std::lround(top_left_world.y)) };
+                SDL_Point world_end  { static_cast<int>(std::lround(x)), static_cast<int>(std::lround(bottom_right_world.y)) };
+                SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
+                SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
+                camera::RenderEffects eff_start = cam.compute_render_effects(world_start, 1.0f, 1.0f);
+                camera::RenderEffects eff_end   = cam.compute_render_effects(world_end,   1.0f, 1.0f);
+                int sx0 = static_cast<int>(std::lround(screen_start.x + eff_start.parallax_offset_x));
+                int sy0 = static_cast<int>(std::lround(screen_start.y));
+                int sx1 = static_cast<int>(std::lround(screen_end.x   + eff_end.parallax_offset_x));
+                int sy1 = static_cast<int>(std::lround(screen_end.y));
+                const bool is_major = (static_cast<long long>(std::llround(x)) % (cell * major_interval) == 0);
+                SDL_Color c = is_major ? major : minor;
+                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                SDL_RenderDrawLine(renderer, sx0, sy0, sx1, sy1);
+            }
+
+            // Horizontal lines
+            float start_y = std::floor(top_left_world.y / cell) * cell;
+            for (float y = start_y; y <= bottom_right_world.y + cell; y += cell) {
+                SDL_Point world_start{ static_cast<int>(std::lround(top_left_world.x)),     static_cast<int>(std::lround(y)) };
+                SDL_Point world_end  { static_cast<int>(std::lround(bottom_right_world.x)), static_cast<int>(std::lround(y)) };
+                SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
+                SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
+                camera::RenderEffects eff_start = cam.compute_render_effects(world_start, 1.0f, 1.0f);
+                camera::RenderEffects eff_end   = cam.compute_render_effects(world_end,   1.0f, 1.0f);
+                int sx0 = static_cast<int>(std::lround(screen_start.x + eff_start.parallax_offset_x));
+                int sy0 = static_cast<int>(std::lround(screen_start.y));
+                int sx1 = static_cast<int>(std::lround(screen_end.x   + eff_end.parallax_offset_x));
+                int sy1 = static_cast<int>(std::lround(screen_end.y));
+                const bool is_major = (static_cast<long long>(std::llround(y)) % (cell * major_interval) == 0);
+                SDL_Color c = is_major ? major : minor;
+                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                SDL_RenderDrawLine(renderer, sx0, sy0, sx1, sy1);
+            }
+        }
+
+        SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
+        SDL_SetRenderDrawBlendMode(renderer, prev_mode);
+    }
+
     if (mode_ == Mode::MapEditor) {
         if (map_editor_) map_editor_->render(renderer);
     } else if (mode_ == Mode::RoomEditor && room_editor_) {
@@ -1573,80 +1620,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
     }
-    // Render grid overlay if enabled
-    if (grid_overlay_enabled_ && assets_) {
-        const camera& cam = assets_->getView();
-        SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
-        SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
-        SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
-        // Grid colors (reduced alpha)
-        SDL_Color minor{0, 255, 255, 48};
-        SDL_Color major{0, 255, 255, 80};
 
-        // Calculate visible world bounds
-        SDL_FPoint top_left_world = cam.screen_to_map(SDL_Point{0, 0});
-        SDL_FPoint bottom_right_world = cam.screen_to_map(SDL_Point{screen_w_, screen_h_});
-
-        // Calculate grid lines using map grid resolution when available
-        int cell = grid_cell_size_px_;
-        if (map_info_json_) {
-            const nlohmann::json* section = nullptr;
-            auto it = map_info_json_->find("map_grid_settings");
-            if (it != map_info_json_->end() && it->is_object()) {
-                section = &(*it);
-            }
-            MapGridSettings settings = MapGridSettings::from_json(section);
-            settings.clamp();
-            cell = settings.spacing();
-        }
-        cell = std::max(1, cell);
-        if (cell > 0) {
-            const int major_interval = 8; // major line every N cells
-            // Vertical lines
-            float start_x = std::floor(top_left_world.x / cell) * cell;
-            for (float x = start_x; x <= bottom_right_world.x + cell; x += cell) {
-                // Compute parallax-adjusted screen coordinates
-                SDL_Point world_start{ static_cast<int>(std::lround(x)), static_cast<int>(std::lround(top_left_world.y)) };
-                SDL_Point world_end  { static_cast<int>(std::lround(x)), static_cast<int>(std::lround(bottom_right_world.y)) };
-                SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
-                SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
-                camera::RenderEffects eff_start = cam.compute_render_effects(world_start, 1.0f, 1.0f);
-                camera::RenderEffects eff_end   = cam.compute_render_effects(world_end,   1.0f, 1.0f);
-                int sx0 = static_cast<int>(std::lround(screen_start.x + eff_start.parallax_offset_x));
-                int sy0 = static_cast<int>(std::lround(screen_start.y));
-                int sx1 = static_cast<int>(std::lround(screen_end.x   + eff_end.parallax_offset_x));
-                int sy1 = static_cast<int>(std::lround(screen_end.y));
-                const bool is_major = (static_cast<long long>(std::llround(x)) % (cell * major_interval) == 0);
-                SDL_Color c = is_major ? major : minor;
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-                SDL_RenderDrawLine(renderer, sx0, sy0, sx1, sy1);
-            }
-
-            // Horizontal lines
-            float start_y = std::floor(top_left_world.y / cell) * cell;
-            for (float y = start_y; y <= bottom_right_world.y + cell; y += cell) {
-                SDL_Point world_start{ static_cast<int>(std::lround(top_left_world.x)),     static_cast<int>(std::lround(y)) };
-                SDL_Point world_end  { static_cast<int>(std::lround(bottom_right_world.x)), static_cast<int>(std::lround(y)) };
-                SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
-                SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
-                camera::RenderEffects eff_start = cam.compute_render_effects(world_start, 1.0f, 1.0f);
-                camera::RenderEffects eff_end   = cam.compute_render_effects(world_end,   1.0f, 1.0f);
-                int sx0 = static_cast<int>(std::lround(screen_start.x + eff_start.parallax_offset_x));
-                int sy0 = static_cast<int>(std::lround(screen_start.y));
-                int sx1 = static_cast<int>(std::lround(screen_end.x   + eff_end.parallax_offset_x));
-                int sy1 = static_cast<int>(std::lround(screen_end.y));
-                const bool is_major = (static_cast<long long>(std::llround(y)) % (cell * major_interval) == 0);
-                SDL_Color c = is_major ? major : minor;
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-                SDL_RenderDrawLine(renderer, sx0, sy0, sx1, sy1);
-            }
-        }
-
-        SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
-        SDL_SetRenderDrawBlendMode(renderer, prev_mode);
-    }
 
     if (map_mode_ui_) map_mode_ui_->render(renderer);
     if (map_assets_modal_ && map_assets_modal_->visible()) {
@@ -1666,7 +1640,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         regenerate_popup_->render(renderer);
     }
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    const bool hide_headers = modal_headers_hidden_; // ignore sliding windows for header visibility
+    // Hide the top dev header when the Layers panel is open so its close button isn't obscured
+    const bool hide_headers = modal_headers_hidden_ || layers_panel_open; // ignore sliding windows for header visibility
     asset_filter_.set_header_suppressed(hide_headers);
     if (!hide_headers && !is_modal_blocking_panels()) {
         // Render header and expanded filters (extra Grid panel is rendered inside AssetFilterBar)
@@ -1963,45 +1938,7 @@ void DevControls::configure_header_button_sets() {
     map_buttons.push_back(make_lighting_button());
     map_buttons.push_back(make_layers_button());
 
-    {
-        MapModeUI::HeaderButtonConfig grid_btn;
-        grid_btn.id = "map_grid";
-        grid_btn.label = "Map Grid";
-        grid_btn.active = map_mode_ui_ && map_mode_ui_->is_grid_panel_visible();
-        grid_btn.on_toggle = [this](bool active) {
-            if (room_editor_) {
-                room_editor_->close_room_config();
-            }
-            if (!map_mode_ui_) {
-                sync_header_button_states();
-                return;
-            }
-            const bool currently_open = map_mode_ui_->is_grid_panel_visible();
-            if (active != currently_open) {
-                if (active && !currently_open && is_modal_blocking_panels()) {
-                    pulse_modal_header();
-                    sync_header_button_states();
-                    return;
-                }
-                map_mode_ui_->toggle_grid_panel();
-            }
-            sync_header_button_states();
-};
-        map_buttons.push_back(std::move(grid_btn));
-    }
 
-    {
-        MapModeUI::HeaderButtonConfig grid_overlay_btn;
-        grid_overlay_btn.id = "map_grid_overlay";
-        grid_overlay_btn.label = "Grid Overlay";
-        grid_overlay_btn.active = grid_overlay_enabled_;
-        grid_overlay_btn.on_toggle = [this](bool active) {
-            grid_overlay_enabled_ = active;
-            devmode::ui_settings::save_bool(kGridOverlayEnabledKey, active);
-            sync_header_button_states();
-        };
-        map_buttons.push_back(std::move(grid_overlay_btn));
-    }
 
     {
         MapModeUI::HeaderButtonConfig map_assets_btn;
@@ -2137,8 +2074,7 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "lights", lights_open);
     const bool light_map_open = map_mode_ui_->is_light_map_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "light_map", light_map_open);
-    const bool grid_open = map_mode_ui_->is_grid_panel_visible();
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_grid", grid_open);
+    // Grid panel removed
     const bool layers_open = map_mode_ui_->is_layers_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "layers", layers_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_layers", layers_open);

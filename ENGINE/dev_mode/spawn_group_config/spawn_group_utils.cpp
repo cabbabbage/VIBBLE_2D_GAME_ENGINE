@@ -333,9 +333,23 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
             entry["edge_inset_percent"] = clamped_inset;
             changed = true;
         }
-    } else if (entry.contains("edge_inset_percent")) {
-        entry.erase("edge_inset_percent");
-        changed = true;
+    } else if (method == "Perimeter") {
+        int radius = entry.value("radius", entry.value("perimeter_radius", kPerimeterRadiusDefault));
+        if (!entry.contains("radius") || !entry["radius"].is_number_integer() ||
+            entry["radius"].get<int>() != radius) {
+            entry["radius"] = radius;
+            changed = true;
+        }
+        if (!entry.contains("perimeter_radius") || !entry["perimeter_radius"].is_number_integer() ||
+            entry["perimeter_radius"].get<int>() != radius) {
+            entry["perimeter_radius"] = radius;
+            changed = true;
+        }
+    } else {
+        if (entry.contains("edge_inset_percent")) {
+            entry.erase("edge_inset_percent");
+            changed = true;
+        }
     }
 
     return changed;

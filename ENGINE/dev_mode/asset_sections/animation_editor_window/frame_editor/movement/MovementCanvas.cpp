@@ -155,6 +155,44 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
     }
 }
 
+void MovementCanvas::render_background(SDL_Renderer* renderer) const {
+    if (!renderer) return;
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    dm_draw::DrawBeveledRect(renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(),
+                              DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(),
+                              DMStyles::ShadowIntensity());
+
+    render_pixel_grid(renderer);
+
+    // Optionally show animation overlay for context, but no movement points/path
+    if (show_animation_overlay_ && preview_provider_) {
+        SDL_Texture* tex = nullptr;
+        if (!animation_id_.empty()) {
+            tex = preview_provider_->get_frame_texture(renderer, animation_id_, std::max(0, selected_index_));
+        }
+        if (tex) {
+            int tw = 0, th = 0;
+            if (SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th) == 0 && tw > 0 && th > 0) {
+                const float scale = pixels_per_unit_ * zoom_;
+                const float scale_factor = (base_scale_percentage_ <= 0.0f) ? 1.0f : (base_scale_percentage_ / 100.0f);
+                const float dst_w_px = static_cast<float>(tw) * scale_factor * scale;
+                const float dst_h_px = static_cast<float>(th) * scale_factor * scale;
+                SDL_FPoint anchor_world = SDL_FPoint{0.0f, 0.0f};
+                if (selected_index_ >= 0 && selected_index_ < static_cast<int>(positions_.size())) {
+                    anchor_world = positions_[selected_index_];
+                }
+                SDL_FPoint anchor_screen = world_to_screen(anchor_world);
+                const int left = static_cast<int>(std::round(anchor_screen.x - dst_w_px * 0.5f));
+                const int top = static_cast<int>(std::round(anchor_screen.y - dst_h_px));
+                SDL_Rect dst{left, top, static_cast<int>(std::round(dst_w_px)), static_cast<int>(std::round(dst_h_px))};
+                SDL_RenderCopy(renderer, tex, nullptr, &dst);
+            }
+        }
+    }
+}
+
 void MovementCanvas::render_pixel_grid(SDL_Renderer* renderer) const {
     if (!renderer) return;
     if (bounds_.w <= 0 || bounds_.h <= 0) return;

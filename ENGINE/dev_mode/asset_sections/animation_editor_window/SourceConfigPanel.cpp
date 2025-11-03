@@ -154,6 +154,18 @@ void SourceConfigPanel::update() {
             }
         }
     }
+
+    // If the dropdown is visible, ensure a user selection made via the global
+    // dropdown handler gets applied even if the event didn't route through us.
+    if (use_animation_reference_ && animation_dropdown_ && !animation_options_.empty()) {
+        int idx = std::clamp(animation_dropdown_->selected(), 0, static_cast<int>(animation_options_.size()) - 1);
+        // Apply only if panel state or document target differs from the dropdown selection.
+        std::string current_target = strings::trim_copy(current_source_.name.value_or(current_source_.path));
+        const std::string& desired = animation_options_[idx];
+        if (idx != animation_index_ || strings::trim_copy(desired) != current_target) {
+            apply_animation_selection();
+        }
+    }
 }
 
 void SourceConfigPanel::render(SDL_Renderer* renderer) const {
@@ -744,14 +756,15 @@ void SourceConfigPanel::layout_controls() {
                 animation_dropdown_ = std::make_unique<DMDropdown>("Source Animation", animation_options_, std::max(0, idx));
                 animation_index_ = animation_dropdown_->selected();
             } else {
-                int idx = animation_index_;
+                // Preserve any user-chosen selection already present in the dropdown.
+                int idx = animation_dropdown_->selected();
                 if (!animation_options_.empty()) {
                     idx = std::clamp(idx, 0, static_cast<int>(animation_options_.size()) - 1);
                 } else {
                     idx = 0;
                 }
                 animation_dropdown_->set_selected(idx);
-                animation_index_ = animation_dropdown_->selected();
+                animation_index_ = idx;
             }
 
             animation_dropdown_rect_ = SDL_Rect{x, y, inner_w, DMDropdown::height()};
@@ -828,9 +841,9 @@ void SourceConfigPanel::refresh_animation_options() {
     }
 
     if (new_options == animation_options_) {
+        // Keep panel state in sync with the current dropdown selection without forcing it.
         if (animation_dropdown_ && !animation_options_.empty()) {
-            int idx = std::clamp(animation_index_, 0, static_cast<int>(animation_options_.size()) - 1);
-            animation_dropdown_->set_selected(idx);
+            animation_index_ = std::clamp(animation_dropdown_->selected(), 0, static_cast<int>(animation_options_.size()) - 1);
         }
         return;
     }
@@ -885,6 +898,10 @@ void SourceConfigPanel::apply_animation_selection() {
     animation_start_time_ = SDL_GetTicks();
     update_status("Linked frames from animation '" + target + "'");
     if (on_source_changed_) on_source_changed_(animation_id_);
+}
+
+void SourceConfigPanel::commit_animation_dropdown_selection() {
+    apply_animation_selection();
 }
 
 void SourceConfigPanel::import_from_folder() {

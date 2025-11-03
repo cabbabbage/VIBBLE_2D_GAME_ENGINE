@@ -127,15 +127,18 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
                                                                        devmode::core::ManifestStore* manifest_store,
                                                                        Room::ManifestWriter manifest_writer)
 {
+        std::cout << "[GenerateTrails] Starting trail generation with " << room_pairs.size() << " forced connections\n";
         trail_areas_.clear();
         std::vector<std::unique_ptr<Room>> trail_rooms;
         std::vector<Area> all_areas = existing_areas;
         auto connection_plan = plan_maze_connections(all_rooms_reference, room_pairs);
+        std::cout << "[GenerateTrails] Planned " << connection_plan.size() << " trail connections (" << room_pairs.size() << " forced)\n";
         if (testing) {
                 std::cout << "[GenerateTrails] Planned " << connection_plan.size() << " trail connections (" << room_pairs.size() << " forced).\n";
         }
         for (const auto& [a, b] : connection_plan) {
                 if (!a || !b) continue;
+                std::cout << "[GenerateTrails] Attempting connection: " << a->room_name << " <-> " << b->room_name << "\n";
                 if (testing) {
                         std::cout << "[GenerateTrails] Connecting: " << a->room_name
                         << " <--> " << b->room_name << "\n";
@@ -146,12 +149,20 @@ std::vector<std::unique_ptr<Room>> GenerateTrails::generate_trails(
                                 success = TrailGeometry::attempt_trail_connection( a, b, all_areas, manifest_context, asset_lib, trail_rooms, 1, asset_ref->data, asset_ref->name, map_assets_data, map_radius, testing, rng_, map_manifest, manifest_store, manifest_writer);
                         }
                 }
-                if (!success && testing) {
-                        std::cout << "[TrailGen] Failed to place trail between "
-                        << a->room_name << " and " << b->room_name << "\n";
+                if (success) {
+                        std::cout << "[GenerateTrails] Connection successful\n";
+                } else {
+                        std::cout << "[GenerateTrails] Connection failed after 1000 attempts\n";
+                        if (testing) {
+                                std::cout << "[TrailGen] Failed to place trail between "
+                                << a->room_name << " and " << b->room_name << "\n";
+                        }
                 }
         }
+        std::cout << "[GenerateTrails] Starting isolated room connections\n";
         find_and_connect_isolated(manifest_context, asset_lib, all_areas, trail_rooms, map_assets_data, map_radius, map_manifest, manifest_store, manifest_writer);
+        std::cout << "[GenerateTrails] Isolated connections completed\n";
+        std::cout << "[GenerateTrails] Total trail rooms created: " << trail_rooms.size() << "\n";
         if (testing) {
                 std::cout << "[TrailGen] Total trail rooms created: " << trail_rooms.size() << "\n";
         }
@@ -374,7 +385,9 @@ void GenerateTrails::find_and_connect_isolated(
 {
 	const int max_passes = 1000000;
 	int allowed_intersections = 0;
+	std::cout << "[GenerateTrails] Starting isolated connection with max " << max_passes << " passes\n";
 	for (int pass = 0; pass < max_passes; ++pass) {
+		std::cout << "[GenerateTrails] Isolated pass " << pass + 1 << " with " << allowed_intersections << " allowed intersections\n";
 		std::unordered_set<Room*> visited;
 		std::unordered_set<Room*> connected_to_spawn;
 		std::vector<std::vector<Room*>> isolated_groups;

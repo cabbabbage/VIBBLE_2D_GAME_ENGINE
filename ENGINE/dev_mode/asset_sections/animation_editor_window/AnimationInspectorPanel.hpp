@@ -70,6 +70,9 @@ class AnimationInspectorPanel {
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
 
+    // Apply any pending dropdown selections inside sub-panels.
+    void apply_dropdown_selections();
+
     // External scrub control (used by FrameEditor modal)
     void set_scrub_mode(bool enable);
     void set_scrub_frame(int frame);

@@ -31,9 +31,8 @@ double room_extent_from_rooms_data(const nlohmann::json* rooms_data, const std::
 
 double map_radius_from_map_info(const nlohmann::json& map_info);
 
-double min_edge_distance_from_map_info(const nlohmann::json& map_info);
+double min_edge_distance_from_map_manifest(const nlohmann::json& map_manifest);
 
 RadialLayout compute_radial_layout(double base_radius, const std::vector<double>& extents, double min_edge_distance, double start_angle);
 
 }
-

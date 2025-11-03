@@ -47,7 +47,7 @@ namespace fs = std::filesystem;
 namespace {
 
 std::optional<fs::path> prepare_sky_background();
-nlohmann::json build_default_map_info(const std::string& map_name);
+nlohmann::json build_default_map_manifest(const std::string& map_name);
 
 std::optional<fs::path> prepare_sky_background() {
     try {
@@ -166,8 +166,8 @@ void MainApp::setup() {
                                 vibble::log::warn(std::string("[MainApp] Map '") + map_identifier + "' missing from manifest. Using descriptor payload.");
                                 map_manifest_json = map_descriptor_.data;
                         } else {
-                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier + "' missing from manifest. Generating default map info.");
-                                map_manifest_json = build_default_map_info(map_identifier);
+                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier + "' missing from manifest. Generating default map manifest.");
+                                map_manifest_json = build_default_map_manifest(map_identifier);
                         }
                 }
 
@@ -187,7 +187,7 @@ void MainApp::setup() {
 
                 bool manifest_updated = !manifest_entry_found;
                 if (relative_content_root.empty()) {
-                        relative_content_root = fs::path("MAPS") / map_identifier;
+                        relative_content_root = fs::path("content") / map_identifier;
                         map_manifest_json["content_root"] = relative_content_root.generic_string();
                         manifest_updated = true;
                         vibble::log::warn(std::string("[MainApp] No content_root for map '") + map_identifier + "'. Using default '" + relative_content_root.generic_string() + "'.");
@@ -230,6 +230,7 @@ void MainApp::setup() {
                 if (screen_w_ > 0 && screen_h_ > 0) {
                         scaling_options.screen_aspect = static_cast<double>(screen_w_) / static_cast<double>(screen_h_);
                 }
+                scaling_options.asset_library = const_cast<const AssetLibrary*>(asset_library_);
                 render_pipeline::BuildScalingProfiles(scaling_options);
 
                 vibble::log::info("[MainApp] Constructing AssetLoader...");
@@ -244,6 +245,12 @@ void MainApp::setup() {
                 auto all_assets = loader_->take_spawned_assets();
                 vibble::log::info(std::string("[MainApp] Asset spawning finished for map '") + map_identifier + "'.");
                 vibble::log::info(std::string("[MainApp] ") + std::to_string(all_assets.size()) + " assets created and cached.");
+                // Hard safety limit to prevent runaway spawns causing severe performance issues
+                if (all_assets.size() > 200000) {
+                        vibble::log::error(std::string("[MainApp] Asset count ") + std::to_string(all_assets.size()) +
+                                           " exceeds limit (200000). Aborting to avoid instability.");
+                        throw std::runtime_error("Asset count exceeds 200000; aborting.");
+                }
                 const auto asset_count = all_assets.size();
                 const auto room_count = loader_->getRooms().size();
                 Asset* player_ptr = nullptr;
@@ -364,7 +371,7 @@ std::optional<std::string> sanitize_map_name(const std::string& input) {
     return result;
 }
 
-nlohmann::json build_default_map_info(const std::string& map_name) {
+nlohmann::json build_default_map_manifest(const std::string& map_name) {
     constexpr int kSpawnRadius = 1500;
     const int diameter = kSpawnRadius * 2;
 
@@ -455,7 +462,7 @@ std::optional<MapDescriptor> create_new_map_interactively() {
             continue;
         }
 
-        nlohmann::json map_info = build_default_map_info(*sanitized);
+        nlohmann::json map_info = build_default_map_manifest(*sanitized);
 
         fs::path manifest_root;
         try {
@@ -467,15 +474,15 @@ std::optional<MapDescriptor> create_new_map_interactively() {
         }
 
         std::error_code dir_error;
-        fs::path maps_root = manifest_root / "MAPS";
-        fs::create_directories(maps_root, dir_error);
+        fs::path content_root = manifest_root / "content";
+        fs::create_directories(content_root, dir_error);
         if (dir_error) {
-            std::string msg = std::string("Failed to prepare MAPS folder: ") + dir_error.message();
+            std::string msg = std::string("Failed to prepare content folder: ") + dir_error.message();
             tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
             continue;
         }
 
-        fs::path map_dir = maps_root / *sanitized;
+        fs::path map_dir = content_root / *sanitized;
         dir_error.clear();
         fs::create_directories(map_dir, dir_error);
         if (dir_error) {
@@ -484,7 +491,7 @@ std::optional<MapDescriptor> create_new_map_interactively() {
             continue;
         }
 
-        map_info["content_root"] = (fs::path("MAPS") / *sanitized).generic_string();
+        map_info["content_root"] = (fs::path("content") / *sanitized).generic_string();
 
 
 

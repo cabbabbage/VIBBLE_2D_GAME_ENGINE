@@ -10,6 +10,7 @@
 #include "MovementCanvas.hpp"
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
+#include "../../../../widgets.hpp"
 
 namespace animation_editor {
 
@@ -41,16 +42,34 @@ TotalsPanel::TotalsPanel() = default;
 
 void TotalsPanel::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
+    // Layout text boxes side-by-side
+    const int pad = 6;
+    const int box_h = DMTextBox::height();
+    const int content_x = bounds_.x + pad;
+    const int content_y = bounds_.y + pad;
+    const int content_w = std::max(0, bounds_.w - pad * 2);
+    const int col_w = std::max(0, (content_w - pad) / 2);
+    if (!dx_box_) dx_box_ = std::make_unique<DMTextBox>("Total dX", "0");
+    if (!dy_box_) dy_box_ = std::make_unique<DMTextBox>("Total dY", "0");
+    if (dx_box_) dx_box_->set_rect(SDL_Rect{content_x, content_y, col_w, box_h});
+    if (dy_box_) dy_box_->set_rect(SDL_Rect{content_x + col_w + pad, content_y, col_w, box_h});
 }
 
 void TotalsPanel::set_frames(const std::vector<MovementFrame>& frames) {
     frames_ = frames;
     recalculate_totals();
+    // Keep widgets in sync if not being edited
+    const int dx = static_cast<int>(std::lround(total_dx_));
+    const int dy = static_cast<int>(std::lround(total_dy_));
+    if (dx_box_ && !dx_box_->is_editing()) dx_box_->set_value(std::to_string(dx));
+    if (dy_box_ && !dy_box_->is_editing()) dy_box_->set_value(std::to_string(dy));
 }
 
 void TotalsPanel::set_selected_index(const int* selected_index) { selected_index_ = selected_index; }
 
-void TotalsPanel::update() {}
+void TotalsPanel::update() {
+    // No animations; sync handled in set_frames and handle_event
+}
 
 void TotalsPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
@@ -60,27 +79,31 @@ void TotalsPanel::render(SDL_Renderer* renderer) const {
         renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(),
         DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
-    SDL_Color text = DMStyles::Label().color;
-
-    const int padding = 6;
-    int x = bounds_.x + padding;
-    int y = bounds_.y + padding;
-
-    const int frame_count = static_cast<int>(frames_.size());
-    int selected = selected_index_ ? *selected_index_ : 0;
-    selected = std::clamp(selected, 0, std::max(0, frame_count - 1));
-
-    const int dx = static_cast<int>(std::lround(total_dx_));
-    const int dy = static_cast<int>(std::lround(total_dy_));
-
-    std::string line = "F " + std::to_string(frame_count) + " | Sel " + std::to_string(selected) +
-                       " | dX " + std::to_string(dx) + " dY " + std::to_string(dy);
-    render_totals_label(renderer, line, x, y, text);
+    if (dx_box_) dx_box_->render(renderer);
+    if (dy_box_) dy_box_->render(renderer);
 }
 
 bool TotalsPanel::handle_event(const SDL_Event& e) {
-    (void)e;
-    return false;
+    bool consumed = false;
+    if (dx_box_ && dx_box_->handle_event(e)) {
+        consumed = true;
+        // Parse and apply dx if valid integer
+        try {
+            int new_dx = std::stoi(dx_box_->value());
+            if (on_totals_changed_) on_totals_changed_(new_dx, static_cast<int>(std::lround(total_dy_)));
+        } catch (...) {
+            // ignore invalid input while typing
+        }
+    }
+    if (dy_box_ && dy_box_->handle_event(e)) {
+        consumed = true;
+        try {
+            int new_dy = std::stoi(dy_box_->value());
+            if (on_totals_changed_) on_totals_changed_(static_cast<int>(std::lround(total_dx_)), new_dy);
+        } catch (...) {
+        }
+    }
+    return consumed;
 }
 
 void TotalsPanel::recalculate_totals() {

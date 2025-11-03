@@ -86,8 +86,15 @@ private:
     mutable std::unique_ptr<DMButton> btn_show_anim_;
 
     // UI layout (computed each frame)
+    // Panel rectangles are derived from stored top-left positions to allow dragging.
     mutable SDL_Rect directory_rect_{0,0,0,0};
     mutable SDL_Rect nav_rect_{0,0,0,0};
+    SDL_Point dir_pos_{0, 0};
+    SDL_Point nav_pos_{0, 0};
+    bool dragging_dir_ = false;
+    bool dragging_nav_ = false;
+    SDL_Point drag_offset_dir_{0, 0};
+    SDL_Point drag_offset_nav_{0, 0};
     mutable std::vector<SDL_Rect> thumb_rects_;
 
 private:

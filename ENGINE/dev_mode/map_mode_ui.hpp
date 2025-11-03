@@ -26,7 +26,6 @@ class MapLayerControlsDisplay;
 class MapLayersController;
 class RoomConfigurator;
 class SlidingWindowContainer;
-class MapGridPanel;
 class DevFooterBar;
 class DockableCollapsible;
 struct DMButtonStyle;
@@ -72,22 +71,15 @@ public:
     void toggle_shading_panel();
     void refresh_reactive_shadow_settings();
     void clear_reactive_shadow_settings();
-    void open_grid_panel();
-    void close_grid_panel();
-    void toggle_grid_panel();
     void toggle_layers_panel();
     void close_all_panels();
 
     bool is_light_panel_visible() const;
     bool is_shading_panel_visible() const;
     bool is_light_map_panel_visible() const;
-    bool is_grid_panel_visible() const;
     using LightSaveCallback = std::function<bool()>;
-    using GridSaveCallback = std::function<bool()>;
-    using GridRegenCallback = std::function<void()>;
 
     void set_light_save_callback(LightSaveCallback cb);
-    void set_map_grid_callbacks(GridSaveCallback save_cb, GridRegenCallback regen_cb);
 
     void set_map_mode_active(bool active);
 
@@ -178,7 +170,6 @@ private:
     std::unique_ptr<MapLayerControlsDisplay> layer_controls_display_;
     std::unique_ptr<MapRoomsDisplay> rooms_display_;
     std::unique_ptr<MapLayersPanel> layers_panel_;
-    std::unique_ptr<MapGridPanel> grid_panel_;
     std::unique_ptr<DevFooterBar> footer_bar_;
     bool footer_buttons_configured_ = false;
     bool map_mode_active_ = false;
@@ -195,8 +186,6 @@ private:
     bool dev_sliding_headers_hidden_ = false;
     std::vector<DockableCollapsible*> floating_panels_;
     LightSaveCallback light_save_callback_;
-    GridSaveCallback grid_save_callback_;
-    GridRegenCallback grid_regen_callback_;
     std::function<void(HeaderMode)> on_mode_changed_;
     bool light_panel_centered_ = false;
     bool shading_panel_centered_ = false;
@@ -218,4 +207,3 @@ private:
     std::function<void(SDL_Color)> map_color_sampling_apply_{};
     std::function<void()> map_color_sampling_cancel_{};
 };
-

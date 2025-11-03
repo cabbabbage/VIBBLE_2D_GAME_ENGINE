@@ -133,7 +133,7 @@ const std::vector<TagDatasetEntry>& tag_dataset() {
 
     std::error_code ec;
     const std::filesystem::directory_options opts = std::filesystem::directory_options::skip_permission_denied;
-    std::array<std::filesystem::path, 2> roots{ std::filesystem::path("SRC"), std::filesystem::path("MAPS") };
+    std::array<std::filesystem::path, 2> roots{ std::filesystem::path("SRC"), std::filesystem::path("content") };
     for (const auto& root : roots) {
         if (!std::filesystem::exists(root, ec)) {
             ec.clear();

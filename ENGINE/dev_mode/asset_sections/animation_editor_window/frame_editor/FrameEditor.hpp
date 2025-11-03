@@ -9,6 +9,7 @@
 #include <SDL.h>
 
 class DMButton;
+class FrameToolsPanel;
 
 namespace animation_editor {
 
@@ -54,6 +55,7 @@ class FrameEditor {
   private:
     std::shared_ptr<AnimationDocument> document_;
     std::unique_ptr<FrameMovementEditor> movement_editor_;
+    std::unique_ptr<FrameToolsPanel> tools_panel_;
     std::shared_ptr<PreviewProvider> preview_provider_;
     std::array<std::unique_ptr<DMButton>, 3> mode_buttons_;
     std::unique_ptr<DMButton> prev_frame_button_;
@@ -69,6 +71,7 @@ class FrameEditor {
     CloseCallback close_callback_;
     FrameChangedCallback frame_changed_callback_;
     Mode active_mode_ = Mode::Movement;
+    bool tools_position_initialized_ = false;
 };
 
 }

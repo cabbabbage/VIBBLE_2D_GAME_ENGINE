@@ -7,6 +7,7 @@
 #include "../../../widgets.hpp"
 #include "../PreviewProvider.hpp"
 #include "movement/FrameMovementEditor.hpp"
+#include "FrameToolsPanel.hpp"
 
 namespace animation_editor {
 namespace {
@@ -19,6 +20,9 @@ constexpr int kFrameListPreferredHeight = 160;
 constexpr int kFrameListMinHeight = 96;
 constexpr int kNavigationButtonWidth = 64;
 constexpr int kNavigationButtonHeight = 64;
+// Small visual tweaks
+constexpr int kModeControlsYOffset = -4;   // nudge up a bit
+constexpr int kFrameListYOffset    =  4;   // nudge down a bit (frame nav panel)
 }
 
 FrameEditor::FrameEditor() { ensure_children(); }
@@ -90,6 +94,12 @@ void FrameEditor::update() {
     if (movement_editor_) {
         movement_editor_->update();
     }
+    // Sync tools panel from movement editor state
+    if (tools_panel_ && movement_editor_) {
+        auto totals = movement_editor_->total_displacement();
+        tools_panel_->set_totals(totals.first, totals.second, true /*avoid overwrite if editing*/);
+        tools_panel_->set_show_animation(movement_editor_->show_animation());
+    }
     update_navigation_styles();
 }
 
@@ -122,6 +132,7 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
 
     if (prev_frame_button_) prev_frame_button_->render(renderer);
     if (next_frame_button_) next_frame_button_->render(renderer);
+    if (tools_panel_ && tools_panel_->is_visible()) tools_panel_->render(renderer);
 }
 
 bool FrameEditor::handle_event(const SDL_Event& e) {
@@ -132,6 +143,11 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
             set_mode(static_cast<Mode>(i));
             return true;
         }
+    }
+
+    // Route to floating tools panel first
+    if (tools_panel_ && tools_panel_->handle_event(e)) {
+        return true;
     }
 
     // Always feed events to the buttons for proper hover/press visuals
@@ -247,6 +263,8 @@ void FrameEditor::ensure_children() {
                 frame_changed_callback_(index);
             }
         });
+        // Default to showing animation overlay
+        movement_editor_->set_show_animation(true);
     } else {
         movement_editor_->set_preview_provider(preview_provider_);
         movement_editor_->set_document(document_);
@@ -257,6 +275,23 @@ void FrameEditor::ensure_children() {
                 frame_changed_callback_(index);
             }
         });
+    }
+    // Create Tools panel
+    if (!tools_panel_) {
+        tools_panel_ = std::make_unique<FrameToolsPanel>();
+        tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
+        tools_panel_->set_callbacks(
+            // Smooth
+            [this]() { if (movement_editor_) movement_editor_->apply_smoothing(); },
+            // Toggle show animation
+            [this](bool show) { if (movement_editor_) movement_editor_->set_show_animation(show); },
+            // Totals changed
+            [this](int dx, int dy) { if (movement_editor_) movement_editor_->set_total_displacement(dx, dy); }
+        );
+        tools_panel_->open();
+        tools_position_initialized_ = false;
+    } else {
+        tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
     }
     update_button_styles();
     update_navigation_styles();
@@ -328,7 +363,10 @@ void FrameEditor::update_layout() {
         }
     }
 
-    mode_controls_rect_ = SDL_Rect{header_rect_.x, header_rect_.y + header_rect_.h + gap_header_mode, header_rect_.w,
+    // Nudge mode controls slightly upward
+    mode_controls_rect_ = SDL_Rect{header_rect_.x,
+                                   header_rect_.y + header_rect_.h + gap_header_mode + kModeControlsYOffset,
+                                   header_rect_.w,
                                    std::max(0, mode_controls_height)};
 
     int center_top = mode_controls_rect_.y + mode_controls_rect_.h + gap_mode_display;
@@ -352,13 +390,28 @@ void FrameEditor::update_layout() {
     prev_button_rect_ = SDL_Rect{prev_x, nav_y, nav_width, nav_height};
     next_button_rect_ = SDL_Rect{next_x, nav_y, nav_width, nav_height};
 
-    frame_list_rect_ = SDL_Rect{header_rect_.x, frame_display_rect_.y + frame_display_rect_.h + gap_display_list, header_rect_.w,
+    // Nudge frame navigation panel slightly downward
+    frame_list_rect_ = SDL_Rect{header_rect_.x,
+                                frame_display_rect_.y + frame_display_rect_.h + gap_display_list + kFrameListYOffset,
+                                header_rect_.w,
                                 std::max(0, frame_list_height)};
 
     if (prev_frame_button_) prev_frame_button_->set_rect(prev_button_rect_);
     if (next_frame_button_) next_frame_button_->set_rect(next_button_rect_);
     if (movement_editor_) {
         movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
+    }
+    if (tools_panel_) {
+        tools_panel_->set_work_area_bounds(bounds_);
+        if (!tools_position_initialized_) {
+            // Default left side, vertically centered
+            int panel_w = tools_panel_->rect().w > 0 ? tools_panel_->rect().w : 360;
+            int panel_h = tools_panel_->height() > 0 ? tools_panel_->height() : 200;
+            int x = bounds_.x + DMSpacing::panel_padding();
+            int y = bounds_.y + std::max(0, (bounds_.h - panel_h) / 2);
+            tools_panel_->set_position(x, y);
+            tools_position_initialized_ = true;
+        }
     }
     update_navigation_styles();
 }
@@ -370,6 +423,9 @@ void FrameEditor::set_mode(Mode mode) {
     active_mode_ = mode;
     update_button_styles();
     update_navigation_styles();
+    if (tools_panel_) {
+        tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
+    }
 }
 
 void FrameEditor::update_button_styles() const {

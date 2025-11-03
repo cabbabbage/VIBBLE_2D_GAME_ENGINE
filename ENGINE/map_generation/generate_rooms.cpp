@@ -81,9 +81,14 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                                         nlohmann::json& trails_data,
                                                         nlohmann::json& map_assets_data,
                                                         const MapGridSettings& grid_settings) {
+        std::cout << "[GenerateRooms] Starting build for " << map_layers_.size() << " layers\n";
         std::vector<std::unique_ptr<Room>> all_rooms;
-        if (map_layers_.empty()) return all_rooms;
+        if (map_layers_.empty()) {
+                std::cout << "[GenerateRooms] No layers to process, returning empty\n";
+                return all_rooms;
+        }
         const auto& root_spec = map_layers_[0].rooms[0];
+        std::cout << "[GenerateRooms] Creating root room: " << root_spec.name << "\n";
         if (testing) {
                 std::cout << "[GenerateRooms] Creating root room: " << root_spec.name << "\n";
         }
@@ -130,6 +135,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
  );
         root->layer = 0;
         all_rooms.push_back(std::move(root));
+        std::cout << "[GenerateRooms] Root room created successfully\n";
         std::vector<Room*> current_parents = { all_rooms[0].get() };
         std::vector<Sector> current_sectors = { { current_parents[0], 0.0f, 2 * M_PI } };
         auto append_sectors_from_angles = [](const std::vector<Room*>& rooms,
@@ -154,9 +160,11 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 }
 };
         for (size_t li = 1; li < map_layers_.size(); ++li) {
+                std::cout << "[GenerateRooms] Processing layer " << li << "\n";
                 const LayerSpec& layer = map_layers_[li];
                 const double radius = (li < layer_radii.size()) ? layer_radii[li] : 0.0;
                 auto children_specs = get_children_from_layer(layer);
+                std::cout << "[GenerateRooms] Layer " << layer.level << " radius: " << radius << ", children count: " << children_specs.size() << "\n";
                 if (testing) {
                         std::cout << "[GenerateRooms] Layer " << layer.level
                         << " radius: " << radius
@@ -321,6 +329,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 }
                 current_parents = next_parents;
                 current_sectors = next_sectors;
+                std::cout << "[GenerateRooms] Layer " << li << " completed, total rooms: " << all_rooms.size() << "\n";
         }
 	std::vector<std::pair<Room*,Room*>> connections;
 	for (auto& rp : all_rooms) {
@@ -328,14 +337,14 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
 			connections.emplace_back(rp.get(), c);
 		}
 	}
+	std::cout << "[GenerateRooms] Parent-child connections established: " << connections.size() << " connections\n";
 	std::vector<Area> existing_areas;
 	for (const auto& r : all_rooms) {
 		existing_areas.push_back(*r->room_area);
 	}
-	if (testing) {
-		std::cout << "[GenerateRooms] Total rooms created (pre-trail): " << all_rooms.size() << "\n";
-		std::cout << "[GenerateRooms] Beginning trail generation...\n";
-	}
+	std::cout << "[GenerateRooms] Existing areas collected: " << existing_areas.size() << "\n";
+	std::cout << "[GenerateRooms] Total rooms created (pre-trail): " << all_rooms.size() << "\n";
+	std::cout << "[GenerateRooms] Beginning trail generation...\n";
         if (all_rooms.size() > 1) {
                 GenerateTrails trailgen(trails_data, room_colors);
                 std::vector<Room*> room_refs;
@@ -349,14 +358,15 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                         all_rooms.push_back(std::move(t));
                 }
         }
-        if (testing) {
-                std::cout << "[GenerateRooms] Trail generation complete. Total rooms now: " << all_rooms.size() << "\n";
-        }
+        std::cout << "[GenerateRooms] Trail generation complete. Total rooms now: " << all_rooms.size() << "\n";
+        std::cout << "[GenerateRooms] Spawning map-wide assets...\n";
         {
                 MapWideAssetSpawner map_wide(asset_lib, grid_settings, map_id_, map_assets_data);
                 map_wide.spawn(all_rooms);
         }
+        std::cout << "[GenerateRooms] Map-wide assets spawned\n";
         if (!boundary_data.is_null() && !boundary_data.empty()) {
+                std::cout << "[GenerateRooms] Processing boundary assets...\n";
                 std::vector<Area> exclusion_zones;
                 for (const auto& r : all_rooms) {
                         exclusion_zones.push_back(*r->room_area);
@@ -392,6 +402,8 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                                         assigned_count++;
                         }
                 }
+                std::cout << "[GenerateRooms] Boundary assets processed, " << assigned_count << " assigned\n";
         }
+	std::cout << "[GenerateRooms] Build completed successfully\n";
 	return all_rooms;
 }

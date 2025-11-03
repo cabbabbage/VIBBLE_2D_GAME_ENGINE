@@ -96,10 +96,13 @@ SDL_Point TrailGeometry::compute_edge_point(const SDL_Point& center,
 	double dirY = dy / len;
 	const int max_steps = 2000;
 	const double step_size = 1.0;
+	const double max_distance = 10000.0;
+	double current_distance = 0.0;
 	SDL_Point edge = center;
-	for (int i = 1; i <= max_steps; ++i) {
-		double px = center.x + dirX * i * step_size;
-		double py = center.y + dirY * i * step_size;
+	for (int i = 1; i <= max_steps && current_distance < max_distance; ++i) {
+		current_distance += step_size;
+		double px = center.x + dirX * current_distance;
+		double py = center.y + dirY * current_distance;
 		int ipx = static_cast<int>(std::lround(px));
 		int ipy = static_cast<int>(std::lround(py));
 		if (area->contains_point(SDL_Point{ ipx, ipy })) {
@@ -128,7 +131,9 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
                                              devmode::core::ManifestStore* manifest_store,
                                              Room::ManifestWriter manifest_writer)
 {
+        std::cout << "[TrailGeometry] Attempting trail between " << a->room_name << " and " << b->room_name << "\n";
         if (!trail_config) {
+                std::cout << "[TrailGeometry] Missing trail configuration for '" << trail_name << "'\n";
                 if (testing) {
                         std::cout << "[TrailGen] Missing trail configuration for '" << trail_name << "'\n";
                 }
@@ -140,6 +145,7 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
         const int curvyness = config.value("curvyness", 2);
         const std::string name = config.value("name", trail_name.empty() ? std::string("trail_segment") : trail_name);
         const double width = static_cast<double>(std::max(min_width, max_width));
+        std::cout << "[TrailGeometry] Using trail template: " << name << " width=" << width << " curvyness=" << curvyness << "\n";
         if (testing) {
                 std::cout << "[TrailGen] Using trail template: " << name
                 << "  width=" << width
@@ -200,6 +206,7 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 	auto [bminx, bminy, bmaxx, bmaxy] = b->room_area->get_bounds();
 
 	for (int attempt = 0; attempt < 1000; ++attempt) {
+		std::cout << "[TrailGeometry] Attempt " << attempt + 1 << "\n";
 		std::vector<SDL_Point> full_line;
 		full_line.reserve(static_cast<size_t>(curvyness) + 6);
 		full_line.push_back(a_interior);
@@ -209,7 +216,9 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 		full_line.push_back(b_edge);
 		full_line.push_back(b_interior);
 
+		std::cout << "[TrailGeometry] Built centerline with " << full_line.size() << " points\n";
 		auto polygon = extrude_centerline(full_line, width);
+		std::cout << "[TrailGeometry] Extruded to polygon with " << polygon.size() << " points\n";
 
 		std::vector<Area::Point> pts;
 		pts.reserve(polygon.size());
@@ -229,7 +238,9 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 				break;
 			}
 		}
+		std::cout << "[TrailGeometry] Intersections: " << intersection_count << " (allowed: " << allowed_intersections << ")\n";
 		if (intersection_count > allowed_intersections) {
+			std::cout << "[TrailGeometry] Too many intersections, retrying\n";
 			if (testing && attempt == 999) {
 				std::cout << "[TrailGen] Failed after 1000 attempts due to intersections\n";
 			}
@@ -245,10 +256,12 @@ bool TrailGeometry::attempt_trail_connection(Room* a,
 		existing_areas.push_back(candidate);
 		trail_rooms.push_back(std::move(trail_room));
 
+		std::cout << "[TrailGeometry] Trail placed successfully\n";
 		if (testing) {
 			std::cout << "[TrailGen] Trail succeeded on attempt " << attempt + 1 << "\n";
 		}
 		return true;
 	}
+	std::cout << "[TrailGeometry] Failed to place trail after 1000 attempts\n";
 	return false;
 }
