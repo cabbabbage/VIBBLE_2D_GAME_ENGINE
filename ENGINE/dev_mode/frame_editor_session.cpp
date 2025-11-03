@@ -121,9 +121,11 @@ void FrameEditorSession::begin(Assets* assets,
 
         const int nav_h = 90;
         const int nav_w = 560;
-        const int movement_strip_extra = (mode_==Mode::Movement ? (DMButton::height()+10) : 8) + 6;
+        const int toolbox_h = DMButton::height() + DMSpacing::small_gap()*2;
+        toolbox_pos_.x = dir_pos_.x;
+        toolbox_pos_.y = dir_pos_.y + dir_h + DMSpacing::section_gap();
         nav_pos_.x = static_cast<int>(std::round(anchor_screen.x - nav_w/2.0f));
-        nav_pos_.y = dir_pos_.y + dir_h + movement_strip_extra;
+        nav_pos_.y = toolbox_pos_.y + toolbox_h + DMSpacing::section_gap();
     }
     active_ = true;
 }
@@ -190,7 +192,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     };
 
     // Handle dragging (motion and release)
-    if (dragging_dir_ || dragging_nav_) {
+    if (dragging_dir_ || dragging_toolbox_ || dragging_nav_) {
         if (e.type == SDL_MOUSEMOTION) {
             if (dragging_dir_) {
                 dir_pos_.x = e.motion.x - drag_offset_dir_.x;
@@ -198,6 +200,12 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 const int dir_w = 480;
                 const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
                 clamp_panel_pos(dir_pos_.x, dir_pos_.y, dir_w, dir_h);
+            } else if (dragging_toolbox_) {
+                toolbox_pos_.x = e.motion.x - drag_offset_toolbox_.x;
+                toolbox_pos_.y = e.motion.y - drag_offset_toolbox_.y;
+                const int tool_w = toolbox_rect_.w;
+                const int tool_h = toolbox_rect_.h;
+                clamp_panel_pos(toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h);
             } else if (dragging_nav_) {
                 nav_pos_.x = e.motion.x - drag_offset_nav_.x;
                 nav_pos_.y = e.motion.y - drag_offset_nav_.y;
@@ -209,6 +217,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             return true; // consume while dragging
         } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             dragging_dir_ = false;
+            dragging_toolbox_ = false;
             dragging_nav_ = false;
             return true; // consume mouse up at end of drag
         }
@@ -229,6 +238,20 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             if (!over_button) {
                 dragging_dir_ = true;
                 drag_offset_dir_ = SDL_Point{ p.x - directory_rect_.x, p.y - directory_rect_.y };
+                return true;
+            }
+        }
+        // Toolbox panel drag: avoid buttons
+        if (mode_ == Mode::Movement && SDL_PointInRect(&p, &toolbox_rect_)) {
+            bool over_button = false;
+            const DMButton* buttons[] = { btn_smooth_.get(), btn_show_anim_.get() };
+            for (const DMButton* b : buttons) {
+                if (!b) continue; const SDL_Rect& r = b->rect();
+                if (SDL_PointInRect(&p, &r)) { over_button = true; break; }
+            }
+            if (!over_button) {
+                dragging_toolbox_ = true;
+                drag_offset_toolbox_ = SDL_Point{ p.x - toolbox_rect_.x, p.y - toolbox_rect_.y };
                 return true;
             }
         }
@@ -356,8 +379,9 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (btn_children_) btn_children_->render(renderer);
     if (btn_attacking_) btn_attacking_->render(renderer);
 
-    // Movement tool strip (right of directory panel)
-    if (mode_ == Mode::Movement) {
+    // Toolbox panel
+    if (mode_ == Mode::Movement && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
+        dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         if (btn_smooth_) btn_smooth_->render(renderer);
         if (btn_show_anim_) btn_show_anim_->render(renderer);
         // Totals label
@@ -367,7 +391,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             total_dy += static_cast<int>(std::lround(frames_[i].dy));
         }
         std::string totals = std::string("Total Movement: ") + std::to_string(total_dx) + ", " + std::to_string(total_dy);
-        render_label(renderer, totals, directory_rect_.x + 8, directory_rect_.y + directory_rect_.h + 6);
+        render_label(renderer, totals, toolbox_rect_.x + DMSpacing::small_gap(), toolbox_rect_.y + toolbox_rect_.h + 6);
     }
 
     // Navigation panel
@@ -439,10 +463,25 @@ void FrameEditorSession::rebuild_layout() const {
     if (btn_children_) { btn_children_->set_style(mode_==Mode::Children? &DMStyles::AccentButton() : &DMStyles::HeaderButton()); btn_children_->set_rect(SDL_Rect{ x, y, btn_children_->rect().w, DMButton::height() }); x += btn_children_->rect().w + DMSpacing::small_gap(); }
     if (btn_attacking_) { btn_attacking_->set_style(mode_==Mode::Attacking? &DMStyles::AccentButton() : &DMStyles::HeaderButton()); btn_attacking_->set_rect(SDL_Rect{ x, y, btn_attacking_->rect().w, DMButton::height() }); }
 
-    // Movement tool strip placement: below directory
+    // Toolbox panel placement
+    const int tool_padding = DMSpacing::small_gap();
     if (mode_ == Mode::Movement) {
-        if (btn_smooth_) btn_smooth_->set_rect(SDL_Rect{ directory_rect_.x, directory_rect_.y + directory_rect_.h + 4, btn_smooth_->rect().w, DMButton::height() });
-        if (btn_show_anim_) btn_show_anim_->set_rect(SDL_Rect{ directory_rect_.x + btn_smooth_->rect().w + DMSpacing::small_gap(), directory_rect_.y + directory_rect_.h + 4, btn_show_anim_->rect().w, DMButton::height() });
+        int tool_w = tool_padding * 2;
+        const int tool_h = DMButton::height() + tool_padding * 2;
+        if (btn_smooth_) tool_w += btn_smooth_->rect().w;
+        if (btn_show_anim_) tool_w += btn_show_anim_->rect().w + (btn_smooth_ ? DMSpacing::small_gap() : 0);
+        toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h };
+        int tx = toolbox_rect_.x + tool_padding;
+        int ty = toolbox_rect_.y + tool_padding;
+        if (btn_smooth_) {
+            btn_smooth_->set_rect(SDL_Rect{ tx, ty, btn_smooth_->rect().w, DMButton::height() });
+            tx += btn_smooth_->rect().w + DMSpacing::small_gap();
+        }
+        if (btn_show_anim_) {
+            btn_show_anim_->set_rect(SDL_Rect{ tx, ty, btn_show_anim_->rect().w, DMButton::height() });
+        }
+    } else {
+        toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
     }
 
     // Navigation panel under tool strip

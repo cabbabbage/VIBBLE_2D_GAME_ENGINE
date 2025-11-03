@@ -860,7 +860,7 @@ void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) 
         const int pad = DMSpacing::panel_padding();
         const int y = frame_editor_modal_header_rect_.y + DMSpacing::small_gap();
         const int w = header_corner_button_->rect().w;
-        header_corner_button_->set_style(&DMStyles::HeaderButton());
+        header_corner_button_->set_style(&DMStyles::DeleteButton());
         header_corner_button_->set_rect(SDL_Rect{frame_editor_modal_header_rect_.x + pad, y, w, DMButton::height()});
         header_corner_button_->render(renderer);
     }
@@ -958,7 +958,7 @@ void AnimationEditorWindow::update_corner_button() {
     }
     if (frame_editor_visible_) {
         header_corner_button_->set_text(u8"\u2190");
-        header_corner_button_->set_style(&DMStyles::HeaderButton());
+        header_corner_button_->set_style(&DMStyles::DeleteButton());
     } else {
         header_corner_button_->set_text(std::string(DMIcons::Close()));
         header_corner_button_->set_style(&DMStyles::DeleteButton());
