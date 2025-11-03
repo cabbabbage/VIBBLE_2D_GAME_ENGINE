@@ -65,13 +65,13 @@ class FrameEditor {
     SDL_Rect mode_controls_rect_{0, 0, 0, 0};
     SDL_Rect frame_display_rect_{0, 0, 0, 0};
     SDL_Rect frame_list_rect_{0, 0, 0, 0};
+    SDL_Rect tools_panel_rect_{0, 0, 0, 0};
     SDL_Rect prev_button_rect_{0, 0, 0, 0};
     SDL_Rect next_button_rect_{0, 0, 0, 0};
     std::string animation_id_;
     CloseCallback close_callback_;
     FrameChangedCallback frame_changed_callback_;
     Mode active_mode_ = Mode::Movement;
-    bool tools_position_initialized_ = false;
 };
 
 }

@@ -1716,6 +1716,8 @@ void DevControls::open_asset_info_editor_for_asset(Asset* asset) {
 
 void DevControls::close_asset_info_editor() {
     if (room_editor_) room_editor_->close_asset_info_editor();
+    // Also close any active in-world Frame Editor session
+    end_frame_editor_session();
 }
 
 bool DevControls::is_asset_info_editor_open() const {

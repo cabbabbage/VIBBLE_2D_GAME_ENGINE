@@ -20,6 +20,7 @@ constexpr int kFrameListPreferredHeight = 160;
 constexpr int kFrameListMinHeight = 96;
 constexpr int kNavigationButtonWidth = 64;
 constexpr int kNavigationButtonHeight = 64;
+constexpr int kToolsPanelWidth = 360;
 // Small visual tweaks
 constexpr int kModeControlsYOffset = -4;   // nudge up a bit
 constexpr int kFrameListYOffset    =  4;   // nudge down a bit (frame nav panel)
@@ -108,6 +109,11 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         return;
     }
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    // Position tools panel within the frame editor layout
+    if (tools_panel_ && tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
+        tools_panel_->set_rect(tools_panel_rect_);
+        tools_panel_->set_work_area_bounds(bounds_);
+    }
     if (header_rect_.w > 0 && header_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(),
                                  DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(),
@@ -224,7 +230,8 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         else { p.x = e.button.x; p.y = e.button.y; }
         if (SDL_PointInRect(&p, &header_rect_) || SDL_PointInRect(&p, &mode_controls_rect_) ||
             SDL_PointInRect(&p, &frame_display_rect_) || SDL_PointInRect(&p, &frame_list_rect_) ||
-            SDL_PointInRect(&p, &prev_button_rect_) || SDL_PointInRect(&p, &next_button_rect_)) {
+            SDL_PointInRect(&p, &tools_panel_rect_) || SDL_PointInRect(&p, &prev_button_rect_) ||
+            SDL_PointInRect(&p, &next_button_rect_)) {
             return true;
         }
     }
@@ -289,7 +296,6 @@ void FrameEditor::ensure_children() {
             [this](int dx, int dy) { if (movement_editor_) movement_editor_->set_total_displacement(dx, dy); }
         );
         tools_panel_->open();
-        tools_position_initialized_ = false;
     } else {
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
     }
@@ -373,15 +379,29 @@ void FrameEditor::update_layout() {
     const int available_width = std::max(0, bounds_.w - 2 * padding);
     const int nav_gap = DMSpacing::small_gap();
     int nav_width = kNavigationButtonWidth;
-    if (available_width < nav_width * 2 + nav_gap * 2) {
-        nav_width = std::max(0, (available_width - nav_gap * 2) / 2);
+
+    // Reserve space for tools panel on the right
+    int tools_panel_width = (available_width >= kToolsPanelWidth + nav_width * 2 + nav_gap * 2) ? kToolsPanelWidth : 0;
+    int remaining_width = available_width - tools_panel_width;
+
+    if (remaining_width < nav_width * 2 + nav_gap * 2) {
+        nav_width = std::max(0, (remaining_width - nav_gap * 2) / 2);
     }
-    int display_width = std::min(kFrameDisplayWidth, std::max(0, available_width - nav_width * 2 - nav_gap * 2));
+    int display_width = std::min(kFrameDisplayWidth, std::max(0, remaining_width - nav_width * 2 - nav_gap * 2));
     int total_center_width = display_width + nav_width * 2 + nav_gap * 2;
-    int start_x = bounds_.x + padding + std::max(0, (available_width - total_center_width) / 2);
+    int start_x = bounds_.x + padding + std::max(0, (remaining_width - total_center_width) / 2);
     int prev_x = start_x;
     int display_x = prev_x + nav_width + nav_gap;
     int next_x = display_x + display_width + nav_gap;
+
+    // Position tools panel on the right side
+    if (tools_panel_width > 0) {
+        int tools_x = bounds_.x + padding + remaining_width;
+        int tools_height = display_height + gap_display_list + frame_list_height;
+        tools_panel_rect_ = SDL_Rect{tools_x, center_top, tools_panel_width, tools_height};
+    } else {
+        tools_panel_rect_ = SDL_Rect{0, 0, 0, 0};
+    }
 
     frame_display_rect_ = SDL_Rect{display_x, center_top, display_width, std::max(0, display_height)};
     int nav_height = std::min(kNavigationButtonHeight, frame_display_rect_.h);
@@ -400,18 +420,6 @@ void FrameEditor::update_layout() {
     if (next_frame_button_) next_frame_button_->set_rect(next_button_rect_);
     if (movement_editor_) {
         movement_editor_->set_layout_sections(mode_controls_rect_, frame_display_rect_, frame_list_rect_);
-    }
-    if (tools_panel_) {
-        tools_panel_->set_work_area_bounds(bounds_);
-        if (!tools_position_initialized_) {
-            // Default left side, vertically centered
-            int panel_w = tools_panel_->rect().w > 0 ? tools_panel_->rect().w : 360;
-            int panel_h = tools_panel_->height() > 0 ? tools_panel_->height() : 200;
-            int x = bounds_.x + DMSpacing::panel_padding();
-            int y = bounds_.y + std::max(0, (bounds_.h - panel_h) / 2);
-            tools_panel_->set_position(x, y);
-            tools_position_initialized_ = true;
-        }
     }
     update_navigation_styles();
 }
@@ -454,4 +462,3 @@ void FrameEditor::update_navigation_styles() const {
 }
 
 }
-
