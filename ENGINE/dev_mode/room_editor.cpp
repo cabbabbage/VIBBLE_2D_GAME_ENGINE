@@ -4018,6 +4018,7 @@ void RoomEditor::finalize_drag_session() {
 
     if (!drag_spawn_id_.empty()) {
         if (nlohmann::json* entry = find_spawn_entry(drag_spawn_id_)) {
+            bool request_respawn = false;
             switch (drag_mode_) {
                 case DragMode::Exact:
                     if (drag_moved_) {
@@ -4063,10 +4064,18 @@ void RoomEditor::finalize_drag_session() {
                         inset = std::clamp(inset, 0, 200);
                         save_edge_json(*entry, inset);
                         json_modified = true;
+                        // For edge placement, respawn to keep even spacing along the edge
+                        // based on the new inset (mirrors live slider behavior).
+                        request_respawn = true;
                     }
                     break;
                 default:
                     break;
+            }
+            if (request_respawn) {
+                // Persist first so the respawn uses current values
+                save_current_room_assets_json();
+                respawn_spawn_group(*entry);
             }
         }
     }

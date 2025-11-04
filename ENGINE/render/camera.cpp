@@ -488,8 +488,18 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
     const int base_w = std::max(1, width_from_area(base_zoom_));
     const int base_h = std::max(1, height_from_area(base_zoom_));
 
-    const double target_center_x = world_x - static_cast<double>(screen_point.x) * new_scale + (static_cast<double>(base_w) * new_scale) * 0.5;
-    const double target_center_y = world_y - static_cast<double>(screen_point.y) * new_scale + (static_cast<double>(base_h) * new_scale) * 0.5;
+    const double anchored_center_x = world_x - static_cast<double>(screen_point.x) * new_scale + (static_cast<double>(base_w) * new_scale) * 0.5;
+    const double anchored_center_y = world_y - static_cast<double>(screen_point.y) * new_scale + (static_cast<double>(base_h) * new_scale) * 0.5;
+
+    // Exaggerate the pan toward the mouse by a gain factor.
+    // Gain of 2.0 makes the camera move twice as far as the
+    // standard "keep mouse anchored" solution, increasing the
+    // perceived panning intensity during zoom.
+    constexpr double PAN_GAIN = 2.0;
+    const double dx = anchored_center_x - static_cast<double>(screen_center_.x);
+    const double dy = anchored_center_y - static_cast<double>(screen_center_.y);
+    const double target_center_x = static_cast<double>(screen_center_.x) + dx * PAN_GAIN;
+    const double target_center_y = static_cast<double>(screen_center_.y) + dy * PAN_GAIN;
 
     SDL_Point target_center{
         static_cast<int>(std::lround(target_center_x)), static_cast<int>(std::lround(target_center_y)) };

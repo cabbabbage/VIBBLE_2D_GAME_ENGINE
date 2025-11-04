@@ -51,6 +51,8 @@ class SourceConfigPanel {
     void set_gif_picker(PathPicker picker);
     void set_png_sequence_picker(MultiPathPicker picker);
     void set_status_callback(std::function<void(const std::string&)> callback);
+    // Notify when the source kind/selection has changed so other panels can refresh immediately
+    void set_on_source_changed(std::function<void(const std::string&)> callback) { on_source_changed_ = std::move(callback); }
 
     void update();
     void render(SDL_Renderer* renderer) const;

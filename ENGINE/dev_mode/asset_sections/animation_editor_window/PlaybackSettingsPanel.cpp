@@ -152,7 +152,12 @@ int PlaybackSettingsPanel::preferred_height(int width) const {
     };
 
     if (derived_from_animation_) {
-        add_checkbox_group(5);  // flip X, flip Y, flip movement X/Y, reverse (locked is inherited)
+        // flip X, flip Y, inherit movement (always shown)
+        // if inherit==true -> show 2 suboptions (flip movement X/Y)
+        // reverse (locked is inherited)
+        int count = 4; // flip X, flip Y, inherit, reverse
+        if (state_.inherit_source_movement) count += 2; // flip movement X/Y
+        add_checkbox_group(count);
     } else {
         add_checkbox_group(2);  // reverse, locked
     }
@@ -197,8 +202,11 @@ void PlaybackSettingsPanel::render(SDL_Renderer* renderer) const {
     const bool show_flip_controls = derived_from_animation_;
     render_checkbox(flip_checkbox_, show_flip_controls);
     render_checkbox(flip_vertical_checkbox_, show_flip_controls);
-    render_checkbox(flip_movement_horizontal_checkbox_, show_flip_controls);
-    render_checkbox(flip_movement_vertical_checkbox_, show_flip_controls);
+    // Inherit movement parent checkbox (derived only)
+    render_checkbox(inherit_movement_checkbox_, derived_from_animation_);
+    const bool show_movement_flip = derived_from_animation_ && inherit_movement_checkbox_ && inherit_movement_checkbox_->value();
+    render_checkbox(flip_movement_horizontal_checkbox_, show_movement_flip);
+    render_checkbox(flip_movement_vertical_checkbox_, show_movement_flip);
     // Only show reverse when derived from another animation
     render_checkbox(reverse_checkbox_, derived_from_animation_);
     render_checkbox(locked_checkbox_, !derived_from_animation_);
@@ -235,8 +243,11 @@ bool PlaybackSettingsPanel::handle_event(const SDL_Event& e) {
     const bool show_flip = derived_from_animation_;
     handle_checkbox_if_visible(flip_checkbox_, show_flip);
     handle_checkbox_if_visible(flip_vertical_checkbox_, show_flip);
-    handle_checkbox_if_visible(flip_movement_horizontal_checkbox_, show_flip);
-    handle_checkbox_if_visible(flip_movement_vertical_checkbox_, show_flip);
+    // Parent inherit control
+    handle_checkbox_if_visible(inherit_movement_checkbox_, derived_from_animation_);
+    const bool show_movement_flip = derived_from_animation_ && inherit_movement_checkbox_ && inherit_movement_checkbox_->value();
+    handle_checkbox_if_visible(flip_movement_horizontal_checkbox_, show_movement_flip);
+    handle_checkbox_if_visible(flip_movement_vertical_checkbox_, show_movement_flip);
     // Only handle reverse when visible (derived from animation)
     handle_checkbox_if_visible(reverse_checkbox_, derived_from_animation_);
     if (!derived_from_animation_) handle_checkbox(locked_checkbox_);
@@ -262,6 +273,7 @@ void PlaybackSettingsPanel::ensure_widgets() {
 
     ensure_checkbox(flip_checkbox_, "Flip Source Horizontally");
     ensure_checkbox(flip_vertical_checkbox_, "Flip Source Vertically");
+    ensure_checkbox(inherit_movement_checkbox_, "Inherit Source Movement");
     ensure_checkbox(flip_movement_horizontal_checkbox_, "Flip Movement Horizontally");
     ensure_checkbox(flip_movement_vertical_checkbox_, "Flip Movement Vertically");
     ensure_checkbox(reverse_checkbox_, "Play Frames In Reverse");
@@ -317,8 +329,34 @@ void PlaybackSettingsPanel::layout_widgets() const {
     const bool show_flip_controls = derived_from_animation_;
     place_checkbox(flip_checkbox_.get(), show_flip_controls, placed_any_checkbox);
     place_checkbox(flip_vertical_checkbox_.get(), show_flip_controls, placed_any_checkbox);
-    place_checkbox(flip_movement_horizontal_checkbox_.get(), show_flip_controls, placed_any_checkbox);
-    place_checkbox(flip_movement_vertical_checkbox_.get(), show_flip_controls, placed_any_checkbox);
+    // Inherit movement toggle (always visible if derived)
+    place_checkbox(inherit_movement_checkbox_.get(), derived_from_animation_, placed_any_checkbox);
+    // Indent sub-options if inherit is enabled
+    bool inherit_on = false;
+    if (derived_from_animation_ && inherit_movement_checkbox_) {
+        inherit_on = inherit_movement_checkbox_->value();
+    }
+    if (derived_from_animation_ && inherit_on) {
+        int indent = 16; // visual indent for sub-options
+        int sub_x = x + indent;
+        int sub_width = std::max(0, width - indent);
+        if (flip_movement_horizontal_checkbox_) {
+            SDL_Rect rect{sub_x, y, sub_width, DMCheckbox::height()};
+            flip_movement_horizontal_checkbox_->set_rect(rect);
+            y += rect.h;
+            placed_any_checkbox = true;
+        }
+        y += gap;
+        if (flip_movement_vertical_checkbox_) {
+            SDL_Rect rect{sub_x, y, sub_width, DMCheckbox::height()};
+            flip_movement_vertical_checkbox_->set_rect(rect);
+            y += rect.h;
+            placed_any_checkbox = true;
+        }
+    } else {
+        if (flip_movement_horizontal_checkbox_) flip_movement_horizontal_checkbox_->set_rect(SDL_Rect{0,0,0,0});
+        if (flip_movement_vertical_checkbox_) flip_movement_vertical_checkbox_->set_rect(SDL_Rect{0,0,0,0});
+    }
     // Only place reverse checkbox when using a source animation
     place_checkbox(reverse_checkbox_.get(), derived_from_animation_, placed_any_checkbox);
     place_checkbox(locked_checkbox_.get(), !derived_from_animation_, placed_any_checkbox);
@@ -362,6 +400,7 @@ void PlaybackSettingsPanel::apply_state_to_controls(const PlaybackState& state) 
     ensure_widgets();
     if (flip_checkbox_) flip_checkbox_->set_value(state.flipped_source);
     if (flip_vertical_checkbox_) flip_vertical_checkbox_->set_value(state.flip_vertical);
+    if (inherit_movement_checkbox_) inherit_movement_checkbox_->set_value(state.inherit_source_movement);
     if (flip_movement_horizontal_checkbox_)
         flip_movement_horizontal_checkbox_->set_value(state.flip_movement_horizontal);
     if (flip_movement_vertical_checkbox_)
@@ -392,10 +431,16 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::read_controls() cons
     if (derived_from_animation_) {
         if (flip_checkbox_) state.flipped_source = flip_checkbox_->value();
         if (flip_vertical_checkbox_) state.flip_vertical = flip_vertical_checkbox_->value();
-        if (flip_movement_horizontal_checkbox_)
-            state.flip_movement_horizontal = flip_movement_horizontal_checkbox_->value();
-        if (flip_movement_vertical_checkbox_)
-            state.flip_movement_vertical = flip_movement_vertical_checkbox_->value();
+        if (inherit_movement_checkbox_) state.inherit_source_movement = inherit_movement_checkbox_->value();
+        if (state.inherit_source_movement) {
+            if (flip_movement_horizontal_checkbox_)
+                state.flip_movement_horizontal = flip_movement_horizontal_checkbox_->value();
+            if (flip_movement_vertical_checkbox_)
+                state.flip_movement_vertical = flip_movement_vertical_checkbox_->value();
+        } else {
+            state.flip_movement_horizontal = false;
+            state.flip_movement_vertical = false;
+        }
     }
     // Reverse applies only to animations derived from another animation
     if (derived_from_animation_) {
@@ -436,6 +481,7 @@ void PlaybackSettingsPanel::handle_controls_changed() {
     }
 
     const bool previous_visibility = random_start_visible();
+    const bool previous_inherit = state_.inherit_source_movement;
     PlaybackState new_state = read_controls();
     const bool new_visibility = random_start_visible_for_state(new_state);
 
@@ -448,7 +494,7 @@ void PlaybackSettingsPanel::handle_controls_changed() {
 
     state_ = new_state;
 
-    if (previous_visibility != new_visibility) {
+    if (previous_visibility != new_visibility || previous_inherit != new_state.inherit_source_movement) {
         layout_dirty_ = true;
     }
 
@@ -558,6 +604,7 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::payload_to_state(con
     state.flip_vertical = false;
     state.flip_movement_horizontal = false;
     state.flip_movement_vertical = false;
+    state.inherit_source_movement = true;
     state.locked         = parse_bool_field(payload, "locked", false);
     state.random_start   = parse_bool_field(payload, "rnd_start", false);
     if (state.locked) {
@@ -570,13 +617,19 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::payload_to_state(con
         std::string kind = source.value("kind", std::string{});
         if (kind == "animation") {
             source_is_animation = true;
+            state.inherit_source_movement = parse_bool_field(payload, "inherit_source_movement", true);
             if (payload.contains("derived_modifiers") && payload["derived_modifiers"].is_object()) {
                 const auto& modifiers = payload["derived_modifiers"];
                 state.reverse_source = parse_bool_field(modifiers, "reverse", state.reverse_source);
                 state.flipped_source = parse_bool_field(modifiers, "flipX", state.flipped_source);
                 state.flip_vertical = parse_bool_field(modifiers, "flipY", false);
-                state.flip_movement_horizontal = parse_bool_field(modifiers, "flipMovementX", false);
-                state.flip_movement_vertical = parse_bool_field(modifiers, "flipMovementY", false);
+                if (state.inherit_source_movement) {
+                    state.flip_movement_horizontal = parse_bool_field(modifiers, "flipMovementX", false);
+                    state.flip_movement_vertical = parse_bool_field(modifiers, "flipMovementY", false);
+                } else {
+                    state.flip_movement_horizontal = false;
+                    state.flip_movement_vertical = false;
+                }
             }
         }
     }
@@ -611,17 +664,24 @@ void PlaybackSettingsPanel::apply_state_to_payload(nlohmann::json& payload, cons
         payload.erase("rnd_start");
         payload.erase("speed_factor");
         payload.erase("fps");
+        payload["inherit_source_movement"] = state.inherit_source_movement;
         nlohmann::json modifiers = nlohmann::json::object();
         modifiers["reverse"] = state.reverse_source;
         modifiers["flipX"] = state.flipped_source;
         modifiers["flipY"] = state.flip_vertical;
-        modifiers["flipMovementX"] = state.flip_movement_horizontal;
-        modifiers["flipMovementY"] = state.flip_movement_vertical;
+        if (state.inherit_source_movement) {
+            modifiers["flipMovementX"] = state.flip_movement_horizontal;
+            modifiers["flipMovementY"] = state.flip_movement_vertical;
+        } else {
+            modifiers.erase("flipMovementX");
+            modifiers.erase("flipMovementY");
+        }
         payload["derived_modifiers"] = std::move(modifiers);
     } else {
         payload["rnd_start"]    = state.random_start && !state.locked;
         payload["fps"]          = std::max(1, state.fps);
         payload.erase("derived_modifiers");
+        payload.erase("inherit_source_movement");
     }
 }
 

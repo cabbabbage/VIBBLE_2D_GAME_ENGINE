@@ -905,6 +905,19 @@ void AnimationInspectorPanel::apply_dependencies() {
         source_config_->set_gif_picker(gif_picker_);
         source_config_->set_png_sequence_picker(png_sequence_picker_);
         source_config_->set_status_callback(status_callback_);
+        // Ensure sibling panels refresh immediately when source changes or mode flips
+        source_config_->set_on_source_changed([this](const std::string& id) {
+            if (playback_settings_) {
+                playback_settings_->set_document(document_);
+                playback_settings_->set_animation_id(id);
+            }
+            if (movement_summary_) {
+                movement_summary_->set_document(document_);
+                movement_summary_->set_animation_id(id);
+            }
+            // Trigger relayout so checkboxes/buttons appear immediately
+            this->layout_dirty_ = true;
+        });
     }
 
     if (movement_summary_) {
@@ -981,8 +994,14 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
             self->preview_reverse_ = modifiers.value("reverse", self->preview_reverse_);
             self->preview_flip_x_ = modifiers.value("flipX", self->preview_flip_x_);
             self->preview_flip_y_ = modifiers.value("flipY", false);
-            self->preview_flip_movement_x_ = modifiers.value("flipMovementX", false);
-            self->preview_flip_movement_y_ = modifiers.value("flipMovementY", false);
+            bool inherit_movement = payload.value("inherit_source_movement", true);
+            if (inherit_movement) {
+                self->preview_flip_movement_x_ = modifiers.value("flipMovementX", false);
+                self->preview_flip_movement_y_ = modifiers.value("flipMovementY", false);
+            } else {
+                self->preview_flip_movement_x_ = false;
+                self->preview_flip_movement_y_ = false;
+            }
         } else {
             self->preview_flip_y_ = false;
             self->preview_flip_movement_x_ = false;

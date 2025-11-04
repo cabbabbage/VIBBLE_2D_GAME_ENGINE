@@ -314,6 +314,7 @@ void Animation::load(const std::string& trigger,
         flip_movement_horizontal = anim_json.value("flip_movement_horizontal", false);
         flip_movement_vertical = anim_json.value("flip_movement_vertical", false);
         reverse_source = anim_json.value("reverse_source", false);
+        const bool inherit_source_movement = anim_json.value("inherit_source_movement", (source.kind == "animation"));
         if (source.kind == "animation" && anim_json.contains("derived_modifiers") &&
             anim_json["derived_modifiers"].is_object()) {
                 const auto& modifiers = anim_json["derived_modifiers"];
@@ -1013,7 +1014,7 @@ void Animation::load(const std::string& trigger,
                 }
                 loaded_from_cache = cached_variants_loaded;
         }
-        if (!movement_specified && source.kind == "animation" && !source.name.empty()) {
+        if (!movement_specified && source.kind == "animation" && inherit_source_movement && !source.name.empty()) {
                 auto it = info.animations.find(source.name);
                 if (it != info.animations.end()) {
                         const Animation& src_anim = it->second;

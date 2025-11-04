@@ -1633,7 +1633,9 @@ private:
                 return;
             }
             (*entry)["edge_inset_percent"] = clamped;
-            notify_change(false, false, false);
+            // Treat as a geometry-affecting change so the editor respawns
+            // the group immediately (mirrors Perimeter radius live updates).
+            notify_change(true, false, false);
             sync_from_json();
         }
     }

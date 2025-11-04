@@ -325,6 +325,8 @@ void SourceConfigPanel::set_source_mode(SourceMode mode) {
     }
 
     layout_controls();
+    // Notify listeners so sibling panels can update immediately
+    if (on_source_changed_) on_source_changed_(animation_id_);
 }
 
 std::vector<std::string> SourceConfigPanel::summary_badges() const {

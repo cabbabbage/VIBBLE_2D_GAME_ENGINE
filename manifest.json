@@ -7880,35 +7880,12 @@
     },
     "Frog": {
       "animations": {
-        "backward": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Frog",
-          "custom_animation_controller_key": "SRC/assets/Frog",
-          "derived_modifiers": {
-            "flipMovementX": false,
-            "flipMovementY": false,
-            "flipX": false,
-            "flipY": false,
-            "reverse": true
-          },
-          "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": false,
-          "loop": false,
-          "number_of_frames": 12,
-          "on_end": "SRC/assets/Frog/default",
-          "reverse_source": true,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "SRC/assets/Frog/forward",
-            "path": "SRC/assets/Frog"
-          }
-        },
         "default": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
           "custom_animation_controller_key": "SRC/assets/Frog",
           "end_path": null,
           "flipped_source": false,
+          "fps": 240,
           "has_custom_animation_controller": false,
           "locked": false,
           "loop": false,
@@ -7938,6 +7915,7 @@
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
           "custom_animation_controller_key": "SRC/assets/Frog",
           "flipped_source": false,
+          "fps": 96,
           "has_custom_animation_controller": false,
           "locked": false,
           "loop": false,
@@ -8072,19 +8050,18 @@
           },
           "speed_factor": -4
         },
-        "left": {
+        "right": {
           "custom_animation_controller_hpp_path": "SRC/assets/Frog",
           "custom_animation_controller_key": "SRC/assets/Frog",
           "derived_modifiers": {
             "flipMovementX": false,
             "flipMovementY": false,
-            "flipX": true,
+            "flipX": false,
             "flipY": false,
             "reverse": false
           },
-          "flipped_source": true,
+          "flipped_source": false,
           "has_custom_animation_controller": false,
-          "locked": false,
           "loop": false,
           "number_of_frames": 12,
           "on_end": "SRC/assets/Frog/default",
@@ -8092,147 +8069,9 @@
           "rnd_start": false,
           "source": {
             "kind": "animation",
-            "name": "SRC/assets/Frog/right",
-            "path": "SRC/assets/Frog"
+            "name": "forward",
+            "path": ""
           }
-        },
-        "right": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Frog",
-          "custom_animation_controller_key": "SRC/assets/Frog",
-          "flipped_source": false,
-          "has_custom_animation_controller": false,
-          "locked": false,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              4,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              4,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              4,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              4,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              4,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              4,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              4,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": 40,
-            "dy": 0
-          },
-          "number_of_frames": 12,
-          "on_end": "SRC/assets/Frog/default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "SRC/assets/Frog/right"
-          },
-          "speed_factor": -4
         }
       },
       "anti_tags": [],
@@ -15424,7 +15263,7 @@
             ],
             "display_name": "batch_map_boundary",
             "enforce_spacing": false,
-            "grid_resolution": 2,
+            "grid_resolution": 9,
             "max_number": 100,
             "min_number": 100,
             "position": "Random",
@@ -15688,9 +15527,9 @@
       "rooms_data": {
         "NewRoom": {
           "display_color": [
-            161,
-            85,
+            225,
             242,
+            85,
             255
           ],
           "name": "NewRoom",
@@ -15698,7 +15537,7 @@
         },
         "NewRoom1": {
           "display_color": [
-            242,
+            158,
             85,
             242,
             255
@@ -15709,9 +15548,9 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            159,
-            31,
-            204,
+            242,
+            85,
+            242,
             255
           ],
           "edge_smoothness": 5,
@@ -15782,8 +15621,8 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            81,
-            71,
+            156,
+            31,
             204,
             255
           ],
@@ -15854,9 +15693,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            242,
             85,
-            148,
+            242,
+            170,
             255
           ],
           "edge_smoothness": 4,
@@ -15934,9 +15773,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            31,
-            204,
-            163,
+            201,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 7,
@@ -16037,9 +15876,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            205,
-            36,
-            242,
+            79,
+            71,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -16136,9 +15975,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            242,
-            36,
-            50,
+            204,
+            31,
+            75,
             255
           ],
           "edge_smoothness": 9,
@@ -16209,9 +16048,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            207,
-            224,
-            34,
+            204,
+            158,
+            71,
             255
           ],
           "edge_smoothness": 8,
@@ -16283,7 +16122,7 @@
           "curvyness": 2,
           "display_color": [
             85,
-            239,
+            137,
             242,
             255
           ],
@@ -16351,9 +16190,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
-            204,
-            31,
-            153,
+            212,
+            224,
+            34,
             255
           ],
           "edge_smoothness": 6,
@@ -16420,9 +16259,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            36,
             242,
-            152,
-            85,
+            115,
             255
           ],
           "edge_smoothness": 2,
@@ -16471,9 +16310,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            204,
-            185,
-            71,
+            36,
+            175,
+            242,
             255
           ],
           "edge_smoothness": 12,
@@ -16573,7 +16412,7 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            110,
+            138,
             242,
             85,
             255
@@ -16645,9 +16484,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            36,
-            189,
-            242,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 7,
@@ -16721,9 +16560,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            111,
-            204,
-            31,
+            85,
+            242,
+            222,
             255
           ],
           "edge_smoothness": 6,
@@ -16801,9 +16640,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
+            48,
             31,
             204,
-            47,
             255
           ],
           "edge_smoothness": 10,
@@ -16913,9 +16752,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            85,
-            121,
             242,
+            192,
+            85,
             255
           ],
           "edge_smoothness": 5,
@@ -16985,9 +16824,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            52,
-            31,
-            204,
+            242,
+            85,
+            160,
             255
           ],
           "edge_smoothness": 6,
@@ -17054,9 +16893,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            170,
-            242,
-            85,
+            204,
+            31,
+            161,
             255
           ],
           "edge_smoothness": 10,
@@ -17130,9 +16969,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
-            132,
-            71,
-            204,
+            242,
+            36,
+            44,
             255
           ],
           "edge_smoothness": 5,
@@ -17220,9 +17059,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            204,
-            143,
-            31,
+            36,
+            242,
+            105,
             255
           ],
           "edge_smoothness": 101,
@@ -17480,14 +17319,14 @@
               "display_name": "Axe",
               "dx": 236,
               "dy": 44,
-              "edge_inset_percent": 63,
+              "edge_inset_percent": 91,
               "enforce_spacing": false,
               "max_number": 20,
               "min_number": 10,
               "origional_height": 1800,
               "origional_width": 1800,
               "perimeter_radius": 608,
-              "position": "Perimeter",
+              "position": "Edge",
               "priority": 9,
               "radius": 608,
               "resolution": 2,
@@ -17500,9 +17339,9 @@
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            31,
-            84,
+            188,
             204,
+            71,
             255
           ],
           "edge_smoothness": 6,
@@ -17572,9 +17411,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
+            100,
             204,
-            31,
-            78,
+            71,
             255
           ],
           "edge_smoothness": 7,

@@ -20,7 +20,10 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
         } else if (wheel_y < 0) {
             eff = 1.0 / std::pow(step, -wheel_y);
         }
-        cam.animate_zoom_towards_point(eff, SDL_Point{ input.getX(), input.getY() }, 0);
+        // Subtle, mouse-centered zoom: animate a bit so the camera
+        // center eases toward the computed target instead of jumping.
+        const int dur = 10; // small, smooth transition for wheel zoom
+        cam.animate_zoom_towards_point(eff, SDL_Point{ input.getX(), input.getY() }, dur);
     }
 
     if (input.wasReleased(Input::LEFT)) {

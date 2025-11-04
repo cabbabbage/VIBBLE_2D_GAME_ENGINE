@@ -96,16 +96,65 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
 			info.animations[trigger] = std::move(anim);
 		}
 	}
-	for (const auto& item : alias_queue) {
-		const std::string& trigger = item.first;
-		const auto& anim_json = item.second;
-		Animation anim;
+    // Resolve derived animations in dependency order to allow referencing derived animations.
+    {
+        std::vector<std::pair<std::string, nlohmann::json>> pending = alias_queue;
+        std::size_t last_remaining = pending.size();
+        int safety = 0;
+        while (!pending.empty() && safety < 1024) {
+            ++safety;
+            std::vector<std::pair<std::string, nlohmann::json>> next;
+            std::size_t resolved_this_pass = 0;
+            for (auto& item : pending) {
+                const std::string& trigger = item.first;
+                const auto& anim_json = item.second;
+                std::string source_name;
+                try {
+                    if (anim_json.contains("source") && anim_json["source"].is_object()) {
+                        const auto& s = anim_json["source"];
+                        if (s.value("kind", std::string{"folder"}) == std::string{"animation"}) {
+                            source_name = s.value("name", std::string{});
+                            if (source_name.empty()) source_name = s.value("path", std::string{});
+                        }
+                    }
+                } catch (...) { source_name.clear(); }
+
+                if (!source_name.empty() && info.animations.find(source_name) == info.animations.end()) {
+                    // Source not ready yet; defer
+                    next.emplace_back(trigger, anim_json);
+                    continue;
+                }
+
+                Animation anim;
                 anim.load(trigger, anim_json, info, info.dir_path_, root_cache, info.scale_factor, renderer, base_sprite, scaled_sprite_w, scaled_sprite_h, info.original_canvas_width, info.original_canvas_height, scaling_refresh_pending);
-		anim.on_end_mapping = anim_json.value("on_end", std::string{});
-		if (!anim.frames.empty()) {
-			info.animations[trigger] = std::move(anim);
-		}
+                anim.on_end_mapping = anim_json.value("on_end", std::string{});
+                if (!anim.frames.empty()) {
+                    info.animations[trigger] = std::move(anim);
+                }
+                ++resolved_this_pass;
+            }
+
+            if (resolved_this_pass == 0 || next.size() == pending.size()) {
+                // Cannot make further progress; break to avoid infinite loop.
+                pending.swap(next);
+                break;
+            }
+            pending.swap(next);
+            last_remaining = pending.size();
         }
+
+        // Best-effort: load any unresolved animations (e.g., cycles or missing deps)
+        for (const auto& item : pending) {
+            const std::string& trigger = item.first;
+            const auto& anim_json = item.second;
+            Animation anim;
+            anim.load(trigger, anim_json, info, info.dir_path_, root_cache, info.scale_factor, renderer, base_sprite, scaled_sprite_w, scaled_sprite_h, info.original_canvas_width, info.original_canvas_height, scaling_refresh_pending);
+            anim.on_end_mapping = anim_json.value("on_end", std::string{});
+            if (!anim.frames.empty()) {
+                info.animations[trigger] = std::move(anim);
+            }
+        }
+    }
 
         info.moving_asset = false;
 	for (const auto& kv : info.animations) {

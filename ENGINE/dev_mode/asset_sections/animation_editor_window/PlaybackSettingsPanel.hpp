@@ -43,6 +43,7 @@ class PlaybackSettingsPanel {
         bool flip_vertical = false;
         bool flip_movement_horizontal = false;
         bool flip_movement_vertical = false;
+        bool inherit_source_movement = true; // new: controls whether movement is inherited from source animation
         bool locked = false;
         bool random_start = false;
         // New: explicit playback FPS selection
@@ -54,6 +55,7 @@ class PlaybackSettingsPanel {
                    flip_vertical == other.flip_vertical &&
                    flip_movement_horizontal == other.flip_movement_horizontal &&
                    flip_movement_vertical == other.flip_movement_vertical &&
+                   inherit_source_movement == other.inherit_source_movement &&
                    locked == other.locked &&
                    random_start == other.random_start &&
                    fps == other.fps;
@@ -84,6 +86,7 @@ class PlaybackSettingsPanel {
 
     std::unique_ptr<DMCheckbox> flip_checkbox_;
     std::unique_ptr<DMCheckbox> flip_vertical_checkbox_;
+    std::unique_ptr<DMCheckbox> inherit_movement_checkbox_;
     std::unique_ptr<DMCheckbox> flip_movement_horizontal_checkbox_;
     std::unique_ptr<DMCheckbox> flip_movement_vertical_checkbox_;
     std::unique_ptr<DMCheckbox> reverse_checkbox_;

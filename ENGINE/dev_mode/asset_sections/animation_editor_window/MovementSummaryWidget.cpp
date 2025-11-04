@@ -104,6 +104,15 @@ ResolvedMovement resolve_movement(const AnimationDocument* document, const std::
     std::string kind = source ? source->value("kind", std::string{"folder"}) : std::string{"folder"};
 
     if (kind == "animation") {
+        // New: honor inherit_source_movement flag (default true for derived)
+        bool inherit_movement = payload.value("inherit_source_movement", true);
+        if (!inherit_movement) {
+            // Treat as custom movement: do not derive from source
+            kind = "folder"; // fallthrough to local movement parsing below
+        }
+    }
+
+    if (kind == "animation") {
         bool reverse = payload.value("reverse_source", false);
         bool flip_x = payload.value("flipped_source", false);
         bool flip_y = false;

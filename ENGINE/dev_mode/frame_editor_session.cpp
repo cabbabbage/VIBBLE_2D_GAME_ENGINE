@@ -109,31 +109,58 @@ void FrameEditorSession::begin(Assets* assets,
     target_->set_hidden(false);
 
     ensure_widgets();
-    // Initialize panel positions away from the asset to avoid blocking it
+    // Initialize panel positions relative to the asset for better UX
     {
         int sw = 0, sh = 0;
         if (assets_ && assets_->renderer()) {
             SDL_GetRendererOutputSize(assets_->renderer(), &sw, &sh);
         }
-        const int padding = DMSpacing::panel_padding();
+        const camera& cam = assets_->getView();
+        SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
+        SDL_FPoint anchor_screen_f = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
+        SDL_Point anchor_screen = round_point(anchor_screen_f);
+
         const int dir_w = 480;
         const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
-        const int toolbox_h = DMButton::height() + DMSpacing::small_gap()*2;
         const int nav_h = 90;
         const int nav_w = 560;
 
-        dir_pos_.x = padding;
-        dir_pos_.y = padding;
-        toolbox_pos_.x = padding;
-        toolbox_pos_.y = dir_pos_.y + dir_h + DMSpacing::section_gap();
-        nav_pos_.x = padding;
-        nav_pos_.y = toolbox_pos_.y + toolbox_h + DMSpacing::section_gap();
+        // Compute toolbox width (similar to rebuild_layout)
+        const int tool_padding = DMSpacing::small_gap();
+        int tool_w = tool_padding * 2;
+        const int gaps_between = DMSpacing::small_gap();
+        const int line_h = std::max(DMButton::height(), DMCheckbox::height());
+        const int cb_w = cb_show_anim_ ? std::max(140, cb_show_anim_->preferred_width()) : 0;
+        const int tb_w = 120;
+        if (btn_smooth_) tool_w += btn_smooth_->rect().w;
+        if (cb_show_anim_) tool_w += (tool_w > tool_padding*2 ? gaps_between : 0) + cb_w;
+        if (tb_total_dx_) tool_w += gaps_between + tb_w;
+        if (tb_total_dy_) tool_w += gaps_between + tb_w;
+        const int tool_h = line_h + tool_padding * 2;
 
-        // If space allows, place navigation panel to the right of directory panel for better spacing
-        if (sw > 0 && (sw >= dir_w + nav_w + padding * 3)) {
-            nav_pos_.x = dir_pos_.x + dir_w + DMSpacing::section_gap();
-            nav_pos_.y = dir_pos_.y;
-        }
+        // Position panels relative to asset
+        // Frame navigator: 400 pixels below asset, horizontally centered
+        nav_pos_.x = anchor_screen.x - nav_w / 2;
+        nav_pos_.y = anchor_screen.y + 400;
+
+        // Mode selector: 200 pixels above asset, horizontally centered
+        dir_pos_.x = anchor_screen.x - dir_w / 2;
+        dir_pos_.y = anchor_screen.y - 200 - dir_h;
+
+        // Tool panel: 400 pixels left of asset, vertically centered on screen
+        toolbox_pos_.x = anchor_screen.x - 400 - tool_w / 2;
+        toolbox_pos_.y = sh / 2 - tool_h / 2;
+
+        // Clamp to screen bounds
+        auto clamp_panel_pos = [&](int& x, int& y, int w, int h) {
+            if (sw > 0 && sh > 0) {
+                x = std::clamp(x, 0, std::max(0, sw - w));
+                y = std::clamp(y, 0, std::max(0, sh - h));
+            }
+        };
+        clamp_panel_pos(nav_pos_.x, nav_pos_.y, nav_w, nav_h);
+        clamp_panel_pos(dir_pos_.x, dir_pos_.y, dir_w, dir_h);
+        clamp_panel_pos(toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h);
     }
     active_ = true;
 }
