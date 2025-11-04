@@ -171,7 +171,7 @@ AssetInfoUI::AssetInfoUI() {
 
     // Duplicate and Delete buttons
     if (!duplicate_btn_) {
-        duplicate_btn_ = std::make_unique<DMButton>("Duplicate Asset", &DMStyles::HeaderButton(), 220, DMButton::height());
+        duplicate_btn_ = std::make_unique<DMButton>("Duplicate Asset", &DMStyles::FooterToggleButton(), 220, DMButton::height());
     }
     if (!duplicate_btn_widget_) {
         duplicate_btn_widget_ = std::make_unique<ButtonWidget>(duplicate_btn_.get(), [this]() {

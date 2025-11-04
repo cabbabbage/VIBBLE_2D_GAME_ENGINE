@@ -13,6 +13,7 @@ class Asset;
 class Input;
 struct SDL_Renderer;
 class DMButton;
+class PanAndZoom;
 
 namespace animation_editor {
 class AnimationDocument;
@@ -83,7 +84,15 @@ private:
     mutable std::unique_ptr<DMButton> btn_prev_;
     mutable std::unique_ptr<DMButton> btn_next_;
     mutable std::unique_ptr<DMButton> btn_smooth_;
-    mutable std::unique_ptr<DMButton> btn_show_anim_;
+    // Replaced button with checkbox per request
+    mutable std::unique_ptr<class DMCheckbox> cb_show_anim_;
+    // Editable totals fields
+    mutable std::unique_ptr<class DMTextBox> tb_total_dx_;
+    mutable std::unique_ptr<class DMTextBox> tb_total_dy_;
+    // Track last-known values to detect edits
+    mutable std::string last_totals_dx_text_{};
+    mutable std::string last_totals_dy_text_{};
+    mutable bool last_show_anim_value_ = true;
 
     // UI layout (computed each frame)
     // Panel rectangles are derived from stored top-left positions to allow dragging.
@@ -100,6 +109,9 @@ private:
     SDL_Point drag_offset_toolbox_{0, 0};
     SDL_Point drag_offset_nav_{0, 0};
     mutable std::vector<SDL_Rect> thumb_rects_;
+
+    // Camera pan/zoom handler (wheel zoom enabled; panning is blocked by default)
+    mutable class PanAndZoom pan_zoom_;
 
 private:
     void ensure_widgets() const;

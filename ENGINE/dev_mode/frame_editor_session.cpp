@@ -15,6 +15,7 @@
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode/widgets.hpp"
+#include "dev_mode/pan_and_zoom.hpp"
 #include "render/camera.hpp"
 #include "utils/input.hpp"
 
@@ -108,24 +109,31 @@ void FrameEditorSession::begin(Assets* assets,
     target_->set_hidden(false);
 
     ensure_widgets();
-    // Initialize panel positions near the asset anchor (screen-space)
+    // Initialize panel positions away from the asset to avoid blocking it
     {
-        const camera& cam = assets_->getView();
-        SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
-        SDL_FPoint anchor_screen = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
-
+        int sw = 0, sh = 0;
+        if (assets_ && assets_->renderer()) {
+            SDL_GetRendererOutputSize(assets_->renderer(), &sw, &sh);
+        }
+        const int padding = DMSpacing::panel_padding();
         const int dir_w = 480;
         const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
-        dir_pos_.x = static_cast<int>(std::round(anchor_screen.x - dir_w/2.0f));
-        dir_pos_.y = static_cast<int>(std::round(anchor_screen.y - 120.0f));
-
+        const int toolbox_h = DMButton::height() + DMSpacing::small_gap()*2;
         const int nav_h = 90;
         const int nav_w = 560;
-        const int toolbox_h = DMButton::height() + DMSpacing::small_gap()*2;
-        toolbox_pos_.x = dir_pos_.x;
+
+        dir_pos_.x = padding;
+        dir_pos_.y = padding;
+        toolbox_pos_.x = padding;
         toolbox_pos_.y = dir_pos_.y + dir_h + DMSpacing::section_gap();
-        nav_pos_.x = static_cast<int>(std::round(anchor_screen.x - nav_w/2.0f));
+        nav_pos_.x = padding;
         nav_pos_.y = toolbox_pos_.y + toolbox_h + DMSpacing::section_gap();
+
+        // If space allows, place navigation panel to the right of directory panel for better spacing
+        if (sw > 0 && (sw >= dir_w + nav_w + padding * 3)) {
+            nav_pos_.x = dir_pos_.x + dir_w + DMSpacing::section_gap();
+            nav_pos_.y = dir_pos_.y;
+        }
     }
     active_ = true;
 }
@@ -137,6 +145,8 @@ void FrameEditorSession::end() {
         camera& cam = assets_->getView();
         cam.set_realism_enabled(prev_realism_enabled_);
         cam.set_parallax_enabled(prev_parallax_enabled_);
+        // Cancel any transient pan/zoom override
+        pan_zoom_.cancel(cam);
     }
     if (target_) {
         target_->set_hidden(prev_asset_hidden_);
@@ -158,14 +168,40 @@ void FrameEditorSession::end() {
     if (on_end_) { auto cb = std::move(on_end_); on_end_ = {}; cb(); }
 }
 
-void FrameEditorSession::update(const Input& /*input*/) {
+void FrameEditorSession::update(const Input& input) {
     if (!active_) return;
+    // Enable mouse wheel zoom on the world camera while editing (panning is blocked to avoid conflicts)
+    if (assets_) {
+        camera& cam = assets_->getView();
+        // Make sure layout is up to date before computing any UI blocking logic (future use)
+        ensure_widgets();
+        rebuild_layout();
+        const bool pan_blocked = true; // disallow left-drag panning here; only wheel zoom
+        pan_zoom_.handle_input(cam, input, pan_blocked);
+    }
     // Ensure the asset frame reflects selection
     update_asset_preview_frame();
-    // Keep show-animation button style up to date
-    if (btn_show_anim_) {
-        btn_show_anim_->set_style(show_animation_ ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+    // Sync checkbox state and totals text boxes
+    if (cb_show_anim_) {
+        cb_show_anim_->set_value(show_animation_);
     }
+    int total_dx = 0, total_dy = 0;
+    for (size_t i = 1; i < frames_.size(); ++i) {
+        total_dx += static_cast<int>(std::lround(frames_[i].dx));
+        total_dy += static_cast<int>(std::lround(frames_[i].dy));
+    }
+    const std::string dxs = std::to_string(total_dx);
+    const std::string dys = std::to_string(total_dy);
+    if (tb_total_dx_ && !tb_total_dx_->is_editing()) {
+        if (tb_total_dx_->value() != dxs) tb_total_dx_->set_value(dxs);
+        last_totals_dx_text_ = tb_total_dx_->value();
+    }
+    if (tb_total_dy_ && !tb_total_dy_->is_editing()) {
+        if (tb_total_dy_->value() != dys) tb_total_dy_->set_value(dys);
+        last_totals_dy_text_ = tb_total_dy_->value();
+    }
+    // Ensure asset hidden state follows checkbox
+    if (target_) target_->set_hidden(!show_animation_);
 }
 
 bool FrameEditorSession::handle_event(const SDL_Event& e) {
@@ -241,15 +277,27 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 return true;
             }
         }
-        // Toolbox panel drag: avoid buttons
+        // Toolbox panel drag: avoid interactive controls (buttons/checkbox/textboxes)
         if (mode_ == Mode::Movement && SDL_PointInRect(&p, &toolbox_rect_)) {
-            bool over_button = false;
-            const DMButton* buttons[] = { btn_smooth_.get(), btn_show_anim_.get() };
+            bool over_interactive = false;
+            const DMButton* buttons[] = { btn_smooth_.get() };
             for (const DMButton* b : buttons) {
                 if (!b) continue; const SDL_Rect& r = b->rect();
-                if (SDL_PointInRect(&p, &r)) { over_button = true; break; }
+                if (SDL_PointInRect(&p, &r)) { over_interactive = true; break; }
             }
-            if (!over_button) {
+            if (!over_interactive && cb_show_anim_) {
+                const SDL_Rect& r = cb_show_anim_->rect();
+                if (SDL_PointInRect(&p, &r)) over_interactive = true;
+            }
+            if (!over_interactive && tb_total_dx_) {
+                const SDL_Rect& r = tb_total_dx_->rect();
+                if (SDL_PointInRect(&p, &r)) over_interactive = true;
+            }
+            if (!over_interactive && tb_total_dy_) {
+                const SDL_Rect& r = tb_total_dy_->rect();
+                if (SDL_PointInRect(&p, &r)) over_interactive = true;
+            }
+            if (!over_interactive) {
                 dragging_toolbox_ = true;
                 drag_offset_toolbox_ = SDL_Point{ p.x - toolbox_rect_.x, p.y - toolbox_rect_.y };
                 return true;
@@ -284,13 +332,57 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     if (handle_button(btn_children_, [this]() { this->mode_ = Mode::Children; })) return true;
     if (handle_button(btn_attacking_, [this]() { this->mode_ = Mode::Attacking; })) return true;
 
-    // Movement tool panel buttons
+    // Movement tool panel widgets
     if (mode_ == Mode::Movement) {
         if (handle_button(btn_smooth_, [this]() { this->smooth_frames(); })) return true;
-        if (handle_button(btn_show_anim_, [this]() {
-                this->show_animation_ = !this->show_animation_;
-                if (target_) target_->set_hidden(!this->show_animation_);
-            })) return true;
+
+        // Checkbox toggle
+        if (cb_show_anim_ && cb_show_anim_->handle_event(e)) {
+            bool current = cb_show_anim_->value();
+            if (current != last_show_anim_value_) {
+                last_show_anim_value_ = current;
+                show_animation_ = current;
+                if (target_) target_->set_hidden(!show_animation_);
+            }
+            return true;
+        }
+
+        // Handle totals edit boxes
+        auto parse_int = [](const std::string& s, int& out) -> bool {
+            try { size_t idx = 0; int v = std::stoi(s, &idx); if (idx == s.size()) { out = v; return true; } } catch (...) {}
+            return false;
+        };
+        bool consumed_tb = false;
+        if (tb_total_dx_) consumed_tb = tb_total_dx_->handle_event(e) || consumed_tb;
+        if (tb_total_dy_) consumed_tb = tb_total_dy_->handle_event(e) || consumed_tb;
+        if (tb_total_dx_ && tb_total_dy_) {
+            const std::string now_dx = tb_total_dx_->value();
+            const std::string now_dy = tb_total_dy_->value();
+            if (now_dx != last_totals_dx_text_ || now_dy != last_totals_dy_text_) {
+                int dx = 0, dy = 0;
+                bool okx = parse_int(now_dx, dx);
+                bool oky = parse_int(now_dy, dy);
+                last_totals_dx_text_ = now_dx;
+                last_totals_dy_text_ = now_dy;
+                if (okx && oky) {
+                    double cur_dx = 0.0, cur_dy = 0.0;
+                    for (size_t i = 1; i < frames_.size(); ++i) {
+                        cur_dx += std::isfinite(frames_[i].dx) ? frames_[i].dx : 0.0;
+                        cur_dy += std::isfinite(frames_[i].dy) ? frames_[i].dy : 0.0;
+                    }
+                    const double need_dx = static_cast<double>(dx) - cur_dx;
+                    const double need_dy = static_cast<double>(dy) - cur_dy;
+                    const size_t last = frames_.size() > 0 ? frames_.size() - 1 : 0;
+                    if (last >= 1) {
+                        frames_[last].dx = static_cast<float>(std::lround(frames_[last].dx + need_dx));
+                        frames_[last].dy = static_cast<float>(std::lround(frames_[last].dy + need_dy));
+                        rebuild_rel_positions();
+                        persist_changes();
+                    }
+                }
+            }
+        }
+        if (consumed_tb) return true;
     }
 
     // Navigation
@@ -313,7 +405,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point sp{e.button.x, e.button.y};
         // Ignore clicks inside our panels only; otherwise treat as world edit
-        if (SDL_PointInRect(&sp, &directory_rect_) || SDL_PointInRect(&sp, &nav_rect_)) {
+        if (SDL_PointInRect(&sp, &directory_rect_) || SDL_PointInRect(&sp, &nav_rect_) || SDL_PointInRect(&sp, &toolbox_rect_)) {
             return false;
         }
         if (!assets_ || !target_) return false;
@@ -383,15 +475,9 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (mode_ == Mode::Movement && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         if (btn_smooth_) btn_smooth_->render(renderer);
-        if (btn_show_anim_) btn_show_anim_->render(renderer);
-        // Totals label
-        int total_dx = 0, total_dy = 0;
-        for (size_t i = 1; i < frames_.size(); ++i) {
-            total_dx += static_cast<int>(std::lround(frames_[i].dx));
-            total_dy += static_cast<int>(std::lround(frames_[i].dy));
-        }
-        std::string totals = std::string("Total Movement: ") + std::to_string(total_dx) + ", " + std::to_string(total_dy);
-        render_label(renderer, totals, toolbox_rect_.x + DMSpacing::small_gap(), toolbox_rect_.y + toolbox_rect_.h + 6);
+        if (cb_show_anim_) cb_show_anim_->render(renderer);
+        if (tb_total_dx_) tb_total_dx_->render(renderer);
+        if (tb_total_dy_) tb_total_dy_->render(renderer);
     }
 
     // Navigation panel
@@ -443,7 +529,12 @@ void FrameEditorSession::ensure_widgets() const {
     if (!btn_prev_) btn_prev_ = std::make_unique<DMButton>("<", &header, 40, 40);
     if (!btn_next_) btn_next_ = std::make_unique<DMButton>(">", &header, 40, 40);
     if (!btn_smooth_) btn_smooth_ = std::make_unique<DMButton>("Smooth", &DMStyles::AccentButton(), 120, bh);
-    if (!btn_show_anim_) btn_show_anim_ = std::make_unique<DMButton>("Show Animation", show_animation_ ? &DMStyles::AccentButton() : &header, 160, bh);
+    if (!cb_show_anim_) cb_show_anim_ = std::make_unique<DMCheckbox>("Show Animation", show_animation_);
+    if (!tb_total_dx_) tb_total_dx_ = std::make_unique<DMTextBox>("Total dX", "0");
+    if (!tb_total_dy_) tb_total_dy_ = std::make_unique<DMTextBox>("Total dY", "0");
+    last_show_anim_value_ = show_animation_;
+    last_totals_dx_text_ = tb_total_dx_->value();
+    last_totals_dy_text_ = tb_total_dy_->value();
 }
 
 void FrameEditorSession::rebuild_layout() const {
@@ -467,18 +558,32 @@ void FrameEditorSession::rebuild_layout() const {
     const int tool_padding = DMSpacing::small_gap();
     if (mode_ == Mode::Movement) {
         int tool_w = tool_padding * 2;
-        const int tool_h = DMButton::height() + tool_padding * 2;
+        const int gaps_between = DMSpacing::small_gap();
+        const int line_h = std::max(DMButton::height(), DMCheckbox::height());
+        const int cb_w = cb_show_anim_ ? std::max(140, cb_show_anim_->preferred_width()) : 0;
+        const int tb_w = 120;
         if (btn_smooth_) tool_w += btn_smooth_->rect().w;
-        if (btn_show_anim_) tool_w += btn_show_anim_->rect().w + (btn_smooth_ ? DMSpacing::small_gap() : 0);
+        if (cb_show_anim_) tool_w += (tool_w > tool_padding*2 ? gaps_between : 0) + cb_w;
+        if (tb_total_dx_) tool_w += gaps_between + tb_w;
+        if (tb_total_dy_) tool_w += gaps_between + tb_w;
+        const int tool_h = line_h + tool_padding * 2;
         toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h };
         int tx = toolbox_rect_.x + tool_padding;
         int ty = toolbox_rect_.y + tool_padding;
         if (btn_smooth_) {
-            btn_smooth_->set_rect(SDL_Rect{ tx, ty, btn_smooth_->rect().w, DMButton::height() });
-            tx += btn_smooth_->rect().w + DMSpacing::small_gap();
+            btn_smooth_->set_rect(SDL_Rect{ tx, ty, btn_smooth_->rect().w, line_h });
+            tx += btn_smooth_->rect().w + gaps_between;
         }
-        if (btn_show_anim_) {
-            btn_show_anim_->set_rect(SDL_Rect{ tx, ty, btn_show_anim_->rect().w, DMButton::height() });
+        if (cb_show_anim_) {
+            cb_show_anim_->set_rect(SDL_Rect{ tx, ty, cb_w, line_h });
+            tx += cb_w + gaps_between;
+        }
+        if (tb_total_dx_) {
+            tb_total_dx_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
+            tx += tb_w + gaps_between;
+        }
+        if (tb_total_dy_) {
+            tb_total_dy_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
         }
     } else {
         toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };

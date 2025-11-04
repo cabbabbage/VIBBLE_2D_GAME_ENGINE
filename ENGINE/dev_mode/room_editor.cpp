@@ -878,6 +878,9 @@ void RoomEditor::update_ui(const Input& input) {
         reset_drag_state();
     }
 
+    // Update room config bounds to account for header visibility changes
+    update_room_config_bounds();
+
     if (library_ui_ && library_ui_->is_visible()) {
         if (manifest_store_) {
             library_ui_->update(input, screen_w_, screen_h_, assets_->library(), *assets_, *manifest_store_);

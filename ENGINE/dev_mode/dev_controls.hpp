@@ -269,4 +269,7 @@ private:
     // In-world frame editor session
     std::unique_ptr<class FrameEditorSession> frame_editor_session_;
     bool frame_editor_prev_grid_overlay_ = false;
+    // Track AssetInfo panel visibility during Frame Editor session
+    bool frame_editor_prev_asset_info_open_ = false;
+    Asset* frame_editor_asset_for_reopen_ = nullptr;
 };

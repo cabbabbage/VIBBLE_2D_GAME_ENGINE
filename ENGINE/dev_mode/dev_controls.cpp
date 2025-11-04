@@ -1660,9 +1660,25 @@ void DevControls::begin_frame_editor_session(Asset* asset,
     // Snapshot grid overlay and force ON (non-persistent)
     frame_editor_prev_grid_overlay_ = grid_overlay_enabled_;
     grid_overlay_enabled_ = true;
+    // Close AssetInfo panel while Frame Editor is active; remember to reopen on exit.
+    frame_editor_prev_asset_info_open_ = false;
+    frame_editor_asset_for_reopen_ = nullptr;
+    if (room_editor_) {
+        if (room_editor_->is_asset_info_editor_open()) {
+            frame_editor_prev_asset_info_open_ = true;
+            frame_editor_asset_for_reopen_ = asset;
+            room_editor_->close_asset_info_editor();
+        }
+    }
     frame_editor_session_->begin(assets_, asset, std::move(document), std::move(preview), animation_id, host_to_toggle, [this]() {
         // Restore grid overlay when session ends
         this->grid_overlay_enabled_ = this->frame_editor_prev_grid_overlay_;
+        // Reopen AssetInfo panel if it was previously open
+        if (this->frame_editor_prev_asset_info_open_ && this->room_editor_) {
+            this->room_editor_->open_asset_info_editor_for_asset(this->frame_editor_asset_for_reopen_);
+        }
+        this->frame_editor_prev_asset_info_open_ = false;
+        this->frame_editor_asset_for_reopen_ = nullptr;
     });
 }
 
