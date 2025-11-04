@@ -32,6 +32,7 @@ constexpr int kVariantCloseSize = 18;
 constexpr int kFrameListBaseSize = 56;
 constexpr int kFrameListMinSize = 36;
 constexpr int kFrameThumbnailPadding = 6;
+constexpr int kFrameListTitleHeight = 22;
 
 int clamp_index(int index, int max_value) {
     if (max_value <= 0) return 0;
@@ -367,6 +368,12 @@ void FrameMovementEditor::load_frames_from_document() {
         }
 
         if (derived && !inherit_movement) {
+            // Use PreviewProvider to get the effective frame count for this derived animation.
+            // PreviewProvider resolves the source chain and applies derived modifiers consistently
+            // with the thumbnails shown in the frame list.
+            if (preview_provider_) {
+                desired_frames = preview_provider_->get_frame_count(animation_id_);
+            }
             if (desired_frames <= 0 && document_ && !derived_source_id.empty()) {
                 // Fallback: read frame count from the source animation's payload
                 auto src_payload_dump = document_->animation_payload(derived_source_id);
@@ -381,7 +388,6 @@ void FrameMovementEditor::load_frames_from_document() {
                     }
                 }
             }
-            if (desired_frames <= 0) desired_frames = 1;
             if (desired_frames <= 0) desired_frames = 1;
             // Expand or trim to match desired frame count.
             if (static_cast<int>(primary.frames.size()) < desired_frames) {
@@ -499,6 +505,8 @@ void FrameMovementEditor::apply_changes() {
     }
 
     document_->replace_animation_payload(animation_id_, payload.dump());
+    // Persist immediately so movement changes are not lost
+    document_->save_to_file();
     if (totals_panel_) totals_panel_->set_frames(frames_);
 }
 
@@ -571,6 +579,9 @@ void FrameMovementEditor::mark_dirty() {
     }
     if (totals_panel_) totals_panel_->set_frames(frames_);
     layout_frame_list();
+    // Persist immediately on any value change to ensure movement points are saved
+    apply_changes();
+    dirty_ = false;
 }
 
 void FrameMovementEditor::layout_variant_header() {
@@ -735,8 +746,19 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
                              DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(),
                              DMStyles::ShadowIntensity());
 
+    // Title: show animation name
+    if (!animation_id_.empty()) {
+        SDL_Rect title_rect{ frame_list_rect_.x + kPanelPadding,
+                             frame_list_rect_.y + kPanelPadding,
+                             std::max(0, frame_list_rect_.w - kPanelPadding * 2),
+                             kFrameListTitleHeight };
+        render_tab_text(renderer, animation_id_, title_rect, DMStyles::Label().color);
+    }
+
     if (frame_item_rects_.empty()) {
-        render_tab_text(renderer, "No Frames", frame_list_rect_, DMStyles::Label().color);
+        SDL_Rect empty_rect{ frame_list_rect_.x, frame_list_rect_.y + kPanelPadding + kFrameListTitleHeight,
+                             frame_list_rect_.w, std::max(0, frame_list_rect_.h - (kPanelPadding*2 + kFrameListTitleHeight)) };
+        render_tab_text(renderer, "No Frames", empty_rect, DMStyles::Label().color);
         return;
     }
 
@@ -954,7 +976,7 @@ void FrameMovementEditor::layout_frame_list() {
     const int padding = kPanelPadding;
     const int spacing = kPanelPadding;
     const int available_width = std::max(0, frame_list_rect_.w - padding * 2);
-    const int available_height = std::max(0, frame_list_rect_.h - padding * 2);
+    const int available_height = std::max(0, frame_list_rect_.h - padding * 2 - kFrameListTitleHeight);
     if (available_width <= 0 || available_height <= 0) {
         return;
     }
@@ -972,7 +994,8 @@ void FrameMovementEditor::layout_frame_list() {
     int used_height = rows * item_height + (rows - 1) * spacing;
 
     int start_x = frame_list_rect_.x + padding + std::max(0, (available_width - used_width) / 2);
-    int start_y = frame_list_rect_.y + padding + std::max(0, (available_height - used_height) / 2);
+    // Leave space for the title above the grid
+    int start_y = frame_list_rect_.y + padding + kFrameListTitleHeight + std::max(0, (available_height - used_height) / 2);
 
     frame_item_rects_.reserve(frames_.size());
     int index = 0;

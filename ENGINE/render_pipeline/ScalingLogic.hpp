@@ -190,6 +190,8 @@ struct ScalingLogic {
                                         const HysteresisState& state,
                                         float smoothed_scale,
                                         HysteresisOptions options = HysteresisOptions{}) {
+        // Base selection prefers downscaling: choose smallest stored scale >= requested.
+        // If none is available (e.g., zoomed-in beyond largest allowed), choose largest allowed.
         ScaleSelection base = choose_closest(desired_scale, steps);
         if (steps.empty()) {
             return base;
@@ -248,12 +250,8 @@ struct ScalingLogic {
             max_bound = bounds.second;
         }
 
-        if (candidate < base.index) {
-            candidate = base.index;
-            bounds = variant_bounds(steps, candidate, options.margin);
-            min_bound = bounds.first;
-            max_bound = bounds.second;
-        }
+        // Do not clamp candidate to the "closest" index; allow selecting a larger
+        // variant (smaller index) when it avoids upscaling a smaller variant.
 
         ScaleSelection result = base;
         result.index = candidate;
@@ -392,10 +390,6 @@ private:
 
         result.requested_scale = sanitized;
 
-        float best_diff    = std::numeric_limits<float>::max();
-        float chosen_scale = steps.front();
-        int   chosen_index = 0;
-
         const float quality_cap = QualityCap();
         const bool  enforce_cap = std::isfinite(quality_cap) && quality_cap > 0.0f && quality_cap < 0.999f;
         bool has_allowed = false;
@@ -408,24 +402,41 @@ private:
             }
         }
 
+        // Steps are sorted descending. Pick the first allowed step >= requested.
+        int   chosen_index = -1;
+        float chosen_scale = steps.front();
         for (std::size_t i = 0; i < steps.size(); ++i) {
             const float candidate = steps[i];
             if (enforce_cap && has_allowed && candidate > quality_cap + 1e-4f) {
                 continue;
             }
-            const float diff = std::fabs(candidate - sanitized);
-            if (diff < best_diff - 1e-4f) {
-                best_diff    = diff;
-                chosen_scale = candidate;
+            if (candidate + 1e-4f >= sanitized) {
                 chosen_index = static_cast<int>(i);
-            } else if (std::fabs(diff - best_diff) <= 1e-4f && candidate > chosen_scale) {
                 chosen_scale = candidate;
-                chosen_index = static_cast<int>(i);
+                break;
             }
         }
 
-        result.index        = chosen_index;
-        result.stored_scale = chosen_scale;
+        // If none is >= requested (zoomed-in), choose the largest allowed.
+        if (chosen_index < 0) {
+            for (std::size_t i = 0; i < steps.size(); ++i) {
+                const float candidate = steps[i];
+                if (enforce_cap && has_allowed && candidate > quality_cap + 1e-4f) {
+                    continue;
+                }
+                chosen_index = static_cast<int>(i);
+                chosen_scale = candidate;
+                break;
+            }
+            if (chosen_index < 0) {
+                // Fallback to the largest step if filtering excluded all.
+                chosen_index = 0;
+                chosen_scale = steps.front();
+            }
+        }
+
+        result.index           = chosen_index;
+        result.stored_scale    = chosen_scale;
         result.remainder_scale = (chosen_scale > 0.0f) ? (sanitized / chosen_scale) : 1.0f;
         return result;
     }

@@ -9,6 +9,7 @@
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
 #include "../../PreviewProvider.hpp"
+#include "util/grid.hpp"
 
 namespace animation_editor {
 
@@ -37,6 +38,16 @@ float round_delta_to_pixel(float value) {
         return 0.0f;
     }
     return static_cast<float>(std::round(value));
+}
+
+SDL_FPoint snap_to_resolution(SDL_FPoint p, int resolution_r) {
+    if (resolution_r < 0) {
+        // Disabled: keep pixel rounding only
+        return SDL_FPoint{ static_cast<float>(std::round(p.x)), static_cast<float>(std::round(p.y)) };
+    }
+    SDL_Point world_px{ static_cast<int>(std::lround(p.x)), static_cast<int>(std::lround(p.y)) };
+    SDL_Point snapped = vibble::grid::snap_world_to_vertex(world_px, vibble::grid::clamp_resolution(resolution_r));
+    return SDL_FPoint{ static_cast<float>(snapped.x), static_cast<float>(snapped.y) };
 }
 
 }
@@ -153,6 +164,18 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
             SDL_RenderFillRect(renderer, &flag);
         }
     }
+}
+
+SDL_FPoint snap_to_grid_resolution(SDL_FPoint p) {
+    // Snap to the nearest major grid intersection using the current visual grid resolution.
+    // The grid overlay emphasizes major lines every kMajorGridInterval units; use that as resolution.
+    if (kMajorGridInterval <= 1) {
+        return SDL_FPoint{ static_cast<float>(std::round(p.x)), static_cast<float>(std::round(p.y)) };
+    }
+    const float step = static_cast<float>(kMajorGridInterval);
+    float sx = std::round(p.x / step) * step;
+    float sy = std::round(p.y / step) * step;
+    return SDL_FPoint{ sx, sy };
 }
 
 void MovementCanvas::render_background(SDL_Renderer* renderer) const {
@@ -324,7 +347,8 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
                     // Set current frame's point to the clicked position without changing selection
                     std::vector<SDL_FPoint> base_positions = positions_;
                     SDL_FPoint world = screen_to_world(SDL_Point{e.button.x, e.button.y});
-                    world = round_point_to_pixel(world);
+                    // Snap to dev grid resolution (if configured) only on click placement
+                    world = snap_to_resolution(world, snap_resolution_);
                     apply_frame_move_from_base(selected_index_, world, base_positions);
                     drag_target_world_ = world;
                 }

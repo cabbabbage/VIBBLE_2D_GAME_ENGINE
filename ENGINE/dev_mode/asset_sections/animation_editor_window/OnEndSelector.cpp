@@ -160,9 +160,9 @@ void OnEndSelector::sync_from_document() {
     if (on_end.empty()) {
         on_end = "default";
     }
-
+    // Only allow values that are valid options (default + animation IDs).
     if (std::find(options_.begin(), options_.end(), on_end) == options_.end()) {
-        options_.push_back(on_end);
+        on_end = "default";
     }
 
     int index = find_option_index(on_end);

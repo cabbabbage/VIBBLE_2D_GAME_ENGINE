@@ -1,0 +1,12 @@
+*** Begin Patch
+*** Update File: ENGINE/dev_mode/asset_sections/animation_editor_window/frame_editor/FrameEditor.hpp
+@@
+ class FrameEditor {
+   public:
+@@
+     void set_frame_changed_callback(FrameChangedCallback callback);
++    void set_grid_snap_resolution(int r);
+@@
+   private:
+*** End Patch
+

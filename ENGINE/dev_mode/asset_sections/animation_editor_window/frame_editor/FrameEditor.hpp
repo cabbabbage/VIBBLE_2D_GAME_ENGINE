@@ -39,6 +39,7 @@ class FrameEditor {
     void set_close_callback(CloseCallback callback);
     void set_preview_provider(std::shared_ptr<PreviewProvider> provider);
     void set_frame_changed_callback(FrameChangedCallback callback);
+    void set_grid_snap_resolution(int r);
     int selected_index() const;
 
     void update();

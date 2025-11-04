@@ -56,6 +56,7 @@ class FrameMovementEditor {
     void apply_smoothing();
     std::pair<int,int> total_displacement() const;
     void set_total_displacement(int dx, int dy);
+    void set_grid_snap_resolution(int r) { if (canvas_) canvas_->set_snap_resolution(r); }
 
   private:
     void load_frames_from_document();

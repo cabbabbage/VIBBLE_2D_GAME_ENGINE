@@ -133,6 +133,7 @@ void BombController::update(const Input&) {
         return;
     }
 
+    // Handle detonation lifecycle first
     if (state_ == State::Detonating) {
         if (explosion_started_ && (!self_->info || self_->get_current_animation() == "explosion")) {
             if (!self_->is_current_animation_looping() && self_->is_current_animation_last_frame()) {
@@ -142,33 +143,19 @@ void BombController::update(const Input&) {
         return;
     }
 
-    if (self_->anim_->path_requested) {
-        switch (state_) {
-        case State::Idle:
-            enter_idle(idle_ratio_);
-            break;
-        case State::Pursuing:
-            if (target_active(current_target_)) {
-                enter_pursue(current_target_);
-            } else {
-                pursuit_locked_ = false;
-                enter_idle(idle_ratio_);
-            }
-            break;
-        case State::Detonating:
-            break;
-        }
-    }
-
     if (!assets_ || !self_->info) {
-        enter_idle(5);
+        // Fallback idle when missing context
+        if (self_->anim_->path_requested) {
+            enter_idle(5);
+        }
         return;
     }
 
     try {
         Asset* player = resolve_player_target();
         if (!target_active(player) || player == self_) {
-            if (!pursuit_locked_) {
+            pursuit_locked_ = false;
+            if (self_->anim_->path_requested) {
                 enter_idle(35);
             }
             return;
@@ -176,34 +163,42 @@ void BombController::update(const Input&) {
 
         const double distance = Range::get_distance(self_, player);
         if (!std::isfinite(distance)) {
-            if (!pursuit_locked_) {
+            pursuit_locked_ = false;
+            if (self_->anim_->path_requested) {
                 enter_idle(idle_ratio_);
             }
             return;
         }
 
-        constexpr double detection_radius = 800.0;
+        constexpr double detection_radius  = 800.0;
         constexpr double detonation_radius = 30.0;
 
         if (distance <= detonation_radius) {
+            // Detonate immediately
             trigger_explosion();
             return;
         }
 
-        if (!pursuit_locked_ && distance <= detection_radius) {
+        if (distance <= detection_radius) {
             pursuit_locked_ = true;
+            current_target_ = player;
+        } else {
+            pursuit_locked_ = false;
+            current_target_ = nullptr;
         }
 
-        if (pursuit_locked_) {
-            enter_pursue(player);
-            return;
-        }
-
-        if (state_ != State::Idle) {
-            enter_idle(idle_ratio_);
+        // Only issue movement when the animation runtime requests a new path
+        if (self_->anim_->path_requested) {
+            if (pursuit_locked_ && target_active(current_target_)) {
+                enter_pursue(current_target_);
+            } else {
+                enter_idle(idle_ratio_);
+            }
         }
     } catch (...) {
-        enter_idle(5);
+        if (self_->anim_->path_requested) {
+            enter_idle(5);
+        }
     }
 }
 

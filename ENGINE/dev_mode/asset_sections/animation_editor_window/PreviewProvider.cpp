@@ -203,6 +203,11 @@ void PreviewProvider::invalidate_all() {
     frame_cache_.clear();
 }
 
+int PreviewProvider::get_frame_count(const std::string& animation_id) const {
+    ResolvedAnimation resolved = resolve_animation(animation_id, 0);
+    return static_cast<int>(resolved.frames.size());
+}
+
 std::shared_ptr<SDL_Texture> PreviewProvider::build_texture(SDL_Renderer* renderer,
                                                             const std::string& animation_id, int depth) {
     if (!renderer || !document_) {
@@ -598,4 +603,3 @@ std::vector<std::filesystem::path> PreviewProvider::find_frame_sequence(const st
 }
 
 }
-

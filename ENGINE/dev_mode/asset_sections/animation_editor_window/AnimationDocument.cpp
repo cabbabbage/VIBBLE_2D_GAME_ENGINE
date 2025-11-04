@@ -94,15 +94,26 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
         }
     }
 
+    // Respect inherit_source_movement for derived animations. When a derived animation opts
+    // OUT of inheriting movement, we keep local movement data in the payload so editors can
+    // load/save it. Otherwise, we strip movement-related fields for clean derived records.
+    bool inherit_source_movement = payload.value("inherit_source_movement", derived_from_animation);
+    // Ensure the key is explicitly present for downstream tools/UI
+    payload["inherit_source_movement"] = inherit_source_movement;
+
     if (derived_from_animation) {
         payload["derived_modifiers"] = nlohmann::json{{"reverse", derived_reverse},
                                                        {"flipX", derived_flip_x},
                                                        {"flipY", derived_flip_y},
                                                        {"flipMovementX", derived_flip_movement_x},
                                                        {"flipMovementY", derived_flip_movement_y}};
-        payload.erase("movement");
-        payload.erase("movement_total");
-        payload.erase("movement_variants");
+        // Keep movement only if not inheriting; otherwise strip to avoid conflicting data
+        if (inherit_source_movement) {
+            payload.erase("movement");
+            payload.erase("movement_total");
+            payload.erase("movement_variants");
+        }
+        // Keep other derived-compatible fields minimal
         payload.erase("audio");
         payload.erase("speed_factor");
         payload.erase("fps");
@@ -138,7 +149,7 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     if (frames < 1) frames = 1;
     payload["number_of_frames"] = frames;
 
-    if (!derived_from_animation) {
+    if (!derived_from_animation || (derived_from_animation && !inherit_source_movement)) {
         nlohmann::json movement = payload.contains("movement") && payload["movement"].is_array() ? payload["movement"] : nlohmann::json::array();
         if (!movement.is_array()) {
             movement = nlohmann::json::array();

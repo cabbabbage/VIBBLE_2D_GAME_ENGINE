@@ -84,6 +84,13 @@ void FrameEditor::set_frame_changed_callback(FrameChangedCallback callback) {
     }
 }
 
+void FrameEditor::set_grid_snap_resolution(int r) {
+    ensure_children();
+    if (movement_editor_) {
+        movement_editor_->set_grid_snap_resolution(r);
+    }
+}
+
 int FrameEditor::selected_index() const {
     if (!movement_editor_) return 0;
     return movement_editor_->selected_index();
@@ -143,6 +150,15 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
 
 bool FrameEditor::handle_event(const SDL_Event& e) {
     ensure_children();
+    // Identify pointer inside tools panel early to avoid routing to the movement canvas
+    bool pointer_in_tools = false;
+    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL) {
+        SDL_Point p;
+        if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
+        else if (e.type == SDL_MOUSEWHEEL) { int mx=0,my=0; SDL_GetMouseState(&mx,&my); p.x = mx; p.y = my; }
+        else { p.x = e.button.x; p.y = e.button.y; }
+        pointer_in_tools = SDL_PointInRect(&p, &tools_panel_rect_) != 0;
+    }
     for (size_t i = 0; i < mode_buttons_.size(); ++i) {
         auto& button = mode_buttons_[i];
         if (button && button->handle_event(e)) {
@@ -207,12 +223,12 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (active_mode_ == Mode::Movement && movement_editor_ && movement_editor_->handle_event(e)) {
+    if (!pointer_in_tools && active_mode_ == Mode::Movement && movement_editor_ && movement_editor_->handle_event(e)) {
         update_navigation_styles();
         return true;
     }
 
-    if (movement_editor_ && active_mode_ != Mode::Movement && movement_editor_->handle_frame_list_event(e)) {
+    if (!pointer_in_tools && movement_editor_ && active_mode_ != Mode::Movement && movement_editor_->handle_frame_list_event(e)) {
         update_navigation_styles();
         return true;
     }

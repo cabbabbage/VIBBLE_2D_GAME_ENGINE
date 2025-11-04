@@ -1,4 +1,4 @@
-﻿#include "AnimationEditorWindow.hpp"
+#include "AnimationEditorWindow.hpp"
 
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -477,6 +477,10 @@ void AnimationEditorWindow::update(const Input& input, int screen_w, int screen_
     }
     if (frame_editor_visible_ && frame_editor_) {
         frame_editor_->set_bounds(frame_editor_rect_);
+        // Keep snapping resolution in sync with current map grid settings
+        if (assets_) {
+            frame_editor_->set_grid_snap_resolution(assets_->map_grid_settings().resolution);
+        }
         frame_editor_->update();
     }
 
@@ -658,6 +662,16 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     return false;
 }
 
+void AnimationEditorWindow::focus_animation(const std::string& animation_id) {
+    if (animation_id.empty()) return;
+    if (!document_) return;
+    auto ids = document_->animation_ids();
+    if (std::find(ids.begin(), ids.end(), animation_id) == ids.end()) {
+        return;
+    }
+    select_animation(std::make_optional(animation_id), true);
+}
+
 void AnimationEditorWindow::prompt_rename_animation(const std::string& animation_id) {
     if (!document_) return;
 
@@ -785,11 +799,11 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
             name = asset_root_path_.filename().string();
         }
         if (!name.empty()) {
-            title += " â€” ";
+            title += " — ";
             title += name;
         }
     } else if (!asset_root_path_.empty()) {
-        title += " â€” ";
+        title += " — ";
         title += asset_root_path_.filename().string();
     }
 
@@ -867,7 +881,7 @@ void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) 
 
     std::string title = "Frame Editor";
     if (!frame_editor_animation_id_.empty()) {
-        title += " â€” ";
+        title += " — ";
         title += frame_editor_animation_id_;
     }
     int label_x = frame_editor_modal_header_rect_.x + DMSpacing::panel_padding();
@@ -929,6 +943,9 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
     frame_editor_->set_document(document_);
     frame_editor_->set_animation_id(animation_id);
     frame_editor_->set_bounds(frame_editor_rect_);
+    if (assets_) {
+        frame_editor_->set_grid_snap_resolution(assets_->map_grid_settings().resolution);
+    }
     if (inspector_panel_) {
         inspector_panel_->set_scrub_mode(true);
         inspector_panel_->set_scrub_frame(frame_editor_->selected_index());
@@ -943,6 +960,9 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
 
 void AnimationEditorWindow::close_frame_editor() {
     frame_editor_visible_ = false;
+    if (!frame_editor_animation_id_.empty()) {
+        focus_animation(frame_editor_animation_id_);
+    }
     frame_editor_animation_id_.clear();
     if (inspector_panel_) {
         inspector_panel_->set_scrub_mode(false);

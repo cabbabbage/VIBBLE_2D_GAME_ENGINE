@@ -24,6 +24,7 @@
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "asset_sections/animation_editor_window/frame_editor/movement/MovementCanvas.hpp" // for helper signatures
 #include "animation_update/animation_update.hpp" // bottom middle helper
+#include "util/grid.hpp"
 
 using animation_editor::AnimationDocument;
 using animation_editor::PreviewProvider;
@@ -94,6 +95,41 @@ void FrameEditorSession::begin(Assets* assets,
     if (frames_.empty()) {
         frames_.push_back(clamp_frame(MovementFrame{}));
     }
+    // For derived animations that do NOT inherit movement, expand/trim movement frames
+    // to match the effective preview frame count so thumbnails and navigation reflect
+    // the true number of frames.
+    {
+        int desired_frames = 0;
+        bool derived = false;
+        bool inherit_movement = true;
+        if (document_) {
+            auto payload_dump = document_->animation_payload(animation_id_);
+            if (payload_dump.has_value()) {
+                nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
+                if (payload.is_object() && payload.contains("source") && payload["source"].is_object()) {
+                    const auto& src = payload["source"];
+                    std::string kind = src.value("kind", std::string{"folder"});
+                    derived = (kind == std::string{"animation"});
+                    inherit_movement = payload.value("inherit_source_movement", true);
+                }
+            }
+        }
+        if (derived && !inherit_movement) {
+            if (preview_) {
+                desired_frames = preview_->get_frame_count(animation_id_);
+            }
+            if (desired_frames <= 0) desired_frames = 1;
+            if (static_cast<int>(frames_.size()) < desired_frames) {
+                const int to_add = desired_frames - static_cast<int>(frames_.size());
+                for (int i = 0; i < to_add; ++i) {
+                    frames_.push_back(clamp_frame(MovementFrame{}));
+                }
+            } else if (static_cast<int>(frames_.size()) > desired_frames) {
+                frames_.resize(desired_frames);
+            }
+        }
+    }
+    // Always keep the first frame zeroed
     frames_.front().dx = 0.0f;
     frames_.front().dy = 0.0f;
     rebuild_rel_positions();
@@ -129,7 +165,7 @@ void FrameEditorSession::begin(Assets* assets,
         const int tool_padding = DMSpacing::small_gap();
         int tool_w = tool_padding * 2;
         const int gaps_between = DMSpacing::small_gap();
-        const int line_h = std::max(DMButton::height(), DMCheckbox::height());
+        const int line_h = std::max(std::max(DMButton::height(), DMCheckbox::height()), DMTextBox::height());
         const int cb_w = cb_show_anim_ ? std::max(140, cb_show_anim_->preferred_width()) : 0;
         const int tb_w = 120;
         if (btn_smooth_) tool_w += btn_smooth_->rect().w;
@@ -181,6 +217,7 @@ void FrameEditorSession::end() {
     // Reopen animation editor window
     if (host_) {
         host_->set_visible(true);
+        host_->focus_animation(animation_id_);
     }
     // Clear session
     active_ = false;
@@ -431,23 +468,37 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     // Map interaction: left-click to set/adjust current frame
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point sp{e.button.x, e.button.y};
-        // Ignore clicks inside our panels only; otherwise treat as world edit
+        // If inside any of our panels, consume the event so it doesn't leak to dev controls/room editor
         if (SDL_PointInRect(&sp, &directory_rect_) || SDL_PointInRect(&sp, &nav_rect_) || SDL_PointInRect(&sp, &toolbox_rect_)) {
-            return false;
+            return true;
         }
         if (!assets_ || !target_) return false;
         camera& cam = assets_->getView();
         SDL_FPoint world_f = cam.screen_to_map(sp);
         // Anchor is bottom-middle of the asset
         SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
-        SDL_FPoint desired_rel{ world_f.x - static_cast<float>(anchor_world.x), world_f.y - static_cast<float>(anchor_world.y) };
-        desired_rel = round_fpoint(desired_rel);
+        // Snap absolute click to current map grid resolution before computing relative
+        SDL_Point world_px{ static_cast<int>(std::lround(world_f.x)), static_cast<int>(std::lround(world_f.y)) };
+        int snap_r = std::max(0, assets_->map_grid_settings().resolution);
+        SDL_Point snapped = vibble::grid::snap_world_to_vertex(world_px, vibble::grid::clamp_resolution(snap_r));
+        SDL_FPoint desired_rel{ static_cast<float>(snapped.x - anchor_world.x), static_cast<float>(snapped.y - anchor_world.y) };
         // Compute current base rel positions
         std::vector<SDL_FPoint> base = rel_positions_;
         apply_frame_move_from_base(selected_index_, desired_rel, base);
         rebuild_rel_positions();
         persist_changes();
         return true;
+    }
+
+    // Swallow pointer events inside our panels to prevent world/editor input from seeing them
+    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL) {
+        SDL_Point sp;
+        if (e.type == SDL_MOUSEMOTION) { sp = SDL_Point{ e.motion.x, e.motion.y }; }
+        else if (e.type == SDL_MOUSEWHEEL) { int mx=0,my=0; SDL_GetMouseState(&mx,&my); sp = SDL_Point{mx,my}; }
+        else { sp = SDL_Point{ e.button.x, e.button.y }; }
+        if (SDL_PointInRect(&sp, &directory_rect_) || SDL_PointInRect(&sp, &nav_rect_) || SDL_PointInRect(&sp, &toolbox_rect_)) {
+            return true;
+        }
     }
 
     // Do not consume events outside our panels by default
@@ -509,6 +560,10 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
 
     // Navigation panel
     dm_draw::DrawBeveledRect(renderer, nav_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    // Title: show animation name above buttons
+    if (!animation_id_.empty()) {
+        render_label(renderer, animation_id_, nav_rect_.x + 8, nav_rect_.y + 4);
+    }
     if (btn_prev_) btn_prev_->render(renderer);
     if (btn_next_) btn_next_->render(renderer);
 
@@ -549,7 +604,7 @@ void FrameEditorSession::ensure_widgets() const {
     const DMButtonStyle& tab_active = DMStyles::AccentButton();
     const int bw = 96;
     const int bh = DMButton::height();
-    if (!btn_back_) btn_back_ = std::make_unique<DMButton>(u8"\u2190 Back", &header, 96, bh);
+    if (!btn_back_) btn_back_ = std::make_unique<DMButton>(u8"\u2190 Back", &DMStyles::DeleteButton(), 96, bh);
     if (!btn_movement_) btn_movement_ = std::make_unique<DMButton>("Movement", mode_ == Mode::Movement ? &tab_active : &header, bw, bh);
     if (!btn_children_) btn_children_ = std::make_unique<DMButton>("Children", mode_ == Mode::Children ? &tab_active : &header, bw, bh);
     if (!btn_attacking_) btn_attacking_ = std::make_unique<DMButton>("Attacking", mode_ == Mode::Attacking ? &tab_active : &header, bw, bh);
@@ -586,7 +641,7 @@ void FrameEditorSession::rebuild_layout() const {
     if (mode_ == Mode::Movement) {
         int tool_w = tool_padding * 2;
         const int gaps_between = DMSpacing::small_gap();
-        const int line_h = std::max(DMButton::height(), DMCheckbox::height());
+        const int line_h = std::max(std::max(DMButton::height(), DMCheckbox::height()), DMTextBox::height());
         const int cb_w = cb_show_anim_ ? std::max(140, cb_show_anim_->preferred_width()) : 0;
         const int tb_w = 120;
         if (btn_smooth_) tool_w += btn_smooth_->rect().w;
@@ -625,7 +680,8 @@ void FrameEditorSession::rebuild_layout() const {
     if (btn_next_) btn_next_->set_rect(SDL_Rect{ nav_rect_.x + nav_rect_.w - next_w - 6, nav_rect_.y + (nav_rect_.h - 40)/2, next_w, 40 });
 
     // Thumbs area
-    const int thumb_h = nav_rect_.h - 16;
+    const int title_h = 22;
+    const int thumb_h = std::max(1, nav_rect_.h - 16 - title_h);
     const int thumb_w = thumb_h; // square thumbs
     const int spacing = 8;
     int x0 = (btn_prev_ ? btn_prev_->rect().x + btn_prev_->rect().w + spacing : nav_rect_.x + spacing);
@@ -642,7 +698,7 @@ void FrameEditorSession::rebuild_layout() const {
     int first_index = std::clamp(selected_index_ - visible/2, 0, std::max(0, count - visible));
     for (int i = 0; i < visible; ++i) {
         int idx = first_index + i;
-        SDL_Rect r{ start_x + i * per, nav_rect_.y + 8, thumb_w, thumb_h };
+        SDL_Rect r{ start_x + i * per, nav_rect_.y + 8 + title_h, thumb_w, thumb_h };
         if (idx >= 0 && idx < count) {
             if (static_cast<int>(thumb_rects_.size()) <= idx) thumb_rects_.resize(idx+1);
             thumb_rects_[idx] = r;
@@ -715,6 +771,8 @@ void FrameEditorSession::persist_changes() {
     }
     payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
     document_->replace_animation_payload(animation_id_, payload.dump());
+    // Persist immediately because the AnimationEditorWindow may be hidden during in-world sessions
+    document_->save_to_file();
 }
 
 void FrameEditorSession::smooth_frames() {
@@ -806,3 +864,5 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
     frames.front().dx = 0.0f; frames.front().dy = 0.0f;
     return frames;
 }
+
+

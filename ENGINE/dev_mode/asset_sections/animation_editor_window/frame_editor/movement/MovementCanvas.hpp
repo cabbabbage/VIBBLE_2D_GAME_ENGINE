@@ -38,6 +38,8 @@ class MovementCanvas {
                                const std::string& animation_id,
                                float scale_percentage);
     void set_show_animation_overlay(bool show) { show_animation_overlay_ = show; }
+    // Configure snapping resolution (grid exponent r where step = 2^r). Set to <0 to disable.
+    void set_snap_resolution(int r) { snap_resolution_ = r; }
 
   private:
     void render_pixel_grid(SDL_Renderer* renderer) const;
@@ -71,6 +73,7 @@ class MovementCanvas {
     std::string animation_id_;
     bool show_animation_overlay_ = false;
     float base_scale_percentage_ = 100.0f;
+    int snap_resolution_ = -1;
 };
 
 }

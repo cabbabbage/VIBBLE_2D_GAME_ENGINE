@@ -51,6 +51,7 @@ class AnimationEditorWindow {
     void update(const Input& input, int screen_w, int screen_h);
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
+    void focus_animation(const std::string& animation_id);
 
     void set_on_document_saved(std::function<void()> callback);
 

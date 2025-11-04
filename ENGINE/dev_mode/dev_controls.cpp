@@ -1012,12 +1012,19 @@ void DevControls::update(const Input& input) {
             handle_map_selection();
         }
     } else if (mode_ == Mode::RoomEditor && room_editor_ && room_editor_->is_enabled()) {
-        if (!pointer_over_camera_panel_) {
-            room_editor_->update(input);
-        }
-        // Update Area Tool overlay/editor if active
-        if (asset_area_editor_ && asset_area_editor_->is_active()) {
-            asset_area_editor_->update(input, screen_w_, screen_h_);
+        // While in-world Frame Editor session is active, disable dev mouse controls that
+        // highlight/select assets by skipping RoomEditor update and clearing highlights.
+        const bool frame_editing = frame_editor_session_ && frame_editor_session_->is_active();
+        if (!frame_editing) {
+            if (!pointer_over_camera_panel_) {
+                room_editor_->update(input);
+            }
+            // Update Area Tool overlay/editor if active
+            if (asset_area_editor_ && asset_area_editor_->is_active()) {
+                asset_area_editor_->update(input, screen_w_, screen_h_);
+            }
+        } else {
+            room_editor_->clear_highlighted_assets();
         }
     }
 
@@ -1255,11 +1262,13 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
-    // Route events to in-world frame editor session before footer/map UI, but do not swallow outside panels
+    // Route events to in-world frame editor session before footer/map UI
     if (frame_editor_session_ && frame_editor_session_->is_active()) {
         if (consume(frame_editor_session_->handle_event(event))) {
             return;
         }
+        // While frame editor is active, prevent RoomEditor from consuming input to avoid
+        // asset highlighting/selection changes.
     }
 
     bool block_for_camera = pointer_event_inside_camera;
@@ -1387,7 +1396,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
-    if (can_route_room_editor && room_editor_->handle_sdl_event(event)) {
+    // Do not route to RoomEditor while the in-world Frame Editor is active
+    if (!(frame_editor_session_ && frame_editor_session_->is_active()) && can_route_room_editor && room_editor_->handle_sdl_event(event)) {
         consume(true);
         return;
     }

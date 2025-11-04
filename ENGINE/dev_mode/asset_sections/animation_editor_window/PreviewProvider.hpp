@@ -27,6 +27,9 @@ class PreviewProvider {
     void invalidate(const std::string& animation_id);
     void invalidate_all();
 
+    // Get the number of frames for an animation (handles recursive sourcing)
+    int get_frame_count(const std::string& animation_id) const;
+
   private:
     struct CacheEntry {
         SDL_Renderer* renderer = nullptr;
@@ -66,4 +69,3 @@ class PreviewProvider {
 };
 
 }
-
