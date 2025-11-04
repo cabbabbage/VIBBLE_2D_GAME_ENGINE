@@ -391,6 +391,72 @@ void AssetLoader::load_from_manifest(const nlohmann::json& map_manifest) {
         trails_data_       = &map_manifest_json_["trails_data"];
         if (!trails_data_->is_object()) *trails_data_ = nlohmann::json::object();
 
+        // If no map_layers are present, infer a minimal layer spec with a single spawn room.
+        // This allows loading a completely blank map that only declares a spawn room in rooms_data,
+        // or even creates a default spawn if rooms_data is empty.
+        try {
+                auto ml_it = map_manifest_json_.find("map_layers");
+                const bool missing_or_empty = (ml_it == map_manifest_json_.end()) || !ml_it->is_array() || ml_it->empty();
+                if (missing_or_empty) {
+                        // Determine a spawn room name to reference
+                        std::string spawn_name;
+                        if (rooms_data_ && rooms_data_->is_object()) {
+                                for (auto it = rooms_data_->begin(); it != rooms_data_->end(); ++it) {
+                                        if (it.value().is_object() && it.value().value("is_spawn", false)) {
+                                                spawn_name = it.key();
+                                                break;
+                                        }
+                                }
+                                if (spawn_name.empty() && rooms_data_->contains("spawn")) {
+                                        spawn_name = "spawn";
+                                }
+                        }
+                        if (spawn_name.empty()) {
+                                spawn_name = "spawn";
+                                // Create a default spawn room entry if none exists
+                                nlohmann::json& rd = *rooms_data_;
+                                nlohmann::json& spawn_entry = rd[spawn_name];
+                                if (!spawn_entry.is_object() || spawn_entry.empty()) {
+                                        // Provide conservative defaults for a circular spawn room
+                                        constexpr int kSpawnRadius = 1500;
+                                        const int diameter = kSpawnRadius * 2;
+                                        spawn_entry = nlohmann::json::object();
+                                        spawn_entry["name"]                 = spawn_name;
+                                        spawn_entry["geometry"]             = "Circle";
+                                        spawn_entry["radius"]               = kSpawnRadius;
+                                        spawn_entry["min_radius"]           = kSpawnRadius;
+                                        spawn_entry["max_radius"]           = kSpawnRadius;
+                                        spawn_entry["min_width"]            = diameter;
+                                        spawn_entry["max_width"]            = diameter;
+                                        spawn_entry["min_height"]           = diameter;
+                                        spawn_entry["max_height"]           = diameter;
+                                        spawn_entry["edge_smoothness"]      = 2;
+                                        spawn_entry["is_spawn"]             = true;
+                                        spawn_entry["is_boss"]              = false;
+                                        spawn_entry["inherits_map_assets"]  = false;
+                                        spawn_entry["spawn_groups"]         = nlohmann::json::array();
+                                }
+                        }
+
+                        nlohmann::json rooms_arr = nlohmann::json::array();
+                        nlohmann::json spawn_spec;
+                        spawn_spec["name"]               = spawn_name;
+                        spawn_spec["max_instances"]      = 1;
+                        spawn_spec["required_children"]  = nlohmann::json::array();
+                        rooms_arr.push_back(std::move(spawn_spec));
+
+                        nlohmann::json inferred_layer;
+                        inferred_layer["level"]     = 0;
+                        inferred_layer["max_rooms"] = 1;
+                        inferred_layer["rooms"]     = std::move(rooms_arr);
+
+                        map_manifest_json_["map_layers"] = nlohmann::json::array({ inferred_layer });
+                        vibble::log::info(std::string("[AssetLoader] Inferred default map_layers for blank map '") + map_id_ + "'.");
+                }
+        } catch (...) {
+                // Non-fatal: if inference fails, continue with whatever structure exists
+        }
+
         auto layers_it = map_manifest_json_.find("map_layers");
         map_layers::LayerRadiiResult radii_result;
         const nlohmann::json* rooms_data_ptr = rooms_data_;

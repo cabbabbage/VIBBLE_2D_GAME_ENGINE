@@ -407,6 +407,11 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
     map_info["map_light_data"] = std::move(default_light);
     map_info["trails_data"] = nlohmann::json::object();
 
+    // Provide a stable default for layer settings so geometry math has a sane min edge.
+    map_info["map_layers_settings"] = nlohmann::json::object({
+        {"min_edge_distance", 200}
+    });
+
     nlohmann::json spawn_room;
     spawn_room["name"] = "spawn";
     spawn_room["geometry"] = "Circle";
