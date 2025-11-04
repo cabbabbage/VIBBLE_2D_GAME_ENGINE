@@ -1,6 +1,7 @@
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 
 #include "asset/Asset.hpp"
+#include "render/camera.hpp"
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/IRenderStage.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
@@ -133,15 +134,19 @@ void StageContext::update_projection(Asset& asset) {
             reference_height,
             reinterpret_cast<camera::RenderSmoothingKey>(&asset));
 
-    const float scaled_sw       = base_sw * effects.distance_scale;
-    const float scaled_sh       = base_sh * effects.distance_scale;
-    const float final_visible_h = scaled_sh * effects.vertical_scale;
+    const float parallax_offset = (asset.info && asset.info->apply_parallax) ? effects.parallax_offset_x : 0.0f;
+    const float distance_scale  = (asset.info && asset.info->apply_distance_scaling) ? effects.distance_scale : 1.0f;
+    const float vertical_scale  = (asset.info && asset.info->apply_vertical_scaling) ? effects.vertical_scale : 1.0f;
+
+    const float scaled_sw       = base_sw * distance_scale;
+    const float scaled_sh       = base_sh * distance_scale;
+    const float final_visible_h = scaled_sh * vertical_scale;
 
     if (!std::isfinite(scaled_sw) || !std::isfinite(final_visible_h) || scaled_sw <= 0.0f || final_visible_h <= 0.0f) {
         return;
     }
 
-    const float center_x = effects.screen_position.x + effects.parallax_offset_x;
+    const float center_x = effects.screen_position.x + parallax_offset;
     const float center_y = effects.screen_position.y;
 
     const float rect_w = std::max(scaled_sw, 1.0f);
@@ -375,4 +380,3 @@ const SceneLighting& AssetRenderPipeline::lighting() const {
 void AssetRenderPipeline::set_player_asset(Asset* player) {
     lighting_.player = player;
 }
-

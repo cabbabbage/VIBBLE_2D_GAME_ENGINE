@@ -247,9 +247,14 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
         smoothing_key);
     SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ world_x, world_y });
     ef.screen_position = screen;
-    const float scaled_sw = base_sw * ef.distance_scale;
-    const float scaled_sh2 = base_sh * ef.distance_scale;
-    const float final_h = scaled_sh2 * ef.vertical_scale;
+
+    const float parallax_offset = (a && a->info && a->info->apply_parallax) ? ef.parallax_offset_x : 0.0f;
+    const float distance_scale  = (a && a->info && a->info->apply_distance_scaling) ? ef.distance_scale : 1.0f;
+    const float vertical_scale  = (a && a->info && a->info->apply_vertical_scaling) ? ef.vertical_scale : 1.0f;
+
+    const float scaled_sw = base_sw * distance_scale;
+    const float scaled_sh2 = base_sh * distance_scale;
+    const float final_h = scaled_sh2 * vertical_scale;
 
     const float min_w_f = static_cast<float>(min_w);
     const float min_h_f = static_cast<float>(min_h);
@@ -273,7 +278,7 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
     width  = std::max(width, 1.0f);
     height = std::max(height, 1.0f);
 
-    const float center_x = ef.screen_position.x + ef.parallax_offset_x;
+    const float center_x = ef.screen_position.x + parallax_offset;
     const float left     = center_x - width * 0.5f;
     const float top      = ef.screen_position.y - height;
 
@@ -889,4 +894,3 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
     SDL_Rect screen_dst{0, 0, screen_width_, screen_height_};
     SDL_RenderCopy(renderer_, darkness_overlay_texture_, nullptr, &screen_dst);
 }
-

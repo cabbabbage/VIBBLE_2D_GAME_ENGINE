@@ -568,6 +568,9 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
         min_same_type_distance = data.value("min_same_type_distance", 0);
         min_distance_all = data.value("min_distance_all", 0);
         flipable = data.value("can_invert", false);
+        apply_parallax = data.value("apply_parallax", true);
+        apply_distance_scaling = data.value("apply_distance_scaling", true);
+        apply_vertical_scaling = data.value("apply_vertical_scaling", true);
         NeighborSearchRadius = std::clamp( data.value("neighbor_search_distance", NeighborSearchRadius), 20, 1000);
         info_json_["neighbor_search_distance"] = NeighborSearchRadius;
 }
@@ -1424,4 +1427,3 @@ bool AssetInfo::reload_animations_from_disk() {
     }
     return apply_payload(*view.data);
 }
-

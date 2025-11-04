@@ -70,6 +70,9 @@ class AssetInfo {
     int original_canvas_width = 0;
     int original_canvas_height = 0;
     bool flipable;
+    bool apply_parallax = true;
+    bool apply_distance_scaling = true;
+    bool apply_vertical_scaling = true;
     std::vector<std::string> tags;
     std::vector<std::string> anti_tags;
     bool is_light_source = false;
@@ -202,4 +205,3 @@ struct AssetInfoTestAccess {
     static void rebuild_anti_tag_cache(AssetInfo& info);
 };
 #endif
-

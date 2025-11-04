@@ -36,6 +36,9 @@ class Section_BasicInfo : public DockableCollapsible {
     std::unique_ptr<DMSlider>    s_scale_pct_;
     std::unique_ptr<DMSlider>    s_zindex_;
     std::unique_ptr<DMCheckbox>  c_flipable_;
+    std::unique_ptr<DMCheckbox>  c_apply_parallax_;
+    std::unique_ptr<DMCheckbox>  c_apply_distance_scaling_;
+    std::unique_ptr<DMCheckbox>  c_apply_vertical_scaling_;
     std::unique_ptr<DMButton>    apply_btn_;
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::vector<std::string> type_options_;
@@ -82,6 +85,9 @@ inline void Section_BasicInfo::build() {
     s_scale_pct_ = std::make_unique<DMSlider>("Scale (%)", 1, 400, pct);
     s_zindex_    = std::make_unique<DMSlider>("Z Index Offset", -1000, 1000, info_->z_threshold);
     c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
+    c_apply_parallax_ = std::make_unique<DMCheckbox>("Apply parallax", info_->apply_parallax);
+    c_apply_distance_scaling_ = std::make_unique<DMCheckbox>("Apply distance scaling", info_->apply_distance_scaling);
+    c_apply_vertical_scaling_ = std::make_unique<DMCheckbox>("Apply vertical scaling", info_->apply_vertical_scaling);
 
     auto w_type = std::make_unique<DropdownWidget>(dd_type_.get());
     rows.push_back({ w_type.get() });
@@ -98,6 +104,18 @@ inline void Section_BasicInfo::build() {
     auto w_flip = std::make_unique<CheckboxWidget>(c_flipable_.get());
     rows.push_back({ w_flip.get() });
     widgets_.push_back(std::move(w_flip));
+
+    auto w_parallax = std::make_unique<CheckboxWidget>(c_apply_parallax_.get());
+    rows.push_back({ w_parallax.get() });
+    widgets_.push_back(std::move(w_parallax));
+
+    auto w_distance = std::make_unique<CheckboxWidget>(c_apply_distance_scaling_.get());
+    rows.push_back({ w_distance.get() });
+    widgets_.push_back(std::move(w_distance));
+
+    auto w_vertical = std::make_unique<CheckboxWidget>(c_apply_vertical_scaling_.get());
+    rows.push_back({ w_vertical.get() });
+    widgets_.push_back(std::move(w_vertical));
 
     if (!apply_btn_) {
         apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
@@ -120,6 +138,9 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         if (s_scale_pct_ && s_scale_pct_->handle_event(e)) used = true;
         if (s_zindex_ && s_zindex_->handle_event(e)) used = true;
         if (c_flipable_ && c_flipable_->handle_event(e)) used = true;
+        if (c_apply_parallax_ && c_apply_parallax_->handle_event(e)) used = true;
+        if (c_apply_distance_scaling_ && c_apply_distance_scaling_->handle_event(e)) used = true;
+        if (c_apply_vertical_scaling_ && c_apply_vertical_scaling_->handle_event(e)) used = true;
     }
 
     bool changed = false;
@@ -153,6 +174,21 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
 
     if (c_flipable_ && info_->flipable != c_flipable_->value()) {
         info_->set_flipable(c_flipable_->value());
+        changed = true;
+    }
+
+    if (c_apply_parallax_ && info_->apply_parallax != c_apply_parallax_->value()) {
+        info_->apply_parallax = c_apply_parallax_->value();
+        changed = true;
+    }
+
+    if (c_apply_distance_scaling_ && info_->apply_distance_scaling != c_apply_distance_scaling_->value()) {
+        info_->apply_distance_scaling = c_apply_distance_scaling_->value();
+        changed = true;
+    }
+
+    if (c_apply_vertical_scaling_ && info_->apply_vertical_scaling != c_apply_vertical_scaling_->value()) {
+        info_->apply_vertical_scaling = c_apply_vertical_scaling_->value();
         changed = true;
     }
 
@@ -222,4 +258,3 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 200);
     SDL_RenderDrawLine(r, bounds.x, z_line_y, bounds.x + bounds.w, z_line_y);
 }
-
