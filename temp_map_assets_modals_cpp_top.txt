@@ -324,19 +324,15 @@ private:
             rows.push_back({instructions_label_.get()});
         }
 
-        // Add grid resolution slider used by Map-wide and Boundary assets
+        // Add grid resolution slider for boundary assets
         if (!grid_resolution_slider_) {
-            constexpr int kMinResolution = 5; // enforce minimum of 5
-            constexpr int kMaxResolution = 10; // keep existing upper bound
-            int current_resolution = kMinResolution; // Default resolution
+            constexpr int kMinResolution = 0;
+            constexpr int kMaxResolution = 10; // Assuming same range as grid
+            int current_resolution = 3; // Default resolution
             if (entry_ && entry_->contains("grid_resolution")) {
-                current_resolution = std::max(kMinResolution, entry_->value("grid_resolution", kMinResolution));
+                current_resolution = entry_->value("grid_resolution", 3);
             }
             grid_resolution_slider_ = std::make_unique<DMSlider>("Grid Resolution (2^r px)", kMinResolution, kMaxResolution, current_resolution);
-            // Ensure the value is persisted in the entry so spawners can read it even if user doesn't move the slider
-            if (entry_) {
-                (*entry_)["grid_resolution"] = current_resolution;
-            }
         }
         if (grid_resolution_slider_) {
             auto grid_slider_widget = std::make_unique<SliderWidget>(grid_resolution_slider_.get());
@@ -442,150 +438,3 @@ private:
 
 }
 
-class CandidateListPanel : public CandidateListPanelImpl {
-public:
-    using CandidateListPanelImpl::CandidateListPanelImpl;
-};
-
-SingleSpawnGroupModal::SingleSpawnGroupModal() = default;
-SingleSpawnGroupModal::~SingleSpawnGroupModal() = default;
-
-void SingleSpawnGroupModal::set_on_close(std::function<void()> cb) {
-    on_close_ = std::move(cb);
-    if (panel_) {
-        panel_->set_on_close([this]() {
-            if (on_close_) on_close_();
-        });
-    }
-}
-
-void SingleSpawnGroupModal::ensure_single_group(json& section,
-                                                const std::string& default_display_name) {
-    if (!section.is_object()) {
-        section = json::object();
-    }
-    auto& groups = devmode::spawn::ensure_spawn_groups_array(section);
-    if (groups.empty()) {
-        json entry = json::object();
-        devmode::spawn::ensure_spawn_group_entry_defaults(entry, default_display_name);
-        groups.push_back(std::move(entry));
-    } else {
-        devmode::spawn::ensure_spawn_group_entry_defaults(groups[0], default_display_name);
-        if (groups.size() > 1) {
-            json first = groups[0];
-            groups = json::array();
-            groups.push_back(std::move(first));
-        }
-    }
-}
-
-void SingleSpawnGroupModal::open(json& map_info,
-                                 const std::string& section_key,
-                                 const std::string& default_display_name,
-                                 const std::string& ownership_label,
-                                 SDL_Color ownership_color,
-                                 SaveCallback on_save,
-                                 RegenCallback on_regen) {
-    map_info_ = &map_info;
-    on_save_ = std::move(on_save);
-    on_regen_ = std::move(on_regen);
-    section_ = &(*map_info_)[section_key];
-    ensure_single_group(*section_, default_display_name);
-
-    auto& groups = (*section_)["spawn_groups"];
-    entry_ = &groups.front();
-
-    if (!panel_) panel_ = std::make_unique<CandidateListPanel>();
-    panel_->set_screen_dimensions(screen_w_, screen_h_);
-    panel_->bind(entry_,
-                 default_display_name,
-                 ownership_label,
-                 ownership_label.empty() ? std::optional<SDL_Color>{} : std::optional<SDL_Color>{ownership_color},
-                 [this]() {
-                     if (on_save_) on_save_();
-                 },
-                 [this](const json& updated_entry) {
-                     if (on_regen_) on_regen_(updated_entry);
-                 });
-
-    if (panel_) {
-        panel_->set_on_close([this]() {
-            if (on_close_) on_close_();
-        });
-    }
-
-    panel_->open();
-    panel_->force_pointer_ready();
-    position_initialized_ = false;
-    ensure_visible_position();
-}
-
-void SingleSpawnGroupModal::close() {
-    if (panel_) panel_->close();
-}
-
-bool SingleSpawnGroupModal::visible() const {
-    return panel_ && panel_->is_visible();
-}
-
-void SingleSpawnGroupModal::update(const Input& input) {
-    if (panel_) panel_->update(input, screen_w_, screen_h_);
-}
-
-bool SingleSpawnGroupModal::handle_event(const SDL_Event& e) {
-    if (!panel_) return false;
-    return panel_->handle_event(e);
-}
-
-void SingleSpawnGroupModal::render(SDL_Renderer* r) const {
-    if (panel_) panel_->render(r);
-}
-
-bool SingleSpawnGroupModal::is_point_inside(int x, int y) const {
-    if (!panel_) return false;
-    return panel_->is_point_inside(x, y);
-}
-
-void SingleSpawnGroupModal::set_screen_dimensions(int width, int height) {
-    screen_w_ = std::max(width, 0);
-    screen_h_ = std::max(height, 0);
-    if (panel_) panel_->set_screen_dimensions(screen_w_, screen_h_);
-    position_initialized_ = false;
-    ensure_visible_position();
-}
-
-void SingleSpawnGroupModal::set_floating_stack_key(std::string key) {
-    stack_key_ = std::move(key);
-}
-
-void SingleSpawnGroupModal::set_on_open_area(
-    std::function<void(const std::string&, const std::string&)> cb) {
-    on_open_area_ = std::move(cb);
-}
-
-void SingleSpawnGroupModal::ensure_visible_position() {
-    if (!panel_) return;
-    if (position_initialized_) return;
-
-    panel_->set_work_area(SDL_Rect{0, 0, screen_w_, screen_h_});
-
-    SDL_Rect rect = panel_->rect();
-    constexpr int kPreferredWidth = 360;
-    constexpr int kPreferredHeight = 420;
-
-    FloatingPanelLayoutManager::PanelInfo info;
-    info.panel = panel_.get();
-    info.force_layout = true;
-    info.preferred_width = rect.w > 0 ? std::max(rect.w, kPreferredWidth) : kPreferredWidth;
-    int resolved_height = rect.h > 0 ? rect.h : panel_->height();
-    if (resolved_height <= 0) {
-        resolved_height = kPreferredHeight;
-    }
-    info.preferred_height = std::max(resolved_height, kPreferredHeight);
-
-    std::vector<FloatingPanelLayoutManager::PanelInfo> panels;
-    panels.push_back(info);
-    FloatingPanelLayoutManager::instance().layoutAll(panels);
-
-    position_initialized_ = true;
-}

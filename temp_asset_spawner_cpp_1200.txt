@@ -125,22 +125,6 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const
                 return {};
         }
     std::vector<nlohmann::json> json_sources{ boundary_json };
-        // Build per-group resolution overrides from the provided JSON (using slider value)
-        group_resolution_map_.clear();
-        try {
-                if (boundary_json.contains("spawn_groups") && boundary_json["spawn_groups"].is_array()) {
-                        for (const auto& entry : boundary_json["spawn_groups"]) {
-                                if (!entry.is_object()) continue;
-                                const std::string sid = entry.value("spawn_id", std::string{});
-                                if (sid.empty()) continue;
-                                int r = std::max(5, entry.value("grid_resolution", 5));
-                                r = vibble::grid::clamp_resolution(r);
-                                group_resolution_map_.insert_or_assign(sid, r);
-                        }
-                }
-        } catch (...) {
-                // ignore malformed json; fall back to defaults
-        }
     AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_);
         boundary_mode_ = true;
         run_spawning(&planner, spawn_area);
@@ -414,23 +398,17 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
 };
 
         vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+        // Boundary placement must use resolution 9 irrespective of preview grid settings
+        constexpr int kEdgeResolution = 7;
+        checker_.begin_session(grid_service, kEdgeResolution);
+
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
 
-                // Resolve per-group resolution from slider value (fallback to 5)
-                int edge_resolution = 5;
-                auto it_res = group_resolution_map_.find(queue_item.spawn_id);
-                if (it_res != group_resolution_map_.end()) {
-                        edge_resolution = it_res->second;
-                }
-                edge_resolution = vibble::grid::clamp_resolution(edge_resolution);
-
-                checker_.begin_session(grid_service, edge_resolution);
-
-                vibble::grid::Occupancy occupancy(area, edge_resolution, grid_service);
+                vibble::grid::Occupancy occupancy(area, kEdgeResolution, grid_service);
                 SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
                 ctx.set_map_grid_settings(map_grid_settings_);
-                ctx.set_spawn_resolution(edge_resolution);
+                ctx.set_spawn_resolution(kEdgeResolution);
                 ctx.set_trail_areas({});
 
                 if (current_room_ && !queue_item.link_area_name.empty()) {
@@ -523,8 +501,8 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
                                 occupancy.set_occupied(vertex, true);
                         }
                 }
-                checker_.reset_session();
         }
+        checker_.reset_session();
 }
 
 void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,

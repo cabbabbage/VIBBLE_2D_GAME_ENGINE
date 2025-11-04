@@ -42,6 +42,4 @@ class AssetSpawner {
     bool boundary_mode_ = false;
     Room* current_room_ = nullptr;
     MapGridSettings map_grid_settings_ = MapGridSettings::defaults();
-    // Optional per-spawn-group resolution overrides (keyed by spawn_id)
-    std::unordered_map<std::string, int> group_resolution_map_;
 };

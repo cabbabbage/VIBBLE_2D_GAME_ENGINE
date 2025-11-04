@@ -2302,7 +2302,16 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         AssetSpawnPlanner planner(sources, *room->room_area, assets_->library());
 
         MapGridSettings grid_settings = room->map_grid_settings();
-        const int resolution = std::max(0, grid_settings.resolution);
+        // Use the spawn-group-specific grid resolution from the modal slider when available
+        int resolution = std::max(0, grid_settings.resolution);
+        try {
+            if (entry.contains("grid_resolution")) {
+                resolution = std::max(5, entry.value("grid_resolution", resolution));
+            }
+        } catch (...) {
+            // keep fallback resolution
+        }
+        resolution = vibble::grid::clamp_resolution(resolution);
         vibble::grid::Grid& grid_service = vibble::grid::global_grid();
         vibble::grid::Occupancy occupancy(*room->room_area, resolution, grid_service);
         checker.begin_session(grid_service, resolution);

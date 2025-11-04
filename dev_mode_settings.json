@@ -2,9 +2,9 @@
     "dev": {
         "asset_filter": {
             "current_room": true,
-            "filters_expanded": false,
+            "filters_expanded": true,
             "initialized": true,
-            "map_assets": false,
+            "map_assets": true,
             "methods": {
                 "center": true,
                 "childrandom": true,
@@ -17,7 +17,7 @@
             },
             "types": {
                 "area": true,
-                "boundary": false,
+                "boundary": true,
                 "enemy": true,
                 "npc": false,
                 "object": true,
