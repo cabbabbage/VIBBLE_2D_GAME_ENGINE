@@ -243,7 +243,59 @@ void AssetLoader::loadRooms() {
                 all_rooms_.push_back(std::move(up));
 	}
         if (rooms_.empty()) {
-                vibble::log::error("[AssetLoader] Room generation failed: no rooms created for map '" + map_id_ + "'");
+                vibble::log::warn("[AssetLoader] Room generation returned no rooms; synthesizing a default spawn room.");
+                try {
+                        constexpr int kSpawnRadius = 1500;
+                        const int diameter = kSpawnRadius * 2;
+                        const int map_radius_int = map_radius_ > 0.0 ? static_cast<int>(std::lround(map_radius_)) : diameter;
+                        const int mr = std::max(diameter, map_radius_int * 2);
+                        SDL_Point center{mr / 2, mr / 2};
+                        // Write back minimal rooms_data entry
+                        if (rooms_data_) {
+                                nlohmann::json& spawn = (*rooms_data_)["spawn"];
+                                if (!spawn.is_object()) spawn = nlohmann::json::object();
+                                spawn["name"] = "spawn";
+                                spawn["geometry"] = "Circle";
+                                spawn["radius"] = kSpawnRadius;
+                                spawn["min_radius"] = kSpawnRadius;
+                                spawn["max_radius"] = kSpawnRadius;
+                                spawn["min_width"] = diameter;
+                                spawn["max_width"] = diameter;
+                                spawn["min_height"] = diameter;
+                                spawn["max_height"] = diameter;
+                                spawn["edge_smoothness"] = 2;
+                                spawn["is_spawn"] = true;
+                                spawn["is_boss"] = false;
+                                spawn["inherits_map_assets"] = false;
+                                spawn["spawn_groups"] = nlohmann::json::array();
+                        }
+                        auto area = std::make_unique<Area>("spawn", center, diameter, diameter, std::string{"Circle"}, 2, mr, mr, 3);
+                        nlohmann::json* rd_ptr = rooms_data_ ? &(*rooms_data_)["spawn"] : nullptr;
+                        auto room = std::make_unique<Room>(Room::Point{center.x, center.y},
+                                                           "room",
+                                                           "spawn",
+                                                           nullptr,
+                                                           map_id_,
+                                                           asset_library_,
+                                                           area.get(),
+                                                           rd_ptr,
+                                                           &map_assets_json,
+                                                           grid_settings,
+                                                           static_cast<double>(mr / 2),
+                                                           "rooms_data",
+                                                           &map_manifest_json_,
+                                                           manifest_store_,
+                                                           map_id_);
+                        room->layer = 0;
+                        room->room_area = std::move(area);
+                        rooms_.push_back(room.get());
+                        all_rooms_.push_back(std::move(room));
+                        vibble::log::info("[AssetLoader] Default spawn room synthesized.");
+                } catch (const std::exception& ex) {
+                        vibble::log::error(std::string("[AssetLoader] Fallback spawn synthesis failed: ") + ex.what());
+                } catch (...) {
+                        vibble::log::error("[AssetLoader] Fallback spawn synthesis failed with unknown error.");
+                }
         } else {
                 vibble::log::info("[AssetLoader] Room generation completed successfully: " + std::to_string(rooms_.size()) + " rooms created");
         }

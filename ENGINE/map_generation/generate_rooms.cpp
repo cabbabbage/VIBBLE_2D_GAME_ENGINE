@@ -87,6 +87,22 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 std::cout << "[GenerateRooms] No layers to process, returning empty\n";
                 return all_rooms;
         }
+        // Ensure there is at least one root room spec; synthesize a spawn if missing.
+        if (map_layers_[0].rooms.empty()) {
+                std::string fallback_name = "spawn";
+                if (rooms_data.is_object()) {
+                        for (auto it = rooms_data.begin(); it != rooms_data.end(); ++it) {
+                                if (it.value().is_object() && it.value().value("is_spawn", false)) {
+                                        fallback_name = it.key();
+                                        break;
+                                }
+                        }
+                }
+                RoomSpec rs;
+                rs.name = fallback_name;
+                rs.max_instances = 1;
+                map_layers_[0].rooms.push_back(rs);
+        }
         const auto& root_spec = map_layers_[0].rooms[0];
         std::cout << "[GenerateRooms] Creating root room: " << root_spec.name << "\n";
         if (testing) {
@@ -94,6 +110,27 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
         }
         if (!rooms_data.is_object()) {
                 rooms_data = nlohmann::json::object();
+        }
+        // Ensure a minimal entry for the root room exists so geometry can be generated
+        if (!rooms_data.contains(root_spec.name) || !rooms_data[root_spec.name].is_object()) {
+                constexpr int kSpawnRadius = 1500;
+                const int diameter = kSpawnRadius * 2;
+                nlohmann::json entry = nlohmann::json::object();
+                entry["name"]                = root_spec.name;
+                entry["geometry"]            = "Circle";
+                entry["radius"]              = kSpawnRadius;
+                entry["min_radius"]          = kSpawnRadius;
+                entry["max_radius"]          = kSpawnRadius;
+                entry["min_width"]           = diameter;
+                entry["max_width"]           = diameter;
+                entry["min_height"]          = diameter;
+                entry["max_height"]          = diameter;
+                entry["edge_smoothness"]     = 2;
+                entry["is_spawn"]            = true;
+                entry["is_boss"]             = false;
+                entry["inherits_map_assets"] = false;
+                entry["spawn_groups"]        = nlohmann::json::array();
+                rooms_data[root_spec.name] = std::move(entry);
         }
 
         std::vector<SDL_Color> room_colors = utils::display_color::collect(rooms_data);
