@@ -399,7 +399,7 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
 
         vibble::grid::Grid& grid_service = vibble::grid::global_grid();
         // Boundary placement must use resolution 9 irrespective of preview grid settings
-        constexpr int kEdgeResolution = 9;
+        constexpr int kEdgeResolution = 7;
         checker_.begin_session(grid_service, kEdgeResolution);
 
         for (auto& queue_item : spawn_queue_) {

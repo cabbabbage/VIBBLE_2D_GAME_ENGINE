@@ -33,6 +33,7 @@ void VibbleController::movement(const Input& input) {
 
     if(dash && canDash == true) {
         Dash();
+
     }
 
     float speedMultiplier = kWalkSpeed;

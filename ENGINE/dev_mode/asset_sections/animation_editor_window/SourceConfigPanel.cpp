@@ -835,9 +835,6 @@ void SourceConfigPanel::refresh_animation_options() {
             if (id == animation_id_) {
                 continue;
             }
-            if (!animation_is_frame_based(id)) {
-                continue;
-            }
             new_options.push_back(id);
         }
     }

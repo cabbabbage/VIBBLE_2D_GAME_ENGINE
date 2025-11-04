@@ -341,6 +341,63 @@ void FrameMovementEditor::load_frames_from_document() {
         primary.name = "Primary";
         primary.primary = true;
         primary.frames = parse_movement_frames(movement);
+
+        // If this animation sources another animation but does NOT inherit movement,
+        // ensure the editor shows a frame entry per source frame (for editing current anim).
+        int desired_frames = 0;
+        try {
+            if (payload.contains("number_of_frames")) {
+                int nf = payload["number_of_frames"].get<int>();
+                if (nf > 0) desired_frames = nf;
+            }
+        } catch (...) { desired_frames = std::max(0, desired_frames); }
+
+        bool derived = false;
+        bool inherit_movement = true;
+        std::string derived_source_id;
+        if (payload.contains("source") && payload["source"].is_object()) {
+            const auto& src = payload["source"];
+            std::string kind = src.value("kind", std::string{"folder"});
+            derived = (kind == std::string{"animation"});
+            inherit_movement = payload.value("inherit_source_movement", true);
+            try {
+                derived_source_id = src.value("name", std::string{});
+                if (derived_source_id.empty()) derived_source_id = src.value("path", std::string{});
+            } catch (...) { derived_source_id.clear(); }
+        }
+
+        if (derived && !inherit_movement) {
+            if (desired_frames <= 0 && document_ && !derived_source_id.empty()) {
+                // Fallback: read frame count from the source animation's payload
+                auto src_payload_dump = document_->animation_payload(derived_source_id);
+                if (src_payload_dump.has_value()) {
+                    nlohmann::json src_payload = nlohmann::json::parse(*src_payload_dump, nullptr, false);
+                    if (src_payload.is_object()) {
+                        try {
+                            desired_frames = src_payload.value("number_of_frames", desired_frames);
+                        } catch (...) {
+                            // leave desired_frames as-is
+                        }
+                    }
+                }
+            }
+            if (desired_frames <= 0) desired_frames = 1;
+            if (desired_frames <= 0) desired_frames = 1;
+            // Expand or trim to match desired frame count.
+            if (static_cast<int>(primary.frames.size()) < desired_frames) {
+                const int to_add = desired_frames - static_cast<int>(primary.frames.size());
+                for (int i = 0; i < to_add; ++i) {
+                    primary.frames.push_back(MovementFrame{});
+                }
+            } else if (static_cast<int>(primary.frames.size()) > desired_frames) {
+                primary.frames.resize(desired_frames);
+            }
+            if (!primary.frames.empty()) {
+                primary.frames.front().dx = 0.0f;
+                primary.frames.front().dy = 0.0f;
+            }
+            sanitize_frames(primary.frames);
+        }
         variants_.push_back(std::move(primary));
 
         if (payload.contains("movement_variants")) {
