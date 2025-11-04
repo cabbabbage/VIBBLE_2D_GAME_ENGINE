@@ -375,7 +375,7 @@ void camera::update_zoom(Room* cur,
         t = std::clamp(t, 0.0, 1.0);
         target_zoom = (sa * (1.0 - t)) + (sb * t);
     }
-    target_zoom = std::clamp(target_zoom, BASE_RATIO * 0.7, BASE_RATIO * 1.3);
+    target_zoom = std::clamp(target_zoom, BASE_RATIO * settings_.min_zoom_multiplier, BASE_RATIO * settings_.max_zoom_multiplier);
     const bool idle = !zooming_;
     if (idle || std::fabs(target_zoom - target_scale_) > SCALE_EPS) {
         zoom_to_scale(target_zoom, 35);
@@ -815,6 +815,8 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     try_read_float("motion_smoothing_max_step", settings_.motion_smoothing_max_step);
     try_read_float("motion_smoothing_snap_threshold", settings_.motion_smoothing_snap_threshold);
     try_read_float("scale_hysteresis_margin", settings_.scale_variant_hysteresis_margin);
+    try_read_float("min_zoom_multiplier", settings_.min_zoom_multiplier);
+    try_read_float("max_zoom_multiplier", settings_.max_zoom_multiplier);
 
     if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
         settings_.render_distance = 800.0f;
@@ -877,6 +879,16 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     if (!std::isfinite(settings_.scale_variant_hysteresis_margin) || settings_.scale_variant_hysteresis_margin < 0.0f) {
         settings_.scale_variant_hysteresis_margin = 0.05f;
     }
+    if (!std::isfinite(settings_.min_zoom_multiplier) || settings_.min_zoom_multiplier < 0.1f) {
+        settings_.min_zoom_multiplier = 0.7f;
+    } else {
+        settings_.min_zoom_multiplier = std::clamp(settings_.min_zoom_multiplier, 0.1f, 2.0f);
+    }
+    if (!std::isfinite(settings_.max_zoom_multiplier) || settings_.max_zoom_multiplier < 0.1f) {
+        settings_.max_zoom_multiplier = 1.3f;
+    } else {
+        settings_.max_zoom_multiplier = std::clamp(settings_.max_zoom_multiplier, 0.1f, 3.0f);
+    }
     TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
     center_smoothing_x_.set_params(motion_params);
     center_smoothing_y_.set_params(motion_params);
@@ -903,6 +915,8 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["motion_smoothing_max_step"] = settings_.motion_smoothing_max_step;
     j["motion_smoothing_snap_threshold"] = settings_.motion_smoothing_snap_threshold;
     j["scale_hysteresis_margin"]   = settings_.scale_variant_hysteresis_margin;
+    j["min_zoom_multiplier"]       = settings_.min_zoom_multiplier;
+    j["max_zoom_multiplier"]       = settings_.max_zoom_multiplier;
     j["parallax_smoothing_method"] = static_cast<int>(settings_.parallax_smoothing.method);
     j["parallax_smoothing_lerp_rate"] = settings_.parallax_smoothing.lerp_rate;
     j["parallax_smoothing_spring_frequency"] = settings_.parallax_smoothing.spring_frequency;

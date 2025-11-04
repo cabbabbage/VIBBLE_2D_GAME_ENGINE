@@ -1303,13 +1303,11 @@ bool DMSlider::handle_event(const SDL_Event& e) {
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
-        if (!focused_) {
+        SDL_Point mouse{0, 0};
+        SDL_GetMouseState(&mouse.x, &mouse.y);
+        update_hover(mouse);
+        if (!focused_ && !hovered_) {
             return false;
-        }
-        if (SDL_GetMouseFocus() != nullptr) {
-            SDL_Point mouse{0, 0};
-            SDL_GetMouseState(&mouse.x, &mouse.y);
-            update_hover(mouse);
         }
         int delta = e.wheel.y;
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {

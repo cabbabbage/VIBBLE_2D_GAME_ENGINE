@@ -836,6 +836,29 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
         basic_info_section_->render_world_overlay(r, cam, target_asset_, reference_screen_height);
     }
 
+    // When the Lighting section is expanded, draw a crosshair at each light's anchor
+    if (lighting_section_ && lighting_section_->is_expanded() && target_asset_ && target_asset_->info.get() == info_.get()) {
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        const SDL_Color lh = DMStyles::AccentButton().hover_bg;
+        SDL_SetRenderDrawColor(r, lh.r, lh.g, lh.b, 220);
+
+        for (const auto& light : info_->light_sources) {
+            int offx = light.offset_x;
+            if (target_asset_->flipped) {
+                offx = -offx;
+            }
+            const int wx = target_asset_->pos.x + offx;
+            const int wy = target_asset_->pos.y + light.offset_y;
+            SDL_FPoint sp = cam.map_to_screen(SDL_Point{ wx, wy });
+
+            const int arm = 6; // pixels
+            const int cx = static_cast<int>(std::lround(sp.x));
+            const int cy = static_cast<int>(std::lround(sp.y));
+            SDL_RenderDrawLine(r, cx - arm, cy, cx + arm, cy);
+            SDL_RenderDrawLine(r, cx, cy - arm, cx, cy + arm);
+        }
+    }
+
 }
 
 void AssetInfoUI::refresh_target_asset_scale() {

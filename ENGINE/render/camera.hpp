@@ -32,6 +32,8 @@ class camera {
         float motion_smoothing_max_step = 8000.0f;
         float motion_smoothing_snap_threshold = 0.25f;
         float scale_variant_hysteresis_margin = 0.05f;
+        float min_zoom_multiplier = 0.7f;
+        float max_zoom_multiplier = 1.3f;
         TransformSmoothingParams parallax_smoothing{
             TransformSmoothingMethod::CriticallyDampedSpring,
             0.0f,
@@ -175,4 +177,3 @@ class camera {
 
     void reset_parallax_smoothing();
 };
-

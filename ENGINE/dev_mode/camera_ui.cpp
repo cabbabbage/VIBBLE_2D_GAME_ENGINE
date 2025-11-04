@@ -413,6 +413,8 @@ void CameraUIPanel::sync_from_camera() {
         parallax_smoothing_slider_->set_value(slider_value);
     }
     if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(last_settings_.scale_variant_hysteresis_margin);
+    if (min_zoom_multiplier_slider_) min_zoom_multiplier_slider_->set_value(last_settings_.min_zoom_multiplier);
+    if (max_zoom_multiplier_slider_) max_zoom_multiplier_slider_->set_value(last_settings_.max_zoom_multiplier);
 }
 
 void CameraUIPanel::build_ui() {
@@ -483,6 +485,16 @@ void CameraUIPanel::build_ui() {
     hysteresis_margin_slider_->set_tooltip(
         "Adjusts the hysteresis margin when choosing between pre-scaled texture variants.");
 
+    min_zoom_multiplier_slider_ = std::make_unique<FloatSliderWidget>(
+        "Min Zoom Multiplier", 0.1f, 2.0f, 0.01f, defaults.min_zoom_multiplier, 2);
+    min_zoom_multiplier_slider_->set_tooltip(
+        "Minimum zoom multiplier applied during automatic camera zoom in normal gameplay.");
+
+    max_zoom_multiplier_slider_ = std::make_unique<FloatSliderWidget>(
+        "Max Zoom Multiplier", 0.1f, 3.0f, 0.01f, defaults.max_zoom_multiplier, 2);
+    max_zoom_multiplier_slider_->set_tooltip(
+        "Maximum zoom multiplier applied during automatic camera zoom in normal gameplay.");
+
     rebuild_rows();
 }
 
@@ -502,6 +514,7 @@ void CameraUIPanel::rebuild_rows() {
     rows.push_back({ motion_tau_slider_.get(), motion_stiffness_slider_.get() });
     rows.push_back({ motion_max_step_slider_.get(), motion_snap_slider_.get() });
     rows.push_back({ parallax_smoothing_slider_.get(), hysteresis_margin_slider_.get() });
+    rows.push_back({ min_zoom_multiplier_slider_.get(), max_zoom_multiplier_slider_.get() });
     rows.push_back({ load_widget_.get(), reset_widget_.get() });
     set_rows(rows);
 }
@@ -529,6 +542,8 @@ void CameraUIPanel::reset_to_defaults() {
         : defaults.parallax_smoothing.spring_frequency;
     if (parallax_smoothing_slider_) parallax_smoothing_slider_->set_value(default_parallax_value);
     if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(defaults.scale_variant_hysteresis_margin);
+    if (min_zoom_multiplier_slider_) min_zoom_multiplier_slider_->set_value(defaults.min_zoom_multiplier);
+    if (max_zoom_multiplier_slider_) max_zoom_multiplier_slider_->set_value(defaults.max_zoom_multiplier);
     apply_settings_if_needed();
 }
 
@@ -561,6 +576,8 @@ void CameraUIPanel::apply_settings_if_needed() {
     changed = changed || differs(settings.motion_smoothing_max_step, prev.motion_smoothing_max_step);
     changed = changed || differs(settings.motion_smoothing_snap_threshold, prev.motion_smoothing_snap_threshold);
     changed = changed || differs(settings.scale_variant_hysteresis_margin, prev.scale_variant_hysteresis_margin);
+    changed = changed || differs(settings.min_zoom_multiplier, prev.min_zoom_multiplier);
+    changed = changed || differs(settings.max_zoom_multiplier, prev.max_zoom_multiplier);
     changed = changed || settings.parallax_smoothing.method != prev.parallax_smoothing.method ||
         differs(settings.parallax_smoothing.lerp_rate, prev.parallax_smoothing.lerp_rate) ||
         differs(settings.parallax_smoothing.spring_frequency, prev.parallax_smoothing.spring_frequency);
@@ -623,6 +640,11 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     if (hysteresis_margin_slider_) {
         settings.scale_variant_hysteresis_margin = std::max(0.0f, hysteresis_margin_slider_->value());
     }
+    if (min_zoom_multiplier_slider_) {
+        settings.min_zoom_multiplier = std::max(0.1f, min_zoom_multiplier_slider_->value());
+    }
+    if (max_zoom_multiplier_slider_) {
+        settings.max_zoom_multiplier = std::max(0.1f, max_zoom_multiplier_slider_->value());
+    }
     return settings;
 }
-

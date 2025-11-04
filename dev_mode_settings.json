@@ -98,25 +98,25 @@
                 "translation": {
                     "lerp_rate": 0.0,
                     "max_step": 8000.0,
-                    "method": 2.0,
+                    "method": 1.0,
                     "snap_threshold": 0.25,
-                    "spring_frequency": 5.0
+                    "spring_frequency": 0.0
                 }
             },
             "camera": {
                 "center": {
                     "lerp_rate": 0.0,
                     "max_step": 8000.0,
-                    "method": 2.0,
+                    "method": 1.0,
                     "snap_threshold": 0.25,
-                    "spring_frequency": 5.0
+                    "spring_frequency": 0.0
                 },
                 "zoom": {
                     "lerp_rate": 0.0,
-                    "max_step": 4.0,
-                    "method": 2.0,
-                    "snap_threshold": 0.0005000000237487257,
-                    "spring_frequency": 4.0
+                    "max_step": 8000.0,
+                    "method": 1.0,
+                    "snap_threshold": 0.25,
+                    "spring_frequency": 0.0
                 }
             }
         }

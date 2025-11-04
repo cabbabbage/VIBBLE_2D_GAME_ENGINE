@@ -80,6 +80,8 @@ private:
     std::unique_ptr<FloatSliderWidget> motion_snap_slider_;
     std::unique_ptr<FloatSliderWidget> parallax_smoothing_slider_;
     std::unique_ptr<FloatSliderWidget> hysteresis_margin_slider_;
+    std::unique_ptr<FloatSliderWidget> min_zoom_multiplier_slider_;
+    std::unique_ptr<FloatSliderWidget> max_zoom_multiplier_slider_;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }
