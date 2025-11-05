@@ -831,22 +831,16 @@ void RoomEditor::update(const Input& input) {
     handle_shortcuts(input);
 
     auto enforce_mouse_controls_disabled = [this]() {
-        const bool panel_visible = spawn_group_panel_ && spawn_group_panel_->is_visible();
+        const bool panel_visible   = spawn_group_panel_ && spawn_group_panel_->is_visible();
         const bool has_spawn_target = active_spawn_group_id_.has_value();
-        const bool has_selection = !selected_assets_.empty();
-        const bool has_highlight = !highlighted_assets_.empty();
-        const bool has_hover = hovered_asset_ != nullptr;
+        const bool has_selection   = !selected_assets_.empty();
+        const bool has_highlight   = !highlighted_assets_.empty();
+        const bool has_hover       = hovered_asset_ != nullptr;
 
         if (!panel_visible && !has_spawn_target && !has_selection && !has_highlight && !has_hover) {
             return;
         }
 
-        if (spawn_group_panel_) {
-            if (panel_visible) {
-                spawn_group_panel_->close();
-            }
-            spawn_group_panel_->set_visible(false);
-        }
 
         if (has_spawn_target) {
             clear_active_spawn_group_target();
@@ -856,17 +850,9 @@ void RoomEditor::update(const Input& input) {
             clear_selection();
             clear_highlighted_assets();
         }
-};
+    };
 
     if (!enabled_) {
-        if (mouse_controls_enabled_last_frame_) {
-            enforce_mouse_controls_disabled();
-        }
-        mouse_controls_enabled_last_frame_ = false;
-        return;
-    }
-
-    if (!input_ || !active_assets_) {
         if (mouse_controls_enabled_last_frame_) {
             enforce_mouse_controls_disabled();
         }
@@ -893,7 +879,11 @@ void RoomEditor::update(const Input& input) {
     if (!is_ui_blocking_input(mx, my)) {
         handle_mouse_input(input);
     }
+
+    // ✅ APPLY the queued highlight/selection state every frame
+    update_highlighted_assets();
 }
+
 
 void RoomEditor::update_ui(const Input& input) {
     const bool config_visible_now = room_cfg_ui_ && room_cfg_ui_->visible();
@@ -2069,6 +2059,17 @@ void RoomEditor::open_room_config() {
     set_room_config_visible(true);
 }
 
+void RoomEditor::open_room_config_for(Asset* asset) {
+    if (!asset || asset->spawn_id.empty()) {
+        open_room_config();
+        return;
+    }
+    set_room_config_visible(true);
+    if (room_cfg_ui_) {
+        room_cfg_ui_->focus_spawn_group(asset->spawn_id);
+    }
+}
+
 void RoomEditor::close_room_config() {
     set_room_config_visible(false);
 }
@@ -2319,132 +2320,191 @@ bool RoomEditor::any_blocking_panel_visible() const {
 }
 
 void RoomEditor::handle_mouse_input(const Input& input) {
+    if (!input_) return;
+
     camera& cam = assets_->getView();
     const float prev_scale = cam.get_scale();
     const SDL_Point prev_center = cam.get_screen_center();
 
-    const bool asset_info_open =
-        (active_modal_ == ActiveModal::AssetInfo) || (info_ui_ && info_ui_->is_visible());
+    // --- Frame input snapshot ---
+    const SDL_Point screen_pt{ input_->getX(), input_->getY() };
+    const SDL_FPoint world_f = cam.screen_to_map(screen_pt);
+    const SDL_Point world_pt{ (int)std::lround(world_f.x), (int)std::lround(world_f.y) };
 
-    if (!asset_info_open && input.isScancodeDown(SDL_SCANCODE_ESCAPE)) {
-        clear_selection();
-        return;
-    }
-
-    if (!input_) return;
-
-    const int mx = input_->getX();
-    const int my = input_->getY();
-    const bool ui_blocked = asset_info_open || is_ui_blocking_input(mx, my);
-    const bool library_modal_block =
-        library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking();
-
-    const bool suppress_hover_and_drag = library_modal_block || asset_info_open;
-    const bool suppress_clicks = library_modal_block || asset_info_open;
-
-    Asset* hit_asset = nullptr;
-    if (!ui_blocked && !suppress_hover_and_drag) {
-        hit_asset = hit_test_asset(SDL_Point{mx, my}, assets_->renderer());
-    }
-
+    // --- Pan / zoom first (so hit-test uses current camera) ---
     pan_zoom_.handle_input(cam, input, true);
-    const float current_scale = cam.get_scale();
-    const SDL_Point current_center = cam.get_screen_center();
-    if (std::fabs(current_scale - prev_scale) > kCameraScaleEpsilon ||
-        current_center.x != prev_center.x ||
-        current_center.y != prev_center.y) {
+    if (std::fabs(cam.get_scale() - prev_scale) > 1e-6 ||
+        cam.get_screen_center().x != prev_center.x ||
+        cam.get_screen_center().y != prev_center.y) {
         mark_spatial_index_dirty();
     }
 
-    SDL_FPoint world_mouse_f = cam.screen_to_map(SDL_Point{mx, my});
-    SDL_Point world_mouse{static_cast<int>(std::lround(world_mouse_f.x)), static_cast<int>(std::lround(world_mouse_f.y))};
+    // --- Hover hit-test (rect only) ---
+    Asset* hit = hit_test_asset(screen_pt, nullptr);
 
-    if (suppress_hover_and_drag) {
-        if (dragging_) {
-            if (library_modal_block) {
-                finalize_drag_session();
-                dragging_ = false;
+    // --- Helper to rebuild highlight state ---
+    auto rebuild_highlight = [this]() {
+        highlighted_assets_.clear();
+        // Selected first
+        if (!selected_assets_.empty()) {
+            highlighted_assets_.insert(highlighted_assets_.end(),
+                                       selected_assets_.begin(),
+                                       selected_assets_.end());
+        }
+        // Add hovered if not already in selected
+        if (hovered_asset_) {
+            if (std::find(highlighted_assets_.begin(),
+                          highlighted_assets_.end(),
+                          hovered_asset_) == highlighted_assets_.end()) {
+                highlighted_assets_.push_back(hovered_asset_);
             }
         }
-        if (hovered_asset_ != nullptr) {
-            hovered_asset_ = nullptr;
-            mark_highlight_dirty();
+        mark_highlight_dirty();
+    };
+
+    // --- Persistent (static) press/drag state ---
+    static bool       prev_left_down = false;
+    static SDL_Point  press_screen   = {0,0};
+    static Asset*     pressed_asset  = nullptr;
+    static bool       was_dragged    = false;
+    static const int  kDragPx        = 4;
+
+    // Global suppression window: swallow left-clicks for a few frames after we consume an up
+    if (suppress_next_left_click_) {
+        if (click_buffer_frames_ > 0) {
+            --click_buffer_frames_;
+        } else {
+            suppress_next_left_click_ = false;
         }
-        hover_miss_frames_ = 3;
-    } else {
-        update_hover_state(hit_asset);
+    }
 
-        const bool pointer_over_selection = hovered_asset_ &&
-            (std::find(selected_assets_.begin(), selected_assets_.end(), hovered_asset_) != selected_assets_.end());
-        const bool ctrl_modifier = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+    const bool left_down = input_->isDown(Input::LEFT);
+    const bool left_pressed_this_frame = input_->wasPressed(Input::LEFT);
+    const bool left_released_this_frame = input_->wasReleased(Input::LEFT);
 
-        if (input_->isDown(Input::LEFT) && !selected_assets_.empty()) {
-            if (!dragging_) {
-                if (pointer_over_selection) {
-                    dragging_ = true;
-                    drag_last_world_ = world_mouse;
-                    begin_drag_session(world_mouse, ctrl_modifier);
-                }
-            } else {
-                update_drag_session(world_mouse);
+    // ---- LEFT DOWN edge ----
+    if (left_down && !prev_left_down) {
+        // Selection only on press; no panels open here.
+        pressed_asset = hit;
+        was_dragged   = false;
+        press_screen  = screen_pt;
+
+        if (pressed_asset) {
+            // Build selection according to spawn-group semantics
+            selected_assets_.clear();
+            bool select_group = true;
+            const std::string& method = pressed_asset->spawn_method;
+            if (method == "Exact" || method == "Exact Position" || method == "Percent") {
+                select_group = false;
             }
-        } else if (input_->isDown(Input::LEFT) && selected_assets_.empty()) {
-            // Support click-and-drag on room areas when no asset selection exists
-            if (!area_dragging_) {
-                if (current_room_) {
-                    if (auto area_name = find_room_area_at_point(world_mouse)) {
-                        begin_area_drag_session(*area_name, world_mouse);
+            if (select_group && !pressed_asset->spawn_id.empty() && active_assets_) {
+                for (Asset* a : *active_assets_) {
+                    if (!asset_belongs_to_room(a)) continue;
+                    if (a->spawn_id == pressed_asset->spawn_id) {
+                        selected_assets_.push_back(a);
                     }
                 }
             } else {
-                update_area_drag_session(world_mouse);
+                if (asset_belongs_to_room(pressed_asset)) {
+                    selected_assets_.push_back(pressed_asset);
+                }
             }
+            // Panels that depend on selection need to stay in sync
+            sync_spawn_group_panel_with_selection();
+
+            hovered_asset_ = pressed_asset; // obvious highlight during press
+            rebuild_highlight();
         } else {
-            if (dragging_) {
-                finalize_drag_session();
+            // Pressed empty: clear selection & hover highlight
+            if (!selected_assets_.empty() || !highlighted_assets_.empty() || hovered_asset_) {
+                selected_assets_.clear();
+                highlighted_assets_.clear();
+                hovered_asset_ = nullptr;
+                sync_spawn_group_panel_with_selection();
+                mark_highlight_dirty();
             }
-            dragging_ = false;
-            if (area_dragging_) {
-                finalize_area_drag_session();
-            }
-            area_dragging_ = false;
         }
     }
 
-    if (!suppress_clicks) {
-        handle_click(input);
-    } else {
-        click_buffer_frames_ = 0;
-        rclick_buffer_frames_ = 0;
+    // ---- While held: detect & run drag ----
+    if (left_down && pressed_asset) {
+        const int dx = screen_pt.x - press_screen.x;
+        const int dy = screen_pt.y - press_screen.y;
+        const int dist2 = dx*dx + dy*dy;
+
+        if (!was_dragged && dist2 > kDragPx*kDragPx) {
+            was_dragged = true;
+            dragging_ = true;
+            drag_last_world_ = world_pt;
+            const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+            begin_drag_session(world_pt, ctrl);
+        }
+
+        if (was_dragged && dragging_) {
+            update_drag_session(world_pt);
+            // Pin hover to dragged asset to keep highlight stable
+            if (hovered_asset_ != pressed_asset) {
+                hovered_asset_ = pressed_asset;
+                rebuild_highlight();
+            }
+        }
     }
-    update_highlighted_assets();
+
+    // ---- LEFT UP edge ----
+    if (!left_down && prev_left_down) {
+        if (pressed_asset) {
+            if (was_dragged) {
+                // End drag
+                if (dragging_) {
+                    finalize_drag_session();
+                    dragging_ = false;
+                }
+                // Swallow the release so nothing else triggers
+                suppress_next_left_click_ = true;
+                click_buffer_frames_ = 3;
+
+                // Keep hover on the (now released) asset until next frame’s hover update
+                hovered_asset_ = pressed_asset;
+                rebuild_highlight();
+            } else {
+                // Clean click (no drag): open Room Config now (on release)
+                open_room_config_for(pressed_asset);
+
+                // Swallow the release so no other panel/pan reacts
+                suppress_next_left_click_ = true;
+                click_buffer_frames_ = 3;
+
+                hovered_asset_ = pressed_asset;
+                rebuild_highlight();
+            }
+        }
+        // Reset press state
+        pressed_asset = nullptr;
+        was_dragged   = false;
+    }
+
+    // ---- Normal hover update (when not actively dragging) ----
+    if (!dragging_) {
+        if (hovered_asset_ != hit) {
+            hovered_asset_ = hit;
+            rebuild_highlight();
+        }
+    }
+
+    // ---- Route other mouse behaviors ONLY if:
+    //      - not dragging
+    //      - not suppressed
+    //      - and there was NO left-button activity this frame
+    const bool any_left_activity = left_pressed_this_frame || left_released_this_frame || left_down;
+    if (!dragging_ && !suppress_next_left_click_ && !any_left_activity) {
+        handle_click(input);
+    }
+
+    prev_left_down = left_down;
 }
 
-Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* renderer) const {
+Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*renderer*/) const {
     if (!active_assets_ || !assets_) return nullptr;
-
-    // Local helper: is the composited screen pixel at 'screen_point' visible (alpha > 0)?
-    // Fail-open to old behavior if we can't read pixels or don't have a renderer.
-    auto is_visible_pixel_at = [&](SDL_Point p) -> bool {
-        if (!renderer) return true;
-
-        const SDL_Rect r{ p.x, p.y, 1, 1 };
-        Uint32 pixel = 0;
-
-        // Read back a 1x1 pixel in a known format.
-        if (SDL_RenderReadPixels(renderer, &r, SDL_PIXELFORMAT_RGBA8888, &pixel, sizeof(pixel)) != 0) {
-            // Driver/platform may not support readback; preserve previous behavior.
-            return true;
-        }
-
-        Uint8 a = 255;
-        if (SDL_PixelFormat* pf = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888)) {
-            Uint8 rr, gg, bb;
-            SDL_GetRGBA(pixel, pf, &rr, &gg, &bb, &a);
-            SDL_FreeFormat(pf);
-        }
-        return a > 0;
-    };
 
     const camera& cam = assets_->getView();
     if (!ensure_spatial_index(cam)) {
@@ -2455,7 +2515,7 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* renderer
     Asset* best = nullptr;
     int best_screen_y = std::numeric_limits<int>::min();
     int best_z_index  = std::numeric_limits<int>::min();
-    int best_area     = std::numeric_limits<int>::max(); // tie-breaker: prefer smaller on-screen rect
+    int best_area     = std::numeric_limits<int>::max(); // tie-breaker: smaller rect wins
 
     for (Asset* asset : candidates) {
         if (!asset) continue;
@@ -2468,7 +2528,7 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* renderer
 
         const int area = rect.w * rect.h;
 
-        // Ordering: prefer higher z_index, then larger screen_y (lower on screen), then smaller area.
+        // Prefer topmost: z_index → screen_y (lower on screen) → smaller area
         if (!best
             || asset->z_index > best_z_index
             || (asset->z_index == best_z_index && it->second.screen_y > best_screen_y)
@@ -2482,16 +2542,11 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* renderer
     }
 
     if (best) {
-        // New: only accept if the pixel under the cursor is actually visible.
-        if (!is_visible_pixel_at(screen_point)) {
-            return nullptr;
-        }
         return best;
     }
 
     return hit_test_asset_fallback(cam, screen_point);
 }
-
 
 
 void RoomEditor::mark_spatial_index_dirty() const {
@@ -2976,9 +3031,9 @@ void RoomEditor::handle_click(const Input& input) {
                 if (!is_asset_library_open()) {
                     pending_spawn_world_pos_.reset();
                 }
-            } else {
-                open_asset_info_editor_for_asset(hovered_asset_);
-            }
+        } else {
+            open_room_config_for(hovered_asset_);
+        }
         } else {
             bool opened_area_info = false;
             if (current_room_) {
@@ -3285,6 +3340,12 @@ void RoomEditor::update_highlighted_assets() {
                 }
             }
         }
+    }
+
+    // Always highlight the hovered asset, even if not in allow_hover_group
+    if (hovered_asset_ && asset_belongs_to_room(hovered_asset_) &&
+        std::find(highlighted_assets_.begin(), highlighted_assets_.end(), hovered_asset_) == highlighted_assets_.end()) {
+        highlighted_assets_.push_back(hovered_asset_);
     }
 
     for (Asset* asset : *active_assets_) {

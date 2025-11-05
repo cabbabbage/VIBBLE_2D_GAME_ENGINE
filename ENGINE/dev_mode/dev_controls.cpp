@@ -583,6 +583,35 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     if (room_editor_ && map_mode_ui_) {
         room_editor_->set_shared_footer_bar(map_mode_ui_->get_footer_bar());
     }
+    // Set up grid controls in footer bar
+    if (map_mode_ui_) {
+        if (auto* footer = map_mode_ui_->get_footer_bar()) {
+            footer->set_grid_overlay_enabled(grid_overlay_enabled_);
+            footer->set_grid_resolution(0); // Will be updated when map info is set
+            footer->set_grid_controls_callbacks(
+                [this](bool enabled) {
+                    grid_overlay_enabled_ = enabled;
+                    devmode::ui_settings::save_bool(kGridOverlayEnabledKey, enabled);
+                },
+                [this](int resolution) {
+                    // Update grid resolution in map settings
+                    if (map_info_json_) {
+                        ensure_map_grid_settings(*map_info_json_);
+                        nlohmann::json& section = (*map_info_json_)["map_grid_settings"];
+                        MapGridSettings settings = MapGridSettings::from_json(&section);
+                        settings.resolution = resolution;
+                        settings.clamp();
+                        settings.apply_to_json(section);
+                        if (map_grid_save_cb_) {
+                            map_grid_save_cb_();
+                        }
+                        // Update derived cell size
+                        grid_cell_size_px_ = settings.spacing();
+                    }
+                }
+            );
+        }
+    }
     configure_header_button_sets();
     trail_suite_ = std::make_unique<TrailEditorSuite>();
     if (trail_suite_) {
@@ -595,99 +624,10 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
     asset_filter_.set_map_info(map_info_json_);
     asset_filter_.set_current_room(current_room_);
-    // Provide extra panel content under filters: Grid Overlay Checkbox and Grid Resolution Stepper
-    const int checkbox_h = DMCheckbox::height();
-    const int stepper_h = DMNumericStepper::height();
-    const int total_height = checkbox_h + DMSpacing::small_gap() + stepper_h + DMSpacing::item_gap() * 2;
-    asset_filter_.set_extra_panel_height(total_height);
-    asset_filter_.set_extra_panel_renderer([this](SDL_Renderer* renderer, const SDL_Rect& area) {
-        if (!renderer) return;
-        const int gap = DMSpacing::item_gap();
-        const int small_gap = DMSpacing::small_gap();
-        const int checkbox_h = DMCheckbox::height();
-        const int stepper_h = DMNumericStepper::height();
-        const int stepper_w_min = 220;
-
-        // Position checkbox at the top
-        int y = area.y + gap;
-        int x = area.x + gap;
-        grid_checkbox_rect_ = SDL_Rect{ x, y, grid_overlay_checkbox_->preferred_width(), checkbox_h };
-        if (grid_overlay_checkbox_) {
-            grid_overlay_checkbox_->set_rect(grid_checkbox_rect_);
-            grid_overlay_checkbox_->render(renderer);
-        }
-
-        // Position stepper below checkbox
-        y += checkbox_h + small_gap;
-        x = area.x + gap;
-        int remaining = std::max(0, area.x + area.w - gap - x);
-        int stepper_w = std::max(stepper_w_min, remaining);
-        grid_stepper_rect_ = SDL_Rect{ x, y, stepper_w, stepper_h };
-        if (grid_resolution_stepper_) {
-            // Keep stepper value in sync with map grid settings each frame
-            int r_value = 0;
-            if (map_info_json_) {
-                const nlohmann::json* section = nullptr;
-                auto it = map_info_json_->find("map_grid_settings");
-                if (it != map_info_json_->end() && it->is_object()) {
-                    section = &(*it);
-                }
-                MapGridSettings settings = MapGridSettings::from_json(section);
-                r_value = settings.resolution;
-            }
-            grid_resolution_stepper_->set_value(r_value);
-            grid_resolution_stepper_->set_rect(grid_stepper_rect_);
-            grid_resolution_stepper_->render(renderer);
-        }
-    });
-    asset_filter_.set_extra_panel_event_handler([this](const SDL_Event& event, const SDL_Rect& area) -> bool {
-        // Only care about pointer interactions inside panel area
-        bool pointer_event = (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL);
-        SDL_Point p{0,0};
-        if (pointer_event) {
-            if (event.type == SDL_MOUSEMOTION) { p = SDL_Point{event.motion.x, event.motion.y}; }
-            else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) { p = SDL_Point{event.button.x, event.button.y}; }
-            else { int mx=0,my=0; SDL_GetMouseState(&mx,&my); p = SDL_Point{mx,my}; }
-            if (!SDL_PointInRect(&p, &area)) {
-                // Ignore pointer events outside the extra panel
-                return false;
-            }
-        }
-        bool used = false;
-        // Update layout against latest area values
-        const int gap = DMSpacing::item_gap();
-        const int small_gap = DMSpacing::small_gap();
-        const int checkbox_h = DMCheckbox::height();
-        const int stepper_h = DMNumericStepper::height();
-        const int stepper_w_min = 220;
-
-        // Position checkbox at the top
-        int y = area.y + gap;
-        int x = area.x + gap;
-        grid_checkbox_rect_ = SDL_Rect{ x, y, grid_overlay_checkbox_->preferred_width(), checkbox_h };
-        if (grid_overlay_checkbox_) {
-            grid_overlay_checkbox_->set_rect(grid_checkbox_rect_);
-            if (grid_overlay_checkbox_->handle_event(event)) {
-                // Checkbox state change is handled internally; sync our state
-                grid_overlay_enabled_ = grid_overlay_checkbox_->value();
-                devmode::ui_settings::save_bool(kGridOverlayEnabledKey, grid_overlay_enabled_);
-                used = true;
-            }
-        }
-
-        // Position stepper below checkbox
-        y += checkbox_h + small_gap;
-        x = area.x + gap;
-        int remaining = std::max(0, area.x + area.w - gap - x);
-        int stepper_w = std::max(stepper_w_min, remaining);
-        grid_stepper_rect_ = SDL_Rect{ x, y, stepper_w, stepper_h };
-        if (grid_resolution_stepper_) grid_resolution_stepper_->set_rect(grid_stepper_rect_);
-        if (grid_resolution_stepper_ && grid_resolution_stepper_->handle_event(event)) {
-            // DMNumericStepper will invoke set_on_change; we consider event handled
-            used = true;
-        }
-        return used;
-    });
+    // No extra panel for grid controls anymore
+    asset_filter_.set_extra_panel_height(0);
+    asset_filter_.set_extra_panel_renderer({});
+    asset_filter_.set_extra_panel_event_handler({});
     asset_filter_.set_mode_buttons({
         {kModeIdRoom, "Room", mode_ == Mode::RoomEditor},
         {kModeIdMap, "Map", mode_ == Mode::MapEditor}
@@ -759,6 +699,12 @@ void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCall
         grid_cell_size_px_ = settings.spacing();
         if (grid_resolution_stepper_) {
             grid_resolution_stepper_->set_value(settings.resolution);
+        }
+        // Sync with footer bar
+        if (map_mode_ui_) {
+            if (auto* footer = map_mode_ui_->get_footer_bar()) {
+                footer->set_grid_resolution(settings.resolution);
+            }
         }
     }
     configure_header_button_sets();
@@ -2139,7 +2085,6 @@ void DevControls::sync_header_button_states() {
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "lights", lights_open);
     const bool light_map_open = map_mode_ui_->is_light_map_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "light_map", light_map_open);
-    // Grid panel removed
     const bool layers_open = map_mode_ui_->is_layers_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "layers", layers_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_layers", layers_open);

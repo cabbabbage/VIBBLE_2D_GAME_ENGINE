@@ -133,7 +133,7 @@ private:
 
     void set_blocking_panel_visible(BlockingPanel panel, bool visible);
     bool any_blocking_panel_visible() const;
-
+    void open_room_config_for(Asset* asset);
     enum class DragMode {
         None,
         Free,
