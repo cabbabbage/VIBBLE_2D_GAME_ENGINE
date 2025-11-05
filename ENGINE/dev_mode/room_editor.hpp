@@ -302,6 +302,7 @@ private:
     DevFooterBar* shared_footer_bar_ = nullptr;
     bool room_config_dock_open_ = false;
     bool room_config_was_visible_ = false;
+    bool room_config_was_open_before_drag_ = false;
     bool suppress_room_config_selection_clear_ = false;
     ActiveModal active_modal_ = ActiveModal::None;
     std::function<void(bool)> header_visibility_callback_{};

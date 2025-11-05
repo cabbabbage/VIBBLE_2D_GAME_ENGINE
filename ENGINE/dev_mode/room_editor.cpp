@@ -3771,6 +3771,12 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
 }
 
 void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier) {
+    // Close room config if it's open and remember the state
+    room_config_was_open_before_drag_ = room_config_dock_open_;
+    if (room_config_dock_open_) {
+        set_room_config_visible(false);
+    }
+
     drag_mode_ = DragMode::None;
     drag_states_.clear();
     drag_spawn_id_.clear();
@@ -4321,6 +4327,11 @@ void RoomEditor::finalize_drag_session() {
         suppress_next_left_click_ = true;
     }
 
+    // Reopen room config if it was open before the drag
+    if (room_config_was_open_before_drag_) {
+        set_room_config_visible(true);
+    }
+
     reset_drag_state();
 }
 
@@ -4344,6 +4355,7 @@ void RoomEditor::reset_drag_state() {
     drag_edge_inset_percent_ = 100.0;
     drag_moved_ = false;
     drag_spawn_id_.clear();
+    room_config_was_open_before_drag_ = false;
 }
 
 nlohmann::json* RoomEditor::find_spawn_entry(const std::string& spawn_id) {
