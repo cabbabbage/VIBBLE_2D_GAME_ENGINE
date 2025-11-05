@@ -4568,17 +4568,17 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
             return false;
         }
         return &(*groups_it) == resolved.owner_array;
-};
+    };
 
     const bool map_assets_entry = owner_matches_section("map_assets_data");
-    const bool boundary_entry = owner_matches_section("map_boundary_data");
+    const bool boundary_entry   = owner_matches_section("map_boundary_data");
 
     auto close_spawn_group_panel = [&]() {
         if (spawn_group_panel_) {
             spawn_group_panel_->close();
             spawn_group_panel_->set_visible(false);
         }
-};
+    };
 
     auto close_room_config_preserving_selection = [this]() {
         if (!room_config_dock_open_) {
@@ -4587,7 +4587,7 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
         suppress_room_config_selection_clear_ = true;
         set_room_config_visible(false);
         suppress_room_config_selection_clear_ = false;
-};
+    };
 
     if (boundary_entry || boundary_asset) {
         close_spawn_group_panel();
@@ -4609,17 +4609,23 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
         return;
     }
 
+    // --- Fixed behavior below: do not auto-open Room Config on selection change ---
     active_spawn_group_id_ = spawn_id;
-    set_room_config_visible(true);
+
+    // Do NOT call set_room_config_visible(true) here.
+    // Only focus if the Room Config dock is already open.
     bool focused = false;
-    if (room_cfg_ui_) {
+    if (room_cfg_ui_ && room_config_dock_open_) {
         focused = room_cfg_ui_->focus_spawn_group(spawn_id);
     }
+
+    // If we focused inside the already-open dock, hide the external picker.
     if (focused && spawn_group_panel_) {
         spawn_group_panel_->close();
         spawn_group_panel_->set_visible(false);
     }
 }
+
 
 void RoomEditor::sanitize_perimeter_spawn_groups() {
     if (!current_room_) return;

@@ -4,7 +4,7 @@
             "current_room": true,
             "filters_expanded": true,
             "initialized": true,
-            "map_assets": true,
+            "map_assets": false,
             "methods": {
                 "center": true,
                 "childrandom": true,

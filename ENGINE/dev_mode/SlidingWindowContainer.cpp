@@ -209,11 +209,14 @@ bool SlidingWindowContainer::is_point_inside(int x, int y) const {
 
     // When header is hidden, use effective panel rectangle that excludes header area
     if (!header_visible_) {
+        const int padding = DMSpacing::panel_padding();
+        const int content_top = panel_.y + padding;
         const int label_height = DMButton::height();
         const int label_gap = DMSpacing::item_gap();
+        int scroll_start = content_top + (header_visible_ ? (label_height + label_gap) : 0);
         SDL_Rect effective_panel = panel_;
-        effective_panel.y += label_height + label_gap;
-        effective_panel.h -= label_height + label_gap;
+        effective_panel.y = scroll_start;
+        effective_panel.h = panel_.h - (scroll_start - panel_.y);
         if (effective_panel.h < 0) effective_panel.h = 0;
         return SDL_PointInRect(&p, &effective_panel) == SDL_TRUE;
     }
@@ -305,11 +308,14 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
     if (pointer_event) {
         // When header is hidden, use effective panel rectangle that excludes header area
         if (!header_visible_) {
+            const int padding = DMSpacing::panel_padding();
+            const int content_top = panel_.y + padding;
             const int label_height = DMButton::height();
             const int label_gap = DMSpacing::item_gap();
+            int scroll_start = content_top + (header_visible_ ? (label_height + label_gap) : 0);
             SDL_Rect effective_panel = panel_;
-            effective_panel.y += label_height + label_gap;
-            effective_panel.h -= label_height + label_gap;
+            effective_panel.y = scroll_start;
+            effective_panel.h = panel_.h - (scroll_start - panel_.y);
             if (effective_panel.h < 0) effective_panel.h = 0;
             pointer_inside_panel = SDL_PointInRect(&pointer, &effective_panel);
         } else {
@@ -594,11 +600,13 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
     const int close_button_w = (header_visible_ && close_button_enabled_) ? label_height : 0;
     const int close_button_gap = (header_visible_ && close_button_enabled_) ? DMSpacing::item_gap() : 0;
 
+    int scroll_start = content_top + (header_visible_ ? (label_height + label_gap) : 0);
+
     // When header is hidden, adjust panel rectangle to exclude header area
     SDL_Rect effective_panel = panel_;
     if (!header_visible_) {
-        effective_panel.y += label_height + label_gap;
-        effective_panel.h -= label_height + label_gap;
+        effective_panel.y = scroll_start;
+        effective_panel.h = panel_.h - (scroll_start - panel_.y);
         if (effective_panel.h < 0) effective_panel.h = 0;
     }
 
@@ -679,8 +687,6 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
             header_nav_button_->set_rect(header_nav_rect_);
         }
     }
-
-    int scroll_start = content_top + (header_visible_ ? (label_height + label_gap) : 0);
 
     int content_w_active = base_content_w;
 
