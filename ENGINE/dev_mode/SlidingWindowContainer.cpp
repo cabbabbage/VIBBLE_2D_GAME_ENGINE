@@ -206,6 +206,18 @@ void SlidingWindowContainer::prepare_layout(int screen_w, int screen_h) const {
 bool SlidingWindowContainer::is_point_inside(int x, int y) const {
     if (!visible_) return false;
     SDL_Point p{x, y};
+
+    // When header is hidden, use effective panel rectangle that excludes header area
+    if (!header_visible_) {
+        const int label_height = DMButton::height();
+        const int label_gap = DMSpacing::item_gap();
+        SDL_Rect effective_panel = panel_;
+        effective_panel.y += label_height + label_gap;
+        effective_panel.h -= label_height + label_gap;
+        if (effective_panel.h < 0) effective_panel.h = 0;
+        return SDL_PointInRect(&p, &effective_panel) == SDL_TRUE;
+    }
+
     return SDL_PointInRect(&p, &panel_) == SDL_TRUE;
 }
 
@@ -291,7 +303,18 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
     bool pointer_inside = false;
     bool pointer_inside_panel = false;
     if (pointer_event) {
-        pointer_inside_panel = SDL_PointInRect(&pointer, &panel_);
+        // When header is hidden, use effective panel rectangle that excludes header area
+        if (!header_visible_) {
+            const int label_height = DMButton::height();
+            const int label_gap = DMSpacing::item_gap();
+            SDL_Rect effective_panel = panel_;
+            effective_panel.y += label_height + label_gap;
+            effective_panel.h -= label_height + label_gap;
+            if (effective_panel.h < 0) effective_panel.h = 0;
+            pointer_inside_panel = SDL_PointInRect(&pointer, &effective_panel);
+        } else {
+            pointer_inside_panel = SDL_PointInRect(&pointer, &panel_);
+        }
         pointer_inside = pointer_inside_panel;
         if (!pointer_inside && !scroll_dragging_ && !scrollbar_dragging_) {
             return false;
@@ -570,6 +593,14 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
     const int label_gap = header_visible_ ? DMSpacing::item_gap() : 0;
     const int close_button_w = (header_visible_ && close_button_enabled_) ? label_height : 0;
     const int close_button_gap = (header_visible_ && close_button_enabled_) ? DMSpacing::item_gap() : 0;
+
+    // When header is hidden, adjust panel rectangle to exclude header area
+    SDL_Rect effective_panel = panel_;
+    if (!header_visible_) {
+        effective_panel.y += label_height + label_gap;
+        effective_panel.h -= label_height + label_gap;
+        if (effective_panel.h < 0) effective_panel.h = 0;
+    }
 
     if (header_visible_) {
         int label_start_x = content_x;

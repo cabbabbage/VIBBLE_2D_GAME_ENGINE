@@ -2319,6 +2319,7 @@ bool RoomEditor::any_blocking_panel_visible() const {
                        [](bool state) { return state; });
 }
 
+// RoomEditor.cpp
 void RoomEditor::handle_mouse_input(const Input& input) {
     if (!input_) return;
 
@@ -2326,12 +2327,12 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const float prev_scale = cam.get_scale();
     const SDL_Point prev_center = cam.get_screen_center();
 
-    // --- Frame input snapshot ---
+    // --- Frame snapshot ---
     const SDL_Point screen_pt{ input_->getX(), input_->getY() };
     const SDL_FPoint world_f = cam.screen_to_map(screen_pt);
     const SDL_Point world_pt{ (int)std::lround(world_f.x), (int)std::lround(world_f.y) };
 
-    // --- Pan / zoom first (so hit-test uses current camera) ---
+    // --- Pan/zoom first ---
     pan_zoom_.handle_input(cam, input, true);
     if (std::fabs(cam.get_scale() - prev_scale) > 1e-6 ||
         cam.get_screen_center().x != prev_center.x ||
@@ -2339,19 +2340,17 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         mark_spatial_index_dirty();
     }
 
-    // --- Hover hit-test (rect only) ---
+    // --- Hit-test for hover (screen-space rects) ---
     Asset* hit = hit_test_asset(screen_pt, nullptr);
 
-    // --- Helper to rebuild highlight state ---
+    // --- Highlight rebuild helper ---
     auto rebuild_highlight = [this]() {
         highlighted_assets_.clear();
-        // Selected first
         if (!selected_assets_.empty()) {
             highlighted_assets_.insert(highlighted_assets_.end(),
                                        selected_assets_.begin(),
                                        selected_assets_.end());
         }
-        // Add hovered if not already in selected
         if (hovered_asset_) {
             if (std::find(highlighted_assets_.begin(),
                           highlighted_assets_.end(),
@@ -2362,14 +2361,14 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         mark_highlight_dirty();
     };
 
-    // --- Persistent (static) press/drag state ---
+    // --- Persistent press/drag state ---
     static bool       prev_left_down = false;
     static SDL_Point  press_screen   = {0,0};
     static Asset*     pressed_asset  = nullptr;
     static bool       was_dragged    = false;
     static const int  kDragPx        = 4;
 
-    // Global suppression window: swallow left-clicks for a few frames after we consume an up
+    // Swallow-window for left clicks after we consume an up
     if (suppress_next_left_click_) {
         if (click_buffer_frames_ > 0) {
             --click_buffer_frames_;
@@ -2378,13 +2377,13 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         }
     }
 
-    const bool left_down = input_->isDown(Input::LEFT);
-    const bool left_pressed_this_frame = input_->wasPressed(Input::LEFT);
+    const bool left_down                = input_->isDown(Input::LEFT);
+    const bool left_pressed_this_frame  = input_->wasPressed(Input::LEFT);
     const bool left_released_this_frame = input_->wasReleased(Input::LEFT);
 
     // ---- LEFT DOWN edge ----
     if (left_down && !prev_left_down) {
-        // Selection only on press; no panels open here.
+        // Selection only on press; NEVER open panels here.
         pressed_asset = hit;
         was_dragged   = false;
         press_screen  = screen_pt;
@@ -2409,13 +2408,12 @@ void RoomEditor::handle_mouse_input(const Input& input) {
                     selected_assets_.push_back(pressed_asset);
                 }
             }
-            // Panels that depend on selection need to stay in sync
             sync_spawn_group_panel_with_selection();
 
-            hovered_asset_ = pressed_asset; // obvious highlight during press
+            hovered_asset_ = pressed_asset; // clear visual feedback while pressed
             rebuild_highlight();
         } else {
-            // Pressed empty: clear selection & hover highlight
+            // Pressed empty: clear selection and hover highlight
             if (!selected_assets_.empty() || !highlighted_assets_.empty() || hovered_asset_) {
                 selected_assets_.clear();
                 highlighted_assets_.clear();
@@ -2454,21 +2452,20 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     if (!left_down && prev_left_down) {
         if (pressed_asset) {
             if (was_dragged) {
-                // End drag: do NOT treat as a click, and do NOT open room config
+                // End drag: do NOT treat as click, do NOT open Room Config
                 if (dragging_) {
                     finalize_drag_session();
                     dragging_ = false;
                 }
-
                 // Swallow this release so nothing underneath gets a click
                 suppress_next_left_click_ = true;
                 click_buffer_frames_      = 3;
 
-                // Keep obvious visual feedback on the thing we just dragged
+                // Keep hover on the thing we just dragged (until next frame)
                 hovered_asset_ = pressed_asset;
                 rebuild_highlight();
             } else {
-                // Clean click (no drag): only open if we released over the same asset
+                // Clean click (no drag): only open if we released over the SAME asset
                 if (hovered_asset_ == pressed_asset) {
                     open_room_config_for(pressed_asset);
 
@@ -2479,16 +2476,15 @@ void RoomEditor::handle_mouse_input(const Input& input) {
                     hovered_asset_ = pressed_asset;
                     rebuild_highlight();
                 }
-                // else: pressed on A, released over B (without crossing drag threshold) → do nothing
+                // else: pressed A, released over B without crossing drag threshold → do nothing
             }
         }
-
         // Reset press state for next cycle
         pressed_asset = nullptr;
         was_dragged   = false;
     }
 
-    // ---- Normal hover update (when not actively dragging) ----
+    // ---- Normal hover update when not actively dragging ----
     if (!dragging_) {
         if (hovered_asset_ != hit) {
             hovered_asset_ = hit;
@@ -2496,17 +2492,18 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         }
     }
 
-    // ---- Route other mouse behaviors ONLY if:
-    //      - not dragging
-    //      - not suppressed
-    //      - and there was NO left-button activity this frame
+    // Route other mouse behaviors ONLY if:
+    //  - not dragging
+    //  - not suppressed
+    //  - and there was NO left-button activity this frame
     const bool any_left_activity = left_pressed_this_frame || left_released_this_frame || left_down;
     if (!dragging_ && !suppress_next_left_click_ && !any_left_activity) {
-        handle_click(input);
+        handle_click(input); // safe to process hover/right-click/UI-only logic here
     }
 
     prev_left_down = left_down;
 }
+
 
 Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*renderer*/) const {
     if (!active_assets_ || !assets_) return nullptr;

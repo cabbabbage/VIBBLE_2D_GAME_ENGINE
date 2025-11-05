@@ -13587,306 +13587,7 @@
       "update_radius": 1000,
       "z_threshold": 34
     },
-    "Vibble": {
-      "animations": {
-        "backward": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Vibble",
-          "custom_animation_controller_key": "SRC/assets/Vibble",
-          "flipped_source": false,
-          "fps": 24,
-          "has_custom_animation_controller": false,
-          "locked": false,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              -6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -5,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -5,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              0,
-              -6,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": -40
-          },
-          "number_of_frames": 8,
-          "on_end": "SRC/assets/Vibble/default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "backward"
-          },
-          "speed_factor": 1
-        },
-        "dash": {
-          "derived_modifiers": {
-            "flipMovementX": false,
-            "flipMovementY": false,
-            "flipX": true,
-            "flipY": false,
-            "reverse": false
-          },
-          "flipped_source": true,
-          "inherit_source_movement": true,
-          "loop": false,
-          "number_of_frames": 6,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "left",
-            "path": ""
-          }
-        },
-        "default": {
-          "custom_animation_controller_hpp_path": "SRC/assets/Vibble",
-          "custom_animation_controller_key": "SRC/assets/Vibble",
-          "end_path": null,
-          "flipped_source": false,
-          "fps": 24,
-          "has_custom_animation_controller": false,
-          "locked": false,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 1,
-          "on_end": "SRC/assets/Vibble/default",
-          "path": null,
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "SRC/assets/Vibble/default"
-          },
-          "speed_factor": 1
-        },
-        "left": {
-          "flipped_source": false,
-          "fps": 24,
-          "locked": false,
-          "loop": false,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 6,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": null,
-            "path": "left"
-          }
-        }
-      },
-      "anti_tags": [],
-      "asset_name": "Vibble",
-      "asset_type": "Player",
-      "can_invert": true,
-      "custom_controller_key": "Vibble_controller",
-      "duplicatable": false,
-      "duplication_interval_max": 60,
-      "duplication_interval_min": 30,
-      "has_shading": false,
-      "impassable_area": null,
-      "lighting_info": [
-        {
-          "apex_speed_bias": 0,
-          "behind": false,
-          "factor": 100,
-          "falloff": 0,
-          "has_light_source": true,
-          "light_intensity": 0,
-          "offset_x": 0,
-          "offset_y": 0,
-          "radius": 0,
-          "x_radius": 0,
-          "y_radius": 0
-        },
-        {
-          "behind": false,
-          "falloff": 50,
-          "flare": 1,
-          "flicker": 0,
-          "has_light_source": true,
-          "light_color": [
-            255,
-            255,
-            255
-          ],
-          "light_intensity": 194,
-          "offset_x": 0,
-          "offset_y": 0,
-          "radius": 502
-        }
-      ],
-      "mappings": {},
-      "max_child_depth": 2,
-      "min_child_depth": 0,
-      "min_distance_all": 106,
-      "neighbor_search_distance": 400,
-      "render_radius": 1000,
-      "rnd_spawn_max": 400,
-      "rnd_spawn_min": 300,
-      "shading_opacity_multiplier": 1.0,
-      "shading_parallax_amount": 0.0,
-      "shading_screen_brightness_multiplier": 1.0,
-      "shadow_mask_settings": {
-        "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
-        "expansion_ratio": 0.800000011920929,
-        "falloff_exponent": 1.0499999523162842,
-        "falloff_start": 0.0
-      },
-      "size_settings": {
-        "scale_percentage": 17.0
-      },
-      "spawn_groups": [
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            }
-          ],
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "priority": 0,
-          "resolution": 0,
-          "spawn_id": "spn-74cd2ebc7996"
-        }
-      ],
-      "start": "default",
-      "tags": [
-        "death",
-        "SRC/assets/Vibble/default",
-        "grave",
-        "graveyard",
-        "ground",
-        "medium",
-        "nature",
-        "passable",
-        "plant",
-        "purple",
-        "red",
-        "small",
-        "still",
-        "white",
-        "yellow"
-      ],
-      "update_radius": 1000,
-      "z_threshold": -6
-    },
+    "Vibble": null,
     "bouncing": {
       "animations": {
         "default": {
@@ -15518,6 +15219,7 @@
       ],
       "z_threshold": 45
     },
+    "side_building_1": null,
     "table": {
       "animations": {
         "default": {
@@ -16226,9 +15928,9 @@
       "rooms_data": {
         "NewRoom": {
           "display_color": [
-            37,
-            242,
-            36,
+            204,
+            31,
+            186,
             255
           ],
           "name": "NewRoom",
@@ -16236,9 +15938,9 @@
         },
         "NewRoom1": {
           "display_color": [
-            85,
             242,
-            117,
+            195,
+            85,
             255
           ],
           "name": "NewRoom1",
@@ -16248,7 +15950,7 @@
           "curvyness": 2,
           "display_color": [
             31,
-            151,
+            57,
             204,
             255
           ],
@@ -16320,9 +16022,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            93,
-            85,
             242,
+            102,
+            85,
             255
           ],
           "edge_smoothness": 4,
@@ -16392,9 +16094,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            204,
-            51,
-            110,
+            85,
+            146,
+            242,
             255
           ],
           "edge_smoothness": 4,
@@ -16472,9 +16174,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            85,
-            234,
-            242,
+            71,
+            204,
+            145,
             255
           ],
           "edge_smoothness": 7,
@@ -16627,9 +16329,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            102,
-            242,
             36,
+            215,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -16727,8 +16429,8 @@
           "curvyness": 4,
           "display_color": [
             204,
-            71,
-            186,
+            31,
+            48,
             255
           ],
           "edge_smoothness": 9,
@@ -16799,9 +16501,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            61,
-            36,
-            242,
+            112,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 8,
@@ -16872,9 +16574,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            242,
-            71,
-            36,
+            204,
+            107,
+            31,
             255
           ],
           "edge_smoothness": 6,
@@ -16941,9 +16643,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
+            217,
             242,
             85,
-            242,
             255
           ],
           "edge_smoothness": 6,
@@ -17010,9 +16712,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            204,
-            158,
-            71,
+            242,
+            36,
+            224,
             255
           ],
           "edge_smoothness": 2,
@@ -17061,9 +16763,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            242,
-            241,
             36,
+            94,
+            242,
             255
           ],
           "edge_smoothness": 12,
@@ -17163,9 +16865,9 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            71,
-            187,
-            204,
+            242,
+            36,
+            139,
             255
           ],
           "edge_smoothness": 9,
@@ -17235,9 +16937,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            71,
-            115,
             204,
+            179,
+            31,
             255
           ],
           "edge_smoothness": 7,
@@ -17311,8 +17013,8 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            149,
-            36,
+            183,
+            85,
             242,
             255
           ],
@@ -17391,9 +17093,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            170,
-            242,
-            36,
+            99,
+            204,
+            71,
             255
           ],
           "edge_smoothness": 10,
@@ -17503,9 +17205,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            242,
-            164,
-            36,
+            204,
+            71,
+            78,
             255
           ],
           "edge_smoothness": 5,
@@ -17575,9 +17277,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
+            152,
             204,
-            86,
-            71,
+            31,
             255
           ],
           "edge_smoothness": 6,
@@ -17644,9 +17346,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            36,
+            61,
             242,
-            129,
+            61,
             255
           ],
           "edge_smoothness": 10,
@@ -17720,9 +17422,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
+            85,
             242,
-            36,
-            83,
+            168,
             255
           ],
           "edge_smoothness": 5,
@@ -17810,9 +17512,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            178,
             31,
             204,
+            75,
             255
           ],
           "edge_smoothness": 101,
@@ -17996,8 +17698,8 @@
                 }
               ],
               "display_name": "home_world_trail",
-              "dx": -736,
-              "dy": 160,
+              "dx": -720,
+              "dy": 48,
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
@@ -18243,15 +17945,67 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-0b3a9ac04334"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "building_4"
+                }
+              ],
+              "display_name": "building_4",
+              "dx": -2723,
+              "dy": 116,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 16000,
+              "origional_width": 16000,
+              "position": "Exact",
+              "priority": 16,
+              "resolution": 3,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-3429fe7d4f8f"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Axe"
+                }
+              ],
+              "display_name": "Axe",
+              "dx": -4280,
+              "dy": 2544,
+              "enforce_spacing": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 16000,
+              "origional_width": 16000,
+              "position": "Exact",
+              "priority": 17,
+              "resolution": 6,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-2ad03fc43ebd"
             }
           ]
         },
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            179,
-            204,
-            71,
+            36,
+            165,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -18321,9 +18075,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            71,
+            31,
             204,
-            139,
+            167,
             255
           ],
           "edge_smoothness": 7,

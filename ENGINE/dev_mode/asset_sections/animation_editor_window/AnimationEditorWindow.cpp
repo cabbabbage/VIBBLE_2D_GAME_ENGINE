@@ -127,12 +127,26 @@ AnimationEditorWindow::~AnimationEditorWindow() = default;
 
 void AnimationEditorWindow::set_visible(bool visible) {
     if (!visible && visible_) {
+        // Quick debug switch: force rebuild on panel close for testing
+        // Uncomment the following lines to enable:
+        // if (on_document_saved_) {
+        //     on_document_saved_();
+        // }
+
         if (document_ && document_->consume_dirty_flag()) {
             auto_save_pending_ = true;
             auto_save_timer_frames_ = 0;
         }
         auto_save_timer_frames_ = 0;
         process_auto_save();
+
+        // Finalize manifest transaction when closing editor
+        if (using_manifest_store_ && manifest_transaction_) {
+            // Force finalization to ensure manifest store sees changes
+            nlohmann::json dummy;
+            persist_manifest_payload(dummy, true);
+        }
+
         if (list_context_menu_) {
             list_context_menu_->close();
         }

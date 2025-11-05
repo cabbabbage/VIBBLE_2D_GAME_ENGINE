@@ -1723,6 +1723,12 @@ void DevControls::open_asset_info_editor_for_asset(Asset* asset) {
     room_editor_->open_asset_info_editor_for_asset(asset);
 }
 
+void DevControls::open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& info) {
+    if (!can_use_room_editor_ui()) return;
+    room_editor_->open_asset_info_editor(info);
+    // The animation editor will be opened within the asset info UI
+}
+
 void DevControls::close_asset_info_editor() {
     if (room_editor_) room_editor_->close_asset_info_editor();
     // Also close any active in-world Frame Editor session
