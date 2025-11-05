@@ -2696,8 +2696,8 @@ bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
     const float base_sw = scaled_fw * inv_scale;
     const float base_sh = scaled_fh * inv_scale;
 
-    const float world_x = asset->smoothed_translation_x();
-    const float world_y = asset->smoothed_translation_y();
+    const float world_x = static_cast<float>(asset->pos.x);
+    const float world_y = static_cast<float>(asset->pos.y);
     const camera::RenderEffects effects =
         cam.compute_render_effects(
             SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
