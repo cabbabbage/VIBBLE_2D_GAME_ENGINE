@@ -2002,15 +2002,17 @@ void RoomEditor::pulse_active_modal_header() {
 
 void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetInfo>& info) {
     if (!asset || !info || !current_room_) return;
+
     auto& root = current_room_->assets_data();
-    auto& arr = ensure_spawn_groups_array(root);
+    auto& arr  = ensure_spawn_groups_array(root);
 
     int width = 0;
     int height = 0;
     SDL_Point center{0, 0};
+
     if (current_room_->room_area) {
         auto bounds = current_room_->room_area->get_bounds();
-        width = std::max(1, std::get<2>(bounds) - std::get<0>(bounds));
+        width  = std::max(1, std::get<2>(bounds) - std::get<0>(bounds));
         height = std::max(1, std::get<3>(bounds) - std::get<1>(bounds));
         auto c = current_room_->room_area->get_center();
         center.x = c.x;
@@ -2018,28 +2020,45 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     }
 
     std::string spawn_id = generate_spawn_id();
-    nlohmann::json entry;
-    entry["spawn_id"] = spawn_id;
-    entry["position"] = "Exact";
-    entry["dx"] = asset->pos.x - center.x;
-    entry["dy"] = asset->pos.y - center.y;
-    if (width > 0) entry["origional_width"] = width;
-    if (height > 0) entry["origional_height"] = height;
-    entry["display_name"] = info->name;
 
-    const int default_resolution = current_room_ ? current_room_->map_grid_settings().resolution : MapGridSettings::defaults().resolution;
+    nlohmann::json entry;
+    entry["spawn_id"]        = spawn_id;
+    entry["position"]        = "Exact";
+    entry["dx"]              = asset->pos.x - center.x;
+    entry["dy"]              = asset->pos.y - center.y;
+    if (width  > 0) entry["origional_width"]  = width;
+    if (height > 0) entry["origional_height"] = height;
+    entry["display_name"]    = info->name;
+
+    const int default_resolution =
+        current_room_ ? current_room_->map_grid_settings().resolution
+                      : MapGridSettings::defaults().resolution;
+
     devmode::spawn::ensure_spawn_group_entry_defaults(entry, info->name, default_resolution);
 
     entry["candidates"].push_back({{"name", info->name}, {"chance", 100}});
 
     arr.push_back(entry);
     save_current_room_assets_json();
-    asset->spawn_id = spawn_id;
+
+    // Update asset spawn metadata
+    asset->spawn_id     = spawn_id;
     asset->spawn_method = "Exact";
+
+    // === Critical: recompute bounds/index immediately for new asset ===
+    if (asset) {
+        refresh_asset_spatial_entry(assets_->getView(), asset);
+        ensure_spatial_index(assets_->getView());
+    }
+    // Ensure highlight/hover reevaluates using fresh geometry.
+    mark_highlight_dirty();
+    // ============================================================
+
     active_spawn_group_id_ = spawn_id;
     refresh_spawn_group_config_ui();
     rebuild_room_spawn_id_cache();
 }
+
 
 void RoomEditor::toggle_room_config() {
     ensure_room_configurator();
@@ -3913,17 +3932,42 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
         return;
     }
 
+    // Helper to invalidate caches for all dragged assets
+    auto invalidate_after_move = [this]() {
+        for (auto& st : drag_states_) {
+            if (st.asset) {
+                auto it = asset_bounds_cache_.find(st.asset);
+                if (it != asset_bounds_cache_.end()) {
+                    asset_bounds_cache_.erase(it);
+                }
+            }
+        }
+        mark_spatial_index_dirty();
+        mark_highlight_dirty();
+        refresh_spatial_entries_for_dragged_assets(); // keep existing behavior
+    };
+
+    // Perimeter drag path
     if (drag_mode_ == DragMode::Perimeter) {
         apply_perimeter_drag(world_mouse);
         drag_last_world_ = world_mouse;
-        return;
-    }
-    if (drag_mode_ == DragMode::Edge) {
-        apply_edge_drag(world_mouse);
-        drag_last_world_ = world_mouse;
+        drag_moved_ = true;
+        invalidate_after_move();
+        ensure_spatial_index(assets_->getView()); // force rebuild now (not later)
         return;
     }
 
+    // Edge drag path
+    if (drag_mode_ == DragMode::Edge) {
+        apply_edge_drag(world_mouse);
+        drag_last_world_ = world_mouse;
+        drag_moved_ = true;
+        invalidate_after_move();
+        ensure_spatial_index(assets_->getView()); // force rebuild now (not later)
+        return;
+    }
+
+    // Standard translate drag
     SDL_Point delta{world_mouse.x - drag_last_world_.x, world_mouse.y - drag_last_world_.y};
     if (delta.x == 0 && delta.y == 0) {
         drag_last_world_ = world_mouse;
@@ -3935,17 +3979,24 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
         state.asset->pos.x += delta.x;
         state.asset->pos.y += delta.y;
     }
+
     if (drag_mode_ == DragMode::PerimeterCenter) {
         drag_perimeter_circle_center_.x += delta.x;
         drag_perimeter_circle_center_.y += delta.y;
         drag_perimeter_center_offset_world_.x += delta.x;
         drag_perimeter_center_offset_world_.y += delta.y;
     }
+
     snap_dragged_assets_to_grid();
+
     drag_last_world_ = world_mouse;
     drag_moved_ = true;
-    refresh_spatial_entries_for_dragged_assets();
+
+    // Critical: ensure hover uses updated positions right away
+    invalidate_after_move();
+    ensure_spatial_index(assets_->getView()); // force rebuild now (not later)
 }
+
 
 void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     if (drag_states_.empty()) return;

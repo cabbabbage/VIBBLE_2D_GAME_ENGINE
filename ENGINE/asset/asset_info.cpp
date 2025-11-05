@@ -1427,3 +1427,49 @@ bool AssetInfo::reload_animations_from_disk() {
     }
     return apply_payload(*view.data);
 }
+
+bool AssetInfo::update_animation_properties(const std::string& animation_name, const nlohmann::json& properties) {
+    if (animation_name.empty() || !properties.is_object()) {
+        return false;
+    }
+
+    try {
+        // Update the anims_json_ structure
+        if (!anims_json_.is_object()) {
+            anims_json_ = nlohmann::json::object();
+        }
+
+        // Merge the new properties with existing animation data
+        nlohmann::json updated_animation = properties;
+        if (anims_json_.contains(animation_name) && anims_json_[animation_name].is_object()) {
+            // Preserve existing properties not being updated
+            for (auto& [key, value] : anims_json_[animation_name].items()) {
+                if (!updated_animation.contains(key)) {
+                    updated_animation[key] = value;
+                }
+            }
+        }
+
+        anims_json_[animation_name] = updated_animation;
+
+        // Update the info_json_ animations section
+        if (!info_json_.is_object()) {
+            info_json_ = nlohmann::json::object();
+        }
+        if (!info_json_.contains("animations") || !info_json_["animations"].is_object()) {
+            info_json_["animations"] = nlohmann::json::object();
+        }
+        info_json_["animations"][animation_name] = updated_animation;
+
+        // Update the start_animation if this animation is being set as start
+        if (properties.contains("start") && properties["start"].is_boolean() && properties["start"].get<bool>()) {
+            start_animation = animation_name;
+            info_json_["start"] = start_animation;
+        }
+
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "[AssetInfo] Failed to update animation properties for '" << animation_name << "': " << e.what() << std::endl;
+        return false;
+    }
+}

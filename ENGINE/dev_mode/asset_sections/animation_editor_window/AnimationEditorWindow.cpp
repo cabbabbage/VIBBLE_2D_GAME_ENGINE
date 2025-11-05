@@ -368,6 +368,7 @@ void AnimationEditorWindow::configure_inspector_panel() {
     });
     inspector_panel_->set_audio_importer(audio_importer_);
     inspector_panel_->set_audio_file_picker([this]() { return this->pick_audio_file(); });
+    inspector_panel_->set_on_animation_properties_changed(on_animation_properties_changed_);
     if (selected_animation_id_) {
         inspector_panel_->set_animation_id(*selected_animation_id_);
     }
@@ -789,6 +790,10 @@ void AnimationEditorWindow::delete_animation_with_confirmation(const std::string
 
 void AnimationEditorWindow::set_on_document_saved(std::function<void()> callback) {
     on_document_saved_ = std::move(callback);
+}
+
+void AnimationEditorWindow::set_on_animation_properties_changed(std::function<void(const std::string&, const nlohmann::json&)> callback) {
+    on_animation_properties_changed_ = std::move(callback);
 }
 
 void AnimationEditorWindow::ensure_layout() const {

@@ -621,6 +621,19 @@
             ],
             "revision": 6318055532976691477
         },
+        "building_3": {
+            "max_scale": 0.9090908765792847,
+            "min_scale": 0.9090908765792847,
+            "recommended_percentages": [
+                100,
+                91
+            ],
+            "recommended_steps": [
+                1.0,
+                0.9090908765792847
+            ],
+            "revision": 16040916717510360896
+        },
         "building_4": {
             "max_scale": 0.9090908765792847,
             "min_scale": 0.9090908765792847,
@@ -884,7 +897,7 @@
             "revision": 2835005892505863127
         }
     },
-    "generated_at": "2025-11-05T06:57:02Z",
+    "generated_at": "2025-11-05T07:25:57Z",
     "screen_aspect": 1.7777777777777777,
     "version": 2
 }

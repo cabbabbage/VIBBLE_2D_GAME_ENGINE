@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <SDL_log.h>
 #include <stdexcept>
 #include <vector>
@@ -353,6 +354,12 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     if (animation_editor_window_) {
         try {
             animation_editor_window_->set_manifest_store(manifest_store_);
+            animation_editor_window_->set_on_animation_properties_changed([this](const std::string& animation_id, const nlohmann::json& properties) {
+                if (info_ && info_->update_animation_properties(animation_id, properties)) {
+                    // Immediately refresh loaded asset instances
+                    refresh_loaded_asset_instances();
+                }
+            });
             animation_editor_window_->set_info(info_);
         } catch (const std::exception& ex) {
             SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s", info_ ? info_->name.c_str() : "<null>", ex.what());
@@ -1391,6 +1398,34 @@ bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& f
 void AssetInfoUI::refresh_loaded_asset_instances() {
     if (!info_) {
         return;
+    }
+
+    // Clear animation cache when animation sources change
+    if (!info_->name.empty()) {
+        std::filesystem::path asset_cache = std::filesystem::path("cache") / info_->name / "animations";
+        try {
+            if (std::filesystem::exists(asset_cache)) {
+                std::filesystem::remove_all(asset_cache);
+                std::cout << "[AssetInfoUI] Cleared animation cache for " << info_->name << " due to source changes\n";
+            }
+        } catch (const std::exception& ex) {
+            std::cerr << "[AssetInfoUI] Failed to clear animation cache for " << info_->name
+                      << ": " << ex.what() << "\n";
+        } catch (...) {
+            std::cerr << "[AssetInfoUI] Failed to clear animation cache for " << info_->name
+                      << " due to unknown error\n";
+        }
+    }
+
+    // Force scaling profile refresh for this asset
+    if (!info_->name.empty()) {
+        // This will trigger a new profile entry to be created/updated
+        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(std::filesystem::path("loading") / "scaling_profiles.json");
+        auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info_->name);
+        if (profile.created_entry) {
+            std::cout << "[AssetInfoUI] Updated scaling profile for " << info_->name << "\n";
+        }
+        info_->scale_profile_revision = profile.revision;
     }
 
     // First refresh direct instances

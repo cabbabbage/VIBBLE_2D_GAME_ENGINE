@@ -63,6 +63,7 @@ class AnimationInspectorPanel {
     void set_navigate_to_animation_callback(AnimationNavigateCallback callback);
     void set_audio_importer(std::shared_ptr<AudioImporter> importer);
     void set_audio_file_picker(AudioFilePicker picker);
+    void set_on_animation_properties_changed(std::function<void(const std::string&, const nlohmann::json&)> callback) { on_animation_properties_changed_ = std::move(callback); }
 
     int height_for_width(int width) const;
 
@@ -156,6 +157,7 @@ class AnimationInspectorPanel {
     AnimationNavigateCallback navigate_to_animation_callback_;
     std::shared_ptr<AudioImporter> audio_importer_;
     AudioFilePicker audio_file_picker_;
+    std::function<void(const std::string&, const nlohmann::json&)> on_animation_properties_changed_;
 
     // Animation preview timing variables
     mutable Uint32 animation_start_time_ = 0;

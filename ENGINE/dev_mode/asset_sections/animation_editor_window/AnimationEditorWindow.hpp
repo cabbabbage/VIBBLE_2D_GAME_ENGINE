@@ -54,6 +54,7 @@ class AnimationEditorWindow {
     void focus_animation(const std::string& animation_id);
 
     void set_on_document_saved(std::function<void()> callback);
+    void set_on_animation_properties_changed(std::function<void(const std::string&, const nlohmann::json&)> callback);
 
     // Wiring to in-world frame editor session
     void set_assets(class Assets* assets) { assets_ = assets; }
@@ -137,6 +138,7 @@ class AnimationEditorWindow {
     bool auto_save_pending_ = false;
     int auto_save_timer_frames_ = 0;
     std::function<void()> on_document_saved_;
+    std::function<void(const std::string&, const nlohmann::json&)> on_animation_properties_changed_;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     devmode::core::ManifestStore::AssetTransaction manifest_transaction_;
     std::string manifest_asset_key_;

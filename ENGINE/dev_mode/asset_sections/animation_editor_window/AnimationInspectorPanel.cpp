@@ -915,6 +915,16 @@ void AnimationInspectorPanel::apply_dependencies() {
                 movement_summary_->set_document(document_);
                 movement_summary_->set_animation_id(id);
             }
+            // Trigger immediate update of animation properties in AssetInfo
+            if (document_) {
+                auto payload = document_->animation_payload(id);
+                if (payload.has_value()) {
+                    // Call the immediate update callback if available
+                    if (on_animation_properties_changed_) {
+                        on_animation_properties_changed_(id, *payload);
+                    }
+                }
+            }
             // Trigger relayout so checkboxes/buttons appear immediately
             this->layout_dirty_ = true;
         });
