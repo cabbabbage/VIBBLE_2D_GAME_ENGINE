@@ -13,23 +13,24 @@ void PanAndZoom::set_zoom_scale_factor(double factor) {
 void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked) {
     const int wheel_y = input.getScrollY();
     if (wheel_y != 0) {
-        // Interpret wheel: negative = zoom IN (towards), positive = zoom OUT (straight)
+        // mouse wheel -> zoom
         const double step = (zoom_scale_factor_ > 0.0) ? zoom_scale_factor_ : 1.0;
         const int ticks = std::abs(wheel_y);
         const bool zoom_in = (wheel_y < 0);
-        const bool zoom_out = !zoom_in;
-
-        // eff > 1 => zoom in; eff < 1 => zoom out
         const double mag = std::pow(step, ticks);
         const double eff = zoom_in ? mag : (1.0 / mag);
+        const int dur = 10;
 
-        const int dur = 10; // small, smooth transition for wheel zoom
-        if (zoom_in) {
-            // Zooming in: pan towards mouse cursor
-            cam.animate_zoom_towards_point(eff, SDL_Point{ input.getX(), input.getY() }, dur);
-        } else { // zoom_out
-            // Zooming out: just zoom straight out without panning
+        // If we are currently panning, lock focus to the pan center so
+        // wheel-zoom happens around that focus (stable “pan with zoom”).
+        if (panning_) {
+            cam.set_manual_zoom_override(true);
+            cam.set_focus_override(cam.get_screen_center());
             cam.animate_zoom_multiply(eff, dur);
+        } else {
+            // Not panning: zoom toward the cursor.
+            const SDL_Point mouse{ input.getX(), input.getY() };
+            cam.animate_zoom_towards_point(eff, mouse, dur);
         }
     }
 
@@ -53,6 +54,7 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
         return;
     }
 
+    // Drag to pan: move screen center and keep focus in sync.
     const double scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
     const int dx = input.getX() - pan_start_mouse_screen_.x;
     const int dy = input.getY() - pan_start_mouse_screen_.y;
@@ -60,8 +62,8 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
         static_cast<int>(std::lround(static_cast<double>(pan_start_center_.x) - static_cast<double>(dx) * scale)),
         static_cast<int>(std::lround(static_cast<double>(pan_start_center_.y) - static_cast<double>(dy) * scale))
     };
-    cam.set_focus_override(new_center);
-    cam.set_screen_center(new_center);
+    cam.set_focus_override(new_center);   // keep camera focus set while panning
+    cam.set_screen_center(new_center);    // and actually move the view
 }
 
 void PanAndZoom::cancel(camera& cam) {

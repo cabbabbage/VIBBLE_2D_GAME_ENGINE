@@ -2454,31 +2454,36 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     if (!left_down && prev_left_down) {
         if (pressed_asset) {
             if (was_dragged) {
-                // End drag
+                // End drag: do NOT treat as a click, and do NOT open room config
                 if (dragging_) {
                     finalize_drag_session();
                     dragging_ = false;
                 }
-                // Swallow the release so nothing else triggers
-                suppress_next_left_click_ = true;
-                click_buffer_frames_ = 3;
 
-                // Keep hover on the (now released) asset until next frame’s hover update
+                // Swallow this release so nothing underneath gets a click
+                suppress_next_left_click_ = true;
+                click_buffer_frames_      = 3;
+
+                // Keep obvious visual feedback on the thing we just dragged
                 hovered_asset_ = pressed_asset;
                 rebuild_highlight();
             } else {
-                // Clean click (no drag): open Room Config now (on release)
-                open_room_config_for(pressed_asset);
+                // Clean click (no drag): only open if we released over the same asset
+                if (hovered_asset_ == pressed_asset) {
+                    open_room_config_for(pressed_asset);
 
-                // Swallow the release so no other panel/pan reacts
-                suppress_next_left_click_ = true;
-                click_buffer_frames_ = 3;
+                    // Swallow the release so no other handler fires next frame
+                    suppress_next_left_click_ = true;
+                    click_buffer_frames_      = 3;
 
-                hovered_asset_ = pressed_asset;
-                rebuild_highlight();
+                    hovered_asset_ = pressed_asset;
+                    rebuild_highlight();
+                }
+                // else: pressed on A, released over B (without crossing drag threshold) → do nothing
             }
         }
-        // Reset press state
+
+        // Reset press state for next cycle
         pressed_asset = nullptr;
         was_dragged   = false;
     }
@@ -3023,8 +3028,8 @@ void RoomEditor::handle_click(const Input& input) {
             input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
 
         if (hovered_asset_) {
-            // CHANGED: Ctrl+Right Click on an existing asset -> open Asset Library at point (add on top)
-            // Otherwise, preserve original behavior (open Asset Info for that asset).
+            // Right Click on an existing asset -> open Asset Info UI for that asset
+            // Ctrl+Right Click on an existing asset -> open Asset Library at point (add on top)
             if (ctrl_down) {
                 pending_spawn_world_pos_ = world_mouse;
                 open_asset_library();
@@ -3032,7 +3037,7 @@ void RoomEditor::handle_click(const Input& input) {
                     pending_spawn_world_pos_.reset();
                 }
         } else {
-            open_room_config_for(hovered_asset_);
+            open_asset_info_editor_for_asset(hovered_asset_);
         }
         } else {
             bool opened_area_info = false;
