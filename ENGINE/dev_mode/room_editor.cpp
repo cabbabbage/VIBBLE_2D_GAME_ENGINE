@@ -2410,12 +2410,8 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         if (pressed_asset) {
             // Build selection according to spawn-group semantics
             selected_assets_.clear();
-            bool select_group = true;
-            const std::string& method = pressed_asset->spawn_method;
-            if (method == "Exact" || method == "Exact Position" || method == "Percent") {
-                select_group = false;
-            }
-            if (select_group && !pressed_asset->spawn_id.empty() && active_assets_) {
+            bool select_group = !pressed_asset->spawn_id.empty();
+            if (select_group && active_assets_) {
                 for (Asset* a : *active_assets_) {
                     if (!asset_belongs_to_room(a)) continue;
                     if (a->spawn_id == pressed_asset->spawn_id) {
@@ -3802,7 +3798,7 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     nlohmann::json* spawn_entry = nullptr;
     if (!drag_spawn_id_.empty()) {
         spawn_entry = find_spawn_entry(drag_spawn_id_);
-        if (spawn_entry) {
+        if (spawn_entry && drag_mode_ != DragMode::Exact) {
             drag_resolution_ = vibble::grid::clamp_resolution(spawn_entry->value("resolution", drag_resolution_));
         }
     }
@@ -4195,6 +4191,7 @@ void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
 }
 
 bool RoomEditor::snap_dragged_assets_to_grid() {
+    if (drag_mode_ != DragMode::Exact) return false;
     if (drag_states_.empty()) return false;
     const int resolution = vibble::grid::clamp_resolution(drag_resolution_);
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
@@ -4258,6 +4255,11 @@ void RoomEditor::finalize_drag_session() {
                 case DragMode::Exact:
                     if (drag_moved_) {
                         update_exact_json(*entry, *primary, center, width, height);
+                        json_modified = true;
+                    }
+                    {
+                        const int current_resolution = current_room_ ? current_room_->map_grid_settings().resolution : MapGridSettings::defaults().resolution;
+                        (*entry)["resolution"] = current_resolution;
                         json_modified = true;
                     }
                     break;
