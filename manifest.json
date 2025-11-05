@@ -15928,9 +15928,9 @@
       "rooms_data": {
         "NewRoom": {
           "display_color": [
-            204,
+            192,
             31,
-            199,
+            204,
             255
           ],
           "name": "NewRoom",
@@ -15938,9 +15938,9 @@
         },
         "NewRoom1": {
           "display_color": [
-            85,
-            242,
-            168,
+            86,
+            204,
+            71,
             255
           ],
           "name": "NewRoom1",
@@ -15950,7 +15950,7 @@
           "curvyness": 2,
           "display_color": [
             31,
-            68,
+            74,
             204,
             255
           ],
@@ -16022,8 +16022,8 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
+            237,
             242,
-            187,
             85,
             255
           ],
@@ -16095,8 +16095,8 @@
           "curvyness": 2,
           "display_color": [
             242,
-            102,
             85,
+            185,
             255
           ],
           "edge_smoothness": 4,
@@ -16174,9 +16174,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            104,
-            85,
+            147,
             242,
+            85,
             255
           ],
           "edge_smoothness": 7,
@@ -16329,9 +16329,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            225,
-            242,
+            96,
             85,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -16428,9 +16428,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            106,
-            31,
-            204,
+            242,
+            85,
+            103,
             255
           ],
           "edge_smoothness": 9,
@@ -16501,9 +16501,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            85,
-            151,
-            242,
+            98,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 8,
@@ -16574,9 +16574,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            96,
-            204,
-            71,
+            242,
+            184,
+            85,
             255
           ],
           "edge_smoothness": 6,
@@ -16645,7 +16645,7 @@
           "display_color": [
             204,
             31,
-            31,
+            105,
             255
           ],
           "edge_smoothness": 6,
@@ -16712,9 +16712,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            85,
             242,
-            36,
-            131,
+            185,
             255
           ],
           "edge_smoothness": 2,
@@ -16763,8 +16763,8 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            36,
-            202,
+            85,
+            154,
             242,
             255
           ],
@@ -16865,9 +16865,9 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            149,
-            204,
-            31,
+            171,
+            85,
+            242,
             255
           ],
           "edge_smoothness": 9,
@@ -16937,9 +16937,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            204,
-            107,
-            31,
+            36,
+            242,
+            79,
             255
           ],
           "edge_smoothness": 7,
@@ -17013,9 +17013,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            181,
-            85,
-            242,
+            154,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 6,
@@ -17093,9 +17093,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            61,
+            36,
+            202,
             242,
-            61,
             255
           ],
           "edge_smoothness": 10,
@@ -17205,9 +17205,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            167,
+            36,
+            110,
+            242,
             255
           ],
           "edge_smoothness": 5,
@@ -17278,8 +17278,8 @@
           "curvyness": 3,
           "display_color": [
             36,
-            104,
             242,
+            155,
             255
           ],
           "edge_smoothness": 6,
@@ -17347,8 +17347,8 @@
           "curvyness": 3,
           "display_color": [
             204,
-            71,
-            71,
+            31,
+            31,
             255
           ],
           "edge_smoothness": 10,
@@ -17423,8 +17423,8 @@
           "curvyness": 2,
           "display_color": [
             204,
-            179,
-            31,
+            71,
+            71,
             255
           ],
           "edge_smoothness": 5,
@@ -17512,9 +17512,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            116,
-            85,
+            167,
             242,
+            85,
             255
           ],
           "edge_smoothness": 101,
@@ -17750,8 +17750,8 @@
                 }
               ],
               "display_name": "church",
-              "dx": -176,
-              "dy": -3168,
+              "dx": 496,
+              "dy": -2736,
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
@@ -17828,8 +17828,8 @@
                 }
               ],
               "display_name": "building_2",
-              "dx": 128,
-              "dy": -2240,
+              "dx": 1568,
+              "dy": -448,
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
@@ -17854,8 +17854,8 @@
                 }
               ],
               "display_name": "car",
-              "dx": 406,
-              "dy": -1978,
+              "dx": 352,
+              "dy": -2752,
               "enforce_spacing": false,
               "max_number": 1,
               "min_number": 1,
@@ -18003,9 +18003,9 @@
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            71,
             204,
-            137,
+            109,
+            31,
             255
           ],
           "edge_smoothness": 6,
@@ -18076,8 +18076,8 @@
           "curvyness": 3,
           "display_color": [
             204,
+            176,
             31,
-            104,
             255
           ],
           "edge_smoothness": 7,

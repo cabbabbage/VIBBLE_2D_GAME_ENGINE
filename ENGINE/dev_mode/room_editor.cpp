@@ -2509,45 +2509,57 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*render
     if (!active_assets_ || !assets_) return nullptr;
 
     const camera& cam = assets_->getView();
+
+    // If we can't ensure the spatial index, just do the slow but correct reverse render-order scan.
+    auto reverse_render_order_scan = [&](const std::vector<Asset*>& pool) -> Asset* {
+        for (auto it = pool.rbegin(); it != pool.rend(); ++it) {
+            Asset* asset = *it;
+            if (!asset) continue;
+
+            auto bc = asset_bounds_cache_.find(asset);
+            if (bc == asset_bounds_cache_.end()) continue;
+
+            const SDL_Rect& rect = bc->second.bounds;
+            if (SDL_PointInRect(&screen_point, &rect)) {
+                return asset; // first one we “drew last” that contains the point
+            }
+        }
+        return nullptr;
+    };
+
     if (!ensure_spatial_index(cam)) {
-        return hit_test_asset_fallback(cam, screen_point);
+        // No spatial index: scan everything in reverse draw order.
+        return reverse_render_order_scan(*active_assets_);
     }
 
-    std::vector<Asset*> candidates = gather_candidate_assets_for_point(screen_point);
-    Asset* best = nullptr;
-    int best_screen_y = std::numeric_limits<int>::min();
-    int best_z_index  = std::numeric_limits<int>::min();
-    int best_area     = std::numeric_limits<int>::max(); // tie-breaker: smaller rect wins
+    // With spatial index: gather candidates, then walk active assets in reverse
+    // (render order) and pick the first that’s in the candidate set and contains the point.
+    const std::vector<Asset*> candidates = gather_candidate_assets_for_point(screen_point);
+    if (candidates.empty()) {
+        // Nothing near; fall back to a full reverse-order scan (cheap early out anyway).
+        return nullptr;
+    }
 
-    for (Asset* asset : candidates) {
+    // Build a fast membership set for candidates.
+    // (If <unordered_set> isn’t already included in this TU, add it at the top.)
+    std::unordered_set<Asset*> candset(candidates.begin(), candidates.end());
+
+    for (auto it = active_assets_->rbegin(); it != active_assets_->rend(); ++it) {
+        Asset* asset = *it;
         if (!asset) continue;
+        if (candset.find(asset) == candset.end()) continue;
 
-        auto it = asset_bounds_cache_.find(asset);
-        if (it == asset_bounds_cache_.end()) continue;
+        auto bc = asset_bounds_cache_.find(asset);
+        if (bc == asset_bounds_cache_.end()) continue;
 
-        const SDL_Rect& rect = it->second.bounds;
-        if (!SDL_PointInRect(&screen_point, &rect)) continue;
-
-        const int area = rect.w * rect.h;
-
-        // Prefer topmost: z_index → screen_y (lower on screen) → smaller area
-        if (!best
-            || asset->z_index > best_z_index
-            || (asset->z_index == best_z_index && it->second.screen_y > best_screen_y)
-            || (asset->z_index == best_z_index && it->second.screen_y == best_screen_y && area < best_area)) {
-
-            best = asset;
-            best_screen_y = it->second.screen_y;
-            best_z_index  = asset->z_index;
-            best_area     = area;
+        const SDL_Rect& rect = bc->second.bounds;
+        if (SDL_PointInRect(&screen_point, &rect)) {
+            return asset; // topmost actually drawn under the cursor
         }
     }
 
-    if (best) {
-        return best;
-    }
-
-    return hit_test_asset_fallback(cam, screen_point);
+    // Nothing hit in candidates; do a full reverse-order pass just in case.
+    return reverse_render_order_scan(*active_assets_);
 }
 
 

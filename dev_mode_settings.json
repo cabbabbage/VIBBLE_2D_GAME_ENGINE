@@ -16,7 +16,7 @@
                 "random": true
             },
             "types": {
-                "area": true,
+                "area": false,
                 "boundary": true,
                 "enemy": true,
                 "npc": false,
