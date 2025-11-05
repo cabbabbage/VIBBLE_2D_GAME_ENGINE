@@ -1688,7 +1688,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     // Hide the top dev header when the Layers panel is open so its close button isn't obscured
-    const bool hide_headers = modal_headers_hidden_ || layers_panel_open; // ignore sliding windows for header visibility
+    const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_ || layers_panel_open;
     asset_filter_.set_header_suppressed(hide_headers);
     if (!hide_headers && !is_modal_blocking_panels()) {
         // Render header and expanded filters (extra Grid panel is rendered inside AssetFilterBar)
