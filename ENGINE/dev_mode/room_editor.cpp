@@ -2461,9 +2461,10 @@ void RoomEditor::handle_mouse_input(const Input& input) {
                 suppress_next_left_click_ = true;
                 click_buffer_frames_      = 3;
 
-                // Keep hover on the thing we just dragged (until next frame)
-                hovered_asset_ = pressed_asset;
-                rebuild_highlight();
+                selected_assets_.clear();
+                highlighted_assets_.clear();
+                hovered_asset_ = nullptr;
+                sync_spawn_group_panel_with_selection();
             } else {
                 // Clean click (no drag): only open if we released over the SAME asset
                 if (hovered_asset_ == pressed_asset) {
