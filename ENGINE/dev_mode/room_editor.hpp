@@ -162,7 +162,7 @@ private:
         double     edge_length = 0.0;
 };
     void handle_mouse_input(const Input& input);
-    Asset* hit_test_asset(SDL_Point screen_point) const;
+    Asset* hit_test_asset(SDL_Point screen_point, SDL_Renderer* renderer) const;
     void update_hover_state(Asset* hit);
     void handle_click(const Input& input);
     std::optional<std::string> find_room_area_at_point(SDL_Point world_point);

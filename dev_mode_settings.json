@@ -28,7 +28,7 @@
         "grid": {
             "cell_size_px": 35.0,
             "overlay": {
-                "enabled": false
+                "enabled": true
             },
             "snap": {
                 "enabled": false
@@ -70,7 +70,7 @@
                 "controls": false
             },
             "lighting": {
-                "map_panel": true,
+                "map_panel": false,
                 "shadow_panel": false
             },
             "map_assets": {

@@ -543,6 +543,9 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
             grid_cell_size_px_ = vibble::grid::delta(clamped_r);
         }
     });
+
+    // Grid overlay checkbox
+    grid_overlay_checkbox_ = std::make_unique<DMCheckbox>("Show Grid", grid_overlay_enabled_);
     camera_panel_ = std::make_unique<CameraUIPanel>(assets_, 72, 72);
     if (camera_panel_) {
         camera_panel_->close();
@@ -592,16 +595,31 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
     asset_filter_.set_map_info(map_info_json_);
     asset_filter_.set_current_room(current_room_);
-    // Provide extra panel content under filters: Grid Resolution
-    asset_filter_.set_extra_panel_height(DMNumericStepper::height() + DMSpacing::item_gap() * 2);
+    // Provide extra panel content under filters: Grid Overlay Checkbox and Grid Resolution Stepper
+    const int checkbox_h = DMCheckbox::height();
+    const int stepper_h = DMNumericStepper::height();
+    const int total_height = checkbox_h + DMSpacing::small_gap() + stepper_h + DMSpacing::item_gap() * 2;
+    asset_filter_.set_extra_panel_height(total_height);
     asset_filter_.set_extra_panel_renderer([this](SDL_Renderer* renderer, const SDL_Rect& area) {
         if (!renderer) return;
         const int gap = DMSpacing::item_gap();
+        const int small_gap = DMSpacing::small_gap();
+        const int checkbox_h = DMCheckbox::height();
         const int stepper_h = DMNumericStepper::height();
         const int stepper_w_min = 220;
-        int y = area.y + std::max(0, (area.h - stepper_h) / 2);
+
+        // Position checkbox at the top
+        int y = area.y + gap;
         int x = area.x + gap;
-        // Stepper takes the full width
+        grid_checkbox_rect_ = SDL_Rect{ x, y, grid_overlay_checkbox_->preferred_width(), checkbox_h };
+        if (grid_overlay_checkbox_) {
+            grid_overlay_checkbox_->set_rect(grid_checkbox_rect_);
+            grid_overlay_checkbox_->render(renderer);
+        }
+
+        // Position stepper below checkbox
+        y += checkbox_h + small_gap;
+        x = area.x + gap;
         int remaining = std::max(0, area.x + area.w - gap - x);
         int stepper_w = std::max(stepper_w_min, remaining);
         grid_stepper_rect_ = SDL_Rect{ x, y, stepper_w, stepper_h };
@@ -638,13 +656,32 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
         bool used = false;
         // Update layout against latest area values
         const int gap = DMSpacing::item_gap();
+        const int small_gap = DMSpacing::small_gap();
+        const int checkbox_h = DMCheckbox::height();
         const int stepper_h = DMNumericStepper::height();
-        int y = area.y + std::max(0, (area.h - stepper_h) / 2);
+        const int stepper_w_min = 220;
+
+        // Position checkbox at the top
+        int y = area.y + gap;
         int x = area.x + gap;
-        // Stepper takes the full width
+        grid_checkbox_rect_ = SDL_Rect{ x, y, grid_overlay_checkbox_->preferred_width(), checkbox_h };
+        if (grid_overlay_checkbox_) {
+            grid_overlay_checkbox_->set_rect(grid_checkbox_rect_);
+            if (grid_overlay_checkbox_->handle_event(event)) {
+                // Checkbox state change is handled internally; sync our state
+                grid_overlay_enabled_ = grid_overlay_checkbox_->value();
+                devmode::ui_settings::save_bool(kGridOverlayEnabledKey, grid_overlay_enabled_);
+                used = true;
+            }
+        }
+
+        // Position stepper below checkbox
+        y += checkbox_h + small_gap;
+        x = area.x + gap;
         int remaining = std::max(0, area.x + area.w - gap - x);
-        grid_stepper_rect_ = SDL_Rect{ x, y, remaining, stepper_h };
-        if (grid_resolution_stepper_)  grid_resolution_stepper_->set_rect(grid_stepper_rect_);
+        int stepper_w = std::max(stepper_w_min, remaining);
+        grid_stepper_rect_ = SDL_Rect{ x, y, stepper_w, stepper_h };
+        if (grid_resolution_stepper_) grid_resolution_stepper_->set_rect(grid_stepper_rect_);
         if (grid_resolution_stepper_ && grid_resolution_stepper_->handle_event(event)) {
             // DMNumericStepper will invoke set_on_change; we consider event handled
             used = true;

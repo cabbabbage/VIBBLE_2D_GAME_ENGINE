@@ -55,29 +55,71 @@ if not exist "%LOCAL_VCPKG%\scripts\buildsystems\vcpkg.cmake" (
 )
 
 rem ----------------------------------------------------
-rem Always refresh builtin-baseline before install
-rem First try x-update-baseline, then fall back to manual rewrite from vcpkg HEAD
+rem Always refresh builtin-baseline before install (robust JSON edit)
+rem Sets builtin-baseline to current vcpkg repo HEAD (40-hex)
 rem ----------------------------------------------------
 echo [run.bat] Updating vcpkg baseline...
-if exist "%cd%\vcpkg.json" (
+
+if not exist "%cd%\vcpkg.json" (
+    echo [WARN] vcpkg.json not found in repo root. Skipping baseline update.
+) else (
+    rem Try x-update-baseline first (works when manifest already valid)
     "%LOCAL_VCPKG%\vcpkg.exe" x-update-baseline
     if errorlevel 1 (
         echo [run.bat] x-update-baseline failed, falling back to manual baseline update...
+
+        rem Get the vcpkg commit SHA we want to pin
         pushd "%LOCAL_VCPKG%" >nul
-        for /f %%H in ('git rev-parse HEAD') do set "NEW_BASELINE=%%H"
+        for /f "delims=" %%H in ('git rev-parse HEAD') do set "NEW_BASELINE=%%H"
         popd >nul
-        powershell -NoProfile -Command ^
-          "$p='vcpkg.json';" ^
-          "$json=Get-Content $p -Raw;" ^
-          "if($json -match '\"builtin-baseline\"'){" ^
-            "$json=$json -replace '\"builtin-baseline\"\s*:\s*\"[0-9a-fA-F]+\"','\"builtin-baseline\":\"%NEW_BASELINE%\"';" ^
-          "}else{" ^
-            "$json=$json -replace '^{','{\"builtin-baseline\":\"%NEW_BASELINE%\",';" ^
-          "};" ^
-          "Set-Content -Path $p -Value $json -NoNewline;"
+
+        if not defined NEW_BASELINE (
+            echo [ERROR] Could not resolve vcpkg HEAD commit. Baseline not updated.
+            goto :fail
+        )
+
+        rem PowerShell: parse JSON, set .builtin-baseline, write back cleanly (using env var)
+        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+          "$p = 'vcpkg.json';" ^
+          "$baseline = $env:NEW_BASELINE;" ^
+          "if (-not $baseline -or $baseline.Length -ne 40 -or ($baseline -notmatch '^[0-9a-fA-F]{40}$')) { throw 'Invalid baseline in env:NEW_BASELINE' }" ^
+          "$json = $null; try { $json = Get-Content $p -Raw | ConvertFrom-Json } catch {}" ^
+          "if ($null -eq $json) { $json = [ordered]@{} }" ^
+          "$json.'builtin-baseline' = $baseline;" ^
+          "$out = $json | ConvertTo-Json -Depth 100;" ^
+          "Set-Content -Path $p -Value $out -NoNewline;"
+
+        if errorlevel 1 (
+            echo [ERROR] Failed to write builtin-baseline into vcpkg.json
+            goto :fail
+        )
+
+        rem Read back for logging
+        for /f "usebackq delims=" %%S in (`powershell -NoProfile -Command ^
+          "(Get-Content 'vcpkg.json' -Raw | ConvertFrom-Json).'builtin-baseline'"`) do set "CHECK_BASELINE=%%S"
+
+        if not defined CHECK_BASELINE (
+            echo [ERROR] builtin-baseline missing after write.
+            goto :fail
+        )
+
+        echo [run.bat] builtin-baseline set to !CHECK_BASELINE!
+    ) else (
+        echo [run.bat] x-update-baseline succeeded.
     )
-) else (
-    echo [WARN] vcpkg.json not found in repo root. Skipping baseline update.
+)
+
+rem ----------------------------------------------------
+rem Final sanity-check in PowerShell (avoid FINDSTR issues)
+rem ----------------------------------------------------
+if exist "%cd%\vcpkg.json" (
+    powershell -NoProfile -Command ^
+      "$b=(Get-Content 'vcpkg.json' -Raw | ConvertFrom-Json).'builtin-baseline';" ^
+      "if($b -and $b -match '^[0-9a-fA-F]{40}$'){exit 0}else{Write-Host '[ERROR] builtin-baseline invalid:' $b; exit 1}"
+    if errorlevel 1 (
+        echo [ERROR] builtin-baseline is not a 40-hex SHA. Aborting.
+        goto :fail
+    )
 )
 
 rem ----------------------------------------------------

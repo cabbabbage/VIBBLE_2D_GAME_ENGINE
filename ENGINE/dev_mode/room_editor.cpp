@@ -97,7 +97,36 @@ std::string trim_copy_room_editor(const std::string& input) {
     return result;
 }
 
+static bool is_visible_pixel_at(SDL_Renderer* renderer, SDL_Point screen_point) {
+    if (!renderer) return true; // fail-open to preserve old behavior if no renderer
+    // Read back a 1x1 pixel from the current render target at screen_point.
+    Uint32 pixel = 0;
+    SDL_Rect r{ screen_point.x, screen_point.y, 1, 1 };
 
+    // Get renderer output format; fall back if unavailable.
+    Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
+#if SDL_MAJOR_VERSION >= 2
+    SDL_RendererInfo info{};
+    if (SDL_GetRendererInfo(renderer, &info) == 0 && info.num_texture_formats > 0) {
+        // Prefer the first reported texture format when possible.
+        fmt = info.texture_formats[0];
+    }
+#endif
+
+    if (SDL_RenderReadPixels(renderer, &r, fmt, &pixel, sizeof(pixel)) != 0) {
+        // If readback fails (e.g., unsupported on this platform/driver), fail-open.
+        return true;
+    }
+
+    Uint8 a = 255;
+    SDL_PixelFormat* pf = SDL_AllocFormat(fmt);
+    if (pf) {
+        Uint8 r8, g8, b8;
+        SDL_GetRGBA(pixel, pf, &r8, &g8, &b8, &a);
+        SDL_FreeFormat(pf);
+    }
+    return a > 0;
+}
 
 std::string sanitize_room_key_local(const std::string& input) {
     std::string out;
@@ -2130,11 +2159,18 @@ void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name
 
 void RoomEditor::focus_camera_on_asset(Asset* asset, double zoom_factor, int duration_steps) {
     if (!asset || !assets_) return;
+
+    // NEW: do not zoom/pan to any asset while the AssetInfoUI is open
+    if (info_ui_ && info_ui_->is_visible()) {
+        return;
+    }
+
     camera& cam = assets_->getView();
     cam.set_manual_zoom_override(true);
     cam.pan_and_zoom_to_asset(asset, zoom_factor, duration_steps);
     mark_spatial_index_dirty();
 }
+
 
 void RoomEditor::focus_camera_on_room_center(bool reframe_zoom) {
     if (!enabled_ || !assets_) return;
@@ -2308,7 +2344,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
 
     Asset* hit_asset = nullptr;
     if (!ui_blocked && !suppress_hover_and_drag) {
-        hit_asset = hit_test_asset(SDL_Point{mx, my});
+        hit_asset = hit_test_asset(SDL_Point{mx, my}, assets_->renderer());
     }
 
     pan_zoom_.handle_input(cam, input, true);
@@ -2384,8 +2420,31 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     update_highlighted_assets();
 }
 
-Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
+Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* renderer) const {
     if (!active_assets_ || !assets_) return nullptr;
+
+    // Local helper: is the composited screen pixel at 'screen_point' visible (alpha > 0)?
+    // Fail-open to old behavior if we can't read pixels or don't have a renderer.
+    auto is_visible_pixel_at = [&](SDL_Point p) -> bool {
+        if (!renderer) return true;
+
+        const SDL_Rect r{ p.x, p.y, 1, 1 };
+        Uint32 pixel = 0;
+
+        // Read back a 1x1 pixel in a known format.
+        if (SDL_RenderReadPixels(renderer, &r, SDL_PIXELFORMAT_RGBA8888, &pixel, sizeof(pixel)) != 0) {
+            // Driver/platform may not support readback; preserve previous behavior.
+            return true;
+        }
+
+        Uint8 a = 255;
+        if (SDL_PixelFormat* pf = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888)) {
+            Uint8 rr, gg, bb;
+            SDL_GetRGBA(pixel, pf, &rr, &gg, &bb, &a);
+            SDL_FreeFormat(pf);
+        }
+        return a > 0;
+    };
 
     const camera& cam = assets_->getView();
     if (!ensure_spatial_index(cam)) {
@@ -2395,29 +2454,45 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point) const {
     std::vector<Asset*> candidates = gather_candidate_assets_for_point(screen_point);
     Asset* best = nullptr;
     int best_screen_y = std::numeric_limits<int>::min();
-    int best_z_index = std::numeric_limits<int>::min();
+    int best_z_index  = std::numeric_limits<int>::min();
+    int best_area     = std::numeric_limits<int>::max(); // tie-breaker: prefer smaller on-screen rect
 
     for (Asset* asset : candidates) {
         if (!asset) continue;
+
         auto it = asset_bounds_cache_.find(asset);
         if (it == asset_bounds_cache_.end()) continue;
+
         const SDL_Rect& rect = it->second.bounds;
         if (!SDL_PointInRect(&screen_point, &rect)) continue;
 
-        if (!best || it->second.screen_y > best_screen_y ||
-            (it->second.screen_y == best_screen_y && asset->z_index > best_z_index)) {
+        const int area = rect.w * rect.h;
+
+        // Ordering: prefer higher z_index, then larger screen_y (lower on screen), then smaller area.
+        if (!best
+            || asset->z_index > best_z_index
+            || (asset->z_index == best_z_index && it->second.screen_y > best_screen_y)
+            || (asset->z_index == best_z_index && it->second.screen_y == best_screen_y && area < best_area)) {
+
             best = asset;
             best_screen_y = it->second.screen_y;
-            best_z_index = asset->z_index;
+            best_z_index  = asset->z_index;
+            best_area     = area;
         }
     }
 
     if (best) {
+        // New: only accept if the pixel under the cursor is actually visible.
+        if (!is_visible_pixel_at(screen_point)) {
+            return nullptr;
+        }
         return best;
     }
 
     return hit_test_asset_fallback(cam, screen_point);
 }
+
+
 
 void RoomEditor::mark_spatial_index_dirty() const {
     spatial_index_dirty_ = true;
@@ -2714,10 +2789,12 @@ Asset* RoomEditor::hit_test_asset_fallback(const camera& cam, SDL_Point screen_p
 
     Asset* best = nullptr;
     int best_screen_y = std::numeric_limits<int>::min();
-    int best_z_index = std::numeric_limits<int>::min();
+    int best_z_index  = std::numeric_limits<int>::min();
+    int best_area     = std::numeric_limits<int>::max(); // smaller is better on final tie-break
 
     for (Asset* asset : *active_assets_) {
         if (!asset) continue;
+
         SDL_Rect rect{0, 0, 0, 0};
         int screen_y = 0;
         if (!compute_asset_screen_bounds(cam, reference_height, inv_scale, asset, rect, screen_y)) {
@@ -2726,15 +2803,25 @@ Asset* RoomEditor::hit_test_asset_fallback(const camera& cam, SDL_Point screen_p
         if (!SDL_PointInRect(&screen_point, &rect)) {
             continue;
         }
-        if (!best || screen_y > best_screen_y || (screen_y == best_screen_y && asset->z_index > best_z_index)) {
+
+        // New ordering: z_index (topmost) -> screen_y (lower is in front) -> smaller rect area
+        const int area = rect.w * rect.h;
+
+        if (!best
+            || asset->z_index > best_z_index
+            || (asset->z_index == best_z_index && screen_y > best_screen_y)
+            || (asset->z_index == best_z_index && screen_y == best_screen_y && area < best_area)) {
+
             best = asset;
             best_screen_y = screen_y;
-            best_z_index = asset->z_index;
+            best_z_index  = asset->z_index;
+            best_area     = area;
         }
     }
 
     return best;
 }
+
 
 void RoomEditor::update_hover_state(Asset* hit) {
     Asset* previous = hovered_asset_;
@@ -2875,8 +2962,23 @@ void RoomEditor::handle_click(const Input& input) {
             return;
         }
         rclick_buffer_frames_ = 2;
+
+        // NEW: Ctrl modifier required for "add asset" with right click
+        const bool ctrl_down =
+            input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+
         if (hovered_asset_) {
-            open_asset_info_editor_for_asset(hovered_asset_);
+            // CHANGED: Ctrl+Right Click on an existing asset -> open Asset Library at point (add on top)
+            // Otherwise, preserve original behavior (open Asset Info for that asset).
+            if (ctrl_down) {
+                pending_spawn_world_pos_ = world_mouse;
+                open_asset_library();
+                if (!is_asset_library_open()) {
+                    pending_spawn_world_pos_.reset();
+                }
+            } else {
+                open_asset_info_editor_for_asset(hovered_asset_);
+            }
         } else {
             bool opened_area_info = false;
             if (current_room_) {
@@ -2896,7 +2998,8 @@ void RoomEditor::handle_click(const Input& input) {
                 if (current_room_ && current_room_->room_area) {
                     inside_room = current_room_->room_area->contains_point(world_mouse);
                 }
-                if (inside_room) {
+                // CHANGED: only open asset library to add when Ctrl is held
+                if (inside_room && ctrl_down) {
                     pending_spawn_world_pos_ = world_mouse;
                     open_asset_library();
                     if (!is_asset_library_open()) {
@@ -2915,54 +3018,57 @@ void RoomEditor::handle_click(const Input& input) {
         return;
     }
 
-    if (suppress_next_left_click_) {
-        suppress_next_left_click_ = false;
-        click_buffer_frames_ = 0;
+    click_buffer_frames_ = std::max(0, click_buffer_frames_ - 1);
+
+    const bool asset_info_open =
+        (active_modal_ == ActiveModal::AssetInfo) || (info_ui_ && info_ui_->is_visible());
+    const bool floating_modal_open = FloatingDockableManager::instance().active_panel() != nullptr;
+
+    if (asset_info_open || floating_modal_open) {
         return;
     }
 
-    if (click_buffer_frames_ > 0) {
-        --click_buffer_frames_;
-        return;
-    }
-    click_buffer_frames_ = 2;
-
-    Asset* nearest = hovered_asset_;
-    if (nearest) {
-        const bool already_selected =
-            std::find(selected_assets_.begin(), selected_assets_.end(), nearest) != selected_assets_.end();
-        if (already_selected) {
+    if (hovered_asset_) {
+        Asset* nearest = hovered_asset_;
+        if (!nearest) {
             if (!selected_assets_.empty()) selection_changed = true;
             selected_assets_.clear();
             if (!highlighted_assets_.empty()) highlight_changed = true;
             highlighted_assets_.clear();
-            last_click_asset_ = nullptr;
-            last_click_time_ms_ = 0;
-            if (selection_changed || highlight_changed) {
-                mark_highlight_dirty();
-            }
+            sync_spawn_group_panel_with_selection();
             return;
         }
 
-        if (!selected_assets_.empty()) selection_changed = true;
-        selected_assets_.clear();
-        bool select_group = true;
-        const std::string& method = nearest->spawn_method;
-        if (method == "Exact" || method == "Exact Position" || method == "Percent") {
-            select_group = false;
-        }
-        if (select_group && !nearest->spawn_id.empty() && active_assets_) {
-            for (Asset* asset : *active_assets_) {
-                if (!asset_belongs_to_room(asset)) continue;
-                if (asset->spawn_id == nearest->spawn_id) {
-                    selection_changed = true;
-                    selected_assets_.push_back(asset);
-                }
+        // Clicking an already-selected asset: don't duplicate it
+        bool already_selected = false;
+        for (Asset* a : selected_assets_) {
+            if (a == nearest) {
+                already_selected = true;
+                break;
             }
-        } else {
-            if (asset_belongs_to_room(nearest)) {
-                selection_changed = true;
-                selected_assets_.push_back(nearest);
+        }
+
+        if (!already_selected) {
+            if (!selected_assets_.empty()) selection_changed = true;
+            selected_assets_.clear();
+            bool select_group = true;
+            const std::string& method = nearest->spawn_method;
+            if (method == "Exact" || method == "Exact Position" || method == "Percent") {
+                select_group = false;
+            }
+            if (select_group && !nearest->spawn_id.empty() && active_assets_) {
+                for (Asset* asset : *active_assets_) {
+                    if (!asset_belongs_to_room(asset)) continue;
+                    if (asset->spawn_id == nearest->spawn_id) {
+                        selection_changed = true;
+                        selected_assets_.push_back(asset);
+                    }
+                }
+            } else {
+                if (asset_belongs_to_room(nearest)) {
+                    selection_changed = true;
+                    selected_assets_.push_back(nearest);
+                }
             }
         }
         sync_spawn_group_panel_with_selection();
@@ -2973,8 +3079,8 @@ void RoomEditor::handle_click(const Input& input) {
         highlighted_assets_.clear();
         sync_spawn_group_panel_with_selection();
 
-        const bool asset_info_open = (active_modal_ == ActiveModal::AssetInfo);
-        const bool floating_modal_open = FloatingDockableManager::instance().active_panel() != nullptr;
+        const bool asset_info_open2 = (active_modal_ == ActiveModal::AssetInfo);
+        const bool floating_modal_open2 = FloatingDockableManager::instance().active_panel() != nullptr;
 
         const bool area_editor_active = area_editor_ && area_editor_->is_active();
 
@@ -2995,7 +3101,7 @@ void RoomEditor::handle_click(const Input& input) {
             }
         }
 
-        if (inside_room && !asset_info_open && !floating_modal_open &&
+        if (inside_room && !asset_info_open2 && !floating_modal_open2 &&
             !area_editor_active && hovered_asset_ == nullptr) {
             if (assets_) {
                 camera& cam = assets_->getView();
@@ -3010,7 +3116,6 @@ void RoomEditor::handle_click(const Input& input) {
     }
 }
 
-// --- Area drag helpers ---
 
 nlohmann::json* RoomEditor::find_area_entry_json(Room* room, const std::string& area_name) const {
     if (!room) return nullptr;
@@ -3236,9 +3341,11 @@ bool RoomEditor::should_enable_mouse_controls() const {
         return false;
     }
 
-    if (info_ui_ && info_ui_->is_visible()) {
-        return false;
-    }
+    // CHANGED: do NOT block on info_ui_ visibility anymore.
+    // if (info_ui_ && info_ui_->is_visible()) {
+    //     return false;
+    // }
+
     if (library_ui_ && library_ui_->is_visible()) {
         return false;
     }
@@ -3252,20 +3359,15 @@ bool RoomEditor::should_enable_mouse_controls() const {
 
     auto floating = FloatingDockableManager::instance().open_panels();
     for (DockableCollapsible* panel : floating) {
-        if (!panel) {
-            continue;
-        }
-        if (spawn_group_panel_ && panel == spawn_group_panel_.get()) {
-            continue;
-        }
-        if (!panel->is_visible()) {
-            continue;
-        }
+        if (!panel) continue;
+        if (spawn_group_panel_ && panel == spawn_group_panel_.get()) continue;
+        if (!panel->is_visible()) continue;
         return false;
     }
 
     return true;
 }
+
 
 void RoomEditor::handle_shortcuts(const Input& input) {
     const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
