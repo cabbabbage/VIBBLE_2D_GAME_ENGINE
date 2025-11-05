@@ -127,12 +127,26 @@ AnimationEditorWindow::~AnimationEditorWindow() = default;
 
 void AnimationEditorWindow::set_visible(bool visible) {
     if (!visible && visible_) {
+        // Quick debug switch: force rebuild on panel close for testing
+        // Uncomment the following lines to enable:
+        // if (on_document_saved_) {
+        //     on_document_saved_();
+        // }
+
         if (document_ && document_->consume_dirty_flag()) {
             auto_save_pending_ = true;
             auto_save_timer_frames_ = 0;
         }
         auto_save_timer_frames_ = 0;
         process_auto_save();
+
+        // Finalize manifest transaction when closing editor
+        if (using_manifest_store_ && manifest_transaction_) {
+            // Force finalization to ensure manifest store sees changes
+            nlohmann::json dummy;
+            persist_manifest_payload(dummy, true);
+        }
+
         if (list_context_menu_) {
             list_context_menu_->close();
         }
@@ -354,6 +368,7 @@ void AnimationEditorWindow::configure_inspector_panel() {
     });
     inspector_panel_->set_audio_importer(audio_importer_);
     inspector_panel_->set_audio_file_picker([this]() { return this->pick_audio_file(); });
+    inspector_panel_->set_on_animation_properties_changed(on_animation_properties_changed_);
     if (selected_animation_id_) {
         inspector_panel_->set_animation_id(*selected_animation_id_);
     }
@@ -775,6 +790,10 @@ void AnimationEditorWindow::delete_animation_with_confirmation(const std::string
 
 void AnimationEditorWindow::set_on_document_saved(std::function<void()> callback) {
     on_document_saved_ = std::move(callback);
+}
+
+void AnimationEditorWindow::set_on_animation_properties_changed(std::function<void(const std::string&, const nlohmann::json&)> callback) {
+    on_animation_properties_changed_ = std::move(callback);
 }
 
 void AnimationEditorWindow::ensure_layout() const {

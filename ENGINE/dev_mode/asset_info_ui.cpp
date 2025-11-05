@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <SDL_log.h>
 #include <stdexcept>
 #include <vector>
@@ -353,6 +354,12 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     if (animation_editor_window_) {
         try {
             animation_editor_window_->set_manifest_store(manifest_store_);
+            animation_editor_window_->set_on_animation_properties_changed([this](const std::string& animation_id, const nlohmann::json& properties) {
+                if (info_ && info_->update_animation_properties(animation_id, properties)) {
+                    // Immediately refresh loaded asset instances
+                    refresh_loaded_asset_instances();
+                }
+            });
             animation_editor_window_->set_info(info_);
         } catch (const std::exception& ex) {
             SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s", info_ ? info_->name.c_str() : "<null>", ex.what());
@@ -1393,6 +1400,35 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
         return;
     }
 
+    // Clear animation cache when animation sources change
+    if (!info_->name.empty()) {
+        std::filesystem::path asset_cache = std::filesystem::path("cache") / info_->name / "animations";
+        try {
+            if (std::filesystem::exists(asset_cache)) {
+                std::filesystem::remove_all(asset_cache);
+                std::cout << "[AssetInfoUI] Cleared animation cache for " << info_->name << " due to source changes\n";
+            }
+        } catch (const std::exception& ex) {
+            std::cerr << "[AssetInfoUI] Failed to clear animation cache for " << info_->name
+                      << ": " << ex.what() << "\n";
+        } catch (...) {
+            std::cerr << "[AssetInfoUI] Failed to clear animation cache for " << info_->name
+                      << " due to unknown error\n";
+        }
+    }
+
+    // Force scaling profile refresh for this asset
+    if (!info_->name.empty()) {
+        // This will trigger a new profile entry to be created/updated
+        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(std::filesystem::path("loading") / "scaling_profiles.json");
+        auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info_->name);
+        if (profile.created_entry) {
+            std::cout << "[AssetInfoUI] Updated scaling profile for " << info_->name << "\n";
+        }
+        info_->scale_profile_revision = profile.revision;
+    }
+
+    // First refresh direct instances
     bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
         asset->clear_render_caches();
         asset->clear_downscale_cache();
@@ -1426,6 +1462,75 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
         asset->refresh_cached_dimensions();
     });
 
+    // Also refresh sourced animations that reference this animation
+    if (assets_ && !info_->name.empty()) {
+        for (auto& [lib_name, lib_info] : assets_->library().all()) {
+            if (!lib_info || lib_name == info_->name) continue;
+
+            // Check if this asset has animations that source from the updated asset
+            bool needs_refresh = false;
+            for (const auto& [anim_id, anim_data] : lib_info->animations) {
+                if (anim_data.source.kind == "animation" && anim_data.source.path == info_->name) {
+                    needs_refresh = true;
+                    break;
+                }
+            }
+
+            if (needs_refresh) {
+                // Refresh instances of this sourced asset
+                std::unordered_set<Asset*> visited;
+                auto visit = [&](Asset* asset) {
+                    if (!asset || asset->info.get() != lib_info.get()) {
+                        return;
+                    }
+                    if (!visited.insert(asset).second) {
+                        return;
+                    }
+                    asset->clear_render_caches();
+                    asset->clear_downscale_cache();
+                    asset->set_final_texture(nullptr);
+                    asset->current_frame = nullptr;
+                    asset->frame_progress = 0.0f;
+                    asset->static_frame = false;
+
+                    std::string desired = asset->current_animation.empty() ? std::string{"default"} : asset->current_animation;
+                    if (asset->anim_) {
+                        asset->anim_->move(SDL_Point{ 0, 0 }, desired);
+                    } else if (asset->info) {
+                        auto it = asset->info->animations.find(desired);
+                        if (it == asset->info->animations.end()) {
+                            it = asset->info->animations.find("default");
+                        }
+                        if (it == asset->info->animations.end() && !asset->info->animations.empty()) {
+                            it = asset->info->animations.begin();
+                        }
+                        if (it != asset->info->animations.end()) {
+                            auto& anim = it->second;
+                            asset->current_animation = it->first;
+                            asset->current_frame = anim.get_first_frame();
+                            asset->static_frame = anim.is_static() || anim.locked;
+                        } else {
+                            asset->current_animation.clear();
+                            asset->current_frame = nullptr;
+                        }
+                    }
+
+                    asset->refresh_cached_dimensions();
+                };
+
+                if (assets_) {
+                    for (Asset* asset : assets_->all) {
+                        visit(asset);
+                    }
+                    for (const auto& owned : assets_->owned_assets) {
+                        visit(owned.get());
+                    }
+                }
+                updated_any = true;
+            }
+        }
+    }
+
     if (updated_any && assets_) {
         assets_->mark_active_assets_dirty();
     }
@@ -1436,12 +1541,14 @@ void AssetInfoUI::on_animation_document_saved() {
         return;
     }
 
-    SDL_Renderer* renderer = last_renderer_;
-    if (!renderer && assets_) {
+    // Prioritize assets_->renderer() over potentially stale last_renderer_
+    SDL_Renderer* renderer = nullptr;
+    if (assets_) {
         renderer = assets_->renderer();
     }
 
     if (!renderer) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] No renderer available for animation reload");
         return;
     }
 

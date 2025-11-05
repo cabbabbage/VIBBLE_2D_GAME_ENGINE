@@ -51,7 +51,10 @@ void draw_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
 
 DevFooterBar::DevFooterBar(std::string title)
     : title_(std::move(title)),
-      height_(kDefaultFooterHeight) {}
+      height_(kDefaultFooterHeight) {
+    grid_checkbox_ = std::make_unique<DMCheckbox>("Show Grid", grid_overlay_enabled_);
+    grid_stepper_ = std::make_unique<DMNumericStepper>("Grid Resolution (r)", 0, 10, grid_resolution_);
+}
 
 void DevFooterBar::set_bounds(int width, int height) {
     screen_w_ = width;
@@ -181,6 +184,25 @@ bool DevFooterBar::handle_event(const SDL_Event& e) {
     const bool in_footer = (pointer_event || wheel_event) && SDL_PointInRect(&pointer, &rect_);
 
     bool used = false;
+
+    // Handle grid controls first (they are on the left)
+    if (grid_checkbox_ && grid_checkbox_->handle_event(e)) {
+        used = true;
+        grid_overlay_enabled_ = grid_checkbox_->value();
+        if (on_grid_overlay_toggle_) {
+            on_grid_overlay_toggle_(grid_overlay_enabled_);
+        }
+    }
+
+    if (grid_stepper_ && grid_stepper_->handle_event(e)) {
+        used = true;
+        grid_resolution_ = grid_stepper_->value();
+        if (on_grid_resolution_change_) {
+            on_grid_resolution_change_(grid_resolution_);
+        }
+    }
+
+    // Handle buttons
     for (auto& btn : buttons_) {
         if (!btn.widget) continue;
         if (btn.widget->handle_event(e)) {
@@ -220,6 +242,14 @@ void DevFooterBar::render(SDL_Renderer* renderer) const {
     if (!visible_ || !renderer) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     dm_draw::DrawBeveledRect( renderer, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+
+    // Render grid controls first (on the left)
+    if (grid_checkbox_) {
+        grid_checkbox_->render(renderer);
+    }
+    if (grid_stepper_) {
+        grid_stepper_->render(renderer);
+    }
 
     if (show_title_ && !title_.empty()) {
         int text_x = rect_.x + DMSpacing::item_gap();
@@ -269,11 +299,21 @@ void DevFooterBar::layout() {
     rect_.x = 0;
     rect_.y = std::max(0, screen_h_ - rect_.h);
     update_title_width();
+    layout_grid_controls();
     layout_buttons();
 }
 
 void DevFooterBar::layout_buttons() {
     int button_start = rect_.x + DMSpacing::item_gap();
+
+    // Account for grid controls on the left
+    if (grid_checkbox_ && grid_stepper_) {
+        SDL_Rect checkbox_rect = grid_checkbox_->rect();
+        SDL_Rect stepper_rect = grid_stepper_->rect();
+        int grid_controls_width = (checkbox_rect.w + DMSpacing::small_gap() + stepper_rect.w);
+        button_start += grid_controls_width + DMSpacing::item_gap();
+    }
+
     if (title_width_ > 0) {
         button_start += title_width_ + DMSpacing::item_gap();
     }
@@ -386,3 +426,51 @@ void DevFooterBar::update_title_width() {
     TTF_CloseFont(font);
 }
 
+// Grid controls implementation
+void DevFooterBar::set_grid_overlay_enabled(bool enabled) {
+    if (grid_overlay_enabled_ != enabled) {
+        grid_overlay_enabled_ = enabled;
+        if (grid_checkbox_) {
+            grid_checkbox_->set_value(enabled);
+        }
+        if (on_grid_overlay_toggle_) {
+            on_grid_overlay_toggle_(enabled);
+        }
+    }
+}
+
+void DevFooterBar::set_grid_resolution(int resolution) {
+    if (grid_resolution_ != resolution) {
+        grid_resolution_ = resolution;
+        if (grid_stepper_) {
+            grid_stepper_->set_value(resolution);
+        }
+        if (on_grid_resolution_change_) {
+            on_grid_resolution_change_(resolution);
+        }
+    }
+}
+
+void DevFooterBar::set_grid_controls_callbacks(std::function<void(bool)> on_overlay_toggle,
+                                               std::function<void(int)> on_resolution_change) {
+    on_grid_overlay_toggle_ = std::move(on_overlay_toggle);
+    on_grid_resolution_change_ = std::move(on_resolution_change);
+}
+
+void DevFooterBar::layout_grid_controls() {
+    if (!grid_checkbox_ || !grid_stepper_) return;
+
+    // Position grid controls at the very left of the footer
+    int x = rect_.x + DMSpacing::item_gap();
+    int y = rect_.y + DMSpacing::item_gap();
+
+    // Checkbox first
+    SDL_Rect checkbox_rect{x, y, grid_checkbox_->preferred_width(), DMCheckbox::height()};
+    grid_checkbox_->set_rect(checkbox_rect);
+
+    // Stepper to the right of checkbox
+    x += checkbox_rect.w + DMSpacing::small_gap();
+    int stepper_w = 180; // Fixed width for stepper
+    SDL_Rect stepper_rect{x, y, stepper_w, DMNumericStepper::height()};
+    grid_stepper_->set_rect(stepper_rect);
+}

@@ -133,7 +133,7 @@ private:
 
     void set_blocking_panel_visible(BlockingPanel panel, bool visible);
     bool any_blocking_panel_visible() const;
-
+    void open_room_config_for(Asset* asset);
     enum class DragMode {
         None,
         Free,
@@ -162,7 +162,7 @@ private:
         double     edge_length = 0.0;
 };
     void handle_mouse_input(const Input& input);
-    Asset* hit_test_asset(SDL_Point screen_point) const;
+    Asset* hit_test_asset(SDL_Point screen_point, SDL_Renderer* renderer) const;
     void update_hover_state(Asset* hit);
     void handle_click(const Input& input);
     std::optional<std::string> find_room_area_at_point(SDL_Point world_point);
@@ -302,6 +302,7 @@ private:
     DevFooterBar* shared_footer_bar_ = nullptr;
     bool room_config_dock_open_ = false;
     bool room_config_was_visible_ = false;
+    bool room_config_was_open_before_drag_ = false;
     bool suppress_room_config_selection_clear_ = false;
     ActiveModal active_modal_ = ActiveModal::None;
     std::function<void(bool)> header_visibility_callback_{};

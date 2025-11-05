@@ -4,7 +4,7 @@
             "current_room": true,
             "filters_expanded": false,
             "initialized": true,
-            "map_assets": true,
+            "map_assets": false,
             "methods": {
                 "center": true,
                 "childrandom": true,
@@ -16,7 +16,7 @@
                 "random": true
             },
             "types": {
-                "area": true,
+                "area": false,
                 "boundary": true,
                 "enemy": true,
                 "npc": false,
@@ -28,7 +28,7 @@
         "grid": {
             "cell_size_px": 35.0,
             "overlay": {
-                "enabled": false
+                "enabled": true
             },
             "snap": {
                 "enabled": false
@@ -70,7 +70,7 @@
                 "controls": false
             },
             "lighting": {
-                "map_panel": true,
+                "map_panel": false,
                 "shadow_panel": false
             },
             "map_assets": {

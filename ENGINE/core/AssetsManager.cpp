@@ -1922,3 +1922,9 @@ void Assets::set_editor_current_room(Room* room) {
         sync_dev_controls_current_room(room, true);
     }
 }
+
+void Assets::open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& info) {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->open_animation_editor_for_asset(info);
+    }
+}

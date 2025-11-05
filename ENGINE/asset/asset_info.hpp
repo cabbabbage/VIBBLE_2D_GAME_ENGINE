@@ -165,6 +165,9 @@ class AssetInfo {
 
     bool reload_animations_from_disk();
 
+    // Update individual animation properties immediately without manifest reload
+    bool update_animation_properties(const std::string& animation_name, const nlohmann::json& properties);
+
     struct AreaCodec {
         static SDL_Point scaled_anchor(const AssetInfo& info, std::optional<float> scale_override = std::nullopt);
 

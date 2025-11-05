@@ -56,9 +56,18 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     bool contains(int x, int y) const;
 
+    // Grid controls
+    void set_grid_overlay_enabled(bool enabled);
+    bool grid_overlay_enabled() const { return grid_overlay_enabled_; }
+    void set_grid_resolution(int resolution);
+    int grid_resolution() const { return grid_resolution_; }
+    void set_grid_controls_callbacks(std::function<void(bool)> on_overlay_toggle,
+                                     std::function<void(int)> on_resolution_change);
+
 private:
     void layout();
     void layout_buttons();
+    void layout_grid_controls();
     void update_title_width();
 
     std::string title_;
@@ -72,5 +81,12 @@ private:
     int title_width_ = 0;
 
     std::vector<Button> buttons_;
-};
 
+    // Grid controls
+    bool grid_overlay_enabled_ = false;
+    int grid_resolution_ = 0;
+    std::unique_ptr<DMCheckbox> grid_checkbox_;
+    std::unique_ptr<DMNumericStepper> grid_stepper_;
+    std::function<void(bool)> on_grid_overlay_toggle_;
+    std::function<void(int)> on_grid_resolution_change_;
+};

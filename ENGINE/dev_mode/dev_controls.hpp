@@ -108,6 +108,7 @@ public:
 
     void open_asset_info_editor(const std::shared_ptr<AssetInfo>& info);
     void open_asset_info_editor_for_asset(Asset* asset);
+    void open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& info);
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
 
@@ -263,8 +264,11 @@ private:
     // Grid header controls
     // Standard ticker for grid resolution (r)
     std::unique_ptr<class DMNumericStepper> grid_resolution_stepper_;
+    // Checkbox for grid overlay toggle
+    std::unique_ptr<class DMCheckbox> grid_overlay_checkbox_;
     // Cached layout of header controls for event handling
     SDL_Rect grid_stepper_rect_{0,0,0,0};
+    SDL_Rect grid_checkbox_rect_{0,0,0,0};
 
     // In-world frame editor session
     std::unique_ptr<class FrameEditorSession> frame_editor_session_;

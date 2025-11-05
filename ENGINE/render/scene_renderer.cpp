@@ -289,7 +289,6 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
 
     return SDL_FRect{ left, top, width, height };
 }
-
 void SceneRenderer::render(){
     static int render_call_count=0; ++render_call_count;
     ++frame_counter_;
@@ -308,7 +307,6 @@ void SceneRenderer::render(){
     }
 
     if (light_map_ && !chunk_lighting_suspended_){
-
         render_pipeline_.lighting().light_map_sampler = light_map_.get();
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
@@ -347,7 +345,7 @@ void SceneRenderer::render(){
         light_map_->render_visible_chunks(renderer_, screen_view, alpha_mult, map_light_color);
         SDL_SetRenderDrawBlendMode(renderer_, previous_mode);
         rendered_light_map = true;
-};
+    };
 
     if (runtime_lighting_sampler_) {
         runtime_lighting_sampler_->set_assets(assets_);
@@ -423,7 +421,7 @@ void SceneRenderer::render(){
 
             auto& target_commands = (asset->info->type == asset_types::texture) ? texture_commands_ : remaining_commands_;
             target_commands.push_back(std::move(cmd));
-};
+        };
 
         for (Asset* a : active) {
             if (!a || !a->info) {
@@ -511,51 +509,93 @@ void SceneRenderer::render(){
             }
         }
 
-        auto render_commands = [&](const std::vector<AssetRenderCommand>& commands) {
-            for (const AssetRenderCommand& cmd : commands) {
-                if (!cmd.source_texture) {
-                    continue;
+    // ---- Modified: bold outline around non-transparent pixels (no interior fill) ----
+    auto render_commands = [&](const std::vector<AssetRenderCommand>& commands) {
+        const int outline_px = 3; // outline thickness in screen pixels
+
+        // 8-direction offsets for a chunky outline; adjust if you want thinner/thicker
+        const SDL_FPoint OFFS[] = {
+            {  0, -1 }, {  0,  1 }, { -1,  0 }, {  1,  0 },
+            { -1, -1 }, {  1, -1 }, { -1,  1 }, {  1,  1 },
+            // add an extra “ring” for a bolder edge
+            {  0, -2 }, {  0,  2 }, { -2,  0 }, {  2,  0 }
+        };
+
+        for (const AssetRenderCommand& cmd : commands) {
+            if (!cmd.source_texture) continue;
+
+            SDL_Texture* tex = cmd.source_texture;
+
+            // Compute base alpha
+            const Uint8 base_alpha_mod = static_cast<Uint8>(
+                std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
+
+            // --------------------
+            // 1) OUTLINE PASS (only if highlighted/selected)
+            //    We draw the sprite as a colored mask at multiple small offsets,
+            //    then later draw the real sprite on top (so the interior is not tinted).
+            // --------------------
+            if (cmd.highlighted || cmd.selected) {
+                // Better/clearer colors
+                Uint8 r = cmd.highlighted ? 255 : 0;   // yellow for highlighted
+                Uint8 g = cmd.highlighted ? 220 : 220; // cyan for selected
+                Uint8 b = cmd.highlighted ? 0   : 255;
+                Uint8 a = 200; // fairly bold
+
+                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
+                SDL_SetTextureColorMod(tex, r, g, b);
+                SDL_SetTextureAlphaMod(tex, a);
+
+                // Draw multiple offset copies for a thick outline
+                for (const SDL_FPoint& o : OFFS) {
+                    SDL_FRect orect = cmd.dst;
+                    orect.x += o.x * outline_px;
+                    orect.y += o.y * outline_px;
+                    SDL_RenderCopyExF(
+                        renderer_,
+                        tex,
+                        nullptr,
+                        &orect,
+                        0.0,
+                        nullptr,
+                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
+                    );
                 }
 
-                SDL_Texture* mod_target = cmd.source_texture;
-                const Uint8 alpha_mod = static_cast<Uint8>(std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
-                if (cmd.highlighted) {
-                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-                    SDL_SetRenderDrawColor(renderer_, 200, 5, 5, 100);
-                    SDL_FRect outline = cmd.dst;
-                    outline.x -= 2.0f;
-                    outline.y -= 2.0f;
-                    outline.w += 4.0f;
-                    outline.h += 4.0f;
-                    SDL_RenderFillRectF(renderer_, &outline);
-                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-                    SDL_SetTextureColorMod(mod_target, 255, 200, 200);
-                } else if (cmd.selected) {
-                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_ADD);
-                    SDL_SetRenderDrawColor(renderer_, 5, 5, 200, 100);
-                    SDL_FRect outline = cmd.dst;
-                    outline.x -= 2.0f;
-                    outline.y -= 2.0f;
-                    outline.w += 4.0f;
-                    outline.h += 4.0f;
-                    SDL_RenderFillRectF(renderer_, &outline);
-                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-                    SDL_SetTextureColorMod(mod_target, 255, 200, 200);
-                } else {
-                    SDL_SetTextureColorMod(mod_target, 255, 255, 255);
-                }
-
-                SDL_SetTextureAlphaMod(mod_target, alpha_mod);
-                SDL_RenderCopyExF(renderer_, cmd.source_texture, nullptr, &cmd.dst, 0.0, nullptr, cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-                SDL_SetTextureColorMod(mod_target, 255, 255, 255);
-                SDL_SetTextureAlphaMod(mod_target, 255);
-                if (cmd.uses_scaled_texture && cmd.final_texture) {
-                    SDL_SetTextureColorMod(cmd.final_texture, 255, 255, 255);
-                    SDL_SetTextureAlphaMod(cmd.final_texture, 255);
-                }
+                // Restore defaults on the texture before the base pass
+                SDL_SetTextureColorMod(tex, 255, 255, 255);
+                SDL_SetTextureAlphaMod(tex, 255);
+                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
             }
-            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-};
+
+            // --------------------
+            // 2) BASE SPRITE PASS (normal rendering covers the interior of the outline)
+            // --------------------
+            SDL_SetTextureColorMod(tex, 255, 255, 255);
+            SDL_SetTextureAlphaMod(tex, base_alpha_mod);
+            SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+            SDL_RenderCopyExF(
+                renderer_,
+                cmd.source_texture,
+                nullptr,
+                &cmd.dst,
+                0.0,
+                nullptr,
+                cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
+            );
+
+            // Cleanup any scaling-temp texture state
+            if (cmd.uses_scaled_texture && cmd.final_texture) {
+                SDL_SetTextureColorMod(cmd.final_texture, 255, 255, 255);
+                SDL_SetTextureAlphaMod(cmd.final_texture, 255);
+                SDL_SetTextureBlendMode(cmd.final_texture, SDL_BLENDMODE_BLEND);
+            }
+        }
+
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    };
+    // -------------------------------------------------------------------------------
+
 
         render_commands(texture_commands_);
         render_dynamic_darkness_overlay(map_light_opacity);

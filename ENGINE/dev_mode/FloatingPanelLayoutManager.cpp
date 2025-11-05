@@ -294,15 +294,9 @@ void FloatingPanelLayoutManager::layoutAll(const std::vector<PanelInfo>& panels)
         total_width += kPanelGap * (count - 1);
     }
 
-    int start_x = usable_rect_.x;
-    if (count == 1) {
-        int left_half_center = usable_rect_.x + usable_rect_.w / 4;
-        start_x = left_half_center - widths.front() / 2;
-    } else if (usable_rect_.w > total_width) {
-        start_x = usable_rect_.x + (usable_rect_.w - total_width) / 2;
-    }
+    int start_x = usable_rect_.x + (usable_rect_.w - total_width) / 2;
     int min_start = usable_rect_.x;
-    int max_start = usable_rect_.x + std::max(0, usable_rect_.w - widths.front());
+    int max_start = usable_rect_.x + std::max(0, usable_rect_.w - total_width);
     if (max_start < min_start) {
         max_start = min_start;
     }
@@ -316,6 +310,9 @@ void FloatingPanelLayoutManager::layoutAll(const std::vector<PanelInfo>& panels)
 
         int x = locate_position(current, width, free_intervals, usable_rect_);
         int y = usable_rect_.y;
+        if (count == 1) {
+            y = usable_rect_.y + (usable_rect_.h - height) / 2;
+        }
         int min_y = usable_rect_.y;
         int max_y = usable_rect_.y + std::max(0, usable_rect_.h - height);
         if (max_y < min_y) {
@@ -346,8 +343,7 @@ SDL_Point FloatingPanelLayoutManager::positionFor(const PanelInfo& panel, const 
             desired_x = parent->bounds.x + parent->bounds.w + parent->padding;
         }
     } else {
-        int left_half_center = usable_rect_.x + usable_rect_.w / 4;
-        desired_x = left_half_center - width / 2;
+        desired_x = usable_rect_.x + usable_rect_.w / 2 - width / 2;
     }
 
     int x = locate_position(desired_x, width, free_intervals, usable_rect_);
@@ -450,4 +446,3 @@ void FloatingPanelLayoutManager::layoutTrackedPanels() {
 bool FloatingPanelLayoutManager::isTracking(const DockableCollapsible* panel) const {
     return std::find(tracked_panels_.begin(), tracked_panels_.end(), panel) != tracked_panels_.end();
 }
-

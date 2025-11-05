@@ -1391,10 +1391,16 @@ bool AssetLibraryUI::create_new_asset(const std::string& raw_name) {
         launcher.detach();
 
         if (library_owner_) {
-            library_owner_->load_all_from_SRC();
+            library_owner_->add_asset(name, manifest_entry);
             if (assets_owner_) {
                 if (SDL_Renderer* renderer = assets_owner_->renderer()) {
                     library_owner_->ensureAllAnimationsLoaded(renderer);
+                }
+                // Open the asset info editor and animation editor for the new asset
+                auto new_info = library_owner_->get(name);
+                if (new_info) {
+                    assets_owner_->open_asset_info_editor(new_info);
+                    assets_owner_->open_animation_editor_for_asset(new_info);
                 }
             }
         }

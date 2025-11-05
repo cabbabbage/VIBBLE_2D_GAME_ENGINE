@@ -67,6 +67,23 @@ void AssetLibrary::load_all_from_SRC() {
         vibble::log::info(std::string("[AssetLibrary] Loaded ") + std::to_string(info_by_name_.size()) + " assets (ok=" + std::to_string(loaded) + ", failed=" + std::to_string(failed) + ") in " + std::to_string(elapsed_ms) + "ms");
 }
 
+void AssetLibrary::add_asset(const std::string& name, const nlohmann::json& metadata) {
+    if (info_by_name_.count(name)) {
+        // Asset already exists, skip adding
+        return;
+    }
+
+    try {
+        std::shared_ptr<AssetInfo> info = AssetInfo::from_manifest_entry(name, metadata);
+        info_by_name_[name] = info;
+        vibble::log::info(std::string("[AssetLibrary] Added asset '") + name + "' to library");
+    } catch (const std::exception& error) {
+        vibble::log::error(std::string("[AssetLibrary] Failed to add asset '") + name + "': " + error.what());
+    } catch (...) {
+        vibble::log::error(std::string("[AssetLibrary] Failed to add asset '") + name + "' due to an unknown error.");
+    }
+}
+
 std::shared_ptr<AssetInfo> AssetLibrary::get(const std::string& name) const {
 	auto it = info_by_name_.find(name);
 	if (it != info_by_name_.end()) {
