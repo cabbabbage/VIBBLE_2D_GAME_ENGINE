@@ -14,6 +14,7 @@
 
 #include "spawn_group_utils.hpp"
 #include "dm_styles.hpp"
+#include "dm_icons.hpp"
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
 #include "utils/input.hpp"
@@ -707,6 +708,23 @@ struct SpawnGroupConfig::Entry {
             [this](bool value) { on_resolve_quantity_changed(value); },
             editable_);
 
+        // Section toggles: Candidates and Advanced Options (both collapsed by default).
+        candidates_toggle_btn_ = std::make_unique<DMButton>("Candidates", &DMStyles::ListButton(), 140, DMButton::height());
+        candidates_toggle_widget_ = std::make_unique<ButtonWidget>(candidates_toggle_btn_.get(), [this]() {
+            candidates_expanded_ = !candidates_expanded_;
+            update_candidates_toggle_label();
+            if (owner_) owner_->mark_layout_dirty();
+        });
+        update_candidates_toggle_label();
+
+        advanced_toggle_btn_ = std::make_unique<DMButton>("Advanced Options", &DMStyles::ListButton(), 180, DMButton::height());
+        advanced_toggle_widget_ = std::make_unique<ButtonWidget>(advanced_toggle_btn_.get(), [this]() {
+            advanced_expanded_ = !advanced_expanded_;
+            update_advanced_toggle_label();
+            if (owner_) owner_->mark_layout_dirty();
+        });
+        update_advanced_toggle_label();
+
         auto min_box = std::make_unique<DMTextBox>("Min Number", "");
         min_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(min_box),
             [this](const std::string& text) { on_min_changed(text); }, false, editable_);
@@ -1138,8 +1156,12 @@ struct SpawnGroupConfig::Entry {
                 if (!priority_row.empty()) rows.push_back(priority_row);
             }
 
-            if (lock_widget_) {
-                rows.push_back({ lock_widget_.get() });
+            // Header row for section toggles: Candidates (left) and Advanced Options (right)
+            if (candidates_toggle_widget_ || advanced_toggle_widget_) {
+                DockableCollapsible::Row toggles_row;
+                if (candidates_toggle_widget_) toggles_row.push_back(candidates_toggle_widget_.get());
+                if (advanced_toggle_widget_)   toggles_row.push_back(advanced_toggle_widget_.get());
+                if (!toggles_row.empty()) rows.push_back(toggles_row);
             }
             rows.push_back({method_widget_.get()});
 
@@ -1150,23 +1172,15 @@ struct SpawnGroupConfig::Entry {
                 DockableCollapsible::Row qty_row;
                 qty_row.push_back(min_widget_.get());
                 qty_row.push_back(max_widget_.get());
-                if (show_resolve_quantity_widget_ && resolve_quantity_widget_) {
-                    qty_row.push_back(resolve_quantity_widget_.get());
-                }
                 rows.push_back(qty_row);
             } else if (show_exact_quantity) {
                 DockableCollapsible::Row qty_row;
                 qty_row.push_back(exact_widget_.get());
-                if (show_resolve_quantity_widget_ && resolve_quantity_widget_) {
-                    qty_row.push_back(resolve_quantity_widget_.get());
-                }
                 rows.push_back(qty_row);
             }
 
-            if (show_resolve_geometry_widget_ && resolve_geometry_widget_) {
-                rows.push_back({resolve_geometry_widget_.get()});
-            }
-
+            // Sliders and non-checkbox fields remain outside Advanced Options
+            
             if (show_perimeter_radius_widget_ && perimeter_radius_widget_) {
                 rows.push_back({perimeter_radius_widget_.get()});
             }
@@ -1179,18 +1193,36 @@ struct SpawnGroupConfig::Entry {
                 rows.push_back({resolution_widget_.get()});
             }
 
-            if (candidate_entries_.empty()) {
-                rows.push_back({empty_candidates_label_.get()});
-            }
-            if (auto* graph = candidate_editor_widget()) {
-                rows.push_back({graph});
+            // Candidates section content (collapsible)
+            if (candidates_expanded_) {
+                if (candidate_entries_.empty()) {
+                    rows.push_back({empty_candidates_label_.get()});
+                }
+                if (auto* graph = candidate_editor_widget()) {
+                    rows.push_back({graph});
+                }
             }
 
-            if (show_explicit_flip_widget_ && explicit_flip_widget_) {
-                rows.push_back({explicit_flip_widget_.get()});
-            }
-            if (show_force_flipped_widget_ && force_flipped_widget_) {
-                rows.push_back({force_flipped_widget_.get()});
+            // Advanced Options section content (collapsible)
+            if (advanced_expanded_) {
+                if (lock_widget_) {
+                    rows.push_back({ lock_widget_.get() });
+                }
+                if (show_resolve_geometry_widget_ && resolve_geometry_widget_) {
+                    rows.push_back({resolve_geometry_widget_.get()});
+                }
+                if (show_resolve_quantity_widget_ && resolve_quantity_widget_) {
+                    rows.push_back({resolve_quantity_widget_.get()});
+                }
+                if (show_explicit_flip_widget_ && explicit_flip_widget_) {
+                    rows.push_back({explicit_flip_widget_.get()});
+                }
+                if (show_force_flipped_widget_ && force_flipped_widget_) {
+                    rows.push_back({force_flipped_widget_.get()});
+                }
+                if (enforce_widget_) {
+                    rows.push_back({enforce_widget_.get()});
+                }
             }
 
             if (open_area_widget_ && open_area_handler_ && !area_link_target_.empty()) {
@@ -1213,9 +1245,7 @@ struct SpawnGroupConfig::Entry {
                 }
             }
 
-            if (enforce_widget_) {
-                rows.push_back({enforce_widget_.get()});
-            }
+            // enforce_widget_ moved into Advanced Options
 
             if (delete_widget_) {
                 rows.push_back({delete_widget_.get()});
@@ -1294,6 +1324,22 @@ private:
     }
 
     void update_toggle_label() {}
+
+    void update_candidates_toggle_label() {
+        if (!candidates_toggle_btn_) return;
+        std::string label = "";
+        label += candidates_expanded_ ? std::string(DMIcons::CollapseExpanded()) : std::string(DMIcons::CollapseCollapsed());
+        label += " Candidates";
+        candidates_toggle_btn_->set_text(label);
+    }
+
+    void update_advanced_toggle_label() {
+        if (!advanced_toggle_btn_) return;
+        std::string label = "";
+        label += advanced_expanded_ ? std::string(DMIcons::CollapseExpanded()) : std::string(DMIcons::CollapseCollapsed());
+        label += " Advanced Options";
+        advanced_toggle_btn_->set_text(label);
+    }
 
     void update_ownership_label() {
         if (!ownership_label_widget_) return;
@@ -1784,6 +1830,13 @@ private:
     std::optional<std::string> method_lock_{};
     bool quantity_hidden_ = false;
     std::unique_ptr<CandidateEditorPieGraphWidget> candidate_graph_{};
+    // Section toggles
+    std::unique_ptr<DMButton> candidates_toggle_btn_{};
+    std::unique_ptr<ButtonWidget> candidates_toggle_widget_{};
+    bool candidates_expanded_ = false;
+    std::unique_ptr<DMButton> advanced_toggle_btn_{};
+    std::unique_ptr<ButtonWidget> advanced_toggle_widget_{};
+    bool advanced_expanded_ = false;
     bool editable_ = false;
     bool expanded_state_ = false;
     bool use_exact_quantity_ = false;
