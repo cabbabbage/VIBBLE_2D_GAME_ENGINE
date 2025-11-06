@@ -259,6 +259,7 @@ private:
     void respawn_asset_child_spawn_group(class Asset* owner, const nlohmann::json& entry);
     static bool asset_info_contains_spawn_group(const class AssetInfo* info, const std::string& spawn_id);
     void mark_highlight_dirty();
+    bool spawn_group_locked(const std::string& spawn_id) const;
 
     struct AssetSpatialEntry {
         SDL_Rect bounds{0, 0, 0, 0};

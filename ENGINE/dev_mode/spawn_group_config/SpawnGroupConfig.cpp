@@ -310,6 +310,12 @@ public:
 
     void render(SDL_Renderer* renderer) const override {
         if (box_) box_->render(renderer);
+        if (!editable_) {
+            SDL_Rect r = rect();
+            SDL_Color overlay{40, 40, 40, 140};
+            SDL_SetRenderDrawColor(renderer, overlay.r, overlay.g, overlay.b, overlay.a);
+            SDL_RenderFillRect(renderer, &r);
+        }
     }
 
     bool wants_full_row() const override { return full_row_; }
@@ -373,6 +379,12 @@ public:
 
     void render(SDL_Renderer* renderer) const override {
         if (slider_) slider_->render(renderer);
+        if (!editable_) {
+            SDL_Rect r = rect();
+            SDL_Color overlay{40, 40, 40, 140};
+            SDL_SetRenderDrawColor(renderer, overlay.r, overlay.g, overlay.b, overlay.a);
+            SDL_RenderFillRect(renderer, &r);
+        }
     }
 
     bool wants_full_row() const override { return true; }
@@ -443,6 +455,12 @@ public:
 
     void render(SDL_Renderer* renderer) const override {
         if (checkbox_) checkbox_->render(renderer);
+        if (!editable_) {
+            SDL_Rect r = rect();
+            SDL_Color overlay{40, 40, 40, 140};
+            SDL_SetRenderDrawColor(renderer, overlay.r, overlay.g, overlay.b, overlay.a);
+            SDL_RenderFillRect(renderer, &r);
+        }
     }
 
     void set_value(bool value) {
@@ -498,6 +516,12 @@ public:
 
     void render(SDL_Renderer* renderer) const override {
         if (dropdown_) dropdown_->render(renderer);
+        if (!editable_) {
+            SDL_Rect r = rect();
+            SDL_Color overlay{40, 40, 40, 140};
+            SDL_SetRenderDrawColor(renderer, overlay.r, overlay.g, overlay.b, overlay.a);
+            SDL_RenderFillRect(renderer, &r);
+        }
     }
 
     void set_options(std::vector<std::string> options, int selected) {
@@ -610,7 +634,7 @@ struct SpawnGroupConfig::Entry {
 
         delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 200, DMButton::height());
         delete_widget_ = std::make_unique<ButtonWidget>(delete_button_.get(), [this]() {
-            if (!owner_) return;
+            if (!owner_ || !editable_) return;
             std::string id = spawn_id();
             owner_->enqueue_notification([owner = owner_, id]() {
                 if (!owner) return;
@@ -847,6 +871,15 @@ struct SpawnGroupConfig::Entry {
         std::string display = safe_string(entry, "display_name", {});
         name_widget_->set_value(display);
 
+        // Sync lock state and recompute editable gating
+        bool base_editable = (owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr));
+        locked_ = safe_bool(entry, "locked", false);
+        if (lock_widget_) {
+            lock_widget_->set_value(locked_);
+            lock_widget_->set_editable(base_editable);
+        }
+        editable_ = base_editable && !locked_;
+
         std::string method = safe_string(entry, "position", kDefaultMethod);
         if (std::find(method_options_.begin(), method_options_.end(), method) == method_options_.end()) {
             method_options_.push_back(method);
@@ -1063,8 +1096,17 @@ struct SpawnGroupConfig::Entry {
         if (resolve_quantity_widget_) {
             resolve_quantity_widget_->set_editable(editable_ && show_resolve_quantity_widget_);
         }
+        // Ensure lock checkbox remains editable when entry is locked so it can be toggled
+        if (lock_widget_) {
+            bool base_editable = (owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr));
+            lock_widget_->set_editable(base_editable);
+        }
         // Linked area UI removed; no dropdown to edit.
         update_priority_button_states();
+        if (delete_button_) {
+            // Dim delete button when not editable
+            delete_button_->set_style(editable_ ? &DMStyles::DeleteButton() : &disabled_priority_button_style());
+        }
     }
 
     void set_expanded(bool expanded) {
@@ -1078,6 +1120,9 @@ struct SpawnGroupConfig::Entry {
         if (!owner_ || owner_->should_render_entry_body(*this)) {
             DockableCollapsible::Row header_row;
             header_row.push_back(name_widget_.get());
+            if (lock_widget_) {
+                header_row.push_back(lock_widget_.get());
+            }
             if (ownership_label_widget_) {
                 header_row.push_back(ownership_label_widget_.get());
             }
@@ -1198,6 +1243,7 @@ struct SpawnGroupConfig::Entry {
     }
 
     bool can_begin_drag_at(const SDL_Point& point) const {
+        if (locked_) return false;
         SDL_Rect rect = header_rect();
         if (rect.w <= 0 || rect.h <= 0) return false;
         if (SDL_PointInRect(&point, &rect)) {
@@ -1341,7 +1387,7 @@ private:
             graph->set_on_delete([this](int index){
                 this->remove_candidate_at(index);
             });
-            if (owner_ && owner_->callbacks_.on_regenerate) {
+            if (owner_ && owner_->callbacks_.on_regenerate && editable_) {
                 graph->set_on_regenerate([this]() {
                     if (!owner_) return;
                     std::string id = spawn_id();
@@ -1708,6 +1754,20 @@ private:
         }
     }
 
+    void on_locked_changed(bool value) {
+        // Allow toggling lock only if the underlying entry is editable in general
+        bool base_editable = (owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr));
+        if (!base_editable) return;
+        if (auto* entry = mutable_entry()) {
+            (*entry)["locked"] = value;
+            locked_ = value;
+            // Recompute per-widget editability
+            editable_ = base_editable && !locked_;
+            notify_change(false, false, false);
+            refresh_configuration();
+        }
+    }
+
     SpawnGroupConfig* owner_ = nullptr;
     nlohmann::json* entry_ = nullptr;
     nlohmann::json shadow_entry_ = nlohmann::json::object();
@@ -1733,6 +1793,7 @@ private:
     std::unique_ptr<PriorityButtonWidget> priority_down_widget_{};
     std::unique_ptr<DMButton> delete_button_{};
     std::unique_ptr<ButtonWidget> delete_widget_{};
+    std::unique_ptr<CallbackCheckboxWidget> lock_widget_{};
 
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> name_widget_{};
 
@@ -1775,6 +1836,7 @@ private:
     std::unique_ptr<CallbackCheckboxWidget> force_flipped_widget_{};
     bool show_explicit_flip_widget_ = false;
     bool show_force_flipped_widget_ = false;
+    bool locked_ = false;
 
     std::optional<size_t> array_index_{};
 
