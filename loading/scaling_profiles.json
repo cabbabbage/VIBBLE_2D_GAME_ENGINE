@@ -569,16 +569,14 @@
         },
         "Vibble": {
             "max_scale": 1.0101009607315063,
-            "min_scale": 0.9090908765792847,
+            "min_scale": 1.0101009607315063,
             "recommended_percentages": [
-                100,
-                91
+                100
             ],
             "recommended_steps": [
-                1.0,
-                0.9090908765792847
+                1.0
             ],
-            "revision": 5275295543363201229
+            "revision": 6314571886027253750
         },
         "area_area": {
             "max_scale": 0.9090908765792847,
@@ -607,19 +605,6 @@
                 0.7999999523162842
             ],
             "revision": 17262755262770782522
-        },
-        "building_2": {
-            "max_scale": 0.9090908765792847,
-            "min_scale": 0.9090908765792847,
-            "recommended_percentages": [
-                100,
-                91
-            ],
-            "recommended_steps": [
-                1.0,
-                0.9090908765792847
-            ],
-            "revision": 6318055532976691477
         },
         "building_3": {
             "max_scale": 0.9090908765792847,
@@ -897,7 +882,7 @@
             "revision": 2835005892505863127
         }
     },
-    "generated_at": "2025-11-06T01:47:12Z",
+    "generated_at": "2025-11-06T02:14:26Z",
     "screen_aspect": 1.7777777777777777,
     "version": 2
 }

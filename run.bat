@@ -34,6 +34,15 @@ if not defined VIBBLE_SAFE_LOADING (
 )
 
 rem ----------------------------------------------------
+rem Sanity check: ensure CMakeLists.txt exists at repo root
+rem ----------------------------------------------------
+if not exist "%cd%\CMakeLists.txt" (
+    echo [ERROR] CMakeLists.txt not found at repo root: "%cd%\CMakeLists.txt"
+    echo        Make sure you are running run.bat from the project root.
+    goto :fail
+)
+
+rem ----------------------------------------------------
 rem Ensure vcpkg exists (clone if missing)
 rem ----------------------------------------------------
 set "LOCAL_VCPKG=%cd%\vcpkg"
@@ -180,6 +189,17 @@ set "EXE=%RELEASE_DIR%\engine.exe"
 if not exist "%EXE%" (
     echo [ERROR] Executable not found in release directory.
     goto :fail
+)
+
+rem ----------------------------------------------------
+rem Clean up .txt files repo-wide (except log.txt and CMakeLists.txt) before launching
+rem ----------------------------------------------------
+echo [run.bat] Deleting all *.txt files (recursively) except log.txt and CMakeLists.txt...
+for /r "%cd%" %%F in (*.txt) do (
+    rem Skip any file named exactly "log.txt" or "CMakeLists.txt" (defensive)
+    if /I not "%%~nxF"=="log.txt" if /I not "%%~nxF"=="CMakeLists.txt" (
+        del /q "%%~fF" >nul 2>&1
+    )
 )
 
 rem ----------------------------------------------------
