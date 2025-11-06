@@ -1120,13 +1120,13 @@ struct SpawnGroupConfig::Entry {
         if (!owner_ || owner_->should_render_entry_body(*this)) {
             DockableCollapsible::Row header_row;
             header_row.push_back(name_widget_.get());
-            if (lock_widget_) {
-                header_row.push_back(lock_widget_.get());
-            }
             if (ownership_label_widget_) {
                 header_row.push_back(ownership_label_widget_.get());
             }
             rows.push_back(header_row);
+            if (lock_widget_) {
+                rows.push_back({ lock_widget_.get() });
+            }
 
             if (priority_count_ > 1) {
                 DockableCollapsible::Row priority_row;
