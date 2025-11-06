@@ -7793,7 +7793,7 @@
       },
       "anti_tags": [],
       "asset_name": "Davey",
-      "asset_type": "Enemy",
+      "asset_type": "player",
       "can_invert": false,
       "custom_controller_key": "Davey_controller",
       "has_shading": true,
@@ -7835,12 +7835,24 @@
       "mappings": {},
       "min_distance_all": 0,
       "min_same_type_distance": 686,
+      "neighbor_search_distance": 500,
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
       "size_settings": {
         "scale_percentage": 10
       },
+      "spawn_groups": [],
       "start": "SRC/assets/Davey/default",
       "tags": [
         "SRC/assets/Davey/backward",
@@ -14149,11 +14161,14 @@
           "behind": false,
           "factor": 100,
           "falloff": 0,
+          "front": true,
           "has_light_source": true,
           "light_intensity": 0,
           "offset_x": 0,
           "offset_y": 0,
           "radius": 0,
+          "render_texture": true,
+          "render_to_mask": true,
           "x_radius": 0,
           "y_radius": 0
         },
@@ -14162,6 +14177,7 @@
           "falloff": 50,
           "flare": 0,
           "flicker": 20,
+          "front": true,
           "has_light_source": true,
           "light_color": [
             255,
@@ -14169,41 +14185,11 @@
             255
           ],
           "light_intensity": 255,
-          "offset_x": -95,
-          "offset_y": -459,
-          "radius": 1
-        },
-        {
-          "behind": false,
-          "falloff": 50,
-          "flare": 0,
-          "flicker": 20,
-          "has_light_source": true,
-          "light_color": [
-            255,
-            255,
-            255
-          ],
-          "light_intensity": 255,
-          "offset_x": -241,
-          "offset_y": -409,
-          "radius": 580
-        },
-        {
-          "behind": false,
-          "falloff": 50,
-          "flare": 0,
-          "flicker": 20,
-          "has_light_source": true,
-          "light_color": [
-            255,
-            255,
-            255
-          ],
-          "light_intensity": 255,
-          "offset_x": -397,
-          "offset_y": -405,
-          "radius": 64
+          "offset_x": 0,
+          "offset_y": 0,
+          "radius": 64,
+          "render_texture": true,
+          "render_to_mask": true
         }
       ],
       "min_distance_all": 0,
@@ -14269,6 +14255,7 @@
           "behind": false,
           "factor": 100,
           "falloff": 0,
+          "front": true,
           "has_light_source": true,
           "light_intensity": 0,
           "offset_x": 0,
@@ -14282,16 +14269,17 @@
           "falloff": 50,
           "flare": 0,
           "flicker": 20,
+          "front": true,
           "has_light_source": true,
           "light_color": [
             255,
             255,
             255
           ],
-          "light_intensity": 255,
-          "offset_x": -2000,
-          "offset_y": -830,
-          "radius": 1012
+          "light_intensity": 247,
+          "offset_x": -242,
+          "offset_y": -705,
+          "radius": 301
         }
       ],
       "min_distance_all": 0,
@@ -15582,7 +15570,7 @@
       "camera_settings": {
         "distance_scale_strength": 0.07999999821186066,
         "foreshorten_strength": 0.5199999809265137,
-        "height_at_zoom1": 486.0,
+        "height_at_zoom1": 769.0,
         "max_zoom_multiplier": 2.999999761581421,
         "min_visible_screen_ratio": 0.00800000037997961,
         "min_zoom_multiplier": 0.699999988079071,
@@ -15602,7 +15590,7 @@
         "render_quality_percent": 10,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
-        "tripod_distance_y": -1680.0
+        "tripod_distance_y": -340.0
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -15904,9 +15892,9 @@
       "rooms_data": {
         "NewRoom": {
           "display_color": [
-            144,
+            36,
+            96,
             242,
-            85,
             255
           ],
           "name": "NewRoom",
@@ -15914,9 +15902,9 @@
         },
         "NewRoom1": {
           "display_color": [
-            36,
+            102,
             242,
-            79,
+            85,
             255
           ],
           "name": "NewRoom1",
@@ -15925,7 +15913,7 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            140,
+            94,
             204,
             31,
             255
@@ -15998,9 +15986,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            195,
-            36,
+            85,
             242,
+            176,
             255
           ],
           "edge_smoothness": 4,
@@ -16070,9 +16058,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            71,
-            154,
-            204,
+            242,
+            36,
+            208,
             255
           ],
           "edge_smoothness": 4,
@@ -16150,9 +16138,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            106,
-            71,
-            204,
+            37,
+            242,
+            36,
             255
           ],
           "edge_smoothness": 7,
@@ -16305,9 +16293,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            242,
-            213,
-            36,
+            89,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -16404,9 +16392,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            51,
-            204,
-            188,
+            242,
+            36,
+            54,
             255
           ],
           "edge_smoothness": 9,
@@ -16477,9 +16465,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            204,
-            31,
-            83,
+            85,
+            138,
+            242,
             255
           ],
           "edge_smoothness": 8,
@@ -16550,9 +16538,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            71,
-            204,
-            122,
+            242,
+            242,
+            85,
             255
           ],
           "edge_smoothness": 6,
@@ -16619,9 +16607,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
-            36,
-            54,
-            242,
+            224,
+            79,
+            121,
             255
           ],
           "edge_smoothness": 6,
@@ -16688,9 +16676,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            102,
-            242,
             36,
+            242,
+            115,
             255
           ],
           "edge_smoothness": 2,
@@ -16739,9 +16727,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            179,
-            204,
-            71,
+            36,
+            199,
+            242,
             255
           ],
           "edge_smoothness": 12,
@@ -16841,9 +16829,9 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            36,
-            130,
-            242,
+            199,
+            71,
+            204,
             255
           ],
           "edge_smoothness": 9,
@@ -16913,9 +16901,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            85,
             242,
-            213,
+            138,
+            36,
             255
           ],
           "edge_smoothness": 7,
@@ -16989,9 +16977,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            204,
-            138,
             71,
+            105,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -17069,9 +17057,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            159,
-            51,
+            137,
             204,
+            71,
             255
           ],
           "edge_smoothness": 10,
@@ -17181,9 +17169,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
+            197,
             242,
-            85,
-            165,
+            36,
             255
           ],
           "edge_smoothness": 5,
@@ -17253,9 +17241,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
+            123,
+            36,
             242,
-            63,
-            61,
             255
           ],
           "edge_smoothness": 6,
@@ -17322,9 +17310,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            204,
-            31,
-            163,
+            242,
+            179,
+            85,
             255
           ],
           "edge_smoothness": 10,
@@ -17398,9 +17386,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
-            85,
-            242,
-            100,
+            204,
+            176,
+            31,
             255
           ],
           "edge_smoothness": 5,
@@ -17488,8 +17476,8 @@
           ],
           "curvyness": 2,
           "display_color": [
-            83,
             61,
+            36,
             242,
             255
           ],
@@ -18055,15 +18043,44 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-e0c9ba651ec4"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Davey"
+                }
+              ],
+              "display_name": "Davey",
+              "dx": -3139,
+              "dy": -4418,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 16000,
+              "origional_width": 16000,
+              "position": "Exact",
+              "priority": 19,
+              "resolution": 6,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-bc1fde70ab55"
             }
           ]
         },
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            204,
-            86,
-            71,
+            242,
+            36,
+            129,
             255
           ],
           "edge_smoothness": 6,
@@ -18133,9 +18150,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            31,
             204,
-            102,
+            96,
+            71,
             255
           ],
           "edge_smoothness": 7,

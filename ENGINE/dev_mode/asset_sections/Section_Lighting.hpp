@@ -32,7 +32,8 @@ public:
             r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 20, ls.flicker);
             r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, ls.offset_x);
             r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, ls.offset_y);
-            r.c_behind    = std::make_unique<DMCheckbox>("Render Behind Asset", ls.behind);
+            r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", ls.in_front);
+            r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", ls.behind);
             r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
             {
                 DMColorRangeWidget::RangedColor rc;
@@ -77,6 +78,10 @@ public:
             place(r.s_flicker,   DMSlider::height());
             place(r.s_offset_x,  DMSlider::height());
             place(r.s_offset_y,  DMSlider::height());
+            if (r.c_front) {
+                r.c_front->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
+                y += DMCheckbox::height() + DMSpacing::item_gap();
+            }
             if (r.c_behind) {
                 r.c_behind->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
                 y += DMCheckbox::height() + DMSpacing::item_gap();
@@ -119,14 +124,21 @@ public:
                     break;
                 }
             }
+            auto commit_change = [&]() {
+                changed = true; regenerate_lighting = true; reset_scaling_profile = true; purge_light_cache = true; used = true;
+            };
+
+            if (r.c_front && r.c_front->handle_event(e)) {
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    r.light.in_front = r.c_front->value();
+                    commit_change();
+                }
+            }
+
             if (r.c_behind && r.c_behind->handle_event(e)) {
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                     r.light.behind = r.c_behind->value();
-                    changed = true;
-                    regenerate_lighting = true;
-                    reset_scaling_profile = true;
-                    purge_light_cache = true;
-                    used = true;
+                    commit_change();
                 }
             }
             if (r.color_widget && r.color_widget->handle_event(e)) {
@@ -204,7 +216,8 @@ public:
                 r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 20, r.light.flicker);
                 r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, r.light.offset_x);
                 r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, r.light.offset_y);
-                r.c_behind    = std::make_unique<DMCheckbox>("Render Behind Asset", r.light.behind);
+                r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", r.light.in_front);
+                r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", r.light.behind);
                 r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
                 {
                     DMColorRangeWidget::RangedColor rc;
@@ -252,7 +265,8 @@ public:
             if (rrow.s_flicker)   rrow.s_flicker->render(r);
             if (rrow.s_offset_x)  rrow.s_offset_x->render(r);
             if (rrow.s_offset_y)  rrow.s_offset_y->render(r);
-            if (rrow.c_behind)    rrow.c_behind->render(r);
+            if (rrow.c_front)  rrow.c_front->render(r);
+            if (rrow.c_behind) rrow.c_behind->render(r);
             if (rrow.color_widget) rrow.color_widget->render(r);
         }
         if (b_add_) b_add_->render(r);
@@ -270,6 +284,7 @@ private:
         std::unique_ptr<DMSlider> s_flicker;
         std::unique_ptr<DMSlider> s_offset_x;
         std::unique_ptr<DMSlider> s_offset_y;
+        std::unique_ptr<DMCheckbox> c_front;
         std::unique_ptr<DMCheckbox> c_behind;
         std::unique_ptr<DMColorRangeWidget> color_widget;
 };
@@ -325,7 +340,8 @@ public:
             if (r.s_flicker)   r.s_flicker->set_value(src.flicker);
             if (r.s_offset_x)  r.s_offset_x->set_value(src.offset_x);
             if (r.s_offset_y)  r.s_offset_y->set_value(src.offset_y);
-            if (r.c_behind)    r.c_behind->set_value(src.behind);
+            if (r.c_front)           r.c_front->set_value(src.in_front);
+            if (r.c_behind)          r.c_behind->set_value(src.behind);
             if (r.color_widget) {
                 DMColorRangeWidget::RangedColor rc;
                 rc.r.min = rc.r.max = static_cast<int>(src.color.r);

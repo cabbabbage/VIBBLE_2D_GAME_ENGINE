@@ -600,18 +600,61 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
             (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
         if (pointer_event && target_asset_ && target_asset_->info.get() == info_.get()) {
             const camera& cam = assets_->getView();
+
+            // Build a transform consistent with SceneRenderer::render_lights_for_source
+            auto compute_light_transform = [&]() {
+                struct Xform { float cx; float cy; float sx; float sy; } out{0,0,1,1};
+                // Resolve base frame size
+                int fw = target_asset_->cached_w;
+                int fh = target_asset_->cached_h;
+                if ((fw <= 0 || fh <= 0)) {
+                    if (SDL_Texture* ft = target_asset_->get_final_texture()) {
+                        SDL_QueryTexture(ft, nullptr, nullptr, &fw, &fh);
+                    }
+                }
+                if (fw <= 0) fw = 1;
+                if (fh <= 0) fh = 1;
+
+                const float base_scale = (target_asset_->info && std::isfinite(target_asset_->info->scale_factor) && target_asset_->info->scale_factor > 0.0f)
+                    ? target_asset_->info->scale_factor
+                    : 1.0f;
+                const float scale = cam.get_scale();
+                const float inv_scale = (scale > 0.0f) ? (1.0f / scale) : 1.0f;
+
+                const float base_sw = static_cast<float>(fw) * base_scale * inv_scale;
+                const float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
+
+                const float ref_sh = compute_player_screen_height(cam);
+                const camera::RenderSmoothingKey smoothing_key = reinterpret_cast<camera::RenderSmoothingKey>(target_asset_);
+                camera::RenderEffects ef = cam.compute_render_effects(
+                    SDL_Point{ target_asset_->pos.x, target_asset_->pos.y },
+                    base_sh,
+                    ref_sh,
+                    smoothing_key);
+
+                const float parallax_offset = ef.parallax_offset_x;
+                const float distance_scale  = ef.distance_scale;
+                const float vertical_scale  = ef.vertical_scale;
+
+                const float width_px  = base_sw * distance_scale;
+                const float height_px = base_sh * distance_scale * vertical_scale;
+
+                out.cx = ef.screen_position.x + parallax_offset;
+                out.cy = ef.screen_position.y;
+                // Per-axis screen-pixels per local-offset unit
+                out.sx = (fw > 0) ? (width_px  / static_cast<float>(fw)) : base_scale * inv_scale * distance_scale;
+                out.sy = (fh > 0) ? (height_px / static_cast<float>(fh)) : base_scale * inv_scale * distance_scale * vertical_scale;
+                return out;
+            };
+
+            auto xform = compute_light_transform();
+
             auto light_screen_pos = [&](const LightSource& light) -> SDL_Point {
                 int offx = light.offset_x;
                 if (target_asset_->flipped) offx = -offx;
-                const int wx = target_asset_->pos.x + offx;
-                const int wy = target_asset_->pos.y + light.offset_y;
-                SDL_FPoint sp = cam.map_to_screen(SDL_Point{ wx, wy });
-                return SDL_Point{ static_cast<int>(std::lround(sp.x)), static_cast<int>(std::lround(sp.y)) };
-            };
-
-            auto screen_to_world = [&](int sx, int sy) -> SDL_Point {
-                SDL_FPoint wp = cam.screen_to_map(SDL_Point{ sx, sy });
-                return SDL_Point{ static_cast<int>(std::lround(wp.x)), static_cast<int>(std::lround(wp.y)) };
+                const float cx = xform.cx + static_cast<float>(offx) * xform.sx;
+                const float cy = xform.cy + static_cast<float>(light.offset_y) * xform.sy;
+                return SDL_Point{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
             };
 
             const int mx = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
@@ -638,13 +681,15 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     return true;
                 }
             } else if (e.type == SDL_MOUSEMOTION && light_drag_active_ && light_drag_index_ >= 0 && light_drag_index_ < static_cast<int>(info_->light_sources.size())) {
-                SDL_Point w = screen_to_world(mx, my);
                 auto& L = info_->light_sources[light_drag_index_];
-                // Compute new local offset from asset position accounting for flip
-                const int dx = w.x - target_asset_->pos.x;
-                const int dy = w.y - target_asset_->pos.y;
-                L.offset_x = target_asset_->flipped ? -dx : dx;
-                L.offset_y = dy;
+                // Invert the screen mapping so the crosshair sits under the mouse
+                const float dx_screen = static_cast<float>(mx) - xform.cx;
+                const float dy_screen = static_cast<float>(my) - xform.cy;
+                const float unflipped_x = (xform.sx != 0.0f) ? (dx_screen / xform.sx) : 0.0f;
+                const float new_off_x   = target_asset_->flipped ? -unflipped_x : unflipped_x;
+                const float new_off_y   = (xform.sy != 0.0f) ? (dy_screen / xform.sy) : 0.0f;
+                L.offset_x = static_cast<int>(std::lround(new_off_x));
+                L.offset_y = static_cast<int>(std::lround(new_off_y));
                 if (lighting_section_) lighting_section_->sync_from_info();
                 this->notify_light_sources_modified(true);
                 (void)info_->commit_manifest();
@@ -951,20 +996,64 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
         const SDL_Color lh = DMStyles::AccentButton().hover_bg;
         SDL_SetRenderDrawColor(r, lh.r, lh.g, lh.b, 220);
 
+        // Compute transform consistent with runtime light rendering
+        const camera& cam = assets_->getView();
+        auto compute_light_transform = [&]() {
+            struct Xform { float cx; float cy; float sx; float sy; } out{0,0,1,1};
+            int fw = target_asset_->cached_w;
+            int fh = target_asset_->cached_h;
+            if ((fw <= 0 || fh <= 0)) {
+                if (SDL_Texture* ft = target_asset_->get_final_texture()) {
+                    SDL_QueryTexture(ft, nullptr, nullptr, &fw, &fh);
+                }
+            }
+            if (fw <= 0) fw = 1;
+            if (fh <= 0) fh = 1;
+
+            const float base_scale = (target_asset_->info && std::isfinite(target_asset_->info->scale_factor) && target_asset_->info->scale_factor > 0.0f)
+                ? target_asset_->info->scale_factor
+                : 1.0f;
+            const float scale = cam.get_scale();
+            const float inv_scale = (scale > 0.0f) ? (1.0f / scale) : 1.0f;
+
+            const float base_sw = static_cast<float>(fw) * base_scale * inv_scale;
+            const float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
+
+            const float ref_sh = compute_player_screen_height(cam);
+            const camera::RenderSmoothingKey smoothing_key = reinterpret_cast<camera::RenderSmoothingKey>(target_asset_);
+            camera::RenderEffects ef = cam.compute_render_effects(
+                SDL_Point{ target_asset_->pos.x, target_asset_->pos.y },
+                base_sh,
+                ref_sh,
+                smoothing_key);
+
+            const float parallax_offset = ef.parallax_offset_x;
+            const float distance_scale  = ef.distance_scale;
+            const float vertical_scale  = ef.vertical_scale;
+
+            const float width_px  = base_sw * distance_scale;
+            const float height_px = base_sh * distance_scale * vertical_scale;
+
+            out.cx = ef.screen_position.x + parallax_offset;
+            out.cy = ef.screen_position.y;
+            out.sx = (fw > 0) ? (width_px  / static_cast<float>(fw)) : base_scale * inv_scale * distance_scale;
+            out.sy = (fh > 0) ? (height_px / static_cast<float>(fh)) : base_scale * inv_scale * distance_scale * vertical_scale;
+            return out;
+        }();
+
         for (const auto& light : info_->light_sources) {
             int offx = light.offset_x;
             if (target_asset_->flipped) {
                 offx = -offx;
             }
-            const int wx = target_asset_->pos.x + offx;
-            const int wy = target_asset_->pos.y + light.offset_y;
-            SDL_FPoint sp = cam.map_to_screen(SDL_Point{ wx, wy });
+            const float cx = compute_light_transform.cx + static_cast<float>(offx) * compute_light_transform.sx;
+            const float cy = compute_light_transform.cy + static_cast<float>(light.offset_y) * compute_light_transform.sy;
 
             const int arm = 6; // pixels
-            const int cx = static_cast<int>(std::lround(sp.x));
-            const int cy = static_cast<int>(std::lround(sp.y));
-            SDL_RenderDrawLine(r, cx - arm, cy, cx + arm, cy);
-            SDL_RenderDrawLine(r, cx, cy - arm, cx, cy + arm);
+            const int ix = static_cast<int>(std::lround(cx));
+            const int iy = static_cast<int>(std::lround(cy));
+            SDL_RenderDrawLine(r, ix - arm, iy, ix + arm, iy);
+            SDL_RenderDrawLine(r, ix, iy - arm, ix, iy + arm);
         }
     }
 
