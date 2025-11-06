@@ -678,6 +678,12 @@ struct SpawnGroupConfig::Entry {
         terminate_with_parent_widget_.reset();
         placed_on_top_parent_widget_.reset();
 
+        auto lock_checkbox = std::make_unique<DMCheckbox>("Locked", false);
+        lock_widget_ = std::make_unique<CallbackCheckboxWidget>(
+            std::move(lock_checkbox),
+            [this](bool value) { on_locked_changed(value); },
+            editable_);
+
         auto enforce_checkbox = std::make_unique<DMCheckbox>("Enforce Spacing", false);
         enforce_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(enforce_checkbox),
             [this](bool value) {
@@ -1124,9 +1130,6 @@ struct SpawnGroupConfig::Entry {
                 header_row.push_back(ownership_label_widget_.get());
             }
             rows.push_back(header_row);
-            if (lock_widget_) {
-                rows.push_back({ lock_widget_.get() });
-            }
 
             if (priority_count_ > 1) {
                 DockableCollapsible::Row priority_row;
@@ -1135,6 +1138,9 @@ struct SpawnGroupConfig::Entry {
                 if (!priority_row.empty()) rows.push_back(priority_row);
             }
 
+            if (lock_widget_) {
+                rows.push_back({ lock_widget_.get() });
+            }
             rows.push_back({method_widget_.get()});
 
             const bool hide_quantity_controls = quantity_hidden() || current_method_ == "Exact";

@@ -1980,6 +1980,12 @@ void RoomEditor::set_manifest_store(devmode::core::ManifestStore* store) {
     if (info_ui_) {
         info_ui_->set_manifest_store(manifest_store_);
     }
+    if (spawn_group_panel_) {
+        spawn_group_panel_->set_manifest_store(manifest_store_);
+    }
+    if (room_cfg_ui_) {
+        room_cfg_ui_->set_manifest_store(manifest_store_);
+    }
 }
 
 void RoomEditor::close_asset_info_editor() {
@@ -2535,70 +2541,67 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*render
 
     const camera& cam = assets_->getView();
 
-    // If we can't ensure the spatial index, just do the slow but correct reverse render-order scan.
-    auto reverse_render_order_scan = [&](const std::vector<Asset*>& pool) -> Asset* {
-        for (auto it = pool.rbegin(); it != pool.rend(); ++it) {
-            Asset* asset = *it;
-            if (!asset) continue;
-
-            auto bc = asset_bounds_cache_.find(asset);
-            if (bc == asset_bounds_cache_.end()) continue;
-
-            const SDL_Rect& rect = bc->second.bounds;
-            if (SDL_PointInRect(&screen_point, &rect)) {
-                return asset; // first one we “drew last” that contains the point
-            }
-        }
-        return nullptr;
-    };
-
     if (!ensure_spatial_index(cam)) {
         // No spatial index: compute bounds and choose the asset highest on screen.
         return hit_test_asset_fallback(cam, screen_point);
     }
 
-    // With spatial index: gather candidates, then walk active assets in reverse
-    // (render order) and pick the first that’s in the candidate set and contains the point.
+    // Gather nearby candidates and choose the one whose screen bounds sit highest.
     const std::vector<Asset*> candidates = gather_candidate_assets_for_point(screen_point);
-    if (candidates.empty()) {
-        // Nothing near; fall back to a full reverse-order scan (cheap early out anyway).
-        return nullptr;
-    }
+    if (!candidates.empty()) {
+        Asset* best = nullptr;
+        int best_bottom = std::numeric_limits<int>::max();
+        int best_top = std::numeric_limits<int>::max();
+        int best_screen_y = std::numeric_limits<int>::max();
+        int best_z = std::numeric_limits<int>::min();
+        int best_area = std::numeric_limits<int>::max();
 
-    // Build a fast membership set for candidates.
-    // (If <unordered_set> isn’t already included in this TU, add it at the top.)
-    std::unordered_set<Asset*> candset(candidates.begin(), candidates.end());
-
-    // New behavior: among overlapping assets, prefer the one higher on the screen
-    // (smallest screen-space top Y). Accumulate best match instead of returning
-    // immediately in reverse render order.
-    Asset* best = nullptr;
-    int best_top = std::numeric_limits<int>::max();
-    int best_area = std::numeric_limits<int>::max();
-
-    for (auto it = active_assets_->rbegin(); it != active_assets_->rend(); ++it) {
-        Asset* asset = *it;
-        if (!asset) continue;
-        if (candset.find(asset) == candset.end()) continue;
-
-        auto bc = asset_bounds_cache_.find(asset);
-        if (bc == asset_bounds_cache_.end()) continue;
-
-        const SDL_Rect& rect = bc->second.bounds;
-        if (SDL_PointInRect(&screen_point, &rect)) {
+        auto consider_candidate = [&](Asset* asset,
+                                      const SDL_Rect& rect,
+                                      int screen_y,
+                                      int z_index) {
+            if (!asset) return;
+            if (!asset->spawn_id.empty() && spawn_group_locked(asset->spawn_id)) {
+                return; // Ignore locked spawn groups entirely for hover/selection.
+            }
+            if (!SDL_PointInRect(&screen_point, &rect)) {
+                return;
+            }
+            const int bottom = rect.y + rect.h;
             const int top = rect.y;
             const int area = rect.w * rect.h;
-            if (!best || top < best_top || (top == best_top && area < best_area)) {
+            const bool is_better =
+                !best ||
+                bottom < best_bottom ||
+                (bottom == best_bottom && top < best_top) ||
+                (bottom == best_bottom && top == best_top && screen_y < best_screen_y) ||
+                (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index > best_z) ||
+                (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index == best_z && area < best_area);
+            if (is_better) {
                 best = asset;
+                best_bottom = bottom;
                 best_top = top;
+                best_screen_y = screen_y;
+                best_z = z_index;
                 best_area = area;
             }
+        };
+
+        for (Asset* asset : candidates) {
+            auto bc = asset_bounds_cache_.find(asset);
+            if (bc == asset_bounds_cache_.end()) {
+                continue;
+            }
+            const AssetSpatialEntry& entry = bc->second;
+            consider_candidate(asset, entry.bounds, entry.screen_y, entry.z_index);
+        }
+
+        if (best) {
+            return best;
         }
     }
 
-    if (best) return best;
-
-    // Nothing hit in candidates; compute using fallback ordering.
+    // Nothing decisive from the spatial index; fall back to a full bounds check.
     return hit_test_asset_fallback(cam, screen_point);
 }
 
@@ -2897,30 +2900,56 @@ Asset* RoomEditor::hit_test_asset_fallback(const camera& cam, SDL_Point screen_p
     const float reference_height = compute_reference_screen_height(cam, inv_scale);
 
     Asset* best = nullptr;
-    int best_top      = std::numeric_limits<int>::max();
-    int best_area     = std::numeric_limits<int>::max(); // smaller is better on final tie-break
+    int best_bottom = std::numeric_limits<int>::max();
+    int best_top = std::numeric_limits<int>::max();
+    int best_screen_y = std::numeric_limits<int>::max();
+    int best_z = std::numeric_limits<int>::min();
+    int best_area = std::numeric_limits<int>::max(); // smaller is better on final tie-break
+
+    auto consider_candidate = [&](Asset* asset,
+                                  const SDL_Rect& rect,
+                                  int screen_y,
+                                  int z_index) {
+        if (!asset) return;
+        if (!asset->spawn_id.empty() && spawn_group_locked(asset->spawn_id)) {
+            return;
+        }
+        if (!SDL_PointInRect(&screen_point, &rect)) {
+            return;
+        }
+        const int bottom = rect.y + rect.h;
+        const int top = rect.y;
+        const int area = rect.w * rect.h;
+        const bool is_better =
+            !best ||
+            bottom < best_bottom ||
+            (bottom == best_bottom && top < best_top) ||
+            (bottom == best_bottom && top == best_top && screen_y < best_screen_y) ||
+            (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index > best_z) ||
+            (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index == best_z && area < best_area);
+        if (is_better) {
+            best = asset;
+            best_bottom = bottom;
+            best_top = top;
+            best_screen_y = screen_y;
+            best_z = z_index;
+            best_area = area;
+        }
+    };
 
     for (Asset* asset : *active_assets_) {
         if (!asset) continue;
+        if (!asset->spawn_id.empty() && spawn_group_locked(asset->spawn_id)) {
+            continue;
+        }
 
         SDL_Rect rect{0, 0, 0, 0};
-        int screen_y_dummy = 0;
-        if (!compute_asset_screen_bounds(cam, reference_height, inv_scale, asset, rect, screen_y_dummy)) {
-            continue;
-        }
-        if (!SDL_PointInRect(&screen_point, &rect)) {
+        int screen_y = 0;
+        if (!compute_asset_screen_bounds(cam, reference_height, inv_scale, asset, rect, screen_y)) {
             continue;
         }
 
-        // Prefer the asset higher on the screen (smallest rect.y).
-        // Tie-break with smaller area to favor small items over large backdrops.
-        const int area = rect.w * rect.h;
-        const int top  = rect.y;
-        if (!best || top < best_top || (top == best_top && area < best_area)) {
-            best = asset;
-            best_top  = top;
-            best_area = area;
-        }
+        consider_candidate(asset, rect, screen_y, asset->z_index);
     }
 
     return best;
@@ -3546,6 +3575,7 @@ void RoomEditor::ensure_room_configurator() {
         room_cfg_ui_ = std::make_unique<RoomConfigurator>();
     }
     if (room_cfg_ui_) {
+        room_cfg_ui_->set_manifest_store(manifest_store_);
         room_cfg_ui_->set_header_visibility_controller([this](bool visible) {
             room_config_panel_visible_ = visible;
             if (header_visibility_callback_) {
@@ -3667,6 +3697,7 @@ void RoomEditor::ensure_spawn_group_config_ui() {
         return;
     }
 
+    spawn_group_panel_->set_manifest_store(manifest_store_);
     spawn_group_panel_->set_show_header(true);
     spawn_group_panel_->set_close_button_enabled(true);
     spawn_group_panel_->set_scroll_enabled(true);

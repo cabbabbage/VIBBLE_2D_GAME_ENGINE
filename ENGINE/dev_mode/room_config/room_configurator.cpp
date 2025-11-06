@@ -386,6 +386,15 @@ RoomConfigurator::~RoomConfigurator() {
     }
 }
 
+void RoomConfigurator::set_manifest_store(devmode::core::ManifestStore* store) {
+    manifest_store_ = store;
+    for (auto& cfg : spawn_group_configs_) {
+        if (cfg) {
+            cfg->set_manifest_store(manifest_store_);
+        }
+    }
+}
+
 void RoomConfigurator::set_bounds(const SDL_Rect& bounds) {
     bounds_override_ = bounds;
     has_bounds_override_ = bounds.w > 0 && bounds.h > 0;
@@ -1135,6 +1144,11 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
         const bool created_new = !config;
         if (!config) {
             config = std::make_unique<SpawnGroupConfig>();
+        }
+
+        // Ensure SpawnGroupConfig can query asset metadata (e.g., can_invert)
+        if (manifest_store_) {
+            config->set_manifest_store(manifest_store_);
         }
 
         int default_resolution = MapGridSettings::defaults().resolution;
