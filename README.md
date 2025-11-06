@@ -94,6 +94,13 @@ Custom controllers allow new behaviour without modifying unrelated engine system
 
 ## Dev Tasks
 
+- Light color picker: fix ENGINE/dev_mode/color_range_widget.cpp Picker class to render with background, enable scrolling, ensure all 4 RGBA sliders are visible and adjustable when opened from asset_info_ui lighting section; verify proper event handling and layout; validate by opening color picker in lighting section and adjusting all channels.
+<!--
+assignee: Any
+assigner: Cal
+status: pending
+-->
+
 - Asset drag/drop parallax: update ENGINE/dev_mode/room_editor.cpp (hit testing + drag loop) to lock cursor to selected asset anchor; unify world↔screen conversions via active camera to remove drift; validate by dragging while panning/zooming across room boundaries.
 <!--
 assignee: Any
