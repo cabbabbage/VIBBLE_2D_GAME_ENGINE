@@ -139,20 +139,10 @@ bool QuickTaskPopup::handle_event(const SDL_Event& event) {
         }
     }
 
-    // If mouse event is within popup, consume to block underlying UI
+    // While the popup is open, block ALL mouse input from reaching the scene
+    // (including clicks, motion, and scroll) regardless of where it occurs.
     if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL) {
-        if (DMDropdown::active_dropdown() != nullptr) {
-            return true; // dropdown open, capture globally
-        }
-        if (event.type == SDL_MOUSEWHEEL) {
-            return true; // background overlay should block scroll
-        }
-        SDL_Point p{};
-        if (event.type == SDL_MOUSEMOTION) { p = SDL_Point{ event.motion.x, event.motion.y }; }
-        else { p = SDL_Point{ event.button.x, event.button.y }; }
-        if (SDL_PointInRect(&p, &popup_rect_)) {
-            return true;
-        }
+        return true;
     }
     return consumed;
 }
@@ -194,28 +184,46 @@ void QuickTaskPopup::layout_ui(const SDL_Rect& screen_rect) const {
                     screen_rect.y + (screen_rect.h - popup_height)/2,
                     popup_width, popup_height };
 
-    // Top bar
-    topbar_rect_ = { popup_rect_.x + 12, popup_rect_.y + 12, popup_rect_.w - 24, 40 };
-    const int ctl_h = DMTextBox::height();
+    // Top bar (dynamic height to avoid overlap)
+    const int topbar_x = popup_rect_.x + 12;
+    const int topbar_y = popup_rect_.y + 12;
+    const int topbar_w = popup_rect_.w - 24;
+
+    // Planned widths and gaps
+    const int gap = 10;
+    const int assignee_w = 180;
+    const int assigner_w = 160;
+    const int add_w = 110;
+    int desc_w = topbar_w - (assignee_w + gap + assigner_w + gap + add_w + gap);
+    if (desc_w < 200) desc_w = 200;
+
+    // Compute preferred heights for each control
+    int assignee_h = assignee_dd_ ? assignee_dd_->preferred_height(assignee_w) : DMButton::height();
+    int assigner_h = assigner_dd_ ? assigner_dd_->preferred_height(assigner_w) : DMButton::height();
+    int desc_h = description_box_ ? description_box_->height_for_width(desc_w) : DMTextBox::height();
+    int add_h = DMButton::height();
+    const int topbar_h = std::max({assignee_h, assigner_h, desc_h, add_h});
+
+    topbar_rect_ = { topbar_x, topbar_y, topbar_w, topbar_h };
+
+    // Lay out controls using computed height
     int x = topbar_rect_.x;
     const int y = topbar_rect_.y;
 
     if (assignee_dd_) {
-        assignee_dd_->set_rect(SDL_Rect{ x, y, 180, ctl_h });
-        x += 190;
+        assignee_dd_->set_rect(SDL_Rect{ x, y, assignee_w, topbar_h });
+        x += assignee_w + gap;
     }
     if (assigner_dd_) {
-        assigner_dd_->set_rect(SDL_Rect{ x, y, 160, ctl_h });
-        x += 170;
+        assigner_dd_->set_rect(SDL_Rect{ x, y, assigner_w, topbar_h });
+        x += assigner_w + gap;
     }
     if (description_box_) {
-        int w = topbar_rect_.w - (x - topbar_rect_.x) - 120; // leave space for Add
-        if (w < 200) w = 200;
-        description_box_->set_rect(SDL_Rect{ x, y, w, ctl_h });
-        x += w + 10;
+        description_box_->set_rect(SDL_Rect{ x, y, desc_w, topbar_h });
+        x += desc_w + gap;
     }
     if (add_button_) {
-        add_button_->set_rect(SDL_Rect{ x, y, 110, DMButton::height() });
+        add_button_->set_rect(SDL_Rect{ x, y + (topbar_h - add_h) / 2, add_w, add_h });
     }
 
     // Lists area split into two
@@ -289,4 +297,3 @@ void QuickTaskPopup::persist_all() {
     cline_file_.save(cline_tasks_);
     rebuild_ui();
 }
-

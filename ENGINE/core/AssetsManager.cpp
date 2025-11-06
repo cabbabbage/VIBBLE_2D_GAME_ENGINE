@@ -1823,6 +1823,10 @@ void Assets::handle_sdl_event(const SDL_Event& e) {
     // Handle quick task popup first (if open)
     if (quick_task_popup_ && quick_task_popup_->is_open()) {
         if (quick_task_popup_->handle_event(e)) {
+            // Ensure underlying input state does not react to this event
+            if (input) {
+                input->consumeEvent(e);
+            }
             return; // Popup consumed the event
         }
     }

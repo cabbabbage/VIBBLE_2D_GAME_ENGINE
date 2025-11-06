@@ -8,6 +8,8 @@
 #include <SDL.h>
 #include <limits>
 #include <cstdint>
+#include <unordered_map>
+#include <mutex>
 
 #include "utils/area.hpp"
 #include "asset_info.hpp"
@@ -147,6 +149,13 @@ class Asset {
     std::string owning_room_name_;
     std::unique_ptr<AnimationUpdate> anim_;
     std::unique_ptr<class AnimationRuntime> anim_runtime_;
+    // Per-spawn-group flip override (set by planner/UI); thread-safe accessors
+public:
+    static void SetFlipOverrideForSpawnId(const std::string& spawn_id, bool enabled, bool flipped);
+    static void ClearFlipOverrideForSpawnId(const std::string& spawn_id);
+private:
+    static std::unordered_map<std::string, std::pair<bool,bool>> s_flip_overrides_;
+    static std::mutex s_flip_overrides_mutex_;
         private:
     friend class AnimationUpdate;
     friend class AnimationRuntime;

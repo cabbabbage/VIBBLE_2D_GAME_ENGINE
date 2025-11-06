@@ -1822,6 +1822,8 @@ void DevControls::notify_spawn_group_config_changed(const nlohmann::json& entry)
 
 void DevControls::notify_spawn_group_removed(const std::string& spawn_id) {
     remove_spawn_group_assets(spawn_id);
+    // Clear any flip override associated with this spawn group
+    Asset::ClearFlipOverrideForSpawnId(spawn_id);
 }
 
 void DevControls::refresh_reactive_shadow_settings() {

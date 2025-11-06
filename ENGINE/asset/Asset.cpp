@@ -34,6 +34,10 @@ std::mutex& asset_rng_mutex()
 
 }
 
+// Static storage for per-spawn-group flip overrides
+std::unordered_map<std::string, std::pair<bool,bool>> Asset::s_flip_overrides_{};
+std::mutex Asset::s_flip_overrides_mutex_{};
+
 Asset::Asset(std::shared_ptr<AssetInfo> info_,
              const Area& spawn_area,
              SDL_Point start_pos,
@@ -631,6 +635,21 @@ void Asset::set_z_offset(int z) {
 
 void Asset::set_flip() {
         if (!info || !info->flipable) return;
+        // Check for explicit flip override set per spawn group
+        bool use_override = false;
+        bool override_value = false;
+        if (!spawn_id.empty()) {
+                std::lock_guard<std::mutex> lock(s_flip_overrides_mutex_);
+                auto it = s_flip_overrides_.find(spawn_id);
+                if (it != s_flip_overrides_.end() && it->second.first) {
+                        use_override = true;
+                        override_value = it->second.second;
+                }
+        }
+        if (use_override) {
+                flipped = override_value;
+                return;
+        }
         std::uniform_int_distribution<int> dist(0, 1);
         bool should_flip;
         {
@@ -638,6 +657,19 @@ void Asset::set_flip() {
                 should_flip = (dist(asset_rng()) == 1);
         }
         flipped = should_flip;
+}
+
+// Static API to control flip overrides by spawn_id
+void Asset::SetFlipOverrideForSpawnId(const std::string& id, bool enabled, bool flipped) {
+        if (id.empty()) return;
+        std::lock_guard<std::mutex> lock(s_flip_overrides_mutex_);
+        s_flip_overrides_[id] = std::make_pair(enabled, flipped);
+}
+
+void Asset::ClearFlipOverrideForSpawnId(const std::string& id) {
+        if (id.empty()) return;
+        std::lock_guard<std::mutex> lock(s_flip_overrides_mutex_);
+        s_flip_overrides_.erase(id);
 }
 
 void Asset::set_final_texture(SDL_Texture* tex) {

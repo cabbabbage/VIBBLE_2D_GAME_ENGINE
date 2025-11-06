@@ -7,6 +7,7 @@
 
 #include "dev_mode/spawn_group_config/spawn_group_utils.hpp"
 #include "room_relative_size_resolver.hpp"
+#include "asset/Asset.hpp"
 AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sources,
                                      const Area& area,
                                      AssetLibrary& asset_library,
@@ -202,6 +203,23 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
         if (force_single_quantity) {
             quantity = 1;
         }
+
+        // Propagate explicit flip override to runtime via Asset static mapping
+        bool explicit_flip = false;
+        bool force_flipped = false;
+        try {
+            const auto it_exp = asset.find("explicit_flip");
+            if (it_exp != asset.end()) {
+                if (it_exp->is_boolean()) explicit_flip = it_exp->get<bool>();
+                else if (it_exp->is_number_integer()) explicit_flip = it_exp->get<int>() != 0;
+            }
+            const auto it_force = asset.find("force_flipped");
+            if (it_force != asset.end()) {
+                if (it_force->is_boolean()) force_flipped = it_force->get<bool>();
+                else if (it_force->is_number_integer()) force_flipped = it_force->get<int>() != 0;
+            }
+        } catch (...) {}
+        Asset::SetFlipOverrideForSpawnId(spawn_id, explicit_flip, force_flipped);
 
         std::vector<nlohmann::json> cand_jsons;
         if (asset.contains("candidates") && asset["candidates"].is_array()) {
