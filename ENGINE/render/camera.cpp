@@ -188,7 +188,11 @@ void camera::set_screen_center(SDL_Point p) {
     screen_center_ = p;
 
     const double distance = std::hypot(dx, dy);
-    const double teleport_threshold = std::max(200.0, static_cast<double>(settings_.render_distance) * 0.25);
+    // Use screen-relative render distance (in pixels) converted to world units for teleport threshold.
+    // This keeps the behavior consistent regardless of zoom level.
+    const double px_margin = std::max(0.0, static_cast<double>(settings_.render_distance));
+    const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
+    const double teleport_threshold = std::max(200.0, px_margin * scale_for_world * 0.25);
     if (distance > teleport_threshold) {
         reset_parallax_smoothing();
     }
@@ -930,8 +934,12 @@ TransformSmoothingParams camera::motion_smoothing_params() const {
 }
 
 int camera::get_render_distance_world_margin() const {
-    const double margin = std::max(0.0, static_cast<double>(settings_.render_distance));
-    return static_cast<int>(std::lround(margin));
+    // Interpret render_distance as a screen-space margin in pixels and
+    // convert it to world units using the current smoothed scale.
+    const double px_margin = std::max(0.0, static_cast<double>(settings_.render_distance));
+    const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
+    const double world_margin = px_margin * scale_for_world;
+    return static_cast<int>(std::lround(world_margin));
 }
 
 void camera::reset_parallax_smoothing() {

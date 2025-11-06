@@ -41,6 +41,7 @@
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
+#include "render/global_light_source.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "search_assets.hpp"
 #include "draw_utils.hpp"
@@ -299,6 +300,11 @@ AssetInfoUI::AssetInfoUI() {
 AssetInfoUI::~AssetInfoUI() {
     apply_camera_override(false);
     sync_map_light_panel_visibility(false);
+    if (assets_) {
+        if (auto* gl = assets_->map_light_source()) {
+            gl->set_alpha_override(std::nullopt);
+        }
+    }
     if (assets_ && forcing_high_quality_rendering_) {
         assets_->set_force_high_quality_rendering(false);
     }
@@ -310,6 +316,12 @@ void AssetInfoUI::set_assets(Assets* a) {
     if (assets_ && forcing_high_quality_rendering_) {
         assets_->set_force_high_quality_rendering(false);
         forcing_high_quality_rendering_ = false;
+    }
+    // Clear any map light override on the previous assets context
+    if (assets_) {
+        if (auto* gl = assets_->map_light_source()) {
+            gl->set_alpha_override(std::nullopt);
+        }
     }
     if (map_light_panel_auto_opened_ && assets_) {
         assets_->set_map_light_panel_visible(false);
@@ -402,6 +414,11 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 
 void AssetInfoUI::clear_info() {
     sync_map_light_panel_visibility(false);
+    if (assets_) {
+        if (auto* gl = assets_->map_light_source()) {
+            gl->set_alpha_override(std::nullopt);
+        }
+    }
     if (assets_ && forcing_high_quality_rendering_) {
         assets_->set_force_high_quality_rendering(false);
         forcing_high_quality_rendering_ = false;
@@ -445,6 +462,11 @@ void AssetInfoUI::close() {
     visible_ = false;
     container_.close();
     sync_map_light_panel_visibility(false);
+    if (assets_) {
+        if (auto* gl = assets_->map_light_source()) {
+            gl->set_alpha_override(std::nullopt);
+        }
+    }
     if (animation_editor_window_) animation_editor_window_->set_visible(false);
     if (asset_selector_) asset_selector_->close();
     if (assets_ && forcing_high_quality_rendering_) {
@@ -679,6 +701,19 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         }
     } else {
         forcing_high_quality_rendering_ = false;
+    }
+
+    // While the Lighting section is expanded, force the map light to darkest opacity
+    if (assets_) {
+        Global_Light_Source* gl = assets_->map_light_source();
+        if (gl) {
+            const bool lighting_open = visible_ && info_ && lighting_section_ && lighting_section_->is_expanded();
+            if (lighting_open) {
+                gl->set_alpha_override(static_cast<Uint8>(255));
+            } else {
+                gl->set_alpha_override(std::nullopt);
+            }
+        }
     }
 
     if (!visible_ || (!area_mode_ && !info_)) return;

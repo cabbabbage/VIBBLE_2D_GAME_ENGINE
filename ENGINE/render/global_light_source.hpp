@@ -27,6 +27,9 @@ class Global_Light_Source {
     void      set_screen_orbit_center(SDL_Point screen_center);
     void      set_direction_reference_world(SDL_Point world_point);
     void      set_direction_target_world(SDL_Point world_point);
+    // Temporarily override the alpha channel of the current map light color
+    // without modifying underlying map configuration. Pass std::nullopt to clear.
+    void      set_alpha_override(std::optional<Uint8> alpha);
 
         private:
     struct KeyEntry {
@@ -78,4 +81,7 @@ class Global_Light_Source {
     float last_degree_ = 0.0f;
     size_t active_segment_start_ = 0;
     size_t active_segment_end_ = 0;
+
+    // Optional override for alpha channel applied in get_current_color()
+    std::optional<Uint8> alpha_override_{};
 };
