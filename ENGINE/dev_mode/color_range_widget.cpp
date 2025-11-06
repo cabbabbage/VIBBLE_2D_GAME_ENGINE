@@ -164,6 +164,8 @@ public:
         sync_sliders_from_value();
     }
 
+    void render(SDL_Renderer* r) const override;
+
     bool is_visible() const { return DockableCollapsible::is_visible(); }
 
 private:
@@ -317,6 +319,18 @@ private:
     std::unique_ptr<DMButton> sample_button_;
     std::unique_ptr<ButtonWidget> sample_button_widget_;
 };
+
+void DMColorRangeWidget::Picker::render(SDL_Renderer* r) const {
+    if (!r) return;
+    // Draw solid background
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_Color bg = DMStyles::PanelBG();
+    bg.a = 255; // Make opaque
+    SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
+    SDL_RenderFillRect(r, &rect_);
+    // Call base render
+    DockableCollapsible::render(r);
+}
 
 DMColorRangeWidget::DMColorRangeWidget(std::string label)
     : label_(std::move(label)) {
@@ -506,4 +520,3 @@ void DMColorRangeWidget::apply_sampled_color(SDL_Color color) {
     ranged.a = make_channel(clamped.a);
     set_value(ranged);
 }
-
