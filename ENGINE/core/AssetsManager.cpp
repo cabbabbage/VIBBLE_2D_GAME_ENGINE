@@ -21,7 +21,7 @@
 #include "utils/text_style.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "utils/transform_smoothing_settings.hpp"
-#include "quick_task_popup.hpp"
+#include "utils/quick_task_popup.hpp"
 
 #include <algorithm>
 #include <atomic>

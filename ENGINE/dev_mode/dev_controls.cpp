@@ -588,6 +588,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
         if (auto* footer = map_mode_ui_->get_footer_bar()) {
             footer->set_grid_overlay_enabled(grid_overlay_enabled_);
             footer->set_grid_resolution(0); // Will be updated when map info is set
+            footer->set_snap_to_grid_enabled(snap_to_grid_enabled_);
             footer->set_grid_controls_callbacks(
                 [this](bool enabled) {
                     grid_overlay_enabled_ = enabled;
@@ -608,6 +609,10 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                         // Update derived cell size
                         grid_cell_size_px_ = settings.spacing();
                     }
+                },
+                [this](bool enabled) {
+                    snap_to_grid_enabled_ = enabled;
+                    devmode::ui_settings::save_bool(kGridSnapEnabledKey, enabled);
                 }
             );
         }
@@ -1059,7 +1064,9 @@ void DevControls::update(const Input& input) {
         }
     }
     modal_hide = is_modal_blocking_panels();
-    hide_headers = modal_hide || sliding_headers_hidden_ || !sliding_rects.empty();
+    // Keep header visible unless a modal blocks panels or layers panel is open
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
+    hide_headers = modal_hide || sliding_headers_hidden_ || layers_panel_open;
     SDL_Rect header_rect = hide_headers ? SDL_Rect{0, 0, 0, 0} : asset_filter_.header_rect();
     SDL_Rect usable_rect = FloatingPanelLayoutManager::instance().computeUsableRect(
         SDL_Rect{0, 0, screen_w_, screen_h_},
@@ -1128,7 +1135,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
     const bool modal_hide_pre = is_modal_blocking_panels();
     const bool layers_panel_open_pre = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    const bool hide_headers_pre = modal_hide_pre || sliding_headers_hidden_ || !sliding_rects.empty() || layers_panel_open_pre;
+    // Only hide headers when modals block panels or the layers panel is open
+    const bool hide_headers_pre = modal_hide_pre || sliding_headers_hidden_ || layers_panel_open_pre;
     header_rect = hide_headers_pre ? SDL_Rect{0, 0, 0, 0} : asset_filter_.header_rect();
     SDL_Rect usable_rect = FloatingPanelLayoutManager::instance().computeUsableRect(
         SDL_Rect{0, 0, screen_w_, screen_h_},
@@ -1150,9 +1158,9 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     const bool modal_hide = is_modal_blocking_panels();
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     modal_headers_hidden_ = modal_hide;
-    // Also suppress header when the Layers panel is open, to avoid intercepting clicks
-    const bool hide_headers = modal_hide || layers_panel_open; // keep header visible unless a modal blocks panels or layers is open
-    // Keep header always visible in dev mode
+    // Suppress header when hidden by sliding panels, modals, or when the Layers panel is open
+    const bool hide_headers = modal_hide || sliding_headers_hidden_ || layers_panel_open;
+    // Keep header always visible in dev mode unless explicitly suppressed
     asset_filter_.set_enabled(enabled_);
     asset_filter_.set_header_suppressed(hide_headers);
     apply_header_suppression();
