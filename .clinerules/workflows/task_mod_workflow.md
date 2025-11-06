@@ -125,3 +125,44 @@ Rewrite (Fix) tasks in DEV_TASKS.md; preserve metadata blocks; sync README.md �
 - Do **not** change assignee/assigner/status HTML comment blocks.
 - Do **not** add/remove tasks or re-order bullets.
 - Do **not** introduce or edit tests or code.
+
+
+---
+
+## Repository State Alignment (README only, non-tasks)
+
+After syncing the **Dev Tasks** section, perform a **minimal, accurate refresh of `README.md`** so it reflects the **current repository state**. This step must **not** modify the Dev Tasks section you just replaced.
+
+### Scope
+- **Allowed data sources:** `README.md` and the local directory tree under `./ENGINE/`.
+- **Out of scope:** Any other files or directories outside `./ENGINE/`, network calls, and speculative edits.
+
+### What to update (examples, do only if verifiably stale):
+- File/path references (e.g., modules or panels) that no longer exist under `./ENGINE/` → update or remove.
+- New top-level `./ENGINE/` modules that are clearly intended to be listed in README feature/module summaries → add.
+- Build/run snippets or commands that reference moved/renamed files **visible under `./ENGINE/`** → correct.
+- Headings or short descriptions that explicitly claim a file lives in a path that differs from what exists in `./ENGINE/` → align wording to match.
+- Image or code-block captions mentioning `./ENGINE/…` paths → correct paths only.
+
+### Explicit **do-nots**
+- **Do not** alter the **Dev Tasks** section content you just replaced.
+- **Do not** infer or invent new features; only reflect what is confirmed by `./ENGINE/` or already stated in `README.md`.
+- **Do not** change tone, structure, or long-form prose beyond the minimal edits needed for accuracy.
+- **Do not** reorder major sections of the README.
+
+### Implementation Steps
+1. Read `README.md` and **snapshot** the boundaries of the **Dev Tasks** section (from its header to just before the next header of the same or higher level). Mark this region **read-only** for this step.
+2. Traverse `./ENGINE/` (one level deep is sufficient) to collect current module/folder names and key files commonly referenced by README (e.g., `dev_mode`, `render`, `assets`, etc.).
+3. Scan `README.md` **outside the protected Dev Tasks region** for:
+   - Lists of modules, paths, or file references under `./ENGINE/`.
+   - Build/run snippets that include explicit `./ENGINE/` paths.
+   - Headings/paragraphs that state a specific path under `./ENGINE/`.
+4. For each mismatched reference, apply the **smallest possible edit** to correct the path/name. Prefer path-only edits over sentence rewrites.
+5. Write back `README.md`, preserving the Dev Tasks section verbatim.
+
+### Validation
+- The **Dev Tasks** section is byte-for-byte identical to the one produced in the prior step.
+- All applied edits are limited to `README.md` **outside** the Dev Tasks section.
+- Each path change is justified by an actual file/folder under `./ENGINE/`.
+- No speculative or stylistic changes were made.
+
