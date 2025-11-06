@@ -53,6 +53,7 @@ DevFooterBar::DevFooterBar(std::string title)
     : title_(std::move(title)),
       height_(kDefaultFooterHeight) {
     grid_checkbox_ = std::make_unique<DMCheckbox>("Show Grid", grid_overlay_enabled_);
+    snap_checkbox_ = std::make_unique<DMCheckbox>("Snap to Grid", snap_to_grid_enabled_);
     grid_stepper_ = std::make_unique<DMNumericStepper>("Grid Resolution (r)", 0, 10, grid_resolution_);
 }
 
@@ -194,6 +195,14 @@ bool DevFooterBar::handle_event(const SDL_Event& e) {
         }
     }
 
+    if (snap_checkbox_ && snap_checkbox_->handle_event(e)) {
+        used = true;
+        snap_to_grid_enabled_ = snap_checkbox_->value();
+        if (on_snap_to_grid_toggle_) {
+            on_snap_to_grid_toggle_(snap_to_grid_enabled_);
+        }
+    }
+
     if (grid_stepper_ && grid_stepper_->handle_event(e)) {
         used = true;
         grid_resolution_ = grid_stepper_->value();
@@ -246,6 +255,9 @@ void DevFooterBar::render(SDL_Renderer* renderer) const {
     // Render grid controls first (on the left)
     if (grid_checkbox_) {
         grid_checkbox_->render(renderer);
+    }
+    if (snap_checkbox_) {
+        snap_checkbox_->render(renderer);
     }
     if (grid_stepper_) {
         grid_stepper_->render(renderer);
@@ -310,7 +322,12 @@ void DevFooterBar::layout_buttons() {
     if (grid_checkbox_ && grid_stepper_) {
         SDL_Rect checkbox_rect = grid_checkbox_->rect();
         SDL_Rect stepper_rect = grid_stepper_->rect();
-        int grid_controls_width = (checkbox_rect.w + DMSpacing::small_gap() + stepper_rect.w);
+        int grid_controls_width = checkbox_rect.w + DMSpacing::small_gap();
+        if (snap_checkbox_) {
+            SDL_Rect snap_rect = snap_checkbox_->rect();
+            grid_controls_width += snap_rect.w + DMSpacing::small_gap();
+        }
+        grid_controls_width += stepper_rect.w;
         button_start += grid_controls_width + DMSpacing::item_gap();
     }
 
@@ -452,9 +469,11 @@ void DevFooterBar::set_grid_resolution(int resolution) {
 }
 
 void DevFooterBar::set_grid_controls_callbacks(std::function<void(bool)> on_overlay_toggle,
-                                               std::function<void(int)> on_resolution_change) {
+                                               std::function<void(int)> on_resolution_change,
+                                               std::function<void(bool)> on_snap_toggle) {
     on_grid_overlay_toggle_ = std::move(on_overlay_toggle);
     on_grid_resolution_change_ = std::move(on_resolution_change);
+    on_snap_to_grid_toggle_ = std::move(on_snap_toggle);
 }
 
 void DevFooterBar::layout_grid_controls() {
@@ -468,9 +487,28 @@ void DevFooterBar::layout_grid_controls() {
     SDL_Rect checkbox_rect{x, y, grid_checkbox_->preferred_width(), DMCheckbox::height()};
     grid_checkbox_->set_rect(checkbox_rect);
 
-    // Stepper to the right of checkbox
+    // Optional Snap checkbox next
     x += checkbox_rect.w + DMSpacing::small_gap();
+    if (snap_checkbox_) {
+        SDL_Rect snap_rect{x, y, snap_checkbox_->preferred_width(), DMCheckbox::height()};
+        snap_checkbox_->set_rect(snap_rect);
+        x += snap_rect.w + DMSpacing::small_gap();
+    }
+
+    // Stepper to the right of checkboxes
     int stepper_w = 180; // Fixed width for stepper
     SDL_Rect stepper_rect{x, y, stepper_w, DMNumericStepper::height()};
     grid_stepper_->set_rect(stepper_rect);
+}
+
+void DevFooterBar::set_snap_to_grid_enabled(bool enabled) {
+    if (snap_to_grid_enabled_ != enabled) {
+        snap_to_grid_enabled_ = enabled;
+        if (snap_checkbox_) {
+            snap_checkbox_->set_value(enabled);
+        }
+        if (on_snap_to_grid_toggle_) {
+            on_snap_to_grid_toggle_(enabled);
+        }
+    }
 }

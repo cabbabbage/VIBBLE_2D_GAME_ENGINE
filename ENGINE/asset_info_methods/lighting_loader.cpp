@@ -45,6 +45,18 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                 light.x_radius  = static_cast<int>(std::lround(static_cast<double>(raw_x_radius) * factor));
                 light.y_radius  = static_cast<int>(std::lround(static_cast<double>(raw_y_radius) * factor));
                 light.color     = {255, 255, 255, 255};
+                try {
+                    if (l.contains("light_color") && l["light_color"].is_array()) {
+                        const auto& arr = l["light_color"];
+                        if (arr.size() >= 3) {
+                            int r = std::clamp(arr.at(0).get<int>(), 0, 255);
+                            int g = std::clamp(arr.at(1).get<int>(), 0, 255);
+                            int b = std::clamp(arr.at(2).get<int>(), 0, 255);
+                            light.color = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
+                        }
+                    }
+                } catch (...) {
+                }
                 light.behind    = l.value("behind", false);
                 return parsed;
 };

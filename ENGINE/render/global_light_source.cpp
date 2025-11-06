@@ -447,6 +447,11 @@ SDL_Color Global_Light_Source::compute_color_from_horizon(float degree) const {
 }
 
 SDL_Color Global_Light_Source::get_current_color() const {
+        if (alpha_override_.has_value()) {
+                SDL_Color c = current_color_;
+                c.a = clamp_alpha(*alpha_override_);
+                return c;
+        }
         return current_color_;
 }
 
@@ -479,4 +484,12 @@ void Global_Light_Source::set_direction_target_world(SDL_Point world_point) {
         smoothed_target_world_.x = static_cast<float>(world_point.x);
         smoothed_target_world_.y = static_cast<float>(world_point.y);
         smoothed_target_valid_   = true;
+}
+
+void Global_Light_Source::set_alpha_override(std::optional<Uint8> alpha) {
+        if (alpha.has_value()) {
+                alpha_override_ = clamp_alpha(*alpha);
+        } else {
+                alpha_override_.reset();
+        }
 }

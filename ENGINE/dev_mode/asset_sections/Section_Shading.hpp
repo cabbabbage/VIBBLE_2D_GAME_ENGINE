@@ -74,11 +74,7 @@ public:
         falloff_exponent_slider_ = make_scaled_slider("Falloff Exponent", 0.01f, 20.0f, settings.falloff_exponent, 100);
         alpha_multiplier_slider_ = make_scaled_slider("Alpha Multiplier", 0.0f, 4.0f, settings.alpha_multiplier, 100);
 
-        // Add chunk resolution slider
-        constexpr int kMinChunkResolution = 0;
-        constexpr int kMaxChunkResolution = 10; // Assuming same range as grid
-        int current_chunk = settings.chunk_resolution;
-        chunk_resolution_slider_ = std::make_unique<DMSlider>("Chunk Resolution (2^r px)", kMinChunkResolution, kMaxChunkResolution, current_chunk);
+        // Chunk resolution is not used here; no slider
 
         auto add_slider_row = [&](std::unique_ptr<DMSlider>& slider) {
             auto widget = std::make_unique<SliderWidget>(slider.get());
@@ -91,7 +87,7 @@ public:
         add_slider_row(falloff_start_slider_);
         add_slider_row(falloff_exponent_slider_);
         add_slider_row(alpha_multiplier_slider_);
-        add_slider_row(chunk_resolution_slider_);
+        // Removed chunk resolution slider row
 
         auto preview_widget = std::make_unique<PreviewWidget>(this);
         rows.push_back({ preview_widget.get() });
@@ -116,7 +112,7 @@ public:
         if (falloff_start_slider_ && falloff_start_slider_->handle_event(e)) used = true;
         if (falloff_exponent_slider_ && falloff_exponent_slider_->handle_event(e)) used = true;
         if (alpha_multiplier_slider_ && alpha_multiplier_slider_->handle_event(e)) used = true;
-        if (chunk_resolution_slider_ && chunk_resolution_slider_->handle_event(e)) used = true;
+        // No chunk resolution slider
 
         const ShadowMaskSettings previous = info_->shadow_mask_settings;
         ShadowMaskSettings       updated  = previous;
@@ -131,15 +127,13 @@ public:
         updated.falloff_start    = read_slider(falloff_start_slider_, updated.falloff_start, 100);
         updated.falloff_exponent = read_slider(falloff_exponent_slider_, updated.falloff_exponent, 100);
         updated.alpha_multiplier = read_slider(alpha_multiplier_slider_, updated.alpha_multiplier, 100);
-        if (chunk_resolution_slider_) {
-            updated.chunk_resolution = chunk_resolution_slider_->value();
-        }
+        // No chunk resolution updates
 
         auto nearly_equal = [](float a, float b) {
             return std::fabs(a - b) <= 0.0005f;
 };
 
-        const bool changed = !nearly_equal(previous.expansion_ratio, updated.expansion_ratio) || !nearly_equal(previous.blur_scale, updated.blur_scale) || !nearly_equal(previous.falloff_start, updated.falloff_start) || !nearly_equal(previous.falloff_exponent, updated.falloff_exponent) || !nearly_equal(previous.alpha_multiplier, updated.alpha_multiplier) || (previous.chunk_resolution != updated.chunk_resolution);
+        const bool changed = !nearly_equal(previous.expansion_ratio, updated.expansion_ratio) || !nearly_equal(previous.blur_scale, updated.blur_scale) || !nearly_equal(previous.falloff_start, updated.falloff_start) || !nearly_equal(previous.falloff_exponent, updated.falloff_exponent) || !nearly_equal(previous.alpha_multiplier, updated.alpha_multiplier);
 
         if (changed) {
             info_->set_shadow_mask_settings(updated);
@@ -191,7 +185,7 @@ private:
     std::unique_ptr<DMSlider> falloff_start_slider_;
     std::unique_ptr<DMSlider> falloff_exponent_slider_;
     std::unique_ptr<DMSlider> alpha_multiplier_slider_;
-    std::unique_ptr<DMSlider> chunk_resolution_slider_;
+    // Removed chunk resolution slider
 
     std::unique_ptr<DMButton> generate_button_;
     std::vector<std::unique_ptr<Widget>> widgets_{};

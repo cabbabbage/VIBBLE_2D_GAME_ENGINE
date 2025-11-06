@@ -41,6 +41,7 @@
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
+#include "render/global_light_source.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "search_assets.hpp"
 #include "draw_utils.hpp"
@@ -299,6 +300,11 @@ AssetInfoUI::AssetInfoUI() {
 AssetInfoUI::~AssetInfoUI() {
     apply_camera_override(false);
     sync_map_light_panel_visibility(false);
+    if (assets_) {
+        if (auto* gl = assets_->map_light_source()) {
+            gl->set_alpha_override(std::nullopt);
+        }
+    }
     if (assets_ && forcing_high_quality_rendering_) {
         assets_->set_force_high_quality_rendering(false);
     }
@@ -310,6 +316,12 @@ void AssetInfoUI::set_assets(Assets* a) {
     if (assets_ && forcing_high_quality_rendering_) {
         assets_->set_force_high_quality_rendering(false);
         forcing_high_quality_rendering_ = false;
+    }
+    // Clear any map light override on the previous assets context
+    if (assets_) {
+        if (auto* gl = assets_->map_light_source()) {
+            gl->set_alpha_override(std::nullopt);
+        }
     }
     if (map_light_panel_auto_opened_ && assets_) {
         assets_->set_map_light_panel_visible(false);
@@ -402,6 +414,11 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 
 void AssetInfoUI::clear_info() {
     sync_map_light_panel_visibility(false);
+    if (assets_) {
+        if (auto* gl = assets_->map_light_source()) {
+            gl->set_alpha_override(std::nullopt);
+        }
+    }
     if (assets_ && forcing_high_quality_rendering_) {
         assets_->set_force_high_quality_rendering(false);
         forcing_high_quality_rendering_ = false;
@@ -445,6 +462,11 @@ void AssetInfoUI::close() {
     visible_ = false;
     container_.close();
     sync_map_light_panel_visibility(false);
+    if (assets_) {
+        if (auto* gl = assets_->map_light_source()) {
+            gl->set_alpha_override(std::nullopt);
+        }
+    }
     if (animation_editor_window_) animation_editor_window_->set_visible(false);
     if (asset_selector_) asset_selector_->close();
     if (assets_ && forcing_high_quality_rendering_) {
@@ -572,6 +594,73 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
 
     if (!area_mode_ && !info_) return false;
 
+    // World overlay: click-and-drag light crosshairs when Lighting section is open
+    if (lighting_section_ && lighting_section_->is_expanded() && info_ && assets_) {
+        const bool pointer_event =
+            (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+        if (pointer_event && target_asset_ && target_asset_->info.get() == info_.get()) {
+            const camera& cam = assets_->getView();
+            auto light_screen_pos = [&](const LightSource& light) -> SDL_Point {
+                int offx = light.offset_x;
+                if (target_asset_->flipped) offx = -offx;
+                const int wx = target_asset_->pos.x + offx;
+                const int wy = target_asset_->pos.y + light.offset_y;
+                SDL_FPoint sp = cam.map_to_screen(SDL_Point{ wx, wy });
+                return SDL_Point{ static_cast<int>(std::lround(sp.x)), static_cast<int>(std::lround(sp.y)) };
+            };
+
+            auto screen_to_world = [&](int sx, int sy) -> SDL_Point {
+                SDL_FPoint wp = cam.screen_to_map(SDL_Point{ sx, sy });
+                return SDL_Point{ static_cast<int>(std::lround(wp.x)), static_cast<int>(std::lround(wp.y)) };
+            };
+
+            const int mx = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
+            const int my = (e.type == SDL_MOUSEMOTION) ? e.motion.y : e.button.y;
+
+            auto hit_test_index = [&](int sx, int sy) -> int {
+                const int kHitRadius = 10;
+                for (size_t i = 0; i < info_->light_sources.size(); ++i) {
+                    SDL_Point sp = light_screen_pos(info_->light_sources[i]);
+                    const int dx = sp.x - sx;
+                    const int dy = sp.y - sy;
+                    if (dx*dx + dy*dy <= kHitRadius * kHitRadius) {
+                        return static_cast<int>(i);
+                    }
+                }
+                return -1;
+            };
+
+            if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                int idx = hit_test_index(mx, my);
+                if (idx >= 0) {
+                    light_drag_active_ = true;
+                    light_drag_index_ = idx;
+                    return true;
+                }
+            } else if (e.type == SDL_MOUSEMOTION && light_drag_active_ && light_drag_index_ >= 0 && light_drag_index_ < static_cast<int>(info_->light_sources.size())) {
+                SDL_Point w = screen_to_world(mx, my);
+                auto& L = info_->light_sources[light_drag_index_];
+                // Compute new local offset from asset position accounting for flip
+                const int dx = w.x - target_asset_->pos.x;
+                const int dy = w.y - target_asset_->pos.y;
+                L.offset_x = target_asset_->flipped ? -dx : dx;
+                L.offset_y = dy;
+                if (lighting_section_) lighting_section_->sync_from_info();
+                this->notify_light_sources_modified(true);
+                (void)info_->commit_manifest();
+                return true;
+            } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                if (light_drag_active_) {
+                    light_drag_active_ = false;
+                    if (light_drag_index_ >= 0) {
+                        light_drag_index_ = -1;
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
         close();
         return true;
@@ -612,6 +701,19 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         }
     } else {
         forcing_high_quality_rendering_ = false;
+    }
+
+    // While the Lighting section is expanded, force the map light to darkest opacity
+    if (assets_) {
+        Global_Light_Source* gl = assets_->map_light_source();
+        if (gl) {
+            const bool lighting_open = visible_ && info_ && lighting_section_ && lighting_section_->is_expanded();
+            if (lighting_open) {
+                gl->set_alpha_override(static_cast<Uint8>(255));
+            } else {
+                gl->set_alpha_override(std::nullopt);
+            }
+        }
     }
 
     if (!visible_ || (!area_mode_ && !info_)) return;

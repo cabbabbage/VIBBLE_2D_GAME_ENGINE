@@ -145,4 +145,8 @@ class AssetInfoUI {
     void clear_delete_state();
     bool handle_delete_modal_event(const SDL_Event& e);
     void update_delete_modal_geometry(int screen_w, int screen_h);
+
+    // Light crosshair dragging state
+    bool light_drag_active_ = false;
+    int  light_drag_index_ = -1;
 };

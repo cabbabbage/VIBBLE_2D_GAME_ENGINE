@@ -710,6 +710,19 @@ struct SpawnGroupConfig::Entry {
 
         empty_candidates_label_ = std::make_unique<SpawnGroupLabelWidget>("No candidates", DMStyles::Label().color, true);
 
+        // Explicit flip controls (hidden by default; visibility decided in sync_from_json)
+        auto explicit_flip_checkbox = std::make_unique<DMCheckbox>("Explicit Flip", false);
+        explicit_flip_widget_ = std::make_unique<CallbackCheckboxWidget>(
+            std::move(explicit_flip_checkbox),
+            [this](bool value) { on_explicit_flip_changed(value); },
+            editable_);
+
+        auto force_flipped_checkbox = std::make_unique<DMCheckbox>("Always Flipped", false);
+        force_flipped_widget_ = std::make_unique<CallbackCheckboxWidget>(
+            std::move(force_flipped_checkbox),
+            [this](bool value) { on_force_flipped_changed(value); },
+            editable_);
+
         rebuild_candidate_widgets();
         sync_from_json();
         update_toggle_label();
@@ -906,6 +919,36 @@ struct SpawnGroupConfig::Entry {
             }
         }
 
+        // Determine explicit flip visibility and state
+        auto has_flippable_candidate = [this](const nlohmann::json& e) -> bool {
+            if (!owner_ || !owner_->manifest_store_) return false;
+            if (!e.is_object()) return false;
+            auto it = e.find("candidates");
+            if (it == e.end() || !it->is_array()) return false;
+            try {
+                for (const auto& c : *it) {
+                    if (!c.is_object()) continue;
+                    std::string nm = c.value("name", std::string{});
+                    if (nm.empty() || nm == "null") continue;
+                    if (!nm.empty() && nm.front() == '#') continue; // tags not resolved here
+                    auto view = owner_->manifest_store_->get_asset(nm);
+                    if (!view || !view.data || !view.data->is_object()) continue;
+                    if (view.data->value("can_invert", false)) return true;
+                }
+            } catch (...) {}
+            return false;
+        };
+        const bool prev_show_explicit = show_explicit_flip_widget_;
+        const bool prev_show_force    = show_force_flipped_widget_;
+        show_explicit_flip_widget_ = has_flippable_candidate(entry);
+        const bool explicit_on = safe_bool(entry, "explicit_flip", false) && show_explicit_flip_widget_;
+        show_force_flipped_widget_ = explicit_on;
+        if (explicit_flip_widget_) explicit_flip_widget_->set_value(explicit_on);
+        if (force_flipped_widget_) force_flipped_widget_->set_value(safe_bool(entry, "force_flipped", false));
+        if (owner_ && (prev_show_explicit != show_explicit_flip_widget_ || prev_show_force != show_force_flipped_widget_)) {
+            owner_->mark_layout_dirty();
+        }
+
         const bool geometry_flag = safe_bool(entry, "resolve_geometry_to_room_size", show_resolve_geometry_widget_);
         const bool quantity_flag = safe_bool(entry, "resolve_quantity_to_room_size", false);
 
@@ -1090,6 +1133,13 @@ struct SpawnGroupConfig::Entry {
             }
             if (auto* graph = candidate_editor_widget()) {
                 rows.push_back({graph});
+            }
+
+            if (show_explicit_flip_widget_ && explicit_flip_widget_) {
+                rows.push_back({explicit_flip_widget_.get()});
+            }
+            if (show_force_flipped_widget_ && force_flipped_widget_) {
+                rows.push_back({force_flipped_widget_.get()});
             }
 
             if (open_area_widget_ && open_area_handler_ && !area_link_target_.empty()) {
@@ -1640,6 +1690,24 @@ private:
         }
     }
 
+    void on_explicit_flip_changed(bool value) {
+        if (!editable_) return;
+        if (auto* entry = mutable_entry()) {
+            (*entry)["explicit_flip"] = value;
+            notify_change(false, false, false);
+            show_force_flipped_widget_ = value && show_explicit_flip_widget_;
+            if (owner_) owner_->mark_layout_dirty();
+        }
+    }
+
+    void on_force_flipped_changed(bool value) {
+        if (!editable_) return;
+        if (auto* entry = mutable_entry()) {
+            (*entry)["force_flipped"] = value;
+            notify_change(false, false, false);
+        }
+    }
+
     SpawnGroupConfig* owner_ = nullptr;
     nlohmann::json* entry_ = nullptr;
     nlohmann::json shadow_entry_ = nlohmann::json::object();
@@ -1701,6 +1769,12 @@ private:
     bool show_resolve_geometry_widget_ = false;
     bool show_resolve_quantity_widget_ = false;
     int current_resolution_ = 0;
+
+    // Explicit flip UI state
+    std::unique_ptr<CallbackCheckboxWidget> explicit_flip_widget_{};
+    std::unique_ptr<CallbackCheckboxWidget> force_flipped_widget_{};
+    bool show_explicit_flip_widget_ = false;
+    bool show_force_flipped_widget_ = false;
 
     std::optional<size_t> array_index_{};
 

@@ -17,7 +17,7 @@
             },
             "types": {
                 "area": false,
-                "boundary": true,
+                "boundary": false,
                 "enemy": true,
                 "npc": false,
                 "object": true,
@@ -31,7 +31,7 @@
                 "enabled": true
             },
             "snap": {
-                "enabled": false
+                "enabled": true
             }
         }
     },

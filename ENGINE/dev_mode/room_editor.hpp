@@ -348,6 +348,10 @@ private:
     std::string drag_spawn_id_;
     bool suppress_next_left_click_ = false;
 
+    // During an active drag with snap OFF, we temporarily sync the footer grid
+    // overlay resolution to the spawn group's resolution and restore it on end.
+    std::optional<int> overlay_resolution_before_drag_{};
+
     int click_buffer_frames_ = 0;
     int rclick_buffer_frames_ = 0;
     int hover_miss_frames_ = 0;

@@ -3770,7 +3770,10 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     // Close room config if it's open and remember the state
     room_config_was_open_before_drag_ = room_config_dock_open_;
     if (room_config_dock_open_) {
+        // Preserve current selection when closing config due to drag start
+        suppress_room_config_selection_clear_ = true;
         set_room_config_visible(false);
+        suppress_room_config_selection_clear_ = false;
     }
 
     drag_mode_ = DragMode::None;
@@ -3822,6 +3825,37 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     }
 
     bool resolve_geometry = (method == "Exact" || method == "Exact Position" || method == "Perimeter");
+
+    // Handle snap-to-grid + footer overlay resolution interactions on drag start
+    const int overlay_resolution = shared_footer_bar_ ? shared_footer_bar_->grid_resolution()
+                                                     : vibble::grid::clamp_resolution(map_settings.resolution);
+    const bool snap_enabled = shared_footer_bar_ ? shared_footer_bar_->snap_to_grid_enabled() : false;
+
+    if (snap_enabled) {
+        // Snap ON: set group resolution to overlay immediately on drag start
+        const int clamped_overlay_r = vibble::grid::clamp_resolution(overlay_resolution);
+        drag_resolution_ = clamped_overlay_r;
+        if (spawn_entry) {
+            (*spawn_entry)["resolution"] = clamped_overlay_r;
+            // Persist the resolution update immediately
+            save_current_room_assets_json();
+        }
+        // Do not change overlay resolution
+        overlay_resolution_before_drag_.reset();
+    } else {
+        // Snap OFF: snap to the group's set resolution, and temporarily sync overlay to it
+        if (spawn_entry) {
+            const int group_r = vibble::grid::clamp_resolution(spawn_entry->value("resolution", drag_resolution_));
+            drag_resolution_ = group_r;
+            if (shared_footer_bar_) {
+                const int current_overlay = shared_footer_bar_->grid_resolution();
+                if (group_r != current_overlay) {
+                    overlay_resolution_before_drag_ = current_overlay;
+                    shared_footer_bar_->set_grid_resolution(group_r);
+                }
+            }
+        }
+    }
 
     auto [room_w, room_h] = get_room_dimensions();
     drag_perimeter_curr_w_ = room_w;
@@ -4191,7 +4225,6 @@ void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
 }
 
 bool RoomEditor::snap_dragged_assets_to_grid() {
-    if (drag_mode_ != DragMode::Exact) return false;
     if (drag_states_.empty()) return false;
     const int resolution = vibble::grid::clamp_resolution(drag_resolution_);
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
@@ -4232,6 +4265,12 @@ bool RoomEditor::snap_dragged_assets_to_grid() {
 }
 
 void RoomEditor::finalize_drag_session() {
+    // Restore overlay grid resolution if we changed it for the drag
+    if (shared_footer_bar_ && overlay_resolution_before_drag_.has_value()) {
+        shared_footer_bar_->set_grid_resolution(*overlay_resolution_before_drag_);
+        overlay_resolution_before_drag_.reset();
+    }
+
     if (drag_states_.empty()) {
         reset_drag_state();
         return;
@@ -4358,6 +4397,7 @@ void RoomEditor::reset_drag_state() {
     drag_moved_ = false;
     drag_spawn_id_.clear();
     room_config_was_open_before_drag_ = false;
+    overlay_resolution_before_drag_.reset();
 }
 
 nlohmann::json* RoomEditor::find_spawn_entry(const std::string& spawn_id) {

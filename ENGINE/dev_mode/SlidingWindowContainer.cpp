@@ -233,8 +233,24 @@ void SlidingWindowContainer::update(const Input& input, int screen_w, int screen
     int my = input.getY();
     const bool pointer_in_scroll =
         (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w && my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h);
-    const bool pointer_in_panel_area =
-        (mx >= panel_.x && mx < panel_.x + panel_.w && my >= panel_.y && my < panel_.y + panel_.h);
+    bool pointer_in_panel_area = false;
+    // When header is hidden, ignore the header region for hit testing so it doesn't consume input
+    if (!header_visible_) {
+        const int padding = DMSpacing::panel_padding();
+        const int content_top = panel_.y + padding;
+        const int label_height = DMButton::height();
+        const int label_gap = DMSpacing::item_gap();
+        int scroll_start = content_top + (header_visible_ ? (label_height + label_gap) : 0);
+        SDL_Rect effective_panel = panel_;
+        effective_panel.y = scroll_start;
+        effective_panel.h = panel_.h - (scroll_start - panel_.y);
+        if (effective_panel.h < 0) effective_panel.h = 0;
+        pointer_in_panel_area =
+            (mx >= effective_panel.x && mx < effective_panel.x + effective_panel.w && my >= effective_panel.y && my < effective_panel.y + effective_panel.h);
+    } else {
+        pointer_in_panel_area =
+            (mx >= panel_.x && mx < panel_.x + panel_.w && my >= panel_.y && my < panel_.y + panel_.h);
+    }
     if ((pointer_in_scroll || pointer_in_panel_area) && !DMWidgetsSliderScrollCaptured()) {
         int dy = input.getScrollY();
         if (dy != 0) {

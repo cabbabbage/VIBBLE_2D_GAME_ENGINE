@@ -324,6 +324,16 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
         changed = true;
     }
 
+    // Explicit flip defaults (optional; default to disabled)
+    if (!entry.contains("explicit_flip") || !entry["explicit_flip"].is_boolean()) {
+        entry["explicit_flip"] = false;
+        changed = true;
+    }
+    if (!entry.contains("force_flipped") || !entry["force_flipped"].is_boolean()) {
+        entry["force_flipped"] = false;
+        changed = true;
+    }
+
     if (method == "Edge") {
         int inset = entry.value("edge_inset_percent", kEdgeInsetDefault);
         int clamped_inset = std::clamp(inset, kEdgeInsetSliderMin, kEdgeInsetSliderMax);

@@ -432,8 +432,8 @@ void CameraUIPanel::build_ui() {
     render_section_label_ = std::make_unique<SectionLabelWidget>("Rendering");
     perspective_section_label_ = std::make_unique<SectionLabelWidget>("Perspective");
     smoothing_section_label_ = std::make_unique<SectionLabelWidget>("Smoothing");
-    render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Distance (world units)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
-    render_distance_slider_->set_tooltip("Maximum world-space distance from the camera at which assets are rendered.");
+    render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Distance (screen px)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
+    render_distance_slider_->set_tooltip("Screen-space margin in pixels around the view to activate and render assets (converted to world units based on zoom).");
     min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min Visible Screen Ratio", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
     min_render_size_slider_->set_tooltip("Cull sprites once their on-screen height falls below this fraction of the viewport.");
     tripod_distance_slider_ = std::make_unique<FloatSliderWidget>("Tripod Distance (Y)", -2000.0f, 0.0f, 5.0f, defaults.tripod_distance_y, 0);
