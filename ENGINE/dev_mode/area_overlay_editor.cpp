@@ -2052,6 +2052,7 @@ void AreaOverlayEditor::append_room_area_spawn_rows(DockableCollapsible::Rows& r
     if (!room_area_spawn_list_) room_area_spawn_list_ = std::make_unique<SpawnGroupConfig>(false);
     if (!room_area_spawn_list_) return;
 
+    room_area_spawn_list_->set_manifest_store(assets_ ? assets_->manifest_store() : nullptr);
     room_area_spawn_list_->set_embedded_mode(true);
 
     // Locate or create the spawn_groups array for this area within room assets JSON

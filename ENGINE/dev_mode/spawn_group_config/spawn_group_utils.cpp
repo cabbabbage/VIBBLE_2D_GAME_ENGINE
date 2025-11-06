@@ -310,6 +310,12 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
         changed = true;
     }
 
+    // Ensure per-group lock flag exists (default false)
+    if (!entry.contains("locked") || !entry["locked"].is_boolean()) {
+        entry["locked"] = false;
+        changed = true;
+    }
+
     const int fallback_resolution = default_resolution
         ? vibble::grid::clamp_resolution(*default_resolution) : vibble::grid::clamp_resolution(MapGridSettings::defaults().resolution);
     int resolution = read_int(entry, "resolution", fallback_resolution);

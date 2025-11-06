@@ -1189,6 +1189,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         shade_entry["factor"] = shading_factor;
         shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
         shade_entry["behind"] = shading.behind;
+        shade_entry["front"]  = shading.in_front;
     } else {
         shade_entry["light_intensity"] = 0;
         shade_entry["radius"] = 0;
@@ -1200,6 +1201,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         shade_entry["factor"] = shading_factor;
         shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
         shade_entry["behind"] = shading.behind;
+        shade_entry["front"]  = shading.in_front;
     }
     arr.push_back(shade_entry);
 
@@ -1215,6 +1217,7 @@ void AssetInfo::set_lighting(bool is_shaded_,
         j["offset_y"] = l.offset_y;
         j["light_color"] = { l.color.r, l.color.g, l.color.b };
         j["behind"] = l.behind;
+        j["front"]  = l.in_front;
         arr.push_back(std::move(j));
     }
     info_json_["has_shading"] = is_shaded;

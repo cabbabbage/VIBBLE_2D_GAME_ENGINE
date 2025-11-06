@@ -57,7 +57,30 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                     }
                 } catch (...) {
                 }
-                light.behind    = l.value("behind", false);
+                light.behind       = l.value("behind", false);
+                // If explicit front flag present, use it; otherwise default to !behind for backwards-compat
+                if (l.contains("front")) {
+                    try {
+                        light.in_front = l.value("front", true);
+                    } catch (...) {
+                        light.in_front = true;
+                    }
+                } else {
+                    light.in_front = !light.behind;
+                }
+                // Legacy support: if older data disabled render_texture entirely, respect it by disabling both placements.
+                if (l.contains("render_texture")) {
+                    bool legacy_render_texture = true;
+                    try {
+                        legacy_render_texture = l.value("render_texture", true);
+                    } catch (...) {
+                        legacy_render_texture = true;
+                    }
+                    if (!legacy_render_texture) {
+                        light.in_front = false;
+                        light.behind   = false;
+                    }
+                }
                 return parsed;
 };
         auto append_light = [&](const ParsedLight& parsed) {

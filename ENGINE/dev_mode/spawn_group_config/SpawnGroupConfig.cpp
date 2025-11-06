@@ -14,6 +14,7 @@
 
 #include "spawn_group_utils.hpp"
 #include "dm_styles.hpp"
+#include "dm_icons.hpp"
 #include "widgets.hpp"
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
 #include "utils/input.hpp"
@@ -310,6 +311,12 @@ public:
 
     void render(SDL_Renderer* renderer) const override {
         if (box_) box_->render(renderer);
+        if (!editable_) {
+            SDL_Rect r = rect();
+            SDL_Color overlay{40, 40, 40, 140};
+            SDL_SetRenderDrawColor(renderer, overlay.r, overlay.g, overlay.b, overlay.a);
+            SDL_RenderFillRect(renderer, &r);
+        }
     }
 
     bool wants_full_row() const override { return full_row_; }
@@ -373,6 +380,12 @@ public:
 
     void render(SDL_Renderer* renderer) const override {
         if (slider_) slider_->render(renderer);
+        if (!editable_) {
+            SDL_Rect r = rect();
+            SDL_Color overlay{40, 40, 40, 140};
+            SDL_SetRenderDrawColor(renderer, overlay.r, overlay.g, overlay.b, overlay.a);
+            SDL_RenderFillRect(renderer, &r);
+        }
     }
 
     bool wants_full_row() const override { return true; }
@@ -443,6 +456,12 @@ public:
 
     void render(SDL_Renderer* renderer) const override {
         if (checkbox_) checkbox_->render(renderer);
+        if (!editable_) {
+            SDL_Rect r = rect();
+            SDL_Color overlay{40, 40, 40, 140};
+            SDL_SetRenderDrawColor(renderer, overlay.r, overlay.g, overlay.b, overlay.a);
+            SDL_RenderFillRect(renderer, &r);
+        }
     }
 
     void set_value(bool value) {
@@ -498,6 +517,12 @@ public:
 
     void render(SDL_Renderer* renderer) const override {
         if (dropdown_) dropdown_->render(renderer);
+        if (!editable_) {
+            SDL_Rect r = rect();
+            SDL_Color overlay{40, 40, 40, 140};
+            SDL_SetRenderDrawColor(renderer, overlay.r, overlay.g, overlay.b, overlay.a);
+            SDL_RenderFillRect(renderer, &r);
+        }
     }
 
     void set_options(std::vector<std::string> options, int selected) {
@@ -610,7 +635,7 @@ struct SpawnGroupConfig::Entry {
 
         delete_button_ = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 200, DMButton::height());
         delete_widget_ = std::make_unique<ButtonWidget>(delete_button_.get(), [this]() {
-            if (!owner_) return;
+            if (!owner_ || !editable_) return;
             std::string id = spawn_id();
             owner_->enqueue_notification([owner = owner_, id]() {
                 if (!owner) return;
@@ -654,6 +679,12 @@ struct SpawnGroupConfig::Entry {
         terminate_with_parent_widget_.reset();
         placed_on_top_parent_widget_.reset();
 
+        auto lock_checkbox = std::make_unique<DMCheckbox>("Locked", false);
+        lock_widget_ = std::make_unique<CallbackCheckboxWidget>(
+            std::move(lock_checkbox),
+            [this](bool value) { on_locked_changed(value); },
+            editable_);
+
         auto enforce_checkbox = std::make_unique<DMCheckbox>("Enforce Spacing", false);
         enforce_widget_ = std::make_unique<CallbackCheckboxWidget>(std::move(enforce_checkbox),
             [this](bool value) {
@@ -676,6 +707,23 @@ struct SpawnGroupConfig::Entry {
             std::move(quantity_checkbox),
             [this](bool value) { on_resolve_quantity_changed(value); },
             editable_);
+
+        // Section toggles: Candidates and Advanced Options (both collapsed by default).
+        candidates_toggle_btn_ = std::make_unique<DMButton>("Candidates", &DMStyles::ListButton(), 140, DMButton::height());
+        candidates_toggle_widget_ = std::make_unique<ButtonWidget>(candidates_toggle_btn_.get(), [this]() {
+            candidates_expanded_ = !candidates_expanded_;
+            update_candidates_toggle_label();
+            if (owner_) owner_->mark_layout_dirty();
+        });
+        update_candidates_toggle_label();
+
+        advanced_toggle_btn_ = std::make_unique<DMButton>("Advanced Options", &DMStyles::ListButton(), 180, DMButton::height());
+        advanced_toggle_widget_ = std::make_unique<ButtonWidget>(advanced_toggle_btn_.get(), [this]() {
+            advanced_expanded_ = !advanced_expanded_;
+            update_advanced_toggle_label();
+            if (owner_) owner_->mark_layout_dirty();
+        });
+        update_advanced_toggle_label();
 
         auto min_box = std::make_unique<DMTextBox>("Min Number", "");
         min_widget_ = std::make_unique<SpawnGroupCallbackTextBoxWidget>(std::move(min_box),
@@ -846,6 +894,15 @@ struct SpawnGroupConfig::Entry {
         const std::string id = spawn_id();
         std::string display = safe_string(entry, "display_name", {});
         name_widget_->set_value(display);
+
+        // Sync lock state and recompute editable gating
+        bool base_editable = (owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr));
+        locked_ = safe_bool(entry, "locked", false);
+        if (lock_widget_) {
+            lock_widget_->set_value(locked_);
+            lock_widget_->set_editable(base_editable);
+        }
+        editable_ = base_editable && !locked_;
 
         std::string method = safe_string(entry, "position", kDefaultMethod);
         if (std::find(method_options_.begin(), method_options_.end(), method) == method_options_.end()) {
@@ -1063,8 +1120,17 @@ struct SpawnGroupConfig::Entry {
         if (resolve_quantity_widget_) {
             resolve_quantity_widget_->set_editable(editable_ && show_resolve_quantity_widget_);
         }
+        // Ensure lock checkbox remains editable when entry is locked so it can be toggled
+        if (lock_widget_) {
+            bool base_editable = (owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr));
+            lock_widget_->set_editable(base_editable);
+        }
         // Linked area UI removed; no dropdown to edit.
         update_priority_button_states();
+        if (delete_button_) {
+            // Dim delete button when not editable
+            delete_button_->set_style(editable_ ? &DMStyles::DeleteButton() : &disabled_priority_button_style());
+        }
     }
 
     void set_expanded(bool expanded) {
@@ -1090,6 +1156,13 @@ struct SpawnGroupConfig::Entry {
                 if (!priority_row.empty()) rows.push_back(priority_row);
             }
 
+            // Header row for section toggles: Candidates (left) and Advanced Options (right)
+            if (candidates_toggle_widget_ || advanced_toggle_widget_) {
+                DockableCollapsible::Row toggles_row;
+                if (candidates_toggle_widget_) toggles_row.push_back(candidates_toggle_widget_.get());
+                if (advanced_toggle_widget_)   toggles_row.push_back(advanced_toggle_widget_.get());
+                if (!toggles_row.empty()) rows.push_back(toggles_row);
+            }
             rows.push_back({method_widget_.get()});
 
             const bool hide_quantity_controls = quantity_hidden() || current_method_ == "Exact";
@@ -1099,23 +1172,15 @@ struct SpawnGroupConfig::Entry {
                 DockableCollapsible::Row qty_row;
                 qty_row.push_back(min_widget_.get());
                 qty_row.push_back(max_widget_.get());
-                if (show_resolve_quantity_widget_ && resolve_quantity_widget_) {
-                    qty_row.push_back(resolve_quantity_widget_.get());
-                }
                 rows.push_back(qty_row);
             } else if (show_exact_quantity) {
                 DockableCollapsible::Row qty_row;
                 qty_row.push_back(exact_widget_.get());
-                if (show_resolve_quantity_widget_ && resolve_quantity_widget_) {
-                    qty_row.push_back(resolve_quantity_widget_.get());
-                }
                 rows.push_back(qty_row);
             }
 
-            if (show_resolve_geometry_widget_ && resolve_geometry_widget_) {
-                rows.push_back({resolve_geometry_widget_.get()});
-            }
-
+            // Sliders and non-checkbox fields remain outside Advanced Options
+            
             if (show_perimeter_radius_widget_ && perimeter_radius_widget_) {
                 rows.push_back({perimeter_radius_widget_.get()});
             }
@@ -1128,18 +1193,36 @@ struct SpawnGroupConfig::Entry {
                 rows.push_back({resolution_widget_.get()});
             }
 
-            if (candidate_entries_.empty()) {
-                rows.push_back({empty_candidates_label_.get()});
-            }
-            if (auto* graph = candidate_editor_widget()) {
-                rows.push_back({graph});
+            // Candidates section content (collapsible)
+            if (candidates_expanded_) {
+                if (candidate_entries_.empty()) {
+                    rows.push_back({empty_candidates_label_.get()});
+                }
+                if (auto* graph = candidate_editor_widget()) {
+                    rows.push_back({graph});
+                }
             }
 
-            if (show_explicit_flip_widget_ && explicit_flip_widget_) {
-                rows.push_back({explicit_flip_widget_.get()});
-            }
-            if (show_force_flipped_widget_ && force_flipped_widget_) {
-                rows.push_back({force_flipped_widget_.get()});
+            // Advanced Options section content (collapsible)
+            if (advanced_expanded_) {
+                if (lock_widget_) {
+                    rows.push_back({ lock_widget_.get() });
+                }
+                if (show_resolve_geometry_widget_ && resolve_geometry_widget_) {
+                    rows.push_back({resolve_geometry_widget_.get()});
+                }
+                if (show_resolve_quantity_widget_ && resolve_quantity_widget_) {
+                    rows.push_back({resolve_quantity_widget_.get()});
+                }
+                if (show_explicit_flip_widget_ && explicit_flip_widget_) {
+                    rows.push_back({explicit_flip_widget_.get()});
+                }
+                if (show_force_flipped_widget_ && force_flipped_widget_) {
+                    rows.push_back({force_flipped_widget_.get()});
+                }
+                if (enforce_widget_) {
+                    rows.push_back({enforce_widget_.get()});
+                }
             }
 
             if (open_area_widget_ && open_area_handler_ && !area_link_target_.empty()) {
@@ -1162,9 +1245,7 @@ struct SpawnGroupConfig::Entry {
                 }
             }
 
-            if (enforce_widget_) {
-                rows.push_back({enforce_widget_.get()});
-            }
+            // enforce_widget_ moved into Advanced Options
 
             if (delete_widget_) {
                 rows.push_back({delete_widget_.get()});
@@ -1198,6 +1279,7 @@ struct SpawnGroupConfig::Entry {
     }
 
     bool can_begin_drag_at(const SDL_Point& point) const {
+        if (locked_) return false;
         SDL_Rect rect = header_rect();
         if (rect.w <= 0 || rect.h <= 0) return false;
         if (SDL_PointInRect(&point, &rect)) {
@@ -1242,6 +1324,22 @@ private:
     }
 
     void update_toggle_label() {}
+
+    void update_candidates_toggle_label() {
+        if (!candidates_toggle_btn_) return;
+        std::string label = "";
+        label += candidates_expanded_ ? std::string(DMIcons::CollapseExpanded()) : std::string(DMIcons::CollapseCollapsed());
+        label += " Candidates";
+        candidates_toggle_btn_->set_text(label);
+    }
+
+    void update_advanced_toggle_label() {
+        if (!advanced_toggle_btn_) return;
+        std::string label = "";
+        label += advanced_expanded_ ? std::string(DMIcons::CollapseExpanded()) : std::string(DMIcons::CollapseCollapsed());
+        label += " Advanced Options";
+        advanced_toggle_btn_->set_text(label);
+    }
 
     void update_ownership_label() {
         if (!ownership_label_widget_) return;
@@ -1341,7 +1439,7 @@ private:
             graph->set_on_delete([this](int index){
                 this->remove_candidate_at(index);
             });
-            if (owner_ && owner_->callbacks_.on_regenerate) {
+            if (owner_ && owner_->callbacks_.on_regenerate && editable_) {
                 graph->set_on_regenerate([this]() {
                     if (!owner_) return;
                     std::string id = spawn_id();
@@ -1708,6 +1806,20 @@ private:
         }
     }
 
+    void on_locked_changed(bool value) {
+        // Allow toggling lock only if the underlying entry is editable in general
+        bool base_editable = (owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr));
+        if (!base_editable) return;
+        if (auto* entry = mutable_entry()) {
+            (*entry)["locked"] = value;
+            locked_ = value;
+            // Recompute per-widget editability
+            editable_ = base_editable && !locked_;
+            notify_change(false, false, false);
+            refresh_configuration();
+        }
+    }
+
     SpawnGroupConfig* owner_ = nullptr;
     nlohmann::json* entry_ = nullptr;
     nlohmann::json shadow_entry_ = nlohmann::json::object();
@@ -1718,6 +1830,13 @@ private:
     std::optional<std::string> method_lock_{};
     bool quantity_hidden_ = false;
     std::unique_ptr<CandidateEditorPieGraphWidget> candidate_graph_{};
+    // Section toggles
+    std::unique_ptr<DMButton> candidates_toggle_btn_{};
+    std::unique_ptr<ButtonWidget> candidates_toggle_widget_{};
+    bool candidates_expanded_ = false;
+    std::unique_ptr<DMButton> advanced_toggle_btn_{};
+    std::unique_ptr<ButtonWidget> advanced_toggle_widget_{};
+    bool advanced_expanded_ = false;
     bool editable_ = false;
     bool expanded_state_ = false;
     bool use_exact_quantity_ = false;
@@ -1733,6 +1852,7 @@ private:
     std::unique_ptr<PriorityButtonWidget> priority_down_widget_{};
     std::unique_ptr<DMButton> delete_button_{};
     std::unique_ptr<ButtonWidget> delete_widget_{};
+    std::unique_ptr<CallbackCheckboxWidget> lock_widget_{};
 
     std::unique_ptr<SpawnGroupCallbackTextBoxWidget> name_widget_{};
 
@@ -1775,6 +1895,7 @@ private:
     std::unique_ptr<CallbackCheckboxWidget> force_flipped_widget_{};
     bool show_explicit_flip_widget_ = false;
     bool show_force_flipped_widget_ = false;
+    bool locked_ = false;
 
     std::optional<size_t> array_index_{};
 

@@ -51,6 +51,7 @@ private:
     using LightOverlaySource = runtime_lighting::AssetLight;
 
     struct AssetRenderCommand {
+        Asset*      asset               = nullptr;
         SDL_Texture* source_texture      = nullptr;
         SDL_Texture* final_texture       = nullptr;
         SDL_FRect    dst                 { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -64,6 +65,7 @@ private:
     bool ensure_darkness_overlay();
     void destroy_darkness_overlay();
     void render_dynamic_darkness_overlay(float map_light_opacity);
+    void render_lights_for_source(const LightOverlaySource& source, bool draw_front);
     void inject_map_light_sample();
 
     SDL_Renderer*  renderer_;

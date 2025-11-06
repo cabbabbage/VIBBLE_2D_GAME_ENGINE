@@ -474,8 +474,17 @@ void RoomEditor::select_spawn_group_assets(const std::string& spawn_id) {
             return true;
         }
         return !std::equal(selected_assets_.begin(), selected_assets_.end(), previous_selection.begin());
-};
+    };
     if (spawn_id.empty()) {
+        sync_spawn_group_panel_with_selection();
+        if (selection_changed()) {
+            mark_highlight_dirty();
+        }
+        update_highlighted_assets();
+        return;
+    }
+    // Prevent selecting a locked spawn group
+    if (spawn_group_locked(spawn_id)) {
         sync_spawn_group_panel_with_selection();
         if (selection_changed()) {
             mark_highlight_dirty();
@@ -1971,6 +1980,12 @@ void RoomEditor::set_manifest_store(devmode::core::ManifestStore* store) {
     if (info_ui_) {
         info_ui_->set_manifest_store(manifest_store_);
     }
+    if (spawn_group_panel_) {
+        spawn_group_panel_->set_manifest_store(manifest_store_);
+    }
+    if (room_cfg_ui_) {
+        room_cfg_ui_->set_manifest_store(manifest_store_);
+    }
 }
 
 void RoomEditor::close_asset_info_editor() {
@@ -2526,56 +2541,68 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*render
 
     const camera& cam = assets_->getView();
 
-    // If we can't ensure the spatial index, just do the slow but correct reverse render-order scan.
-    auto reverse_render_order_scan = [&](const std::vector<Asset*>& pool) -> Asset* {
-        for (auto it = pool.rbegin(); it != pool.rend(); ++it) {
-            Asset* asset = *it;
-            if (!asset) continue;
-
-            auto bc = asset_bounds_cache_.find(asset);
-            if (bc == asset_bounds_cache_.end()) continue;
-
-            const SDL_Rect& rect = bc->second.bounds;
-            if (SDL_PointInRect(&screen_point, &rect)) {
-                return asset; // first one we “drew last” that contains the point
-            }
-        }
-        return nullptr;
-    };
-
     if (!ensure_spatial_index(cam)) {
-        // No spatial index: scan everything in reverse draw order.
-        return reverse_render_order_scan(*active_assets_);
+        // No spatial index: compute bounds and choose the asset highest on screen.
+        return hit_test_asset_fallback(cam, screen_point);
     }
 
-    // With spatial index: gather candidates, then walk active assets in reverse
-    // (render order) and pick the first that’s in the candidate set and contains the point.
+    // Gather nearby candidates and choose the one whose screen bounds sit highest.
     const std::vector<Asset*> candidates = gather_candidate_assets_for_point(screen_point);
-    if (candidates.empty()) {
-        // Nothing near; fall back to a full reverse-order scan (cheap early out anyway).
-        return nullptr;
-    }
+    if (!candidates.empty()) {
+        Asset* best = nullptr;
+        int best_bottom = std::numeric_limits<int>::max();
+        int best_top = std::numeric_limits<int>::max();
+        int best_screen_y = std::numeric_limits<int>::max();
+        int best_z = std::numeric_limits<int>::min();
+        int best_area = std::numeric_limits<int>::max();
 
-    // Build a fast membership set for candidates.
-    // (If <unordered_set> isn’t already included in this TU, add it at the top.)
-    std::unordered_set<Asset*> candset(candidates.begin(), candidates.end());
+        auto consider_candidate = [&](Asset* asset,
+                                      const SDL_Rect& rect,
+                                      int screen_y,
+                                      int z_index) {
+            if (!asset) return;
+            if (!asset->spawn_id.empty() && spawn_group_locked(asset->spawn_id)) {
+                return; // Ignore locked spawn groups entirely for hover/selection.
+            }
+            if (!SDL_PointInRect(&screen_point, &rect)) {
+                return;
+            }
+            const int bottom = rect.y + rect.h;
+            const int top = rect.y;
+            const int area = rect.w * rect.h;
+            const bool is_better =
+                !best ||
+                bottom < best_bottom ||
+                (bottom == best_bottom && top < best_top) ||
+                (bottom == best_bottom && top == best_top && screen_y < best_screen_y) ||
+                (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index > best_z) ||
+                (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index == best_z && area < best_area);
+            if (is_better) {
+                best = asset;
+                best_bottom = bottom;
+                best_top = top;
+                best_screen_y = screen_y;
+                best_z = z_index;
+                best_area = area;
+            }
+        };
 
-    for (auto it = active_assets_->rbegin(); it != active_assets_->rend(); ++it) {
-        Asset* asset = *it;
-        if (!asset) continue;
-        if (candset.find(asset) == candset.end()) continue;
+        for (Asset* asset : candidates) {
+            auto bc = asset_bounds_cache_.find(asset);
+            if (bc == asset_bounds_cache_.end()) {
+                continue;
+            }
+            const AssetSpatialEntry& entry = bc->second;
+            consider_candidate(asset, entry.bounds, entry.screen_y, entry.z_index);
+        }
 
-        auto bc = asset_bounds_cache_.find(asset);
-        if (bc == asset_bounds_cache_.end()) continue;
-
-        const SDL_Rect& rect = bc->second.bounds;
-        if (SDL_PointInRect(&screen_point, &rect)) {
-            return asset; // topmost actually drawn under the cursor
+        if (best) {
+            return best;
         }
     }
 
-    // Nothing hit in candidates; do a full reverse-order pass just in case.
-    return reverse_render_order_scan(*active_assets_);
+    // Nothing decisive from the spatial index; fall back to a full bounds check.
+    return hit_test_asset_fallback(cam, screen_point);
 }
 
 
@@ -2873,35 +2900,56 @@ Asset* RoomEditor::hit_test_asset_fallback(const camera& cam, SDL_Point screen_p
     const float reference_height = compute_reference_screen_height(cam, inv_scale);
 
     Asset* best = nullptr;
-    int best_screen_y = std::numeric_limits<int>::min();
-    int best_z_index  = std::numeric_limits<int>::min();
-    int best_area     = std::numeric_limits<int>::max(); // smaller is better on final tie-break
+    int best_bottom = std::numeric_limits<int>::max();
+    int best_top = std::numeric_limits<int>::max();
+    int best_screen_y = std::numeric_limits<int>::max();
+    int best_z = std::numeric_limits<int>::min();
+    int best_area = std::numeric_limits<int>::max(); // smaller is better on final tie-break
+
+    auto consider_candidate = [&](Asset* asset,
+                                  const SDL_Rect& rect,
+                                  int screen_y,
+                                  int z_index) {
+        if (!asset) return;
+        if (!asset->spawn_id.empty() && spawn_group_locked(asset->spawn_id)) {
+            return;
+        }
+        if (!SDL_PointInRect(&screen_point, &rect)) {
+            return;
+        }
+        const int bottom = rect.y + rect.h;
+        const int top = rect.y;
+        const int area = rect.w * rect.h;
+        const bool is_better =
+            !best ||
+            bottom < best_bottom ||
+            (bottom == best_bottom && top < best_top) ||
+            (bottom == best_bottom && top == best_top && screen_y < best_screen_y) ||
+            (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index > best_z) ||
+            (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index == best_z && area < best_area);
+        if (is_better) {
+            best = asset;
+            best_bottom = bottom;
+            best_top = top;
+            best_screen_y = screen_y;
+            best_z = z_index;
+            best_area = area;
+        }
+    };
 
     for (Asset* asset : *active_assets_) {
         if (!asset) continue;
+        if (!asset->spawn_id.empty() && spawn_group_locked(asset->spawn_id)) {
+            continue;
+        }
 
         SDL_Rect rect{0, 0, 0, 0};
         int screen_y = 0;
         if (!compute_asset_screen_bounds(cam, reference_height, inv_scale, asset, rect, screen_y)) {
             continue;
         }
-        if (!SDL_PointInRect(&screen_point, &rect)) {
-            continue;
-        }
 
-        // New ordering: z_index (topmost) -> screen_y (lower is in front) -> smaller rect area
-        const int area = rect.w * rect.h;
-
-        if (!best
-            || asset->z_index > best_z_index
-            || (asset->z_index == best_z_index && screen_y > best_screen_y)
-            || (asset->z_index == best_z_index && screen_y == best_screen_y && area < best_area)) {
-
-            best = asset;
-            best_screen_y = screen_y;
-            best_z_index  = asset->z_index;
-            best_area     = area;
-        }
+        consider_candidate(asset, rect, screen_y, asset->z_index);
     }
 
     return best;
@@ -3361,6 +3409,9 @@ void RoomEditor::update_highlighted_assets() {
         for (Asset* asset : *active_assets_) {
             if (!asset_belongs_to_room(asset)) continue;
             if (!hovered_asset_->spawn_id.empty() && asset->spawn_id == hovered_asset_->spawn_id) {
+                if (spawn_group_locked(asset->spawn_id)) {
+                    continue; // skip highlighting locked groups
+                }
                 if (std::find(highlighted_assets_.begin(), highlighted_assets_.end(), asset) == highlighted_assets_.end()) {
                     highlighted_assets_.push_back(asset);
                 }
@@ -3374,6 +3425,7 @@ void RoomEditor::update_highlighted_assets() {
 
     // Always highlight the hovered asset, even if not in allow_hover_group
     if (hovered_asset_ && asset_belongs_to_room(hovered_asset_) &&
+        (hovered_asset_->spawn_id.empty() || !spawn_group_locked(hovered_asset_->spawn_id)) &&
         std::find(highlighted_assets_.begin(), highlighted_assets_.end(), hovered_asset_) == highlighted_assets_.end()) {
         highlighted_assets_.push_back(hovered_asset_);
     }
@@ -3523,6 +3575,7 @@ void RoomEditor::ensure_room_configurator() {
         room_cfg_ui_ = std::make_unique<RoomConfigurator>();
     }
     if (room_cfg_ui_) {
+        room_cfg_ui_->set_manifest_store(manifest_store_);
         room_cfg_ui_->set_header_visibility_controller([this](bool visible) {
             room_config_panel_visible_ = visible;
             if (header_visibility_callback_) {
@@ -3644,6 +3697,7 @@ void RoomEditor::ensure_spawn_group_config_ui() {
         return;
     }
 
+    spawn_group_panel_->set_manifest_store(manifest_store_);
     spawn_group_panel_->set_show_header(true);
     spawn_group_panel_->set_close_button_enabled(true);
     spawn_group_panel_->set_scroll_enabled(true);
@@ -3767,6 +3821,14 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
 }
 
 void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier) {
+    // If primary selection belongs to a locked group, do not start drag
+    if (!selected_assets_.empty()) {
+        Asset* primary = selected_assets_.front();
+        if (primary && !primary->spawn_id.empty() && spawn_group_locked(primary->spawn_id)) {
+            return;
+        }
+    }
+
     // Close room config if it's open and remember the state
     room_config_was_open_before_drag_ = room_config_dock_open_;
     if (room_config_dock_open_) {
@@ -5843,4 +5905,18 @@ double RoomEditor::edge_length_along_direction(const Area& area,
         return 0.0;
     }
     return best;
+}
+bool RoomEditor::spawn_group_locked(const std::string& spawn_id) const {
+    if (spawn_id.empty()) return false;
+    // We need a non-const to call locate, but we won't mutate
+    RoomEditor* self = const_cast<RoomEditor*>(this);
+    SpawnEntryResolution resolved = self->locate_spawn_entry(spawn_id);
+    if (!resolved.valid() || !resolved.entry) return false;
+    try {
+        const auto& e = *resolved.entry;
+        if (e.is_object() && e.contains("locked") && e["locked"].is_boolean()) {
+            return e["locked"].get<bool>();
+        }
+    } catch (...) {}
+    return false;
 }
