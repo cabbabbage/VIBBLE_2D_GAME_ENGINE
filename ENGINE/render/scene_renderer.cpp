@@ -82,12 +82,13 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}),
   reactive_shadow_settings_(render_pipeline::shading::sanitize_reactive_shadow_settings({})),
-  render_pipeline_(renderer,
-                   SceneLighting{ assets->getView(),
-                                  main_light_source_,
-                                  assets->player,
-                                  nullptr,
-                                  &reactive_shadow_settings_ }),
+   render_pipeline_(renderer,
+                    SceneLighting{ assets->getView(),
+                                   main_light_source_,
+                                   assets->player,
+                                   nullptr,
+                                   &reactive_shadow_settings_,
+                                   &assets->world_grid() }),
   update_map_light_enabled_(devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true))
 {
     if (map_manifest.is_object()) {
@@ -240,15 +241,23 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
     camera& cam = assets_->getView();
     const camera::RenderSmoothingKey smoothing_key = a ?
         reinterpret_cast<camera::RenderSmoothingKey>(a) : 0;
-    camera::RenderEffects ef=cam.compute_render_effects(
-        SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
+    const SDL_Point world_point{
+        static_cast<int>(std::lround(world_x)),
+        static_cast<int>(std::lround(world_y))
+    };
+    camera::RenderEffects ef = cam.compute_render_effects(
+        world_point,
         base_sh,
         ref_sh,
         smoothing_key);
     SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ world_x, world_y });
     ef.screen_position = screen;
 
-    const float parallax_offset = (a && a->info && a->info->apply_parallax) ? ef.parallax_offset_x : 0.0f;
+    float center_x = ef.screen_position.x;
+    if (assets_) {
+        world::Grid& grid = assets_->world_grid();
+        center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
+    }
     const float distance_scale  = (a && a->info && a->info->apply_distance_scaling) ? ef.distance_scale : 1.0f;
     const float vertical_scale  = (a && a->info && a->info->apply_vertical_scaling) ? ef.vertical_scale : 1.0f;
 
@@ -278,7 +287,6 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
     width  = std::max(width, 1.0f);
     height = std::max(height, 1.0f);
 
-    const float center_x = ef.screen_position.x + parallax_offset;
     const float left     = center_x - width * 0.5f;
     const float top      = ef.screen_position.y - height;
 

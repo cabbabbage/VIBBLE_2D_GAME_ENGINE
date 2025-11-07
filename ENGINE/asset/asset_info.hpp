@@ -70,7 +70,6 @@ class AssetInfo {
     int original_canvas_width = 0;
     int original_canvas_height = 0;
     bool flipable;
-    bool apply_parallax = true;
     bool apply_distance_scaling = true;
     bool apply_vertical_scaling = true;
     std::vector<std::string> tags;

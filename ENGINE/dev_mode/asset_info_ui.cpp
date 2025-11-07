@@ -632,14 +632,17 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     ref_sh,
                     smoothing_key);
 
-                const float parallax_offset = ef.parallax_offset_x;
+                SDL_Point world_point{ target_asset_->pos.x, target_asset_->pos.y };
+                const float adjusted_cx = (assets_ && target_asset_)
+                    ? assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x)
+                    : ef.screen_position.x;
                 const float distance_scale  = ef.distance_scale;
                 const float vertical_scale  = ef.vertical_scale;
 
                 const float width_px  = base_sw * distance_scale;
                 const float height_px = base_sh * distance_scale * vertical_scale;
 
-                out.cx = ef.screen_position.x + parallax_offset;
+                out.cx = adjusted_cx;
                 out.cy = ef.screen_position.y;
                 // Per-axis screen-pixels per local-offset unit
                 out.sx = (fw > 0) ? (width_px  / static_cast<float>(fw)) : base_scale * inv_scale * distance_scale;
@@ -1027,14 +1030,17 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
                 ref_sh,
                 smoothing_key);
 
-            const float parallax_offset = ef.parallax_offset_x;
+            SDL_Point world_point{ target_asset_->pos.x, target_asset_->pos.y };
+            const float adjusted_cx = (assets_ && target_asset_)
+                ? assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x)
+                : ef.screen_position.x;
             const float distance_scale  = ef.distance_scale;
             const float vertical_scale  = ef.vertical_scale;
 
             const float width_px  = base_sw * distance_scale;
             const float height_px = base_sh * distance_scale * vertical_scale;
 
-            out.cx = ef.screen_position.x + parallax_offset;
+            out.cx = adjusted_cx;
             out.cy = ef.screen_position.y;
             out.sx = (fw > 0) ? (width_px  / static_cast<float>(fw)) : base_scale * inv_scale * distance_scale;
             out.sy = (fh > 0) ? (height_px / static_cast<float>(fh)) : base_scale * inv_scale * distance_scale * vertical_scale;

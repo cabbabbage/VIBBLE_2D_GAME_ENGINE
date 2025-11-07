@@ -199,19 +199,16 @@ void Input::clear_screen_to_world_mapper() {
     screen_to_world_fn_ = {};
 }
 
-std::optional<SDL_Point> Input::screen_to_world(SDL_Point screen,
-                                                float parallax_x,
-                                                float parallax_y) const {
+std::optional<SDL_Point> Input::screen_to_world(SDL_Point screen) const {
     if (!screen_to_world_fn_) {
         return std::nullopt;
     }
-    return screen_to_world_fn_(screen, parallax_x, parallax_y);
+    return screen_to_world_fn_(screen);
 }
 
-std::optional<SDL_Point> Input::mouse_world_position(float parallax_x,
-                                                     float parallax_y) const {
+std::optional<SDL_Point> Input::mouse_world_position() const {
     SDL_Point screen{x_, y_};
-    return screen_to_world(screen, parallax_x, parallax_y);
+    return screen_to_world(screen);
 }
 
 void Input::refresh_click_buffer_active() {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../DockableCollapsible.hpp"
+#include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
@@ -36,7 +37,6 @@ class Section_BasicInfo : public DockableCollapsible {
     std::unique_ptr<DMSlider>    s_scale_pct_;
     std::unique_ptr<DMSlider>    s_zindex_;
     std::unique_ptr<DMCheckbox>  c_flipable_;
-    std::unique_ptr<DMCheckbox>  c_apply_parallax_;
     std::unique_ptr<DMCheckbox>  c_apply_distance_scaling_;
     std::unique_ptr<DMCheckbox>  c_apply_vertical_scaling_;
     std::unique_ptr<DMButton>    apply_btn_;
@@ -85,7 +85,6 @@ inline void Section_BasicInfo::build() {
     s_scale_pct_ = std::make_unique<DMSlider>("Scale (%)", 1, 400, pct);
     s_zindex_    = std::make_unique<DMSlider>("Z Index Offset", -1000, 1000, info_->z_threshold);
     c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
-    c_apply_parallax_ = std::make_unique<DMCheckbox>("Apply parallax", info_->apply_parallax);
     c_apply_distance_scaling_ = std::make_unique<DMCheckbox>("Apply distance scaling", info_->apply_distance_scaling);
     c_apply_vertical_scaling_ = std::make_unique<DMCheckbox>("Apply vertical scaling", info_->apply_vertical_scaling);
 
@@ -104,10 +103,6 @@ inline void Section_BasicInfo::build() {
     auto w_flip = std::make_unique<CheckboxWidget>(c_flipable_.get());
     rows.push_back({ w_flip.get() });
     widgets_.push_back(std::move(w_flip));
-
-    auto w_parallax = std::make_unique<CheckboxWidget>(c_apply_parallax_.get());
-    rows.push_back({ w_parallax.get() });
-    widgets_.push_back(std::move(w_parallax));
 
     auto w_distance = std::make_unique<CheckboxWidget>(c_apply_distance_scaling_.get());
     rows.push_back({ w_distance.get() });
@@ -138,8 +133,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         if (s_scale_pct_ && s_scale_pct_->handle_event(e)) used = true;
         if (s_zindex_ && s_zindex_->handle_event(e)) used = true;
         if (c_flipable_ && c_flipable_->handle_event(e)) used = true;
-        if (c_apply_parallax_ && c_apply_parallax_->handle_event(e)) used = true;
-        if (c_apply_distance_scaling_ && c_apply_distance_scaling_->handle_event(e)) used = true;
+    if (c_apply_distance_scaling_ && c_apply_distance_scaling_->handle_event(e)) used = true;
         if (c_apply_vertical_scaling_ && c_apply_vertical_scaling_->handle_event(e)) used = true;
     }
 
@@ -177,11 +171,6 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         changed = true;
     }
 
-    if (c_apply_parallax_ && info_->apply_parallax != c_apply_parallax_->value()) {
-        info_->apply_parallax = c_apply_parallax_->value();
-        changed = true;
-    }
-
     if (c_apply_distance_scaling_ && info_->apply_distance_scaling != c_apply_distance_scaling_->value()) {
         info_->apply_distance_scaling = c_apply_distance_scaling_->value();
         changed = true;
@@ -207,6 +196,7 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
                                                     const Asset* target,
                                                     float reference_screen_height) const {
     if (!is_expanded() || !target || !target->info) return;
+    Assets* assets = ui_ ? ui_->assets() : nullptr;
 
     SDL_Texture* tex = target->get_final_texture();
     int fw = target->cached_w;
@@ -244,7 +234,10 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     int sh = std::max(1, static_cast<int>(std::round(final_visible_h)));
     if (sw <= 0 || sh <= 0) return;
 
-        const float center_x = effects.screen_position.x + effects.parallax_offset_x;
+        SDL_Point world_point{ target->pos.x, target->pos.y };
+        const float center_x = assets
+            ? assets->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x)
+            : effects.screen_position.x;
         const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
         const int   top      = static_cast<int>(std::lround(effects.screen_position.y)) - sh;
     SDL_Rect bounds{ left, top, sw, sh };
