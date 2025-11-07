@@ -116,10 +116,10 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
               "starting_camera",
               std::vector<SDL_Point>{
 
-                  SDL_Point{-10,-10},
-                  SDL_Point{ 10,-10},
-                  SDL_Point{ 10,10},
-                  SDL_Point{-10, 10}
+                  SDL_Point{-100,-100},
+                  SDL_Point{ 100,-100},
+                  SDL_Point{ 100,100},
+                  SDL_Point{-100, 100}
               },
               0)
       ),
@@ -146,6 +146,30 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     if (finder_) {
         camera_.set_up_rooms(finder_);
     }
+
+    auto current_room = [&]() -> Room* {
+        if (finder_) {
+            return finder_->getCurrentRoom();
+        }
+        return nullptr;
+    };
+    Room* intro_room = current_room();
+
+    SDL_Point intro_center{screen_center_x, screen_center_y};
+    if (player) {
+        intro_center = SDL_Point{player->pos.x, player->pos.y};
+    } else if (Room* room = intro_room) {
+        if (room->room_area) {
+            intro_center = room->room_area->get_center();
+        }
+    }
+    camera_.set_screen_center(intro_center);
+
+    double intro_zoom = camera_.default_zoom_for_room(intro_room);
+    if (!std::isfinite(intro_zoom) || intro_zoom <= 0.0) {
+        intro_zoom = 1.0;
+    }
+    camera_.set_scale(static_cast<float>(intro_zoom));
 
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_info_json_, map_id_);
     notify_reactive_shadow_settings_available();

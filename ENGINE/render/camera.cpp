@@ -326,6 +326,10 @@ void camera::set_up_rooms(CurrentRoomFinder* finder) {
     }
 }
 
+double camera::default_zoom_for_room(const Room* room) const {
+    return compute_room_scale_from_area(room);
+}
+
 void camera::update_zoom(Room* cur,
                          CurrentRoomFinder* finder,
                          Asset* player,

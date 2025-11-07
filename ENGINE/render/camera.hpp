@@ -110,6 +110,7 @@ class camera {
 
     void update(float dt);
     void set_up_rooms(CurrentRoomFinder* finder);
+    double default_zoom_for_room(const Room* room) const;
     void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player, bool refresh_requested, float dt);
 
     void pan(const std::vector<SDL_Point>& , int ) {}

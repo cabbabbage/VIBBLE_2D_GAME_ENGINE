@@ -68,22 +68,6 @@ void InitializeAssets::initialize(Assets& assets,
     assets.mark_active_assets_dirty();
     assets.refresh_active_asset_lists();
 
-    {
-        Room* spawn_room = nullptr;
-        for (Room* r : assets.rooms()) {
-            if (r && r->is_spawn_room()) {
-                spawn_room = r;
-                break;
-            }
-        }
-        if (spawn_room && spawn_room->room_area) {
-            const Area& area = *spawn_room->room_area;
-            assets.getView().set_screen_center(area.get_center());
-            assets.getView().zoom_to_area(area, 0);
-        } else {
-            assets.getView().zoom_to_scale(1.0, 0);
-        }
-    }
 }
 
 void InitializeAssets::find_player(Assets& assets) {
