@@ -27,6 +27,9 @@ struct AssetLight {
     int      base_height      = 0;
     bool     flipped          = false;
     float    asset_base_scale = 1.0f;
+    bool     has_dark_mask_lights = false;
+    bool     has_front_lights     = false;
+    bool     has_back_lights      = false;
 };
 
 struct RuntimeLightingFrame {

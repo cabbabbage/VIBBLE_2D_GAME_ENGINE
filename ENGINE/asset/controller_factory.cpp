@@ -20,7 +20,7 @@ ControllerFactory::create_by_key(const std::string& key, Asset* self) const {
         try {
                 if (key == "Davey_controller")
                         return std::make_unique<DaveyController>(assets_, self);
-                if (key == "Vibble_controller")
+                if (self->info->type == "Player" || self->info->type == "player")
                         return std::make_unique<VibbleController>(self);
                 if (key == "Frog_controller")
 
@@ -36,6 +36,9 @@ ControllerFactory::create_by_key(const std::string& key, Asset* self) const {
 std::unique_ptr<AssetController>
 ControllerFactory::create_for_asset(Asset* self) const {
         if (!assets_ || !self || !self->info) return nullptr;
+        if (self->info->type == "Player" || self->info->type == "player") {
+                return std::make_unique<VibbleController>(self);
+        }
         const std::string key = self->info->custom_controller_key;
         if (!key.empty()) {
                 return create_by_key(key, self);

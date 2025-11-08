@@ -485,10 +485,18 @@ void SceneRenderer::render(){
             enqueue_command(a, final_tex, draw_tex, dst);
 
             if (a->info && !a->info->light_sources.empty() && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
-                const std::string canonical_type = asset_types::canonicalize(a->info->type);
-                const bool        punches_overlay =
-                    (canonical_type == asset_types::object || canonical_type == asset_types::texture || canonical_type == asset_types::player);
-                if (!punches_overlay) {
+                bool has_front_lights     = false;
+                bool has_back_lights      = false;
+                bool has_dark_mask_lights = false;
+                for (const LightSource& light : a->info->light_sources) {
+                    has_front_lights     |= light.in_front;
+                    has_back_lights      |= light.behind;
+                    has_dark_mask_lights |= light.render_to_dark_mask;
+                    if (has_front_lights && has_back_lights && has_dark_mask_lights) {
+                        break;
+                    }
+                }
+                if (!(has_front_lights || has_back_lights || has_dark_mask_lights)) {
                     continue;
                 }
                 LightOverlaySource source;
@@ -506,8 +514,11 @@ void SceneRenderer::render(){
                 if (a->info && std::isfinite(a->info->scale_factor) && a->info->scale_factor > 0.0f) {
                     base_scale = a->info->scale_factor;
                 }
-                source.asset_base_scale = base_scale;
-                light_overlay_sources_.push_back(source);
+                source.asset_base_scale     = base_scale;
+                source.has_front_lights     = has_front_lights;
+                source.has_back_lights      = has_back_lights;
+                source.has_dark_mask_lights = has_dark_mask_lights;
+                light_overlay_sources_.push_back(std::move(source));
             }
 
             if (a->current_frame) {
@@ -537,17 +548,11 @@ void SceneRenderer::render(){
             if (cmd.asset) {
                 for (const auto& src : light_overlay_sources_) {
                     if (src.asset == cmd.asset) {
-                        // Render behind lights before the sprite
-                        render_lights_for_source(src, /*draw_front=*/false);
                         overlay_source = &src;
-                        if (src.asset && src.asset->info) {
-                            for (const LightSource& light : src.asset->info->light_sources) {
-                                if (light.in_front) {
-                                    has_front_light = true;
-                                    break;
-                                }
-                            }
+                        if (src.has_back_lights) {
+                            render_lights_for_source(src, /*draw_front=*/false);
                         }
+                        has_front_light = src.has_front_lights;
                         break;
                     }
                 }
@@ -651,7 +656,7 @@ void SceneRenderer::render(){
         render_commands(texture_commands_, /*overlay_passed=*/false);
         render_dynamic_darkness_overlay(map_light_opacity);
         for (const LightOverlaySource* src : pending_front_lights) {
-            if (src) {
+            if (src && src->has_front_lights) {
                 render_lights_for_source(*src, /*draw_front=*/true);
             }
         }
@@ -756,6 +761,16 @@ void SceneRenderer::render_lights_for_source(const LightOverlaySource& source, b
     const auto& lights = asset->info->light_sources;
     if (lights.empty()) {
         return;
+    }
+
+    if (draw_front) {
+        if (!source.has_front_lights) {
+            return;
+        }
+    } else {
+        if (!source.has_back_lights) {
+            return;
+        }
     }
 
     const float base_width   = static_cast<float>(std::max(1, source.base_width));
@@ -1018,6 +1033,9 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         if (!asset || !asset->info) {
             continue;
         }
+        if (!source.has_dark_mask_lights) {
+            continue;
+        }
 
         const auto& lights = asset->info->light_sources;
         if (lights.empty()) {
@@ -1043,6 +1061,9 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
 
         for (const LightSource& light : lights) {
+            if (!light.render_to_dark_mask) {
+                continue;
+            }
             const int raw_radius = light.radius;
             if (raw_radius <= 0) {
                 continue;

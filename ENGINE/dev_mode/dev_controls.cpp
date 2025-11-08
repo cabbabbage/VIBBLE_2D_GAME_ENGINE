@@ -1430,18 +1430,54 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             const int major_interval = 8; // major line every N cells
             // Vertical lines
             float start_x = std::floor(top_left_world.x / cell) * cell;
+
+            // Compute constant angular step so outermost visible lines reach a chosen max angle
+            int out_w = 0, out_h = 0;
+            if (SDL_GetRendererOutputSize(renderer, &out_w, &out_h) != 0) {
+                // Fallback to a reasonable default if query fails
+                out_w = 1920; out_h = 1080;
+            }
+            const SDL_Point screen_center_px{ out_w / 2, out_h / 2 };
+            const float cam_scale = std::max(0.0001f, cam.get_scale());
+            const float cell_screen_px = static_cast<float>(static_cast<double>(cell) / static_cast<double>(cam_scale));
+            const int max_right = (cell_screen_px > 0.0f)
+                ? static_cast<int>(std::ceil(std::max(0.0f, static_cast<float>(out_w - screen_center_px.x)) / cell_screen_px))
+                : 1;
+            const int max_left = (cell_screen_px > 0.0f)
+                ? static_cast<int>(std::ceil(std::max(0.0f, static_cast<float>(screen_center_px.x)) / cell_screen_px))
+                : 1;
+            const int max_i = std::max(1, std::max(max_left, max_right));
+
+            // Choose maximum angle at edges and derive uniform step
+            constexpr double kThetaMaxDegrees = 24.0; // approximately 24 degrees at outermost lines
+            const double theta_max = kThetaMaxDegrees * (3.14159265358979323846 / 180.0);
+            const double dtheta = theta_max / static_cast<double>(max_i);
+
             for (float x = start_x; x <= bottom_right_world.x + cell; x += cell) {
-                // Compute parallax-adjusted screen coordinates
+                // Base screen coordinates (no parallax skew)
                 SDL_Point world_start{ static_cast<int>(std::lround(x)), static_cast<int>(std::lround(top_left_world.y)) };
                 SDL_Point world_end  { static_cast<int>(std::lround(x)), static_cast<int>(std::lround(bottom_right_world.y)) };
                 SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
                 SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
-                const float sx0_f = assets_->world_grid().parallax_adjusted_screen_x(world_start, screen_start.x);
-                const float sx1_f = assets_->world_grid().parallax_adjusted_screen_x(world_end,   screen_end.x);
-                int sx0 = static_cast<int>(std::lround(sx0_f));
+
+                // Determine line index i from screen-center using uniform cell spacing in screen-space
+                const float base_sx = screen_start.x; // same for any y along the line
+                const double fi = (cell_screen_px > 0.0f)
+                    ? static_cast<double>((base_sx - static_cast<float>(screen_center_px.x)) / cell_screen_px)
+                    : 0.0;
+                const int i = static_cast<int>(std::llround(fi));
+                const double theta = std::clamp(static_cast<double>(i) * dtheta, -theta_max, theta_max);
+                const double t = std::tan(theta);
+
+                // Apply angular skew around screen center so slope = tan(theta)
+                const double dx0 = t * static_cast<double>(screen_start.y - static_cast<float>(screen_center_px.y));
+                const double dx1 = t * static_cast<double>(screen_end.y   - static_cast<float>(screen_center_px.y));
+
+                int sx0 = static_cast<int>(std::lround(static_cast<double>(base_sx) + dx0));
                 int sy0 = static_cast<int>(std::lround(screen_start.y));
-                int sx1 = static_cast<int>(std::lround(sx1_f));
+                int sx1 = static_cast<int>(std::lround(static_cast<double>(base_sx) + dx1));
                 int sy1 = static_cast<int>(std::lround(screen_end.y));
+
                 const bool is_major = (static_cast<long long>(std::llround(x)) % (cell * major_interval) == 0);
                 SDL_Color c = is_major ? major : minor;
                 SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);

@@ -179,6 +179,9 @@ public:
 
     int shading_group_count() const { return num_groups_; }
 
+    void notify_light_map_asset_moved(const Asset* asset);
+    void notify_light_map_static_assets_changed();
+
     std::deque<std::unique_ptr<Asset>> owned_assets;
     std::vector<Asset*> all;
     Asset* player = nullptr;
@@ -202,8 +205,6 @@ private:
     void update_scene_render_quality();
     int  saved_render_quality_percent() const;
     int  effective_render_quality_percent() const;
-    void notify_light_map_asset_moved(const Asset* asset);
-    void notify_light_map_static_assets_changed();
     void notify_reactive_shadow_settings_about_to_change();
     void notify_reactive_shadow_settings_available();
     void sync_dev_controls_current_room(Room* room, bool force_refresh = false);
