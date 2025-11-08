@@ -776,7 +776,6 @@ void AssetInfo::set_shadow_mask_settings(const ShadowMaskSettings& settings) {
 
 void AssetInfo::set_shading_enabled(bool enabled) {
         is_shaded = enabled;
-        orbital_light_sources.clear();
         is_light_source = enabled || !light_sources.empty();
         if (!info_json_.is_object()) {
                 info_json_ = nlohmann::json::object();
@@ -1158,56 +1157,11 @@ void AssetInfo::set_spawn_groups(const nlohmann::json& groups) {
     info_json_["spawn_groups"] = std::move(sanitized);
 }
 
-void AssetInfo::set_lighting(bool is_shaded_,
-                             const LightSource& shading,
-                             int shading_factor,
-                             const std::vector<LightSource>& lights) {
-    is_shaded = is_shaded_;
-    this->shading_factor = shading_factor;
-    orbital_light_sources.clear();
+void AssetInfo::set_lighting(const std::vector<LightSource>& lights) {
     light_sources = lights;
-    if (is_shaded) {
-        orbital_light_sources.push_back(shading);
-    }
-    is_light_source = is_shaded || !lights.empty();
+    is_light_source = !lights.empty();
 
     nlohmann::json arr = nlohmann::json::array();
-
-    nlohmann::json shade_entry = nlohmann::json::object();
-    shade_entry["has_light_source"] = true;
-    if (is_shaded) {
-        shade_entry["light_intensity"] = shading.intensity;
-        shade_entry["radius"] = shading.radius;
-        const double f = std::max(0.01, static_cast<double>(shading_factor) / 100.0);
-        int base_x = static_cast<int>(std::round(shading.x_radius / f));
-        int base_y = static_cast<int>(std::round(shading.y_radius / f));
-        int base_off_x = static_cast<int>(std::round(shading.offset_x / f));
-        int base_off_y = static_cast<int>(std::round(shading.offset_y / f));
-        shade_entry["x_radius"] = base_x;
-        shade_entry["y_radius"] = base_y;
-        shade_entry["falloff"] = shading.fall_off;
-        shade_entry["offset_x"] = base_off_x;
-        shade_entry["offset_y"] = base_off_y;
-        shade_entry["factor"] = shading_factor;
-        shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
-        shade_entry["behind"] = shading.behind;
-        shade_entry["front"]  = shading.in_front;
-        shade_entry["dark_mask"] = shading.render_to_dark_mask;
-    } else {
-        shade_entry["light_intensity"] = 0;
-        shade_entry["radius"] = 0;
-        shade_entry["x_radius"] = 0;
-        shade_entry["y_radius"] = 0;
-        shade_entry["falloff"] = 0;
-        shade_entry["offset_x"] = 0;
-        shade_entry["offset_y"] = 0;
-        shade_entry["factor"] = shading_factor;
-        shade_entry["apex_speed_bias"] = shading.apex_speed_bias;
-        shade_entry["behind"] = shading.behind;
-        shade_entry["front"]  = shading.in_front;
-        shade_entry["dark_mask"] = shading.render_to_dark_mask;
-    }
-    arr.push_back(shade_entry);
 
     for (const auto& l : lights) {
         nlohmann::json j;
@@ -1225,7 +1179,6 @@ void AssetInfo::set_lighting(bool is_shaded_,
         j["dark_mask"] = l.render_to_dark_mask;
         arr.push_back(std::move(j));
     }
-    info_json_["has_shading"] = is_shaded;
     info_json_["lighting_info"] = std::move(arr);
 }
 

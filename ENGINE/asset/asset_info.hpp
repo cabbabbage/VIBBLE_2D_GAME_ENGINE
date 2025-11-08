@@ -51,14 +51,12 @@ class AssetInfo {
     void loadAnimations(SDL_Renderer *renderer);
     bool has_tag(const std::string &tag) const;
     std::vector<LightSource> light_sources;
-    std::vector<LightSource> orbital_light_sources;
     std::string name;
     std::string type;
     std::string start_animation;
     int z_threshold;
     bool passable;
     bool is_shaded = false;
-    int shading_factor = 100;
     ShadowMaskSettings shadow_mask_settings{};
     float shading_parallax_amount = 0.0f;
     float shading_screen_brightness_multiplier = 1.0f;
@@ -131,7 +129,7 @@ class AssetInfo {
 
     void set_children(const std::vector<ChildInfo>& asset_children);
 
-    void set_lighting(bool is_shaded, const LightSource& shading, int shading_factor, const std::vector<LightSource>& lights);
+    void set_lighting(const std::vector<LightSource>& lights);
     void set_shadow_mask_settings(const ShadowMaskSettings& settings);
     void set_shading_enabled(bool enabled);
     void set_shading_parallax_amount(float amount);

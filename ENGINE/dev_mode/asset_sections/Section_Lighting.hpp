@@ -319,13 +319,7 @@ private:
         if (!info_) return;
         std::vector<LightSource> lights;
         for (const auto& r : rows_) lights.push_back(r.light);
-        LightSource shading_light{};
-        if (info_ && !info_->orbital_light_sources.empty()) {
-            shading_light = info_->orbital_light_sources.front();
-        }
-        int shading_factor = info_ ? info_->shading_factor : 100;
-        bool is_shaded = info_ ? info_->is_shaded : false;
-        info_->set_lighting(is_shaded, shading_light, shading_factor, lights);
+        info_->set_lighting(lights);
     }
 
     std::vector<Row> rows_;
@@ -384,4 +378,3 @@ public:
         }
     }
 };
-

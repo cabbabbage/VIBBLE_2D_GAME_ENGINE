@@ -35,7 +35,6 @@ private:
     bool is_shaded_ = false;
     bool moving_asset_ = false;
     bool is_light_source_ = false;
-    int shading_factor_ = 0;
     int min_same_type_distance_ = std::numeric_limits<int>::max();
     int min_distance_all_ = std::numeric_limits<int>::max();
     int neighbor_radius_ = 0;
@@ -45,7 +44,6 @@ private:
     std::unordered_set<std::string> tags_;
     std::unordered_set<std::string> anti_tags_;
     std::vector<LightSource> light_sources_;
-    std::vector<LightSource> orbital_light_sources_;
     std::optional<ShadowMaskSettings> shadow_settings_;
     std::optional<std::string> type_;
     std::optional<std::string> custom_controller_;
@@ -81,4 +79,3 @@ private:
 };
 
 }
-

@@ -133,7 +133,6 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
             changed |= copy_key("tags");
             break;
         case AssetInfoSectionId::Lighting:
-            changed |= copy_key("has_shading");
             changed |= copy_key("lighting_info");
             break;
         case AssetInfoSectionId::Spacing:

@@ -68,7 +68,6 @@ TemporaryMergedAssetInfo::TemporaryMergedAssetInfo(std::string name)
     info_->tags.clear();
     info_->anti_tags.clear();
     info_->light_sources.clear();
-    info_->orbital_light_sources.clear();
 }
 
 void TemporaryMergedAssetInfo::absorb(const Asset& asset, SDL_Point merged_origin) {
@@ -89,7 +88,6 @@ void TemporaryMergedAssetInfo::absorb(const Asset& asset, SDL_Point merged_origi
     is_shaded_ = is_shaded_ || src.is_shaded;
     moving_asset_ = moving_asset_ || src.moving_asset;
     is_light_source_ = is_light_source_ || src.is_light_source;
-    shading_factor_ = std::max(shading_factor_, src.shading_factor);
     min_same_type_distance_ = std::min(min_same_type_distance_, src.min_same_type_distance);
     min_distance_all_ = std::min(min_distance_all_, src.min_distance_all);
     neighbor_radius_ = std::max(neighbor_radius_, src.NeighborSearchRadius);
@@ -117,9 +115,6 @@ void TemporaryMergedAssetInfo::absorb(const Asset& asset, SDL_Point merged_origi
 
     for (const auto& light : src.light_sources) {
         light_sources_.push_back(adjust_light_source(light, asset, merged_origin));
-    }
-    for (const auto& light : src.orbital_light_sources) {
-        orbital_light_sources_.push_back(adjust_light_source(light, asset, merged_origin));
     }
 }
 
@@ -163,7 +158,6 @@ std::shared_ptr<AssetInfo> TemporaryMergedAssetInfo::finalize(const std::vector<
     info_->is_shaded = is_shaded_;
     info_->moving_asset = moving_asset_;
     info_->is_light_source = is_light_source_;
-    info_->shading_factor = shading_factor_;
     info_->min_same_type_distance = (min_same_type_distance_ == std::numeric_limits<int>::max()) ? 0 : min_same_type_distance_;
     info_->min_distance_all = (min_distance_all_ == std::numeric_limits<int>::max()) ? 0 : min_distance_all_;
     info_->NeighborSearchRadius = neighbor_radius_;
@@ -176,7 +170,6 @@ std::shared_ptr<AssetInfo> TemporaryMergedAssetInfo::finalize(const std::vector<
     }
 
     info_->light_sources = light_sources_;
-    info_->orbital_light_sources = orbital_light_sources_;
 
     info_->tags.assign(tags_.begin(), tags_.end());
     info_->anti_tags.assign(anti_tags_.begin(), anti_tags_.end());
@@ -528,4 +521,3 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
 }
 
 }
-

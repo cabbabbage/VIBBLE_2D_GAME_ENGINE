@@ -10,9 +10,6 @@ struct LightSource {
         int         flicker          = 20;
         int         offset_x         = 0;
         int         offset_y         = 0;
-        int         x_radius         = 0;
-        int         y_radius         = 0;
-        int         apex_speed_bias  = 0;
         SDL_Color   color            = {255, 255, 255, 255};
         // Rendering controls
         bool        render_to_dark_mask = true; // carve light out of the dynamic darkness overlay
