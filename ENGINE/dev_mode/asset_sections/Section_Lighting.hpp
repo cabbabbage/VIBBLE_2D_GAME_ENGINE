@@ -34,6 +34,7 @@ public:
             r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, ls.offset_y);
             r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", ls.in_front);
             r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", ls.behind);
+            r.c_dark_mask      = std::make_unique<DMCheckbox>("Render To Dark Mask", ls.render_to_dark_mask);
             r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
             {
                 DMColorRangeWidget::RangedColor rc;
@@ -84,6 +85,10 @@ public:
             }
             if (r.c_behind) {
                 r.c_behind->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
+                y += DMCheckbox::height() + DMSpacing::item_gap();
+            }
+            if (r.c_dark_mask) {
+                r.c_dark_mask->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
                 y += DMCheckbox::height() + DMSpacing::item_gap();
             }
             if (r.color_widget) {
@@ -138,6 +143,12 @@ public:
             if (r.c_behind && r.c_behind->handle_event(e)) {
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                     r.light.behind = r.c_behind->value();
+                    commit_change();
+                }
+            }
+            if (r.c_dark_mask && r.c_dark_mask->handle_event(e)) {
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    r.light.render_to_dark_mask = r.c_dark_mask->value();
                     commit_change();
                 }
             }
@@ -218,6 +229,7 @@ public:
                 r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, r.light.offset_y);
                 r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", r.light.in_front);
                 r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", r.light.behind);
+                r.c_dark_mask      = std::make_unique<DMCheckbox>("Render To Dark Mask", r.light.render_to_dark_mask);
                 r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
                 {
                     DMColorRangeWidget::RangedColor rc;
@@ -267,6 +279,7 @@ public:
             if (rrow.s_offset_y)  rrow.s_offset_y->render(r);
             if (rrow.c_front)  rrow.c_front->render(r);
             if (rrow.c_behind) rrow.c_behind->render(r);
+            if (rrow.c_dark_mask) rrow.c_dark_mask->render(r);
             if (rrow.color_widget) rrow.color_widget->render(r);
         }
         if (b_add_) b_add_->render(r);
@@ -286,6 +299,7 @@ private:
         std::unique_ptr<DMSlider> s_offset_y;
         std::unique_ptr<DMCheckbox> c_front;
         std::unique_ptr<DMCheckbox> c_behind;
+        std::unique_ptr<DMCheckbox> c_dark_mask;
         std::unique_ptr<DMColorRangeWidget> color_widget;
 };
 
@@ -342,6 +356,7 @@ public:
             if (r.s_offset_y)  r.s_offset_y->set_value(src.offset_y);
             if (r.c_front)           r.c_front->set_value(src.in_front);
             if (r.c_behind)          r.c_behind->set_value(src.behind);
+            if (r.c_dark_mask)       r.c_dark_mask->set_value(src.render_to_dark_mask);
             if (r.color_widget) {
                 DMColorRangeWidget::RangedColor rc;
                 rc.r.min = rc.r.max = static_cast<int>(src.color.r);

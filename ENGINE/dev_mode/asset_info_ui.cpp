@@ -1297,10 +1297,15 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
     bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
         asset->is_shaded = info_->is_shaded;
         asset->clear_render_caches();
+        if (assets_) {
+            // Ensure any light-map and runtime lighting consumers react immediately
+            assets_->notify_light_map_asset_moved(asset);
+        }
     });
 
     if (updated_any && assets_) {
         assets_->mark_active_assets_dirty();
+        assets_->notify_light_map_static_assets_changed();
     }
 
     if (!purge_light_cache) {

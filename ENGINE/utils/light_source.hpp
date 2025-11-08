@@ -15,8 +15,9 @@ struct LightSource {
         int         apex_speed_bias  = 0;
         SDL_Color   color            = {255, 255, 255, 255};
         // Rendering controls
-        bool        behind           = false;   // render light texture behind asset
-        bool        in_front         = true;    // render light texture in front of asset
+        bool        render_to_dark_mask = true; // carve light out of the dynamic darkness overlay
+        bool        behind              = false; // render light texture behind asset
+        bool        in_front            = true;  // render light texture in front of asset
         int         cached_w         = 0;
         int         cached_h         = 0;
         SDL_Texture* texture         = nullptr;

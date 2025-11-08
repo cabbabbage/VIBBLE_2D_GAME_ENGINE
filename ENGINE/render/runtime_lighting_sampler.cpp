@@ -368,6 +368,9 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
         if (lights.empty()) {
             continue;
         }
+        if (!source.has_dark_mask_lights) {
+            continue;
+        }
 
         const float base_width  = static_cast<float>(std::max(1, source.base_width));
         const float base_height = static_cast<float>(std::max(1, source.base_height));
@@ -388,6 +391,9 @@ RuntimeLightingFrame RuntimeLightingSampler::gather(const std::vector<AssetLight
         const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
 
         for (const LightSource& light : lights) {
+            if (!light.render_to_dark_mask) {
+                continue;
+            }
             int base_w = light.cached_w;
             int base_h = light.cached_h;
 
