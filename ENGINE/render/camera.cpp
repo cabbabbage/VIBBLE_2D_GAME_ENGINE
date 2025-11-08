@@ -10,8 +10,6 @@
 #include <nlohmann/json.hpp>
 
 namespace {
-    constexpr float kDefaultSmoothingDt = 1.0f / 60.0f;
-
     constexpr float kMinTau = 1e-4f;
 
     TransformSmoothingParams sanitize_params(const TransformSmoothingParams& params) {
@@ -147,8 +145,6 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     smoothed_center_.x = center_smoothing_x_.value_for_render();
     smoothed_center_.y = center_smoothing_y_.value_for_render();
     smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
-    last_update_dt_    = kDefaultSmoothingDt;
-    smoothing_frame_counter_ = 0;
 
     settings_.smooth_motion_zoom           = center_defaults.method != TransformSmoothingMethod::None;
     settings_.motion_smoothing_method      = center_defaults.method;
@@ -165,7 +161,6 @@ void camera::set_realism_settings(const RealismSettings& settings) {
     center_smoothing_x_.set_params(motion_params);
     center_smoothing_y_.set_params(motion_params);
     zoom_smoothing_.set_params(motion_params);
-    reset_parallax_smoothing();
 }
 
 void camera::set_screen_center(SDL_Point p) {
@@ -178,7 +173,6 @@ void camera::set_screen_center(SDL_Point p) {
         center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
         smoothed_center_.x = center_smoothing_x_.value_for_render();
         smoothed_center_.y = center_smoothing_y_.value_for_render();
-        reset_parallax_smoothing();
         return;
     }
     const double dx = static_cast<double>(p.x) - static_cast<double>(screen_center_.x);
@@ -194,7 +188,6 @@ void camera::set_screen_center(SDL_Point p) {
     const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
     const double teleport_threshold = std::max(200.0, px_margin * scale_for_world * 0.25);
     if (distance > teleport_threshold) {
-        reset_parallax_smoothing();
     }
 }
 
@@ -205,7 +198,6 @@ void camera::set_scale(float s) {
     start_scale_ = target_scale_ = scale_;
     zoom_smoothing_.reset(scale_);
     smoothed_scale_ = scale_;
-    reset_parallax_smoothing();
 }
 
 float camera::get_scale() const { return smoothed_scale_; }
@@ -247,8 +239,6 @@ void camera::update(float dt) {
     if (!std::isfinite(dt) || dt < 0.0f) {
         dt = 0.0f;
     }
-    last_update_dt_ = dt;
-    ++smoothing_frame_counter_;
 
     if (zooming_) {
         ++steps_done_;
@@ -289,19 +279,6 @@ void camera::update(float dt) {
     smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
 
     recompute_current_view();
-
-    if (!smoothing_entries_.empty()) {
-        const uint64_t prune_threshold = (smoothing_frame_counter_ > 480)
-            ? smoothing_frame_counter_ - 480
-            : 0;
-        for (auto it = smoothing_entries_.begin(); it != smoothing_entries_.end(); ) {
-            if (it->second.last_used_frame < prune_threshold) {
-                it = smoothing_entries_.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
 }
 
 double camera::compute_room_scale_from_area(const Room* room) const {
@@ -538,7 +515,7 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
     manual_zoom_override_ = true;
 }
 
-SDL_FPoint camera::map_to_screen_f(SDL_FPoint world, float, float) const {
+SDL_FPoint camera::map_to_screen_f(SDL_FPoint world) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
     const double inv_scale = (smoothed_scale_ > 0.000001f) ? (1.0 / static_cast<double>(smoothed_scale_)) : 1e6;
@@ -547,12 +524,12 @@ SDL_FPoint camera::map_to_screen_f(SDL_FPoint world, float, float) const {
     return SDL_FPoint{ static_cast<float>(sx), static_cast<float>(sy) };
 }
 
-SDL_FPoint camera::map_to_screen(SDL_Point world, float parallax_x, float parallax_y) const {
+SDL_FPoint camera::map_to_screen(SDL_Point world) const {
     SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
-    return map_to_screen_f(world_f, parallax_x, parallax_y);
+    return map_to_screen_f(world_f);
 }
 
-SDL_FPoint camera::screen_to_map(SDL_Point screen, float, float) const {
+SDL_FPoint camera::screen_to_map(SDL_Point screen) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
     const double s = static_cast<double>(std::max(0.000001f, smoothed_scale_));
@@ -567,15 +544,12 @@ camera::RenderEffects camera::compute_render_effects(
     float reference_screen_height,
     RenderSmoothingKey smoothing_key) const
 {
+    (void)smoothing_key;
     RenderEffects result;
     SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
     result.screen_position  = map_to_screen_f(world_f);
-    result.parallax_offset_x = 0.0f;
     result.vertical_scale   = 1.0f;
     result.distance_scale   = 1.0f;
-
-    const double safe_scale       = std::max(1e-6, static_cast<double>(smoothed_scale_));
-    const double pixels_per_world = 1.0 / safe_scale;
 
     if (!realism_enabled_) {
         return result;
@@ -614,32 +588,6 @@ camera::RenderEffects camera::compute_render_effects(
 
     const double screen_bias = 0.5 + 0.5 * std::tanh(dy / SY);
 
-    if (parallax_enabled_) {
-        const double parallax_strength = std::max(0.0f, settings_.parallax_strength);
-        if (parallax_strength > 0.0 && camera_height > EPS) {
-            const int view_height = height_from_area(current_view_);
-            const int view_width  = width_from_area(current_view_);
-
-            const double ndy = dy / (view_height * 0.5);
-            const double ndx = dx / (view_width  * 0.5);
-
-            const double vertical_bias = 1.0 + PARALLAX_KV *
-                                         std::tanh(ndy * (view_height / SY) * PARALLAX_STEEPEN);
-
-            double zoom_gain = (height_at_zoom1 > EPS) ? (height_at_zoom1 / (camera_height + EPS)) : 1.0;
-            if (zoom_gain >= 1.0) {
-                zoom_gain = std::pow(zoom_gain, 1.5);
-            }
-
-            double parallax_px = parallax_strength *
-                                 ndx * ndy *
-                                 pixels_per_world * vertical_bias * zoom_gain;
-
-            parallax_px = std::clamp(parallax_px, -PARALLAX_MAX, PARALLAX_MAX);
-            result.parallax_offset_x = static_cast<float>(parallax_px);
-        }
-    }
-
     {
         const double foreshorten_strength = std::max(0.0f, settings_.foreshorten_strength);
         if (foreshorten_strength > 0.0 && camera_height > EPS) {
@@ -673,58 +621,6 @@ camera::RenderEffects camera::compute_render_effects(
 
             distance_scale = std::clamp(distance_scale, DIST_MIN, DIST_MAX);
             result.distance_scale = static_cast<float>(distance_scale);
-        }
-    }
-
-    if (smoothing_key != 0) {
-        TransformSmoothingParams raw_params = sanitize_params(settings_.parallax_smoothing);
-        if (!settings_.smooth_motion_zoom) {
-            raw_params.method = TransformSmoothingMethod::None;
-        }
-        if (raw_params.method != TransformSmoothingMethod::None) {
-            auto& entry = smoothing_entries_[smoothing_key];
-            entry.parallax.set_params(raw_params);
-            entry.zoom.set_params(raw_params);
-
-            const float dt = (last_update_dt_ > 0.0f) ? last_update_dt_ : kDefaultSmoothingDt;
-            const float target_parallax = std::isfinite(result.parallax_offset_x) ? result.parallax_offset_x : 0.0f;
-            const float target_zoom     = std::isfinite(result.distance_scale) && result.distance_scale > 0.0f
-                                              ? result.distance_scale
-                                              : 1.0f;
-
-            bool force_snap = !entry.initialized;
-            const float snap_threshold = std::max(0.0f, raw_params.snap_threshold);
-            const float max_step       = std::max(0.0f, raw_params.max_step);
-            if (!force_snap) {
-                const float current = entry.parallax.current;
-                const float delta   = std::fabs(target_parallax - current);
-                if (snap_threshold > 0.0f && delta > snap_threshold * 4.0f) {
-                    force_snap = true;
-                } else if (max_step > 0.0f && dt > 0.0f) {
-                    const float max_delta = max_step * dt * 4.0f;
-                    if (delta > max_delta) {
-                        force_snap = true;
-                    }
-                }
-            }
-
-            entry.parallax.target = target_parallax;
-            entry.zoom.target     = target_zoom;
-
-            if (force_snap) {
-                entry.parallax.reset(target_parallax);
-                entry.zoom.reset(target_zoom);
-                entry.parallax.target = target_parallax;
-                entry.zoom.target     = target_zoom;
-                entry.initialized     = true;
-            } else {
-                entry.parallax.advance(dt);
-                entry.zoom.advance(dt);
-            }
-
-            entry.last_used_frame = smoothing_frame_counter_;
-            result.parallax_offset_x = entry.parallax.value_for_render();
-            result.distance_scale    = std::max(0.0f, entry.zoom.value_for_render());
         }
     }
 
@@ -902,7 +798,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     center_smoothing_y_.set_params(motion_params);
     zoom_smoothing_.set_params(motion_params);
 
-    reset_parallax_smoothing();
 }
 
 nlohmann::json camera::camera_settings_to_json() const {
@@ -944,8 +839,4 @@ int camera::get_render_distance_world_margin() const {
     const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
     const double world_margin = px_margin * scale_for_world;
     return static_cast<int>(std::lround(world_margin));
-}
-
-void camera::reset_parallax_smoothing() {
-    smoothing_entries_.clear();
 }

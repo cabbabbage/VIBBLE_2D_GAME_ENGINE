@@ -14,6 +14,7 @@ class camera;
 class Global_Light_Source;
 class LightMap;
 class LightMapManager;
+namespace world { class Grid; }
 
 namespace render_pipeline::shading {
 struct ReactiveShadowSettings;
@@ -24,6 +25,7 @@ struct SceneLighting {
     Asset*                 player = nullptr;
     const LightMap*        light_map_sampler = nullptr;
     render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings = nullptr;
+    world::Grid*           world_grid = nullptr;
 };
 
 struct StageContext {

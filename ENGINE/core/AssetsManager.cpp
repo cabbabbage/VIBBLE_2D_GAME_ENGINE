@@ -741,8 +741,8 @@ void Assets::set_input(Input* m) {
     input = m;
 
     if (input) {
-        input->set_screen_to_world_mapper([this](SDL_Point screen, float parallax_x, float parallax_y) {
-            SDL_FPoint mapped = camera_.screen_to_map(screen, parallax_x, parallax_y);
+        input->set_screen_to_world_mapper([this](SDL_Point screen) {
+            SDL_FPoint mapped = camera_.screen_to_map(screen);
             return SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
         });
     }
@@ -828,6 +828,7 @@ void Assets::update(const Input& input)
     auto [minx, miny, maxx, maxy] = view.get_bounds();
     SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
     world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
+    world_grid_.update_parallax(camera_, last_frame_dt_seconds_);
 
     update_active_assets(camera_.get_screen_center());
     const bool rebuilt_active_assets = rebuild_active_assets_if_needed();

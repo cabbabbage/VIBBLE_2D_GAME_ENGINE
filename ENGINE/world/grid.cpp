@@ -1,11 +1,15 @@
 #include "world/grid.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "asset/Asset.hpp"
+#include "render/camera.hpp"
 #include "util/grid.hpp"
+#include "utils/area.hpp"
 #include "utils/log.hpp"
 
 namespace world {
@@ -212,6 +216,195 @@ int Grid::lighting_subdivisions_per_chunk() const {
 bool Grid::set_lighting_subdivisions_per_chunk(int subdivisions) {
     requested_lighting_subdivisions_ = clamp_lighting_subdivisions(subdivisions);
     return refresh_lighting_subdivision_cache(true);
+}
+
+std::uint64_t Grid::parallax_key(int i, int j) const {
+    const auto hi = static_cast<std::uint32_t>(i);
+    const auto lo = static_cast<std::uint32_t>(j);
+    return (static_cast<std::uint64_t>(hi) << 32) | static_cast<std::uint64_t>(lo);
+}
+
+namespace {
+constexpr float  kDefaultParallaxDt = 1.0f / 60.0f;
+constexpr double kParallaxEpsilon   = 1e-6;
+constexpr double kParallaxSy        = 200.0;
+constexpr double kParallaxKv        = 0.25;
+constexpr double kParallaxSteepen   = 1.5;
+constexpr double kParallaxMax       = 4000.0;
+
+TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params) {
+    TransformSmoothingParams out = params;
+    if (!std::isfinite(out.lerp_rate) || out.lerp_rate < 0.0f) out.lerp_rate = 0.0f;
+    if (!std::isfinite(out.spring_frequency) || out.spring_frequency < 0.0f) out.spring_frequency = 0.0f;
+    if (!std::isfinite(out.max_step) || out.max_step < 0.0f) out.max_step = 0.0f;
+    if (!std::isfinite(out.snap_threshold) || out.snap_threshold < 0.0f) out.snap_threshold = 0.0f;
+    switch (out.method) {
+    case TransformSmoothingMethod::None:
+    case TransformSmoothingMethod::Lerp:
+    case TransformSmoothingMethod::CriticallyDampedSpring:
+        break;
+    default:
+        out.method = TransformSmoothingMethod::None;
+        break;
+    }
+    return out;
+}
+
+int width_from_area(const Area& a) {
+    int minx, miny, maxx, maxy;
+    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
+    (void)miny; (void)maxy;
+    return std::max(0, maxx - minx);
+}
+
+int height_from_area(const Area& a) {
+    int minx, miny, maxx, maxy;
+    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
+    (void)minx; (void)maxx;
+    return std::max(0, maxy - miny);
+}
+}
+
+void Grid::update_parallax(const camera& cam, float dt) {
+    const float clamped_dt = (std::isfinite(dt) && dt > 0.0f) ? dt : kDefaultParallaxDt;
+    ++parallax_frame_counter_;
+
+    const camera::RealismSettings& settings = cam.realism_settings();
+    const double parallax_strength = std::max(0.0f, settings.parallax_strength);
+    const float  raw_scale         = cam.get_scale();
+    const double scale_value       = std::isfinite(raw_scale) ? static_cast<double>(raw_scale) : 0.0;
+    const double safe_scale        = std::max(kParallaxEpsilon, scale_value);
+    const double pixels_per_world  = 1.0 / safe_scale;
+    const double zoom_norm         = std::clamp(scale_value, 0.0, 1.0);
+    const double height_at_zoom1   = std::max(0.0f, settings.height_at_zoom1);
+    const double camera_height     = height_at_zoom1 * zoom_norm;
+
+    parallax_active_ = cam.parallax_enabled() && parallax_strength > 0.0 && camera_height > kParallaxEpsilon;
+    if (!parallax_active_) {
+        parallax_entries_.clear();
+        return;
+    }
+
+    const Area& view          = cam.get_camera_area();
+    const double view_width   = std::max(1.0, static_cast<double>(width_from_area(view)));
+    const double view_height  = std::max(1.0, static_cast<double>(height_from_area(view)));
+    const double half_width   = std::max(1.0, view_width * 0.5);
+    const double half_height  = std::max(1.0, view_height * 0.5);
+    const double view_scale_y = view_height / kParallaxSy;
+
+    const double tripod_distance = std::isfinite(settings.tripod_distance_y)
+        ? static_cast<double>(settings.tripod_distance_y)
+        : 0.0;
+    const SDL_Point center_px = cam.get_screen_center();
+    const double base_x = static_cast<double>(center_px.x);
+    const double base_y = static_cast<double>(center_px.y) - tripod_distance;
+
+    TransformSmoothingParams smoothing = sanitize_smoothing(settings.parallax_smoothing);
+    if (!settings.smooth_motion_zoom) {
+        smoothing.method = TransformSmoothingMethod::None;
+    }
+
+    for (Chunk* chunk : chunks_.active()) {
+        if (!chunk) {
+            continue;
+        }
+
+        const double chunk_cx = static_cast<double>(chunk->world_bounds.x) +
+                                static_cast<double>(chunk->world_bounds.w) * 0.5;
+        const double chunk_cy = static_cast<double>(chunk->world_bounds.y) +
+                                static_cast<double>(chunk->world_bounds.h) * 0.5;
+
+        const double dx = chunk_cx - base_x;
+        const double dy = chunk_cy - base_y;
+
+        const double ndx = dx / half_width;
+        const double ndy = dy / half_height;
+
+        const double vertical_bias = 1.0 + kParallaxKv *
+            std::tanh(ndy * view_scale_y * kParallaxSteepen);
+
+        double zoom_gain = (height_at_zoom1 > kParallaxEpsilon)
+            ? (height_at_zoom1 / (camera_height + kParallaxEpsilon))
+            : 1.0;
+        if (zoom_gain >= 1.0) {
+            zoom_gain = std::pow(zoom_gain, 1.5);
+        }
+
+        double parallax_px = parallax_strength *
+                             ndx * ndy *
+                             pixels_per_world * vertical_bias * zoom_gain;
+        parallax_px = std::clamp(parallax_px, -kParallaxMax, kParallaxMax);
+        const float target = static_cast<float>(parallax_px);
+
+        auto& entry = parallax_entries_[parallax_key(chunk->i, chunk->j)];
+        entry.smoothing.set_params(smoothing);
+        entry.last_used_frame = parallax_frame_counter_;
+
+        bool force_snap = !entry.initialized || smoothing.method == TransformSmoothingMethod::None;
+        if (!force_snap) {
+            const float snap_threshold = std::max(0.0f, smoothing.snap_threshold);
+            const float max_step       = std::max(0.0f, smoothing.max_step);
+            const float current        = entry.smoothing.current;
+            const float delta          = std::fabs(target - current);
+            if (snap_threshold > 0.0f && delta > snap_threshold * 4.0f) {
+                force_snap = true;
+            } else if (max_step > 0.0f && clamped_dt > 0.0f) {
+                const float max_delta = max_step * clamped_dt * 4.0f;
+                if (delta > max_delta) {
+                    force_snap = true;
+                }
+            }
+        }
+
+        if (force_snap) {
+            entry.smoothing.reset(target);
+            entry.smoothing.target = target;
+            entry.initialized      = true;
+        } else {
+            entry.smoothing.target = target;
+            entry.smoothing.advance(clamped_dt);
+        }
+
+        entry.last_value = entry.smoothing.value_for_render();
+    }
+
+    const std::uint64_t prune_threshold = (parallax_frame_counter_ > 480)
+        ? parallax_frame_counter_ - 480
+        : 0;
+    for (auto it = parallax_entries_.begin(); it != parallax_entries_.end(); ) {
+        if (it->second.last_used_frame < prune_threshold) {
+            it = parallax_entries_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+float Grid::parallax_offset(SDL_Point world) const {
+    if (!parallax_active_) {
+        return 0.0f;
+    }
+    const int step = 1 << r_chunk_;
+    if (step <= 0) {
+        return 0.0f;
+    }
+    const int i = floor_div(world.x - origin_.x, step);
+    const int j = floor_div(world.y - origin_.y, step);
+    const auto key = parallax_key(i, j);
+    auto it = parallax_entries_.find(key);
+    if (it == parallax_entries_.end()) {
+        return 0.0f;
+    }
+    return it->second.last_value;
+}
+
+float Grid::parallax_adjusted_screen_x(SDL_Point world, float base_screen_x) const {
+    return base_screen_x + parallax_offset(world);
+}
+
+SDL_FPoint Grid::parallax_adjusted_screen_position(SDL_Point world, SDL_FPoint base_screen) const {
+    base_screen.x = parallax_adjusted_screen_x(world, base_screen.x);
+    return base_screen;
 }
 
 }

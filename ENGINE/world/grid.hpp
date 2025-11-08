@@ -7,8 +7,10 @@
 #include <SDL.h>
 
 #include "world/chunk_manager.hpp"
+#include "utils/transform_smoothing.hpp"
 
 class Asset;
+class camera;
 
 namespace world {
 
@@ -37,12 +39,18 @@ public:
     Chunk* chunk_from_world(SDL_Point world_px) const { return chunks_.from_world(world_px, r_chunk_, origin_); }
     std::vector<Chunk*> all_chunks() const;
 
+    void  update_parallax(const camera& cam, float dt);
+    float parallax_offset(SDL_Point world) const;
+    float parallax_adjusted_screen_x(SDL_Point world, float base_screen_x) const;
+    SDL_FPoint parallax_adjusted_screen_position(SDL_Point world, SDL_FPoint base_screen) const;
+
 private:
     void remove_from_chunk(Asset* a, Chunk* c);
     void rebuild_chunks();
     void invalidate_active_cache();
     int  clamp_lighting_subdivisions(int subdivisions) const;
     bool refresh_lighting_subdivision_cache(bool apply_to_chunks);
+    std::uint64_t parallax_key(int i, int j) const;
 
 private:
     SDL_Point origin_{0,0};
@@ -55,6 +63,17 @@ private:
     bool has_cached_camera_rect_ = false;
     int requested_lighting_subdivisions_ = 1;
     int cached_lighting_subdivisions_    = 1;
+
+    struct ParallaxEntry {
+        TransformSmoothingState smoothing{};
+        float                   last_value = 0.0f;
+        bool                    initialized = false;
+        std::uint64_t           last_used_frame = 0;
+    };
+
+    std::unordered_map<std::uint64_t, ParallaxEntry> parallax_entries_{};
+    bool                                             parallax_active_ = false;
+    std::uint64_t                                    parallax_frame_counter_ = 0;
 };
 
 }

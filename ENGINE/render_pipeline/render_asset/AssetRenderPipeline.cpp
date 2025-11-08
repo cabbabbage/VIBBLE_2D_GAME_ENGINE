@@ -6,6 +6,7 @@
 #include "render_pipeline/render_asset/IRenderStage.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 #include "world/chunk.hpp"
+#include "world/grid.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -127,6 +128,10 @@ void StageContext::update_projection(Asset& asset) {
 
     const float world_x = asset.smoothed_translation_x();
     const float world_y = asset.smoothed_translation_y();
+    const SDL_Point world_point{
+        static_cast<int>(std::lround(world_x)),
+        static_cast<int>(std::lround(world_y))
+    };
     const camera::RenderEffects effects =
         cam.compute_render_effects(
             SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
@@ -134,7 +139,7 @@ void StageContext::update_projection(Asset& asset) {
             reference_height,
             reinterpret_cast<camera::RenderSmoothingKey>(&asset));
 
-    const float parallax_offset = (asset.info && asset.info->apply_parallax) ? effects.parallax_offset_x : 0.0f;
+    world::Grid* grid = (lighting && lighting->world_grid) ? lighting->world_grid : nullptr;
     const float distance_scale  = (asset.info && asset.info->apply_distance_scaling) ? effects.distance_scale : 1.0f;
     const float vertical_scale  = (asset.info && asset.info->apply_vertical_scaling) ? effects.vertical_scale : 1.0f;
 
@@ -146,7 +151,9 @@ void StageContext::update_projection(Asset& asset) {
         return;
     }
 
-    const float center_x = effects.screen_position.x + parallax_offset;
+    const float center_x = grid
+        ? grid->parallax_adjusted_screen_x(world_point, effects.screen_position.x)
+        : effects.screen_position.x;
     const float center_y = effects.screen_position.y;
 
     const float rect_w = std::max(scaled_sw, 1.0f);
