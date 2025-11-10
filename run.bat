@@ -11,6 +11,7 @@ type nul > "%LOG_FILE%"
 set "SCRIPT_PATH=%~f0"
 
 rem Run the script recursively and pipe to powershell logger
+if not defined VIBBLE_SUPPRESS_PAUSE set "VIBBLE_SUPPRESS_PAUSE=1"
 cmd /v:on /c call "%SCRIPT_PATH%" __RUN__ %* 2>&1 | powershell -NoProfile -Command ^
   "$input | Tee-Object -FilePath '%LOG_FILE%'; exit $LASTEXITCODE"
 
@@ -155,12 +156,22 @@ if not exist "%cd%\CMakePresets.json" (
     goto :fail
 )
 
+set "CMAKE_CMD="
+call :LocateCMake
+if not defined CMAKE_CMD (
+    echo [ERROR] CMake executable not found. Run setup.bat to install it.
+    goto :fail
+)
+for %%P in ("%CMAKE_CMD%") do set "CMAKE_DIR=%%~dpP"
+if defined CMAKE_DIR set "PATH=%CMAKE_DIR%;%PATH%"
+echo [run.bat] Using CMake from: %CMAKE_CMD%
+
 echo [run.bat] Configuring with preset: windows-vcpkg
-cmake --preset windows-vcpkg
+"%CMAKE_CMD%" --preset windows-vcpkg
 if errorlevel 1 goto :fail
 
 echo [run.bat] Building with preset: windows-vcpkg-release (%BUILD_CONFIG%)
-cmake --build --preset windows-vcpkg-release --config %BUILD_CONFIG%
+"%CMAKE_CMD%" --build --preset windows-vcpkg-release --config %BUILD_CONFIG%
 if errorlevel 1 goto :fail
 
 rem ----------------------------------------------------
@@ -236,5 +247,46 @@ goto :eof
 :fail
 echo [run.bat] Build failed.
 popd >nul
-pause
+if not defined VIBBLE_SUPPRESS_PAUSE pause
 exit /b 1
+
+:LocateCMake
+set "CMAKE_CMD="
+
+for /f "delims=" %%I in ('where cmake 2^>nul') do (
+    if not defined CMAKE_CMD set "CMAKE_CMD=%%~fI"
+)
+if defined CMAKE_CMD goto :locate_done
+
+for %%P in ("%ProgramFiles%\CMake\bin\cmake.exe" "C:\Program Files\CMake\bin\cmake.exe" "C:\Program Files (x86)\CMake\bin\cmake.exe" "%ProgramFiles(x86)%\CMake\bin\cmake.exe") do (
+    if not defined CMAKE_CMD if exist %%~P set "CMAKE_CMD=%%~fP"
+)
+if defined CMAKE_CMD goto :locate_done
+
+set "CMAKE_HINT_FILE=%cd%\TEMP\cmake-path.txt"
+if exist "%CMAKE_HINT_FILE%" (
+    set /p CMAKE_CMD=<"%CMAKE_HINT_FILE%"
+    if defined CMAKE_CMD (
+        if exist "!CMAKE_CMD!" goto :locate_done
+        if exist "!CMAKE_CMD!\cmake.exe" (
+            set "CMAKE_CMD=!CMAKE_CMD!\cmake.exe"
+            goto :locate_done
+        )
+    )
+    set "CMAKE_CMD="
+)
+
+if exist "%LOCAL_VCPKG%\downloads\tools\cmake" (
+    for /d %%D in ("%LOCAL_VCPKG%\downloads\tools\cmake\cmake-*") do (
+        if not defined CMAKE_CMD if exist "%%D\bin\cmake.exe" (
+            set "CMAKE_CMD=%%D\bin\cmake.exe"
+            goto :locate_done
+        )
+    )
+)
+
+:locate_done
+if defined CMAKE_CMD (
+    for %%Q in ("%CMAKE_CMD%") do if exist %%~fQ set "CMAKE_CMD=%%~fQ"
+)
+exit /b 0

@@ -10,6 +10,7 @@ set "SETUP_LOG=%~dp0setup_log.txt"
 type nul > "%SETUP_LOG%"
 set "SCRIPT_PATH=%~f0"
 
+if not defined VIBBLE_SUPPRESS_PAUSE set "VIBBLE_SUPPRESS_PAUSE=1"
 cmd /v:on /c call "%SCRIPT_PATH%" __RUN__ %* 2>&1 | powershell -NoProfile -Command ^
   "$input | Tee-Object -FilePath '%SETUP_LOG%'; exit $LASTEXITCODE"
 exit /b %ERRORLEVEL%
@@ -236,6 +237,7 @@ if not "%errorlevel%"=="0" (
 
 echo [setup.bat] CMake installed successfully:
 cmake --version
+call :RecordCMakeHint
 exit /b 0
 
 :EnsureNinja
@@ -248,5 +250,20 @@ exit /b 0
 :fail
 echo [setup.bat] Setup failed.
 popd >nul
-pause
+if not defined VIBBLE_SUPPRESS_PAUSE pause
 exit /b 1
+
+:RecordCMakeHint
+set "CMAKE_FOUND="
+for /f "delims=" %%I in ('where cmake 2^>nul') do (
+    if not defined CMAKE_FOUND set "CMAKE_FOUND=%%~fI"
+)
+if not defined CMAKE_FOUND exit /b 0
+
+set "CMAKE_HINT_DIR=%REPO_ROOT%\TEMP"
+if not exist "%CMAKE_HINT_DIR%" mkdir "%CMAKE_HINT_DIR%" >nul 2>&1
+set "CMAKE_HINT_FILE=%CMAKE_HINT_DIR%\cmake-path.txt"
+(
+    echo %CMAKE_FOUND%
+) > "%CMAKE_HINT_FILE%"
+exit /b 0
