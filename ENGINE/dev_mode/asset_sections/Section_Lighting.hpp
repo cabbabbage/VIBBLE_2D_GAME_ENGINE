@@ -35,6 +35,9 @@ public:
             r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", ls.in_front);
             r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", ls.behind);
             r.c_dark_mask      = std::make_unique<DMCheckbox>("Render To Dark Mask", ls.render_to_dark_mask);
+            r.c_alpha_mask     = std::make_unique<DMCheckbox>(
+                "Render Front/Back To Asset Alpha Mask",
+                ls.render_front_and_back_to_asset_alpha_mask);
             r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
             {
                 DMColorRangeWidget::RangedColor rc;
@@ -89,6 +92,10 @@ public:
             }
             if (r.c_dark_mask) {
                 r.c_dark_mask->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
+                y += DMCheckbox::height() + DMSpacing::item_gap();
+            }
+            if (r.c_alpha_mask) {
+                r.c_alpha_mask->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
                 y += DMCheckbox::height() + DMSpacing::item_gap();
             }
             if (r.color_widget) {
@@ -149,6 +156,12 @@ public:
             if (r.c_dark_mask && r.c_dark_mask->handle_event(e)) {
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                     r.light.render_to_dark_mask = r.c_dark_mask->value();
+                    commit_change();
+                }
+            }
+            if (r.c_alpha_mask && r.c_alpha_mask->handle_event(e)) {
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    r.light.render_front_and_back_to_asset_alpha_mask = r.c_alpha_mask->value();
                     commit_change();
                 }
             }
@@ -219,6 +232,8 @@ public:
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 Row r;
                 r.light = LightSource{};
+                r.light.in_front = true;
+                r.light.render_to_dark_mask = true;
                 r.lbl = std::make_unique<DMButton>("Light Source", &DMStyles::HeaderButton(), 180, DMButton::height());
                 r.b_delete = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
                 r.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, r.light.intensity);
@@ -230,6 +245,9 @@ public:
                 r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", r.light.in_front);
                 r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", r.light.behind);
                 r.c_dark_mask      = std::make_unique<DMCheckbox>("Render To Dark Mask", r.light.render_to_dark_mask);
+                r.c_alpha_mask     = std::make_unique<DMCheckbox>(
+                    "Render Front/Back To Asset Alpha Mask",
+                    r.light.render_front_and_back_to_asset_alpha_mask);
                 r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
                 {
                     DMColorRangeWidget::RangedColor rc;
@@ -280,6 +298,7 @@ public:
             if (rrow.c_front)  rrow.c_front->render(r);
             if (rrow.c_behind) rrow.c_behind->render(r);
             if (rrow.c_dark_mask) rrow.c_dark_mask->render(r);
+            if (rrow.c_alpha_mask) rrow.c_alpha_mask->render(r);
             if (rrow.color_widget) rrow.color_widget->render(r);
         }
         if (b_add_) b_add_->render(r);
@@ -300,6 +319,7 @@ private:
         std::unique_ptr<DMCheckbox> c_front;
         std::unique_ptr<DMCheckbox> c_behind;
         std::unique_ptr<DMCheckbox> c_dark_mask;
+        std::unique_ptr<DMCheckbox> c_alpha_mask;
         std::unique_ptr<DMColorRangeWidget> color_widget;
 };
 
@@ -351,6 +371,8 @@ public:
             if (r.c_front)           r.c_front->set_value(src.in_front);
             if (r.c_behind)          r.c_behind->set_value(src.behind);
             if (r.c_dark_mask)       r.c_dark_mask->set_value(src.render_to_dark_mask);
+            if (r.c_alpha_mask)
+                r.c_alpha_mask->set_value(src.render_front_and_back_to_asset_alpha_mask);
             if (r.color_widget) {
                 DMColorRangeWidget::RangedColor rc;
                 rc.r.min = rc.r.max = static_cast<int>(src.color.r);

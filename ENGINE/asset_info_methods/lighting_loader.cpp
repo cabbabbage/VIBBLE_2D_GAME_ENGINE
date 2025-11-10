@@ -43,6 +43,8 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                 }
                 light.behind            = l.value("behind", false);
                 light.render_to_dark_mask = l.value("dark_mask", true);
+                light.render_front_and_back_to_asset_alpha_mask =
+                    l.value("render_front_and_back_to_asset_alpha_mask", false);
                 // If explicit front flag present, use it; otherwise default to !behind for backwards-compat
                 if (l.contains("front")) {
                     try {

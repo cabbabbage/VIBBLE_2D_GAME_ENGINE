@@ -1177,6 +1177,8 @@ void AssetInfo::set_lighting(const std::vector<LightSource>& lights) {
         j["behind"] = l.behind;
         j["front"]  = l.in_front;
         j["dark_mask"] = l.render_to_dark_mask;
+        j["render_front_and_back_to_asset_alpha_mask"] =
+            l.render_front_and_back_to_asset_alpha_mask;
         arr.push_back(std::move(j));
     }
     info_json_["lighting_info"] = std::move(arr);
