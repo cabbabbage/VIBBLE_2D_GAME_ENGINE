@@ -5,6 +5,7 @@
 #include <array>
 #include <vector>
 #include <memory>
+#include <optional>
 #include <SDL.h>
 #include <limits>
 #include <cstdint>
@@ -35,7 +36,19 @@ class Asset {
         SDL_Texture* texture = nullptr;
         int          width   = 0;
         int          height  = 0;
-};
+    };
+
+    struct TilingInfo {
+        bool      enabled      = false;
+        SDL_Point grid_origin{0, 0};
+        SDL_Point tile_size{0, 0};
+        SDL_Rect  coverage{0, 0, 0, 0};
+        SDL_Point anchor{0, 0};
+
+        bool is_valid() const {
+            return enabled && tile_size.x > 0 && tile_size.y > 0 && coverage.w > 0 && coverage.h > 0;
+        }
+    };
 
     Area get_area(const std::string& name) const;
     Asset(std::shared_ptr<AssetInfo> info,
@@ -94,6 +107,8 @@ class Asset {
     void set_camera(camera* v) { window = v; }
     void set_assets(Assets* a);
     Assets* get_assets() const { return assets_; }
+    void set_tiling_info(std::optional<TilingInfo> info);
+    const std::optional<TilingInfo>& tiling_info() const { return tiling_info_; }
     const std::string& owning_room_name() const { return owning_room_name_; }
     void set_owning_room_name(std::string name);
     AssetList* get_neighbors_list();
@@ -179,6 +194,7 @@ private:
     std::unique_ptr<AssetController>   controller_;
     std::unique_ptr<AssetList> neighbors;
     AssetList* impassable_naighbors = nullptr;
+    std::optional<TilingInfo> tiling_info_{};
     SDL_Point last_neighbor_origin_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
     bool neighbor_lists_initialized_ = false;
     void update_neighbor_lists(bool force_update);

@@ -77,9 +77,10 @@ void write_manifest_file(const std::filesystem::path& path,
         oss << "Failed while writing manifest file at '" << path.string() << "'.";
         throw std::runtime_error(oss.str());
     }
-}
 
 }
+
+} // namespace
 
 std::string manifest_path() {
     return (project_root() / "manifest.json").string();
@@ -141,5 +142,12 @@ ManifestData load_manifest() {
     return make_manifest_data(std::move(manifest_json));
 }
 
+void save_manifest(const ManifestData& data) {
+    const std::filesystem::path root = project_root();
+    const std::filesystem::path path = root / "manifest.json";
+    write_manifest_file(path, data.raw);
 }
+
+} // namespace manifest
+
 

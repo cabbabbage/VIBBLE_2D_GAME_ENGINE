@@ -63,6 +63,25 @@
       "render_radius": 2191,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.2626262605190277,
+        "min_scale": 0.23636361956596375,
+        "recommended_percentages": [
+          100,
+          26,
+          25,
+          24
+        ],
+        "recommended_steps": [
+          1.0,
+          0.2626262605190277,
+          0.2491491436958313,
+          0.23636361956596375
+        ],
+        "revision": 9709375114360071595,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 26.0
       },
@@ -832,6 +851,25 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.14141413569450378,
+        "min_scale": 0.12727272510528564,
+        "recommended_percentages": [
+          100,
+          14,
+          13,
+          13
+        ],
+        "recommended_steps": [
+          1.0,
+          0.14141413569450378,
+          0.1341572254896164,
+          0.12727272510528564
+        ],
+        "revision": 11647282840148632619,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -2703,6 +2741,23 @@
       "neighbor_search_distance": 500,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.17171716690063477,
+        "min_scale": 0.17171716690063477,
+        "recommended_percentages": [
+          100,
+          17,
+          17
+        ],
+        "recommended_steps": [
+          1.0,
+          0.17171716690063477,
+          0.17171716690063477
+        ],
+        "revision": 17137370256608082498,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -4628,6 +4683,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.9191919565200806,
+        "min_scale": 0.9191919565200806,
+        "recommended_percentages": [
+          100,
+          92,
+          92
+        ],
+        "recommended_steps": [
+          1.0,
+          0.9191919565200806,
+          0.9191919565200806
+        ],
+        "revision": 15484092627372479652,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -4700,6 +4772,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.6767677068710327,
+        "min_scale": 0.6767677068710327,
+        "recommended_percentages": [
+          100,
+          68,
+          68
+        ],
+        "recommended_steps": [
+          1.0,
+          0.6767677068710327,
+          0.6767677068710327
+        ],
+        "revision": 2977683064929519070,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 67
       },
@@ -5090,6 +5179,25 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.08080808073282242,
+        "min_scale": 0.072727270424366,
+        "recommended_percentages": [
+          100,
+          8,
+          8,
+          7
+        ],
+        "recommended_steps": [
+          1.0,
+          0.08080808073282242,
+          0.07666127383708954,
+          0.072727270424366
+        ],
+        "revision": 10047999422421411953,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -5164,6 +5272,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.20202019810676575,
+        "min_scale": 0.20202019810676575,
+        "recommended_percentages": [
+          100,
+          20,
+          20
+        ],
+        "recommended_steps": [
+          1.0,
+          0.20202019810676575,
+          0.20202019810676575
+        ],
+        "revision": 2658042293347433072,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 20,
         "variability_percentage": 0
@@ -5214,6 +5339,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.24242423474788666,
+        "min_scale": 0.24242423474788666,
+        "recommended_percentages": [
+          100,
+          24,
+          24
+        ],
+        "recommended_steps": [
+          1.0,
+          0.24242423474788666,
+          0.24242423474788666
+        ],
+        "revision": 5861433496732153956,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -5271,6 +5413,23 @@
       "min_same_type_distance": 400,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.20202019810676575,
+        "min_scale": 0.20202019810676575,
+        "recommended_percentages": [
+          100,
+          20,
+          20
+        ],
+        "recommended_steps": [
+          1.0,
+          0.20202019810676575,
+          0.20202019810676575
+        ],
+        "revision": 8562479788467223927,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 20,
         "variability_percentage": 0
@@ -5320,6 +5479,23 @@
       "min_same_type_distance": 0,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.12121211737394333,
+        "min_scale": 0.12121211737394333,
+        "recommended_percentages": [
+          100,
+          12,
+          12
+        ],
+        "recommended_steps": [
+          1.0,
+          0.12121211737394333,
+          0.12121211737394333
+        ],
+        "revision": 1166330222194531375,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 12
       },
@@ -5368,6 +5544,23 @@
       "min_same_type_distance": 161,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.12121211737394333,
+        "min_scale": 0.12121211737394333,
+        "recommended_percentages": [
+          100,
+          12,
+          12
+        ],
+        "recommended_steps": [
+          1.0,
+          0.12121211737394333,
+          0.12121211737394333
+        ],
+        "revision": 15160178858489762027,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 12
       },
@@ -5415,6 +5608,23 @@
       "min_same_type_distance": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.20202019810676575,
+        "min_scale": 0.20202019810676575,
+        "recommended_percentages": [
+          100,
+          20,
+          20
+        ],
+        "recommended_steps": [
+          1.0,
+          0.20202019810676575,
+          0.20202019810676575
+        ],
+        "revision": 16014179635084997326,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 20,
         "variability_percentage": 0
@@ -5480,6 +5690,23 @@
       "min_same_type_distance": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.20202019810676575,
+        "min_scale": 0.20202019810676575,
+        "recommended_percentages": [
+          100,
+          20,
+          20
+        ],
+        "recommended_steps": [
+          1.0,
+          0.20202019810676575,
+          0.20202019810676575
+        ],
+        "revision": 4458838113538847926,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 20
       },
@@ -5544,6 +5771,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.09090909361839294,
+        "min_scale": 0.09090909361839294,
+        "recommended_percentages": [
+          100,
+          9,
+          9
+        ],
+        "recommended_steps": [
+          1.0,
+          0.09090909361839294,
+          0.09090909361839294
+        ],
+        "revision": 2556929478069417033,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 9.0
       },
@@ -5625,6 +5869,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.05050504952669144,
+        "min_scale": 0.05050504952669144,
+        "recommended_percentages": [
+          100,
+          5,
+          5
+        ],
+        "recommended_steps": [
+          1.0,
+          0.05050504952669144,
+          0.05050504952669144
+        ],
+        "revision": 11357992257498854020,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 5
       },
@@ -5696,6 +5957,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.13131313025951385,
+        "min_scale": 0.13131313025951385,
+        "recommended_percentages": [
+          100,
+          13,
+          13
+        ],
+        "recommended_steps": [
+          1.0,
+          0.13131313025951385,
+          0.13131313025951385
+        ],
+        "revision": 13757892255286212665,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 13
       },
@@ -6083,6 +6361,23 @@
       "min_same_type_distance": 511,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.14141413569450378,
+        "min_scale": 0.14141413569450378,
+        "recommended_percentages": [
+          100,
+          14,
+          14
+        ],
+        "recommended_steps": [
+          1.0,
+          0.14141413569450378,
+          0.14141413569450378
+        ],
+        "revision": 15659964178579154225,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 14.0
       },
@@ -6462,6 +6757,23 @@
       "min_same_type_distance": 557,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.12121211737394333,
+        "min_scale": 0.12121211737394333,
+        "recommended_percentages": [
+          100,
+          12,
+          12
+        ],
+        "recommended_steps": [
+          1.0,
+          0.12121211737394333,
+          0.12121211737394333
+        ],
+        "revision": 11314129007527351185,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 12.0
       },
@@ -6560,6 +6872,23 @@
       "min_same_type_distance": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.4141414165496826,
+        "min_scale": 0.4141414165496826,
+        "recommended_percentages": [
+          100,
+          41,
+          41
+        ],
+        "recommended_steps": [
+          1.0,
+          0.4141414165496826,
+          0.4141414165496826
+        ],
+        "revision": 4147515759674811569,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 41
       },
@@ -7839,6 +8168,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.09090909361839294,
+        "min_scale": 0.09090909361839294,
+        "recommended_percentages": [
+          100,
+          9,
+          9
+        ],
+        "recommended_steps": [
+          1.0,
+          0.09090909361839294,
+          0.09090909361839294
+        ],
+        "revision": 17826286536811119873,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -7866,8 +8212,9 @@
         "SRC/assets/Davey/right",
         "SRC/assets/Davey/start"
       ],
+      "tillable": false,
       "update_radius": 1000,
-      "z_threshold": 159
+      "z_threshold": -8
     },
     "Fountain": {
       "animations": {
@@ -7982,6 +8329,25 @@
       "neighbor_search_distance": 500,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:03:22Z",
+        "max_scale": 0.12121211737394333,
+        "min_scale": 0.1090909019112587,
+        "recommended_percentages": [
+          100,
+          12,
+          11,
+          11
+        ],
+        "recommended_steps": [
+          1.0,
+          0.12121211737394333,
+          0.11499191075563431,
+          0.1090909019112587
+        ],
+        "revision": 4661186540925489216,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -7990,7 +8356,7 @@
         "blur_scale": 1.0,
         "expansion_ratio": 0.14000000059604645,
         "falloff_exponent": 6.230000019073486,
-        "falloff_start": 0.3100000023841858
+        "falloff_start": 0.20999999344348907
       },
       "size_settings": {
         "scale_percentage": 12.0
@@ -8010,6 +8376,7 @@
         "grey",
         "light"
       ],
+      "tillable": false,
       "z_threshold": 1
     },
     "Frog": {
@@ -8267,6 +8634,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.1111111119389534,
+        "min_scale": 0.1111111119389534,
+        "recommended_percentages": [
+          100,
+          11,
+          11
+        ],
+        "recommended_steps": [
+          1.0,
+          0.1111111119389534,
+          0.1111111119389534
+        ],
+        "revision": 12183622602141915628,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 11.0
       },
@@ -8387,6 +8771,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.05000000074505806,
+        "min_scale": 0.05000000074505806,
+        "recommended_percentages": [
+          100,
+          5,
+          5
+        ],
+        "recommended_steps": [
+          1.0,
+          0.05000000074505806,
+          0.05000000074505806
+        ],
+        "revision": 12043316664133468227,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -8513,6 +8914,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.05000000074505806,
+        "min_scale": 0.05000000074505806,
+        "recommended_percentages": [
+          100,
+          5,
+          5
+        ],
+        "recommended_steps": [
+          1.0,
+          0.05000000074505806,
+          0.05000000074505806
+        ],
+        "revision": 1963053822044083355,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -8617,6 +9035,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.27272728085517883,
+        "min_scale": 0.27272728085517883,
+        "recommended_percentages": [
+          100,
+          27,
+          27
+        ],
+        "recommended_steps": [
+          1.0,
+          0.27272728085517883,
+          0.27272728085517883
+        ],
+        "revision": 1045699729086070309,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 27.0
       },
@@ -8711,6 +9146,23 @@
       "min_same_type_distance": 0,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.17171716690063477,
+        "min_scale": 0.17171716690063477,
+        "recommended_percentages": [
+          100,
+          17,
+          17
+        ],
+        "recommended_steps": [
+          1.0,
+          0.17171716690063477,
+          0.17171716690063477
+        ],
+        "revision": 13604006396152318104,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 17
       },
@@ -8781,6 +9233,19 @@
       },
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 1.0101009607315063,
+        "min_scale": 1.0101009607315063,
+        "recommended_percentages": [
+          100
+        ],
+        "recommended_steps": [
+          1.0
+        ],
+        "revision": 4843662883977377945,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "flipability": true,
         "scale_percentage": 100,
@@ -8877,6 +9342,23 @@
       "neighbor_search_distance": 500,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.5454545617103577,
+        "min_scale": 0.5454545617103577,
+        "recommended_percentages": [
+          100,
+          55,
+          55
+        ],
+        "recommended_steps": [
+          1.0,
+          0.5454545617103577,
+          0.5454545617103577
+        ],
+        "revision": 4308709108878271428,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -8950,6 +9432,23 @@
       "min_same_type_distance": 400,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.2222222238779068,
+        "min_scale": 0.2222222238779068,
+        "recommended_percentages": [
+          100,
+          22,
+          22
+        ],
+        "recommended_steps": [
+          1.0,
+          0.2222222238779068,
+          0.2222222238779068
+        ],
+        "revision": 5606063344762563600,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 22
       },
@@ -9014,6 +9513,23 @@
       "min_same_type_distance": 29,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.2222222238779068,
+        "min_scale": 0.2222222238779068,
+        "recommended_percentages": [
+          100,
+          22,
+          22
+        ],
+        "recommended_steps": [
+          1.0,
+          0.2222222238779068,
+          0.2222222238779068
+        ],
+        "revision": 309590346138694153,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 22
       },
@@ -9064,6 +9580,23 @@
       "neighbor_search_distance": 500,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.5151515007019043,
+        "min_scale": 0.5151515007019043,
+        "recommended_percentages": [
+          100,
+          52,
+          52
+        ],
+        "recommended_steps": [
+          1.0,
+          0.5151515007019043,
+          0.5151515007019043
+        ],
+        "revision": 15437341256592371338,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "flipability": true,
         "scale_percentage": 51.0,
@@ -9115,6 +9648,23 @@
       "min_same_type_distance": 400,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.08080808073282242,
+        "min_scale": 0.08080808073282242,
+        "recommended_percentages": [
+          100,
+          8,
+          8
+        ],
+        "recommended_steps": [
+          1.0,
+          0.08080808073282242,
+          0.08080808073282242
+        ],
+        "revision": 16865998409181713987,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 8
       },
@@ -9213,6 +9763,19 @@
       "min_same_type_distance": 0,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 1.0505050420761108,
+        "min_scale": 1.0505050420761108,
+        "recommended_percentages": [
+          100
+        ],
+        "recommended_steps": [
+          1.0
+        ],
+        "revision": 12849517189337331952,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 104,
         "variability_percentage": 0.0
@@ -9307,6 +9870,23 @@
       "min_same_type_distance": 500,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.2222222238779068,
+        "min_scale": 0.2222222238779068,
+        "recommended_percentages": [
+          100,
+          22,
+          22
+        ],
+        "recommended_steps": [
+          1.0,
+          0.2222222238779068,
+          0.2222222238779068
+        ],
+        "revision": 11517530203629125197,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "flipability": true,
         "scale_percentage": 22,
@@ -9361,6 +9941,23 @@
       "min_same_type_distance": 832,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.2626262605190277,
+        "min_scale": 0.2626262605190277,
+        "recommended_percentages": [
+          100,
+          26,
+          26
+        ],
+        "recommended_steps": [
+          1.0,
+          0.2626262605190277,
+          0.2626262605190277
+        ],
+        "revision": 18080536886810623208,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "flipability": true,
         "scale_percentage": 26,
@@ -9418,6 +10015,25 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.2954545319080353,
+        "min_scale": 0.23636361956596375,
+        "recommended_percentages": [
+          100,
+          30,
+          26,
+          24
+        ],
+        "recommended_steps": [
+          1.0,
+          0.2954545319080353,
+          0.2642625570297241,
+          0.23636361956596375
+        ],
+        "revision": 12701692905620885828,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 26.0
       },
@@ -11268,6 +11884,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.35353535413742065,
+        "min_scale": 0.35353535413742065,
+        "recommended_percentages": [
+          100,
+          35,
+          35
+        ],
+        "recommended_steps": [
+          1.0,
+          0.35353535413742065,
+          0.35353535413742065
+        ],
+        "revision": 1123978527603944143,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 35
       },
@@ -12325,6 +12958,23 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.9595959186553955,
+        "min_scale": 0.9595959186553955,
+        "recommended_percentages": [
+          100,
+          96,
+          96
+        ],
+        "recommended_steps": [
+          1.0,
+          0.9595959186553955,
+          0.9595959186553955
+        ],
+        "revision": 2934235771012967217,
+        "screen_aspect": 1.6
+      },
       "shadow_mask_settings": {
         "alpha_multiplier": 1.0,
         "blur_scale": 0.12999999523162842,
@@ -13580,6 +14230,19 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 1.0505050420761108,
+        "min_scale": 1.0505050420761108,
+        "recommended_percentages": [
+          100
+        ],
+        "recommended_steps": [
+          1.0
+        ],
+        "revision": 4678080243282510438,
+        "screen_aspect": 1.6
+      },
       "shadow_mask_settings": {
         "alpha_multiplier": 2.690000057220459,
         "blur_scale": 0.0,
@@ -13684,6 +14347,23 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.7999999523162842,
+        "min_scale": 0.7999999523162842,
+        "recommended_percentages": [
+          100,
+          80,
+          80
+        ],
+        "recommended_steps": [
+          1.0,
+          0.7999999523162842,
+          0.7999999523162842
+        ],
+        "revision": 2174567251658702918,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -13940,6 +14620,25 @@
       "neighbor_search_distance": 500,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.06818182021379471,
+        "min_scale": 0.060606058686971664,
+        "recommended_percentages": [
+          100,
+          7,
+          6,
+          6
+        ],
+        "recommended_steps": [
+          1.0,
+          0.06818182021379471,
+          0.06428243219852448,
+          0.060606058686971664
+        ],
+        "revision": 15809255941717519803,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -14030,6 +14729,23 @@
       "asset_type": "Object",
       "can_invert": true,
       "mappings": {},
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.07070706784725189,
+        "min_scale": 0.07070706784725189,
+        "recommended_percentages": [
+          100,
+          7,
+          7
+        ],
+        "recommended_steps": [
+          1.0,
+          0.07070706784725189,
+          0.07070706784725189
+        ],
+        "revision": 14818972424423798985,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 7.0
       },
@@ -14092,6 +14808,25 @@
       "render_radius": 1000,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.34343433380126953,
+        "min_scale": 0.30909091234207153,
+        "recommended_percentages": [
+          100,
+          34,
+          33,
+          31
+        ],
+        "recommended_steps": [
+          1.0,
+          0.34343433380126953,
+          0.32581043243408203,
+          0.30909091234207153
+        ],
+        "revision": 4840233565179771779,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -14157,45 +14892,255 @@
       "has_shading": false,
       "lighting_info": [
         {
-          "apex_speed_bias": 0,
           "behind": false,
-          "factor": 100,
-          "falloff": 0,
-          "front": true,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 8,
           "has_light_source": true,
-          "light_intensity": 0,
-          "offset_x": 0,
-          "offset_y": 0,
-          "radius": 0,
-          "render_texture": true,
-          "render_to_mask": true,
-          "x_radius": 0,
-          "y_radius": 0
+          "in_front": true,
+          "light_color": [
+            184,
+            255,
+            157
+          ],
+          "light_intensity": 99,
+          "offset_x": 128,
+          "offset_y": -570,
+          "radius": 140,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
         },
         {
           "behind": false,
           "falloff": 50,
           "flare": 0,
           "flicker": 20,
-          "front": true,
           "has_light_source": true,
+          "in_front": true,
           "light_color": [
             255,
             255,
             255
           ],
-          "light_intensity": 255,
-          "offset_x": 0,
-          "offset_y": 0,
-          "radius": 64,
-          "render_texture": true,
-          "render_to_mask": true
+          "light_intensity": 99,
+          "offset_x": 411,
+          "offset_y": -512,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": 358,
+          "offset_y": -513,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": 309,
+          "offset_y": -513,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": 229,
+          "offset_y": -573,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": 180,
+          "offset_y": -570,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": -171,
+          "offset_y": -572,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": -117,
+          "offset_y": -570,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": -221,
+          "offset_y": -572,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": -349,
+          "offset_y": -511,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": -402,
+          "offset_y": -511,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 99,
+          "offset_x": -301,
+          "offset_y": -513,
+          "radius": 67,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
         }
       ],
       "min_distance_all": 0,
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.5454545617103577,
+        "min_scale": 0.5454545617103577,
+        "recommended_percentages": [
+          100,
+          55,
+          55
+        ],
+        "recommended_steps": [
+          1.0,
+          0.5454545617103577,
+          0.5454545617103577
+        ],
+        "revision": 436991626080154853,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -14212,6 +15157,7 @@
       "spawn_groups": [],
       "start": "SRC/casino",
       "tags": [],
+      "tillable": false,
       "update_radius": 0
     },
     "church": {
@@ -14252,27 +15198,45 @@
       "lighting_info": [
         {
           "behind": false,
-          "dark_mask": true,
           "falloff": 50,
           "flare": 0,
           "flicker": 20,
-          "front": true,
           "has_light_source": true,
+          "in_front": true,
           "light_color": [
             255,
             255,
             255
           ],
           "light_intensity": 255,
-          "offset_x": 0,
-          "offset_y": 0,
-          "radius": 64
+          "offset_x": 93,
+          "offset_y": -245,
+          "radius": 451,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
         }
       ],
       "min_distance_all": 0,
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.4727272391319275,
+        "min_scale": 0.4727272391319275,
+        "recommended_percentages": [
+          100,
+          47,
+          47
+        ],
+        "recommended_steps": [
+          1.0,
+          0.4727272391319275,
+          0.4727272391319275
+        ],
+        "revision": 14653002997776166657,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -14363,6 +15327,23 @@
       "min_same_type_distance": 20,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.060606058686971664,
+        "min_scale": 0.060606058686971664,
+        "recommended_percentages": [
+          100,
+          6,
+          6
+        ],
+        "recommended_steps": [
+          1.0,
+          0.060606058686971664,
+          0.060606058686971664
+        ],
+        "revision": 9615868423022211789,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "flipability": false,
         "scale_percentage": 6,
@@ -14423,6 +15404,23 @@
       "min_same_type_distance": 20,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.060606058686971664,
+        "min_scale": 0.060606058686971664,
+        "recommended_percentages": [
+          100,
+          6,
+          6
+        ],
+        "recommended_steps": [
+          1.0,
+          0.060606058686971664,
+          0.060606058686971664
+        ],
+        "revision": 10533118392762360661,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "flipability": true,
         "scale_percentage": 6,
@@ -14482,6 +15480,23 @@
       "min_same_type_distance": 20,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.060606058686971664,
+        "min_scale": 0.060606058686971664,
+        "recommended_percentages": [
+          100,
+          6,
+          6
+        ],
+        "recommended_steps": [
+          1.0,
+          0.060606058686971664,
+          0.060606058686971664
+        ],
+        "revision": 14143257122841216903,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "flipability": true,
         "scale_percentage": 6,
@@ -14575,6 +15590,23 @@
       "min_same_type_distance": 20,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.060606058686971664,
+        "min_scale": 0.060606058686971664,
+        "recommended_percentages": [
+          100,
+          6,
+          6
+        ],
+        "recommended_steps": [
+          1.0,
+          0.060606058686971664,
+          0.060606058686971664
+        ],
+        "revision": 1581998718393238822,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "flipability": true,
         "scale_percentage": 6,
@@ -14670,6 +15702,23 @@
       "neighbor_search_distance": 500,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.060606058686971664,
+        "min_scale": 0.060606058686971664,
+        "recommended_percentages": [
+          100,
+          6,
+          6
+        ],
+        "recommended_steps": [
+          1.0,
+          0.060606058686971664,
+          0.060606058686971664
+        ],
+        "revision": 10621038097052833001,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "flipability": true,
         "scale_percentage": 6,
@@ -14929,6 +15978,23 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.9909090995788574,
+        "min_scale": 0.9909090995788574,
+        "recommended_percentages": [
+          100,
+          99,
+          99
+        ],
+        "recommended_steps": [
+          1.0,
+          0.9909090995788574,
+          0.9909090995788574
+        ],
+        "revision": 3793306529986629289,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -14945,6 +16011,8 @@
       "spawn_groups": [],
       "start": "default",
       "tags": [],
+      "tileable": true,
+      "tillable": true,
       "update_radius": 0
     },
     "marker": {
@@ -15111,6 +16179,23 @@
       "min_same_type_distance": 1299,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.05050504952669144,
+        "min_scale": 0.05050504952669144,
+        "recommended_percentages": [
+          100,
+          5,
+          5
+        ],
+        "recommended_steps": [
+          1.0,
+          0.05050504952669144,
+          0.05050504952669144
+        ],
+        "revision": 5030176641071883364,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 5
       },
@@ -15160,6 +16245,23 @@
       "min_same_type_distance": 0,
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.5252525210380554,
+        "min_scale": 0.5252525210380554,
+        "recommended_percentages": [
+          100,
+          53,
+          53
+        ],
+        "recommended_steps": [
+          1.0,
+          0.5252525210380554,
+          0.5252525210380554
+        ],
+        "revision": 17135170491582726348,
+        "screen_aspect": 1.6
+      },
       "size_settings": {
         "scale_percentage": 52,
         "variability_percentage": 0
@@ -15276,6 +16378,23 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.5454545617103577,
+        "min_scale": 0.5454545617103577,
+        "recommended_percentages": [
+          100,
+          55,
+          55
+        ],
+        "recommended_steps": [
+          1.0,
+          0.5454545617103577,
+          0.5454545617103577
+        ],
+        "revision": 7726281903526866862,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -15373,6 +16492,23 @@
       "asset_type": "Object",
       "mappings": {},
       "neighbor_search_distance": 500,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.42424240708351135,
+        "min_scale": 0.42424240708351135,
+        "recommended_percentages": [
+          100,
+          42,
+          42
+        ],
+        "recommended_steps": [
+          1.0,
+          0.42424240708351135,
+          0.42424240708351135
+        ],
+        "revision": 457925809667585743,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -15429,6 +16565,23 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-10T15:09:41Z",
+        "max_scale": 0.5454545617103577,
+        "min_scale": 0.5454545617103577,
+        "recommended_percentages": [
+          100,
+          55,
+          55
+        ],
+        "recommended_steps": [
+          1.0,
+          0.5454545617103577,
+          0.5454545617103577
+        ],
+        "revision": 17048153485698798436,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -15571,10 +16724,10 @@
         "parallax_smoothing_method": 1,
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 0.0,
-        "parallax_strength": 85.0,
+        "parallax_strength": 57.25,
         "realism_enabled": false,
-        "render_distance": 540.0,
-        "render_quality_percent": 10,
+        "render_distance": 1270.0,
+        "render_quality_percent": 75,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
         "tripod_distance_y": -860.0
@@ -15829,7 +16982,7 @@
             "vertical_falloff": 3.5
           }
         },
-        "update_interval": 26
+        "update_interval": 1
       },
       "map_name": "FORREST",
       "reactive_shadows": {
@@ -15863,14 +17016,14 @@
           "map_light_dir_offset_strength": 0.0,
           "max_offset_x": 93.93000030517578,
           "max_offset_y": 6.46999979019165,
-          "max_opacity": 0.7400000095367432,
+          "max_opacity": 0.5799999833106995,
           "min_opacity": 0.0,
           "offset_horizontal_falloff": 1.9900000095367432,
           "offset_search_radius": 3,
           "offset_vertical_falloff": 1.909999966621399,
-          "opacity_boost": 0.0,
+          "opacity_boost": -0.41999998688697815,
           "opacity_horizontal_falloff": 1.9900000095367432,
-          "opacity_search_radius": 2,
+          "opacity_search_radius": 1,
           "opacity_vertical_falloff": 1.909999966621399,
           "search_radius": 3,
           "vertical_falloff": 1.909999966621399
@@ -15879,9 +17032,9 @@
       "rooms_data": {
         "NewRoom": {
           "display_color": [
-            132,
-            242,
-            85,
+            31,
+            32,
+            204,
             255
           ],
           "name": "NewRoom",
@@ -15889,9 +17042,9 @@
         },
         "NewRoom1": {
           "display_color": [
-            71,
-            204,
-            175,
+            231,
+            85,
+            242,
             255
           ],
           "name": "NewRoom1",
@@ -15900,9 +17053,9 @@
         "axe_range": {
           "curvyness": 2,
           "display_color": [
-            206,
-            85,
+            207,
             242,
+            85,
             255
           ],
           "edge_smoothness": 5,
@@ -15973,9 +17126,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            204,
-            140,
-            31,
+            242,
+            192,
+            85,
             255
           ],
           "edge_smoothness": 4,
@@ -16045,9 +17198,9 @@
         "bone_pit": {
           "curvyness": 2,
           "display_color": [
-            71,
+            31,
             204,
-            112,
+            31,
             255
           ],
           "edge_smoothness": 4,
@@ -16125,9 +17278,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            204,
-            71,
-            71,
+            134,
+            242,
+            36,
             255
           ],
           "edge_smoothness": 7,
@@ -16280,9 +17433,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
-            31,
-            129,
-            204,
+            242,
+            36,
+            214,
             255
           ],
           "edge_smoothness": 6,
@@ -16379,9 +17532,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            121,
-            85,
-            242,
+            100,
+            204,
+            71,
             255
           ],
           "edge_smoothness": 9,
@@ -16452,9 +17605,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            31,
-            45,
-            204,
+            85,
+            203,
+            242,
             255
           ],
           "edge_smoothness": 8,
@@ -16525,9 +17678,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            36,
             242,
-            194,
+            36,
+            77,
             255
           ],
           "edge_smoothness": 6,
@@ -16594,9 +17747,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
-            204,
-            31,
-            136,
+            85,
+            124,
+            242,
             255
           ],
           "edge_smoothness": 6,
@@ -16663,9 +17816,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            47,
+            242,
+            75,
+            36,
             255
           ],
           "edge_smoothness": 2,
@@ -16714,9 +17867,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            242,
-            85,
-            201,
+            31,
+            204,
+            194,
             255
           ],
           "edge_smoothness": 12,
@@ -16816,9 +17969,9 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
-            117,
             31,
             204,
+            114,
             255
           ],
           "edge_smoothness": 9,
@@ -16888,9 +18041,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            195,
-            31,
-            204,
+            141,
+            85,
+            242,
             255
           ],
           "edge_smoothness": 7,
@@ -16964,9 +18117,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            85,
-            194,
-            242,
+            139,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -17044,9 +18197,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            204,
-            175,
-            71,
+            242,
+            85,
+            116,
             255
           ],
           "edge_smoothness": 10,
@@ -17156,9 +18309,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            204,
-            71,
-            169,
+            242,
+            36,
+            158,
             255
           ],
           "edge_smoothness": 5,
@@ -17228,9 +18381,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            36,
-            226,
-            242,
+            71,
+            204,
+            160,
             255
           ],
           "edge_smoothness": 6,
@@ -17297,9 +18450,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            154,
-            242,
-            36,
+            31,
+            129,
+            204,
             255
           ],
           "edge_smoothness": 10,
@@ -17373,9 +18526,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
-            85,
-            242,
-            145,
+            204,
+            158,
+            71,
             255
           ],
           "edge_smoothness": 5,
@@ -17463,9 +18616,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            160,
-            204,
-            71,
+            187,
+            242,
+            36,
             255
           ],
           "edge_smoothness": 101,
@@ -17517,35 +18670,6 @@
                 },
                 {
                   "chance": 100,
-                  "name": "zone_spawn_area_area_2"
-                }
-              ],
-              "display_name": "zone_spawn_area_area_2",
-              "dx": -27,
-              "dy": -292,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 1800,
-              "origional_width": 1800,
-              "position": "Exact",
-              "priority": 1,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-59d6d737e1c1"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
                   "name": "Bomb"
                 }
               ],
@@ -17561,7 +18685,7 @@
               "origional_height": 1800,
               "origional_width": 1800,
               "position": "Exact",
-              "priority": 2,
+              "priority": 1,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17590,7 +18714,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 3,
+              "priority": 2,
               "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17619,40 +18743,11 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 4,
+              "priority": 3,
               "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-2b5ebabd0c42"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "home_world_trail"
-                }
-              ],
-              "display_name": "home_world_trail",
-              "dx": -1824,
-              "dy": 544,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": true,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 16000,
-              "origional_width": 16000,
-              "position": "Exact",
-              "priority": 5,
-              "resolution": 6,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-a16b09aa2b39"
             },
             {
               "candidates": [
@@ -17677,7 +18772,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 6,
+              "priority": 4,
               "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17706,7 +18801,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 7,
+              "priority": 5,
               "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17724,7 +18819,7 @@
                 }
               ],
               "display_name": "casino",
-              "dx": -2272,
+              "dx": -2400,
               "dy": -2016,
               "enforce_spacing": false,
               "explicit_flip": false,
@@ -17735,7 +18830,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 8,
+              "priority": 6,
               "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17764,7 +18859,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 9,
+              "priority": 7,
               "resolution": 8,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17793,7 +18888,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 10,
+              "priority": 8,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17822,7 +18917,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 11,
+              "priority": 9,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17851,7 +18946,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 12,
+              "priority": 10,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17880,7 +18975,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 13,
+              "priority": 11,
               "resolution": 8,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17909,7 +19004,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 14,
+              "priority": 12,
               "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17938,7 +19033,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 15,
+              "priority": 13,
               "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17967,7 +19062,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 16,
+              "priority": 14,
               "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -17996,7 +19091,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 17,
+              "priority": 15,
               "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -18025,7 +19120,7 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 18,
+              "priority": 16,
               "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -18043,8 +19138,8 @@
                 }
               ],
               "display_name": "Davey",
-              "dx": -4434,
-              "dy": -2376,
+              "dx": -2848,
+              "dy": -1568,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -18054,20 +19149,49 @@
               "origional_height": 16000,
               "origional_width": 16000,
               "position": "Exact",
-              "priority": 19,
-              "resolution": 6,
+              "priority": 17,
+              "resolution": 0,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-bc1fde70ab55"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "home_world_trail"
+                }
+              ],
+              "display_name": "home_world_trail",
+              "dx": -1840,
+              "dy": -1015,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 16000,
+              "origional_width": 16000,
+              "position": "Exact",
+              "priority": 18,
+              "resolution": 6,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-f499ce69d324"
             }
           ]
         },
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            71,
-            166,
-            204,
+            130,
+            242,
+            85,
             255
           ],
           "edge_smoothness": 6,
@@ -18137,9 +19261,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            96,
             204,
-            71,
+            31,
+            186,
             255
           ],
           "edge_smoothness": 7,

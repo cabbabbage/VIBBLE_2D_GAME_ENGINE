@@ -151,9 +151,11 @@ void StageContext::update_projection(Asset& asset) {
         return;
     }
 
-    const float center_x = grid
-        ? grid->parallax_adjusted_screen_x(world_point, effects.screen_position.x)
-        : effects.screen_position.x;
+    // Do not apply grid parallax to the player asset
+    const bool is_player_asset = (&asset == player());
+    const float center_x = (!grid || is_player_asset)
+        ? effects.screen_position.x
+        : grid->parallax_adjusted_screen_x(world_point, effects.screen_position.x);
     const float center_y = effects.screen_position.y;
 
     const float rect_w = std::max(scaled_sw, 1.0f);

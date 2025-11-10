@@ -225,8 +225,6 @@ void MainApp::setup() {
                 }
 
                 render_pipeline::ScalingProfileBuildOptions scaling_options;
-                scaling_options.manifest_root = manifest_root;
-                scaling_options.output_path  = manifest_root / "loading" / "scaling_profiles.json";
                 if (screen_w_ > 0 && screen_h_ > 0) {
                         scaling_options.screen_aspect = static_cast<double>(screen_w_) / static_cast<double>(screen_h_);
                 }

@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <memory>
+#include <string>
 struct SDL_Renderer;
 
 namespace animation_editor {

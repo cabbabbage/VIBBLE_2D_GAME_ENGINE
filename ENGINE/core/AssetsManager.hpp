@@ -17,6 +17,7 @@
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 #include "world/grid.hpp"
+#include "asset/Asset.hpp"
 
 class Asset;
 class SceneRenderer;
@@ -175,6 +176,11 @@ public:
     int  map_grid_chunk_resolution() const;
     const MapGridSettings& map_grid_settings() const { return map_grid_settings_; }
 
+    // Compute tiling info for an asset so its sprite
+    // is cropped into grid-aligned squares matching the
+    // non-tiled sprite's world footprint.
+    std::optional<Asset::TilingInfo> compute_tiling_for_asset(const Asset* asset) const;
+
     bool is_dev_mode() const { return dev_mode; }
 
     int shading_group_count() const { return num_groups_; }
@@ -198,6 +204,7 @@ private:
     void load_camera_settings_from_json();
     void write_camera_settings_to_json();
     void schedule_removal(Asset* a);
+    // Legacy chunk tiling removed; tiles are built at load and rendered separately.
     void process_removals();
     void addAsset(const std::string& name, SDL_Point g);
     void update_filtered_active_assets();
@@ -284,6 +291,7 @@ private:
     std::vector<Asset*> pending_static_grid_registration_;
     std::vector<GridMovementCommand> movement_commands_buffer_;
     std::vector<Asset*> grid_registration_buffer_;
+    // Legacy tiling caches removed.
 
     struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;

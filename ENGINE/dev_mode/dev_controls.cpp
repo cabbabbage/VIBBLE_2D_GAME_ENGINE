@@ -12,6 +12,7 @@
 #include "dev_mode/room_editor.hpp"
 #include "dev_mode/map_mode_ui.hpp"
 #include "dev_mode/frame_editor_session.hpp"
+#include "FloatingDockableManager.hpp"
 #include "FloatingPanelLayoutManager.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
@@ -1171,6 +1172,49 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
         return used;
 };
+
+    auto handle_floating_panels = [&]() -> bool {
+        auto floating = FloatingDockableManager::instance().open_panels();
+        if (floating.empty()) {
+            return false;
+        }
+        bool used = false;
+        SDL_Point wheel_point{0, 0};
+        bool wheel_point_valid = false;
+        for (auto it = floating.rbegin(); it != floating.rend(); ++it) {
+            DockableCollapsible* panel = *it;
+            if (!panel || !panel->is_visible()) {
+                continue;
+            }
+            if (panel->handle_event(event)) {
+                used = true;
+                break;
+            }
+            if (pointer_relevant) {
+                SDL_Point probe = pointer;
+                if (!pointer_event) {
+                    if (!wheel_point_valid) {
+                        SDL_GetMouseState(&wheel_point.x, &wheel_point.y);
+                        wheel_point_valid = true;
+                    }
+                    probe = wheel_point;
+                }
+                if (panel->is_point_inside(probe.x, probe.y)) {
+                    used = true;
+                    break;
+                }
+            }
+        }
+        if (used) {
+            consume(true);
+            return true;
+        }
+        return false;
+    };
+
+    if (handle_floating_panels()) {
+        return;
+    }
 
     // If Layers panel is open, allow ESC to close it and consume the key so main menu does not open
     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {

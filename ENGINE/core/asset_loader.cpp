@@ -27,6 +27,7 @@
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
 #include "util/grid.hpp"
+#include "core/tile_builder.hpp"
 #include <nlohmann/json.hpp>
 #include "utils/loading_status_notifier.hpp"
 #include "utils/log.hpp"
@@ -408,6 +409,16 @@ void AssetLoader::createAssets(world::Grid& grid) {
         vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") + std::to_string(spawned_assets_.size()));
 
         const auto t1 = std::chrono::steady_clock::now();
+        // Build per-grid tiles once assets are registered to chunks.
+        {
+            std::vector<Asset*> raw_assets;
+            raw_assets.reserve(spawned_assets_.size());
+            for (const auto& up : spawned_assets_) {
+                if (up) raw_assets.push_back(up.get());
+            }
+            loader_tiles::build_grid_tiles(renderer_, grid, map_grid_settings_, raw_assets);
+        }
+
         vibble::log::debug(std::string("[AssetLoader] createAssets total ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) + "ms");
 }
 

@@ -57,6 +57,22 @@ void InitializeAssets::initialize(Assets& assets,
                 assets.owned_assets.push_back(std::move(asset));
                 assets.all.push_back(raw);
                 raw->finalize_setup();
+                // Initialize tiling for tileable assets on load
+                try {
+                    if (raw->info && raw->info->tillable) {
+                        auto t = assets.compute_tiling_for_asset(raw);
+                        if (t && t->is_valid()) {
+                            raw->set_tiling_info(*t);
+                        } else {
+                            raw->set_tiling_info(std::nullopt);
+                        }
+                    } else {
+                        raw->set_tiling_info(std::nullopt);
+                    }
+                } catch (...) {
+                    // Leave tiling unset on any failure
+                    raw->set_tiling_info(std::nullopt);
+                }
         }
 	find_player(assets);
         assets.initialize_active_assets(SDL_Point{screen_center_x, screen_center_y});

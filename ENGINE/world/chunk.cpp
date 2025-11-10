@@ -28,6 +28,7 @@
 #include "render/global_light_source.hpp"
 #include "render/runtime_lighting_sampler.hpp"
 #include "world/grid.hpp"
+#include "tiling/grid_tile.hpp"
 
 namespace {
 
@@ -60,6 +61,7 @@ namespace world {
 
 Chunk::~Chunk() {
     releaseLightingArtifacts();
+    releaseTileTextures();
 }
 
 void Chunk::ChunkShadowHistory::reset() {
@@ -176,6 +178,16 @@ void Chunk::releaseLightingArtifacts() {
     for (auto& cell : lighting_chunks_) {
         cell.releaseLightingArtifacts();
     }
+}
+
+void Chunk::releaseTileTextures() {
+    for (auto& t : tiles) {
+        if (t.texture) {
+            SDL_DestroyTexture(t.texture);
+            t.texture = nullptr;
+        }
+    }
+    tiles.clear();
 }
 
 Chunk::LightingChunk* Chunk::lighting_chunk_at(int local_i, int local_j) {

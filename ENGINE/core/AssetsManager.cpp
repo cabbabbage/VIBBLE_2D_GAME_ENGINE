@@ -598,6 +598,8 @@ Assets::~Assets() {
     movement_commands_buffer_.clear();
     grid_registration_buffer_.clear();
 
+    // Legacy tiling caches removed.
+
     if (input) {
         input->clear_screen_to_world_mapper();
     }
@@ -1118,6 +1120,17 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
         std::cout << "[Assets::addAsset] View set successfully\n";
         newAsset->finalize_setup();
         std::cout << "[Assets::addAsset] Finalize setup successful\n";
+        // If this asset is tileable, compute and set tiling now
+        if (newAsset->info && newAsset->info->tillable) {
+            auto t = compute_tiling_for_asset(newAsset);
+            if (t && t->is_valid()) {
+                newAsset->set_tiling_info(*t);
+            } else {
+                newAsset->set_tiling_info(std::nullopt);
+            }
+        } else {
+            newAsset->set_tiling_info(std::nullopt);
+        }
     } catch (const std::exception& e) {
         std::cerr << "[Assets::addAsset][Exception] " << e.what() << "\n";
     }
@@ -1175,6 +1188,17 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
         std::cout << "[Assets::spawn_asset] View set successfully\n";
         newAsset->finalize_setup();
         std::cout << "[Assets::spawn_asset] Finalize setup successful\n";
+        // If this asset is tileable, compute and set tiling now
+        if (newAsset->info && newAsset->info->tillable) {
+            auto t = compute_tiling_for_asset(newAsset);
+            if (t && t->is_valid()) {
+                newAsset->set_tiling_info(*t);
+            } else {
+                newAsset->set_tiling_info(std::nullopt);
+            }
+        } else {
+            newAsset->set_tiling_info(std::nullopt);
+        }
     } catch (const std::exception& e) {
         std::cerr << "[Assets::spawn_asset][Exception] " << e.what() << "\n";
     }
@@ -1598,8 +1622,78 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     SDL_RenderCopy(renderer, texture, nullptr, &dest);
 }
 
+// Legacy chunk tiling implementation removed.
+
 SDL_Renderer* Assets::renderer() const {
     return scene ? scene->get_renderer() : nullptr;
+}
+
+std::optional<Asset::TilingInfo> Assets::compute_tiling_for_asset(const Asset* asset) const {
+    if (!asset || !asset->info) {
+        return std::nullopt;
+    }
+    if (!asset->info->tillable) {
+        return std::nullopt;
+    }
+
+    // Determine grid step
+    int step = map_grid_settings_.spacing();
+    // Fallback: scaled canvas dimension if spacing not configured
+    if (step <= 0) {
+        const int raw_w = std::max(1, asset->info->original_canvas_width);
+        const int raw_h = std::max(1, asset->info->original_canvas_height);
+        double scale = 1.0;
+        if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+            scale = static_cast<double>(asset->info->scale_factor);
+        }
+        step = std::max(1, static_cast<int>(std::lround(static_cast<double>(std::max(raw_w, raw_h)) * scale)));
+    }
+    step = std::max(1, step);
+
+    // Compute the world footprint of the non-tiled sprite (bottom-center anchor)
+    const SDL_Point world_pos{ asset->pos.x, asset->pos.y };
+    const int base_w = std::max(1, asset->info->original_canvas_width);
+    const int base_h = std::max(1, asset->info->original_canvas_height);
+    double scale = 1.0;
+    if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+        scale = static_cast<double>(asset->info->scale_factor);
+    }
+    const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<double>(base_w) * scale)));
+    const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<double>(base_h) * scale)));
+
+    const int left   = world_pos.x - (scaled_w / 2);
+    const int top    = world_pos.y - scaled_h;
+    const int right  = left + scaled_w;
+    const int bottom = world_pos.y;
+
+    auto align_down = [](int value, int step_) {
+        if (step_ <= 0) return value;
+        const double scaled = std::floor(static_cast<double>(value) / static_cast<double>(step_));
+        return static_cast<int>(scaled * static_cast<double>(step_));
+    };
+    auto align_up = [](int value, int step_) {
+        if (step_ <= 0) return value;
+        const double scaled = std::ceil(static_cast<double>(value) / static_cast<double>(step_));
+        return static_cast<int>(scaled * static_cast<double>(step_));
+    };
+
+    const int origin_x = align_down(left, step);
+    const int origin_y = align_down(top, step);
+    const int limit_x  = align_up(right, step);
+    const int limit_y  = align_up(bottom, step);
+
+    Asset::TilingInfo tiling{};
+    tiling.enabled    = true;
+    tiling.tile_size  = SDL_Point{ step, step };
+    tiling.grid_origin = SDL_Point{ origin_x, origin_y };
+    tiling.anchor = SDL_Point{ align_down(world_pos.x, step) + step / 2,
+                               align_down(world_pos.y, step) + step / 2 };
+
+    const int coverage_w = std::max(step, limit_x - origin_x);
+    const int coverage_h = std::max(step, limit_y - origin_y);
+    tiling.coverage = SDL_Rect{ origin_x, origin_y, coverage_w, coverage_h };
+
+    return tiling.is_valid() ? std::optional<Asset::TilingInfo>(tiling) : std::nullopt;
 }
 
 Asset* Assets::find_asset_by_name(const std::string& name) const {

@@ -39,6 +39,7 @@ class Section_BasicInfo : public DockableCollapsible {
     std::unique_ptr<DMCheckbox>  c_flipable_;
     std::unique_ptr<DMCheckbox>  c_apply_distance_scaling_;
     std::unique_ptr<DMCheckbox>  c_apply_vertical_scaling_;
+    std::unique_ptr<DMCheckbox>  c_tillable_;
     std::unique_ptr<DMButton>    apply_btn_;
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::vector<std::string> type_options_;
@@ -87,6 +88,7 @@ inline void Section_BasicInfo::build() {
     c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
     c_apply_distance_scaling_ = std::make_unique<DMCheckbox>("Apply distance scaling", info_->apply_distance_scaling);
     c_apply_vertical_scaling_ = std::make_unique<DMCheckbox>("Apply vertical scaling", info_->apply_vertical_scaling);
+    c_tillable_ = std::make_unique<DMCheckbox>("Tileable (grid tiles)", info_->tillable);
 
     auto w_type = std::make_unique<DropdownWidget>(dd_type_.get());
     rows.push_back({ w_type.get() });
@@ -112,6 +114,10 @@ inline void Section_BasicInfo::build() {
     rows.push_back({ w_vertical.get() });
     widgets_.push_back(std::move(w_vertical));
 
+    auto w_tillable = std::make_unique<CheckboxWidget>(c_tillable_.get());
+    rows.push_back({ w_tillable.get() });
+    widgets_.push_back(std::move(w_tillable));
+
     if (!apply_btn_) {
         apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
     }
@@ -135,11 +141,13 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         if (c_flipable_ && c_flipable_->handle_event(e)) used = true;
     if (c_apply_distance_scaling_ && c_apply_distance_scaling_->handle_event(e)) used = true;
         if (c_apply_vertical_scaling_ && c_apply_vertical_scaling_->handle_event(e)) used = true;
+        if (c_tillable_ && c_tillable_->handle_event(e)) used = true;
     }
 
     bool changed = false;
     bool scale_changed = false;
     bool z_changed = false;
+    bool tile_changed = false;
     if (dd_type_ && !type_options_.empty()) {
         int idx = std::clamp(dd_type_->selected(), 0, static_cast<int>(type_options_.size()) - 1);
         std::string selected = asset_types::canonicalize(type_options_[idx]);
@@ -181,11 +189,18 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         changed = true;
     }
 
+    if (c_tillable_ && info_->tillable != c_tillable_->value()) {
+        info_->set_tillable(c_tillable_->value());
+        changed = true;
+        tile_changed = true;
+    }
+
     if (changed) {
         (void)info_->commit_manifest();
         if (ui_) {
             if (scale_changed) ui_->refresh_target_asset_scale();
             if (z_changed) ui_->sync_target_z_threshold();
+            if (tile_changed) ui_->sync_target_tiling_state();
         }
     }
     return used || changed;
@@ -235,9 +250,13 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     if (sw <= 0 || sh <= 0) return;
 
         SDL_Point world_point{ target->pos.x, target->pos.y };
-        const float center_x = assets
-            ? assets->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x)
-            : effects.screen_position.x;
+        float center_x = effects.screen_position.x;
+        if (assets) {
+            // Do not apply grid parallax to the player asset
+            if (!(assets->player == target)) {
+                center_x = assets->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x);
+            }
+        }
         const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
         const int   top      = static_cast<int>(std::lround(effects.screen_position.y)) - sh;
     SDL_Rect bounds{ left, top, sw, sh };

@@ -13,6 +13,7 @@
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
 #include "render/runtime_lighting_sampler.hpp"
+#include "render/grid_tile_renderer.hpp"
 
 class Assets;
 class Asset;
@@ -65,7 +66,6 @@ private:
     bool ensure_darkness_overlay();
     void destroy_darkness_overlay();
     void render_dynamic_darkness_overlay(float map_light_opacity);
-    void render_lights_for_source(const LightOverlaySource& source, bool draw_front);
     void inject_map_light_sample();
 
     SDL_Renderer*  renderer_;
@@ -75,6 +75,7 @@ private:
     Global_Light_Source main_light_source_;
     render_pipeline::shading::ReactiveShadowSettings reactive_shadow_settings_{};
     AssetRenderPipeline render_pipeline_;
+    std::unique_ptr<GridTileRenderer> tile_renderer_;
     std::unique_ptr<LightMap> light_map_;
     bool           debugging = false;
     bool           low_quality_rendering_ = false;

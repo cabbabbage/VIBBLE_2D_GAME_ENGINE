@@ -2367,7 +2367,9 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const SDL_Point world_pt{ (int)std::lround(world_f.x), (int)std::lround(world_f.y) };
 
     // --- Pan/zoom first ---
-    pan_zoom_.handle_input(cam, input, true);
+    // Allow panning when the pointer is over the scene (not over blocking UI).
+    // At this point, caller has already ensured input is not over UI via is_ui_blocking_input.
+    pan_zoom_.handle_input(cam, input, false);
     if (std::fabs(cam.get_scale() - prev_scale) > 1e-6 ||
         cam.get_screen_center().x != prev_center.x ||
         cam.get_screen_center().y != prev_center.y) {
@@ -2740,9 +2742,13 @@ bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
         static_cast<int>(std::lround(world_x)),
         static_cast<int>(std::lround(world_y))
     };
-    const float center_x = assets_
-        ? assets_->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x)
-        : effects.screen_position.x;
+    float center_x = effects.screen_position.x;
+    if (assets_) {
+        // Do not apply grid parallax to the player asset
+        if (!(asset && assets_->player == asset)) {
+            center_x = assets_->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x);
+        }
+    }
     const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
     const int   top      = static_cast<int>(std::lround(effects.screen_position.y)) - sh;
     out_rect             = SDL_Rect{left, top, sw, sh};
@@ -3486,7 +3492,10 @@ bool RoomEditor::should_enable_mouse_controls() const {
         return false;
     }
 
-    if (active_modal_ != ActiveModal::None) {
+    // Do not globally disable mouse controls just because Asset Info is open.
+    // Only block for other modal types (none exist yet), keeping pan/zoom active
+    // when the AssetInfo sliding window is visible but the mouse is over the scene.
+    if (active_modal_ != ActiveModal::None && active_modal_ != ActiveModal::AssetInfo) {
         return false;
     }
 

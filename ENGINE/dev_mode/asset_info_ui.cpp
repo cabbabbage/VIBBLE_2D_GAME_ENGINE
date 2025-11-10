@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -36,6 +37,10 @@
 #include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
 #include "map_generation/room.hpp"
+#include "core/AssetsManager.hpp"
+#include "world/grid.hpp"
+#include "world/chunk.hpp"
+#include "utils/map_grid_settings.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "core/AssetsManager.hpp"
@@ -127,6 +132,9 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
             }
             changed |= copy_key("z_threshold");
             changed |= copy_key("can_invert");
+            // Support both keys; canonical UI uses "tileable"
+            changed |= copy_key("tileable");
+            changed |= copy_key("tillable");
             break;
         }
         case AssetInfoSectionId::Tags:
@@ -632,9 +640,13 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     smoothing_key);
 
                 SDL_Point world_point{ target_asset_->pos.x, target_asset_->pos.y };
-                const float adjusted_cx = (assets_ && target_asset_)
-                    ? assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x)
-                    : ef.screen_position.x;
+                float adjusted_cx = ef.screen_position.x;
+                if (assets_ && target_asset_) {
+                    // Do not apply grid parallax to the player asset
+                    if (!(assets_->player == target_asset_)) {
+                        adjusted_cx = assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x);
+                    }
+                }
                 const float distance_scale  = ef.distance_scale;
                 const float vertical_scale  = ef.vertical_scale;
 
@@ -690,9 +702,18 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 const float unflipped_x = (xform.sx != 0.0f) ? (dx_screen / xform.sx) : 0.0f;
                 const float new_off_x   = target_asset_->flipped ? -unflipped_x : unflipped_x;
                 const float new_off_y   = (xform.sy != 0.0f) ? (dy_screen / xform.sy) : 0.0f;
-                L.offset_x = static_cast<int>(std::lround(new_off_x));
-                L.offset_y = static_cast<int>(std::lround(new_off_y));
-                if (lighting_section_) lighting_section_->sync_from_info();
+                const int final_off_x = static_cast<int>(std::lround(new_off_x));
+                const int final_off_y = static_cast<int>(std::lround(new_off_y));
+                if (L.offset_x == final_off_x && L.offset_y == final_off_y) {
+                    return true;
+                }
+                L.offset_x = final_off_x;
+                L.offset_y = final_off_y;
+                // Update serialized lighting payload without disturbing other properties.
+                info_->set_lighting(info_->light_sources);
+                if (lighting_section_) {
+                    lighting_section_->update_light_offsets(static_cast<std::size_t>(light_drag_index_), final_off_x, final_off_y);
+                }
                 this->notify_light_sources_modified(true);
                 (void)info_->commit_manifest();
                 return true;
@@ -810,6 +831,9 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     }
 
     container_.render(r, screen_w, screen_h);
+    if (lighting_section_) {
+        lighting_section_->render_overlays(r);
+    }
 
     if (info_ && asset_selector_ && asset_selector_->visible())
         asset_selector_->render(r);
@@ -1030,9 +1054,13 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
                 smoothing_key);
 
             SDL_Point world_point{ target_asset_->pos.x, target_asset_->pos.y };
-            const float adjusted_cx = (assets_ && target_asset_)
-                ? assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x)
-                : ef.screen_position.x;
+            float adjusted_cx = ef.screen_position.x;
+            if (assets_ && target_asset_) {
+                // Do not apply grid parallax to the player asset
+                if (!(assets_->player == target_asset_)) {
+                    adjusted_cx = assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x);
+                }
+            }
             const float distance_scale  = ef.distance_scale;
             const float vertical_scale  = ef.vertical_scale;
 
@@ -1140,6 +1168,51 @@ void AssetInfoUI::sync_target_z_threshold() {
 
     if (!updated_any && target_valid && current_target) {
         (void)sync_asset(current_target);
+    }
+}
+
+void AssetInfoUI::sync_target_tiling_state() {
+    if (!info_) return;
+    Asset* current_target = target_asset_;
+    const bool target_valid = validate_target_asset();
+    if (!assets_) {
+        return;
+    }
+
+    auto compute_tiling = [&](Asset* asset) -> std::optional<Asset::TilingInfo> {
+        if (!assets_) return std::nullopt;
+        if (!asset || !asset->info) return std::nullopt;
+        if (!asset->info->tillable) return std::nullopt;
+        return assets_->compute_tiling_for_asset(asset);
+    };
+
+    auto apply_for_asset = [&](Asset* asset) {
+        if (!asset) return false;
+        if (asset->info.get() != info_.get()) return false;
+        if (info_->tillable) {
+            auto t = compute_tiling(asset);
+            if (t && t->is_valid()) {
+                asset->set_tiling_info(*t);
+                return true;
+            }
+            // Fallback to disabling if invalid
+            asset->set_tiling_info(std::nullopt);
+            return true;
+        } else {
+            asset->set_tiling_info(std::nullopt);
+            return true;
+        }
+    };
+
+    bool updated_any = false;
+    for (Asset* asset : assets_->all) {
+        updated_any |= apply_for_asset(asset);
+    }
+    for (const auto& owned : assets_->owned_assets) {
+        updated_any |= apply_for_asset(owned.get());
+    }
+    if (!updated_any && target_valid && current_target) {
+        (void)apply_for_asset(current_target);
     }
 }
 
@@ -1621,7 +1694,7 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
     // Force scaling profile refresh for this asset
     if (!info_->name.empty()) {
         // This will trigger a new profile entry to be created/updated
-        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(std::filesystem::path("loading") / "scaling_profiles.json");
+        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(true);
         auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info_->name);
         if (profile.created_entry) {
             std::cout << "[AssetInfoUI] Updated scaling profile for " << info_->name << "\n";

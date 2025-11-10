@@ -41,19 +41,31 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                     }
                 } catch (...) {
                 }
-                light.behind            = l.value("behind", false);
-                light.render_to_dark_mask = l.value("dark_mask", true);
-                // If explicit front flag present, use it; otherwise default to !behind for backwards-compat
-                if (l.contains("front")) {
-                    try {
-                        light.in_front = l.value("front", true);
-                    } catch (...) {
-                        light.in_front = true;
+                light.in_front = l.value("in_front", false);
+                light.behind   = l.value("behind", false);
+                light.render_to_dark_mask = l.value("render_to_dark_mask", false);
+                light.render_front_and_back_to_asset_alpha_mask =
+                    l.value("render_front_and_back_to_asset_alpha_mask", false);
+
+                // Legacy key migration: support historical fields once on read.
+                if (!l.contains("in_front")) {
+                    if (l.contains("front")) {
+                        try {
+                            light.in_front = l.value("front", false);
+                        } catch (...) {
+                            light.in_front = false;
+                        }
                     }
-                } else {
-                    light.in_front = !light.behind;
                 }
-                // Legacy support: if older data disabled render_texture entirely, respect it by disabling both placements.
+
+                if (!l.contains("render_to_dark_mask") && l.contains("dark_mask")) {
+                    try {
+                        light.render_to_dark_mask = l.value("dark_mask", false);
+                    } catch (...) {
+                        light.render_to_dark_mask = false;
+                    }
+                }
+
                 if (l.contains("render_texture")) {
                     bool legacy_render_texture = true;
                     try {
