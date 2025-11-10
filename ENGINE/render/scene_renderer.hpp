@@ -65,7 +65,6 @@ private:
     bool ensure_darkness_overlay();
     void destroy_darkness_overlay();
     void render_dynamic_darkness_overlay(float map_light_opacity);
-    void render_lights_for_source(const LightOverlaySource& source, bool draw_front);
     void inject_map_light_sample();
 
     SDL_Renderer*  renderer_;

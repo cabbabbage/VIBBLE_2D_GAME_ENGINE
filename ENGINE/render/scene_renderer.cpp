@@ -4,6 +4,7 @@
 #include "asset/asset_types.hpp"
 #include "world/chunk.hpp"
 #include "render/camera.hpp"
+#include "render/asset_light_renderer.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
@@ -550,7 +551,8 @@ void SceneRenderer::render(){
                     if (src.asset == cmd.asset) {
                         overlay_source = &src;
                         if (src.has_back_lights) {
-                            render_lights_for_source(src, /*draw_front=*/false);
+                            AssetLightRenderer light_renderer(renderer_, src, darkness_overlay_vertices_, darkness_overlay_indices_);
+                            light_renderer.draw_behind();
                         }
                         has_front_light = src.has_front_lights;
                         break;
@@ -561,7 +563,8 @@ void SceneRenderer::render(){
                 if (overlay_source) {
                     if (overlay_passed) {
                         if (has_front_light) {
-                            render_lights_for_source(*overlay_source, /*draw_front=*/true);
+                            AssetLightRenderer light_renderer(renderer_, *overlay_source, darkness_overlay_vertices_, darkness_overlay_indices_);
+                            light_renderer.draw_in_front();
                         }
                     } else if (has_front_light) {
                         pending_front_lights.push_back(overlay_source);
@@ -640,7 +643,8 @@ void SceneRenderer::render(){
             if (overlay_source) {
                 if (overlay_passed) {
                     if (has_front_light) {
-                        render_lights_for_source(*overlay_source, /*draw_front=*/true);
+                        AssetLightRenderer light_renderer(renderer_, *overlay_source, darkness_overlay_vertices_, darkness_overlay_indices_);
+                        light_renderer.draw_in_front();
                     }
                 } else if (has_front_light) {
                     pending_front_lights.push_back(overlay_source);
@@ -657,7 +661,8 @@ void SceneRenderer::render(){
         render_dynamic_darkness_overlay(map_light_opacity);
         for (const LightOverlaySource* src : pending_front_lights) {
             if (src && src->has_front_lights) {
-                render_lights_for_source(*src, /*draw_front=*/true);
+                AssetLightRenderer light_renderer(renderer_, *src, darkness_overlay_vertices_, darkness_overlay_indices_);
+                light_renderer.draw_in_front();
             }
         }
         pending_front_lights.clear();
@@ -748,195 +753,6 @@ void SceneRenderer::destroy_darkness_overlay() {
     }
 }
 
-void SceneRenderer::render_lights_for_source(const LightOverlaySource& source, bool draw_front) {
-    if (!renderer_) {
-        return;
-    }
-
-    Asset* asset = source.asset;
-    if (!asset || !asset->info) {
-        return;
-    }
-
-    const auto& lights = asset->info->light_sources;
-    if (lights.empty()) {
-        return;
-    }
-
-    if (draw_front) {
-        if (!source.has_front_lights) {
-            return;
-        }
-    } else {
-        if (!source.has_back_lights) {
-            return;
-        }
-    }
-
-    const float base_width   = static_cast<float>(std::max(1, source.base_width));
-    const float base_height  = static_cast<float>(std::max(1, source.base_height));
-    const float scale_x      = std::isfinite(static_cast<float>(source.asset_rect.w) / base_width)
-                                 ? static_cast<float>(source.asset_rect.w) / base_width
-                                 : 1.0f;
-    const float scale_y_base = std::isfinite(static_cast<float>(source.asset_rect.h) / base_height)
-                                 ? static_cast<float>(source.asset_rect.h) / base_height
-                                 : scale_x;
-    const float scale_y      = (source.base_height > 0) ? scale_y_base : scale_x;
-    if (!std::isfinite(scale_x) || !std::isfinite(scale_y)) {
-        return;
-    }
-
-    const float safe_base_scale   = (std::isfinite(source.asset_base_scale) && source.asset_base_scale > 0.0f)
-                                      ? source.asset_base_scale
-                                      : 1.0f;
-    const float zoom_scale_x      = scale_x / safe_base_scale;
-    const float zoom_scale_y      = scale_y / safe_base_scale;
-    const float safe_zoom_scale_x = (std::isfinite(zoom_scale_x) && zoom_scale_x > 0.0f) ? zoom_scale_x : 1.0f;
-    const float safe_zoom_scale_y = (std::isfinite(zoom_scale_y) && zoom_scale_y > 0.0f) ? zoom_scale_y : 1.0f;
-
-    const float center_base_x = static_cast<float>(source.asset_rect.x) + static_cast<float>(source.asset_rect.w) * 0.5f;
-    const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
-
-    // Reuse internal buffers to avoid reallocations
-    std::vector<SDL_Vertex>& vertices = darkness_overlay_vertices_;
-    std::vector<int>&        indices  = darkness_overlay_indices_;
-
-    for (const LightSource& light : lights) {
-        if (draw_front) {
-            if (!light.in_front) continue;
-        } else {
-            if (!light.behind) continue;
-        }
-
-            const int raw_radius = light.radius;
-            if (raw_radius <= 0) {
-                continue;
-            }
-
-            const Uint8 intensity = static_cast<Uint8>(std::clamp(light.intensity, 0, 255));
-            if (intensity == 0) {
-                continue;
-            }
-
-            const float radius_base = static_cast<float>(std::max(1, raw_radius));
-            const float radius_x    = std::max(1.0f, radius_base * safe_zoom_scale_x);
-            const float radius_y    = std::max(1.0f, radius_base * safe_zoom_scale_y);
-            if (!std::isfinite(radius_x) || !std::isfinite(radius_y)) {
-                continue;
-            }
-
-            const float offset_x = static_cast<float>(source.flipped ? -light.offset_x : light.offset_x);
-            const float offset_y = static_cast<float>(light.offset_y);
-            const float center_x = center_base_x + offset_x * scale_x;
-            const float center_y = center_base_y + offset_y * scale_y;
-
-            // If a specific texture is provided for the light, render it with normal blending
-            if (light.texture) {
-                int base_w = light.cached_w;
-                int base_h = light.cached_h;
-                if (base_w <= 0 || base_h <= 0) {
-                    SDL_QueryTexture(light.texture, nullptr, nullptr, &base_w, &base_h);
-                }
-                if (base_w <= 0 || base_h <= 0) {
-                    base_w = static_cast<int>(std::lround(radius_base * 2.0f));
-                    base_h = static_cast<int>(std::lround(radius_base * 2.0f));
-                }
-
-                const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_w) * safe_zoom_scale_x)));
-                const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_h) * safe_zoom_scale_y)));
-
-                SDL_Rect tex_dst{};
-                tex_dst.w = scaled_w;
-                tex_dst.h = scaled_h;
-                tex_dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(tex_dst.w) * 0.5f));
-                tex_dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(tex_dst.h) * 0.5f));
-
-                Uint8 prev_a = 255; Uint8 prev_r = 255, prev_g = 255, prev_b = 255; SDL_BlendMode prev_bm = SDL_BLENDMODE_BLEND;
-                SDL_GetTextureAlphaMod(light.texture, &prev_a);
-                SDL_GetTextureColorMod(light.texture, &prev_r, &prev_g, &prev_b);
-                SDL_GetTextureBlendMode(light.texture, &prev_bm);
-                SDL_SetTextureBlendMode(light.texture, SDL_BLENDMODE_BLEND);
-                SDL_SetTextureAlphaMod(light.texture, intensity);
-                SDL_RenderCopy(renderer_, light.texture, nullptr, &tex_dst);
-                SDL_SetTextureAlphaMod(light.texture, prev_a);
-                SDL_SetTextureColorMod(light.texture, prev_r, prev_g, prev_b);
-                SDL_SetTextureBlendMode(light.texture, prev_bm);
-                continue; // Done with this light
-            }
-
-            SDL_Rect dst{};
-            dst.w = std::max(1, static_cast<int>(std::lround(radius_x * 2.0f)));
-            dst.h = std::max(1, static_cast<int>(std::lround(radius_y * 2.0f)));
-            dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(dst.w) * 0.5f));
-            dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(dst.h) * 0.5f));
-
-            const float falloff_norm  = std::clamp(static_cast<float>(light.fall_off) / 100.0f, 0.0f, 1.0f);
-            const float fade_exponent = 0.6f + 3.4f * falloff_norm;
-
-            const float radius_hint   = std::max(radius_x, radius_y);
-            const int   angular_steps = std::clamp(static_cast<int>(std::ceil(radius_hint / 6.0f)), 16, 64);
-            const int   radial_steps  = 12;
-            const float two_pi        = 6.28318530718f;
-
-            const std::size_t desired_vertex_capacity = static_cast<std::size_t>((radial_steps + 1) * (angular_steps + 1));
-            const std::size_t desired_index_capacity  = static_cast<std::size_t>(radial_steps * angular_steps * 6);
-
-            vertices.clear();
-            indices.clear();
-            if (desired_vertex_capacity > vertices.capacity()) {
-                vertices.reserve(desired_vertex_capacity);
-            }
-            if (desired_index_capacity > indices.capacity()) {
-                indices.reserve(desired_index_capacity);
-            }
-
-            // Build a radial gradient using the light's color and intensity
-            for (int ring = 0; ring <= radial_steps; ++ring) {
-                const float ring_ratio  = static_cast<float>(ring) / static_cast<float>(radial_steps);
-                const float base        = std::max(0.0f, 1.0f - ring_ratio);
-                float       alpha_ratio = std::pow(base, fade_exponent);
-                alpha_ratio             = std::clamp(alpha_ratio, 0.0f, 1.0f);
-                const float scaled_alpha = std::min(255.0f, static_cast<float>(intensity) * alpha_ratio);
-                const Uint8 alpha        = static_cast<Uint8>(std::clamp(std::lround(scaled_alpha), 0L, 255L));
-
-                for (int step = 0; step <= angular_steps; ++step) {
-                    const float angle = (static_cast<float>(step) / static_cast<float>(angular_steps)) * two_pi;
-                    const float px    = center_x + std::cos(angle) * radius_x * ring_ratio;
-                    const float py    = center_y + std::sin(angle) * radius_y * ring_ratio;
-
-                    SDL_Vertex v{};
-                    v.position.x = px;
-                    v.position.y = py;
-                    v.color      = SDL_Color{ light.color.r, light.color.g, light.color.b, alpha };
-                    v.tex_coord  = SDL_FPoint{ 0.0f, 0.0f };
-                    vertices.push_back(v);
-                }
-            }
-
-            const int stride = angular_steps + 1;
-            for (int ring = 0; ring < radial_steps; ++ring) {
-                for (int step = 0; step < angular_steps; ++step) {
-                    const int current = ring * stride + step;
-                    const int next    = current + stride;
-
-                    indices.push_back(current);
-                    indices.push_back(next);
-                    indices.push_back(current + 1);
-
-                    indices.push_back(current + 1);
-                    indices.push_back(next);
-                    indices.push_back(next + 1);
-                }
-            }
-
-            if (SDL_RenderGeometry(renderer_, nullptr, vertices.data(), static_cast<int>(vertices.size()),
-                                   indices.data(), static_cast<int>(indices.size())) != 0) {
-                // Fallback: draw a simple filled rect with light color
-                SDL_SetRenderDrawColor(renderer_, light.color.r, light.color.g, light.color.b, intensity);
-                SDL_RenderFillRect(renderer_, &dst);
-            }
-        }
-    }
 void SceneRenderer::inject_map_light_sample() {
     if (!runtime_lighting_sampler_ || !assets_) {
         return;
@@ -1029,143 +845,13 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
     std::size_t frame_max_indices  = 0;
 
     for (const LightOverlaySource& source : light_overlay_sources_) {
-        Asset* asset = source.asset;
-        if (!asset || !asset->info) {
-            continue;
-        }
         if (!source.has_dark_mask_lights) {
             continue;
         }
-
-        const auto& lights = asset->info->light_sources;
-        if (lights.empty()) {
-            continue;
-        }
-
-        const float base_width  = static_cast<float>(std::max(1, source.base_width));
-        const float base_height = static_cast<float>(std::max(1, source.base_height));
-        const float scale_x     = std::isfinite(static_cast<float>(source.asset_rect.w) / base_width) ? static_cast<float>(source.asset_rect.w) / base_width : 1.0f;
-        const float scale_y_base = std::isfinite(static_cast<float>(source.asset_rect.h) / base_height) ? static_cast<float>(source.asset_rect.h) / base_height : scale_x;
-        const float scale_y = (source.base_height > 0) ? scale_y_base : scale_x;
-        if (!std::isfinite(scale_x) || !std::isfinite(scale_y)) {
-            continue;
-        }
-
-        const float safe_base_scale = (std::isfinite(source.asset_base_scale) && source.asset_base_scale > 0.0f) ? source.asset_base_scale : 1.0f;
-        const float zoom_scale_x = scale_x / safe_base_scale;
-        const float zoom_scale_y = scale_y / safe_base_scale;
-        const float safe_zoom_scale_x = (std::isfinite(zoom_scale_x) && zoom_scale_x > 0.0f) ? zoom_scale_x : 1.0f;
-        const float safe_zoom_scale_y = (std::isfinite(zoom_scale_y) && zoom_scale_y > 0.0f) ? zoom_scale_y : 1.0f;
-
-        const float center_base_x = static_cast<float>(source.asset_rect.x) + static_cast<float>(source.asset_rect.w) * 0.5f;
-        const float center_base_y = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
-
-        for (const LightSource& light : lights) {
-            if (!light.render_to_dark_mask) {
-                continue;
-            }
-            const int raw_radius = light.radius;
-            if (raw_radius <= 0) {
-                continue;
-            }
-
-            const Uint8 intensity = static_cast<Uint8>(std::clamp(light.intensity, 0, 255));
-            if (intensity == 0) {
-                continue;
-            }
-
-            const float radius_base = static_cast<float>(std::max(1, raw_radius));
-            const float radius_x    = std::max(1.0f, radius_base * safe_zoom_scale_x);
-            const float radius_y    = std::max(1.0f, radius_base * safe_zoom_scale_y);
-
-            if (!std::isfinite(radius_x) || !std::isfinite(radius_y)) {
-                continue;
-            }
-
-            const float offset_x = static_cast<float>(source.flipped ? -light.offset_x : light.offset_x);
-            const float offset_y = static_cast<float>(light.offset_y);
-
-            const float center_x = center_base_x + offset_x * scale_x;
-            const float center_y = center_base_y + offset_y * scale_y;
-
-            SDL_Rect dst{};
-            dst.w = std::max(1, static_cast<int>(std::lround(radius_x * 2.0f)));
-            dst.h = std::max(1, static_cast<int>(std::lround(radius_y * 2.0f)));
-            dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(dst.w) * 0.5f));
-            dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(dst.h) * 0.5f));
-
-            const float falloff_norm  = std::clamp(static_cast<float>(light.fall_off) / 100.0f, 0.0f, 1.0f);
-            const float fade_exponent = 0.6f + 3.4f * falloff_norm;
-
-            const float radius_hint   = std::max(radius_x, radius_y);
-            const int   angular_steps = std::clamp(static_cast<int>(std::ceil(radius_hint / 6.0f)), 16, 64);
-            const int   radial_steps  = 12;
-            const float two_pi        = 6.28318530718f;
-
-            const std::size_t desired_vertex_capacity = static_cast<std::size_t>((radial_steps + 1) * (angular_steps + 1));
-            const std::size_t desired_index_capacity  = static_cast<std::size_t>(radial_steps * angular_steps * 6);
-
-            auto& light_vertices = darkness_overlay_vertices_;
-            auto& light_indices  = darkness_overlay_indices_;
-
-            light_vertices.clear();
-            light_indices.clear();
-
-            if (desired_vertex_capacity > light_vertices.capacity()) {
-                light_vertices.reserve(desired_vertex_capacity);
-            }
-            if (desired_index_capacity > light_indices.capacity()) {
-                light_indices.reserve(desired_index_capacity);
-            }
-
-            frame_max_vertices = std::max(frame_max_vertices, desired_vertex_capacity);
-            frame_max_indices  = std::max(frame_max_indices, desired_index_capacity);
-
-            for (int ring = 0; ring <= radial_steps; ++ring) {
-                const float ring_ratio = static_cast<float>(ring) / static_cast<float>(radial_steps);
-                const float base       = std::max(0.0f, 1.0f - ring_ratio);
-                float       alpha_ratio = std::pow(base, fade_exponent);
-                alpha_ratio             = std::clamp(alpha_ratio, 0.0f, 1.0f);
-                const float scaled_alpha = std::min(255.0f, static_cast<float>(intensity) * alpha_ratio * 1.6f);
-                const Uint8 alpha        = static_cast<Uint8>(std::clamp(std::lround(scaled_alpha), 0L, 255L));
-
-                for (int step = 0; step <= angular_steps; ++step) {
-                    const float angle = (static_cast<float>(step) / static_cast<float>(angular_steps)) * two_pi;
-                    const float px    = center_x + std::cos(angle) * radius_x * ring_ratio;
-                    const float py    = center_y + std::sin(angle) * radius_y * ring_ratio;
-
-                    SDL_Vertex vertex{};
-                    vertex.position.x = px;
-                    vertex.position.y = py;
-                    vertex.color      = SDL_Color{0, 0, 0, alpha};
-                    vertex.tex_coord  = SDL_FPoint{0.0f, 0.0f};
-                    light_vertices.push_back(vertex);
-                }
-            }
-
-            const int stride = angular_steps + 1;
-            for (int ring = 0; ring < radial_steps; ++ring) {
-                for (int step = 0; step < angular_steps; ++step) {
-                    const int current = ring * stride + step;
-                    const int next    = current + stride;
-
-                    light_indices.push_back(current);
-                    light_indices.push_back(next);
-                    light_indices.push_back(current + 1);
-
-                    light_indices.push_back(current + 1);
-                    light_indices.push_back(next);
-                    light_indices.push_back(next + 1);
-                }
-            }
-
-            if (SDL_RenderGeometry(renderer_, nullptr,
-                                   light_vertices.data(), static_cast<int>(light_vertices.size()),
-                                   light_indices.data(), static_cast<int>(light_indices.size())) != 0) {
-                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, intensity);
-                SDL_RenderFillRect(renderer_, &dst);
-            }
-        }
+        AssetLightRenderer light_renderer(renderer_, source, darkness_overlay_vertices_, darkness_overlay_indices_);
+        auto               result = light_renderer.accumulate_dark_mask();
+        frame_max_vertices        = std::max(frame_max_vertices, result.max_vertices);
+        frame_max_indices         = std::max(frame_max_indices, result.max_indices);
     }
 
     if (frame_max_vertices > darkness_overlay_vertex_capacity_hint_) {
