@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -690,9 +691,18 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 const float unflipped_x = (xform.sx != 0.0f) ? (dx_screen / xform.sx) : 0.0f;
                 const float new_off_x   = target_asset_->flipped ? -unflipped_x : unflipped_x;
                 const float new_off_y   = (xform.sy != 0.0f) ? (dy_screen / xform.sy) : 0.0f;
-                L.offset_x = static_cast<int>(std::lround(new_off_x));
-                L.offset_y = static_cast<int>(std::lround(new_off_y));
-                if (lighting_section_) lighting_section_->sync_from_info();
+                const int final_off_x = static_cast<int>(std::lround(new_off_x));
+                const int final_off_y = static_cast<int>(std::lround(new_off_y));
+                if (L.offset_x == final_off_x && L.offset_y == final_off_y) {
+                    return true;
+                }
+                L.offset_x = final_off_x;
+                L.offset_y = final_off_y;
+                // Update serialized lighting payload without disturbing other properties.
+                info_->set_lighting(info_->light_sources);
+                if (lighting_section_) {
+                    lighting_section_->update_light_offsets(static_cast<std::size_t>(light_drag_index_), final_off_x, final_off_y);
+                }
                 this->notify_light_sources_modified(true);
                 (void)info_->commit_manifest();
                 return true;

@@ -2,6 +2,7 @@
 
 #include "../DockableCollapsible.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <vector>
 #include "asset/asset_info.hpp"
@@ -381,6 +382,20 @@ public:
                 rc.a.min = rc.a.max = static_cast<int>(src.color.a);
                 r.color_widget->set_value(rc);
             }
+        }
+    }
+    void update_light_offsets(std::size_t index, int offset_x, int offset_y) {
+        if (index >= rows_.size()) {
+            return;
+        }
+        auto& row = rows_[index];
+        row.light.offset_x = offset_x;
+        row.light.offset_y = offset_y;
+        if (row.s_offset_x) {
+            row.s_offset_x->set_value(offset_x);
+        }
+        if (row.s_offset_y) {
+            row.s_offset_y->set_value(offset_y);
         }
     }
     void update(const Input& input, int screen_w, int screen_h) override {
