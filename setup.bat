@@ -25,8 +25,6 @@ pushd "%~dp0" >nul
 set "REPO_ROOT=%CD%"
 
 set "VSBT_INSTALL_DIR=C:\VS2022\BuildTools"
-set "VS_BOOT_URL=https://aka.ms/vs/17/release/vs_BuildTools.exe"
-set "VS_BOOT_EXE=%TEMP%\vs_BuildTools.exe"
 set "INSTALL_TIMEOUT_SECS=5400"
 
 rem Elevate if needed, keep working directory at repo root
@@ -121,44 +119,36 @@ exit /b 0
 where cl >nul 2>&1 && ( echo [setup.bat] MSVC toolchain already available. & exit /b 0 )
 
 call :DetectVSInstallPath
-
-if errorlevel 1 (
-    echo [setup.bat] Installing Visual Studio 2022 Build Tools...
-    call :DownloadVSBootstrapper || exit /b 1
-    call :RunWithTimeoutPS "%VS_BOOT_EXE%" "--installPath ""%VSBT_INSTALL_DIR%"" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621" %INSTALL_TIMEOUT_SECS%
-    if errorlevel 1 (
-        call :RunWithTimeoutPS "%VS_BOOT_EXE%" "--installPath ""%VSBT_INSTALL_DIR%"" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows10SDK.19041" %INSTALL_TIMEOUT_SECS% || (echo [ERROR] VS Build Tools install failed. & exit /b 1)
-    )
-    call :DetectVSInstallPath
-    if errorlevel 1 (
-        echo [ERROR] Visual Studio Build Tools not found after install.
-        exit /b 1
-    )
-) else (
-    echo [setup.bat] Ensuring required C++ components...
-    set "VS_SETUP=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\setup.exe"
-    if exist "%VS_SETUP%" (
-        call :RunWithTimeoutPS "%VS_SETUP%" "modify --installPath ""%VS_INSTALL_PATH%"" --quiet --norestart --wait --locale en-US --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621" %INSTALL_TIMEOUT_SECS% ^
-        || call :RunWithTimeoutPS "%VS_SETUP%" "modify --installPath ""%VS_INSTALL_PATH%"" --quiet --norestart --wait --locale en-US --add Microsoft.VisualStudio.Component.Windows10SDK.19041" %INSTALL_TIMEOUT_SECS%
-    ) else (
-        echo [setup.bat] Visual Studio Installer not found. Using bootstrapper to modify...
-        call :DownloadVSBootstrapper || exit /b 1
-        call :RunWithTimeoutPS "%VS_BOOT_EXE%" "modify --installPath ""%VS_INSTALL_PATH%"" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621" %INSTALL_TIMEOUT_SECS% ^
-        || call :RunWithTimeoutPS "%VS_BOOT_EXE%" "modify --installPath ""%VS_INSTALL_PATH%"" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Component.Windows10SDK.19041" %INSTALL_TIMEOUT_SECS% || (echo [ERROR] VS component modify failed. & exit /b 1)
-    )
-    call :DetectVSInstallPath
-    if errorlevel 1 (
-        echo [ERROR] Visual Studio Build Tools not detected after component update.
-        exit /b 1
-    )
+if not errorlevel 1 (
+    echo [setup.bat] Visual Studio Build Tools with required workloads detected.
+    exit /b 0
 )
+
+echo [setup.bat] Installing Visual Studio 2022 Build Tools via winget...
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget --accept-package-agreements --accept-source-agreements --silent ^
+  --override "--installPath \"%VSBT_INSTALL_DIR%\" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621" || (
+    echo [setup.bat] Retrying Visual Studio Build Tools install with Windows 10 SDK...
+    winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget --accept-package-agreements --accept-source-agreements --silent ^
+      --override "--installPath \"%VSBT_INSTALL_DIR%\" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows10SDK.19041" || (
+        echo [ERROR] VS Build Tools install failed.
+        exit /b 1
+      )
+  )
+
+call :DetectVSInstallPath
+if errorlevel 1 (
+    echo [ERROR] Visual Studio Build Tools not found after winget install.
+    exit /b 1
+)
+
+echo [setup.bat] Visual Studio Build Tools installed.
 exit /b 0
 
 :DetectVSInstallPath
 set "VS_INSTALL_PATH="
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if exist "%VSWHERE%" (
-  for /f "usebackq tokens=* delims=" %%I in (`"%VSWHERE%" -latest -products Microsoft.VisualStudio.Product.BuildTools -property installationPath`) do set "VS_INSTALL_PATH=%%I"
+  for /f "usebackq tokens=* delims=" %%I in (`"%VSWHERE%" -latest -products Microsoft.VisualStudio.Product.BuildTools -requires Microsoft.VisualStudio.Workload.VCTools -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -requires Microsoft.VisualStudio.Component.VC.CMake.Project -property installationPath`) do set "VS_INSTALL_PATH=%%I"
 )
 if not defined VS_INSTALL_PATH if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools" set "VS_INSTALL_PATH=C:\Program Files\Microsoft Visual Studio\2022\BuildTools"
 if not defined VS_INSTALL_PATH if exist "%VSBT_INSTALL_DIR%" set "VS_INSTALL_PATH=%VSBT_INSTALL_DIR%"
@@ -187,10 +177,65 @@ echo [ERROR] Could not load MSVC dev environment.
 exit /b 1
 
 :EnsureCMake
-where cmake >nul 2>&1 && ( echo [setup.bat] CMake is installed. & exit /b 0 )
-echo [setup.bat] Installing CMake via winget...
-winget install -e --id Kitware.CMake --source winget --silent || (echo [ERROR] CMake install failed. & exit /b 1)
-echo [setup.bat] CMake installed.
+where cmake >nul 2>&1 && (
+    echo [setup.bat] CMake is installed.
+    exit /b 0
+)
+
+echo [setup.bat] Installing CMake...
+
+rem Try winget first
+winget -v >nul 2>&1
+if "%errorlevel%"=="0" (
+    echo [setup.bat] Installing CMake via winget...
+    winget install --id Kitware.CMake -e --silent --accept-package-agreements --accept-source-agreements
+    if "%errorlevel%"=="0" (
+        echo [setup.bat] CMake installed via winget.
+        goto :CMakePostCheck
+    ) else (
+        echo [setup.bat] winget install failed, trying MSI fallback.
+        goto :CMakeMSI
+    )
+) else (
+    echo [setup.bat] winget not found, trying MSI fallback.
+    goto :CMakeMSI
+)
+
+:CMakeMSI
+set "CMAKE_MSI=%TEMP%\cmake_latest_x64.msi"
+echo [setup.bat] Downloading latest CMake MSI from GitHub...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$r=Invoke-RestMethod https://api.github.com/repos/Kitware/CMake/releases/latest; " ^
+  "$asset=$r.assets | Where-Object { $_.name -match 'windows-x86_64\.msi$' } | Select-Object -First 1; " ^
+  "if(-not $asset){Write-Error 'CMake MSI not found'; exit 1}; " ^
+  "Invoke-WebRequest $asset.browser_download_url -OutFile '%CMAKE_MSI%'" || (
+    echo [ERROR] Failed to download CMake MSI.
+    exit /b 1
+  )
+
+echo [setup.bat] Installing CMake from MSI...
+msiexec /i "%CMAKE_MSI%" /qn ADD_CMAKE_TO_PATH=System
+set "msi_rc=%errorlevel%"
+del "%CMAKE_MSI%" 2>nul
+if not "%msi_rc%"=="0" (
+  echo [ERROR] CMake MSI install failed with code %msi_rc%.
+  exit /b %msi_rc%
+)
+
+:CMakePostCheck
+rem Add to PATH in this session if needed
+if exist "C:\Program Files\CMake\bin\cmake.exe" (
+  set "PATH=C:\Program Files\CMake\bin;%PATH%"
+)
+
+where cmake >nul 2>&1
+if not "%errorlevel%"=="0" (
+  echo [ERROR] CMake not found on PATH after installation.
+  exit /b 1
+)
+
+echo [setup.bat] CMake installed successfully:
+cmake --version
 exit /b 0
 
 :EnsureNinja
@@ -199,22 +244,6 @@ echo [setup.bat] Installing Ninja via winget...
 winget install -e --id Ninja-build.Ninja --source winget --silent || (echo [ERROR] Ninja install failed. & exit /b 1)
 echo [setup.bat] Ninja installed.
 exit /b 0
-
-:DownloadVSBootstrapper
-if exist "%VS_BOOT_EXE%" del /q "%VS_BOOT_EXE%" >nul 2>&1
-powershell -NoProfile -Command ^
-  "$ErrorActionPreference='Stop';[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;Invoke-WebRequest -Uri '%VS_BOOT_URL%' -OutFile '%VS_BOOT_EXE%'" || exit /b 1
-exit /b 0
-
-:RunWithTimeoutPS
-rem Args: 1=exe 2=args 3=timeoutSeconds
-set "_R_EXE=%~1"
-set "_R_ARGS=%~2"
-set "_R_TO=%~3"
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$exe='%_R_EXE%';$args='%_R_ARGS%';$t=%_R_TO%;$p=Start-Process -FilePath $exe -ArgumentList $args -PassThru -WindowStyle Hidden;" ^
-  "$sw=[Diagnostics.Stopwatch]::StartNew(); while(-not $p.HasExited){ Start-Sleep -Seconds 2; if($sw.Elapsed.TotalSeconds -gt $t){ try{ $p.Kill() } catch{}; exit 901 } } ; exit $p.ExitCode"
-exit /b %ERRORLEVEL%
 
 :fail
 echo [setup.bat] Setup failed.
