@@ -1621,7 +1621,7 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
     // Force scaling profile refresh for this asset
     if (!info_->name.empty()) {
         // This will trigger a new profile entry to be created/updated
-        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(std::filesystem::path("loading") / "scaling_profiles.json");
+        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(true);
         auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info_->name);
         if (profile.created_entry) {
             std::cout << "[AssetInfoUI] Updated scaling profile for " << info_->name << "\n";

@@ -45,7 +45,7 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 return oss.str();
 };
 
-        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(std::filesystem::path("loading") / "scaling_profiles.json");
+        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(true);
         const auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info.name);
         const bool scaling_refresh_pending = false;
         std::ostringstream range_stream;

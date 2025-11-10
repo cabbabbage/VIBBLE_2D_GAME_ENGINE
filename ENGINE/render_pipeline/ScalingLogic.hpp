@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <limits>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -16,6 +15,8 @@
 #include <vector>
 
 #include <SDL.h>
+
+#include "core/manifest/manifest_loader.hpp"
 
 namespace render_pipeline {
 
@@ -331,12 +332,11 @@ struct ScalingLogic {
         return percents;
     }
 
-    static inline void LoadPrecomputedProfiles(const std::filesystem::path& path = std::filesystem::path()) {
+    static inline void LoadPrecomputedProfiles(bool force_reload = false) {
         ProfilesState& state = profiles_state();
         std::lock_guard<std::mutex> guard(state.mutex);
-        if (!path.empty() && path != state.file_path) {
-            state.file_path = path;
-            state.loaded    = false;
+        if (force_reload) {
+            state.loaded = false;
         }
         ensure_loaded(state);
     }
@@ -478,7 +478,6 @@ private:
     };
 
     struct ProfilesState {
-        std::filesystem::path file_path;
         bool                   loaded = false;
         std::mutex             mutex;
         std::unordered_map<std::string, ProfileEntry> entries;
@@ -496,48 +495,41 @@ private:
         state.loaded = true;
         state.entries.clear();
 
-        if (state.file_path.empty()) {
-            state.file_path = std::filesystem::path("loading") / "scaling_profiles.json";
-        }
-
-        std::ifstream in(state.file_path);
-        if (!in.good()) {
-            return;
-        }
-
-        nlohmann::json root;
+        manifest::ManifestData manifest_data;
         try {
-            in >> root;
+            manifest_data = manifest::load_manifest();
         } catch (...) {
             return;
         }
 
-        if (!root.is_object()) {
+        if (!manifest_data.assets.is_object()) {
             return;
         }
 
-        auto assets_it = root.find("assets");
-        if (assets_it == root.end() || !assets_it->is_object()) {
-            return;
-        }
-
-        for (auto it = assets_it->begin(); it != assets_it->end(); ++it) {
+        for (auto it = manifest_data.assets.begin(); it != manifest_data.assets.end(); ++it) {
             if (!it.value().is_object()) {
                 continue;
             }
-            ProfileEntry entry;
-            entry.revision = it.value().value("revision", static_cast<std::uint64_t>(0));
-            entry.min_scale = static_cast<float>(it.value().value("min_scale", 1.0));
-            entry.max_scale = static_cast<float>(it.value().value("max_scale", 1.0));
 
-            if (auto steps_it = it.value().find("recommended_steps"); steps_it != it.value().end() && steps_it->is_array()) {
+            const auto profile_it = it.value().find("scaling_profile");
+            if (profile_it == it.value().end() || !profile_it->is_object()) {
+                continue;
+            }
+
+            ProfileEntry entry;
+            entry.revision  = profile_it->value("revision", static_cast<std::uint64_t>(0));
+            entry.min_scale = static_cast<float>(profile_it->value("min_scale", 1.0));
+            entry.max_scale = static_cast<float>(profile_it->value("max_scale", 1.0));
+
+            if (auto steps_it = profile_it->find("recommended_steps"); steps_it != profile_it->end() && steps_it->is_array()) {
                 for (const auto& value : *steps_it) {
                     if (!value.is_number()) {
                         continue;
                     }
                     entry.steps.push_back(static_cast<float>(value.get<double>()));
                 }
-            } else if (auto perc_it = it.value().find("recommended_percentages"); perc_it != it.value().end() && perc_it->is_array()) {
+            } else if (auto perc_it = profile_it->find("recommended_percentages");
+                       perc_it != profile_it->end() && perc_it->is_array()) {
                 for (const auto& value : *perc_it) {
                     if (!value.is_number()) {
                         continue;

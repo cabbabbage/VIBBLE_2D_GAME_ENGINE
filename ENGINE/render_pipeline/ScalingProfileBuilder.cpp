@@ -11,12 +11,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <fstream>
-#include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <nlohmann/json.hpp>
-#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -182,22 +179,25 @@ std::vector<float> build_variant_steps(float min_scale, float max_scale) {
     const float clamped_min = std::clamp(min_scale, 0.05f, clamped_max);
 
     steps.push_back(1.0f);
-    if (clamped_min >= 0.98f) {
-        return steps;
+
+    float upper_candidate = std::min(clamped_max, 0.98f);
+    if (upper_candidate < clamped_min) {
+        upper_candidate = clamped_min;
     }
 
-    if (clamped_min > 0.8f) {
-        if (std::fabs(clamped_min - 1.0f) > 1e-3f) {
-            steps.push_back(clamped_min);
+    if (std::fabs(upper_candidate - 1.0f) > 1e-3f) {
+        steps.push_back(upper_candidate);
+    }
+
+    const float base_for_mid = std::max(clamped_min, std::min(upper_candidate, 0.99f));
+    if (base_for_mid > clamped_min + 1e-4f) {
+        const float mid = std::clamp(std::sqrt(clamped_min * base_for_mid), clamped_min, base_for_mid);
+        if (std::fabs(mid - 1.0f) > 1e-3f && std::fabs(mid - upper_candidate) > 1e-3f) {
+            steps.push_back(mid);
         }
-        return steps;
     }
 
-    const float mid = std::clamp(std::sqrt(clamped_min), clamped_min, 0.99f);
-    if (std::fabs(mid - 1.0f) > 1e-3f) {
-        steps.push_back(mid);
-    }
-    if (std::fabs(clamped_min - mid) > 1e-3f) {
+    if (std::fabs(clamped_min - 1.0f) > 1e-3f) {
         steps.push_back(clamped_min);
     }
     return steps;
@@ -228,22 +228,6 @@ std::string iso_timestamp_now() {
     std::ostringstream oss;
     oss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
     return oss.str();
-}
-
-bool ensure_parent_directory(const std::filesystem::path& path) {
-    const auto parent = path.parent_path();
-    if (parent.empty()) {
-        return true;
-    }
-    std::error_code ec;
-    if (std::filesystem::create_directories(parent, ec)) {
-        return true;
-    }
-    if (ec && !std::filesystem::exists(parent)) {
-        vibble::log::error(std::string("[ScalingProfileBuilder] Failed to create directory '") + parent.string() + "': " + ec.message());
-        return false;
-    }
-    return true;
 }
 
 } // namespace
@@ -381,20 +365,35 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
         }
     }
 
-    if (!ensure_parent_directory(options.output_path)) {
+    const std::string generated_at = iso_timestamp_now();
+
+    if (!manifest_data.raw.is_object()) {
+        vibble::log::error("[ScalingProfileBuilder] Manifest is not an object; aborting.");
         return false;
     }
 
-    json root;
-    root["version"]        = 2;
-    root["screen_aspect"]  = aspect;
-    root["generated_at"]   = iso_timestamp_now();
-    json assets_json        = json::object();
+    nlohmann::json& manifest_assets = manifest_data.raw["assets"];
+    if (!manifest_assets.is_object()) {
+        manifest_assets = json::object();
+    }
 
-    for (const auto& [name, range] : ranges) {
-        if (range.max_scale <= 0.0f || range.min_scale == std::numeric_limits<float>::max()) {
+    for (auto it = manifest_assets.begin(); it != manifest_assets.end(); ++it) {
+        if (!it.value().is_object()) {
             continue;
         }
+
+        const auto range_it = ranges.find(it.key());
+        if (range_it == ranges.end()) {
+            it.value().erase("scaling_profile");
+            continue;
+        }
+
+        const auto& range = range_it->second;
+        if (range.max_scale <= 0.0f || range.min_scale == std::numeric_limits<float>::max()) {
+            it.value().erase("scaling_profile");
+            continue;
+        }
+
         const float min_scale = std::clamp(range.min_scale, static_cast<float>(kMinScaleClamp), static_cast<float>(kMaxScaleClamp));
         const float max_scale = std::clamp(range.max_scale, static_cast<float>(kMinScaleClamp), static_cast<float>(kMaxScaleClamp));
 
@@ -408,27 +407,25 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
         }
 
         json entry;
-        entry["min_scale"]                = min_scale;
-        entry["max_scale"]                = max_scale;
-        entry["recommended_steps"]        = std::move(steps_json);
-        entry["recommended_percentages"]  = std::move(percent_json);
-        entry["revision"]                 = compute_revision(name, min_scale, max_scale, steps);
-        assets_json[name]                 = std::move(entry);
-    }
+        entry["min_scale"]               = min_scale;
+        entry["max_scale"]               = max_scale;
+        entry["recommended_steps"]       = std::move(steps_json);
+        entry["recommended_percentages"] = std::move(percent_json);
+        entry["revision"]                = compute_revision(it.key(), min_scale, max_scale, steps);
+        entry["screen_aspect"]          = aspect;
+        entry["generated_at"]           = generated_at;
 
-    root["assets"] = std::move(assets_json);
+        it.value()["scaling_profile"] = std::move(entry);
+    }
 
     try {
-        std::ofstream out(options.output_path);
-        out << root.dump(4);
-        if (!out.good()) {
-            vibble::log::error(std::string("[ScalingProfileBuilder] Failed while writing '") + options.output_path.string() + "'.");
-            return false;
-        }
+        manifest::save_manifest(manifest_data);
     } catch (const std::exception& ex) {
-        vibble::log::error(std::string("[ScalingProfileBuilder] Exception while writing '") + options.output_path.string() + "': " + ex.what());
+        vibble::log::error(std::string("[ScalingProfileBuilder] Failed to write manifest: ") + ex.what());
         return false;
     }
+
+    manifest_data.assets = manifest_data.raw.at("assets");
 
     vibble::log::info("[ScalingProfileBuilder] Scaling profile precomputation complete.");
     return true;

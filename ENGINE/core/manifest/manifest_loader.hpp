@@ -16,5 +16,7 @@ ManifestData load_manifest();
 
 std::string manifest_path();
 
+void save_manifest(const ManifestData& data);
+
 }
 
