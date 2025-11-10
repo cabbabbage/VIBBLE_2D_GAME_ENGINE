@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "tiling/grid_tile.hpp"
+
 class Assets;
 class Asset;
 class camera;
@@ -18,7 +20,6 @@ namespace world { class Grid; }
 namespace world { class Grid; }
 namespace runtime_lighting { struct RuntimeLightingFrame; }
 namespace runtime_lighting { struct RuntimeLightingFrame; }
-struct GridTile;
 namespace world {
 
 struct Chunk {

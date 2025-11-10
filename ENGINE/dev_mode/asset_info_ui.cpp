@@ -831,6 +831,9 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     }
 
     container_.render(r, screen_w, screen_h);
+    if (lighting_section_) {
+        lighting_section_->render_overlays(r);
+    }
 
     if (info_ && asset_selector_ && asset_selector_->visible())
         asset_selector_->render(r);

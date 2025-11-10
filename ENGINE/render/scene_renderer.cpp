@@ -329,7 +329,9 @@ void SceneRenderer::render(){
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
     const SDL_Color map_light_color = main_light_source_.get_current_color();
-    const float map_light_opacity = std::clamp(static_cast<float>(map_light_color.a) / 255.0f, 0.0f, 1.0f);
+    const float     map_light_opacity =
+        std::clamp(static_cast<float>(map_light_color.a) / 255.0f, 0.0f, 1.0f);
+    const float light_overlay_visibility = map_light_opacity;
 
     SDL_SetRenderTarget(renderer_,nullptr);
     SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
@@ -423,13 +425,19 @@ void SceneRenderer::render(){
         auto enqueue_command = [&](Asset* asset,
                                    SDL_Texture* final_tex,
                                    SDL_Texture* draw_tex,
-                                   const SDL_FRect& dst_rect) {
+                                   const SDL_FRect& dst_rect,
+                                   bool suppress_sprite_draw = false) {
             AssetRenderCommand cmd;
             cmd.asset              = asset;
-            cmd.source_texture      = draw_tex ? draw_tex : final_tex;
             cmd.final_texture       = final_tex;
             cmd.dst                 = dst_rect;
-            cmd.uses_scaled_texture = draw_tex && draw_tex != final_tex;
+            if (!suppress_sprite_draw) {
+                cmd.source_texture      = draw_tex ? draw_tex : final_tex;
+                cmd.uses_scaled_texture = draw_tex && draw_tex != final_tex;
+            } else {
+                cmd.source_texture      = nullptr;
+                cmd.uses_scaled_texture = false;
+            }
             cmd.highlighted         = asset->is_highlighted();
             cmd.selected            = asset->is_selected();
             cmd.flipped             = asset->flipped;
@@ -448,8 +456,10 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            // Note: Tileable assets now render as normal assets. Grid tiles are
-            // drawn first via GridTileRenderer using loader-composed per-cell textures.
+            // Tileable assets are composited into grid tiles and should skip the normal sprite pass.
+            const auto& tiling_opt      = a->tiling_info();
+            const bool  is_chunk_tiled  = tiling_opt && tiling_opt->is_valid();
+            const bool  has_light_sources = !a->info->light_sources.empty();
 
             const bool is_new = a->last_render_frame_id != frame_counter_ - 1;
             if (is_new) {
@@ -486,20 +496,25 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            const float hysteresis_margin = camera_state
-                ? camera_state->realism_settings().scale_variant_hysteresis_margin
-                : render_pipeline::ScalingLogic::kDefaultHysteresisMargin;
-            SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(
-                a,
-                final_tex,
-                fw,
-                fh,
-                static_cast<int>(std::lround(dst.w)),
-                static_cast<int>(std::lround(dst.h)),
-                hysteresis_margin);
-            enqueue_command(a, final_tex, draw_tex, dst);
+            if (!is_chunk_tiled) {
+                const float hysteresis_margin = camera_state
+                    ? camera_state->realism_settings().scale_variant_hysteresis_margin
+                    : render_pipeline::ScalingLogic::kDefaultHysteresisMargin;
+                SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(
+                    a,
+                    final_tex,
+                    fw,
+                    fh,
+                    static_cast<int>(std::lround(dst.w)),
+                    static_cast<int>(std::lround(dst.h)),
+                    hysteresis_margin);
+                enqueue_command(a, final_tex, draw_tex, dst);
+            } else if (has_light_sources) {
+                // Keep a command placeholder so the lighting system can still sample this asset.
+                enqueue_command(a, final_tex, nullptr, dst, /*suppress_sprite_draw=*/true);
+            }
 
-            if (a->info && !a->info->light_sources.empty() && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
+            if (has_light_sources && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
                 bool has_front_lights         = false;
                 bool has_back_lights          = false;
                 bool has_dark_mask_lights     = false;
@@ -567,11 +582,15 @@ void SceneRenderer::render(){
                 for (const auto& src : light_overlay_sources_) {
                     if (src.asset == cmd.asset) {
                         overlay_source = &src;
-                        if (src.has_back_lights) {
-                            AssetLightRenderer light_renderer(renderer_, src, darkness_overlay_vertices_, darkness_overlay_indices_);
+                        if (src.has_back_lights && light_overlay_visibility > 0.0f) {
+                            AssetLightRenderer light_renderer(renderer_,
+                                                              src,
+                                                              darkness_overlay_vertices_,
+                                                              darkness_overlay_indices_,
+                                                              light_overlay_visibility);
                             light_renderer.draw_behind();
                         }
-                        has_front_light = src.has_front_lights;
+                        has_front_light = light_overlay_visibility > 0.0f && src.has_front_lights;
                         break;
                     }
                 }
@@ -842,10 +861,16 @@ void SceneRenderer::render(){
         render_light_map();
 
         // Draw all deferred front-lights above the darkness overlay
-        for (const LightOverlaySource* src : pending_front_lights) {
-            if (src && src->has_front_lights) {
-                AssetLightRenderer light_renderer(renderer_, *src, darkness_overlay_vertices_, darkness_overlay_indices_);
-                light_renderer.draw_in_front();
+        if (light_overlay_visibility > 0.0f) {
+            for (const LightOverlaySource* src : pending_front_lights) {
+                if (src && src->has_front_lights) {
+                    AssetLightRenderer light_renderer(renderer_,
+                                                      *src,
+                                                      darkness_overlay_vertices_,
+                                                      darkness_overlay_indices_,
+                                                      light_overlay_visibility);
+                    light_renderer.draw_in_front();
+                }
             }
         }
         pending_front_lights.clear();
@@ -970,7 +995,8 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         return;
     }
 
-    const float overlay_alpha = std::clamp(map_light_opacity, 0.0f, 1.0f);
+    const float overlay_alpha             = std::clamp(map_light_opacity, 0.0f, 1.0f);
+    const float light_overlay_visibility = overlay_alpha;
     if (!ensure_darkness_overlay()) {
         return;
     }
@@ -1005,7 +1031,11 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
         if (!source.has_dark_mask_lights) {
             continue;
         }
-        AssetLightRenderer light_renderer(renderer_, source, darkness_overlay_vertices_, darkness_overlay_indices_);
+        AssetLightRenderer light_renderer(renderer_,
+                                          source,
+                                          darkness_overlay_vertices_,
+                                          darkness_overlay_indices_,
+                                          light_overlay_visibility);
         auto               result = light_renderer.accumulate_dark_mask();
         frame_max_vertices        = std::max(frame_max_vertices, result.max_vertices);
         frame_max_indices         = std::max(frame_max_indices, result.max_indices);

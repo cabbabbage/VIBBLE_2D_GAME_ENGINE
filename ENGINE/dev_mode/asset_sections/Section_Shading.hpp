@@ -27,6 +27,7 @@ public:
 
     void build() override {
         widgets_.clear();
+        shading_enabled_checkbox_.reset();
         Rows rows;
 
         if (!info_) {
@@ -35,6 +36,11 @@ public:
         }
 
         const ShadowMaskSettings settings = SanitizeShadowMaskSettings(info_->shadow_mask_settings);
+
+        shading_enabled_checkbox_ = std::make_unique<DMCheckbox>("Enable Shading", info_->is_shaded);
+        auto shading_checkbox_widget = std::make_unique<CheckboxWidget>(shading_enabled_checkbox_.get());
+        rows.push_back({ shading_checkbox_widget.get() });
+        widgets_.push_back(std::move(shading_checkbox_widget));
 
         auto make_scaled_slider = [](const std::string& label,
                                      float                min_value,
@@ -102,9 +108,29 @@ public:
     }
 
     bool handle_event(const SDL_Event& e) override {
-        bool used = DockableCollapsible::handle_event(e);
-        if (!info_ || !expanded_) {
-            return used;
+        if (!info_) {
+            return DockableCollapsible::handle_event(e);
+        }
+
+        const bool was_shaded = info_->is_shaded;
+        bool       used       = DockableCollapsible::handle_event(e);
+        bool       shading_changed = false;
+
+        if (shading_enabled_checkbox_) {
+            const bool wants_shading = shading_enabled_checkbox_->value();
+            if (wants_shading != was_shaded) {
+                info_->set_shading_enabled(wants_shading);
+                (void)info_->commit_manifest();
+                shading_changed = true;
+                if (ui_) {
+                    ui_->notify_light_sources_modified(true);
+                    ui_->regenerate_shadow_masks();
+                }
+            }
+        }
+
+        if (!expanded_) {
+            return used || shading_changed;
         }
 
         if (expansion_ratio_slider_ && expansion_ratio_slider_->handle_event(e)) used = true;
@@ -143,7 +169,7 @@ public:
             }
         }
 
-        return used || changed;
+        return used || changed || shading_changed;
     }
 
     void render_content(SDL_Renderer* r) const override {
@@ -180,6 +206,7 @@ private:
     SDL_Texture* resolve_preview_sprite() const;
     SDL_Texture* resolve_preview_mask() const;
 
+    std::unique_ptr<DMCheckbox> shading_enabled_checkbox_;
     std::unique_ptr<DMSlider> expansion_ratio_slider_;
     std::unique_ptr<DMSlider> blur_scale_slider_;
     std::unique_ptr<DMSlider> falloff_start_slider_;

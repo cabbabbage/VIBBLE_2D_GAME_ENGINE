@@ -31,7 +31,7 @@ public:
             r.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, ls.intensity);
             r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, ls.radius);
             r.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, ls.fall_off);
-            r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 20, ls.flicker);
+            r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 100, ls.flicker);
             r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, ls.offset_x);
             r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, ls.offset_y);
             r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", ls.in_front);
@@ -49,6 +49,7 @@ public:
                 rc.a.min = rc.a.max = static_cast<int>(ls.color.a);
                 r.color_widget->set_value(rc);
             }
+            configure_color_widget(r);
             configure_row_sliders(r);
             rows_.push_back(std::move(r));
         }
@@ -150,7 +151,7 @@ public:
                     nr.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, nr.light.intensity);
                     nr.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, nr.light.radius);
                     nr.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, nr.light.fall_off);
-                    nr.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 20, nr.light.flicker);
+                    nr.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 100, nr.light.flicker);
                     nr.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, nr.light.offset_x);
                     nr.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, nr.light.offset_y);
                     nr.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", nr.light.in_front);
@@ -168,6 +169,7 @@ public:
                         rc.a.min = rc.a.max = static_cast<int>(nr.light.color.a);
                         nr.color_widget->set_value(rc);
                     }
+                    configure_color_widget(nr);
                     configure_row_sliders(nr);
                     rows_.insert(rows_.begin() + static_cast<long long>(i) + 1, std::move(nr));
                     changed = true;
@@ -204,17 +206,6 @@ public:
             }
             if (r.color_widget && r.color_widget->handle_overlay_event(e)) {
                 used = true;
-                const auto& v = r.color_widget->value();
-                SDL_Color new_c{ static_cast<Uint8>(std::clamp(v.r.min, 0, 255)),
-                                 static_cast<Uint8>(std::clamp(v.g.min, 0, 255)),
-                                 static_cast<Uint8>(std::clamp(v.b.min, 0, 255)),
-                                 static_cast<Uint8>(std::clamp(v.a.min, 0, 255)) };
-                if (new_c.r != r.light.color.r || new_c.g != r.light.color.g || new_c.b != r.light.color.b || new_c.a != r.light.color.a) {
-                    r.light.color = new_c;
-                    changed = true;
-                    regenerate_lighting = true;
-                    purge_light_cache = true;
-                }
             }
             auto handle_slider = [&](std::unique_ptr<DMSlider>& slider,
                                      auto get_value,
@@ -273,7 +264,7 @@ public:
                 r.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, r.light.intensity);
                 r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, r.light.radius);
                 r.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, r.light.fall_off);
-                r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 20, r.light.flicker);
+                r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 100, r.light.flicker);
                 r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, r.light.offset_x);
                 r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, r.light.offset_y);
                 r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", r.light.in_front);
@@ -291,6 +282,7 @@ public:
                     rc.a.min = rc.a.max = static_cast<int>(r.light.color.a);
                     r.color_widget->set_value(rc);
                 }
+                configure_color_widget(r);
                 configure_row_sliders(r);
                 rows_.push_back(std::move(r));
                 changed = true;
@@ -378,6 +370,49 @@ private:
         info_->set_lighting(lights);
     }
 
+    void configure_color_widget(Row& r) {
+        if (!r.color_widget) {
+            return;
+        }
+        DMColorRangeWidget* widget = r.color_widget.get();
+        widget->set_on_value_changed([this, widget](const DMColorRangeWidget::RangedColor& value) {
+            this->handle_color_widget_changed(widget, value);
+        });
+    }
+
+    void handle_color_widget_changed(DMColorRangeWidget* widget,
+                                     const DMColorRangeWidget::RangedColor& value) {
+        if (!widget) {
+            return;
+        }
+        auto row_it = std::find_if(rows_.begin(), rows_.end(),
+                                   [widget](const Row& r) { return r.color_widget.get() == widget; });
+        if (row_it == rows_.end()) {
+            return;
+        }
+        SDL_Color new_c{
+            static_cast<Uint8>(std::clamp(value.r.min, 0, 255)),
+            static_cast<Uint8>(std::clamp(value.g.min, 0, 255)),
+            static_cast<Uint8>(std::clamp(value.b.min, 0, 255)),
+            static_cast<Uint8>(std::clamp(value.a.min, 0, 255))};
+        if (new_c.r == row_it->light.color.r && new_c.g == row_it->light.color.g &&
+            new_c.b == row_it->light.color.b && new_c.a == row_it->light.color.a) {
+            return;
+        }
+        row_it->light.color = new_c;
+        apply_light_change(true, true);
+    }
+
+    void apply_light_change(bool reset_scaling_profile, bool purge_light_cache) {
+        commit_to_info();
+        if (info_) {
+            if (ui_ && reset_scaling_profile) {
+                ui_->notify_light_sources_modified(purge_light_cache);
+            }
+            (void)info_->commit_manifest();
+        }
+    }
+
     std::vector<Row> rows_;
     std::unique_ptr<DMButton> b_add_;
     std::unique_ptr<DMButton> apply_btn_;
@@ -416,6 +451,7 @@ public:
                 rc.b.min = rc.b.max = static_cast<int>(src.color.b);
                 rc.a.min = rc.a.max = static_cast<int>(src.color.a);
                 r.color_widget->set_value(rc);
+                configure_color_widget(r);
             }
         }
     }
@@ -443,6 +479,12 @@ public:
     }
     void render(SDL_Renderer* r) const override {
         DockableCollapsible::render(r);
+    }
+
+    void render_overlays(SDL_Renderer* r) const {
+        if (!r) {
+            return;
+        }
         for (const auto& row : rows_) {
             if (row.color_widget) {
                 row.color_widget->render_overlay(r);

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <utility>
 
 #include "asset/Asset.hpp"
@@ -38,12 +39,15 @@ SDL_BlendMode mask_alpha_multiply_blend() {
 AssetLightRenderer::AssetLightRenderer(SDL_Renderer* renderer,
                                        const runtime_lighting::AssetLight& source,
                                        std::vector<SDL_Vertex>& scratch_vertices,
-                                       std::vector<int>& scratch_indices)
+                                       std::vector<int>& scratch_indices,
+                                       float light_visibility)
     : renderer_(renderer),
       source_(source),
       asset_(source.asset),
       scratch_vertices_(scratch_vertices),
-      scratch_indices_(scratch_indices) {
+      scratch_indices_(scratch_indices),
+      overlay_visibility_(std::clamp(light_visibility, 0.0f, 1.0f)),
+      flicker_time_seconds_(static_cast<float>(SDL_GetTicks64() % 1000000ULL) * 0.001f) {
     if (!renderer_ || !asset_ || !asset_->info) {
         return;
     }
@@ -96,7 +100,14 @@ bool AssetLightRenderer::prepare_light(const LightSource& light, ComputedLight& 
         return false;
     }
 
-    const int intensity = std::clamp(light.intensity, 0, 255);
+    int intensity = std::clamp(light.intensity, 0, 255);
+    if (intensity <= 0) {
+        return false;
+    }
+
+    const float flicker_multiplier = compute_flicker_multiplier(light);
+    intensity = static_cast<int>(std::lround(static_cast<float>(intensity) * flicker_multiplier));
+    intensity = std::clamp(intensity, 0, 255);
     if (intensity <= 0) {
         return false;
     }
@@ -176,6 +187,10 @@ void AssetLightRenderer::draw_pass(Pass pass) {
         return;
     }
 
+    if (overlay_visibility_ <= 0.0f) {
+        return;
+    }
+
     SDL_Texture* original_target = SDL_GetRenderTarget(renderer_);
 
     for (const LightSource& light : *lights_) {
@@ -188,6 +203,13 @@ void AssetLightRenderer::draw_pass(Pass pass) {
 
         ComputedLight computed{};
         if (!prepare_light(light, computed)) {
+            continue;
+        }
+
+        computed.intensity = static_cast<int>(
+            std::lround(static_cast<float>(computed.intensity) * overlay_visibility_));
+        computed.intensity = std::clamp(computed.intensity, 0, 255);
+        if (computed.intensity <= 0) {
             continue;
         }
 
@@ -430,6 +452,66 @@ bool AssetLightRenderer::render_light_with_asset_mask(const LightSource& light,
 
     SDL_RenderCopy(renderer_, composite, &clipped_src, &dst_rect);
     return true;
+}
+
+float AssetLightRenderer::compute_flicker_multiplier(const LightSource& light) const {
+    const int flicker_value = std::clamp(light.flicker, 0, 20);
+    if (flicker_value <= 0) {
+        return 1.0f;
+    }
+
+    const float strength  = static_cast<float>(flicker_value) / 20.0f;
+    const float amplitude = strength * 0.45f;
+    if (amplitude <= 0.0f) {
+        return 1.0f;
+    }
+
+    auto mix = [](std::uint32_t seed, int value) {
+        seed ^= static_cast<std::uint32_t>(value) + 0x9e3779b9u + (seed << 6) + (seed >> 2);
+        return seed;
+    };
+
+    std::uint32_t hash = 0x811C9DC5u;
+    hash = mix(hash, light.offset_x);
+    hash = mix(hash, light.offset_y);
+    hash = mix(hash, light.radius);
+    hash = mix(hash, light.intensity);
+    hash = mix(hash, light.fall_off);
+    hash = mix(hash, static_cast<int>(reinterpret_cast<std::uintptr_t>(light.texture) & 0xFFFFu));
+
+    const float phase  = static_cast<float>(hash & 0xFFFFu) / 65535.0f * kTwoPi;
+    const float wobble = static_cast<float>((hash >> 16) & 0xFFu) / 255.0f;
+    const float speed  = 0.9f + 1.6f * strength;
+    const float time_a = flicker_time_seconds_ * speed + phase;
+    const float time_b =
+        flicker_time_seconds_ * (speed * (0.45f + 0.55f * wobble) + 0.45f + 0.75f * strength) +
+        phase * 0.5f + wobble * kTwoPi;
+
+    float noise = std::sin(time_a) + 0.5f * std::sin(time_b);
+
+    const float jitter_strength = strength * strength;
+    if (jitter_strength > 0.0f) {
+        const float jitter_speed = 6.0f + 22.0f * jitter_strength;
+        const float jitter_time =
+            flicker_time_seconds_ * jitter_speed + phase * 0.37f + wobble * (kTwoPi * 0.8f);
+        const int jitter_index = static_cast<int>(std::floor(jitter_time));
+        const float jitter_frac = jitter_time - static_cast<float>(jitter_index);
+
+        auto random_value = [&](int idx) {
+            const std::uint32_t jitter_hash = mix(hash, idx);
+            return static_cast<float>(jitter_hash & 0xFFFFu) / 32767.5f - 1.0f;
+        };
+
+        const float j0 = random_value(jitter_index);
+        const float j1 = random_value(jitter_index + 1);
+        const float jitter_noise = j0 + (j1 - j0) * jitter_frac;
+        noise += jitter_noise * (0.65f + 0.25f * wobble) * jitter_strength;
+    }
+
+    noise       = std::clamp(noise, -1.0f, 1.0f);
+
+    const float multiplier = 1.0f + noise * amplitude;
+    return std::clamp(multiplier, 0.1f, 1.0f + amplitude);
 }
 
 SDL_Texture* AssetLightRenderer::ensure_mask_composite_texture(int width, int height, Uint32 format_hint) {
