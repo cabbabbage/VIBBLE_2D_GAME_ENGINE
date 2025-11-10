@@ -257,8 +257,11 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
 
     float center_x = ef.screen_position.x;
     if (assets_) {
-        world::Grid& grid = assets_->world_grid();
-        center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
+        // Do not apply grid parallax to the player asset
+        if (!(a && assets_->player == a)) {
+            world::Grid& grid = assets_->world_grid();
+            center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
+        }
     }
     const float distance_scale  = (a && a->info && a->info->apply_distance_scaling) ? ef.distance_scale : 1.0f;
     const float vertical_scale  = (a && a->info && a->info->apply_vertical_scaling) ? ef.vertical_scale : 1.0f;
@@ -739,7 +742,11 @@ void SceneRenderer::render(){
                                         double sx = static_cast<double>(anchor_screen.x) + (dx_world * inv_scale_local * distance_scale);
                                         double sy = static_cast<double>(anchor_screen.y) - (dy_world * inv_scale_local * distance_scale * vertical_scale);
                                         // Parallax-adjusted X
-                                        sx = static_cast<double>(assets_->world_grid().parallax_adjusted_screen_x(SDL_Point{ static_cast<int>(std::lround(w.x)), static_cast<int>(std::lround(w.y)) }, static_cast<float>(sx)));
+                                        if (!(assets_ && assets_->player == cmd.asset)) {
+                                            sx = static_cast<double>(assets_->world_grid().parallax_adjusted_screen_x(
+                                                SDL_Point{ static_cast<int>(std::lround(w.x)), static_cast<int>(std::lround(w.y)) },
+                                                static_cast<float>(sx)));
+                                        }
                                         return SDL_FPoint{ static_cast<float>(sx), static_cast<float>(sy) };
                                     };
 

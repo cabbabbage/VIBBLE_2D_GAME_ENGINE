@@ -17,6 +17,7 @@
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 #include "world/grid.hpp"
+#include "asset/Asset.hpp"
 
 class Asset;
 class SceneRenderer;
@@ -176,6 +177,11 @@ public:
     int  map_grid_chunk_resolution() const;
     const MapGridSettings& map_grid_settings() const { return map_grid_settings_; }
 
+    // Compute tiling info for an asset so its sprite
+    // is cropped into grid-aligned squares matching the
+    // non-tiled sprite's world footprint.
+    std::optional<Asset::TilingInfo> compute_tiling_for_asset(const Asset* asset) const;
+
     bool is_dev_mode() const { return dev_mode; }
 
     int shading_group_count() const { return num_groups_; }
@@ -298,6 +304,25 @@ private:
     std::vector<GridMovementCommand> movement_commands_buffer_;
     std::vector<Asset*> grid_registration_buffer_;
     std::unordered_map<const world::Chunk*, ChunkTileAtlas> chunk_tile_atlases_;
+
+    // Cached full-coverage tiled textures per asset. We render each tillable
+    // asset once into a texture the size of its tiling coverage, then crop
+    // into chunk atlases. This avoids stamping many small tiles per chunk.
+    struct TiledCoverageEntry {
+        SDL_Texture* texture = nullptr;      // coverage-sized texture
+        SDL_Rect     bounds{0,0,0,0};        // world-space coverage rect
+        SDL_Point    tile_size{0,0};         // world tile size used
+        std::uint64_t asset_revision = 0;    // asset texture revision observed
+        SDL_Texture* source_texture = nullptr; // last tile source texture used
+    };
+    std::unordered_map<const Asset*, TiledCoverageEntry> tiled_coverage_cache_;
+
+    // Acquire a coverage-sized tiled texture for the asset, rebuilding the
+    // cache if the asset/frame/coverage changed. Returns nullptr on failure.
+    SDL_Texture* get_or_build_tiled_coverage_texture(SDL_Renderer* renderer,
+                                                     Asset* asset,
+                                                     const Asset::TilingInfo& tiling,
+                                                     SDL_Texture* tile_source);
 
     struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;

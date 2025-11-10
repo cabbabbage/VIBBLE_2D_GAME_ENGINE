@@ -62,6 +62,14 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 {
 	set_flip();
 	set_z_index();
+        // Ensure the player is always pixel-precise (no grid snapping during movement/rendering)
+        try {
+                if (info && asset_types::canonicalize(info->type) == asset_types::player) {
+                        grid_resolution = 0; // force 0-resolution grid for the player
+                }
+        } catch (...) {
+                // If type introspection fails, leave grid_resolution as-is
+        }
         if (info) {
                 try {
                         is_shaded = info->is_shaded;

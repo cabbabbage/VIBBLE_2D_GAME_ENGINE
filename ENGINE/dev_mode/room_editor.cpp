@@ -2740,9 +2740,13 @@ bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
         static_cast<int>(std::lround(world_x)),
         static_cast<int>(std::lround(world_y))
     };
-    const float center_x = assets_
-        ? assets_->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x)
-        : effects.screen_position.x;
+    float center_x = effects.screen_position.x;
+    if (assets_) {
+        // Do not apply grid parallax to the player asset
+        if (!(asset && assets_->player == asset)) {
+            center_x = assets_->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x);
+        }
+    }
     const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
     const int   top      = static_cast<int>(std::lround(effects.screen_position.y)) - sh;
     out_rect             = SDL_Rect{left, top, sw, sh};

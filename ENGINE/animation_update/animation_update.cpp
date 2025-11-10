@@ -154,7 +154,14 @@ SDL_Point frame_world_delta(const AnimationFrame& frame,
     // Interpret frame dx/dy primarily as world-space pixel deltas.
     // Only snap to grid when the delta is aligned to the grid step, to avoid
     // rounding small movements to zero at higher grid resolutions.
-    const int resolution = vibble::grid::clamp_resolution(asset.grid_resolution);
+    int resolution = vibble::grid::clamp_resolution(asset.grid_resolution);
+    try {
+        if (asset.info && asset_types::canonicalize(asset.info->type) == asset_types::player) {
+            resolution = 0; // player always moves pixel-by-pixel
+        }
+    } catch (...) {
+        // if anything goes wrong, just use the clamped asset value
+    }
     if (resolution <= 0) {
         return SDL_Point{ frame.dx, frame.dy };
     }

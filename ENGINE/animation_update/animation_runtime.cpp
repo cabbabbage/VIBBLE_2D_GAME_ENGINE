@@ -735,6 +735,13 @@ int AnimationRuntime::effective_grid_resolution(std::optional<int> override_reso
         return vibble::grid::clamp_resolution(*override_resolution);
     }
     if (self_) {
+        try {
+            if (self_->info && asset_types::canonicalize(self_->info->type) == asset_types::player) {
+                return 0; // always pixel-precise for player
+            }
+        } catch (...) {
+            // ignore, fall through to default behavior
+        }
         return vibble::grid::clamp_resolution(self_->grid_resolution);
     }
     return 0;

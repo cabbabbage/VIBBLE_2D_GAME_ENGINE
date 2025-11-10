@@ -606,6 +606,14 @@ Assets::~Assets() {
     }
     chunk_tile_atlases_.clear();
 
+    for (auto& kv : tiled_coverage_cache_) {
+        if (kv.second.texture) {
+            SDL_DestroyTexture(kv.second.texture);
+            kv.second.texture = nullptr;
+        }
+    }
+    tiled_coverage_cache_.clear();
+
     if (input) {
         input->clear_screen_to_world_mapper();
     }
@@ -1126,6 +1134,17 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
         std::cout << "[Assets::addAsset] View set successfully\n";
         newAsset->finalize_setup();
         std::cout << "[Assets::addAsset] Finalize setup successful\n";
+        // If this asset is tileable, compute and set tiling now
+        if (newAsset->info && newAsset->info->tillable) {
+            auto t = compute_tiling_for_asset(newAsset);
+            if (t && t->is_valid()) {
+                newAsset->set_tiling_info(*t);
+            } else {
+                newAsset->set_tiling_info(std::nullopt);
+            }
+        } else {
+            newAsset->set_tiling_info(std::nullopt);
+        }
     } catch (const std::exception& e) {
         std::cerr << "[Assets::addAsset][Exception] " << e.what() << "\n";
     }
@@ -1183,6 +1202,17 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
         std::cout << "[Assets::spawn_asset] View set successfully\n";
         newAsset->finalize_setup();
         std::cout << "[Assets::spawn_asset] Finalize setup successful\n";
+        // If this asset is tileable, compute and set tiling now
+        if (newAsset->info && newAsset->info->tillable) {
+            auto t = compute_tiling_for_asset(newAsset);
+            if (t && t->is_valid()) {
+                newAsset->set_tiling_info(*t);
+            } else {
+                newAsset->set_tiling_info(std::nullopt);
+            }
+        } else {
+            newAsset->set_tiling_info(std::nullopt);
+        }
     } catch (const std::exception& e) {
         std::cerr << "[Assets::spawn_asset][Exception] " << e.what() << "\n";
     }
@@ -1670,84 +1700,144 @@ Assets::ChunkTileAtlas& Assets::rebuild_chunk_tile_atlas(SDL_Renderer* renderer,
         if (!tiling_opt || !tiling_opt->is_valid()) {
             continue;
         }
-        SDL_Texture* tile_texture = asset->get_final_texture();
-        // When building chunk tile atlases we don't require the post-processed
-        // final texture. If it's not available yet (e.g., early in the frame),
-        // fall back to the asset's current frame. Tiled rendering ignores
-        // shading/motion blur per design.
-        if (!tile_texture) {
-            tile_texture = asset->get_current_frame();
+        // Obtain or build the full-coverage tiled texture for this asset
+        SDL_Texture* tile_source = asset->get_final_texture();
+        if (!tile_source) {
+            tile_source = asset->get_current_frame();
         }
-        if (!tile_texture) {
-            continue;
-        }
-        int tex_w = 0;
-        int tex_h = 0;
-        SDL_QueryTexture(tile_texture, nullptr, nullptr, &tex_w, &tex_h);
-        if (tex_w <= 0 || tex_h <= 0) {
+        if (!tile_source) {
             continue;
         }
 
         const auto& tiling = *tiling_opt;
-        const SDL_Point tile_size = tiling.tile_size;
-        if (tile_size.x <= 0 || tile_size.y <= 0) {
+        SDL_Texture* coverage_tex = get_or_build_tiled_coverage_texture(renderer, asset, tiling, tile_source);
+        if (!coverage_tex) {
             continue;
         }
 
-        const SDL_Rect coverage = tiling.coverage;
-        for (int y = coverage.y; y < coverage.y + coverage.h; y += tile_size.y) {
-            for (int x = coverage.x; x < coverage.x + coverage.w; x += tile_size.x) {
-                SDL_Rect tile_world{ x, y, tile_size.x, tile_size.y };
-                SDL_Rect intersection{};
-                if (!SDL_IntersectRect(&tile_world, &chunk_rect, &intersection)) {
-                    continue;
-                }
-                if (intersection.w <= 0 || intersection.h <= 0) {
-                    continue;
-                }
-
-                SDL_Rect dest{ intersection.x - chunk_rect.x,
-                               intersection.y - chunk_rect.y,
-                               intersection.w,
-                               intersection.h };
-                if (dest.w <= 0 || dest.h <= 0) {
-                    continue;
-                }
-
-                const double scale_x = static_cast<double>(tex_w) / static_cast<double>(tile_size.x);
-                const double scale_y = static_cast<double>(tex_h) / static_cast<double>(tile_size.y);
-
-                SDL_Rect src{};
-                src.x = static_cast<int>(std::floor((intersection.x - tile_world.x) * scale_x));
-                src.y = static_cast<int>(std::floor((intersection.y - tile_world.y) * scale_y));
-                src.w = static_cast<int>(std::ceil(static_cast<double>(intersection.w) * scale_x));
-                src.h = static_cast<int>(std::ceil(static_cast<double>(intersection.h) * scale_y));
-
-                src.x = std::clamp(src.x, 0, tex_w);
-                src.y = std::clamp(src.y, 0, tex_h);
-                if (src.x + src.w > tex_w) {
-                    src.w = tex_w - src.x;
-                }
-                if (src.y + src.h > tex_h) {
-                    src.h = tex_h - src.y;
-                }
-                if (src.w <= 0 || src.h <= 0) {
-                    continue;
-                }
-
-                SDL_RenderCopy(renderer, tile_texture, &src, &dest);
-
-                ChunkTileAtlas::TilePatch patch{};
-                patch.world_rect = intersection;
-                patch.atlas_rect = dest;
-                entry.tiles.push_back(patch);
-            }
+        // Crop the coverage by the current chunk and blit once
+        SDL_Rect intersection{};
+        if (!SDL_IntersectRect(&tiling.coverage, &chunk_rect, &intersection)) {
+            continue;
         }
+        if (intersection.w <= 0 || intersection.h <= 0) {
+            continue;
+        }
+
+        SDL_Rect src{ intersection.x - tiling.coverage.x,
+                      intersection.y - tiling.coverage.y,
+                      intersection.w,
+                      intersection.h };
+        SDL_Rect dest{ intersection.x - chunk_rect.x,
+                       intersection.y - chunk_rect.y,
+                       intersection.w,
+                       intersection.h };
+
+        SDL_RenderCopy(renderer, coverage_tex, &src, &dest);
+
+        ChunkTileAtlas::TilePatch patch{};
+        patch.world_rect = intersection;
+        patch.atlas_rect = dest;
+        entry.tiles.push_back(patch);
     }
 
     SDL_SetRenderTarget(renderer, previous_target);
     entry.texture = texture;
     return entry;
+}
+
+SDL_Texture* Assets::get_or_build_tiled_coverage_texture(SDL_Renderer* renderer,
+                                                         Asset* asset,
+                                                         const Asset::TilingInfo& tiling,
+                                                         SDL_Texture* tile_source) {
+    if (!renderer || !asset || !tile_source || !tiling.is_valid()) {
+        return nullptr;
+    }
+
+    // Inspect current cached entry
+    TiledCoverageEntry& cache = tiled_coverage_cache_[asset];
+
+    // Query source texture size
+    int src_w = 0, src_h = 0;
+    SDL_QueryTexture(tile_source, nullptr, nullptr, &src_w, &src_h);
+    if (src_w <= 0 || src_h <= 0) {
+        return nullptr;
+    }
+
+    const bool coverage_changed = (cache.bounds.x != tiling.coverage.x) ||
+                                  (cache.bounds.y != tiling.coverage.y) ||
+                                  (cache.bounds.w != tiling.coverage.w) ||
+                                  (cache.bounds.h != tiling.coverage.h);
+    const bool tile_size_changed = (cache.tile_size.x != tiling.tile_size.x) ||
+                                   (cache.tile_size.y != tiling.tile_size.y);
+
+    // Use Asset friendship to read revision counter (increments on changes that
+    // invalidate downscale caches, e.g., scale/variant changes).
+    std::uint64_t current_rev = asset->final_texture_revision_;
+    const bool source_changed = (cache.source_texture != tile_source) || (cache.asset_revision != current_rev);
+
+    const bool need_rebuild = (!cache.texture) || coverage_changed || tile_size_changed || source_changed;
+    if (!need_rebuild) {
+        return cache.texture;
+    }
+
+    // Rebuild coverage texture
+    if (cache.texture) {
+        SDL_DestroyTexture(cache.texture);
+        cache.texture = nullptr;
+    }
+
+    const int cov_w = std::max(1, tiling.coverage.w);
+    const int cov_h = std::max(1, tiling.coverage.h);
+    SDL_Texture* coverage_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, cov_w, cov_h);
+    if (!coverage_tex) {
+        return nullptr;
+    }
+    SDL_SetTextureBlendMode(coverage_tex, SDL_BLENDMODE_BLEND);
+
+    SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+    if (SDL_SetRenderTarget(renderer, coverage_tex) != 0) {
+        SDL_DestroyTexture(coverage_tex);
+        SDL_SetRenderTarget(renderer, prev_target);
+        return nullptr;
+    }
+
+    // Clear to transparent
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+
+    // Fill the entire coverage by stamping the tile texture
+    // into each grid-aligned cell. This renders a proper tiled
+    // pattern rather than only the single source footprint.
+    const SDL_Point ts = tiling.tile_size;
+    SDL_Rect src_full{0, 0, src_w, src_h};
+
+    for (int y = 0; y < cov_h; y += ts.y) {
+        for (int x = 0; x < cov_w; x += ts.x) {
+            SDL_Rect dest{
+                x,
+                y,
+                std::min(ts.x, cov_w - x),
+                std::min(ts.y, cov_h - y)
+            };
+
+            if (dest.w <= 0 || dest.h <= 0) continue;
+
+            // Stamp full source into this grid cell (scaled to cell size)
+            SDL_RenderCopy(renderer, tile_source, &src_full, &dest);
+        }
+    }
+
+    SDL_SetRenderTarget(renderer, prev_target);
+
+    cache.texture        = coverage_tex;
+    cache.bounds         = tiling.coverage;
+    cache.tile_size      = tiling.tile_size;
+    cache.source_texture = tile_source;
+    cache.asset_revision = current_rev;
+
+    return cache.texture;
 }
 
 void Assets::render_chunk_tile_atlases(SDL_Renderer* renderer) {
@@ -1864,6 +1954,74 @@ void Assets::render_chunk_tile_atlases(SDL_Renderer* renderer) {
 
 SDL_Renderer* Assets::renderer() const {
     return scene ? scene->get_renderer() : nullptr;
+}
+
+std::optional<Asset::TilingInfo> Assets::compute_tiling_for_asset(const Asset* asset) const {
+    if (!asset || !asset->info) {
+        return std::nullopt;
+    }
+    if (!asset->info->tillable) {
+        return std::nullopt;
+    }
+
+    // Determine grid step
+    int step = map_grid_settings_.spacing();
+    // Fallback: scaled canvas dimension if spacing not configured
+    if (step <= 0) {
+        const int raw_w = std::max(1, asset->info->original_canvas_width);
+        const int raw_h = std::max(1, asset->info->original_canvas_height);
+        double scale = 1.0;
+        if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+            scale = static_cast<double>(asset->info->scale_factor);
+        }
+        step = std::max(1, static_cast<int>(std::lround(static_cast<double>(std::max(raw_w, raw_h)) * scale)));
+    }
+    step = std::max(1, step);
+
+    // Compute the world footprint of the non-tiled sprite (bottom-center anchor)
+    const SDL_Point world_pos{ asset->pos.x, asset->pos.y };
+    const int base_w = std::max(1, asset->info->original_canvas_width);
+    const int base_h = std::max(1, asset->info->original_canvas_height);
+    double scale = 1.0;
+    if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+        scale = static_cast<double>(asset->info->scale_factor);
+    }
+    const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<double>(base_w) * scale)));
+    const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<double>(base_h) * scale)));
+
+    const int left   = world_pos.x - (scaled_w / 2);
+    const int top    = world_pos.y - scaled_h;
+    const int right  = left + scaled_w;
+    const int bottom = world_pos.y;
+
+    auto align_down = [](int value, int step_) {
+        if (step_ <= 0) return value;
+        const double scaled = std::floor(static_cast<double>(value) / static_cast<double>(step_));
+        return static_cast<int>(scaled * static_cast<double>(step_));
+    };
+    auto align_up = [](int value, int step_) {
+        if (step_ <= 0) return value;
+        const double scaled = std::ceil(static_cast<double>(value) / static_cast<double>(step_));
+        return static_cast<int>(scaled * static_cast<double>(step_));
+    };
+
+    const int origin_x = align_down(left, step);
+    const int origin_y = align_down(top, step);
+    const int limit_x  = align_up(right, step);
+    const int limit_y  = align_up(bottom, step);
+
+    Asset::TilingInfo tiling{};
+    tiling.enabled    = true;
+    tiling.tile_size  = SDL_Point{ step, step };
+    tiling.grid_origin = SDL_Point{ origin_x, origin_y };
+    tiling.anchor = SDL_Point{ align_down(world_pos.x, step) + step / 2,
+                               align_down(world_pos.y, step) + step / 2 };
+
+    const int coverage_w = std::max(step, limit_x - origin_x);
+    const int coverage_h = std::max(step, limit_y - origin_y);
+    tiling.coverage = SDL_Rect{ origin_x, origin_y, coverage_w, coverage_h };
+
+    return tiling.is_valid() ? std::optional<Asset::TilingInfo>(tiling) : std::nullopt;
 }
 
 Asset* Assets::find_asset_by_name(const std::string& name) const {

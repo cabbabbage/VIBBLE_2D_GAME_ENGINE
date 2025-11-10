@@ -250,9 +250,13 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     if (sw <= 0 || sh <= 0) return;
 
         SDL_Point world_point{ target->pos.x, target->pos.y };
-        const float center_x = assets
-            ? assets->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x)
-            : effects.screen_position.x;
+        float center_x = effects.screen_position.x;
+        if (assets) {
+            // Do not apply grid parallax to the player asset
+            if (!(assets->player == target)) {
+                center_x = assets->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x);
+            }
+        }
         const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
         const int   top      = static_cast<int>(std::lround(effects.screen_position.y)) - sh;
     SDL_Rect bounds{ left, top, sw, sh };

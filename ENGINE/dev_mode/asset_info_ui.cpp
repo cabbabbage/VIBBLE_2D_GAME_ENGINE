@@ -640,9 +640,13 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     smoothing_key);
 
                 SDL_Point world_point{ target_asset_->pos.x, target_asset_->pos.y };
-                const float adjusted_cx = (assets_ && target_asset_)
-                    ? assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x)
-                    : ef.screen_position.x;
+                float adjusted_cx = ef.screen_position.x;
+                if (assets_ && target_asset_) {
+                    // Do not apply grid parallax to the player asset
+                    if (!(assets_->player == target_asset_)) {
+                        adjusted_cx = assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x);
+                    }
+                }
                 const float distance_scale  = ef.distance_scale;
                 const float vertical_scale  = ef.vertical_scale;
 
@@ -1047,9 +1051,13 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
                 smoothing_key);
 
             SDL_Point world_point{ target_asset_->pos.x, target_asset_->pos.y };
-            const float adjusted_cx = (assets_ && target_asset_)
-                ? assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x)
-                : ef.screen_position.x;
+            float adjusted_cx = ef.screen_position.x;
+            if (assets_ && target_asset_) {
+                // Do not apply grid parallax to the player asset
+                if (!(assets_->player == target_asset_)) {
+                    adjusted_cx = assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x);
+                }
+            }
             const float distance_scale  = ef.distance_scale;
             const float vertical_scale  = ef.vertical_scale;
 
@@ -1169,51 +1177,10 @@ void AssetInfoUI::sync_target_tiling_state() {
     }
 
     auto compute_tiling = [&](Asset* asset) -> std::optional<Asset::TilingInfo> {
-        if (!asset || !asset->info) {
-            return std::nullopt;
-        }
-        if (!asset->info->tillable) {
-            return std::nullopt;
-        }
-        const MapGridSettings& settings = assets_->map_grid_settings();
-        int step = settings.spacing();
-        if (step <= 0) {
-            const int raw_w = std::max(1, asset->info->original_canvas_width);
-            const int raw_h = std::max(1, asset->info->original_canvas_height);
-            double scale = 1.0;
-            if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
-                scale = static_cast<double>(asset->info->scale_factor);
-            }
-            // Use square tiles based on scaled canvas if map spacing unset
-            step = std::max(1, static_cast<int>(std::lround(static_cast<double>(std::max(raw_w, raw_h)) * scale)));
-        }
-
-        world::Grid& grid = assets_->world_grid();
-        const SDL_Point world_pos{ asset->pos.x, asset->pos.y };
-        world::Chunk* chunk = grid.ensure_chunk_from_world(world_pos);
-        if (!chunk) {
-            return std::nullopt;
-        }
-
-        Asset::TilingInfo tiling{};
-        tiling.enabled = true;
-        tiling.tile_size = SDL_Point{ step, step };
-
-        // Align anchor to tile grid within the chunk
-        auto align_down = [](int v, int s) {
-            if (s <= 0) return v;
-            const double q = std::floor(static_cast<double>(v) / static_cast<double>(s));
-            return static_cast<int>(q * static_cast<double>(s));
-        };
-        const int anchor_x = align_down(world_pos.x, step) + step / 2;
-        const int anchor_y = align_down(world_pos.y, step) + step / 2;
-        tiling.anchor = SDL_Point{ anchor_x, anchor_y };
-
-        // Cover the whole chunk; builder will clip per-chunk and apply parallax grid
-        tiling.coverage   = chunk->world_bounds;
-        tiling.grid_origin = SDL_Point{ tiling.coverage.x, tiling.coverage.y };
-
-        return tiling;
+        if (!assets_) return std::nullopt;
+        if (!asset || !asset->info) return std::nullopt;
+        if (!asset->info->tillable) return std::nullopt;
+        return assets_->compute_tiling_for_asset(asset);
     };
 
     auto apply_for_asset = [&](Asset* asset) {
