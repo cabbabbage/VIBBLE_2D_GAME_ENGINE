@@ -21,6 +21,7 @@ public:
                        const runtime_lighting::AssetLight& source,
                        std::vector<SDL_Vertex>& scratch_vertices,
                        std::vector<int>& scratch_indices);
+    ~AssetLightRenderer();
 
     bool valid() const { return valid_; }
 
@@ -63,8 +64,11 @@ private:
                              float                radius_x,
                              float                radius_y,
                              const SDL_Rect&      fallback_rect);
-    SDL_Texture* resolve_target_for_light(const LightSource& light, SDL_Texture* fallback_target);
-    SDL_Texture* acquire_asset_mask_texture();
+    bool render_light_with_asset_mask(const LightSource& light,
+                                      const ComputedLight& computed,
+                                      const SDL_Color& base_color);
+    SDL_Texture* ensure_mask_composite_texture(int width, int height, Uint32 format_hint);
+    SDL_Rect     scale_mask_rect_to_asset(const SDL_Rect& rect, int mask_width, int mask_height) const;
 
     SDL_Renderer*                          renderer_ = nullptr;
     const runtime_lighting::AssetLight&    source_;
@@ -79,9 +83,9 @@ private:
     bool                                   valid_ = false;
     std::vector<SDL_Vertex>&               scratch_vertices_;
     std::vector<int>&                      scratch_indices_;
-    SDL_Texture*                           cached_mask_target_ = nullptr;
-    bool                                   mask_target_resolved_ = false;
-    int                                    mask_width_ = 0;
-    int                                    mask_height_ = 0;
+    SDL_Texture*                           mask_composite_texture_ = nullptr;
+    int                                    mask_composite_w_ = 0;
+    int                                    mask_composite_h_ = 0;
+    Uint32                                 mask_composite_format_ = 0;
 };
 
