@@ -403,6 +403,10 @@ void SceneRenderer::render(){
         }
         if (player_sh<=0.f) player_sh=1.f;
 
+        if (assets_) {
+            assets_->render_chunk_tile_atlases(renderer_);
+        }
+
         const auto& active = assets_->getActive();
         texture_commands_.clear();
         texture_commands_.reserve(active.size());

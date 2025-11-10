@@ -128,6 +128,7 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
             }
             changed |= copy_key("z_threshold");
             changed |= copy_key("can_invert");
+            changed |= copy_key("tillable");
             break;
         }
         case AssetInfoSectionId::Tags:

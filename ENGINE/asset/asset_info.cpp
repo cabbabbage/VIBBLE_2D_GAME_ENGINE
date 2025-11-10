@@ -561,15 +561,25 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
         if (type == asset_types::player) {
                 std::cout << "[AssetInfo] Player asset '" << name << "' loaded\n\n";
         }
-	start_animation = data.value("start", std::string{"default"});
+        start_animation = data.value("start", std::string{"default"});
         z_threshold = data.value("z_threshold", 0);
         passable = has_tag("passable");
+        try {
+                if (data.contains("tillable")) {
+                        tillable = data.at("tillable").get<bool>();
+                } else {
+                        tillable = info_json_.value("tillable", false);
+                }
+        } catch (...) {
+                tillable = info_json_.value("tillable", false);
+        }
         is_shaded = data.value("has_shading", false);
         min_same_type_distance = data.value("min_same_type_distance", 0);
         min_distance_all = data.value("min_distance_all", 0);
         flipable = data.value("can_invert", false);
         apply_distance_scaling = data.value("apply_distance_scaling", true);
         apply_vertical_scaling = data.value("apply_vertical_scaling", true);
+        info_json_["tillable"] = tillable;
         NeighborSearchRadius = std::clamp( data.value("neighbor_search_distance", NeighborSearchRadius), 20, 1000);
         info_json_["neighbor_search_distance"] = NeighborSearchRadius;
         if (info_json_.is_object()) {
@@ -758,6 +768,11 @@ void AssetInfo::set_passable(bool v) {
         add_tag("passable");
         else
         remove_tag("passable");
+}
+
+void AssetInfo::set_tillable(bool v) {
+        tillable = v;
+        info_json_["tillable"] = v;
 }
 
 void AssetInfo::set_shadow_mask_settings(const ShadowMaskSettings& settings) {

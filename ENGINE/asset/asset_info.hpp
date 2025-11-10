@@ -70,6 +70,7 @@ class AssetInfo {
     bool flipable;
     bool apply_distance_scaling = true;
     bool apply_vertical_scaling = true;
+    bool tillable = false;
     std::vector<std::string> tags;
     std::vector<std::string> anti_tags;
     bool is_light_source = false;
@@ -122,6 +123,7 @@ class AssetInfo {
     void add_anti_tag(const std::string &tag);
     void remove_anti_tag(const std::string &tag);
     void set_passable(bool v);
+    void set_tillable(bool v);
     Area* find_area(const std::string& name);
     void upsert_area_from_editor(const class Area& area, std::optional<NamedArea::RenderFrame> frame = std::nullopt);
     std::string pick_next_animation(const std::string& mapping_id) const;

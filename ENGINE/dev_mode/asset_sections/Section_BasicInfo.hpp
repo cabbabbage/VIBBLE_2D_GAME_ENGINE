@@ -39,6 +39,7 @@ class Section_BasicInfo : public DockableCollapsible {
     std::unique_ptr<DMCheckbox>  c_flipable_;
     std::unique_ptr<DMCheckbox>  c_apply_distance_scaling_;
     std::unique_ptr<DMCheckbox>  c_apply_vertical_scaling_;
+    std::unique_ptr<DMCheckbox>  c_tillable_;
     std::unique_ptr<DMButton>    apply_btn_;
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::vector<std::string> type_options_;
@@ -87,6 +88,7 @@ inline void Section_BasicInfo::build() {
     c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
     c_apply_distance_scaling_ = std::make_unique<DMCheckbox>("Apply distance scaling", info_->apply_distance_scaling);
     c_apply_vertical_scaling_ = std::make_unique<DMCheckbox>("Apply vertical scaling", info_->apply_vertical_scaling);
+    c_tillable_ = std::make_unique<DMCheckbox>("Tillable (grid tiles)", info_->tillable);
 
     auto w_type = std::make_unique<DropdownWidget>(dd_type_.get());
     rows.push_back({ w_type.get() });
@@ -112,6 +114,10 @@ inline void Section_BasicInfo::build() {
     rows.push_back({ w_vertical.get() });
     widgets_.push_back(std::move(w_vertical));
 
+    auto w_tillable = std::make_unique<CheckboxWidget>(c_tillable_.get());
+    rows.push_back({ w_tillable.get() });
+    widgets_.push_back(std::move(w_tillable));
+
     if (!apply_btn_) {
         apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 180, DMButton::height());
     }
@@ -135,6 +141,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         if (c_flipable_ && c_flipable_->handle_event(e)) used = true;
     if (c_apply_distance_scaling_ && c_apply_distance_scaling_->handle_event(e)) used = true;
         if (c_apply_vertical_scaling_ && c_apply_vertical_scaling_->handle_event(e)) used = true;
+        if (c_tillable_ && c_tillable_->handle_event(e)) used = true;
     }
 
     bool changed = false;
@@ -178,6 +185,11 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
 
     if (c_apply_vertical_scaling_ && info_->apply_vertical_scaling != c_apply_vertical_scaling_->value()) {
         info_->apply_vertical_scaling = c_apply_vertical_scaling_->value();
+        changed = true;
+    }
+
+    if (c_tillable_ && info_->tillable != c_tillable_->value()) {
+        info_->set_tillable(c_tillable_->value());
         changed = true;
     }
 

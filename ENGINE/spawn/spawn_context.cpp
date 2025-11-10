@@ -1,5 +1,6 @@
 #include "spawn_context.hpp"
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <sstream>
@@ -47,14 +48,15 @@ SpawnContext::Point SpawnContext::get_point_within_area(const Area& area) {
         return SDL_Point{0, 0};
 }
 
-Asset* SpawnContext::spawnAsset(const std::string& name,
-                                const std::shared_ptr<AssetInfo>& info,
-                                const Area& area,
-                                SDL_Point pos,
-                                int depth,
-                                Asset* parent,
-                                const std::string& spawn_id,
-                                const std::string& spawn_method)
+Asset* SpawnContext::spawnAssetInternal(const std::string& name,
+                                        const std::shared_ptr<AssetInfo>& info,
+                                        const Area& area,
+                                        SDL_Point pos,
+                                        int depth,
+                                        Asset* parent,
+                                        const std::string& spawn_id,
+                                        const std::string& spawn_method,
+                                        const std::optional<Asset::TilingInfo>& tiling)
 {
 
         if (clip_area_ && !position_allowed(*clip_area_, pos)) {
@@ -63,6 +65,11 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
         auto assetPtr = std::make_unique<Asset>(info, area, pos, depth, parent, spawn_id, spawn_method, spawn_resolution_);
         Asset* raw = assetPtr.get();
         all_.push_back(std::move(assetPtr));
+        if (tiling && raw) {
+                raw->set_tiling_info(*tiling);
+        } else if (raw) {
+                raw->set_tiling_info(std::nullopt);
+        }
         if (raw->info && !raw->info->asset_children.empty()) {
                 const std::string parent_name = raw->info ? raw->info->name : std::string{"<null>"};
                 vibble::log::debug(std::string{"[Spawn] Parent asset '"} + parent_name +
@@ -179,6 +186,96 @@ Asset* SpawnContext::spawnAsset(const std::string& name,
                 }
         }
         return raw;
+}
+
+Asset* SpawnContext::spawnAsset(const std::string& name,
+                                const std::shared_ptr<AssetInfo>& info,
+                                const Area& area,
+                                SDL_Point pos,
+                                int depth,
+                                Asset* parent,
+                                const std::string& spawn_id,
+                                const std::string& spawn_method)
+{
+        if (info && info->tillable) {
+                return spawnTiledAsset(name, info, area, pos, depth, parent, spawn_id, spawn_method);
+        }
+        return spawnAssetInternal(name, info, area, pos, depth, parent, spawn_id, spawn_method, std::nullopt);
+}
+
+Asset* SpawnContext::spawnTiledAsset(const std::string& name,
+                                     const std::shared_ptr<AssetInfo>& info,
+                                     const Area& area,
+                                     SDL_Point pos,
+                                     int depth,
+                                     Asset* parent,
+                                     const std::string& spawn_id,
+                                     const std::string& spawn_method)
+{
+        if (!info) {
+                return spawnAssetInternal(name, info, area, pos, depth, parent, spawn_id, spawn_method, std::nullopt);
+        }
+
+        Asset::TilingInfo tiling{};
+        tiling.enabled = true;
+
+        const int raw_w = std::max(1, info->original_canvas_width);
+        const int raw_h = std::max(1, info->original_canvas_height);
+        double scale = 1.0;
+        if (std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) {
+                scale = static_cast<double>(info->scale_factor);
+        }
+        int tile_w = std::max(1, static_cast<int>(std::lround(static_cast<double>(raw_w) * scale)));
+        int tile_h = std::max(1, static_cast<int>(std::lround(static_cast<double>(raw_h) * scale)));
+        const int spacing = map_grid_settings_.spacing();
+        if (spacing > 0) {
+                tile_w = spacing;
+                tile_h = spacing;
+        }
+
+        if (tile_w <= 0 || tile_h <= 0) {
+                return spawnAssetInternal(name, info, area, pos, depth, parent, spawn_id, spawn_method, std::nullopt);
+        }
+
+        const auto bounds = area.get_bounds();
+        const int min_x = std::get<0>(bounds);
+        const int min_y = std::get<1>(bounds);
+        const int max_x = std::get<2>(bounds);
+        const int max_y = std::get<3>(bounds);
+
+        auto align_down = [](int value, int step) {
+                if (step <= 0) {
+                        return value;
+                }
+                const double scaled = std::floor(static_cast<double>(value) / static_cast<double>(step));
+                return static_cast<int>(scaled * static_cast<double>(step));
+        };
+        auto align_up = [](int value, int step) {
+                if (step <= 0) {
+                        return value;
+                }
+                const double scaled = std::ceil(static_cast<double>(value) / static_cast<double>(step));
+                return static_cast<int>(scaled * static_cast<double>(step));
+        };
+
+        const int origin_x = align_down(min_x, tile_w);
+        const int origin_y = align_down(min_y, tile_h);
+        const int limit_x  = align_up(max_x, tile_w);
+        const int limit_y  = align_up(max_y, tile_h);
+
+        SDL_Point aligned_pos = pos;
+        aligned_pos.x = align_down(pos.x, tile_w) + tile_w / 2;
+        aligned_pos.y = align_down(pos.y, tile_h) + tile_h / 2;
+
+        tiling.grid_origin = SDL_Point{ origin_x, origin_y };
+        tiling.tile_size   = SDL_Point{ tile_w, tile_h };
+        tiling.anchor      = aligned_pos;
+
+        int coverage_w = std::max(tile_w, limit_x - origin_x);
+        int coverage_h = std::max(tile_h, limit_y - origin_y);
+        tiling.coverage = SDL_Rect{ origin_x, origin_y, coverage_w, coverage_h };
+
+        return spawnAssetInternal(name, info, area, aligned_pos, depth, parent, spawn_id, spawn_method, tiling);
 }
 
 bool SpawnContext::point_overlaps_trail(SDL_Point pt, const Area* ignore) const {

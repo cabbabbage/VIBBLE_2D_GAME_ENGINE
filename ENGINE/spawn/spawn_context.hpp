@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -34,6 +35,14 @@ class SpawnContext {
                       Asset* parent,
                       const std::string& spawn_id = std::string{},
                       const std::string& spawn_method = std::string{});
+    Asset* spawnTiledAsset(const std::string& name,
+                           const std::shared_ptr<AssetInfo>& info,
+                           const Area& area,
+                           SDL_Point pos,
+                           int depth,
+                           Asset* parent,
+                           const std::string& spawn_id = std::string{},
+                           const std::string& spawn_method = std::string{});
     Point get_area_center(const Area& area) const;
     Point get_point_within_area(const Area& area);
     std::mt19937& rng() { return rng_; }
@@ -80,4 +89,14 @@ class SpawnContext {
     MapGridSettings map_grid_settings_ = MapGridSettings::defaults();
     bool checks_enabled_ = true;
     bool allow_partial_clip_overlap_ = false;
+
+    Asset* spawnAssetInternal(const std::string& name,
+                              const std::shared_ptr<AssetInfo>& info,
+                              const Area& area,
+                              SDL_Point pos,
+                              int depth,
+                              Asset* parent,
+                              const std::string& spawn_id,
+                              const std::string& spawn_method,
+                              const std::optional<Asset::TilingInfo>& tiling);
 };

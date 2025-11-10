@@ -598,6 +598,14 @@ Assets::~Assets() {
     movement_commands_buffer_.clear();
     grid_registration_buffer_.clear();
 
+    for (auto& entry : chunk_tile_atlases_) {
+        if (entry.second.texture) {
+            SDL_DestroyTexture(entry.second.texture);
+            entry.second.texture = nullptr;
+        }
+    }
+    chunk_tile_atlases_.clear();
+
     if (input) {
         input->clear_screen_to_world_mapper();
     }
@@ -1596,6 +1604,206 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
 
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
     SDL_RenderCopy(renderer, texture, nullptr, &dest);
+}
+
+void Assets::destroy_chunk_tile_atlas(const world::Chunk* chunk) {
+    if (!chunk) {
+        return;
+    }
+    auto it = chunk_tile_atlases_.find(chunk);
+    if (it == chunk_tile_atlases_.end()) {
+        return;
+    }
+    if (it->second.texture) {
+        SDL_DestroyTexture(it->second.texture);
+        it->second.texture = nullptr;
+    }
+    chunk_tile_atlases_.erase(it);
+}
+
+Assets::ChunkTileAtlas& Assets::rebuild_chunk_tile_atlas(SDL_Renderer* renderer, world::Chunk& chunk) {
+    ChunkTileAtlas& entry = chunk_tile_atlases_[&chunk];
+    if (entry.texture) {
+        SDL_DestroyTexture(entry.texture);
+        entry.texture = nullptr;
+    }
+    entry.bounds = chunk.world_bounds;
+
+    if (!renderer) {
+        return entry;
+    }
+
+    const int width  = std::max(1, entry.bounds.w);
+    const int height = std::max(1, entry.bounds.h);
+    if (width <= 0 || height <= 0) {
+        return entry;
+    }
+
+    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, width, height);
+    if (!texture) {
+        return entry;
+    }
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+
+    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
+    if (SDL_SetRenderTarget(renderer, texture) != 0) {
+        SDL_DestroyTexture(texture);
+        SDL_SetRenderTarget(renderer, previous_target);
+        return entry;
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+
+    const SDL_Rect chunk_rect = chunk.world_bounds;
+    for (Asset* asset : chunk.assets) {
+        if (!asset || !asset->info) {
+            continue;
+        }
+        if (!asset->info->tillable) {
+            continue;
+        }
+        const auto& tiling_opt = asset->tiling_info();
+        if (!tiling_opt || !tiling_opt->is_valid()) {
+            continue;
+        }
+        SDL_Texture* tile_texture = asset->get_final_texture();
+        if (!tile_texture) {
+            continue;
+        }
+        int tex_w = 0;
+        int tex_h = 0;
+        SDL_QueryTexture(tile_texture, nullptr, nullptr, &tex_w, &tex_h);
+        if (tex_w <= 0 || tex_h <= 0) {
+            continue;
+        }
+
+        const auto& tiling = *tiling_opt;
+        const SDL_Point tile_size = tiling.tile_size;
+        if (tile_size.x <= 0 || tile_size.y <= 0) {
+            continue;
+        }
+
+        const SDL_Rect coverage = tiling.coverage;
+        for (int y = coverage.y; y < coverage.y + coverage.h; y += tile_size.y) {
+            for (int x = coverage.x; x < coverage.x + coverage.w; x += tile_size.x) {
+                SDL_Rect tile_world{ x, y, tile_size.x, tile_size.y };
+                SDL_Rect intersection{};
+                if (!SDL_IntersectRect(&tile_world, &chunk_rect, &intersection)) {
+                    continue;
+                }
+                if (intersection.w <= 0 || intersection.h <= 0) {
+                    continue;
+                }
+
+                SDL_Rect dest{ intersection.x - chunk_rect.x,
+                               intersection.y - chunk_rect.y,
+                               intersection.w,
+                               intersection.h };
+                if (dest.w <= 0 || dest.h <= 0) {
+                    continue;
+                }
+
+                const double scale_x = static_cast<double>(tex_w) / static_cast<double>(tile_size.x);
+                const double scale_y = static_cast<double>(tex_h) / static_cast<double>(tile_size.y);
+
+                SDL_Rect src{};
+                src.x = static_cast<int>(std::floor((intersection.x - tile_world.x) * scale_x));
+                src.y = static_cast<int>(std::floor((intersection.y - tile_world.y) * scale_y));
+                src.w = static_cast<int>(std::ceil(static_cast<double>(intersection.w) * scale_x));
+                src.h = static_cast<int>(std::ceil(static_cast<double>(intersection.h) * scale_y));
+
+                src.x = std::clamp(src.x, 0, tex_w);
+                src.y = std::clamp(src.y, 0, tex_h);
+                if (src.x + src.w > tex_w) {
+                    src.w = tex_w - src.x;
+                }
+                if (src.y + src.h > tex_h) {
+                    src.h = tex_h - src.y;
+                }
+                if (src.w <= 0 || src.h <= 0) {
+                    continue;
+                }
+
+                SDL_RenderCopy(renderer, tile_texture, &src, &dest);
+            }
+        }
+    }
+
+    SDL_SetRenderTarget(renderer, previous_target);
+    entry.texture = texture;
+    return entry;
+}
+
+void Assets::render_chunk_tile_atlases(SDL_Renderer* renderer) {
+    if (!renderer) {
+        return;
+    }
+
+    const auto& active_chunks = world_grid_.active_chunks();
+    if (active_chunks.empty()) {
+        for (auto it = chunk_tile_atlases_.begin(); it != chunk_tile_atlases_.end(); ) {
+            if (it->second.texture) {
+                SDL_DestroyTexture(it->second.texture);
+            }
+            it = chunk_tile_atlases_.erase(it);
+        }
+        return;
+    }
+
+    std::unordered_set<const world::Chunk*> visited;
+    visited.reserve(active_chunks.size());
+
+    SDL_BlendMode previous_mode = SDL_BLENDMODE_BLEND;
+    SDL_GetRenderDrawBlendMode(renderer, &previous_mode);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    for (world::Chunk* chunk : active_chunks) {
+        if (!chunk) {
+            continue;
+        }
+        visited.insert(chunk);
+
+        ChunkTileAtlas& atlas = rebuild_chunk_tile_atlas(renderer, *chunk);
+        if (!atlas.texture) {
+            continue;
+        }
+
+        const SDL_Rect bounds = chunk->world_bounds;
+        if (bounds.w <= 0 || bounds.h <= 0) {
+            continue;
+        }
+
+        SDL_Point chunk_center{ bounds.x + bounds.w / 2, bounds.y + bounds.h / 2 };
+        SDL_FPoint screen_tl = camera_.map_to_screen(SDL_Point{ bounds.x, bounds.y });
+        SDL_FPoint screen_br = camera_.map_to_screen(SDL_Point{ bounds.x + bounds.w, bounds.y + bounds.h });
+        const float parallax = world_grid_.parallax_offset(chunk_center);
+
+        SDL_FRect dest{ screen_tl.x + parallax,
+                        screen_tl.y,
+                        screen_br.x - screen_tl.x,
+                        screen_br.y - screen_tl.y };
+
+        if (dest.w <= 0.0f || dest.h <= 0.0f) {
+            continue;
+        }
+
+        SDL_RenderCopyF(renderer, atlas.texture, nullptr, &dest);
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer, previous_mode);
+
+    for (auto it = chunk_tile_atlases_.begin(); it != chunk_tile_atlases_.end(); ) {
+        if (visited.find(it->first) == visited.end()) {
+            if (it->second.texture) {
+                SDL_DestroyTexture(it->second.texture);
+            }
+            it = chunk_tile_atlases_.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 SDL_Renderer* Assets::renderer() const {

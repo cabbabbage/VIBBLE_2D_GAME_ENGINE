@@ -158,6 +158,7 @@ Asset::Asset(const Asset& o)
 , spawn_method(o.spawn_method)
 , owning_room_name_(o.owning_room_name_)
 , controller_(nullptr)
+, tiling_info_(o.tiling_info_)
 , anim_(nullptr)
 , last_scaled_texture_(nullptr)
 , last_scaled_source_(nullptr)
@@ -219,6 +220,7 @@ Asset& Asset::operator=(const Asset& o) {
         owning_room_name_    = o.owning_room_name_;
         controller_.reset();
         anim_.reset();
+        tiling_info_         = o.tiling_info_;
         last_scaled_texture_      = nullptr;
         last_scaled_source_       = nullptr;
         last_scaled_w_            = 0;
@@ -497,6 +499,10 @@ void Asset::set_assets(Assets* a) {
     impassable_naighbors = nullptr;
     neighbor_lists_initialized_ = false;
     last_neighbor_origin_ = SDL_Point{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
+}
+
+void Asset::set_tiling_info(std::optional<TilingInfo> info) {
+    tiling_info_ = std::move(info);
 }
 
 void Asset::set_owning_room_name(std::string name) {

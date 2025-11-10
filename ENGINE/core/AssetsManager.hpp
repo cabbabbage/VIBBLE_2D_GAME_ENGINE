@@ -88,6 +88,7 @@ public:
     float frame_delta_seconds() const { return last_frame_dt_seconds_; }
 
     void render_overlays(SDL_Renderer* renderer);
+    void render_chunk_tile_atlases(SDL_Renderer* renderer);
     SDL_Renderer* renderer() const;
     void toggle_asset_library();
     void open_asset_library();
@@ -198,6 +199,12 @@ private:
     void load_camera_settings_from_json();
     void write_camera_settings_to_json();
     void schedule_removal(Asset* a);
+    struct ChunkTileAtlas {
+        SDL_Texture* texture = nullptr;
+        SDL_Rect bounds{0, 0, 0, 0};
+    };
+    ChunkTileAtlas& rebuild_chunk_tile_atlas(SDL_Renderer* renderer, world::Chunk& chunk);
+    void destroy_chunk_tile_atlas(const world::Chunk* chunk);
     void process_removals();
     void addAsset(const std::string& name, SDL_Point g);
     void update_filtered_active_assets();
@@ -284,6 +291,7 @@ private:
     std::vector<Asset*> pending_static_grid_registration_;
     std::vector<GridMovementCommand> movement_commands_buffer_;
     std::vector<Asset*> grid_registration_buffer_;
+    std::unordered_map<const world::Chunk*, ChunkTileAtlas> chunk_tile_atlases_;
 
     struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;
