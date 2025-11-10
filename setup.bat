@@ -28,10 +28,6 @@ set "REPO_ROOT=%CD%"
 set "VSBT_INSTALL_DIR=C:\VS2022\BuildTools"
 set "INSTALL_TIMEOUT_SECS=5400"
 
-rem Elevate if needed, keep working directory at repo root
-call :EnsureAdmin
-if %ERRORLEVEL%==1 ( popd >nul & exit /b 0 ) else if %ERRORLEVEL% GEQ 2 ( echo [ERROR] Could not elevate. & goto :fail )
-
 rem Always work from repo root
 cd /d "%REPO_ROOT%"
 
@@ -95,14 +91,6 @@ if exist "%REPO_ROOT%\vcpkg.json" (
 echo [setup.bat] Setup complete.
 popd >nul
 exit /b 0
-
-:EnsureAdmin
-powershell -NoProfile -Command ^
-  "$wd='%REPO_ROOT%'; if(-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){ Start-Process -FilePath '%SCRIPT_PATH%' -ArgumentList '__RUN__ %*' -Verb RunAs -WorkingDirectory $wd; exit 1 } else { exit 0 }"
-set "rc=%ERRORLEVEL%"
-if "%rc%"=="1" exit /b 1
-if "%rc%"=="0" exit /b 0
-exit /b 2
 
 :EnsureWinget
 where winget >nul 2>&1 && exit /b 0
@@ -180,6 +168,7 @@ exit /b 1
 :EnsureCMake
 where cmake >nul 2>&1 && (
     echo [setup.bat] CMake is installed.
+    call :CMakePostCheck
     exit /b 0
 )
 
@@ -224,9 +213,11 @@ if not "%msi_rc%"=="0" (
 )
 
 :CMakePostCheck
-rem Add to PATH in this session if needed
+rem Try to find and add CMake to PATH for this session and persist for the user
 if exist "C:\Program Files\CMake\bin\cmake.exe" (
-  set "PATH=C:\Program Files\CMake\bin;%PATH%"
+  call :AddToUserPath "C:\Program Files\CMake\bin"
+) else if exist "C:\Program Files (x86)\CMake\bin\cmake.exe" (
+  call :AddToUserPath "C:\Program Files (x86)\CMake\bin"
 )
 
 where cmake >nul 2>&1
@@ -245,6 +236,30 @@ where ninja >nul 2>&1 && ( echo [setup.bat] Ninja is installed. & exit /b 0 )
 echo [setup.bat] Installing Ninja via winget...
 winget install -e --id Ninja-build.Ninja --source winget --silent || (echo [ERROR] Ninja install failed. & exit /b 1)
 echo [setup.bat] Ninja installed.
+exit /b 0
+
+:AddToUserPath
+rem %1 = directory to add
+set "ADD_DIR=%~1"
+if "%ADD_DIR%"=="" exit /b 0
+if not exist "%ADD_DIR%\." exit /b 0
+
+set "NEED_ADD=1"
+for /f "usebackq delims=" %%P in (`powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('Path','User')"`) do set "CUR_USER_PATH=%%P"
+if defined CUR_USER_PATH (
+    set "TMP=!CUR_USER_PATH:%ADD_DIR%=!"
+    if /i "!TMP!" NEQ "!CUR_USER_PATH!" set "NEED_ADD=0"
+)
+
+if "!NEED_ADD!"=="1" (
+    echo [setup.bat] Adding "%ADD_DIR%" to user PATH...
+    powershell -NoProfile -Command ^
+      "$p=[Environment]::GetEnvironmentVariable('Path','User');" ^
+      "if([string]::IsNullOrEmpty($p)){$p='%ADD_DIR%'}" ^
+      "elseif(-not ($p.Split(';') -contains '%ADD_DIR%')){$p=$p+';%ADD_DIR%'};" ^
+      "[Environment]::SetEnvironmentVariable('Path',$p,'User')" >nul 2>&1
+)
+set "PATH=%ADD_DIR%;%PATH%"
 exit /b 0
 
 :fail
