@@ -10,6 +10,7 @@
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/log.hpp"
 #include "utils/ranged_color.hpp"
+#include "util/grid.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -419,6 +420,7 @@ void SceneRenderer::render(){
                                    SDL_Texture* draw_tex,
                                    const SDL_FRect& dst_rect) {
             AssetRenderCommand cmd;
+            cmd.asset              = asset;
             cmd.source_texture      = draw_tex ? draw_tex : final_tex;
             cmd.final_texture       = final_tex;
             cmd.dst                 = dst_rect;
@@ -439,6 +441,18 @@ void SceneRenderer::render(){
         for (Asset* a : active) {
             if (!a || !a->info) {
                 continue;
+            }
+
+            // If this asset is managed as tiled geometry by the chunk-atlas
+            // pass, skip normal per-asset rendering entirely so it doesn't
+            // draw twice or apply parallax/other effects.
+            if (a->info->tillable) {
+                const auto& tiling_opt = a->tiling_info();
+                if (tiling_opt && tiling_opt->is_valid()) {
+                    // Do not generate final textures or enqueue draw commands.
+                    last_rendered_frames_.erase(a);
+                    continue;
+                }
             }
 
             const bool is_new = a->last_render_frame_id != frame_counter_ - 1;
@@ -490,18 +504,20 @@ void SceneRenderer::render(){
             enqueue_command(a, final_tex, draw_tex, dst);
 
             if (a->info && !a->info->light_sources.empty() && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
-                bool has_front_lights     = false;
-                bool has_back_lights      = false;
-                bool has_dark_mask_lights = false;
+                bool has_front_lights         = false;
+                bool has_back_lights          = false;
+                bool has_dark_mask_lights     = false;
+                bool has_alpha_mask_only_lights = false;
                 for (const LightSource& light : a->info->light_sources) {
-                    has_front_lights     |= light.in_front;
-                    has_back_lights      |= light.behind;
-                    has_dark_mask_lights |= light.render_to_dark_mask;
-                    if (has_front_lights && has_back_lights && has_dark_mask_lights) {
+                    has_front_lights         |= light.in_front;
+                    has_back_lights          |= light.behind;
+                    has_dark_mask_lights     |= light.render_to_dark_mask;
+                    has_alpha_mask_only_lights |= light.render_front_and_back_to_asset_alpha_mask;
+                    if (has_front_lights && has_back_lights && has_dark_mask_lights && has_alpha_mask_only_lights) {
                         break;
                     }
                 }
-                if (!(has_front_lights || has_back_lights || has_dark_mask_lights)) {
+                if (!(has_front_lights || has_back_lights || has_dark_mask_lights || has_alpha_mask_only_lights)) {
                     continue;
                 }
                 LightOverlaySource source;
@@ -521,7 +537,8 @@ void SceneRenderer::render(){
                 }
                 source.asset_base_scale     = base_scale;
                 source.has_front_lights     = has_front_lights;
-                source.has_back_lights      = has_back_lights;
+                // Treat alpha-mask-only lights as a behind-pass so they get processed.
+                source.has_back_lights      = has_back_lights || has_alpha_mask_only_lights;
                 source.has_dark_mask_lights = has_dark_mask_lights;
                 light_overlay_sources_.push_back(std::move(source));
             }
@@ -564,15 +581,8 @@ void SceneRenderer::render(){
                 }
             }
             if (!cmd.source_texture) {
-                if (overlay_source) {
-                    if (overlay_passed) {
-                        if (has_front_light) {
-                            AssetLightRenderer light_renderer(renderer_, *overlay_source, darkness_overlay_vertices_, darkness_overlay_indices_);
-                            light_renderer.draw_in_front();
-                        }
-                    } else if (has_front_light) {
-                        pending_front_lights.push_back(overlay_source);
-                    }
+                if (overlay_source && has_front_light) {
+                    pending_front_lights.push_back(overlay_source);
                 }
                 continue;
             }
@@ -622,20 +632,167 @@ void SceneRenderer::render(){
             }
 
             // --------------------
-            // 2) BASE SPRITE PASS (normal rendering covers the interior of the outline)
+            // 2) BASE SPRITE PASS (grid-sliced trapezoids when large relative to grid)
             // --------------------
-            SDL_SetTextureColorMod(tex, 255, 255, 255);
-            SDL_SetTextureAlphaMod(tex, base_alpha_mod);
-            SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-            SDL_RenderCopyExF(
-                renderer_,
-                cmd.source_texture,
-                nullptr,
-                &cmd.dst,
-                0.0,
-                nullptr,
-                cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
-            );
+            bool drew_grid_sliced = false;
+            if (assets_ && cmd.asset && tex) {
+                // Only apply when not already handled by chunk tile atlases
+                const auto& tiling_opt = cmd.asset->tiling_info();
+                const bool allow_grid_sliced = (cmd.asset->info && cmd.asset->info->tillable);
+                const bool tiling_managed_by_chunk = (tiling_opt && tiling_opt->is_valid());
+                if (allow_grid_sliced && !tiling_managed_by_chunk) {
+                    // Compute grid step (world units)
+                    const int grid_step = std::max(1, 1 << std::clamp(cmd.asset->grid_resolution, 0, vibble::grid::kMaxResolution));
+
+                    // Camera parameters
+                    camera& cam = assets_->getView();
+                    const float scale = std::max(1e-6f, cam.get_scale());
+                    const float inv_scale_local = 1.0f / scale;
+
+                    // Asset base dimensions and scale
+                    int fw = cmd.asset->cached_w;
+                    int fh = cmd.asset->cached_h;
+                    if ((fw <= 0 || fh <= 0) && cmd.final_texture) {
+                        SDL_QueryTexture(cmd.final_texture, nullptr, nullptr, &fw, &fh);
+                    }
+                    float base_scale = cmd.asset->smoothed_scale();
+                    if (!std::isfinite(base_scale) || base_scale <= 0.0f) base_scale = 1.0f;
+                    const float scaled_fw = static_cast<float>(fw) * base_scale;
+                    const float scaled_fh = static_cast<float>(fh) * base_scale;
+                    const float base_sh   = scaled_fh * inv_scale_local;
+
+                    // Reference screen height (player) for realism effects
+                    float ref_sh = player_sh;
+                    if (!std::isfinite(ref_sh) || ref_sh <= 0.0f) ref_sh = 1.0f;
+
+                    // Effects (distance + vertical squash)
+                    const SDL_Point world_point{
+                        static_cast<int>(std::lround(cmd.asset->smoothed_translation_x())),
+                        static_cast<int>(std::lround(cmd.asset->smoothed_translation_y()))
+                    };
+                    camera::RenderEffects ef = cam.compute_render_effects(world_point, base_sh, ref_sh, reinterpret_cast<camera::RenderSmoothingKey>(cmd.asset));
+                    const float distance_scale = (cmd.asset->info && cmd.asset->info->apply_distance_scaling) ? ef.distance_scale : 1.0f;
+                    const float vertical_scale = (cmd.asset->info && cmd.asset->info->apply_vertical_scaling) ? ef.vertical_scale : 1.0f;
+
+                    // Determine world extents covered by this sprite so we can slice on world grid
+                    const float world_width  = cmd.dst.w * scale / std::max(1e-6f, distance_scale);
+                    const float world_height = cmd.dst.h * scale / std::max(1e-6f, (distance_scale * vertical_scale));
+
+                    if (std::isfinite(world_width) && std::isfinite(world_height) && world_width > 0.0f && world_height > 0.0f) {
+                        // Only slice when larger than a single grid cell in at least one dimension
+                        if (world_width > static_cast<float>(grid_step) || world_height > static_cast<float>(grid_step)) {
+                            // Anchor world and screen positions
+                            SDL_FPoint anchor_screen = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(world_point.x), static_cast<float>(world_point.y) });
+
+                            const double left_world   = static_cast<double>(world_point.x) - static_cast<double>(world_width) * 0.5;
+                            const double top_world    = static_cast<double>(world_point.y) - static_cast<double>(world_height);
+                            const double right_world  = left_world + static_cast<double>(world_width);
+                            const double bottom_world = static_cast<double>(world_point.y);
+
+                            auto align_down = [](double v, int step) {
+                                if (step <= 0) return v;
+                                const double s = static_cast<double>(step);
+                                return std::floor(v / s) * s;
+                            };
+                            auto align_up = [](double v, int step) {
+                                if (step <= 0) return v;
+                                const double s = static_cast<double>(step);
+                                return std::ceil(v / s) * s;
+                            };
+
+                            const double start_x = align_down(left_world, grid_step);
+                            const double end_x   = align_up(right_world, grid_step);
+                            const double start_y = align_down(top_world, grid_step);
+                            const double end_y   = align_up(bottom_world, grid_step);
+
+                            // Normalize helpers for UVs (relative to entire texture)
+                            const double inv_w = (world_width > 0.0f) ? (1.0 / static_cast<double>(world_width)) : 0.0;
+                            const double inv_h = (world_height > 0.0f) ? (1.0 / static_cast<double>(world_height)) : 0.0;
+
+                            const SDL_Color white{255,255,255,255};
+                            int indices[6] = {0, 1, 2, 0, 2, 3};
+
+                            // Ensure the texture is in a neutral mod state; use vertex alpha/color
+                            SDL_SetTextureColorMod(tex, 255, 255, 255);
+                            SDL_SetTextureAlphaMod(tex, 255);
+                            SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+
+                            for (double wy = start_y; wy < end_y; wy += grid_step) {
+                                const double cell_top    = std::max(wy, top_world);
+                                const double cell_bottom = std::min(wy + grid_step, end_y);
+                                if (cell_bottom <= cell_top) continue;
+                                for (double wx = start_x; wx < end_x; wx += grid_step) {
+                                    const double cell_left  = std::max(wx, left_world);
+                                    const double cell_right = std::min(wx + grid_step, end_x);
+                                    if (cell_right <= cell_left) continue;
+
+                                    // World corners of this patch (TL, TR, BR, BL)
+                                    SDL_FPoint w_tl{ static_cast<float>(cell_left),  static_cast<float>(cell_top) };
+                                    SDL_FPoint w_tr{ static_cast<float>(cell_right), static_cast<float>(cell_top) };
+                                    SDL_FPoint w_br{ static_cast<float>(cell_right), static_cast<float>(cell_bottom) };
+                                    SDL_FPoint w_bl{ static_cast<float>(cell_left),  static_cast<float>(cell_bottom) };
+
+                                    auto to_screen = [&](const SDL_FPoint& w)->SDL_FPoint {
+                                        // Offsets from anchor in world units
+                                        const double dx_world = static_cast<double>(w.x) - static_cast<double>(world_point.x);
+                                        const double dy_world = static_cast<double>(world_point.y) - static_cast<double>(w.y);
+                                        double sx = static_cast<double>(anchor_screen.x) + (dx_world * inv_scale_local * distance_scale);
+                                        double sy = static_cast<double>(anchor_screen.y) - (dy_world * inv_scale_local * distance_scale * vertical_scale);
+                                        // Parallax-adjusted X
+                                        sx = static_cast<double>(assets_->world_grid().parallax_adjusted_screen_x(SDL_Point{ static_cast<int>(std::lround(w.x)), static_cast<int>(std::lround(w.y)) }, static_cast<float>(sx)));
+                                        return SDL_FPoint{ static_cast<float>(sx), static_cast<float>(sy) };
+                                    };
+
+                                    SDL_FPoint s_tl = to_screen(w_tl);
+                                    SDL_FPoint s_tr = to_screen(w_tr);
+                                    SDL_FPoint s_br = to_screen(w_br);
+                                    SDL_FPoint s_bl = to_screen(w_bl);
+
+                                    // UVs normalized to 0..1 over the full sprite
+                                    double u0 = (static_cast<double>(w_tl.x) - left_world) * inv_w;
+                                    double u1 = (static_cast<double>(w_tr.x) - left_world) * inv_w;
+                                    double v0 = (static_cast<double>(w_tl.y) - top_world)  * inv_h;
+                                    double v1 = (static_cast<double>(w_br.y) - top_world)  * inv_h;
+
+                                    // Horizontal flip
+                                    if (cmd.flipped) {
+                                        u0 = 1.0 - u0;
+                                        u1 = 1.0 - u1;
+                                        std::swap(u0, u1);
+                                    }
+
+                                    const Uint8 a_mod = base_alpha_mod;
+                                    SDL_Vertex verts[4]{};
+                                    verts[0].position = s_tl; verts[0].color = SDL_Color{255,255,255,a_mod}; verts[0].tex_coord = SDL_FPoint{ static_cast<float>(u0), static_cast<float>(v0) };
+                                    verts[1].position = s_tr; verts[1].color = SDL_Color{255,255,255,a_mod}; verts[1].tex_coord = SDL_FPoint{ static_cast<float>(u1), static_cast<float>(v0) };
+                                    verts[2].position = s_br; verts[2].color = SDL_Color{255,255,255,a_mod}; verts[2].tex_coord = SDL_FPoint{ static_cast<float>(u1), static_cast<float>(v1) };
+                                    verts[3].position = s_bl; verts[3].color = SDL_Color{255,255,255,a_mod}; verts[3].tex_coord = SDL_FPoint{ static_cast<float>(u0), static_cast<float>(v1) };
+
+                                    SDL_RenderGeometry(renderer_, tex, verts, 4, indices, 6);
+                                }
+                            }
+
+                            drew_grid_sliced = true;
+                        }
+                    }
+                }
+            }
+
+            if (!drew_grid_sliced) {
+                // Fallback: draw normally as a rect
+                SDL_SetTextureColorMod(tex, 255, 255, 255);
+                SDL_SetTextureAlphaMod(tex, base_alpha_mod);
+                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+                SDL_RenderCopyExF(
+                    renderer_,
+                    cmd.source_texture,
+                    nullptr,
+                    &cmd.dst,
+                    0.0,
+                    nullptr,
+                    cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
+                );
+            }
 
             // Cleanup any scaling-temp texture state
             if (cmd.uses_scaled_texture && cmd.final_texture) {
@@ -644,15 +801,8 @@ void SceneRenderer::render(){
                 SDL_SetTextureBlendMode(cmd.final_texture, SDL_BLENDMODE_BLEND);
             }
 
-            if (overlay_source) {
-                if (overlay_passed) {
-                    if (has_front_light) {
-                        AssetLightRenderer light_renderer(renderer_, *overlay_source, darkness_overlay_vertices_, darkness_overlay_indices_);
-                        light_renderer.draw_in_front();
-                    }
-                } else if (has_front_light) {
-                    pending_front_lights.push_back(overlay_source);
-                }
+            if (overlay_source && has_front_light) {
+                pending_front_lights.push_back(overlay_source);
             }
         }
 
@@ -662,14 +812,6 @@ void SceneRenderer::render(){
 
 
         render_commands(texture_commands_, /*overlay_passed=*/false);
-        render_dynamic_darkness_overlay(map_light_opacity);
-        for (const LightOverlaySource* src : pending_front_lights) {
-            if (src && src->has_front_lights) {
-                AssetLightRenderer light_renderer(renderer_, *src, darkness_overlay_vertices_, darkness_overlay_indices_);
-                light_renderer.draw_in_front();
-            }
-        }
-        pending_front_lights.clear();
         runtime_lighting::RuntimeLightingFrame runtime_frame;
         if (runtime_lighting_sampler_ && assets_) {
             runtime_frame = runtime_lighting_sampler_->gather(light_overlay_sources_, assets_->getView());
@@ -693,9 +835,20 @@ void SceneRenderer::render(){
             light_map_->ingest_runtime_samples(runtime_frame);
             light_map_->update(renderer_, 0u);
         }
+        render_commands(remaining_commands_, /*overlay_passed=*/false);
+
+        // After all base sprites are drawn, apply the dynamic darkness overlay once
+        render_dynamic_darkness_overlay(map_light_opacity);
         render_light_map();
 
-        render_commands(remaining_commands_, /*overlay_passed=*/true);
+        // Draw all deferred front-lights above the darkness overlay
+        for (const LightOverlaySource* src : pending_front_lights) {
+            if (src && src->has_front_lights) {
+                AssetLightRenderer light_renderer(renderer_, *src, darkness_overlay_vertices_, darkness_overlay_indices_);
+                light_renderer.draw_in_front();
+            }
+        }
+        pending_front_lights.clear();
 
         for (auto it = last_rendered_frames_.begin(); it != last_rendered_frames_.end();) {
             Asset* asset = it->first;

@@ -37,6 +37,10 @@
 #include "spawn_group_config/SpawnGroupConfig.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
 #include "map_generation/room.hpp"
+#include "core/AssetsManager.hpp"
+#include "world/grid.hpp"
+#include "world/chunk.hpp"
+#include "utils/map_grid_settings.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "core/AssetsManager.hpp"
@@ -128,6 +132,8 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
             }
             changed |= copy_key("z_threshold");
             changed |= copy_key("can_invert");
+            // Support both keys; canonical UI uses "tileable"
+            changed |= copy_key("tileable");
             changed |= copy_key("tillable");
             break;
         }
@@ -1151,6 +1157,92 @@ void AssetInfoUI::sync_target_z_threshold() {
 
     if (!updated_any && target_valid && current_target) {
         (void)sync_asset(current_target);
+    }
+}
+
+void AssetInfoUI::sync_target_tiling_state() {
+    if (!info_) return;
+    Asset* current_target = target_asset_;
+    const bool target_valid = validate_target_asset();
+    if (!assets_) {
+        return;
+    }
+
+    auto compute_tiling = [&](Asset* asset) -> std::optional<Asset::TilingInfo> {
+        if (!asset || !asset->info) {
+            return std::nullopt;
+        }
+        if (!asset->info->tillable) {
+            return std::nullopt;
+        }
+        const MapGridSettings& settings = assets_->map_grid_settings();
+        int step = settings.spacing();
+        if (step <= 0) {
+            const int raw_w = std::max(1, asset->info->original_canvas_width);
+            const int raw_h = std::max(1, asset->info->original_canvas_height);
+            double scale = 1.0;
+            if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+                scale = static_cast<double>(asset->info->scale_factor);
+            }
+            // Use square tiles based on scaled canvas if map spacing unset
+            step = std::max(1, static_cast<int>(std::lround(static_cast<double>(std::max(raw_w, raw_h)) * scale)));
+        }
+
+        world::Grid& grid = assets_->world_grid();
+        const SDL_Point world_pos{ asset->pos.x, asset->pos.y };
+        world::Chunk* chunk = grid.ensure_chunk_from_world(world_pos);
+        if (!chunk) {
+            return std::nullopt;
+        }
+
+        Asset::TilingInfo tiling{};
+        tiling.enabled = true;
+        tiling.tile_size = SDL_Point{ step, step };
+
+        // Align anchor to tile grid within the chunk
+        auto align_down = [](int v, int s) {
+            if (s <= 0) return v;
+            const double q = std::floor(static_cast<double>(v) / static_cast<double>(s));
+            return static_cast<int>(q * static_cast<double>(s));
+        };
+        const int anchor_x = align_down(world_pos.x, step) + step / 2;
+        const int anchor_y = align_down(world_pos.y, step) + step / 2;
+        tiling.anchor = SDL_Point{ anchor_x, anchor_y };
+
+        // Cover the whole chunk; builder will clip per-chunk and apply parallax grid
+        tiling.coverage   = chunk->world_bounds;
+        tiling.grid_origin = SDL_Point{ tiling.coverage.x, tiling.coverage.y };
+
+        return tiling;
+    };
+
+    auto apply_for_asset = [&](Asset* asset) {
+        if (!asset) return false;
+        if (asset->info.get() != info_.get()) return false;
+        if (info_->tillable) {
+            auto t = compute_tiling(asset);
+            if (t && t->is_valid()) {
+                asset->set_tiling_info(*t);
+                return true;
+            }
+            // Fallback to disabling if invalid
+            asset->set_tiling_info(std::nullopt);
+            return true;
+        } else {
+            asset->set_tiling_info(std::nullopt);
+            return true;
+        }
+    };
+
+    bool updated_any = false;
+    for (Asset* asset : assets_->all) {
+        updated_any |= apply_for_asset(asset);
+    }
+    for (const auto& owned : assets_->owned_assets) {
+        updated_any |= apply_for_asset(owned.get());
+    }
+    if (!updated_any && target_valid && current_target) {
+        (void)apply_for_asset(current_target);
     }
 }
 

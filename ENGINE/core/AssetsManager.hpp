@@ -200,8 +200,14 @@ private:
     void write_camera_settings_to_json();
     void schedule_removal(Asset* a);
     struct ChunkTileAtlas {
-        SDL_Texture* texture = nullptr;
-        SDL_Rect bounds{0, 0, 0, 0};
+        struct TilePatch {
+            SDL_Rect world_rect{0, 0, 0, 0};
+            SDL_Rect atlas_rect{0, 0, 0, 0};
+        };
+
+        SDL_Texture*            texture = nullptr;
+        SDL_Rect                bounds{0, 0, 0, 0};
+        std::vector<TilePatch>  tiles;
     };
     ChunkTileAtlas& rebuild_chunk_tile_atlas(SDL_Renderer* renderer, world::Chunk& chunk);
     void destroy_chunk_tile_atlas(const world::Chunk* chunk);

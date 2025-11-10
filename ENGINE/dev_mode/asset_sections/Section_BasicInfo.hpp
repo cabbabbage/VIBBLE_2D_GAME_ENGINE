@@ -88,7 +88,7 @@ inline void Section_BasicInfo::build() {
     c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
     c_apply_distance_scaling_ = std::make_unique<DMCheckbox>("Apply distance scaling", info_->apply_distance_scaling);
     c_apply_vertical_scaling_ = std::make_unique<DMCheckbox>("Apply vertical scaling", info_->apply_vertical_scaling);
-    c_tillable_ = std::make_unique<DMCheckbox>("Tillable (grid tiles)", info_->tillable);
+    c_tillable_ = std::make_unique<DMCheckbox>("Tileable (grid tiles)", info_->tillable);
 
     auto w_type = std::make_unique<DropdownWidget>(dd_type_.get());
     rows.push_back({ w_type.get() });
@@ -147,6 +147,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     bool changed = false;
     bool scale_changed = false;
     bool z_changed = false;
+    bool tile_changed = false;
     if (dd_type_ && !type_options_.empty()) {
         int idx = std::clamp(dd_type_->selected(), 0, static_cast<int>(type_options_.size()) - 1);
         std::string selected = asset_types::canonicalize(type_options_[idx]);
@@ -191,6 +192,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     if (c_tillable_ && info_->tillable != c_tillable_->value()) {
         info_->set_tillable(c_tillable_->value());
         changed = true;
+        tile_changed = true;
     }
 
     if (changed) {
@@ -198,6 +200,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         if (ui_) {
             if (scale_changed) ui_->refresh_target_asset_scale();
             if (z_changed) ui_->sync_target_z_threshold();
+            if (tile_changed) ui_->sync_target_tiling_state();
         }
     }
     return used || changed;

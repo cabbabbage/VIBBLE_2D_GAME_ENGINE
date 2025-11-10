@@ -567,11 +567,22 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
         try {
                 if (data.contains("tillable")) {
                         tillable = data.at("tillable").get<bool>();
-                } else {
+                } else if (data.contains("tileable")) { // backward/alternate key support
+                        tillable = data.at("tileable").get<bool>();
+                } else if (info_json_.contains("tillable")) {
                         tillable = info_json_.value("tillable", false);
+                } else if (info_json_.contains("tileable")) {
+                        tillable = info_json_.value("tileable", false);
+                } else {
+                        tillable = false;
                 }
         } catch (...) {
-                tillable = info_json_.value("tillable", false);
+                // Fallback on either key if parsing fails
+                if (info_json_.contains("tillable")) {
+                        tillable = info_json_.value("tillable", false);
+                } else {
+                        tillable = info_json_.value("tileable", false);
+                }
         }
         is_shaded = data.value("has_shading", false);
         min_same_type_distance = data.value("min_same_type_distance", 0);
@@ -772,7 +783,9 @@ void AssetInfo::set_passable(bool v) {
 
 void AssetInfo::set_tillable(bool v) {
         tillable = v;
+        // Write both keys for compatibility; UI shows "Tileable"
         info_json_["tillable"] = v;
+        info_json_["tileable"] = v;
 }
 
 void AssetInfo::set_shadow_mask_settings(const ShadowMaskSettings& settings) {

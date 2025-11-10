@@ -1618,6 +1618,7 @@ void Assets::destroy_chunk_tile_atlas(const world::Chunk* chunk) {
         SDL_DestroyTexture(it->second.texture);
         it->second.texture = nullptr;
     }
+    it->second.tiles.clear();
     chunk_tile_atlases_.erase(it);
 }
 
@@ -1628,6 +1629,7 @@ Assets::ChunkTileAtlas& Assets::rebuild_chunk_tile_atlas(SDL_Renderer* renderer,
         entry.texture = nullptr;
     }
     entry.bounds = chunk.world_bounds;
+    entry.tiles.clear();
 
     if (!renderer) {
         return entry;
@@ -1669,6 +1671,13 @@ Assets::ChunkTileAtlas& Assets::rebuild_chunk_tile_atlas(SDL_Renderer* renderer,
             continue;
         }
         SDL_Texture* tile_texture = asset->get_final_texture();
+        // When building chunk tile atlases we don't require the post-processed
+        // final texture. If it's not available yet (e.g., early in the frame),
+        // fall back to the asset's current frame. Tiled rendering ignores
+        // shading/motion blur per design.
+        if (!tile_texture) {
+            tile_texture = asset->get_current_frame();
+        }
         if (!tile_texture) {
             continue;
         }
@@ -1727,6 +1736,11 @@ Assets::ChunkTileAtlas& Assets::rebuild_chunk_tile_atlas(SDL_Renderer* renderer,
                 }
 
                 SDL_RenderCopy(renderer, tile_texture, &src, &dest);
+
+                ChunkTileAtlas::TilePatch patch{};
+                patch.world_rect = intersection;
+                patch.atlas_rect = dest;
+                entry.tiles.push_back(patch);
             }
         }
     }
@@ -1775,21 +1789,63 @@ void Assets::render_chunk_tile_atlases(SDL_Renderer* renderer) {
             continue;
         }
 
-        SDL_Point chunk_center{ bounds.x + bounds.w / 2, bounds.y + bounds.h / 2 };
-        SDL_FPoint screen_tl = camera_.map_to_screen(SDL_Point{ bounds.x, bounds.y });
-        SDL_FPoint screen_br = camera_.map_to_screen(SDL_Point{ bounds.x + bounds.w, bounds.y + bounds.h });
-        const float parallax = world_grid_.parallax_offset(chunk_center);
-
-        SDL_FRect dest{ screen_tl.x + parallax,
-                        screen_tl.y,
-                        screen_br.x - screen_tl.x,
-                        screen_br.y - screen_tl.y };
-
-        if (dest.w <= 0.0f || dest.h <= 0.0f) {
+        if (atlas.tiles.empty()) {
             continue;
         }
 
-        SDL_RenderCopyF(renderer, atlas.texture, nullptr, &dest);
+        const float inv_tex_w = (atlas.bounds.w > 0)
+            ? (1.0f / static_cast<float>(atlas.bounds.w))
+            : 0.0f;
+        const float inv_tex_h = (atlas.bounds.h > 0)
+            ? (1.0f / static_cast<float>(atlas.bounds.h))
+            : 0.0f;
+        if (!(inv_tex_w > 0.0f) || !(inv_tex_h > 0.0f)) {
+            continue;
+        }
+
+        const SDL_Color white{255, 255, 255, 255};
+        int indices[6] = {0, 1, 2, 0, 2, 3};
+
+        for (const ChunkTileAtlas::TilePatch& patch : atlas.tiles) {
+            if (patch.world_rect.w <= 0 || patch.world_rect.h <= 0 ||
+                patch.atlas_rect.w <= 0 || patch.atlas_rect.h <= 0) {
+                continue;
+            }
+
+            const SDL_Point world_tl{ patch.world_rect.x, patch.world_rect.y };
+            const SDL_Point world_tr{ patch.world_rect.x + patch.world_rect.w, patch.world_rect.y };
+            const SDL_Point world_br{ patch.world_rect.x + patch.world_rect.w, patch.world_rect.y + patch.world_rect.h };
+            const SDL_Point world_bl{ patch.world_rect.x, patch.world_rect.y + patch.world_rect.h };
+
+            SDL_FPoint screen_tl = camera_.map_to_screen(world_tl);
+            SDL_FPoint screen_tr = camera_.map_to_screen(world_tr);
+            SDL_FPoint screen_br = camera_.map_to_screen(world_br);
+            SDL_FPoint screen_bl = camera_.map_to_screen(world_bl);
+
+            screen_tl.x = world_grid_.parallax_adjusted_screen_x(world_tl, screen_tl.x);
+            screen_tr.x = world_grid_.parallax_adjusted_screen_x(world_tr, screen_tr.x);
+            screen_br.x = world_grid_.parallax_adjusted_screen_x(world_br, screen_br.x);
+            screen_bl.x = world_grid_.parallax_adjusted_screen_x(world_bl, screen_bl.x);
+
+            SDL_Vertex vertices[4]{};
+            vertices[0].position = SDL_FPoint{ screen_tl.x, screen_tl.y };
+            vertices[1].position = SDL_FPoint{ screen_tr.x, screen_tr.y };
+            vertices[2].position = SDL_FPoint{ screen_br.x, screen_br.y };
+            vertices[3].position = SDL_FPoint{ screen_bl.x, screen_bl.y };
+            vertices[0].color = vertices[1].color = vertices[2].color = vertices[3].color = white;
+
+            const float tx0 = static_cast<float>(patch.atlas_rect.x) * inv_tex_w;
+            const float ty0 = static_cast<float>(patch.atlas_rect.y) * inv_tex_h;
+            const float tx1 = static_cast<float>(patch.atlas_rect.x + patch.atlas_rect.w) * inv_tex_w;
+            const float ty1 = static_cast<float>(patch.atlas_rect.y + patch.atlas_rect.h) * inv_tex_h;
+
+            vertices[0].tex_coord = SDL_FPoint{ tx0, ty0 };
+            vertices[1].tex_coord = SDL_FPoint{ tx1, ty0 };
+            vertices[2].tex_coord = SDL_FPoint{ tx1, ty1 };
+            vertices[3].tex_coord = SDL_FPoint{ tx0, ty1 };
+
+            SDL_RenderGeometry(renderer, atlas.texture, vertices, 4, indices, 6);
+        }
     }
 
     SDL_SetRenderDrawBlendMode(renderer, previous_mode);
