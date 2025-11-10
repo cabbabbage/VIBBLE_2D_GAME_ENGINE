@@ -84,7 +84,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}),
   reactive_shadow_settings_(render_pipeline::shading::sanitize_reactive_shadow_settings({})),
-   render_pipeline_(renderer,
+  render_pipeline_(renderer,
                     SceneLighting{ assets->getView(),
                                    main_light_source_,
                                    assets->player,
@@ -117,6 +117,7 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
     runtime_lighting_sampler_ = std::make_unique<runtime_lighting::RuntimeLightingSampler>(assets_);
     main_light_source_.update(std::nullopt, std::nullopt);
+    tile_renderer_ = std::make_unique<GridTileRenderer>(assets_);
 }
 
 SceneRenderer::~SceneRenderer() {
@@ -407,8 +408,9 @@ void SceneRenderer::render(){
         }
         if (player_sh<=0.f) player_sh=1.f;
 
-        if (assets_) {
-            assets_->render_chunk_tile_atlases(renderer_);
+        // Draw grid tiles first
+        if (tile_renderer_) {
+            tile_renderer_->render(renderer_, assets_->getView(), assets_->world_grid());
         }
 
         const auto& active = assets_->getActive();
@@ -446,17 +448,8 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            // If this asset is managed as tiled geometry by the chunk-atlas
-            // pass, skip normal per-asset rendering entirely so it doesn't
-            // draw twice or apply parallax/other effects.
-            if (a->info->tillable) {
-                const auto& tiling_opt = a->tiling_info();
-                if (tiling_opt && tiling_opt->is_valid()) {
-                    // Do not generate final textures or enqueue draw commands.
-                    last_rendered_frames_.erase(a);
-                    continue;
-                }
-            }
+            // Note: Tileable assets now render as normal assets. Grid tiles are
+            // drawn first via GridTileRenderer using loader-composed per-cell textures.
 
             const bool is_new = a->last_render_frame_id != frame_counter_ - 1;
             if (is_new) {
@@ -639,7 +632,7 @@ void SceneRenderer::render(){
             // --------------------
             bool drew_grid_sliced = false;
             if (assets_ && cmd.asset && tex) {
-                // Only apply when not already handled by chunk tile atlases
+                // Only apply when not already handled by loader-composed grid tiles
                 const auto& tiling_opt = cmd.asset->tiling_info();
                 const bool allow_grid_sliced = (cmd.asset->info && cmd.asset->info->tillable);
                 const bool tiling_managed_by_chunk = (tiling_opt && tiling_opt->is_valid());

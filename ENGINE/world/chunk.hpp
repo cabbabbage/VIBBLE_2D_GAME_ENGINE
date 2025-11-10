@@ -18,6 +18,7 @@ namespace world { class Grid; }
 namespace world { class Grid; }
 namespace runtime_lighting { struct RuntimeLightingFrame; }
 namespace runtime_lighting { struct RuntimeLightingFrame; }
+struct GridTile;
 namespace world {
 
 struct Chunk {
@@ -28,6 +29,11 @@ struct Chunk {
 
     std::vector<Asset*> assets;
     std::uint64_t       occlusion_revision = 0;
+
+    // Per-grid tiles composed at load time. Each tile contains a texture
+    // representing the cropped region of all tiled assets intersecting
+    // that grid cell. Owned textures are destroyed with the chunk.
+    std::vector<GridTile> tiles;
 
     struct ChunkShadowParameters {
 
@@ -163,6 +169,7 @@ struct Chunk {
     ~Chunk();
 
     void releaseLightingArtifacts();
+    void releaseTileTextures();
 
     Chunk(const Chunk&) = delete;
     Chunk& operator=(const Chunk&) = delete;

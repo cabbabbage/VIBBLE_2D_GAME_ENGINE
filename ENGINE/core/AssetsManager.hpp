@@ -89,7 +89,6 @@ public:
     float frame_delta_seconds() const { return last_frame_dt_seconds_; }
 
     void render_overlays(SDL_Renderer* renderer);
-    void render_chunk_tile_atlases(SDL_Renderer* renderer);
     SDL_Renderer* renderer() const;
     void toggle_asset_library();
     void open_asset_library();
@@ -205,18 +204,7 @@ private:
     void load_camera_settings_from_json();
     void write_camera_settings_to_json();
     void schedule_removal(Asset* a);
-    struct ChunkTileAtlas {
-        struct TilePatch {
-            SDL_Rect world_rect{0, 0, 0, 0};
-            SDL_Rect atlas_rect{0, 0, 0, 0};
-        };
-
-        SDL_Texture*            texture = nullptr;
-        SDL_Rect                bounds{0, 0, 0, 0};
-        std::vector<TilePatch>  tiles;
-    };
-    ChunkTileAtlas& rebuild_chunk_tile_atlas(SDL_Renderer* renderer, world::Chunk& chunk);
-    void destroy_chunk_tile_atlas(const world::Chunk* chunk);
+    // Legacy chunk tiling removed; tiles are built at load and rendered separately.
     void process_removals();
     void addAsset(const std::string& name, SDL_Point g);
     void update_filtered_active_assets();
@@ -303,26 +291,7 @@ private:
     std::vector<Asset*> pending_static_grid_registration_;
     std::vector<GridMovementCommand> movement_commands_buffer_;
     std::vector<Asset*> grid_registration_buffer_;
-    std::unordered_map<const world::Chunk*, ChunkTileAtlas> chunk_tile_atlases_;
-
-    // Cached full-coverage tiled textures per asset. We render each tillable
-    // asset once into a texture the size of its tiling coverage, then crop
-    // into chunk atlases. This avoids stamping many small tiles per chunk.
-    struct TiledCoverageEntry {
-        SDL_Texture* texture = nullptr;      // coverage-sized texture
-        SDL_Rect     bounds{0,0,0,0};        // world-space coverage rect
-        SDL_Point    tile_size{0,0};         // world tile size used
-        std::uint64_t asset_revision = 0;    // asset texture revision observed
-        SDL_Texture* source_texture = nullptr; // last tile source texture used
-    };
-    std::unordered_map<const Asset*, TiledCoverageEntry> tiled_coverage_cache_;
-
-    // Acquire a coverage-sized tiled texture for the asset, rebuilding the
-    // cache if the asset/frame/coverage changed. Returns nullptr on failure.
-    SDL_Texture* get_or_build_tiled_coverage_texture(SDL_Renderer* renderer,
-                                                     Asset* asset,
-                                                     const Asset::TilingInfo& tiling,
-                                                     SDL_Texture* tile_source);
+    // Legacy tiling caches removed.
 
     struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;

@@ -1,0 +1,1 @@
+C:\VS2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe
