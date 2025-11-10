@@ -80,6 +80,7 @@ void write_manifest_file(const std::filesystem::path& path,
 
 }
 
+} // namespace
 
 std::string manifest_path() {
     return (project_root() / "manifest.json").string();
@@ -147,6 +148,6 @@ void save_manifest(const ManifestData& data) {
     write_manifest_file(path, data.raw);
 }
 
-}
+} // namespace manifest
 
 
