@@ -8,8 +8,31 @@
 #include "asset/asset_info.hpp"
 
 namespace {
-constexpr float kTwoPi = 6.28318530718f;
+constexpr float kTwoPi       = 6.28318530718f;
 constexpr int   kRadialSteps = 12;
+
+SDL_Rect clamp_rect_to_bounds(const SDL_Rect& rect, int width, int height) {
+    SDL_Rect clamped = rect;
+    const int min_x  = std::max(rect.x, 0);
+    const int min_y  = std::max(rect.y, 0);
+    const int max_x  = std::min(rect.x + rect.w, width);
+    const int max_y  = std::min(rect.y + rect.h, height);
+    clamped.x        = min_x;
+    clamped.y        = min_y;
+    clamped.w        = std::max(0, max_x - min_x);
+    clamped.h        = std::max(0, max_y - min_y);
+    return clamped;
+}
+
+SDL_BlendMode mask_alpha_multiply_blend() {
+    static SDL_BlendMode cached = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO,
+                                                             SDL_BLENDFACTOR_SRC_ALPHA,
+                                                             SDL_BLENDOPERATION_ADD,
+                                                             SDL_BLENDFACTOR_ZERO,
+                                                             SDL_BLENDFACTOR_SRC_ALPHA,
+                                                             SDL_BLENDOPERATION_ADD);
+    return cached;
+}
 }
 
 AssetLightRenderer::AssetLightRenderer(SDL_Renderer* renderer,
@@ -58,6 +81,13 @@ AssetLightRenderer::AssetLightRenderer(SDL_Renderer* renderer,
     center_base_y_ = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
 
     valid_ = true;
+}
+
+AssetLightRenderer::~AssetLightRenderer() {
+    if (mask_composite_texture_) {
+        SDL_DestroyTexture(mask_composite_texture_);
+        mask_composite_texture_ = nullptr;
+    }
 }
 
 bool AssetLightRenderer::prepare_light(const LightSource& light, ComputedLight& out) const {
@@ -147,17 +177,10 @@ void AssetLightRenderer::draw_pass(Pass pass) {
     }
 
     SDL_Texture* original_target = SDL_GetRenderTarget(renderer_);
-    SDL_Texture* current_target  = original_target;
 
     for (const LightSource& light : *lights_) {
-        if (pass == Pass::kBehind) {
-            if (!light.behind) {
-                continue;
-            }
-        } else {
-            if (!light.in_front) {
-                continue;
-            }
+        if ((pass == Pass::kBehind && !light.behind) || (pass == Pass::kFront && !light.in_front)) {
+            continue;
         }
 
         ComputedLight computed{};
@@ -165,51 +188,40 @@ void AssetLightRenderer::draw_pass(Pass pass) {
             continue;
         }
 
-        SDL_Texture* desired_target = resolve_target_for_light(light, original_target);
-        const bool   using_mask     = (desired_target != original_target && desired_target != nullptr);
-        if (desired_target != current_target) {
-            if (!desired_target || SDL_SetRenderTarget(renderer_, desired_target) != 0) {
-                SDL_SetRenderTarget(renderer_, original_target);
-                current_target = original_target;
-            } else {
-                current_target = desired_target;
-            }
-        }
-
         SDL_Color base_color = computed.source ? computed.source->color : SDL_Color{255, 255, 255, 255};
 
-        if (computed.textured && computed.source && computed.source->texture) {
-            SDL_Rect dst = computed.texture_dst;
-            if (using_mask && mask_width_ > 0 && mask_height_ > 0) {
-                dst.x = static_cast<int>(std::lround(computed.texture_ratio_x * static_cast<float>(mask_width_)));
-                dst.y = static_cast<int>(std::lround(computed.texture_ratio_y * static_cast<float>(mask_height_)));
-                dst.w = std::max(1, static_cast<int>(std::lround(computed.texture_ratio_w * static_cast<float>(mask_width_))));
-                dst.h = std::max(1, static_cast<int>(std::lround(computed.texture_ratio_h * static_cast<float>(mask_height_))));
+        bool handled_with_mask = false;
+        if (light.render_front_and_back_to_asset_alpha_mask) {
+            handled_with_mask = render_light_with_asset_mask(light, computed, base_color);
+        }
+
+        if (handled_with_mask) {
+            if (original_target != SDL_GetRenderTarget(renderer_)) {
+                SDL_SetRenderTarget(renderer_, original_target);
             }
-            render_textured_light(computed, dst);
             continue;
         }
 
-        float    center_x = computed.center_x;
-        float    center_y = computed.center_y;
-        float    radius_x = computed.radius_x;
-        float    radius_y = computed.radius_y;
-        SDL_Rect bounds   = computed.bounds;
-        if (using_mask && mask_width_ > 0 && mask_height_ > 0) {
-            center_x = computed.center_ratio_x * static_cast<float>(mask_width_);
-            center_y = computed.center_ratio_y * static_cast<float>(mask_height_);
-            radius_x = computed.radius_ratio_x * static_cast<float>(mask_width_);
-            radius_y = computed.radius_ratio_y * static_cast<float>(mask_height_);
-            bounds.w = std::max(1, static_cast<int>(std::lround(radius_x * 2.0f)));
-            bounds.h = std::max(1, static_cast<int>(std::lround(radius_y * 2.0f)));
-            bounds.x = static_cast<int>(std::lround(center_x - static_cast<float>(bounds.w) * 0.5f));
-            bounds.y = static_cast<int>(std::lround(center_y - static_cast<float>(bounds.h) * 0.5f));
+        if (original_target != SDL_GetRenderTarget(renderer_)) {
+            SDL_SetRenderTarget(renderer_, original_target);
         }
 
-        render_radial_light(computed, base_color, 1.0f, center_x, center_y, radius_x, radius_y, bounds);
+        if (computed.textured && computed.source && computed.source->texture) {
+            render_textured_light(computed, computed.texture_dst);
+            continue;
+        }
+
+        render_radial_light(computed,
+                            base_color,
+                            1.0f,
+                            computed.center_x,
+                            computed.center_y,
+                            computed.radius_x,
+                            computed.radius_y,
+                            computed.bounds);
     }
 
-    if (current_target != original_target) {
+    if (original_target != SDL_GetRenderTarget(renderer_)) {
         SDL_SetRenderTarget(renderer_, original_target);
     }
 }
@@ -314,46 +326,160 @@ void AssetLightRenderer::render_radial_light(const ComputedLight& info,
     }
 }
 
-SDL_Texture* AssetLightRenderer::resolve_target_for_light(const LightSource& light, SDL_Texture* fallback_target) {
-    if (!light.render_front_and_back_to_asset_alpha_mask) {
-        return fallback_target;
+bool AssetLightRenderer::render_light_with_asset_mask(const LightSource& light,
+                                                      const ComputedLight& computed,
+                                                      const SDL_Color& base_color) {
+    (void)light;
+    if (!renderer_ || !asset_) {
+        return false;
     }
-    SDL_Texture* mask = acquire_asset_mask_texture();
-    return mask ? mask : fallback_target;
+
+    SDL_Texture* mask = asset_->get_current_mask_texture();
+    if (!mask) {
+        return false;
+    }
+
+    Uint32 mask_format = 0;
+    int    mask_w      = 0;
+    int    mask_h      = 0;
+    if (SDL_QueryTexture(mask, &mask_format, nullptr, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
+        return false;
+    }
+
+    SDL_Texture* composite = ensure_mask_composite_texture(mask_w, mask_h, mask_format);
+    if (!composite) {
+        return false;
+    }
+
+    SDL_Texture* saved_target = SDL_GetRenderTarget(renderer_);
+    if (SDL_SetRenderTarget(renderer_, composite) != 0) {
+        SDL_SetRenderTarget(renderer_, saved_target);
+        return false;
+    }
+
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
+    SDL_RenderClear(renderer_);
+
+    SDL_Rect mask_space_rect{0, 0, mask_w, mask_h};
+    SDL_Rect light_rect{0, 0, 0, 0};
+
+    if (computed.textured && computed.source && computed.source->texture) {
+        SDL_Rect dst = computed.texture_dst;
+        dst.x = static_cast<int>(std::lround(computed.texture_ratio_x * static_cast<float>(mask_space_rect.w)));
+        dst.y = static_cast<int>(std::lround(computed.texture_ratio_y * static_cast<float>(mask_space_rect.h)));
+        dst.w = std::max(1, static_cast<int>(std::lround(computed.texture_ratio_w * static_cast<float>(mask_space_rect.w))));
+        dst.h = std::max(1, static_cast<int>(std::lround(computed.texture_ratio_h * static_cast<float>(mask_space_rect.h))));
+        render_textured_light(computed, dst);
+        light_rect = dst;
+    } else {
+        const float center_x = computed.center_ratio_x * static_cast<float>(mask_space_rect.w);
+        const float center_y = computed.center_ratio_y * static_cast<float>(mask_space_rect.h);
+        const float radius_x = computed.radius_ratio_x * static_cast<float>(mask_space_rect.w);
+        const float radius_y = computed.radius_ratio_y * static_cast<float>(mask_space_rect.h);
+
+        SDL_Rect bounds{};
+        bounds.w = std::max(1, static_cast<int>(std::lround(radius_x * 2.0f)));
+        bounds.h = std::max(1, static_cast<int>(std::lround(radius_y * 2.0f)));
+        bounds.x = static_cast<int>(std::lround(center_x - static_cast<float>(bounds.w) * 0.5f));
+        bounds.y = static_cast<int>(std::lround(center_y - static_cast<float>(bounds.h) * 0.5f));
+
+        render_radial_light(computed,
+                            base_color,
+                            1.0f,
+                            center_x,
+                            center_y,
+                            radius_x,
+                            radius_y,
+                            bounds);
+        light_rect = bounds;
+    }
+
+    SDL_Rect clipped_src = clamp_rect_to_bounds(light_rect, mask_space_rect.w, mask_space_rect.h);
+
+    if (clipped_src.w <= 0 || clipped_src.h <= 0) {
+        SDL_SetRenderTarget(renderer_, saved_target);
+        return true;
+    }
+
+    SDL_BlendMode prev_mask_blend = SDL_BLENDMODE_BLEND;
+    SDL_GetTextureBlendMode(mask, &prev_mask_blend);
+    Uint8 prev_r = 255;
+    Uint8 prev_g = 255;
+    Uint8 prev_b = 255;
+    Uint8 prev_a = 255;
+    SDL_GetTextureColorMod(mask, &prev_r, &prev_g, &prev_b);
+    SDL_GetTextureAlphaMod(mask, &prev_a);
+
+    SDL_SetTextureColorMod(mask, 255, 255, 255);
+    SDL_SetTextureAlphaMod(mask, 255);
+    SDL_SetTextureBlendMode(mask, mask_alpha_multiply_blend());
+    SDL_RenderCopy(renderer_, mask, &clipped_src, &clipped_src);
+    SDL_SetTextureBlendMode(mask, prev_mask_blend);
+    SDL_SetTextureColorMod(mask, prev_r, prev_g, prev_b);
+    SDL_SetTextureAlphaMod(mask, prev_a);
+
+    SDL_SetRenderTarget(renderer_, saved_target);
+
+    SDL_Rect dst_rect = scale_mask_rect_to_asset(clipped_src, mask_space_rect.w, mask_space_rect.h);
+    if (dst_rect.w <= 0 || dst_rect.h <= 0) {
+        return true;
+    }
+
+    SDL_RenderCopy(renderer_, composite, &clipped_src, &dst_rect);
+    return true;
 }
 
-SDL_Texture* AssetLightRenderer::acquire_asset_mask_texture() {
-    if (mask_target_resolved_) {
-        return cached_mask_target_;
-    }
-    mask_target_resolved_ = true;
-    mask_width_           = 0;
-    mask_height_          = 0;
-    cached_mask_target_   = nullptr;
-
-    if (!asset_) {
+SDL_Texture* AssetLightRenderer::ensure_mask_composite_texture(int width, int height, Uint32 format_hint) {
+    if (width <= 0 || height <= 0 || !renderer_) {
         return nullptr;
     }
 
-    SDL_Texture* texture = asset_->get_current_mask_texture();
-    if (!texture) {
-        return nullptr;
+    if (mask_composite_texture_) {
+        if (mask_composite_w_ != width || mask_composite_h_ != height ||
+            (format_hint != 0 && mask_composite_format_ != format_hint)) {
+            SDL_DestroyTexture(mask_composite_texture_);
+            mask_composite_texture_ = nullptr;
+            mask_composite_w_       = 0;
+            mask_composite_h_       = 0;
+            mask_composite_format_  = 0;
+        }
     }
 
-    int access = 0;
-    int tex_w  = 0;
-    int tex_h  = 0;
-    if (SDL_QueryTexture(texture, nullptr, &access, &tex_w, &tex_h) != 0) {
-        return nullptr;
-    }
-    if (access != SDL_TEXTUREACCESS_TARGET) {
-        return nullptr;
+    if (!mask_composite_texture_) {
+        Uint32 format = format_hint ? format_hint : SDL_PIXELFORMAT_RGBA8888;
+        mask_composite_texture_ = SDL_CreateTexture(renderer_, format, SDL_TEXTUREACCESS_TARGET, width, height);
+        if (!mask_composite_texture_ && format != SDL_PIXELFORMAT_RGBA8888) {
+            format = SDL_PIXELFORMAT_RGBA8888;
+            mask_composite_texture_ =
+                SDL_CreateTexture(renderer_, format, SDL_TEXTUREACCESS_TARGET, width, height);
+        }
+        if (!mask_composite_texture_) {
+            return nullptr;
+        }
+        SDL_SetTextureBlendMode(mask_composite_texture_, SDL_BLENDMODE_BLEND);
+        mask_composite_w_      = width;
+        mask_composite_h_      = height;
+        mask_composite_format_ = format;
     }
 
-    cached_mask_target_ = texture;
-    mask_width_         = tex_w;
-    mask_height_        = tex_h;
-    return cached_mask_target_;
+    return mask_composite_texture_;
+}
+
+SDL_Rect AssetLightRenderer::scale_mask_rect_to_asset(const SDL_Rect& rect, int mask_width, int mask_height) const {
+    SDL_Rect result{0, 0, 0, 0};
+    if (mask_width <= 0 || mask_height <= 0) {
+        return result;
+    }
+
+    SDL_Rect asset_rect = source_.asset_rect;
+    const float scale_x = static_cast<float>(asset_rect.w) / static_cast<float>(mask_width);
+    const float scale_y = static_cast<float>(asset_rect.h) / static_cast<float>(mask_height);
+
+    result.x = asset_rect.x + static_cast<int>(std::lround(static_cast<float>(rect.x) * scale_x));
+    result.y = asset_rect.y + static_cast<int>(std::lround(static_cast<float>(rect.y) * scale_y));
+    result.w = std::max(0, static_cast<int>(std::lround(static_cast<float>(rect.w) * scale_x)));
+    result.h = std::max(0, static_cast<int>(std::lround(static_cast<float>(rect.h) * scale_y)));
+    return result;
 }
 
 AssetLightRenderer::DarkMaskResult AssetLightRenderer::accumulate_dark_mask() {
