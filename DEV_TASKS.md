@@ -34,3 +34,24 @@ assignee: Cal
 assigner: Cal
 status: pending
 -->
+
+- Tillable asset toggle: extend ENGINE/asset/asset_info.(hpp|cpp) to add a persisted `tillable` flag with setters; expose checkbox in ENGINE/dev_mode/asset_sections/Section_BasicInfo.hpp; update asset manifest copy logic in ENGINE/dev_mode/asset_info_ui.cpp so toggling persists across reloads; validate by toggling an asset and reloading manifest.
+<!--
+assignee: Any
+assigner: User
+status: pending
+-->
+
+- Chunk tile atlas: augment ENGINE/world/chunk.(hpp|cpp) and ENGINE/core/AssetsManager.(hpp|cpp) to build per-chunk tile textures for assets flagged `tillable`; split textures along chunk resolution, ensure memory lifetime managed with renderer lifecycle hooks, and rebuild tiles on asset reload/unload.
+<!--
+assignee: Any
+assigner: User
+status: pending
+-->
+
+- Tillable render stage: update ENGINE/render/scene_renderer.cpp to render chunk tile atlases before regular asset draw loop; adjust screen-space quads using world::Grid parallax helpers so each chunk tile lines up with parallax offsets; add tests/manual QA instructions for verifying seamless tiling while panning/zooming.
+<!--
+assignee: Any
+assigner: User
+status: pending
+-->
