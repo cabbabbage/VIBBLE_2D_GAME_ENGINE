@@ -44,7 +44,6 @@
                     "virtual_light_map": {
                         "grid_subdivide": 1.0,
                         "horizontal_falloff": 1.9900000095367432,
-                        "map_light_dir_offset_strength": 0.0,
                         "max_offset_x": 93.93000030517578,
                         "max_offset_y": 6.46999979019165,
                         "max_scale_percent": 95.0,

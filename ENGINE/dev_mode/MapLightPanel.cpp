@@ -165,6 +165,9 @@ class MapLightPanel::OrbitKeyWidget : public Widget {
 public:
     explicit OrbitKeyWidget(MapLightPanel& owner);
 
+    void set_enabled(bool enabled);
+    bool enabled() const { return enabled_; }
+
     void set_rect(const SDL_Rect& r) override;
     const SDL_Rect& rect() const override { return rect_; }
     int height_for_width(int w) const override;
@@ -195,6 +198,7 @@ private:
     enum class HoverSource { None, Circle, List };
     int hovered_pair_index_ = -1;
     HoverSource hovered_source_ = HoverSource::None;
+    bool enabled_ = true;
 
     void update_internal_layout();
     void rebuild_pair_entries();
@@ -212,6 +216,24 @@ private:
 MapLightPanel::OrbitKeyWidget::OrbitKeyWidget(MapLightPanel& owner)
     : owner_(owner) {
     update_internal_layout();
+}
+
+void MapLightPanel::OrbitKeyWidget::set_enabled(bool enabled) {
+    if (enabled_ == enabled) {
+        return;
+    }
+    enabled_ = enabled;
+    if (!enabled_) {
+        hovered_pair_index_ = -1;
+        hovered_source_ = HoverSource::None;
+        release_scroll_capture();
+        owner_.set_focused_pair(-1);
+        for (auto& entry : pair_entries_) {
+            if (entry.widget) {
+                entry.widget->close_overlay();
+            }
+        }
+    }
 }
 
 void MapLightPanel::OrbitKeyWidget::set_rect(const SDL_Rect& r) {
@@ -234,6 +256,9 @@ int MapLightPanel::OrbitKeyWidget::height_for_width(int) const {
 }
 
 bool MapLightPanel::OrbitKeyWidget::handle_event(const SDL_Event& e) {
+    if (!enabled_) {
+        return false;
+    }
     bool used = false;
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
@@ -348,6 +373,7 @@ void MapLightPanel::OrbitKeyWidget::render(SDL_Renderer* r) const {
         return;
     }
 
+    const bool disabled = !enabled_;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_Color panel_bg = dm_draw::DarkenColor(DMStyles::PanelBG(), 0.08f);
     SDL_SetRenderDrawColor(r, panel_bg.r, panel_bg.g, panel_bg.b, panel_bg.a);
@@ -370,12 +396,15 @@ void MapLightPanel::OrbitKeyWidget::render(SDL_Renderer* r) const {
     for (size_t i = 0; i < owner_.orbit_key_pairs_.size(); ++i) {
         const auto& pair = owner_.orbit_key_pairs_[i];
         SDL_Color color = utils::color::resolve_ranged_color(pair.color);
+        if (disabled) {
+            color = dm_draw::DarkenColor(color, 0.35f);
+        }
         const bool focused = (owner_.focused_pair_index_ == static_cast<int>(i));
         const bool hovered_pair = (hovered_pair_index_ == static_cast<int>(i));
         const double primary = MapLightPanel::normalize_angle(pair.angle);
         const double mirror = MapLightPanel::normalize_angle(180.0 - pair.angle);
-        draw_orbit_line(r, primary, color, focused, hovered_pair);
-        draw_orbit_line(r, mirror, color, focused, hovered_pair);
+        draw_orbit_line(r, primary, color, focused && !disabled, hovered_pair && !disabled);
+        draw_orbit_line(r, mirror, color, focused && !disabled, hovered_pair && !disabled);
     }
 
     for (size_t i = 0; i < pair_entries_.size(); ++i) {
@@ -402,9 +431,22 @@ void MapLightPanel::OrbitKeyWidget::render(SDL_Renderer* r) const {
         }
         entry.widget->render(r);
     }
+
+    if (disabled) {
+        SDL_Color overlay = dm_draw::LightenColor(DMStyles::PanelBG(), 0.1f);
+        overlay.a = 180;
+        SDL_SetRenderDrawColor(r, overlay.r, overlay.g, overlay.b, overlay.a);
+        SDL_RenderFillRect(r, &rect_);
+        SDL_Color outline = DMStyles::Border();
+        SDL_SetRenderDrawColor(r, outline.r, outline.g, outline.b, 170);
+        SDL_RenderDrawRect(r, &rect_);
+    }
 }
 
 bool MapLightPanel::OrbitKeyWidget::handle_overlay_event(const SDL_Event& e) {
+    if (!enabled_) {
+        return false;
+    }
     bool used = false;
     for (size_t i = 0; i < pair_entries_.size(); ++i) {
         auto& entry = pair_entries_[i];
@@ -417,6 +459,9 @@ bool MapLightPanel::OrbitKeyWidget::handle_overlay_event(const SDL_Event& e) {
 }
 
 void MapLightPanel::OrbitKeyWidget::render_overlay(SDL_Renderer* r) const {
+    if (!enabled_) {
+        return;
+    }
     for (const auto& entry : pair_entries_) {
         if (entry.widget) {
             entry.widget->render_overlay(r);
@@ -425,6 +470,9 @@ void MapLightPanel::OrbitKeyWidget::render_overlay(SDL_Renderer* r) const {
 }
 
 void MapLightPanel::OrbitKeyWidget::update_overlays(const Input& input, int screen_w, int screen_h) {
+    if (!enabled_) {
+        return;
+    }
     for (auto& entry : pair_entries_) {
         if (entry.widget) {
             entry.widget->update_overlay(input, screen_w, screen_h);
@@ -440,6 +488,10 @@ void MapLightPanel::OrbitKeyWidget::on_pairs_changed() {
 }
 
 void MapLightPanel::OrbitKeyWidget::on_focus_changed() {
+    if (!enabled_) {
+        release_scroll_capture();
+        return;
+    }
     if (owner_.focused_pair_index_ >= 0) {
         ensure_scroll_capture();
     } else {
@@ -775,9 +827,18 @@ void MapLightPanel::build_ui() {
     orbit_y_        = std::make_unique<DMSlider>("Orbit Y Radius",  0, 20000, 0);
     update_interval_= std::make_unique<DMSlider>("Update Interval", 1,   120, 10);
 
-    if (update_interval_) update_interval_->set_defer_commit_until_unfocus(true);
-    if (orbit_x_)        orbit_x_->set_defer_commit_until_unfocus(true);
-    if (orbit_y_)        orbit_y_->set_defer_commit_until_unfocus(true);
+    if (update_interval_) {
+        update_interval_->set_defer_commit_until_unfocus(true);
+        update_interval_->set_enabled(false);
+    }
+    if (orbit_x_) {
+        orbit_x_->set_defer_commit_until_unfocus(true);
+        orbit_x_->set_enabled(false);
+    }
+    if (orbit_y_) {
+        orbit_y_->set_defer_commit_until_unfocus(true);
+        orbit_y_->set_enabled(false);
+    }
 
     rebuild_rows();
 }
@@ -841,6 +902,9 @@ void MapLightPanel::rebuild_rows() {
     if (!texture_section_collapsed_) {
         auto orbit_widget = std::make_unique<OrbitKeyWidget>(*this);
         orbit_key_widget_ = orbit_widget.get();
+        if (orbit_key_widget_) {
+            orbit_key_widget_->set_enabled(false);
+        }
         rows.push_back({ add_widget(std::move(orbit_widget)) });
     }
 
@@ -959,25 +1023,9 @@ nlohmann::json& MapLightPanel::ensure_light() {
     L.erase("min_opacity");
     L.erase("max_opacity");
 
-    auto read_radius = [&](const char* key) -> std::optional<int> {
-        auto it = L.find(key);
-        if (it == L.end()) {
-            return std::nullopt;
-        }
-        if (auto parsed = parse_int(*it, 0)) {
-            return clamp_int(*parsed, 0, 20000);
-        }
-        return std::nullopt;
-};
-
-    const int fallback_orbit = read_radius("orbit_radius").value_or(0);
-    int orbit_x = read_radius("orbit_x").value_or(fallback_orbit);
-    int orbit_y = read_radius("orbit_y").value_or(orbit_x);
-    orbit_x = clamp_int(orbit_x, 0, 20000);
-    orbit_y = clamp_int(orbit_y, 0, 20000);
-    L["orbit_x"] = orbit_x;
-    L["orbit_y"] = orbit_y;
-    L["orbit_radius"] = std::max(orbit_x, orbit_y);
+    L.erase("orbit_x");
+    L.erase("orbit_y");
+    L.erase("orbit_radius");
 
     utils::color::RangedColor base_range{{255,255},{255,255},{255,255},{255,255}};
     if (auto parsed = utils::color::ranged_color_from_json(L.value("base_color", nlohmann::json{}))) {
@@ -1054,9 +1102,8 @@ void MapLightPanel::sync_ui_from_json() {
 
     OrbitSettings orbit{};
     orbit.update_interval = clamp_int(L.value("update_interval", 10), 1, 120);
-    const int fallback_orbit = clamp_int(L.value("orbit_radius", 0), 0, 20000);
-    orbit.orbit_x = clamp_int(L.value("orbit_x", fallback_orbit), 0, 20000);
-    orbit.orbit_y = clamp_int(L.value("orbit_y", orbit.orbit_x), 0, 20000);
+    orbit.orbit_x = 0;
+    orbit.orbit_y = 0;
     orbit = sanitize_orbit_settings(orbit);
     set_orbit_sliders(orbit);
     last_applied_orbit_ = orbit;
@@ -1142,12 +1189,11 @@ void MapLightPanel::set_orbit_sliders(const OrbitSettings& orbit) {
 void MapLightPanel::write_orbit_settings_to_json(const OrbitSettings& orbit) {
     json& L = ensure_light();
     L["update_interval"] = orbit.update_interval;
-    L["orbit_x"] = orbit.orbit_x;
-    L["orbit_y"] = orbit.orbit_y;
-    L["orbit_radius"] = std::max(orbit.orbit_x, orbit.orbit_y);
+    L.erase("orbit_x");
+    L.erase("orbit_y");
+    L.erase("orbit_radius");
     L.erase("min_opacity");
     L.erase("max_opacity");
-    L.erase("screen_light");
 }
 
 void MapLightPanel::apply_immediate_settings() {

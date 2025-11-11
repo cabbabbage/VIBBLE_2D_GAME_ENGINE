@@ -17,7 +17,6 @@ struct ReactiveShadowSettings {
         float opacity_vertical_falloff   = 1.0f;
         float max_offset_x       = 0.0f;
         float max_offset_y       = 0.0f;
-        float map_light_dir_offset_strength = 0.5f;
         int   search_radius      = 2; // legacy shared search radius (read for backward compat)
         // New: separate K-neighbor search radii
         int   offset_search_radius = 2;
@@ -41,7 +40,6 @@ struct ReactiveShadowSettings {
                    opacity_vertical_falloff == other.opacity_vertical_falloff &&
                    max_offset_x == other.max_offset_x &&
                    max_offset_y == other.max_offset_y &&
-                   map_light_dir_offset_strength == other.map_light_dir_offset_strength &&
                    search_radius == other.search_radius &&
                    offset_search_radius == other.offset_search_radius &&
                    opacity_search_radius == other.opacity_search_radius &&
@@ -121,8 +119,6 @@ inline ReactiveShadowSettings sanitize_reactive_shadow_settings(const ReactiveSh
     out.virtual_light_map.opacity_vertical_falloff   = clampf(out.virtual_light_map.opacity_vertical_falloff, 0.0f, 10.0f);
     out.virtual_light_map.max_offset_x       = clampf(out.virtual_light_map.max_offset_x, 0.0f, 500.0f);
     out.virtual_light_map.max_offset_y       = clampf(out.virtual_light_map.max_offset_y, 0.0f, 500.0f);
-    out.virtual_light_map.map_light_dir_offset_strength =
-        clampf(out.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
     out.virtual_light_map.search_radius      = clampi(out.virtual_light_map.search_radius, 0, 64);
     out.virtual_light_map.offset_search_radius = clampi(out.virtual_light_map.offset_search_radius, 0, 64);
     out.virtual_light_map.opacity_search_radius = clampi(out.virtual_light_map.opacity_search_radius, 0, 64);

@@ -1,495 +1,140 @@
 #include "global_light_source.hpp"
-#include "map_generation/map_layers_geometry.hpp"
-#include <nlohmann/json.hpp>
-#include <iostream>
-#include <cmath>
-#include <algorithm>
-#include <random>
-#include <optional>
-#include <SDL.h>
 
-#include "utils/ranged_color.hpp"
+#include <iostream>
+
 using json = nlohmann::json;
+
+namespace {
+
+SDL_Color ranged_color_to_sdl(const utils::color::RangedColor& range) {
+    return utils::color::resolve_ranged_color(range);
+}
+
+std::optional<utils::color::RangedColor> first_key_color(const json& data) {
+    auto keys_it = data.find("keys");
+    if (keys_it == data.end() || !keys_it->is_array() || keys_it->empty()) {
+        return std::nullopt;
+    }
+    const auto& entry = (*keys_it)[0];
+    if (!entry.is_array() || entry.size() < 2) {
+        return std::nullopt;
+    }
+    return utils::color::ranged_color_from_json(entry[1]);
+}
+
+} // namespace
 
 Global_Light_Source::Global_Light_Source(SDL_Renderer* renderer,
                                          SDL_Point screen_center,
-                                         int screen_width,
+                                         int /*screen_width*/,
                                          SDL_Color fallback_base_color)
 : renderer_(renderer),
-        base_color_(fallback_base_color),
-        current_color_(fallback_base_color),
-        default_center_(screen_center),
-        default_map_center_(screen_center),
-        center_(screen_center),
-        map_reference_center_(screen_center),
-        direction_target_world_(screen_center),
-        angle_(0.0f),
-        initialized_(false),
-        pos_{screen_center.x, screen_center.y},
-        frame_counter_(0),
-        light_brightness(255),
-        orbit_radius_x_(0),
-        orbit_radius_y_(0)
-{
-        set_defaults(screen_width, fallback_base_color);
-        set_light_brightness();
-        recalc_position();
+  screen_center_(screen_center) {
+    set_defaults(fallback_base_color);
 }
 
-bool Global_Light_Source::initialize_from_map_manifest(const json& map_info, std::string_view map_id) {
-        return load_from_map_manifest(map_info, map_id);
-}
-
-void Global_Light_Source::set_defaults(int screen_width, SDL_Color fallback_base_color) {
-        radius_          = float(screen_width) * 3.0f;
-        intensity_       = 255.0f;
-        mult_            = 0.4f;
-        fall_off_        = 1.0f;
-        orbit_radius_x_  = std::max(1, screen_width / 4);
-        orbit_radius_y_  = orbit_radius_x_;
-        update_interval_ = 2;
-        base_color_range_ = utils::color::RangedColor{
-            {fallback_base_color.r, fallback_base_color.r},
-            {fallback_base_color.g, fallback_base_color.g},
-            {fallback_base_color.b, fallback_base_color.b},
-            {fallback_base_color.a, fallback_base_color.a}
-};
-        base_color_      = clamp_color_alpha(fallback_base_color);
-        current_color_   = base_color_;
-        key_colors_.clear();
-        key_colors_.push_back({0.0f, base_color_range_, base_color_, false});
-        resolve_each_orbit_ = false;
-        base_pending_resolve_ = false;
-        last_degree_ = 0.0f;
-        active_segment_start_ = 0;
-        active_segment_end_ = 0;
-        orbit_initialized_ = false;
-        center_ = default_center_;
-        default_map_center_ = default_center_;
-        map_reference_center_ = default_map_center_;
-        direction_target_world_ = map_reference_center_;
-        recalc_position();
-        smoothed_target_world_.x = static_cast<float>(map_reference_center_.x);
-        smoothed_target_world_.y = static_cast<float>(map_reference_center_.y);
-        smoothed_target_valid_   = false;
-        smoothed_direction_      = SDL_FPoint{1.0f, 0.0f};
-        smoothed_direction_valid_ = false;
+void Global_Light_Source::set_defaults(SDL_Color fallback_base_color) {
+    base_color_range_ = utils::color::RangedColor{
+        {fallback_base_color.r, fallback_base_color.r},
+        {fallback_base_color.g, fallback_base_color.g},
+        {fallback_base_color.b, fallback_base_color.b},
+        {fallback_base_color.a, fallback_base_color.a}
+    };
+    base_color_      = clamp_color_alpha(fallback_base_color);
+    current_color_   = base_color_;
+    light_brightness = current_color_.a;
 }
 
 bool Global_Light_Source::load_from_map_manifest(const json& map_info, std::string_view map_id) {
-        if (!map_info.is_object()) {
-                std::cerr << "[MapLight] Map manifest for '" << map_id << "' is not an object. Using defaults.\n";
-                set_light_brightness();
-                recalc_position();
-                return false;
+    if (!map_info.is_object()) {
+        std::cerr << "[MapLight] Map manifest for '" << map_id << "' is not an object. Using defaults.\n";
+        return false;
+    }
+
+    auto it = map_info.find("map_light_data");
+    if (it == map_info.end() || !it->is_object()) {
+        if (!map_id.empty()) {
+            std::cerr << "[MapLight] Manifest for '" << map_id << "' has no valid map_light_data object. Using defaults.\n";
+        } else {
+            std::cerr << "[MapLight] Manifest has no valid map_light_data object. Using defaults.\n";
         }
+        return false;
+    }
 
-        int default_cx = default_map_center_.x;
-        int default_cy = default_map_center_.y;
-        try {
-                const double map_radius = map_layers::map_radius_from_map_info(map_info);
-                if (map_radius > 0.0) {
-                        const int center_val = static_cast<int>(std::lround(map_radius));
-                        default_cx = center_val;
-                        default_cy = center_val;
-                }
-        } catch (...) {
-        }
+    apply_config(*it);
+    return true;
+}
 
-        default_map_center_ = SDL_Point{ default_cx, default_cy };
-        map_reference_center_ = default_map_center_;
-        center_ = default_center_;
-
-        auto it = map_info.find("map_light_data");
-        if (it == map_info.end() || !it->is_object()) {
-                if (!map_id.empty()) {
-                        std::cerr << "[MapLight] Manifest for '" << map_id << "' has no valid map_light_data object. Using defaults.\n";
-                } else {
-                        std::cerr << "[MapLight] Manifest has no valid map_light_data object. Using defaults.\n";
-                }
-                set_light_brightness();
-                recalc_position();
-                return false;
-        }
-
-        apply_config(*it);
-        return true;
+bool Global_Light_Source::initialize_from_map_manifest(const json& map_info, std::string_view map_id) {
+    if (!load_from_map_manifest(map_info, map_id)) {
+        current_color_   = base_color_;
+        light_brightness = current_color_.a;
+        return false;
+    }
+    return true;
 }
 
 void Global_Light_Source::apply_config(const json& data) {
-        if (!data.is_object()) {
-                return;
-        }
+    if (!data.is_object()) {
+        return;
+    }
 
-        radius_        = data.value("radius", radius_);
-        intensity_     = data.value("intensity", intensity_);
-        const int fallback_orbit = std::clamp(data.value("orbit_radius", orbit_radius_x_), 0, 20000);
-        orbit_radius_x_ = std::clamp(data.value("orbit_x", fallback_orbit), 0, 20000);
-        orbit_radius_y_ = std::clamp(data.value("orbit_y", orbit_radius_x_), 0, 20000);
-        update_interval_= std::max(1, data.value("update_interval", update_interval_));
-        mult_          = std::clamp(data.value("mult", mult_), 0.0f, 1.0f);
-        fall_off_      = data.value("fall_off", fall_off_);
-
-        if (auto parsed = utils::color::ranged_color_from_json(data.value("base_color", nlohmann::json{}))) {
-                base_color_range_ = *parsed;
-        }
-        base_color_ = clamp_color_alpha(utils::color::resolve_ranged_color(base_color_range_));
-
-        key_colors_.clear();
-        const auto keys_it = data.find("keys");
-        if (keys_it != data.end() && keys_it->is_array()) {
-                for (const auto& entry : *keys_it) {
-                        if (!entry.is_array() || entry.size() < 2) continue;
-                        float deg = 0.0f;
-                        try {
-                                deg = static_cast<float>(entry[0].get<double>());
-                        } catch (...) {
-                                continue;
-                        }
-                        utils::color::RangedColor range = base_color_range_;
-                        if (auto parsed = utils::color::ranged_color_from_json(entry[1])) {
-                                range = *parsed;
-                        }
-                        KeyEntry key{};
-                        key.degree = deg;
-                        key.range = range;
-                        resolve_key_entry(key);
-                        key_colors_.push_back(key);
-                }
-        }
-        if (key_colors_.empty()) {
-                KeyEntry key{};
-                key.degree = 0.0f;
-                key.range = base_color_range_;
-                resolve_key_entry(key);
-                key_colors_.push_back(key);
-        } else {
-                std::sort(key_colors_.begin(), key_colors_.end(), [](const KeyEntry& a, const KeyEntry& b) {
-                        return a.degree < b.degree;
-                });
-        }
-        resolve_each_orbit_ = key_colors_.size() > 2;
-        base_pending_resolve_ = false;
-        for (auto& key : key_colors_) {
-                key.needs_resolve = false;
-        }
-        last_degree_ = 0.0f;
-        active_segment_start_ = 0;
-        active_segment_end_ = key_colors_.size() > 1 ? 1 : 0;
-        orbit_initialized_ = false;
-
-        center_ = default_center_;
-        map_reference_center_ = default_map_center_;
-        auto parse_point = [](const nlohmann::json& arr) -> std::optional<SDL_Point> {
-                if (!arr.is_array() || arr.size() < 2) {
-                        return std::nullopt;
-                }
-                try {
-                        double cx = arr[0].get<double>();
-                        double cy = arr[1].get<double>();
-                        return SDL_Point{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
-                } catch (...) {
-                        return std::nullopt;
-                }
-};
-        bool custom_center = false;
-        if (auto center_it = data.find("center"); center_it != data.end()) {
-                if (auto parsed = parse_point(*center_it)) {
-                        map_reference_center_ = *parsed;
-                        custom_center = true;
-                }
-        }
-        if (!custom_center) {
-                if (auto position_it = data.find("position"); position_it != data.end()) {
-                        if (auto parsed = parse_point(*position_it)) {
-                                map_reference_center_ = *parsed;
-                                custom_center = true;
-                        }
-                }
-        }
-        if (!custom_center) {
-                if (data.contains("center_x")) {
-                        try {
-                                map_reference_center_.x = data.at("center_x").get<int>();
-                                custom_center = true;
-                        } catch (...) {}
-                }
-                if (data.contains("center_y")) {
-                        try {
-                                map_reference_center_.y = data.at("center_y").get<int>();
-                                custom_center = true;
-                        } catch (...) {}
-                }
-        }
-
-        direction_target_world_ = map_reference_center_;
-        smoothed_target_world_.x = static_cast<float>(map_reference_center_.x);
-        smoothed_target_world_.y = static_cast<float>(map_reference_center_.y);
-        smoothed_target_valid_   = false;
-        smoothed_direction_      = SDL_FPoint{1.0f, 0.0f};
-        smoothed_direction_valid_ = false;
-
-        current_color_ = clamp_color_alpha(base_color_);
-        set_light_brightness();
-        recalc_position();
-        frame_counter_ = 0;
+    SDL_Color resolved = resolve_color_from_config(data);
+    base_color_        = clamp_color_alpha(resolved);
+    current_color_     = base_color_;
+    base_color_range_ = utils::color::RangedColor{
+        {base_color_.r, base_color_.r},
+        {base_color_.g, base_color_.g},
+        {base_color_.b, base_color_.b},
+        {base_color_.a, base_color_.a}
+    };
+    light_brightness = current_color_.a;
 }
 
-void Global_Light_Source::resolve_key_entry(KeyEntry& entry) {
-        entry.color = clamp_color_alpha(utils::color::resolve_ranged_color(entry.range));
-        entry.needs_resolve = false;
-}
-
-void Global_Light_Source::update_active_segment(float degree) {
-        if (key_colors_.empty()) {
-                active_segment_start_ = 0;
-                active_segment_end_ = 0;
-                return;
-        }
-        if (key_colors_.size() == 1) {
-                active_segment_start_ = active_segment_end_ = 0;
-                return;
-        }
-        for (size_t i = 0; i + 1 < key_colors_.size(); ++i) {
-                const auto& K0 = key_colors_[i];
-                const auto& K1 = key_colors_[i + 1];
-                if (degree >= K0.degree && degree <= K1.degree) {
-                        active_segment_start_ = i;
-                        active_segment_end_ = i + 1;
-                        return;
-                }
-        }
-        active_segment_start_ = key_colors_.size() - 1;
-        active_segment_end_ = 0;
-}
-
-void Global_Light_Source::update(const std::optional<SDL_FPoint>& target_world,
-                                 const std::optional<SDL_FPoint>& average_direction) {
-        if (++frame_counter_ % update_interval_ != 0) {
-                return;
-        }
-
-        const auto lerp = [](float a, float b, float t) {
-                return a + (b - a) * t;
-};
-
-        const SDL_FPoint fallback_target{
-                static_cast<float>(map_reference_center_.x), static_cast<float>(map_reference_center_.y)};
-        const SDL_FPoint desired_target = target_world.value_or(fallback_target);
-
-        if (!smoothed_target_valid_) {
-                smoothed_target_world_ = desired_target;
-                smoothed_target_valid_ = true;
-        } else {
-                constexpr float kTargetLerp = 0.15f;
-                smoothed_target_world_.x = lerp(smoothed_target_world_.x, desired_target.x, kTargetLerp);
-                smoothed_target_world_.y = lerp(smoothed_target_world_.y, desired_target.y, kTargetLerp);
-        }
-
-        direction_target_world_.x = static_cast<int>(std::lround(smoothed_target_world_.x));
-        direction_target_world_.y = static_cast<int>(std::lround(smoothed_target_world_.y));
-
-        SDL_FPoint desired_direction{0.0f, -1.0f};
-        bool       have_direction = false;
-        if (average_direction) {
-                desired_direction = *average_direction;
-                const float len = std::sqrt(desired_direction.x * desired_direction.x + desired_direction.y * desired_direction.y);
-                if (len > 1e-4f) {
-                        desired_direction.x /= len;
-                        desired_direction.y /= len;
-                        have_direction = true;
-                }
-        }
-        if (!have_direction) {
-                desired_direction.x = smoothed_target_world_.x - static_cast<float>(map_reference_center_.x);
-                desired_direction.y = smoothed_target_world_.y - static_cast<float>(map_reference_center_.y);
-                const float len = std::sqrt(desired_direction.x * desired_direction.x + desired_direction.y * desired_direction.y);
-                if (len > 1e-4f) {
-                        desired_direction.x /= len;
-                        desired_direction.y /= len;
-                        have_direction = true;
-                }
-        }
-        if (!have_direction) {
-                desired_direction = SDL_FPoint{0.0f, -1.0f};
-        }
-
-        if (!smoothed_direction_valid_) {
-                smoothed_direction_       = desired_direction;
-                smoothed_direction_valid_ = true;
-        } else {
-                constexpr float kDirectionLerp = 0.2f;
-                smoothed_direction_.x = lerp(smoothed_direction_.x, desired_direction.x, kDirectionLerp);
-                smoothed_direction_.y = lerp(smoothed_direction_.y, desired_direction.y, kDirectionLerp);
-                const float len = std::sqrt(smoothed_direction_.x * smoothed_direction_.x + smoothed_direction_.y * smoothed_direction_.y);
-                if (len > 1e-4f) {
-                        smoothed_direction_.x /= len;
-                        smoothed_direction_.y /= len;
-                } else {
-                        smoothed_direction_ = desired_direction;
-                }
-        }
-
-        const auto wrap_angle = [](float angle) {
-                const float two_pi = 2.0f * float(M_PI);
-                while (angle > float(M_PI)) angle -= two_pi;
-                while (angle < -float(M_PI)) angle += two_pi;
-                return angle;
-};
-
-        const float desired_angle = std::atan2(-smoothed_direction_.y, smoothed_direction_.x);
-        if (!initialized_) {
-                angle_       = desired_angle;
-                initialized_ = true;
-        } else {
-                const float delta = wrap_angle(desired_angle - angle_);
-                angle_ = wrap_angle(angle_ + delta * 0.2f);
-        }
-
-        recalc_position();
-
-        float deg = std::fmod(angle_ * (180.0f/float(M_PI)) + 270.0f, 360.0f);
-        if (deg < 0) deg += 360.0f;
-
-        if (resolve_each_orbit_) {
-                if (orbit_initialized_ && deg > last_degree_ + 180.0f) {
-                        base_pending_resolve_ = true;
-                        for (auto& key : key_colors_) {
-                                key.needs_resolve = true;
-                        }
-                }
-                last_degree_ = deg;
-        }
-
-        update_active_segment(deg);
-
-        if (resolve_each_orbit_) {
-                if (base_pending_resolve_) {
-                        base_color_ = clamp_color_alpha(utils::color::resolve_ranged_color(base_color_range_));
-                        base_pending_resolve_ = false;
-                }
-                for (size_t i = 0; i < key_colors_.size(); ++i) {
-                        if (!key_colors_[i].needs_resolve) {
-                                continue;
-                        }
-                        if (i == active_segment_start_ || i == active_segment_end_) {
-                                continue;
-                        }
-                        resolve_key_entry(key_colors_[i]);
-                }
-        }
-        orbit_initialized_ = true;
-
-        SDL_Color k = compute_color_from_horizon(deg);
-        current_color_ = k;
-        set_light_brightness();
-}
-
-SDL_Point Global_Light_Source::get_position() const {
-        return pos_;
-}
-
-float Global_Light_Source::get_angle() const {
-	return angle_;
-}
-
-void Global_Light_Source::set_light_brightness() {
-        const int alpha = std::clamp(static_cast<int>(current_color_.a), 0, 255);
-        light_brightness = std::clamp(255 - alpha, 0, 255);
-}
-
-void Global_Light_Source::recalc_position() {
-        const double ca = std::cos(angle_);
-        const double sa = std::sin(angle_);
-        const int dx = static_cast<int>(std::lround(static_cast<double>(orbit_radius_x_) * ca));
-        const int dy = static_cast<int>(std::lround(static_cast<double>(orbit_radius_y_) * sa));
-        pos_.x = center_.x + dx;
-        pos_.y = center_.y - dy;
-}
-
-SDL_Point Global_Light_Source::get_direction_target() const {
-        return direction_target_world_;
-}
-
-SDL_Color Global_Light_Source::compute_color_from_horizon(float degree) const {
-        auto lerp = [](Uint8 A, Uint8 B, float t){
-                return Uint8(A + (B - A) * t);
-};
-
-        if (key_colors_.size() < 2) {
-                return key_colors_.empty() ? base_color_ : key_colors_.front().color;
-        }
-
-        for (size_t i = 0; i + 1 < key_colors_.size(); ++i) {
-                auto &K0 = key_colors_[i], &K1 = key_colors_[i+1];
-                if (degree >= K0.degree && degree <= K1.degree) {
-                        float span = K1.degree - K0.degree;
-                        float t = span <= 0.0f ? 0.0f : (degree - K0.degree) / span;
-                        return clamp_color_alpha({
-                                lerp(K0.color.r, K1.color.r, t),
-                                lerp(K0.color.g, K1.color.g, t),
-                                lerp(K0.color.b, K1.color.b, t),
-                                lerp(K0.color.a, K1.color.a, t)
-                        });
-                }
-        }
-
-        auto &KL = key_colors_.back(), &KF = key_colors_.front();
-        float span = 360.0f - KL.degree + KF.degree;
-        float t = (degree < KF.degree) ? (degree + 360.0f - KL.degree) / span : (degree - KL.degree) / span;
-
-        return clamp_color_alpha({
-                lerp(KL.color.r, KF.color.r, t),
-                lerp(KL.color.g, KF.color.g, t),
-                lerp(KL.color.b, KF.color.b, t),
-                lerp(KL.color.a, KF.color.a, t)
-        });
+SDL_Color Global_Light_Source::resolve_color_from_config(const json& data) const {
+    if (auto base = utils::color::ranged_color_from_json(data.value("base_color", json{}))) {
+        return clamp_color_alpha(ranged_color_to_sdl(*base));
+    }
+    if (auto key_color = first_key_color(data)) {
+        return clamp_color_alpha(ranged_color_to_sdl(*key_color));
+    }
+    return current_color_;
 }
 
 SDL_Color Global_Light_Source::get_current_color() const {
-        if (alpha_override_.has_value()) {
-                SDL_Color c = current_color_;
-                c.a = clamp_alpha(*alpha_override_);
-                return c;
-        }
-        return current_color_;
+    if (alpha_override_.has_value()) {
+        SDL_Color c = current_color_;
+        c.a = clamp_alpha(*alpha_override_);
+        return c;
+    }
+    return current_color_;
 }
 
 int Global_Light_Source::get_brightness() const {
-        return light_brightness;
-}
-
-Uint8 Global_Light_Source::clamp_alpha(Uint8 value) const {
-        int v = static_cast<int>(value);
-        v = std::clamp(v, 0, 255);
-        return static_cast<Uint8>(v);
-}
-
-SDL_Color Global_Light_Source::clamp_color_alpha(SDL_Color color) const {
-        color.a = clamp_alpha(color.a);
-        return color;
-}
-
-void Global_Light_Source::set_screen_orbit_center(SDL_Point screen_center) {
-        center_ = screen_center;
-        recalc_position();
-}
-
-void Global_Light_Source::set_direction_reference_world(SDL_Point world_point) {
-        map_reference_center_ = world_point;
-}
-
-void Global_Light_Source::set_direction_target_world(SDL_Point world_point) {
-        direction_target_world_ = world_point;
-        smoothed_target_world_.x = static_cast<float>(world_point.x);
-        smoothed_target_world_.y = static_cast<float>(world_point.y);
-        smoothed_target_valid_   = true;
+    return light_brightness;
 }
 
 void Global_Light_Source::set_alpha_override(std::optional<Uint8> alpha) {
-        if (alpha.has_value()) {
-                alpha_override_ = clamp_alpha(*alpha);
-        } else {
-                alpha_override_.reset();
-        }
+    if (alpha.has_value()) {
+        alpha_override_ = clamp_alpha(*alpha);
+    } else {
+        alpha_override_.reset();
+    }
+}
+
+Uint8 Global_Light_Source::clamp_alpha(Uint8 value) const {
+    const Uint8 min_alpha = 0;
+    const Uint8 max_alpha = 255;
+    if (value < min_alpha) {
+        return min_alpha;
+    }
+    if (value > max_alpha) {
+        return max_alpha;
+    }
+    return value;
+}
+
+SDL_Color Global_Light_Source::clamp_color_alpha(SDL_Color color) const {
+    color.a = clamp_alpha(color.a);
+    return color;
 }

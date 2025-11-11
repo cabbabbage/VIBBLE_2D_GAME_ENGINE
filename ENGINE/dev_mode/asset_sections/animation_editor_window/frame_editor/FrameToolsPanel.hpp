@@ -10,7 +10,7 @@
 
 class FrameToolsPanel : public DockableCollapsible {
 public:
-    enum class Mode { Movement = 0, Children = 1, Attacking = 2 };
+    enum class Mode { Movement = 0, Children = 1, AttackGeometry = 2, HitGeometry = 3 };
 
     FrameToolsPanel();
 

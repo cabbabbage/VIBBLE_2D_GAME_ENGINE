@@ -907,34 +907,6 @@ void LightMap::update(SDL_Renderer* , std::uint32_t ) {
         }
     }
 
-    std::optional<SDL_FPoint> map_light_direction;
-    if (const Global_Light_Source* gl = assets_->map_light_source()) {
-        const SDL_Point ref = gl->get_direction_reference();
-        const SDL_Point tgt = gl->get_direction_target();
-        const float dx      = static_cast<float>(tgt.x - ref.x);
-        const float dy      = static_cast<float>(tgt.y - ref.y);
-        const float len     = std::sqrt(dx * dx + dy * dy);
-        if (len > 1e-4f) {
-            map_light_direction = SDL_FPoint{dx / len, dy / len};
-        }
-    }
-
-    bool map_direction_changed = false;
-    if (map_light_direction) {
-        const SDL_FPoint dir = *map_light_direction;
-        if (!last_map_light_direction_valid_ ||
-            std::abs(dir.x - last_map_light_direction_.x) > 1e-4f ||
-            std::abs(dir.y - last_map_light_direction_.y) > 1e-4f) {
-            map_direction_changed = true;
-        }
-        last_map_light_direction_        = dir;
-        last_map_light_direction_valid_ = true;
-    } else if (last_map_light_direction_valid_) {
-        map_direction_changed            = true;
-        last_map_light_direction_valid_ = false;
-        last_map_light_direction_        = SDL_FPoint{0.0f, 0.0f};
-    }
-
     if (!scene_light_cache_valid_ || cached_chunk_count_ != static_cast<int>(chunks.size()) ||
         scene_light_count_ != total_cells) {
         rebuild_scene_light_cache(chunks);
@@ -966,8 +938,7 @@ void LightMap::update(SDL_Renderer* , std::uint32_t ) {
 
         double chunk_strength_delta = 0.0;
 
-        const bool chunk_dirty = chunk->lighting_dirty || chunk->lighting.needs_update || map_opacity_changed ||
-                                 map_direction_changed;
+        const bool chunk_dirty = chunk->lighting_dirty || chunk->lighting.needs_update || map_opacity_changed;
 
         for (auto& cell : chunk->lighting_chunks()) {
             const float prev_blended = std::clamp(cell.lighting.current_strength, 0.0f, 1.0f);

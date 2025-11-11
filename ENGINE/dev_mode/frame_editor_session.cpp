@@ -156,7 +156,7 @@ void FrameEditorSession::begin(Assets* assets,
         SDL_FPoint anchor_screen_f = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
         SDL_Point anchor_screen = round_point(anchor_screen_f);
 
-        const int dir_w = 480;
+        const int dir_w = 600;
         const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
         const int nav_h = 90;
         const int nav_w = 560;
@@ -297,7 +297,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             if (dragging_dir_) {
                 dir_pos_.x = e.motion.x - drag_offset_dir_.x;
                 dir_pos_.y = e.motion.y - drag_offset_dir_.y;
-                const int dir_w = 480;
+                const int dir_w = 600;
                 const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
                 clamp_panel_pos(dir_pos_.x, dir_pos_.y, dir_w, dir_h);
             } else if (dragging_toolbox_) {
@@ -330,7 +330,13 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         bool over_dir = SDL_PointInRect(&p, &directory_rect_);
         if (over_dir) {
             bool over_button = false;
-            const DMButton* buttons[] = { btn_back_.get(), btn_movement_.get(), btn_children_.get(), btn_attacking_.get() };
+            const DMButton* buttons[] = {
+                btn_back_.get(),
+                btn_movement_.get(),
+                btn_children_.get(),
+                btn_attack_geometry_.get(),
+                btn_hit_geometry_.get()
+            };
             for (const DMButton* b : buttons) {
                 if (!b) continue; const SDL_Rect& r = b->rect();
                 if (SDL_PointInRect(&p, &r)) { over_button = true; break; }
@@ -394,7 +400,8 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     if (handle_button(btn_back_, [this]() { this->end(); })) return true;
     if (handle_button(btn_movement_, [this]() { this->mode_ = Mode::Movement; })) return true;
     if (handle_button(btn_children_, [this]() { this->mode_ = Mode::Children; })) return true;
-    if (handle_button(btn_attacking_, [this]() { this->mode_ = Mode::Attacking; })) return true;
+    if (handle_button(btn_attack_geometry_, [this]() { this->mode_ = Mode::AttackGeometry; })) return true;
+    if (handle_button(btn_hit_geometry_, [this]() { this->mode_ = Mode::HitGeometry; })) return true;
 
     // Movement tool panel widgets
     if (mode_ == Mode::Movement) {
@@ -547,7 +554,8 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (btn_back_) btn_back_->render(renderer);
     if (btn_movement_) btn_movement_->render(renderer);
     if (btn_children_) btn_children_->render(renderer);
-    if (btn_attacking_) btn_attacking_->render(renderer);
+    if (btn_attack_geometry_) btn_attack_geometry_->render(renderer);
+    if (btn_hit_geometry_) btn_hit_geometry_->render(renderer);
 
     // Toolbox panel
     if (mode_ == Mode::Movement && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
@@ -607,7 +615,8 @@ void FrameEditorSession::ensure_widgets() const {
     if (!btn_back_) btn_back_ = std::make_unique<DMButton>(u8"\u2190 Back", &DMStyles::DeleteButton(), 96, bh);
     if (!btn_movement_) btn_movement_ = std::make_unique<DMButton>("Movement", mode_ == Mode::Movement ? &tab_active : &header, bw, bh);
     if (!btn_children_) btn_children_ = std::make_unique<DMButton>("Children", mode_ == Mode::Children ? &tab_active : &header, bw, bh);
-    if (!btn_attacking_) btn_attacking_ = std::make_unique<DMButton>("Attacking", mode_ == Mode::Attacking ? &tab_active : &header, bw, bh);
+    if (!btn_attack_geometry_) btn_attack_geometry_ = std::make_unique<DMButton>("Attack Geometry", mode_ == Mode::AttackGeometry ? &tab_active : &header, bw, bh);
+    if (!btn_hit_geometry_) btn_hit_geometry_ = std::make_unique<DMButton>("Hit Geometry", mode_ == Mode::HitGeometry ? &tab_active : &header, bw, bh);
     if (!btn_prev_) btn_prev_ = std::make_unique<DMButton>("<", &header, 40, 40);
     if (!btn_next_) btn_next_ = std::make_unique<DMButton>(">", &header, 40, 40);
     if (!btn_smooth_) btn_smooth_ = std::make_unique<DMButton>("Smooth", &DMStyles::AccentButton(), 120, bh);
@@ -625,7 +634,7 @@ void FrameEditorSession::rebuild_layout() const {
     const int screen_w = assets_->renderer() ? assets_->getView().get_current_view().width() : 0; // not used for clamp heavily
     (void)screen_w;
     (void)cam; // anchor-based layout replaced by draggable screen-space positions
-    const int dir_w = 480;
+    const int dir_w = 600;
     const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
     directory_rect_ = SDL_Rect{ dir_pos_.x, dir_pos_.y, dir_w, dir_h };
     // Place buttons inside
@@ -634,7 +643,15 @@ void FrameEditorSession::rebuild_layout() const {
     if (btn_back_) { btn_back_->set_rect(SDL_Rect{ x, y, btn_back_->rect().w, DMButton::height() }); x += btn_back_->rect().w + DMSpacing::small_gap(); }
     if (btn_movement_) { btn_movement_->set_style(mode_==Mode::Movement? &DMStyles::AccentButton() : &DMStyles::HeaderButton()); btn_movement_->set_rect(SDL_Rect{ x, y, btn_movement_->rect().w, DMButton::height() }); x += btn_movement_->rect().w + DMSpacing::small_gap(); }
     if (btn_children_) { btn_children_->set_style(mode_==Mode::Children? &DMStyles::AccentButton() : &DMStyles::HeaderButton()); btn_children_->set_rect(SDL_Rect{ x, y, btn_children_->rect().w, DMButton::height() }); x += btn_children_->rect().w + DMSpacing::small_gap(); }
-    if (btn_attacking_) { btn_attacking_->set_style(mode_==Mode::Attacking? &DMStyles::AccentButton() : &DMStyles::HeaderButton()); btn_attacking_->set_rect(SDL_Rect{ x, y, btn_attacking_->rect().w, DMButton::height() }); }
+    if (btn_attack_geometry_) {
+        btn_attack_geometry_->set_style(mode_==Mode::AttackGeometry? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+        btn_attack_geometry_->set_rect(SDL_Rect{ x, y, btn_attack_geometry_->rect().w, DMButton::height() });
+        x += btn_attack_geometry_->rect().w + DMSpacing::small_gap();
+    }
+    if (btn_hit_geometry_) {
+        btn_hit_geometry_->set_style(mode_==Mode::HitGeometry? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+        btn_hit_geometry_->set_rect(SDL_Rect{ x, y, btn_hit_geometry_->rect().w, DMButton::height() });
+    }
 
     // Toolbox panel placement
     const int tool_padding = DMSpacing::small_gap();

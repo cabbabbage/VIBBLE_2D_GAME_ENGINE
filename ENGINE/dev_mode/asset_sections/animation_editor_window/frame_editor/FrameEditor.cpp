@@ -256,7 +256,7 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
 
 void FrameEditor::ensure_children() {
     const DMButtonStyle& default_style = DMStyles::HeaderButton();
-    const char* labels[] = {"Movement", "Children", "Attacking"};
+    const char* labels[] = {"Movement", "Children", "Attack Geometry", "Hit Geometry"};
     for (size_t i = 0; i < mode_buttons_.size(); ++i) {
         if (!mode_buttons_[i]) {
             mode_buttons_[i] = std::make_unique<DMButton>(labels[i], &default_style, kTabButtonWidth, DMButton::height());

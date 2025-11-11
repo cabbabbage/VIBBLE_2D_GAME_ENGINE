@@ -1677,26 +1677,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-        bool drew_indicator = false;
-        if (const Global_Light_Source* light = assets_->map_light_source()) {
-            SDL_Point start_map = light->get_direction_reference();
-            SDL_Point end_map = light->get_direction_target();
-            SDL_FPoint start_f = cam.map_to_screen(start_map);
-            SDL_FPoint end_f = cam.map_to_screen(end_map);
-            SDL_Point start{static_cast<int>(std::lround(start_f.x)), static_cast<int>(std::lround(start_f.y))};
-            SDL_Point end{static_cast<int>(std::lround(end_f.x)), static_cast<int>(std::lround(end_f.y))};
-            SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
-            SDL_RenderDrawLine(renderer, start.x, start.y, end.x, end.y);
-            SDL_Rect tip{ end.x - 4, end.y - 4, 8, 8 };
-            SDL_RenderFillRect(renderer, &tip);
-            drew_indicator = true;
-        }
-
-        if (!drew_indicator) {
-            SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
-            SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y - 6, screen_center.x + 6, screen_center.y + 6);
-            SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y + 6, screen_center.x + 6, screen_center.y - 6);
-        }
+        SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
+        SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y - 6, screen_center.x + 6, screen_center.y + 6);
+        SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y + 6, screen_center.x + 6, screen_center.y - 6);
 
         SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);

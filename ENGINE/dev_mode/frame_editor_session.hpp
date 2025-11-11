@@ -25,7 +25,7 @@ class AnimationEditorWindow;
 // Non-modal; anchors panels near the target asset and draws gizmos in world space.
 class FrameEditorSession {
 public:
-    enum class Mode { Movement, Children, Attacking };
+    enum class Mode { Movement, Children, AttackGeometry, HitGeometry };
 
     FrameEditorSession();
     ~FrameEditorSession();
@@ -80,7 +80,8 @@ private:
     mutable std::unique_ptr<DMButton> btn_back_;
     mutable std::unique_ptr<DMButton> btn_movement_;
     mutable std::unique_ptr<DMButton> btn_children_;
-    mutable std::unique_ptr<DMButton> btn_attacking_;
+    mutable std::unique_ptr<DMButton> btn_attack_geometry_;
+    mutable std::unique_ptr<DMButton> btn_hit_geometry_;
     mutable std::unique_ptr<DMButton> btn_prev_;
     mutable std::unique_ptr<DMButton> btn_next_;
     mutable std::unique_ptr<DMButton> btn_smooth_;

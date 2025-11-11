@@ -130,7 +130,8 @@ void FrameToolsPanel::rebuild_rows() {
             break;
         }
         case Mode::Children:
-        case Mode::Attacking: {
+        case Mode::AttackGeometry:
+        case Mode::HitGeometry: {
             rows.clear(); // empty for now
             break;
         }

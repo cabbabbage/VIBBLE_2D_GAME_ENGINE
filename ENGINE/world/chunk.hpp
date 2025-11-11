@@ -281,8 +281,6 @@ private:
     int     screen_height_ = 0;
 
     mutable float        last_map_light_opacity_ = -1.0f;
-    mutable SDL_FPoint   last_map_light_direction_{0.0f, 0.0f};
-    mutable bool         last_map_light_direction_valid_ = false;
     mutable std::recursive_mutex mutex_;
 
     mutable SDL_Texture*   runtime_shadow_mask_          = nullptr;

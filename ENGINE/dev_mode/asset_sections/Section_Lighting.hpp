@@ -4,11 +4,14 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 #include "asset/asset_info.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
-#include "dev_mode/asset_info_sections.hpp"
 #include "color_range_widget.hpp"
+#include "dev_mode/asset_info_sections.hpp"
+#include "../dm_icons.hpp"
+#include "../draw_utils.hpp"
 
 class AssetInfoUI;
 
@@ -17,42 +20,19 @@ public:
     Section_Lighting() : DockableCollapsible("Lighting", false) {}
     void set_ui(AssetInfoUI* ui) { ui_ = ui; }
     ~Section_Lighting() override = default;
+    void set_highlighted_light(std::optional<std::size_t> index);
+    void expand_light_row(std::size_t index);
 
     void build() override {
         rows_.clear();
+        highlighted_row_index_ = -1;
         if (!info_) return;
 
         for (const auto& ls : info_->light_sources) {
-            Row r;
-            r.light = ls;
-            r.lbl = std::make_unique<DMButton>("Light Source", &DMStyles::HeaderButton(), 180, DMButton::height());
-            r.b_duplicate = std::make_unique<DMButton>("Duplicate", &DMStyles::AccentButton(), 120, DMButton::height());
-            r.b_delete = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
-            r.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, ls.intensity);
-            r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, ls.radius);
-            r.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, ls.fall_off);
-            r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 100, ls.flicker);
-            r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, ls.offset_x);
-            r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, ls.offset_y);
-            r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", ls.in_front);
-            r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", ls.behind);
-            r.c_dark_mask      = std::make_unique<DMCheckbox>("Render To Dark Mask", ls.render_to_dark_mask);
-            r.c_asset_alpha_mask = std::make_unique<DMCheckbox>(
-                "Render Front/Back To Asset Alpha Mask",
-                ls.render_front_and_back_to_asset_alpha_mask);
-            r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
-            {
-                DMColorRangeWidget::RangedColor rc;
-                rc.r.min = rc.r.max = static_cast<int>(ls.color.r);
-                rc.g.min = rc.g.max = static_cast<int>(ls.color.g);
-                rc.b.min = rc.b.max = static_cast<int>(ls.color.b);
-                rc.a.min = rc.a.max = static_cast<int>(ls.color.a);
-                r.color_widget->set_value(rc);
-            }
-            configure_color_widget(r);
-            configure_row_sliders(r);
-            rows_.push_back(std::move(r));
+            rows_.push_back(create_row_from_light(ls, false));
         }
+        refresh_row_headers();
+        refresh_highlight_state();
         b_add_ = std::make_unique<DMButton>("Add New Light Source", &DMStyles::CreateButton(), 220, DMButton::height());
         if (!apply_btn_) {
             apply_btn_ = std::make_unique<DMButton>("Apply Settings", &DMStyles::AccentButton(), 200, DMButton::height());
@@ -69,9 +49,14 @@ public:
             widget->set_rect(SDL_Rect{ x, y - scroll_, maxw, h });
             y += h + DMSpacing::item_gap();
 };
+        auto hide = [&](auto& widget) {
+            if (!widget) return;
+            widget->set_rect(SDL_Rect{ 0, 0, 0, 0 });
+};
 
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
+            const int row_top = y;
             if (r.lbl) {
                 int lbl_x = rect_.x + DMSpacing::panel_padding() + (maxw - 180) / 2;
                 r.lbl->set_rect(SDL_Rect{ lbl_x, y - scroll_, 180, DMButton::height() });
@@ -81,33 +66,50 @@ public:
             if (r.b_duplicate)
                 r.b_duplicate->set_rect(SDL_Rect{ x + maxw - 240, y - scroll_, 120, DMButton::height() });
             y += DMButton::height() + DMSpacing::item_gap();
-            place(r.s_intensity, DMSlider::height());
-            place(r.s_radius,    DMSlider::height());
-            place(r.s_falloff,   DMSlider::height());
-            place(r.s_flicker,   DMSlider::height());
-            place(r.s_offset_x,  DMSlider::height());
-            place(r.s_offset_y,  DMSlider::height());
-            if (r.c_front) {
-                r.c_front->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
-                y += DMCheckbox::height() + DMSpacing::item_gap();
+            if (r.expanded) {
+                place(r.s_intensity, DMSlider::height());
+                place(r.s_radius,    DMSlider::height());
+                place(r.s_falloff,   DMSlider::height());
+                place(r.s_flicker,   DMSlider::height());
+                place(r.s_offset_x,  DMSlider::height());
+                place(r.s_offset_y,  DMSlider::height());
+                if (r.c_front) {
+                    r.c_front->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
+                    y += DMCheckbox::height() + DMSpacing::item_gap();
+                }
+                if (r.c_behind) {
+                    r.c_behind->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
+                    y += DMCheckbox::height() + DMSpacing::item_gap();
+                }
+                if (r.c_dark_mask) {
+                    r.c_dark_mask->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
+                    y += DMCheckbox::height() + DMSpacing::item_gap();
+                }
+                if (r.c_asset_alpha_mask) {
+                    r.c_asset_alpha_mask->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
+                    y += DMCheckbox::height() + DMSpacing::item_gap();
+                }
+                if (r.color_widget) {
+                    int ch = r.color_widget->height_for_width(maxw);
+                    r.color_widget->set_rect(SDL_Rect{ x, y - scroll_, maxw, ch });
+                    y += ch + DMSpacing::item_gap();
+                }
+            } else {
+                hide(r.s_intensity);
+                hide(r.s_radius);
+                hide(r.s_falloff);
+                hide(r.s_flicker);
+                hide(r.s_offset_x);
+                hide(r.s_offset_y);
+                hide(r.c_front);
+                hide(r.c_behind);
+                hide(r.c_dark_mask);
+                hide(r.c_asset_alpha_mask);
+                hide(r.color_widget);
             }
-            if (r.c_behind) {
-                r.c_behind->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
-                y += DMCheckbox::height() + DMSpacing::item_gap();
-            }
-            if (r.c_dark_mask) {
-                r.c_dark_mask->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
-                y += DMCheckbox::height() + DMSpacing::item_gap();
-            }
-            if (r.c_asset_alpha_mask) {
-                r.c_asset_alpha_mask->set_rect(SDL_Rect{ x, y - scroll_, maxw, DMCheckbox::height() });
-                y += DMCheckbox::height() + DMSpacing::item_gap();
-            }
-            if (r.color_widget) {
-                int ch = r.color_widget->height_for_width(maxw);
-                r.color_widget->set_rect(SDL_Rect{ x, y - scroll_, maxw, ch });
-                y += ch + DMSpacing::item_gap();
-            }
+            const int row_bottom = y - DMSpacing::item_gap();
+            int row_height = std::max(DMButton::height(), row_bottom - row_top);
+            r.container_rect = SDL_Rect{ x, row_top - scroll_, maxw, row_height };
         }
         if (b_add_) {
             b_add_->set_rect(SDL_Rect{ x, y - scroll_, std::min(260, maxw), DMButton::height() });
@@ -129,56 +131,41 @@ public:
         bool purge_light_cache = false;
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
-            if (r.lbl && r.lbl->handle_event(e)) used = true;
+            if (r.lbl && r.lbl->handle_event(e)) {
+                used = true;
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    set_row_expanded(r, !r.expanded, i);
+                }
+            }
             if (r.b_delete && r.b_delete->handle_event(e)) {
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                    rows_.erase(rows_.begin() + i);
+                    rows_.erase(rows_.begin() + static_cast<long long>(i));
                     changed = true;
                     regenerate_lighting = true;
                     reset_scaling_profile = true;
                     purge_light_cache = true;
                     used = true;
+                    refresh_row_headers();
+                    refresh_highlight_state();
                     break;
                 }
             }
             if (r.b_duplicate && r.b_duplicate->handle_event(e)) {
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                    Row nr;
-                    nr.light = r.light; // duplicate values as-is
-                    nr.lbl = std::make_unique<DMButton>("Light Source", &DMStyles::HeaderButton(), 180, DMButton::height());
-                    nr.b_duplicate = std::make_unique<DMButton>("Duplicate", &DMStyles::AccentButton(), 120, DMButton::height());
-                    nr.b_delete = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
-                    nr.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, nr.light.intensity);
-                    nr.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, nr.light.radius);
-                    nr.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, nr.light.fall_off);
-                    nr.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 100, nr.light.flicker);
-                    nr.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, nr.light.offset_x);
-                    nr.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, nr.light.offset_y);
-                    nr.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", nr.light.in_front);
-                    nr.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", nr.light.behind);
-                    nr.c_dark_mask      = std::make_unique<DMCheckbox>("Render To Dark Mask", nr.light.render_to_dark_mask);
-                    nr.c_asset_alpha_mask = std::make_unique<DMCheckbox>(
-                        "Render Front/Back To Asset Alpha Mask",
-                        nr.light.render_front_and_back_to_asset_alpha_mask);
-                    nr.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
-                    {
-                        DMColorRangeWidget::RangedColor rc;
-                        rc.r.min = rc.r.max = static_cast<int>(nr.light.color.r);
-                        rc.g.min = rc.g.max = static_cast<int>(nr.light.color.g);
-                        rc.b.min = rc.b.max = static_cast<int>(nr.light.color.b);
-                        rc.a.min = rc.a.max = static_cast<int>(nr.light.color.a);
-                        nr.color_widget->set_value(rc);
-                    }
-                    configure_color_widget(nr);
-                    configure_row_sliders(nr);
+                    Row nr = create_row_from_light(r.light, true);
                     rows_.insert(rows_.begin() + static_cast<long long>(i) + 1, std::move(nr));
                     changed = true;
                     regenerate_lighting = true;
                     reset_scaling_profile = true;
                     purge_light_cache = true;
                     used = true;
+                    refresh_row_headers();
+                    refresh_highlight_state();
                     break;
                 }
+            }
+            if (!r.expanded) {
+                continue;
             }
             auto commit_change = [&]() {
                 changed = true; regenerate_lighting = true; reset_scaling_profile = true; purge_light_cache = true; used = true;
@@ -255,41 +242,17 @@ public:
         }
         if (b_add_ && b_add_->handle_event(e)) {
             if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                Row r;
-                r.light = LightSource{};
-                r.light.in_front = true;
-                r.light.render_to_dark_mask = true;
-                r.lbl = std::make_unique<DMButton>("Light Source", &DMStyles::HeaderButton(), 180, DMButton::height());
-                r.b_delete = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
-                r.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, r.light.intensity);
-                r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, r.light.radius);
-                r.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, r.light.fall_off);
-                r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 100, r.light.flicker);
-                r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, r.light.offset_x);
-                r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, r.light.offset_y);
-                r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", r.light.in_front);
-                r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", r.light.behind);
-                r.c_dark_mask      = std::make_unique<DMCheckbox>("Render To Dark Mask", r.light.render_to_dark_mask);
-                r.c_asset_alpha_mask = std::make_unique<DMCheckbox>(
-                    "Render Front/Back To Asset Alpha Mask",
-                    r.light.render_front_and_back_to_asset_alpha_mask);
-                r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
-                {
-                    DMColorRangeWidget::RangedColor rc;
-                    rc.r.min = rc.r.max = static_cast<int>(r.light.color.r);
-                    rc.g.min = rc.g.max = static_cast<int>(r.light.color.g);
-                    rc.b.min = rc.b.max = static_cast<int>(r.light.color.b);
-                    rc.a.min = rc.a.max = static_cast<int>(r.light.color.a);
-                    r.color_widget->set_value(rc);
-                }
-                configure_color_widget(r);
-                configure_row_sliders(r);
-                rows_.push_back(std::move(r));
+                LightSource new_light{};
+                new_light.in_front = true;
+                new_light.render_to_dark_mask = true;
+                rows_.push_back(create_row_from_light(new_light, true, false));
                 changed = true;
                 regenerate_lighting = true;
                 reset_scaling_profile = true;
                 purge_light_cache = true;
                 used = true;
+                refresh_row_headers();
+                refresh_highlight_state();
             }
         }
         if (apply_btn_ && apply_btn_->handle_event(e)) {
@@ -313,9 +276,30 @@ public:
 
     void render_content(SDL_Renderer* r) const override {
         for (const auto& rrow : rows_) {
+            if (rrow.highlighted && rrow.container_rect.w > 0 && rrow.container_rect.h > 0) {
+                SDL_Rect highlight_rect = rrow.container_rect;
+                const int inset = 2;
+                highlight_rect.x += inset;
+                highlight_rect.y += inset;
+                highlight_rect.w = std::max(0, highlight_rect.w - inset * 2);
+                highlight_rect.h = std::max(0, highlight_rect.h - inset * 2);
+                const SDL_Color fill = dm_draw::LightenColor(DMStyles::PanelBG(), 0.08f);
+                dm_draw::DrawBeveledRect(
+                    r,
+                    highlight_rect,
+                    DMStyles::CornerRadius(),
+                    DMStyles::BevelDepth(),
+                    fill,
+                    DMStyles::HighlightColor(),
+                    DMStyles::ShadowColor(),
+                    false,
+                    DMStyles::HighlightIntensity(),
+                    DMStyles::ShadowIntensity());
+            }
             if (rrow.lbl)      rrow.lbl->render(r);
             if (rrow.b_duplicate) rrow.b_duplicate->render(r);
             if (rrow.b_delete) rrow.b_delete->render(r);
+            if (!rrow.expanded) continue;
             if (rrow.s_intensity) rrow.s_intensity->render(r);
             if (rrow.s_radius)    rrow.s_radius->render(r);
             if (rrow.s_falloff)   rrow.s_falloff->render(r);
@@ -335,6 +319,9 @@ public:
 private:
     struct Row {
         LightSource light;
+        bool expanded = false;
+        bool highlighted = false;
+        mutable SDL_Rect container_rect{0, 0, 0, 0};
         std::unique_ptr<DMButton> lbl;
         std::unique_ptr<DMButton> b_duplicate;
         std::unique_ptr<DMButton> b_delete;
@@ -350,6 +337,74 @@ private:
         std::unique_ptr<DMCheckbox> c_asset_alpha_mask;
         std::unique_ptr<DMColorRangeWidget> color_widget;
 };
+
+    Row create_row_from_light(const LightSource& ls, bool expanded_default, bool include_duplicate_button = true) {
+        Row r;
+        r.light = ls;
+        r.expanded = expanded_default;
+        r.lbl = std::make_unique<DMButton>("Light Source", &DMStyles::HeaderButton(), 180, DMButton::height());
+        if (include_duplicate_button) {
+            r.b_duplicate = std::make_unique<DMButton>("Duplicate", &DMStyles::AccentButton(), 120, DMButton::height());
+        }
+        r.b_delete = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
+        r.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, ls.intensity);
+        r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, ls.radius);
+        r.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, ls.fall_off);
+        r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 100, ls.flicker);
+        r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, ls.offset_x);
+        r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, ls.offset_y);
+        r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", ls.in_front);
+        r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", ls.behind);
+        r.c_dark_mask      = std::make_unique<DMCheckbox>("Render To Dark Mask", ls.render_to_dark_mask);
+        r.c_asset_alpha_mask = std::make_unique<DMCheckbox>(
+            "Render Front/Back To Asset Alpha Mask",
+            ls.render_front_and_back_to_asset_alpha_mask);
+        r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
+        {
+            DMColorRangeWidget::RangedColor rc;
+            rc.r.min = rc.r.max = static_cast<int>(ls.color.r);
+            rc.g.min = rc.g.max = static_cast<int>(ls.color.g);
+            rc.b.min = rc.b.max = static_cast<int>(ls.color.b);
+            rc.a.min = rc.a.max = static_cast<int>(ls.color.a);
+            r.color_widget->set_value(rc);
+        }
+        configure_color_widget(r);
+        configure_row_sliders(r);
+        return r;
+    }
+
+    void refresh_row_headers() {
+        for (size_t i = 0; i < rows_.size(); ++i) {
+            update_row_header(rows_[i], i);
+        }
+    }
+
+    void update_row_header(Row& row, size_t index) const {
+        if (!row.lbl) {
+            return;
+        }
+        std::string label = "Light " + std::to_string(index + 1) + " ";
+        label += row.expanded ? std::string(DMIcons::CollapseExpanded()) : std::string(DMIcons::CollapseCollapsed());
+        row.lbl->set_text(label);
+    }
+
+    void refresh_highlight_state() {
+        if (highlighted_row_index_ < 0 || highlighted_row_index_ >= static_cast<int>(rows_.size())) {
+            highlighted_row_index_ = -1;
+        }
+        for (size_t i = 0; i < rows_.size(); ++i) {
+            rows_[i].highlighted = (static_cast<int>(i) == highlighted_row_index_);
+        }
+    }
+
+    void set_row_expanded(Row& row, bool expanded, size_t index) {
+        if (row.expanded == expanded) return;
+        row.expanded = expanded;
+        if (!row.expanded && row.color_widget && row.color_widget->overlay_visible()) {
+            row.color_widget->close_overlay();
+        }
+        update_row_header(row, index);
+    }
 
     void configure_row_sliders(Row& r) {
         auto configure_regen_slider = [](std::unique_ptr<DMSlider>& slider) {
@@ -414,6 +469,7 @@ private:
     }
 
     std::vector<Row> rows_;
+    int highlighted_row_index_ = -1;
     std::unique_ptr<DMButton> b_add_;
     std::unique_ptr<DMButton> apply_btn_;
     AssetInfoUI* ui_ = nullptr;
@@ -454,6 +510,8 @@ public:
                 configure_color_widget(r);
             }
         }
+        refresh_row_headers();
+        refresh_highlight_state();
     }
     void update_light_offsets(std::size_t index, int offset_x, int offset_y) {
         if (index >= rows_.size()) {
@@ -472,7 +530,7 @@ public:
     void update(const Input& input, int screen_w, int screen_h) override {
         DockableCollapsible::update(input, screen_w, screen_h);
         for (auto& r : rows_) {
-            if (r.color_widget) {
+            if (r.expanded && r.color_widget) {
                 r.color_widget->update_overlay(input, screen_w, screen_h);
             }
         }
@@ -486,9 +544,28 @@ public:
             return;
         }
         for (const auto& row : rows_) {
-            if (row.color_widget) {
+            if (row.expanded && row.color_widget) {
                 row.color_widget->render_overlay(r);
             }
         }
+    }
+
+    void set_highlighted_light(std::optional<std::size_t> index) {
+        int new_index = -1;
+        if (index && *index < rows_.size()) {
+            new_index = static_cast<int>(*index);
+        }
+        if (new_index == highlighted_row_index_) {
+            return;
+        }
+        highlighted_row_index_ = new_index;
+        refresh_highlight_state();
+    }
+
+    void expand_light_row(std::size_t index) {
+        if (index >= rows_.size()) {
+            return;
+        }
+        set_row_expanded(rows_[index], true, index);
     }
 };

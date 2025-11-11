@@ -192,6 +192,8 @@ public:
     void set_value_formatter(SliderValueFormatter formatter);
     void set_value_parser(std::function<std::optional<int>(const std::string&)> parser);
     void set_tooltip_state(DMWidgetTooltipState* state);
+    void set_enabled(bool enabled);
+    bool enabled() const { return enabled_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     int preferred_height(int width) const;
@@ -233,6 +235,7 @@ private:
     SliderValueFormatter value_formatter_{};
     std::function<std::optional<int>(const std::string&)> value_parser_{};
     DMWidgetTooltipState* tooltip_state_ = nullptr;
+    bool enabled_ = true;
 };
 
 class DMRangeSlider {

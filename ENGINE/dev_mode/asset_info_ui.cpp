@@ -431,6 +431,10 @@ void AssetInfoUI::clear_info() {
         forcing_high_quality_rendering_ = false;
     }
     info_.reset();
+    hovered_light_index_ = -1;
+    if (lighting_section_) {
+        lighting_section_->set_highlighted_light(std::nullopt);
+    }
     container_.reset_scroll();
     if (asset_selector_) asset_selector_->close();
     if (animation_editor_window_) {
@@ -602,6 +606,15 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     if (!area_mode_ && !info_) return false;
 
     // World overlay: click-and-drag light crosshairs when Lighting section is open
+    auto clear_light_hover = [&]() {
+        if (hovered_light_index_ == -1) {
+            return;
+        }
+        hovered_light_index_ = -1;
+        if (lighting_section_) {
+            lighting_section_->set_highlighted_light(std::nullopt);
+        }
+    };
     if (lighting_section_ && lighting_section_->is_expanded() && info_ && assets_) {
         const bool pointer_event =
             (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
@@ -687,14 +700,33 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 return -1;
             };
 
-            if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-                int idx = hit_test_index(mx, my);
+            auto set_light_hover = [&](int idx) {
+                if (idx == hovered_light_index_) {
+                    return;
+                }
+                hovered_light_index_ = idx;
+                if (!lighting_section_) return;
                 if (idx >= 0) {
+                    lighting_section_->set_highlighted_light(static_cast<std::size_t>(idx));
+                } else {
+                    lighting_section_->set_highlighted_light(std::nullopt);
+                }
+            };
+
+            const int hovered_idx = hit_test_index(mx, my);
+
+            if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                set_light_hover(hovered_idx);
+                if (hovered_idx >= 0) {
                     light_drag_active_ = true;
-                    light_drag_index_ = idx;
+                    light_drag_index_ = hovered_idx;
+                    lighting_section_->open();
+                    lighting_section_->set_expanded(true);
+                    lighting_section_->expand_light_row(static_cast<std::size_t>(hovered_idx));
                     return true;
                 }
-            } else if (e.type == SDL_MOUSEMOTION && light_drag_active_ && light_drag_index_ >= 0 && light_drag_index_ < static_cast<int>(info_->light_sources.size())) {
+            } else if (e.type == SDL_MOUSEMOTION && light_drag_active_ && light_drag_index_ >= 0 &&
+                       light_drag_index_ < static_cast<int>(info_->light_sources.size())) {
                 auto& L = info_->light_sources[light_drag_index_];
                 // Invert the screen mapping so the crosshair sits under the mouse
                 const float dx_screen = static_cast<float>(mx) - xform.cx;
@@ -705,6 +737,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 const int final_off_x = static_cast<int>(std::lround(new_off_x));
                 const int final_off_y = static_cast<int>(std::lround(new_off_y));
                 if (L.offset_x == final_off_x && L.offset_y == final_off_y) {
+                    set_light_hover(light_drag_index_);
                     return true;
                 }
                 L.offset_x = final_off_x;
@@ -714,9 +747,12 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 if (lighting_section_) {
                     lighting_section_->update_light_offsets(static_cast<std::size_t>(light_drag_index_), final_off_x, final_off_y);
                 }
+                set_light_hover(light_drag_index_);
                 this->notify_light_sources_modified(true);
                 (void)info_->commit_manifest();
                 return true;
+            } else if (e.type == SDL_MOUSEMOTION) {
+                set_light_hover(hovered_idx);
             } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 if (light_drag_active_) {
                     light_drag_active_ = false;
@@ -726,7 +762,11 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     return true;
                 }
             }
+        } else if (pointer_event) {
+            clear_light_hover();
         }
+    } else {
+        clear_light_hover();
     }
 
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {

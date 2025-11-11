@@ -81,7 +81,6 @@ private:
     std::unique_ptr<DMSlider> max_offset_x_{};
     std::unique_ptr<DMSlider> max_offset_y_{};
     std::unique_ptr<DMSlider> frame_blend_falloff_frames_{};
-    std::unique_ptr<DMSlider> map_light_dir_strength_{};
     std::unique_ptr<DMNumericStepper> offset_search_radius_step_{};
 
     // Opacity section

@@ -95,7 +95,6 @@ void populate(ReactiveShadowSettings& settings, const nlohmann::json& json) {
         read_float(json, "max_offset_x", settings.virtual_light_map.max_offset_x);
     settings.virtual_light_map.max_offset_y =
         read_float(json, "max_offset_y", settings.virtual_light_map.max_offset_y);
-    settings.virtual_light_map.map_light_dir_offset_strength = read_float( json, "map_light_dir_offset_strength", settings.virtual_light_map.map_light_dir_offset_strength);
     // Legacy shared search radius
     const bool has_legacy_radius = json.contains("search_radius");
     settings.virtual_light_map.search_radius =
@@ -217,7 +216,6 @@ void assign_reactive_shadow_settings(nlohmann::json& json, const ReactiveShadowS
         { "opacity_vertical_falloff", sanitized.virtual_light_map.opacity_vertical_falloff },
         { "max_offset_x", sanitized.virtual_light_map.max_offset_x },
         { "max_offset_y", sanitized.virtual_light_map.max_offset_y },
-        { "map_light_dir_offset_strength", sanitized.virtual_light_map.map_light_dir_offset_strength },
         { "search_radius", sanitized.virtual_light_map.search_radius },
         { "offset_search_radius", sanitized.virtual_light_map.offset_search_radius },
         { "opacity_search_radius", sanitized.virtual_light_map.opacity_search_radius },

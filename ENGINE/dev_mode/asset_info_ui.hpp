@@ -150,4 +150,5 @@ class AssetInfoUI {
     // Light crosshair dragging state
     bool light_drag_active_ = false;
     int  light_drag_index_ = -1;
+    int  hovered_light_index_ = -1;
 };

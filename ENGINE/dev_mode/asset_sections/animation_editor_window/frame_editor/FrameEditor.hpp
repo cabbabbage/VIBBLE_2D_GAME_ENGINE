@@ -24,7 +24,8 @@ class FrameEditor {
     enum class Mode {
         Movement = 0,
         Children = 1,
-        Attacking = 2,
+        AttackGeometry = 2,
+        HitGeometry = 3,
 };
 
     using CloseCallback = std::function<void()>;
@@ -58,7 +59,7 @@ class FrameEditor {
     std::unique_ptr<FrameMovementEditor> movement_editor_;
     std::unique_ptr<FrameToolsPanel> tools_panel_;
     std::shared_ptr<PreviewProvider> preview_provider_;
-    std::array<std::unique_ptr<DMButton>, 3> mode_buttons_;
+    std::array<std::unique_ptr<DMButton>, 4> mode_buttons_;
     std::unique_ptr<DMButton> prev_frame_button_;
     std::unique_ptr<DMButton> next_frame_button_;
     SDL_Rect bounds_{0, 0, 0, 0};

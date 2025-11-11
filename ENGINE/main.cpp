@@ -400,9 +400,6 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
     nlohmann::json default_light = nlohmann::json::object({
         {"radius", 0},
         {"intensity", 255},
-        {"orbit_x", 0},
-        {"orbit_y", 0},
-        {"orbit_radius", 0},
         {"update_interval", 10},
         {"mult", 0.0},
         {"fall_off", 100},

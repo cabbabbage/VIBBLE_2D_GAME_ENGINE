@@ -195,7 +195,6 @@ void MapShadowPanel::build_ui() {
         offset_vertical_falloff_   = make_scaled_slider("Vertical Falloff (offset)", 0.0f, 10.0f, vsettings.offset_vertical_falloff, 100, 2);
         max_offset_x_ = make_scaled_slider("Max Offset X (px)", 0.0f, 500.0f, vsettings.max_offset_x, 100, 2);
         max_offset_y_ = make_scaled_slider("Max Offset Y (px)", 0.0f, 500.0f, vsettings.max_offset_y, 100, 2);
-        map_light_dir_strength_ = make_scaled_slider("Directional Offset Strength", 0.0f, 1.0f, vsettings.map_light_dir_offset_strength, 100, 2);
 
         const int offset_k = std::clamp(vsettings.offset_search_radius, 0, 128);
         offset_search_radius_step_ = std::make_unique<DMNumericStepper>("K Neighbors (offset)", 0, 128, offset_k);
@@ -235,7 +234,6 @@ void MapShadowPanel::build_ui() {
         add_slider(offset_vertical_falloff_,   "Lower: tighter vertical fade of offset. Higher: spreads vertically.");
         add_slider(max_offset_x_, "Lower: limits sideways shift. Higher: allows more horizontal movement.");
         add_slider(max_offset_y_, "Lower: keeps shadows close vertically. Higher: lets them stretch farther up/down.");
-        add_slider(map_light_dir_strength_, "Lower: ignore directional light push. Higher: follow main light direction strongly.");
         add_stepper(offset_search_radius_step_, "K-neighbor search radius for offset sampling.");
         add_slider(frame_blend_falloff_frames_, "Lower: no blur. Higher: blend with more previous frames.");
     }
@@ -348,8 +346,6 @@ void MapShadowPanel::sync_ui_from_settings(const ReactiveShadowSettings& setting
     if (max_offset_y_) max_offset_y_->set_value(static_cast<int>(std::round(settings.virtual_light_map.max_offset_y * 100.0f)));
     if (frame_blend_falloff_frames_)
         frame_blend_falloff_frames_->set_value(std::clamp(settings.frame_blend_falloff_frames, 0, 200));
-    if (map_light_dir_strength_)
-        map_light_dir_strength_->set_value(static_cast<int>(std::round(settings.virtual_light_map.map_light_dir_offset_strength * 100.0f)));
     if (offset_search_radius_step_) offset_search_radius_step_->set_value(std::clamp(settings.virtual_light_map.offset_search_radius, 0, 128));
     if (opacity_search_radius_step_) opacity_search_radius_step_->set_value(std::clamp(settings.virtual_light_map.opacity_search_radius, 0, 128));
     if (min_opacity_) min_opacity_->set_value(static_cast<int>(std::round(std::clamp(settings.virtual_light_map.min_opacity, 0.0f, 1.0f) * 100.0f)));
@@ -375,8 +371,6 @@ MapShadowPanel::ReactiveShadowSettings MapShadowPanel::settings_from_ui() {
         settings.frame_blend_falloff_frames =
             std::clamp(frame_blend_falloff_frames_->displayed_value(), 0, 200);
     }
-    settings.virtual_light_map.map_light_dir_offset_strength =
-        read_scaled_slider(map_light_dir_strength_, 100, settings.virtual_light_map.map_light_dir_offset_strength);
     if (offset_search_radius_step_) {
         settings.virtual_light_map.offset_search_radius = std::clamp(offset_search_radius_step_->value(), 0, 128);
     }

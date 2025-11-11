@@ -1134,6 +1134,24 @@ void DMSlider::set_tooltip_state(DMWidgetTooltipState* state) {
     }
 }
 
+void DMSlider::set_enabled(bool enabled) {
+    if (enabled_ == enabled) {
+        return;
+    }
+    enabled_ = enabled;
+    if (!enabled_) {
+        dragging_ = false;
+        hovered_ = false;
+        knob_hovered_ = false;
+        if (focused_) {
+            focused_ = false;
+            set_slider_scroll_capture(this, false);
+            commit_pending_value();
+        }
+        edit_box_.reset();
+    }
+}
+
 void DMSlider::set_value(int v) {
     int clamped = clamp_value(v);
     value_ = clamped;
@@ -1181,6 +1199,9 @@ int DMSlider::value_for_x(int x) const {
 bool DMSlider::handle_event(const SDL_Event& e) {
     if (tooltip_state_ && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state_)) {
         return true;
+    }
+    if (!enabled_) {
+        return false;
     }
     if (e.type == SDL_KEYDOWN && focused_) {
         switch (e.key.keysym.sym) {
@@ -1340,14 +1361,15 @@ void DMSlider::draw_text(SDL_Renderer* r, const std::string& s, int x, int y) co
 
 void DMSlider::render(SDL_Renderer* r) const {
     const DMSliderStyle& st = DMStyles::Slider();
+    const bool disabled = !enabled_;
     if (!label_.empty() && label_height_ > 0) {
         draw_text(r, label_, label_rect_.x, label_rect_.y);
     }
-    const bool active = focused_ || dragging_;
+    const bool active = !disabled && (focused_ || dragging_);
     if (active) {
         const SDL_Color& focus_outline = DMStyles::SliderFocusOutline();
         dm_draw::DrawRoundedFocusRing( r, rect_, DMStyles::CornerRadius(), kFocusRingThickness, focus_outline);
-    } else if (hovered_) {
+    } else if (!disabled && hovered_) {
         const SDL_Color& hover_outline = DMStyles::SliderHoverOutline();
         dm_draw::DrawRoundedOutline( r, rect_, DMStyles::CornerRadius(), kControlOutlineThickness, hover_outline);
     }
@@ -1363,7 +1385,10 @@ void DMSlider::render(SDL_Renderer* r) const {
     SDL_Rect fill{ tr.x, tr.y, (int)((current_value - min_) * tr.w / (double)range), tr.h };
     if (fill.w > 0) {
         SDL_Rect fill_rect = fill;
-        const SDL_Color track_fill = active ? st.track_fill_active : st.track_fill;
+        SDL_Color track_fill = active ? st.track_fill_active : st.track_fill;
+        if (disabled) {
+            track_fill = dm_draw::DarkenColor(track_fill, 0.2f);
+        }
         dm_draw::DrawBeveledRect( r, fill_rect, radius, bevel, track_fill, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     }
     SDL_Rect krect = knob_rect();
@@ -1372,9 +1397,13 @@ void DMSlider::render(SDL_Renderer* r) const {
     if (active) {
         knob_col = st.knob_accent;
         kborder = st.knob_accent_border;
-    } else if (knob_hovered_) {
+    } else if (!disabled && knob_hovered_) {
         knob_col = st.knob_hover;
         kborder = st.knob_border_hover;
+    }
+    if (disabled) {
+        knob_col = dm_draw::DarkenColor(knob_col, 0.25f);
+        kborder = dm_draw::DarkenColor(kborder, 0.15f);
     }
     const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(krect.w, krect.h) / 2);
     const int knob_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(krect.w, krect.h) / 2));
@@ -1389,6 +1418,16 @@ void DMSlider::render(SDL_Renderer* r) const {
         int text_x = vr.x + kSliderValueHorizontalPadding;
         int text_y = vr.y + (vr.h - size.y) / 2;
         DMFontCache::instance().draw_text(r, st.label, value_text, text_x, text_y);
+    }
+    if (disabled) {
+        SDL_Color overlay = dm_draw::LightenColor(DMStyles::PanelBG(), 0.12f);
+        overlay.a = 180;
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, overlay.r, overlay.g, overlay.b, overlay.a);
+        SDL_RenderFillRect(r, &rect_);
+        SDL_Color outline = DMStyles::Border();
+        SDL_SetRenderDrawColor(r, outline.r, outline.g, outline.b, 160);
+        SDL_RenderDrawRect(r, &rect_);
     }
     if (tooltip_state_) {
         DMWidgetTooltipRender(r, rect_, *tooltip_state_);
