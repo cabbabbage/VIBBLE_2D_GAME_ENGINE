@@ -624,12 +624,13 @@ LightInfluence compute_light_influence(const LightingChunk& center,
 }
 
 static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& settings,
-                                              float scene_average_strength,
+                                              float /*scene_average_strength*/,
                                               const LightInfluence& influence,
                                               bool prefer_fast_blend,
                                               float static_strength,
                                               float dynamic_strength,
                                               float blended_strength,
+                                              float map_light_opacity,
                                               LightingChunk& chunk) {
     world::Chunk::ChunkShadowParameters sample{};
 
@@ -639,11 +640,8 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
     const world::Chunk::ChunkShadowParameters previous = chunk.shadow_history.value();
     sample.scale = previous.scale;
 
-    const float sensitivity = std::clamp(settings.opacity_sensitivity_percent, 0.0f, 100.0f) / 100.0f;
-    const float local_avg = std::clamp(influence.average_brightness, 0.0f, 1.0f);
-    const float blended_avg =
-        std::clamp(local_avg * (1.0f - sensitivity) + scene_average_strength * sensitivity, 0.0f, 1.0f);
-    sample.opacity = std::clamp(1.0f - blended_avg, 0.0f, 1.0f);
+    const float map_opacity = std::clamp(map_light_opacity, 0.0f, 1.0f);
+    sample.opacity          = map_opacity;
 
     const float chunk_w = static_cast<float>(std::max(1, chunk.world_bounds.w));
     const float chunk_h = static_cast<float>(std::max(1, chunk.world_bounds.h));
@@ -1022,7 +1020,15 @@ void LightMap::update(SDL_Renderer* , std::uint32_t ) {
             const auto influence = compute_light_influence(cell, grid, radius, fx, fy);
             const bool prefer_fast_blend = chunk_prefers_fast_blend || info.runtime_changed;
 
-            compute_use_shadow_data_for_chunk(settings, scene_average_strength, influence, prefer_fast_blend, cell.lighting.static_strength, cell.lighting.dynamic_strength, cell.lighting.current_strength, cell);
+            compute_use_shadow_data_for_chunk(settings,
+                                              scene_average_strength,
+                                              influence,
+                                              prefer_fast_blend,
+                                              cell.lighting.static_strength,
+                                              cell.lighting.dynamic_strength,
+                                              cell.lighting.current_strength,
+                                              map_light_opacity,
+                                              cell);
 
             cell.lighting.needs_update = false;
         }

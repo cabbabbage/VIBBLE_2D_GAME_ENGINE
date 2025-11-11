@@ -43,8 +43,19 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const camera& cam, const w
             screen_br.x = grid.parallax_adjusted_screen_x(world_br, screen_br.x);
             screen_bl.x = grid.parallax_adjusted_screen_x(world_bl, screen_bl.x);
 
-            const float tx1 = 1.0f;
-            const float ty1 = 1.0f;
+            int tex_w = 0;
+            int tex_h = 0;
+            if (SDL_QueryTexture(tile.texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+                continue;
+            }
+
+            const float padding_x = 0.5f / static_cast<float>(tex_w);
+            const float padding_y = 0.5f / static_cast<float>(tex_h);
+
+            const float tx0 = padding_x;
+            const float ty0 = padding_y;
+            const float tx1 = 1.0f - padding_x;
+            const float ty1 = 1.0f - padding_y;
 
             SDL_Vertex vertices[4]{};
             vertices[0].position = SDL_FPoint{ screen_tl.x, screen_tl.y };
@@ -52,10 +63,10 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const camera& cam, const w
             vertices[2].position = SDL_FPoint{ screen_br.x, screen_br.y };
             vertices[3].position = SDL_FPoint{ screen_bl.x, screen_bl.y };
             vertices[0].color = vertices[1].color = vertices[2].color = vertices[3].color = white;
-            vertices[0].tex_coord = SDL_FPoint{ 0.0f, 0.0f };
-            vertices[1].tex_coord = SDL_FPoint{ tx1, 0.0f };
+            vertices[0].tex_coord = SDL_FPoint{ tx0, ty0 };
+            vertices[1].tex_coord = SDL_FPoint{ tx1, ty0 };
             vertices[2].tex_coord = SDL_FPoint{ tx1, ty1 };
-            vertices[3].tex_coord = SDL_FPoint{ 0.0f, ty1 };
+            vertices[3].tex_coord = SDL_FPoint{ tx0, ty1 };
 
             SDL_RenderGeometry(renderer, tile.texture, vertices, 4, indices, 6);
         }
