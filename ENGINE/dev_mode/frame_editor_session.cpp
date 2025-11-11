@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <sstream>
 #include <utility>
+#include <iomanip>
 
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
@@ -92,6 +94,22 @@ void FrameEditorSession::begin(Assets* assets,
 
     // Parse frames from document
     frames_ = parse_movement_frames_json(document_->animation_payload(animation_id_).value_or(std::string{}));
+    child_assets_.clear();
+    if (document_) {
+        if (auto payload_dump = document_->animation_payload(animation_id_)) {
+            nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
+            if (payload.is_object() && payload.contains("children") && payload["children"].is_array()) {
+                for (const auto& entry : payload["children"]) {
+                    if (!entry.is_string()) continue;
+                    std::string name = entry.get<std::string>();
+                    if (name.empty()) continue;
+                    child_assets_.push_back(std::move(name));
+                }
+            }
+        }
+    }
+    sync_child_frames();
+    selected_child_index_ = 0;
     if (frames_.empty()) {
         frames_.push_back(clamp_frame(MovementFrame{}));
     }
@@ -263,6 +281,41 @@ void FrameEditorSession::update(const Input& input) {
     if (tb_total_dy_ && !tb_total_dy_->is_editing()) {
         if (tb_total_dy_->value() != dys) tb_total_dy_->set_value(dys);
         last_totals_dy_text_ = tb_total_dy_->value();
+    }
+    if (mode_ == Mode::Children) {
+        const ChildFrame* child = current_child_frame();
+        auto sync_text_box = [&](DMTextBox* tb, std::string& cache, float value) {
+            if (!tb || tb->is_editing()) return;
+            std::ostringstream oss;
+            oss << static_cast<int>(std::lround(value));
+            const std::string text = oss.str();
+            if (tb->value() != text) {
+                tb->set_value(text);
+            }
+            cache = tb->value();
+        };
+        if (child) {
+            sync_text_box(tb_child_dx_.get(), last_child_dx_text_, child->dx);
+            sync_text_box(tb_child_dy_.get(), last_child_dy_text_, child->dy);
+            if (tb_child_deg_ && !tb_child_deg_->is_editing()) {
+                std::ostringstream oss;
+                oss << std::fixed << std::setprecision(1) << child->degree;
+                const std::string text = oss.str();
+                if (tb_child_deg_->value() != text) {
+                    tb_child_deg_->set_value(text);
+                }
+                last_child_deg_text_ = tb_child_deg_->value();
+            }
+            if (cb_child_visible_) {
+                cb_child_visible_->set_value(child->visible);
+                last_child_visible_value_ = child->visible;
+            }
+        } else {
+            if (tb_child_dx_ && !tb_child_dx_->is_editing()) tb_child_dx_->set_value("0");
+            if (tb_child_dy_ && !tb_child_dy_->is_editing()) tb_child_dy_->set_value("0");
+            if (tb_child_deg_ && !tb_child_deg_->is_editing()) tb_child_deg_->set_value("0");
+            if (cb_child_visible_) cb_child_visible_->set_value(false);
+        }
     }
     // Ensure asset hidden state follows checkbox
     if (target_) target_->set_hidden(!show_animation_);
@@ -456,9 +509,71 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         if (consumed_tb) return true;
     }
 
+    if (mode_ == Mode::Children) {
+        bool consumed_child = false;
+        if (tb_child_dx_) consumed_child = tb_child_dx_->handle_event(e) || consumed_child;
+        if (tb_child_dy_) consumed_child = tb_child_dy_->handle_event(e) || consumed_child;
+        if (tb_child_deg_) consumed_child = tb_child_deg_->handle_event(e) || consumed_child;
+        if (cb_child_visible_) consumed_child = cb_child_visible_->handle_event(e) || consumed_child;
+        if (consumed_child) {
+            auto* child = current_child_frame();
+            if (child) {
+                auto parse_float = [](const std::string& s, float fallback) -> float {
+                    try {
+                        size_t idx = 0;
+                        float v = std::stof(s, &idx);
+                        if (idx == s.size()) {
+                            return v;
+                        }
+                    } catch (...) {
+                    }
+                    return fallback;
+                };
+                bool changed = false;
+                if (tb_child_dx_) {
+                    float new_dx = parse_float(tb_child_dx_->value(), child->dx);
+                    if (!std::isnan(new_dx) && child->dx != new_dx) {
+                        child->dx = new_dx;
+                        changed = true;
+                    }
+                }
+                if (tb_child_dy_) {
+                    float new_dy = parse_float(tb_child_dy_->value(), child->dy);
+                    if (!std::isnan(new_dy) && child->dy != new_dy) {
+                        child->dy = new_dy;
+                        changed = true;
+                    }
+                }
+                if (tb_child_deg_) {
+                    float new_deg = parse_float(tb_child_deg_->value(), child->degree);
+                    if (!std::isnan(new_deg) && child->degree != new_deg) {
+                        child->degree = new_deg;
+                        changed = true;
+                    }
+                }
+                if (cb_child_visible_) {
+                    bool vis = cb_child_visible_->value();
+                    if (child->visible != vis) {
+                        child->visible = vis;
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    rebuild_rel_positions();
+                    persist_changes();
+                }
+            }
+            return true;
+        }
+    }
+
     // Navigation
     if (handle_button(btn_prev_, [this]() { this->select_frame(std::max(0, this->selected_index_ - 1)); })) return true;
     if (handle_button(btn_next_, [this]() { this->select_frame(this->selected_index_ + 1); })) return true;
+    if (mode_ == Mode::Children) {
+        if (handle_button(btn_child_prev_, [this]() { this->select_child(this->selected_child_index_ - 1); })) return true;
+        if (handle_button(btn_child_next_, [this]() { this->select_child(this->selected_child_index_ + 1); })) return true;
+    }
 
     // Thumbnails (skip if we were dragging)
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
@@ -546,6 +661,27 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         SDL_RenderDrawRect(renderer, &dot);
     }
 
+    if (mode_ == Mode::Children && !child_assets_.empty() && selected_index_ < static_cast<int>(frames_.size())) {
+        const auto& frame = frames_[selected_index_];
+        for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size(); ++i) {
+            const auto& child = frame.children[i];
+            SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{
+                child.dx + anchor_world.x,
+                child.dy + anchor_world.y
+            });
+            SDL_Point cp = round_point(screen);
+            const int marker_r = (static_cast<int>(i) == selected_child_index_) ? 6 : 4;
+            SDL_Rect marker{ cp.x - marker_r, cp.y - marker_r, marker_r * 2, marker_r * 2 };
+            SDL_Color base = (static_cast<int>(i) == selected_child_index_) ? DMStyles::AccentButton().bg : DMStyles::HeaderButton().bg;
+            Uint8 alpha = child.visible ? 220 : 90;
+            SDL_SetRenderDrawColor(renderer, base.r, base.g, base.b, alpha);
+            SDL_RenderFillRect(renderer, &marker);
+            SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, 255);
+            SDL_RenderDrawRect(renderer, &marker);
+            render_label(renderer, child_assets_[i], marker.x + marker.w + 4, marker.y - 4);
+        }
+    }
+
     // Panels
     ensure_widgets();
     rebuild_layout();
@@ -564,6 +700,14 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         if (cb_show_anim_) cb_show_anim_->render(renderer);
         if (tb_total_dx_) tb_total_dx_->render(renderer);
         if (tb_total_dy_) tb_total_dy_->render(renderer);
+    } else if (mode_ == Mode::Children && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
+        dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        if (btn_child_prev_) btn_child_prev_->render(renderer);
+        if (btn_child_next_) btn_child_next_->render(renderer);
+        if (tb_child_dx_) tb_child_dx_->render(renderer);
+        if (tb_child_dy_) tb_child_dy_->render(renderer);
+        if (tb_child_deg_) tb_child_deg_->render(renderer);
+        if (cb_child_visible_) cb_child_visible_->render(renderer);
     }
 
     // Navigation panel
@@ -623,6 +767,12 @@ void FrameEditorSession::ensure_widgets() const {
     if (!cb_show_anim_) cb_show_anim_ = std::make_unique<DMCheckbox>("Show Animation", show_animation_);
     if (!tb_total_dx_) tb_total_dx_ = std::make_unique<DMTextBox>("Total dX", "0");
     if (!tb_total_dy_) tb_total_dy_ = std::make_unique<DMTextBox>("Total dY", "0");
+    if (!btn_child_prev_) btn_child_prev_ = std::make_unique<DMButton>("< Child", &header, 96, bh);
+    if (!btn_child_next_) btn_child_next_ = std::make_unique<DMButton>("Child >", &header, 96, bh);
+    if (!tb_child_dx_) tb_child_dx_ = std::make_unique<DMTextBox>("Child dX", "0");
+    if (!tb_child_dy_) tb_child_dy_ = std::make_unique<DMTextBox>("Child dY", "0");
+    if (!tb_child_deg_) tb_child_deg_ = std::make_unique<DMTextBox>("Rotation", "0");
+    if (!cb_child_visible_) cb_child_visible_ = std::make_unique<DMCheckbox>("Visible", true);
     last_show_anim_value_ = show_animation_;
     last_totals_dx_text_ = tb_total_dx_->value();
     last_totals_dy_text_ = tb_total_dy_->value();
@@ -683,6 +833,43 @@ void FrameEditorSession::rebuild_layout() const {
         }
         if (tb_total_dy_) {
             tb_total_dy_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
+        }
+    } else if (mode_ == Mode::Children) {
+        const int gaps_between = DMSpacing::small_gap();
+        const int line_h = std::max(DMButton::height(), DMTextBox::height());
+        const int tb_w = 110;
+        int tool_w = tool_padding * 2;
+        if (btn_child_prev_) tool_w += btn_child_prev_->rect().w;
+        if (btn_child_next_) tool_w += btn_child_next_->rect().w + gaps_between;
+        tool_w += (tb_w * 3) + gaps_between * 4;
+        const int tool_h = line_h * 2 + tool_padding * 3;
+        toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h };
+        int tx = toolbox_rect_.x + tool_padding;
+        int ty = toolbox_rect_.y + tool_padding;
+        if (btn_child_prev_) {
+            btn_child_prev_->set_rect(SDL_Rect{ tx, ty, btn_child_prev_->rect().w, line_h });
+            tx += btn_child_prev_->rect().w + gaps_between;
+        }
+        if (btn_child_next_) {
+            btn_child_next_->set_rect(SDL_Rect{ tx, ty, btn_child_next_->rect().w, line_h });
+            tx += btn_child_next_->rect().w + gaps_between;
+        }
+        ty += line_h + gaps_between;
+        tx = toolbox_rect_.x + tool_padding;
+        if (tb_child_dx_) {
+            tb_child_dx_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
+            tx += tb_w + gaps_between;
+        }
+        if (tb_child_dy_) {
+            tb_child_dy_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
+            tx += tb_w + gaps_between;
+        }
+        if (tb_child_deg_) {
+            tb_child_deg_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
+            tx += tb_w + gaps_between;
+        }
+        if (cb_child_visible_) {
+            cb_child_visible_->set_rect(SDL_Rect{ tx, ty, std::max(100, cb_child_visible_->preferred_width()), DMCheckbox::height() });
         }
     } else {
         toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
@@ -760,6 +947,74 @@ void FrameEditorSession::rebuild_rel_positions() {
     }
 }
 
+void FrameEditorSession::sync_child_frames() {
+    if (child_assets_.empty()) {
+        for (auto& frame : frames_) {
+            frame.children.clear();
+        }
+        selected_child_index_ = 0;
+        return;
+    }
+    for (auto& frame : frames_) {
+        std::vector<ChildFrame> normalized(child_assets_.size());
+        for (std::size_t i = 0; i < normalized.size(); ++i) {
+            normalized[i].child_index = static_cast<int>(i);
+        }
+        for (const auto& existing : frame.children) {
+            if (existing.child_index < 0 ||
+                existing.child_index >= static_cast<int>(normalized.size())) {
+                continue;
+            }
+            normalized[existing.child_index] = existing;
+        }
+        frame.children = std::move(normalized);
+    }
+    if (selected_child_index_ >= static_cast<int>(child_assets_.size())) {
+        selected_child_index_ = static_cast<int>(child_assets_.size()) - 1;
+    }
+    if (selected_child_index_ < 0) {
+        selected_child_index_ = 0;
+    }
+}
+
+FrameEditorSession::ChildFrame* FrameEditorSession::current_child_frame() {
+    if (frames_.empty() || child_assets_.empty()) {
+        return nullptr;
+    }
+    const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+    auto& frame = frames_[frame_index];
+    if (selected_child_index_ < 0 ||
+        selected_child_index_ >= static_cast<int>(frame.children.size())) {
+        return nullptr;
+    }
+    return &frame.children[selected_child_index_];
+}
+
+const FrameEditorSession::ChildFrame* FrameEditorSession::current_child_frame() const {
+    if (frames_.empty() || child_assets_.empty()) {
+        return nullptr;
+    }
+    const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+    const auto& frame = frames_[frame_index];
+    if (selected_child_index_ < 0 ||
+        selected_child_index_ >= static_cast<int>(frame.children.size())) {
+        return nullptr;
+    }
+    return &frame.children[selected_child_index_];
+}
+
+void FrameEditorSession::select_child(int index) {
+    if (child_assets_.empty()) {
+        selected_child_index_ = 0;
+        return;
+    }
+    index = std::clamp(index, 0, static_cast<int>(child_assets_.size()) - 1);
+    if (index == selected_child_index_) {
+        return;
+    }
+    selected_child_index_ = index;
+}
+
 void FrameEditorSession::persist_changes() {
     if (!document_) return;
     // Serialize primary movement + totals (reuse logic similar to FrameMovementEditor)
@@ -768,6 +1023,11 @@ void FrameEditorSession::persist_changes() {
         payload = nlohmann::json::parse(*j, nullptr, false);
         if (!payload.is_object()) payload = nlohmann::json::object();
     }
+    nlohmann::json children_array = nlohmann::json::array();
+    for (const auto& child_name : child_assets_) {
+        children_array.push_back(child_name);
+    }
+    payload["children"] = std::move(children_array);
     nlohmann::json movement = nlohmann::json::array();
     for (size_t i = 0; i < frames_.size(); ++i) {
         const MovementFrame& f = frames_[i];
@@ -775,6 +1035,25 @@ void FrameEditorSession::persist_changes() {
         int dy = static_cast<int>(std::lround(i == 0 ? 0.0f : f.dy));
         nlohmann::json entry = nlohmann::json::array({dx, dy});
         if (f.resort_z) entry.push_back(f.resort_z);
+        if (!child_assets_.empty()) {
+            nlohmann::json child_entries = nlohmann::json::array();
+            if (!f.children.empty()) {
+                for (const auto& child : f.children) {
+                    if (child.child_index < 0 ||
+                        child.child_index >= static_cast<int>(child_assets_.size())) {
+                        continue;
+                    }
+                    nlohmann::json child_json = nlohmann::json::array();
+                    child_json.push_back(child.child_index);
+                    child_json.push_back(static_cast<int>(std::lround(child.dx)));
+                    child_json.push_back(static_cast<int>(std::lround(child.dy)));
+                    child_json.push_back(static_cast<double>(child.degree));
+                    child_json.push_back(child.visible);
+                    child_entries.push_back(std::move(child_json));
+                }
+            }
+            entry.push_back(std::move(child_entries));
+        }
         movement.push_back(entry);
     }
     if (movement.empty()) movement.push_back(nlohmann::json::array({0,0}));
@@ -870,10 +1149,66 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
             if (!entry.empty() && entry[0].is_number()) f.dx = static_cast<float>(entry[0].get<double>());
             if (entry.size() > 1 && entry[1].is_number()) f.dy = static_cast<float>(entry[1].get<double>());
             if (entry.size() > 2 && entry[2].is_boolean()) f.resort_z = entry[2].get<bool>();
+            if (entry.size() > 4 && entry[4].is_array()) {
+                for (const auto& child_entry : entry[4]) {
+                    if (!child_entry.is_array() || child_entry.empty()) continue;
+                    ChildFrame child;
+                    try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
+                    if (child_entry.size() > 1 && child_entry[1].is_number()) {
+                        child.dx = static_cast<float>(child_entry[1].get<double>());
+                    }
+                    if (child_entry.size() > 2 && child_entry[2].is_number()) {
+                        child.dy = static_cast<float>(child_entry[2].get<double>());
+                    }
+                    if (child_entry.size() > 3 && child_entry[3].is_number()) {
+                        child.degree = static_cast<float>(child_entry[3].get<double>());
+                    }
+                    if (child_entry.size() > 4) {
+                        if (child_entry[4].is_boolean()) {
+                            child.visible = child_entry[4].get<bool>();
+                        } else if (child_entry[4].is_number_integer()) {
+                            child.visible = child_entry[4].get<int>() != 0;
+                        }
+                    }
+                    f.children.push_back(child);
+                }
+            }
         } else if (entry.is_object()) {
             f.dx = static_cast<float>(entry.value("dx", 0.0));
             f.dy = static_cast<float>(entry.value("dy", 0.0));
             f.resort_z = entry.value("resort_z", false);
+            if (entry.contains("children") && entry["children"].is_array()) {
+                for (const auto& child_entry : entry["children"]) {
+                    if (!child_entry.is_object() && !child_entry.is_array()) continue;
+                    ChildFrame child;
+                    if (child_entry.is_object()) {
+                        child.child_index = child_entry.value("child_index", -1);
+                        child.dx = static_cast<float>(child_entry.value("dx", 0.0));
+                        child.dy = static_cast<float>(child_entry.value("dy", 0.0));
+                        child.degree = static_cast<float>(child_entry.value("degree", 0.0));
+                        child.visible = child_entry.value("visible", false);
+                    } else if (child_entry.is_array()) {
+                        try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
+                        if (child_entry.size() > 1 && child_entry[1].is_number()) {
+                            child.dx = static_cast<float>(child_entry[1].get<double>());
+                        }
+                        if (child_entry.size() > 2 && child_entry[2].is_number()) {
+                            child.dy = static_cast<float>(child_entry[2].get<double>());
+                        }
+                        if (child_entry.size() > 3 && child_entry[3].is_number()) {
+                            child.degree = static_cast<float>(child_entry[3].get<double>());
+                        }
+                        if (child_entry.size() > 4) {
+                            if (child_entry[4].is_boolean()) {
+                                child.visible = child_entry[4].get<bool>();
+                            } else if (child_entry[4].is_number_integer()) {
+                                child.visible = child_entry[4].get<int>() != 0;
+                            }
+                        }
+                    }
+                    f.children.push_back(child);
+                }
+            }
         }
         frames.push_back(clamp_frame(f));
     }

@@ -353,13 +353,34 @@ void Animation::load(const std::string& trigger,
 	randomize = anim_json.value("randomize", false);
 	rnd_start = anim_json.value("rnd_start", false);
 	on_end_animation = anim_json.value("on_end", std::string{"default"});
+        child_asset_names_.clear();
+        bool children_specified = false;
+        if (anim_json.contains("children") && anim_json["children"].is_array()) {
+                for (const auto& child_entry : anim_json["children"]) {
+                        if (!child_entry.is_string()) {
+                                continue;
+                        }
+                        std::string name = child_entry.get<std::string>();
+                        if (name.empty()) {
+                                continue;
+                        }
+                        child_asset_names_.push_back(std::move(name));
+                }
+                children_specified = true;
+        }
+        if (!children_specified && source.kind == "animation" && !source.name.empty()) {
+                auto src_child_it = info.animations.find(source.name);
+                if (src_child_it != info.animations.end()) {
+                        child_asset_names_ = src_child_it->second.child_assets();
+                }
+        }
         total_dx = 0;
         total_dy = 0;
         movement_paths_.clear();
         audio_clip = AudioClip{};
         bool movement_specified = false;
 
-        auto parse_movement_sequence = [](const nlohmann::json& seq, std::vector<AnimationFrame>& dest) {
+        auto parse_movement_sequence = [this](const nlohmann::json& seq, std::vector<AnimationFrame>& dest) {
                 bool specified = false;
                 if (!seq.is_array()) return specified;
                 auto clamp = [](int v) { return (v < 0) ? 0 : (v > 255 ? 255 : v); };
@@ -378,10 +399,47 @@ void Animation::load(const std::string& trigger,
                                 try { b = clamp(mv[3][2].get<int>()); } catch (...) { b = 255; }
                                 fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
                         }
+                        fm.children.clear();
+                        if (mv.size() >= 5 && mv[4].is_array()) {
+                                for (const auto& child_entry : mv[4]) {
+                                        if (!child_entry.is_array() || child_entry.empty()) {
+                                                continue;
+                                        }
+                                        AnimationChildFrameData child_data;
+                                        try {
+                                                child_data.child_index = child_entry[0].get<int>();
+                                        } catch (...) {
+                                                child_data.child_index = -1;
+                                        }
+                                        if (child_entry.size() >= 2 && child_entry[1].is_number()) {
+                                                try { child_data.dx = child_entry[1].get<int>(); } catch (...) { child_data.dx = 0; }
+                                        }
+                                        if (child_entry.size() >= 3 && child_entry[2].is_number()) {
+                                                try { child_data.dy = child_entry[2].get<int>(); } catch (...) { child_data.dy = 0; }
+                                        }
+                                        if (child_entry.size() >= 4 && child_entry[3].is_number()) {
+                                                try { child_data.degree = static_cast<float>(child_entry[3].get<double>()); } catch (...) { child_data.degree = 0.0f; }
+                                        }
+                                        if (child_entry.size() >= 5) {
+                                                if (child_entry[4].is_boolean()) {
+                                                        child_data.visible = child_entry[4].get<bool>();
+                                                } else if (child_entry[4].is_number_integer()) {
+                                                        child_data.visible = child_entry[4].get<int>() != 0;
+                                                } else {
+                                                        child_data.visible = false;
+                                                }
+                                        }
+                                        if (child_data.child_index < 0 ||
+                                            child_data.child_index >= static_cast<int>(child_asset_names_.size())) {
+                                                continue;
+                                        }
+                                        fm.children.push_back(child_data);
+                                }
+                        }
                         if (fm.dx != 0 || fm.dy != 0 || mv.size() >= 3) {
                                 specified = true;
                         }
-                        dest.push_back(fm);
+                        dest.push_back(std::move(fm));
                 }
                 return specified;
 };

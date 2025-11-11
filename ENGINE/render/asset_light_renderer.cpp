@@ -194,9 +194,12 @@ void AssetLightRenderer::draw_pass(Pass pass) {
     SDL_Texture* original_target = SDL_GetRenderTarget(renderer_);
 
     for (const LightSource& light : *lights_) {
-        // Allow alpha-mask lights to render even when neither front nor behind is set.
-        // In that case, render them in the behind pass only to avoid double work.
-        if ((pass == Pass::kBehind && !light.behind && !light.render_front_and_back_to_asset_alpha_mask) ||
+        // Render lights only on passes they are configured for.
+        // Mask-only lights with no explicit front/behind flags default to the behind pass.
+        const bool mask_only_light = light.render_front_and_back_to_asset_alpha_mask &&
+                                     !light.in_front && !light.behind;
+        const bool should_render_in_behind_pass = light.behind || mask_only_light;
+        if ((pass == Pass::kBehind && !should_render_in_behind_pass) ||
             (pass == Pass::kFront  && !light.in_front)) {
             continue;
         }

@@ -25,6 +25,7 @@ class camera;
 class Assets;
 class Input;
 class AnimationFrame;
+class Animation;
 class AssetInfoUI;
 class RenderAsset;
 class AssetList;
@@ -48,6 +49,18 @@ class Asset {
         bool is_valid() const {
             return enabled && tile_size.x > 0 && tile_size.y > 0 && coverage.w > 0 && coverage.h > 0;
         }
+    };
+
+    struct AnimationChildAttachment {
+        int child_index = -1;
+        std::string asset_name;
+        std::shared_ptr<AssetInfo> info;
+        const Animation* animation = nullptr;
+        const AnimationFrame* current_frame = nullptr;
+        float frame_progress = 0.0f;
+        SDL_Point world_pos{0, 0};
+        float rotation_degrees = 0.0f;
+        bool visible = false;
     };
 
     Area get_area(const std::string& name) const;
@@ -152,6 +165,7 @@ class Asset {
     float angle_from_camera = 0.0f;
 
     std::vector<Asset*> asset_children;
+    const std::vector<AnimationChildAttachment>& animation_children() const { return animation_children_; }
     int depth = 0;
     bool is_shaded = false;
     bool dead = false;
@@ -194,6 +208,7 @@ private:
     std::unique_ptr<AssetController>   controller_;
     std::unique_ptr<AssetList> neighbors;
     AssetList* impassable_naighbors = nullptr;
+    std::vector<AnimationChildAttachment> animation_children_;
     std::optional<TilingInfo> tiling_info_{};
     SDL_Point last_neighbor_origin_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
     bool neighbor_lists_initialized_ = false;

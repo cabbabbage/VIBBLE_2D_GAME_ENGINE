@@ -187,6 +187,7 @@ Asset::Asset(const Asset& o)
         translation_smoothing_y_  = o.translation_smoothing_y_;
         scale_smoothing_          = o.scale_smoothing_;
         alpha_smoothing_          = o.alpha_smoothing_;
+        animation_children_       = o.animation_children_;
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -242,6 +243,7 @@ Asset& Asset::operator=(const Asset& o) {
         translation_smoothing_y_  = o.translation_smoothing_y_;
         scale_smoothing_          = o.scale_smoothing_;
         alpha_smoothing_          = o.alpha_smoothing_;
+        animation_children_       = o.animation_children_;
         return *this;
 }
 

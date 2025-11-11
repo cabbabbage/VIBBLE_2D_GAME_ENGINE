@@ -302,6 +302,84 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
 
     return SDL_FRect{ left, top, width, height };
 }
+
+SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
+                                                 SDL_Point world_point,
+                                                 int fw,
+                                                 int fh,
+                                                 float inv_scale,
+                                                 int min_w,
+                                                 int min_h,
+                                                 float reference_screen_height) {
+    if (!parent || fw <= 0 || fh <= 0) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
+    float base_scale = parent->smoothed_scale();
+    if (!std::isfinite(base_scale) || base_scale <= 0.0f) {
+        base_scale = 1.0f;
+    }
+    const float scaled_fw = static_cast<float>(fw) * base_scale;
+    const float scaled_fh = static_cast<float>(fh) * base_scale;
+    const float base_sw   = scaled_fw * inv_scale;
+    const float base_sh   = scaled_fh * inv_scale;
+
+    camera& cam = assets_->getView();
+    const camera::RenderSmoothingKey smoothing_key =
+        reinterpret_cast<camera::RenderSmoothingKey>(parent);
+    camera::RenderEffects ef = cam.compute_render_effects(
+        world_point,
+        base_sh,
+        reference_screen_height,
+        smoothing_key);
+    SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{
+        static_cast<float>(world_point.x),
+        static_cast<float>(world_point.y)
+    });
+    ef.screen_position = screen;
+
+    float center_x = ef.screen_position.x;
+    if (assets_ && assets_->player != parent) {
+        world::Grid& grid = assets_->world_grid();
+        center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
+    }
+
+    const bool apply_distance = parent->info && parent->info->apply_distance_scaling;
+    const bool apply_vertical = parent->info && parent->info->apply_vertical_scaling;
+    const float distance_scale = apply_distance ? ef.distance_scale : 1.0f;
+    const float vertical_scale = apply_vertical ? ef.vertical_scale : 1.0f;
+
+    float width  = base_sw * distance_scale;
+    float height = (base_sh * distance_scale) * vertical_scale;
+
+    const float min_w_f = static_cast<float>(min_w);
+    const float min_h_f = static_cast<float>(min_h);
+    if (width < min_w_f && height < min_h_f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    bool enforced_min = false;
+    if (width < min_w_f) {
+        width = min_w_f;
+        enforced_min = true;
+    }
+    if (height < min_h_f) {
+        height = min_h_f;
+        enforced_min = true;
+    }
+
+    width  = std::max(width, 1.0f);
+    height = std::max(height, 1.0f);
+
+    const float left = center_x - width * 0.5f;
+    const float top  = ef.screen_position.y - height;
+
+    if (enforced_min) {
+        width  = static_cast<float>(std::max(1, static_cast<int>(std::lround(width))));
+        height = static_cast<float>(std::max(1, static_cast<int>(std::lround(height))));
+    }
+
+    return SDL_FRect{ left, top, width, height };
+}
 void SceneRenderer::render(){
     static int render_call_count=0; ++render_call_count;
     ++frame_counter_;
@@ -500,6 +578,52 @@ void SceneRenderer::render(){
                 enqueue_command(a, final_tex, nullptr, dst, /*suppress_sprite_draw=*/true);
             }
 
+            if (!a->animation_children().empty()) {
+                for (const auto& attachment : a->animation_children()) {
+                    if (!attachment.visible || !attachment.animation || !attachment.current_frame) {
+                        continue;
+                    }
+                    SDL_Texture* child_tex = attachment.animation->get_frame(attachment.current_frame);
+                    if (!child_tex) {
+                        continue;
+                    }
+                    int child_fw = 0;
+                    int child_fh = 0;
+                    SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh);
+                    SDL_FRect child_rect = get_child_position_rect(
+                        a,
+                        attachment.world_pos,
+                        child_fw,
+                        child_fh,
+                        inv_scale,
+                        min_w,
+                        min_h,
+                        player_sh);
+                    if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
+                        continue;
+                    }
+                    AssetRenderCommand child_cmd;
+                    child_cmd.asset = a;
+                    child_cmd.final_texture = child_tex;
+                    child_cmd.source_texture = child_tex;
+                    child_cmd.dst = child_rect;
+                    child_cmd.highlighted = a->is_highlighted();
+                    child_cmd.selected = a->is_selected();
+                    child_cmd.flipped = a->flipped;
+                    child_cmd.alpha = a ? a->smoothed_alpha() : 1.0f;
+                    if (!std::isfinite(child_cmd.alpha)) {
+                        child_cmd.alpha = 1.0f;
+                    }
+                    child_cmd.alpha = std::clamp(child_cmd.alpha, 0.0f, 1.0f);
+                    child_cmd.rotation_degrees = attachment.rotation_degrees;
+                    if (std::fabs(attachment.rotation_degrees) > std::numeric_limits<float>::epsilon()) {
+                        child_cmd.has_custom_pivot = true;
+                        child_cmd.rotation_pivot = SDL_FPoint{ child_rect.w * 0.5f, child_rect.h };
+                    }
+                    remaining_commands_.push_back(std::move(child_cmd));
+                }
+            }
+
             if (has_light_sources && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
                 bool has_front_lights         = false;
                 bool has_back_lights          = false;
@@ -509,7 +633,9 @@ void SceneRenderer::render(){
                     has_front_lights         |= light.in_front;
                     has_back_lights          |= light.behind;
                     has_dark_mask_lights     |= light.render_to_dark_mask;
-                    has_alpha_mask_only_lights |= light.render_front_and_back_to_asset_alpha_mask;
+                    has_alpha_mask_only_lights |=
+                        light.render_front_and_back_to_asset_alpha_mask && !light.in_front &&
+                        !light.behind;
                     if (has_front_lights && has_back_lights && has_dark_mask_lights && has_alpha_mask_only_lights) {
                         break;
                     }
@@ -615,15 +741,15 @@ void SceneRenderer::render(){
                     SDL_FRect orect = cmd.dst;
                     orect.x += o.x * outline_px;
                     orect.y += o.y * outline_px;
-                    SDL_RenderCopyExF(
-                        renderer_,
-                        tex,
-                        nullptr,
-                        &orect,
-                        0.0,
-                        nullptr,
-                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
-                    );
+                SDL_RenderCopyExF(
+                    renderer_,
+                    tex,
+                    nullptr,
+                    &orect,
+                    cmd.rotation_degrees,
+                    cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
+                    cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
+                );
                 }
 
                 // Restore defaults on the texture before the base pass
@@ -793,8 +919,8 @@ void SceneRenderer::render(){
                     cmd.source_texture,
                     nullptr,
                     &cmd.dst,
-                    0.0,
-                    nullptr,
+                    cmd.rotation_degrees,
+                    cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
                     cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
                 );
             }

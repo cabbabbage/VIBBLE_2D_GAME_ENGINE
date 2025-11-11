@@ -46,6 +46,14 @@ public:
 private:
     bool shouldRegen(Asset* a);
     SDL_FRect get_scaled_position_rect(Asset* a, int fw, int fh, float inv_scale, int min_w, int min_h, float reference_screen_height);
+    SDL_FRect get_child_position_rect(const Asset* parent,
+                                      SDL_Point world_point,
+                                      int fw,
+                                      int fh,
+                                      float inv_scale,
+                                      int min_w,
+                                      int min_h,
+                                      float reference_screen_height);
     bool initialize_static_light_chunks();
 
 private:
@@ -61,6 +69,9 @@ private:
         bool         selected            = false;
         bool         flipped             = false;
         float        alpha               = 1.0f;
+        float        rotation_degrees    = 0.0f;
+        bool         has_custom_pivot    = false;
+        SDL_FPoint   rotation_pivot      { 0.0f, 0.0f };
     };
 
     bool ensure_darkness_overlay();
