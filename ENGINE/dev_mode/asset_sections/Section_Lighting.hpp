@@ -549,23 +549,23 @@ public:
             }
         }
     }
-
-    void set_highlighted_light(std::optional<std::size_t> index) {
-        int new_index = -1;
-        if (index && *index < rows_.size()) {
-            new_index = static_cast<int>(*index);
-        }
-        if (new_index == highlighted_row_index_) {
-            return;
-        }
-        highlighted_row_index_ = new_index;
-        refresh_highlight_state();
-    }
-
-    void expand_light_row(std::size_t index) {
-        if (index >= rows_.size()) {
-            return;
-        }
-        set_row_expanded(rows_[index], true, index);
-    }
 };
+
+inline void Section_Lighting::set_highlighted_light(std::optional<std::size_t> index) {
+    int new_index = -1;
+    if (index && *index < rows_.size()) {
+        new_index = static_cast<int>(*index);
+    }
+    if (new_index == highlighted_row_index_) {
+        return;
+    }
+    highlighted_row_index_ = new_index;
+    refresh_highlight_state();
+}
+
+inline void Section_Lighting::expand_light_row(std::size_t index) {
+    if (index >= rows_.size()) {
+        return;
+    }
+    set_row_expanded(rows_[index], true, index);
+}
