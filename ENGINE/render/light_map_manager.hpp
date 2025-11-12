@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "world/chunk.hpp"
 
 class Assets;

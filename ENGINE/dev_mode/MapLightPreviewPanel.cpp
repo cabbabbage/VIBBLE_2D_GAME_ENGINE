@@ -13,7 +13,6 @@
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "dev_mode/dev_ui_settings.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/shared/formatting.hpp"
@@ -21,19 +20,12 @@
 #include "input.hpp"
 #include "render/camera.hpp"
 #include "world/chunk.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "util/grid.hpp"
 #include "world/chunk.hpp"
 
 namespace {
-constexpr std::string_view kReactiveSettingsKey = "dev_ui.lighting.map_panel.reactive";
-
 int clamp_int(int value, int lo, int hi) {
-    return std::max(lo, std::min(hi, value));
-}
-
-float clamp_float(float value, float lo, float hi) {
     return std::max(lo, std::min(hi, value));
 }
 
@@ -41,53 +33,6 @@ std::string format_float(float value, int precision) {
     std::ostringstream stream;
     stream << std::fixed << std::setprecision(precision) << value;
     return stream.str();
-}
-
-std::unique_ptr<DMSlider> make_float_slider(const std::string& label,
-                                            float                min_value,
-                                            float                max_value,
-                                            float                current,
-                                            int                  scale) {
-    const int min_i = static_cast<int>(std::round(min_value * static_cast<float>(scale)));
-    const int max_i = static_cast<int>(std::round(max_value * static_cast<float>(scale)));
-    const int cur_i = static_cast<int>(std::round(current * static_cast<float>(scale)));
-    auto       slider = std::make_unique<DMSlider>(label, min_i, max_i, cur_i);
-    slider->set_defer_commit_until_unfocus(false);
-    slider->set_value_formatter([scale](int value, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) -> std::string_view {
-        const float scaled = static_cast<float>(value) / static_cast<float>(scale);
-        return dev_mode::FormatSliderValue(scaled, 2, buffer);
-    });
-    slider->set_value_parser([scale](const std::string& text) -> std::optional<int> {
-        try {
-            float parsed = std::stof(text);
-            return static_cast<int>(std::round(parsed * static_cast<float>(scale)));
-        } catch (...) {
-            return std::nullopt;
-        }
-    });
-    return slider;
-}
-
-float slider_value_scaled(const std::unique_ptr<DMSlider>& slider, float fallback, int scale) {
-    if (!slider) {
-        return fallback;
-    }
-    return static_cast<float>(slider->displayed_value()) / static_cast<float>(scale);
-}
-
-void set_slider_scaled(const std::unique_ptr<DMSlider>& slider, float value, int scale) {
-    if (!slider) {
-        return;
-    }
-    const int scaled = static_cast<int>(std::round(value * static_cast<float>(scale)));
-    slider->set_value(scaled);
-}
-
-std::string make_setting_key(std::string_view suffix) {
-    std::string key{kReactiveSettingsKey};
-    key.push_back('.');
-    key.append(suffix);
-    return key;
 }
 
 SDL_Point preview_event_point(const SDL_Event& e) {
@@ -202,7 +147,9 @@ void MapLightPreviewPanel::set_assets(Assets* assets) {
             chunk_resolution_->set_value(last_chunk_resolution_);
         }
     }
-    force_shading_refresh_if_needed(true);
+    if (assets_) {
+        assets_->force_shaded_assets_rerender();
+    }
 }
 
 void MapLightPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback on_save) {
@@ -211,23 +158,8 @@ void MapLightPreviewPanel::set_map_info(nlohmann::json* map_info, SaveCallback o
     if (map_info_ && map_info_->is_object()) {
         ensure_map_grid_settings(*map_info_);
     }
-    if (!reactive_settings_initialized_) {
-        last_applied_settings_ = load_reactive_settings_from_dev_settings();
-        set_reactive_sliders(last_applied_settings_);
-        reactive_settings_initialized_ = true;
-    }
-    apply_immediate_settings();
     sync_ui_from_json();
-}
-
-void MapLightPreviewPanel::set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings) {
-    reactive_settings_shared_ = settings;
-    if (settings) {
-        last_applied_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(*settings);
-        set_reactive_sliders(last_applied_settings_);
-        apply_immediate_settings();
-        forced_settings_snapshot_ = last_applied_settings_;
-    }
+    apply_immediate_settings();
 }
 
 void MapLightPreviewPanel::update(const Input& input, int screen_w, int screen_h) {
@@ -1147,15 +1079,8 @@ void MapLightPreviewPanel::sync_ui_from_json() {
     if (!map_info_) {
         return;
     }
-    auto it = map_info_->find("reactive_shadows");
-    if (it != map_info_->end() && it->is_object()) {
-        last_applied_settings_ = render_pipeline::shading::reactive_shadow_settings_from_json(*it, last_applied_settings_);
-        last_applied_settings_ = render_pipeline::shading::sanitize_reactive_shadow_settings(last_applied_settings_);
-        set_reactive_sliders(last_applied_settings_);
-        apply_immediate_settings();
-    }
     int chunk_value = last_chunk_resolution_;
-    if (map_info_ && map_info_->is_object()) {
+    if (map_info_->is_object()) {
         auto grid_it = map_info_->find("map_grid_settings");
         if (grid_it != map_info_->end() && grid_it->is_object()) {
             MapGridSettings grid_settings = MapGridSettings::from_json(&(*grid_it));
@@ -1190,102 +1115,15 @@ void MapLightPreviewPanel::sync_json_from_ui() {
     grid_settings.apply_to_json(grid_section);
     if (assets_) {
         assets_->apply_map_grid_settings(grid_settings);
+        assets_->force_shaded_assets_rerender();
     }
-    render_pipeline::shading::ReactiveShadowSettings settings = current_settings_from_ui();
-    write_reactive_settings_to_json(settings);
-    last_applied_settings_ = settings;
-    apply_immediate_settings();
     needs_sync_to_json_ = false;
 }
 
 void MapLightPreviewPanel::apply_immediate_settings() {
-    bool settings_changed = false;
-    if (reactive_settings_shared_) {
-        auto sanitized = render_pipeline::shading::sanitize_reactive_shadow_settings(last_applied_settings_);
-        if (*reactive_settings_shared_ != sanitized) {
-            *reactive_settings_shared_ = sanitized;
-            settings_changed = true;
-        }
-        last_applied_settings_ = sanitized;
+    if (assets_) {
+        assets_->force_shaded_assets_rerender();
     }
-    persist_reactive_settings_to_dev_settings(last_applied_settings_);
-    force_shading_refresh_if_needed(settings_changed);
-}
-
-render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::current_settings_from_ui() const {
-    render_pipeline::shading::ReactiveShadowSettings settings = last_applied_settings_;
-    settings.virtual_light_map.horizontal_falloff = slider_value_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
-    settings.virtual_light_map.vertical_falloff = slider_value_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
-    settings.virtual_light_map.max_offset_x = slider_value_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
-    settings.virtual_light_map.max_offset_y = slider_value_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
-    if (search_radius_) {
-        settings.virtual_light_map.search_radius = search_radius_->displayed_value();
-    }
-    return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
-}
-
-void MapLightPreviewPanel::set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings) {
-    set_slider_scaled(horizontal_falloff_, settings.virtual_light_map.horizontal_falloff, 100);
-    set_slider_scaled(vertical_falloff_, settings.virtual_light_map.vertical_falloff, 100);
-    set_slider_scaled(max_offset_x_, settings.virtual_light_map.max_offset_x, 100);
-    set_slider_scaled(max_offset_y_, settings.virtual_light_map.max_offset_y, 100);
-    if (search_radius_) {
-        search_radius_->set_value(settings.virtual_light_map.search_radius);
-    }
-}
-
-render_pipeline::shading::ReactiveShadowSettings MapLightPreviewPanel::load_reactive_settings_from_dev_settings() {
-    using devmode::ui_settings::load_number;
-    render_pipeline::shading::ReactiveShadowSettings settings = render_pipeline::shading::sanitize_reactive_shadow_settings({});
-    settings.virtual_light_map.horizontal_falloff = static_cast<float>( load_number(make_setting_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff));
-    settings.virtual_light_map.vertical_falloff = static_cast<float>( load_number(make_setting_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff));
-    settings.virtual_light_map.max_offset_x = static_cast<float>( load_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x));
-    settings.virtual_light_map.max_offset_y = static_cast<float>( load_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y));
-    settings.opacity_sensitivity_percent = static_cast<float>( load_number(make_setting_key("opacity_sensitivity_percent"), settings.opacity_sensitivity_percent));
-    settings.frame_blend_falloff_frames = static_cast<int>(std::lround(load_number( make_setting_key("frame_blend_falloff_frames"), static_cast<double>(settings.frame_blend_falloff_frames))));
-    settings.virtual_light_map.search_radius = static_cast<int>( std::lround(load_number(make_setting_key("virtual_light_map.search_radius"), static_cast<double>(settings.virtual_light_map.search_radius))));
-    settings.virtual_light_map.grid_subdivide = static_cast<int>(
-        std::lround(load_number(make_setting_key("virtual_light_map.grid_subdivide"),
-                                static_cast<double>(settings.virtual_light_map.grid_subdivide))));
-    return render_pipeline::shading::sanitize_reactive_shadow_settings(settings);
-}
-
-void MapLightPreviewPanel::persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const {
-    using devmode::ui_settings::save_number;
-    save_number(make_setting_key("virtual_light_map.horizontal_falloff"), settings.virtual_light_map.horizontal_falloff);
-    save_number(make_setting_key("virtual_light_map.vertical_falloff"), settings.virtual_light_map.vertical_falloff);
-    save_number(make_setting_key("virtual_light_map.max_offset_x"), settings.virtual_light_map.max_offset_x);
-    save_number(make_setting_key("virtual_light_map.max_offset_y"), settings.virtual_light_map.max_offset_y);
-    save_number(make_setting_key("opacity_sensitivity_percent"), settings.opacity_sensitivity_percent);
-    save_number(make_setting_key("frame_blend_falloff_frames"), settings.frame_blend_falloff_frames);
-    save_number(make_setting_key("virtual_light_map.search_radius"), settings.virtual_light_map.search_radius);
-    save_number(make_setting_key("virtual_light_map.grid_subdivide"), settings.virtual_light_map.grid_subdivide);
-}
-
-void MapLightPreviewPanel::write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings) {
-    if (!map_info_) {
-        return;
-    }
-    nlohmann::json& json = (*map_info_)["reactive_shadows"];
-    render_pipeline::shading::assign_reactive_shadow_settings(json, settings);
-}
-
-nlohmann::json& MapLightPreviewPanel::ensure_reactive_settings_json() {
-    if (!map_info_) {
-        static nlohmann::json dummy = nlohmann::json::object();
-        return dummy;
-    }
-    return (*map_info_)["reactive_shadows"];
-}
-
-void MapLightPreviewPanel::force_shading_refresh_if_needed(bool force_refresh) {
-    const bool settings_changed = forced_settings_snapshot_ != last_applied_settings_;
-    const bool should_refresh   = force_refresh || settings_changed;
-    if (!assets_ || !should_refresh) {
-        return;
-    }
-    forced_settings_snapshot_ = last_applied_settings_;
-    assets_->force_shaded_assets_rerender();
 }
 
 void MapLightPreviewPanel::handle_chunk_resolution_changed() {

@@ -24,7 +24,6 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "render/camera.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/global_light_source.hpp"
 #include "render/runtime_lighting_sampler.hpp"
 #include "world/grid.hpp"
@@ -696,33 +695,7 @@ static void compute_use_shadow_data_for_chunk(const LightMap::ShadowSettings& se
 }
 
 LightMap::ShadowSettings LightMap::shadow_settings() const {
-    ShadowSettings settings{};
-    if (!assets_) {
-        return settings;
-    }
-
-    const auto* reactive = assets_->reactive_shadow_settings();
-    if (!reactive) {
-        return settings;
-    }
-
-    using render_pipeline::shading::sanitize_reactive_shadow_settings;
-    const auto sanitized = sanitize_reactive_shadow_settings(*reactive);
-
-    settings.search_radius_cells     = std::max(0, sanitized.virtual_light_map.search_radius);
-    settings.requested_grid_subdivide = sanitized.virtual_light_map.grid_subdivide;
-    settings.grid_subdivide          = std::clamp(sanitized.virtual_light_map.grid_subdivide, 1, 8);
-    settings.falloff_horizontal  = std::max(0.0f, sanitized.virtual_light_map.horizontal_falloff);
-    settings.falloff_vertical    = std::max(0.0f, sanitized.virtual_light_map.vertical_falloff);
-    settings.max_offset_x_px     = std::max(0.0f, sanitized.virtual_light_map.max_offset_x);
-    settings.max_offset_y_px     = std::max(0.0f, sanitized.virtual_light_map.max_offset_y);
-    settings.opacity_sensitivity_percent =
-        std::clamp(sanitized.opacity_sensitivity_percent, 0.0f, 100.0f);
-    settings.frame_blend_falloff_frames = sanitized.frame_blend_falloff_frames;
-    settings.sampling_static_weight  = std::max(0.0f, sanitized.sampling_weights.static_weight);
-    settings.sampling_dynamic_weight = std::max(0.0f, sanitized.sampling_weights.dynamic_weight);
-
-    return settings;
+    return ShadowSettings{};
 }
 
 void LightMap::invalidate_scene_light_cache() {
@@ -752,14 +725,6 @@ void LightMap::rebuild_scene_light_cache(const std::vector<world::Chunk*>& chunk
 std::pair<float, float> LightMap::resolve_sampling_weights(float static_weight, float dynamic_weight) const {
     float base_static  = kDefaultStaticWeight;
     float base_dynamic = kDefaultDynamicWeight;
-    if (assets_) {
-        if (const auto* reactive = assets_->reactive_shadow_settings()) {
-            const auto sanitized =
-                render_pipeline::shading::sanitize_reactive_shadow_settings(*reactive);
-            base_static  = std::max(0.0f, sanitized.sampling_weights.static_weight);
-            base_dynamic = std::max(0.0f, sanitized.sampling_weights.dynamic_weight);
-        }
-    }
 
     float effective_static  = static_weight;
     float effective_dynamic = dynamic_weight;
