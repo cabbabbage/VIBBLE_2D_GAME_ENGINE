@@ -22,6 +22,7 @@
 #include "AnimationInspectorPanel.hpp"
 #include "AnimationListContextMenu.hpp"
 #include "AnimationListPanel.hpp"
+#include "EditorUIPrimitives.hpp"
 #include "AsyncTaskQueue.hpp"
 #include "AudioImporter.hpp"
 #include "CroppingService.hpp"
@@ -1079,7 +1080,7 @@ void AnimationEditorWindow::ensure_layout() const {
 
 void AnimationEditorWindow::render_background(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    ui::draw_panel_background(renderer, bounds_);
 }
 
 void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
