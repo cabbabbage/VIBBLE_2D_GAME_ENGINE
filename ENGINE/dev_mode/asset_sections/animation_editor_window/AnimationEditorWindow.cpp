@@ -659,18 +659,37 @@ void AnimationEditorWindow::layout_children() {
     int status_height = DMStyles::Label().font_size + status_padding * 2;
     status_rect_ = SDL_Rect{bounds_.x, bounds_.y + bounds_.h - status_height, bounds_.w, status_height};
 
-    int list_y = header_rect_.y + header_rect_.h + header_gap;
-    int list_height = std::max(0, status_rect_.y - list_y - header_gap);
+    int content_top = header_rect_.y + header_rect_.h + header_gap;
+    int content_bottom = status_rect_.y - header_gap;
+    int content_height = std::max(0, content_bottom - content_top);
     int available_width = std::max(0, bounds_.w - padding * 2);
-    int sidebar_width = std::min(320, available_width);
-    int inspector_gap = DMSpacing::panel_padding();
-    if (available_width < sidebar_width + inspector_gap) {
-        inspector_gap = DMSpacing::small_gap();
+    bool stack_vertical = available_width < 640;
+
+    if (stack_vertical) {
+        int gap = DMSpacing::panel_padding();
+        if (content_height < gap * 2) {
+            gap = DMSpacing::small_gap();
+        }
+        int inspector_height = content_height / 2;
+        int list_height = std::max(0, content_height - inspector_height - gap);
+        inspector_height = std::max(0, content_height - list_height - gap);
+
+        list_rect_ = SDL_Rect{bounds_.x + padding, content_top, available_width, list_height};
+        inspector_rect_ = SDL_Rect{bounds_.x + padding,
+                                   list_rect_.y + list_rect_.h + gap,
+                                   available_width,
+                                   inspector_height};
+    } else {
+        int sidebar_width = std::clamp(available_width / 3, 260, 420);
+        int inspector_gap = DMSpacing::panel_padding();
+        if (available_width < sidebar_width + inspector_gap + 320) {
+            inspector_gap = DMSpacing::small_gap();
+        }
+        list_rect_ = SDL_Rect{bounds_.x + padding, content_top, sidebar_width, content_height};
+        int inspector_x = list_rect_.x + list_rect_.w + inspector_gap;
+        int inspector_w = std::max(0, bounds_.x + bounds_.w - padding - inspector_x);
+        inspector_rect_ = SDL_Rect{inspector_x, content_top, inspector_w, content_height};
     }
-    list_rect_ = SDL_Rect{bounds_.x + padding, list_y, sidebar_width, list_height};
-    int inspector_x = list_rect_.x + list_rect_.w + inspector_gap;
-    int inspector_w = std::max(0, bounds_.x + bounds_.w - padding - inspector_x);
-    inspector_rect_ = SDL_Rect{inspector_x, list_y, inspector_w, list_height};
     if (list_panel_) list_panel_->set_bounds(list_rect_);
     if (inspector_panel_) inspector_panel_->set_bounds(inspector_rect_);
 
@@ -826,7 +845,6 @@ void AnimationEditorWindow::update(const Input& input, int screen_w, int screen_
     if (list_panel_) list_panel_->update();
     ensure_selection_valid();
     if (inspector_panel_) {
-        inspector_panel_->set_bounds(inspector_rect_);
         if (selected_animation_id_) {
             inspector_panel_->update();
         }
@@ -1080,7 +1098,7 @@ void AnimationEditorWindow::ensure_layout() const {
 
 void AnimationEditorWindow::render_background(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    ui::draw_panel_background(renderer, bounds_);
+    animation_editor::ui::draw_panel_background(renderer, bounds_);
 }
 
 void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
@@ -1094,14 +1112,13 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
             name = asset_root_path_.filename().string();
         }
         if (!name.empty()) {
-            title += " — ";
+            title += " - ";
             title += name;
         }
     } else if (!asset_root_path_.empty()) {
-        title += " — ";
+        title += " - ";
         title += asset_root_path_.filename().string();
     }
-
 
     if (add_button_) add_button_->render(renderer);
     if (controller_button_) controller_button_->render(renderer);
@@ -1120,7 +1137,7 @@ void AnimationEditorWindow::render_status(SDL_Renderer* renderer) const {
     if (status_message_.empty()) return;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect( renderer, status_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    animation_editor::ui::draw_panel_background(renderer, status_rect_);
 
     render_label(renderer, status_message_, status_rect_.x + DMSpacing::panel_padding(), status_rect_.y + DMSpacing::panel_padding());
 }
@@ -1137,7 +1154,7 @@ void AnimationEditorWindow::render_inspector(SDL_Renderer* renderer) const {
     }
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(renderer, inspector_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    animation_editor::ui::draw_panel_background(renderer, inspector_rect_);
 
     std::string message = "Select an animation to edit.";
     int text_x = inspector_rect_.x + DMSpacing::panel_padding();
