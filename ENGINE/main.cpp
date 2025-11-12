@@ -27,6 +27,7 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -46,10 +47,19 @@ namespace fs = std::filesystem;
 
 namespace {
 
+struct SkyBackgroundTaskResult {
+    std::optional<fs::path> sky_path;
+    std::string log_message;
+    bool log_is_warning = false;
+};
+
+SkyBackgroundTaskResult compute_sky_background_task();
+void log_sky_background_task_result(const SkyBackgroundTaskResult& result);
 std::optional<fs::path> prepare_sky_background();
 nlohmann::json build_default_map_manifest(const std::string& map_name);
 
-std::optional<fs::path> prepare_sky_background() {
+SkyBackgroundTaskResult compute_sky_background_task() {
+    SkyBackgroundTaskResult task_result;
     try {
         const fs::path manifest_root = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
         const fs::path sky_dir = manifest_root / "TEMP" / "sky_cache";
@@ -63,16 +73,37 @@ std::optional<fs::path> prepare_sky_background() {
             if (result.reused_cached) {
                 message += " (cached)";
             }
-            vibble::log::info(message);
-            return fs::path(result.saved_png_path);
+            task_result.sky_path = fs::path(result.saved_png_path);
+            task_result.log_message = std::move(message);
+            task_result.log_is_warning = false;
+            return task_result;
         }
 
-        vibble::log::warn(std::string("[Main] Sky map unavailable: ") + result.message);
+        task_result.log_message = std::string("[Main] Sky map unavailable: ") + result.message;
+        task_result.log_is_warning = true;
     } catch (const std::exception& ex) {
-        vibble::log::warn(std::string("[Main] Sky map error: ") + ex.what());
+        task_result.log_message = std::string("[Main] Sky map error: ") + ex.what();
+        task_result.log_is_warning = true;
     }
 
-    return std::nullopt;
+    return task_result;
+}
+
+void log_sky_background_task_result(const SkyBackgroundTaskResult& result) {
+    if (result.log_message.empty()) {
+        return;
+    }
+    if (result.log_is_warning) {
+        vibble::log::warn(result.log_message);
+    } else {
+        vibble::log::info(result.log_message);
+    }
+}
+
+std::optional<fs::path> prepare_sky_background() {
+    auto result = compute_sky_background_task();
+    log_sky_background_task_result(result);
+    return result.sky_path;
 }
 
 }
@@ -714,7 +745,14 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         return;
     }
 
-    std::optional<fs::path> preloaded_sky_background = prepare_sky_background();
+    std::future<SkyBackgroundTaskResult> sky_background_preload_future;
+    try {
+        sky_background_preload_future = std::async(std::launch::async, [] {
+            return compute_sky_background_task();
+        });
+    } catch (const std::exception& ex) {
+        vibble::log::warn(std::string("[Main] Failed to start sky background preload: ") + ex.what());
+    }
 
     std::shared_ptr<AssetLibrary> shared_asset_library = std::make_shared<AssetLibrary>(false);
     vibble::log::info("[Main] Preparing asset metadata cache...");
@@ -726,7 +764,24 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
     { SDL_Event ev; while (SDL_PollEvent(&ev)) {} }
     vibble::log::info("[Main] Cached asset resources loaded.");
 
+    std::optional<fs::path> preloaded_sky_background;
+    auto finalize_sky_preload_if_needed = [&]() {
+        if (!sky_background_preload_future.valid()) {
+            return;
+        }
+        try {
+            SkyBackgroundTaskResult task_result = sky_background_preload_future.get();
+            log_sky_background_task_result(task_result);
+            preloaded_sky_background = std::move(task_result.sky_path);
+        } catch (const std::exception& ex) {
+            vibble::log::warn(std::string("[Main] Sky background preload failed: ") + ex.what());
+        } catch (...) {
+            vibble::log::warn("[Main] Sky background preload failed due to an unknown error.");
+        }
+    };
+
     while (true) {
+        finalize_sky_preload_if_needed();
         std::optional<fs::path> sky_background;
         if (preloaded_sky_background.has_value()) {
             sky_background = preloaded_sky_background;

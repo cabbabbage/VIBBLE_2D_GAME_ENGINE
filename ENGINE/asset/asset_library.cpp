@@ -6,10 +6,13 @@
 #include <chrono>
 #include <cctype>
 #include <filesystem>
+#include <future>
 #include <iomanip>
 #include <iostream>
+#include <thread>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 #include "utils/log.hpp"
@@ -358,6 +361,13 @@ void AssetLibrary::load_all_from_SRC() {
         int failed = 0;
         const auto start_ms = std::chrono::steady_clock::now();
 
+        struct AssetBuildJob {
+                std::string name;
+                nlohmann::json metadata;
+        };
+        std::vector<AssetBuildJob> work_items;
+        work_items.reserve(manifest.assets.size());
+
         for (auto it = manifest.assets.begin(); it != manifest.assets.end(); ++it) {
                 const std::string name = it.key();
                 const auto& metadata = it.value();
@@ -368,22 +378,63 @@ void AssetLibrary::load_all_from_SRC() {
                         continue;
                 }
 
-                try {
-                        std::shared_ptr<AssetInfo> info;
-                        const bool has_metadata = metadata.is_object() && !metadata.empty();
-                        if (has_metadata) {
-                                info = AssetInfo::from_manifest_entry(name, metadata);
-                        } else {
-                                info = AssetInfo::from_manifest_entry(name, nlohmann::json::object());
+                work_items.push_back(AssetBuildJob{name, metadata});
+        }
+
+        if (!work_items.empty()) {
+                const unsigned int hardware_threads = std::max(1u, std::thread::hardware_concurrency());
+                const std::size_t worker_count = std::min(work_items.size(), static_cast<std::size_t>(hardware_threads));
+                const std::size_t slice_size = (work_items.size() + worker_count - 1) / worker_count;
+
+                struct WorkerResult {
+                        int loaded = 0;
+                        int failed = 0;
+                        std::vector<std::pair<std::string, std::shared_ptr<AssetInfo>>> assets;
+                };
+
+                std::vector<std::future<WorkerResult>> futures;
+                futures.reserve(worker_count);
+
+                for (std::size_t worker_index = 0; worker_index < worker_count; ++worker_index) {
+                        const std::size_t start_index = worker_index * slice_size;
+                        if (start_index >= work_items.size()) {
+                                break;
                         }
-                        info_by_name_[name] = info;
-                        ++loaded;
-                } catch (const std::exception& error) {
-                        ++failed;
-                        vibble::log::warn(std::string("[AssetLibrary] Failed to load asset '") + name + "': " + error.what());
-                } catch (...) {
-                        ++failed;
-                        vibble::log::warn(std::string("[AssetLibrary] Failed to load asset '") + name + "' due to an unknown error.");
+                        const std::size_t end_index = std::min(work_items.size(), start_index + slice_size);
+                        futures.push_back(std::async(std::launch::async,
+                                                     [start_index, end_index, &work_items]() -> WorkerResult {
+                                                             WorkerResult result;
+                                                             result.assets.reserve(end_index - start_index);
+                                                             for (std::size_t idx = start_index; idx < end_index; ++idx) {
+                                                                     const auto& item = work_items[idx];
+                                                                     try {
+                                                                             const bool has_metadata = item.metadata.is_object() && !item.metadata.empty();
+                                                                             auto info = AssetInfo::from_manifest_entry(
+                                                                                 item.name,
+                                                                                 has_metadata ? item.metadata : nlohmann::json::object());
+                                                                             result.assets.emplace_back(item.name, std::move(info));
+                                                                             ++result.loaded;
+                                                                     } catch (const std::exception& error) {
+                                                                             ++result.failed;
+                                                                             vibble::log::warn(std::string("[AssetLibrary] Failed to load asset '") +
+                                                                                               item.name + "': " + error.what());
+                                                                     } catch (...) {
+                                                                             ++result.failed;
+                                                                             vibble::log::warn(std::string("[AssetLibrary] Failed to load asset '") +
+                                                                                               item.name + "' due to an unknown error.");
+                                                                     }
+                                                             }
+                                                             return result;
+                                                     }));
+                }
+
+                for (auto& future : futures) {
+                        WorkerResult result = future.get();
+                        loaded += result.loaded;
+                        failed += result.failed;
+                        for (auto& entry : result.assets) {
+                                info_by_name_[entry.first] = std::move(entry.second);
+                        }
                 }
         }
         const auto end_ms = std::chrono::steady_clock::now();

@@ -1894,18 +1894,6 @@ void DevControls::notify_spawn_group_removed(const std::string& spawn_id) {
     Asset::ClearFlipOverrideForSpawnId(spawn_id);
 }
 
-void DevControls::refresh_reactive_shadow_settings() {
-    if (map_mode_ui_) {
-        map_mode_ui_->refresh_reactive_shadow_settings();
-    }
-}
-
-void DevControls::clear_reactive_shadow_settings() {
-    if (map_mode_ui_) {
-        map_mode_ui_->clear_reactive_shadow_settings();
-    }
-}
-
 const std::vector<Asset*>& DevControls::get_selected_assets() const {
     static std::vector<Asset*> empty;
     if (!can_use_room_editor_ui()) return empty;

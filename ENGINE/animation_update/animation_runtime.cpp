@@ -68,6 +68,24 @@ std::string resolve_animation(const Asset& asset, const std::string& requested) 
 bool same_point(SDL_Point lhs, SDL_Point rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
+
+void update_child_attachment_dimensions(Asset::AnimationChildAttachment& slot) {
+    slot.cached_w = 0;
+    slot.cached_h = 0;
+    if (!slot.animation || !slot.current_frame) {
+        return;
+    }
+    SDL_Texture* texture = slot.animation->get_frame(slot.current_frame);
+    if (!texture) {
+        return;
+    }
+    int width = 0;
+    int height = 0;
+    if (SDL_QueryTexture(texture, nullptr, nullptr, &width, &height) == 0) {
+        slot.cached_w = width;
+        slot.cached_h = height;
+    }
+}
 }
 
 AnimationRuntime::AnimationRuntime(Asset* self, Assets* assets)
@@ -339,10 +357,13 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
     }
     for (std::size_t i = 0; i < requested.size(); ++i) {
         auto& slot = slots[i];
+        const AnimationFrame* previous_frame = slot.current_frame;
+        bool slot_invalidated = false;
         if (slot.child_index != static_cast<int>(i) || slot.asset_name != requested[i]) {
             slot = Asset::AnimationChildAttachment{};
             slot.child_index = static_cast<int>(i);
             slot.asset_name = requested[i];
+            slot_invalidated = true;
         }
         if (!slot.info && library && !slot.asset_name.empty()) {
             slot.info = library->get(slot.asset_name);
@@ -355,8 +376,12 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
                     slot.animation = &child_anim_it->second;
                     slot.current_frame = slot.animation->get_first_frame();
                     slot.frame_progress = 0.0f;
+                    slot_invalidated = true;
                 }
             }
+        }
+        if (slot_invalidated || slot.current_frame != previous_frame) {
+            update_child_attachment_dimensions(slot);
         }
     }
 }
@@ -372,6 +397,7 @@ void AnimationRuntime::advance_child_frames(float dt) {
         if (!slot.animation || !slot.current_frame) {
             continue;
         }
+        const AnimationFrame* previous_frame = slot.current_frame;
         int fps = slot.animation->playback_fps;
         if (fps <= 0) {
             fps = 24;
@@ -388,6 +414,9 @@ void AnimationRuntime::advance_child_frames(float dt) {
             } else {
                 break;
             }
+        }
+        if (slot.current_frame != previous_frame) {
+            update_child_attachment_dimensions(slot);
         }
     }
 }

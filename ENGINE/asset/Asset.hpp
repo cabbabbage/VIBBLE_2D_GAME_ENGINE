@@ -61,6 +61,8 @@ class Asset {
         SDL_Point world_pos{0, 0};
         float rotation_degrees = 0.0f;
         bool visible = false;
+        int cached_w = 0;
+        int cached_h = 0;
     };
 
     Area get_area(const std::string& name) const;

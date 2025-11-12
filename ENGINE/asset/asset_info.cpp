@@ -779,9 +779,6 @@ void AssetInfo::set_manifest_store_provider(ManifestStoreProvider provider) {
 }
 
 AssetInfo::~AssetInfo() {
-	std::ostringstream oss;
-	oss << "[AssetInfo] Destructor for '" << name << "'\r";
-	std::cout << std::left << std::setw(60) << oss.str() << std::flush;
 	clear_light_textures();
 	for (auto &[key, anim] : animations) {
                 anim.clear_texture_cache();

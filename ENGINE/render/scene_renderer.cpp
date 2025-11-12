@@ -378,7 +378,6 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
     return SDL_FRect{ left, top, width, height };
 }
 void SceneRenderer::render(){
-    static int render_call_count=0; ++render_call_count;
     ++frame_counter_;
 
 
@@ -387,8 +386,6 @@ void SceneRenderer::render(){
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
-
-    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
     const SDL_Color map_light_color = main_light_source_.get_current_color();
     const float     map_light_opacity =
@@ -586,9 +583,11 @@ void SceneRenderer::render(){
                     if (!child_tex) {
                         continue;
                     }
-                    int child_fw = 0;
-                    int child_fh = 0;
-                    SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh);
+                    int child_fw = attachment.cached_w;
+                    int child_fh = attachment.cached_h;
+                    if ((child_fw == 0 || child_fh == 0)) {
+                        SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh);
+                    }
                     SDL_FRect child_rect = get_child_position_rect(
                         a,
                         attachment.world_pos,

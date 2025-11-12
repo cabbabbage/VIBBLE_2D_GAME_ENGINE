@@ -175,7 +175,6 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     if (scene) {
         scene->set_dark_mask_enabled(render_dark_mask_enabled_);
     }
-    notify_reactive_shadow_settings_available();
     apply_map_light_config();
     apply_map_grid_settings(map_grid_settings_, false);
     moving_assets_for_grid_.clear();
@@ -577,7 +576,6 @@ Assets::~Assets() {
     if (input) {
         input->clear_screen_to_world_mapper();
     }
-    notify_reactive_shadow_settings_about_to_change();
     delete scene;
     scene = nullptr;
     delete finder_;
@@ -705,8 +703,6 @@ void Assets::ensure_dev_controls() {
     dev_mode_trace("[Assets] Dev Controls -> set_map_context");
     dev_controls_->set_map_context(&map_info_json_, map_path_);
     dev_mode_trace("[Assets] Dev Controls wiring complete");
-
-    dev_controls_->refresh_reactive_shadow_settings();
 }
 
 void Assets::set_input(Input* m) {
@@ -1288,18 +1284,6 @@ void Assets::register_pending_static_assets() {
     pending_static_grid_registration_.swap(still_pending);
 }
 
-void Assets::notify_reactive_shadow_settings_about_to_change() {
-    if (dev_controls_) {
-        dev_controls_->clear_reactive_shadow_settings();
-    }
-}
-
-void Assets::notify_reactive_shadow_settings_available() {
-    if (dev_controls_) {
-        dev_controls_->refresh_reactive_shadow_settings();
-    }
-}
-
 void Assets::initialize_active_assets(SDL_Point center) {
     const int radius = active_search_radius();
     active_asset_list_ = std::make_unique<AssetList>(
@@ -1720,17 +1704,6 @@ Global_Light_Source* Assets::map_light_source() {
 
 const Global_Light_Source* Assets::map_light_source() const {
     return const_cast<Assets*>(this)->map_light_source();
-}
-
-render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_settings() {
-    if (!scene) {
-        return nullptr;
-    }
-    return &scene->reactive_shadow_settings();
-}
-
-const render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_settings() const {
-    return const_cast<Assets*>(this)->reactive_shadow_settings();
 }
 
 LightMap* Assets::light_map() {
