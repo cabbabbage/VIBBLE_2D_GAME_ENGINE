@@ -19,7 +19,9 @@ public:
     Grid(SDL_Point origin = SDL_Point{0,0}, int r_chunk = 0);
 
     void set_chunk_resolution(int r);
+    void set_parallax_resolution(int r);
     int  chunk_resolution() const { return r_chunk_; }
+    int  parallax_resolution() const { return parallax_resolution_; }
     SDL_Point origin() const { return origin_; }
 
     void register_asset(Asset* a);
@@ -45,10 +47,12 @@ private:
     void rebuild_chunks();
     void invalidate_active_cache();
     std::uint64_t parallax_key(int i, int j) const;
+    int parallax_step_size() const;
 
 private:
     SDL_Point origin_{0,0};
     int r_chunk_ = 0;
+    int parallax_resolution_ = 0;
     ChunkManager chunks_{};
     std::unordered_map<Asset*, Chunk*> residency_{};
     SDL_Rect last_expanded_camera_{0, 0, 0, 0};

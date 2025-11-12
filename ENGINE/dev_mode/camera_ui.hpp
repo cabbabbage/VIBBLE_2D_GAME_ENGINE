@@ -58,6 +58,9 @@ private:
     std::unique_ptr<DMButton> reset_button_;
     std::unique_ptr<ButtonWidget> load_widget_;
     std::unique_ptr<ButtonWidget> reset_widget_;
+    std::unique_ptr<Widget> header_spacer_;
+    std::unique_ptr<Widget> hero_banner_widget_;
+    std::unique_ptr<Widget> controls_spacer_;
     std::unique_ptr<SectionToggleWidget> visibility_section_header_;
     std::unique_ptr<SectionToggleWidget> depth_section_header_;
     std::unique_ptr<SectionToggleWidget> zoom_section_header_;

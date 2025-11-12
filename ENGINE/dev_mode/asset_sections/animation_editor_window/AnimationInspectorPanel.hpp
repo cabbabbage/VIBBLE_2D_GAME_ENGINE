@@ -89,11 +89,20 @@ class AnimationInspectorPanel {
     void rebuild_widgets();
     void refresh_totals();
     void layout_widgets() const;
+    void ensure_preview_controls();
+    void update_preview_playback();
+    void render_preview(SDL_Renderer* renderer) const;
+    void render_preview_controls(SDL_Renderer* renderer) const;
+    void sync_slider_to_current_frame();
+    void sync_timeline_to_slider(int display_frame);
+    int display_frame_from_timeline(int timeline_frame) const;
+    int timeline_frame_from_display(int display_frame) const;
     void commit_rename();
     void refresh_start_indicator();
     void apply_dependencies();
     void update_source_mode_button_styles();
     void refresh_preview_metadata() const;
+    bool handle_scroll_wheel(const SDL_Event& e);
     void update_scrollbar_geometry() const;
     void render_scrollbar(SDL_Renderer* renderer) const;
     void render_overlays(SDL_Renderer* renderer) const;
@@ -159,6 +168,8 @@ class AnimationInspectorPanel {
     std::unique_ptr<DMButton> preview_play_button_;
     std::unique_ptr<DMSlider> preview_scrub_slider_;
     mutable SDL_Rect preview_controls_rect_{0, 0, 0, 0};
+    int preview_slider_max_frame_ = 0;
+    bool preview_scrubbing_active_ = false;
     mutable bool was_playing_before_scrub_ = false;
 
     std::shared_ptr<CroppingService> cropping_service_;
@@ -177,7 +188,6 @@ class AnimationInspectorPanel {
     ui::WidgetRegistry widget_registry_;
 
     // Animation preview timing variables
-    mutable Uint32 animation_start_time_ = 0;
     mutable int current_frame_ = 0;
     mutable int current_fps_ = 24;
     mutable int frame_count_ = 1;

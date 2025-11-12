@@ -62,7 +62,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T11:05:21Z",
+        "generated_at": "2025-11-12T12:12:08Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -76,7 +76,7 @@
           0.05454545095562935
         ],
         "revision": 4329668871805815559,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -115,7 +115,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T11:05:21Z",
+        "generated_at": "2025-11-12T12:12:08Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -129,7 +129,7 @@
           0.05000000074505806
         ],
         "revision": 15640563384705236170,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -168,7 +168,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T11:05:21Z",
+        "generated_at": "2025-11-12T12:12:08Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -182,7 +182,7 @@
           0.05000000074505806
         ],
         "revision": 17324624370779397839,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -301,6 +301,9 @@
           "speed_factor": 1.0
         },
         "default": {
+          "children": [
+            "Candle"
+          ],
           "flipped_source": false,
           "fps": 12,
           "inherit_source_movement": false,
@@ -359,6 +362,9 @@
           }
         },
         "left": {
+          "children": [
+            "Candle"
+          ],
           "flipped_source": false,
           "fps": 12,
           "inherit_source_movement": false,
@@ -447,7 +453,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T11:05:21Z",
+        "generated_at": "2025-11-12T12:12:08Z",
         "max_scale": 0.1818181872367859,
         "min_scale": 0.1818181872367859,
         "recommended_percentages": [
@@ -461,7 +467,7 @@
           0.1818181872367859
         ],
         "revision": 4634089302953237708,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -560,7 +566,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-12T11:05:21Z",
+        "generated_at": "2025-11-12T12:12:08Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.9090908765792847,
         "recommended_percentages": [
@@ -574,7 +580,7 @@
           0.9090908765792847
         ],
         "revision": 10642336998275347472,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -607,11 +613,11 @@
       },
       "camera_settings": {
         "distance_scale_strength": 0.07999999821186066,
-        "foreshorten_strength": 0.25999999046325684,
-        "height_at_zoom1": 601.0,
+        "foreshorten_strength": 0.38999998569488525,
+        "height_at_zoom1": 306.0,
         "max_zoom_multiplier": 2.999999761581421,
-        "min_visible_screen_ratio": 0.00800000037997961,
-        "min_zoom_multiplier": 0.699999988079071,
+        "min_visible_screen_ratio": 0.006000000052154064,
+        "min_zoom_multiplier": 0.35999998450279236,
         "motion_smoothing_max_step": 8000.0,
         "motion_smoothing_method": 1,
         "motion_smoothing_snap_threshold": 0.25,
@@ -622,13 +628,13 @@
         "parallax_smoothing_method": 1,
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 0.0,
-        "parallax_strength": 90.75,
+        "parallax_strength": 37.0,
         "realism_enabled": false,
-        "render_distance": 460.0,
+        "render_distance": 350.0,
         "render_quality_percent": 10,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
-        "tripod_distance_y": -430.0
+        "tripod_distance_y": -1345.0
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -905,9 +911,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            37,
             242,
             36,
+            242,
             255
           ],
           "edge_smoothness": 101,

@@ -1770,6 +1770,7 @@ void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persi
     }
 
     world_grid_.set_chunk_resolution(std::max(0, sanitized.r_chunk));
+    world_grid_.set_parallax_resolution(std::max(0, sanitized.resolution));
 
     if (chunk_changed) {
         for (Asset* asset : all) {

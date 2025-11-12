@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -31,7 +32,8 @@ int floor_div(int value, int step) {
 
 Grid::Grid(SDL_Point origin, int r_chunk)
     : origin_(origin)
-    , r_chunk_(std::clamp(r_chunk, 0, vibble::grid::kMaxResolution)) {
+    , r_chunk_(std::clamp(r_chunk, 0, vibble::grid::kMaxResolution))
+    , parallax_resolution_(r_chunk_) {
     invalidate_active_cache();
 }
 
@@ -47,6 +49,20 @@ void Grid::set_chunk_resolution(int r) {
     }
     r_chunk_ = clamped;
     rebuild_chunks();
+}
+
+void Grid::set_parallax_resolution(int r) {
+    const int clamped = std::clamp(r, 0, vibble::grid::kMaxResolution);
+    if (clamped == parallax_resolution_) {
+        return;
+    }
+    parallax_resolution_ = clamped;
+    parallax_entries_.clear();
+}
+
+int Grid::parallax_step_size() const {
+    const int clamped = std::clamp(parallax_resolution_, 0, vibble::grid::kMaxResolution);
+    return 1 << clamped;
 }
 
 void Grid::register_asset(Asset* a) {
@@ -270,68 +286,115 @@ void Grid::update_parallax(const camera& cam, float dt) {
         smoothing.method = TransformSmoothingMethod::None;
     }
 
-    for (Chunk* chunk : chunks_.active()) {
+    const auto& active_chunks = chunks_.active();
+    if (active_chunks.empty()) {
+        parallax_entries_.clear();
+        return;
+    }
+
+    int active_min_i = std::numeric_limits<int>::max();
+    int active_max_i = std::numeric_limits<int>::min();
+    int active_min_j = std::numeric_limits<int>::max();
+    int active_max_j = std::numeric_limits<int>::min();
+    for (const Chunk* chunk : active_chunks) {
         if (!chunk) {
             continue;
         }
+        active_min_i = std::min(active_min_i, chunk->i);
+        active_max_i = std::max(active_max_i, chunk->i);
+        active_min_j = std::min(active_min_j, chunk->j);
+        active_max_j = std::max(active_max_j, chunk->j);
+    }
 
-        const double chunk_cx = static_cast<double>(chunk->world_bounds.x) +
-                                static_cast<double>(chunk->world_bounds.w) * 0.5;
-        const double chunk_cy = static_cast<double>(chunk->world_bounds.y) +
-                                static_cast<double>(chunk->world_bounds.h) * 0.5;
+    if (active_min_i > active_max_i || active_min_j > active_max_j) {
+        parallax_entries_.clear();
+        return;
+    }
 
-        const double dx = chunk_cx - base_x;
-        const double dy = chunk_cy - base_y;
+    const int chunk_step    = 1 << r_chunk_;
+    const int parallax_step = parallax_step_size();
+    if (parallax_step <= 0) {
+        parallax_entries_.clear();
+        return;
+    }
 
-        const double ndx = dx / half_width;
-        const double ndy = dy / half_height;
+    int world_min_x = origin_.x + active_min_i * chunk_step;
+    int world_max_x = origin_.x + (active_max_i + 1) * chunk_step;
+    int world_min_y = origin_.y + active_min_j * chunk_step;
+    int world_max_y = origin_.y + (active_max_j + 1) * chunk_step;
 
-        const double vertical_bias = 1.0 + kParallaxKv *
-            std::tanh(ndy * view_scale_y * kParallaxSteepen);
+    world_min_x -= parallax_step;
+    world_max_x += parallax_step;
+    world_min_y -= parallax_step;
+    world_max_y += parallax_step;
 
-        double zoom_gain = (height_at_zoom1 > kParallaxEpsilon)
-            ? (height_at_zoom1 / (camera_height + kParallaxEpsilon))
-            : 1.0;
-        if (zoom_gain >= 1.0) {
-            zoom_gain = std::pow(zoom_gain, 1.5);
-        }
+    const int cell_i_min = floor_div(world_min_x - origin_.x, parallax_step);
+    const int cell_i_max = floor_div((world_max_x - 1) - origin_.x, parallax_step);
+    const int cell_j_min = floor_div(world_min_y - origin_.y, parallax_step);
+    const int cell_j_max = floor_div((world_max_y - 1) - origin_.y, parallax_step);
 
-        double parallax_px = parallax_strength *
-                             ndx * ndy *
-                             pixels_per_world * vertical_bias * zoom_gain;
-        parallax_px = std::clamp(parallax_px, -kParallaxMax, kParallaxMax);
-        const float target = static_cast<float>(parallax_px);
+    const double step_d     = static_cast<double>(parallax_step);
+    const double origin_x_d = static_cast<double>(origin_.x);
+    const double origin_y_d = static_cast<double>(origin_.y);
 
-        auto& entry = parallax_entries_[parallax_key(chunk->i, chunk->j)];
-        entry.smoothing.set_params(smoothing);
-        entry.last_used_frame = parallax_frame_counter_;
+    for (int cell_j = cell_j_min; cell_j <= cell_j_max; ++cell_j) {
+        const double cell_cy = origin_y_d + (static_cast<double>(cell_j) + 0.5) * step_d;
+        for (int cell_i = cell_i_min; cell_i <= cell_i_max; ++cell_i) {
+            const double cell_cx = origin_x_d + (static_cast<double>(cell_i) + 0.5) * step_d;
 
-        bool force_snap = !entry.initialized || smoothing.method == TransformSmoothingMethod::None;
-        if (!force_snap) {
-            const float snap_threshold = std::max(0.0f, smoothing.snap_threshold);
-            const float max_step       = std::max(0.0f, smoothing.max_step);
-            const float current        = entry.smoothing.current;
-            const float delta          = std::fabs(target - current);
-            if (snap_threshold > 0.0f && delta > snap_threshold * 4.0f) {
-                force_snap = true;
-            } else if (max_step > 0.0f && clamped_dt > 0.0f) {
-                const float max_delta = max_step * clamped_dt * 4.0f;
-                if (delta > max_delta) {
+            const double dx = cell_cx - base_x;
+            const double dy = cell_cy - base_y;
+
+            const double ndx = dx / half_width;
+            const double ndy = dy / half_height;
+
+            const double vertical_bias = 1.0 + kParallaxKv *
+                std::tanh(ndy * view_scale_y * kParallaxSteepen);
+
+            double zoom_gain = (height_at_zoom1 > kParallaxEpsilon)
+                ? (height_at_zoom1 / (camera_height + kParallaxEpsilon))
+                : 1.0;
+            if (zoom_gain >= 1.0) {
+                zoom_gain = std::pow(zoom_gain, 1.5);
+            }
+
+            double parallax_px = parallax_strength *
+                                 ndx * ndy *
+                                 pixels_per_world * vertical_bias * zoom_gain;
+            parallax_px = std::clamp(parallax_px, -kParallaxMax, kParallaxMax);
+            const float target = static_cast<float>(parallax_px);
+
+            auto& entry = parallax_entries_[parallax_key(cell_i, cell_j)];
+            entry.smoothing.set_params(smoothing);
+            entry.last_used_frame = parallax_frame_counter_;
+
+            bool force_snap = !entry.initialized || smoothing.method == TransformSmoothingMethod::None;
+            if (!force_snap) {
+                const float snap_threshold = std::max(0.0f, smoothing.snap_threshold);
+                const float max_step       = std::max(0.0f, smoothing.max_step);
+                const float current        = entry.smoothing.current;
+                const float delta          = std::fabs(target - current);
+                if (snap_threshold > 0.0f && delta > snap_threshold * 4.0f) {
                     force_snap = true;
+                } else if (max_step > 0.0f && clamped_dt > 0.0f) {
+                    const float max_delta = max_step * clamped_dt * 4.0f;
+                    if (delta > max_delta) {
+                        force_snap = true;
+                    }
                 }
             }
-        }
 
-        if (force_snap) {
-            entry.smoothing.reset(target);
-            entry.smoothing.target = target;
-            entry.initialized      = true;
-        } else {
-            entry.smoothing.target = target;
-            entry.smoothing.advance(clamped_dt);
-        }
+            if (force_snap) {
+                entry.smoothing.reset(target);
+                entry.smoothing.target = target;
+                entry.initialized      = true;
+            } else {
+                entry.smoothing.target = target;
+                entry.smoothing.advance(clamped_dt);
+            }
 
-        entry.last_value = entry.smoothing.value_for_render();
+            entry.last_value = entry.smoothing.value_for_render();
+        }
     }
 
     const std::uint64_t prune_threshold = (parallax_frame_counter_ > 480)
@@ -350,7 +413,7 @@ float Grid::parallax_offset(SDL_Point world) const {
     if (!parallax_active_) {
         return 0.0f;
     }
-    const int step = 1 << r_chunk_;
+    const int step = parallax_step_size();
     if (step <= 0) {
         return 0.0f;
     }

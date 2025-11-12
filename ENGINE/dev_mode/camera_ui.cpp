@@ -11,9 +11,11 @@
 #include <cstdlib>
 #include <string>
 #include <functional>
+#include <sstream>
 
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/font_cache.hpp"
 #include "dev_mode/shared/formatting.hpp"
 #include "dev_mode/widgets.hpp"
 #include "utils/input.hpp"
@@ -49,6 +51,128 @@ namespace {
         return (idx == 0) ? TransformSmoothingMethod::Lerp : TransformSmoothingMethod::CriticallyDampedSpring;
     }
 }
+
+class SpacerWidget : public Widget {
+public:
+    explicit SpacerWidget(int height)
+        : height_(std::max(0, height)) {}
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return height_; }
+    bool handle_event(const SDL_Event&) override { return false; }
+    void render(SDL_Renderer*) const override {}
+    bool wants_full_row() const override { return true; }
+
+private:
+    SDL_Rect rect_{0, 0, 0, 0};
+    int height_ = 0;
+};
+
+class PanelBannerWidget : public Widget {
+public:
+    PanelBannerWidget(std::string heading, std::string detail)
+        : heading_(std::move(heading)),
+          detail_(std::move(detail)) {
+        heading_style_ = DMStyles::Label();
+        heading_style_.font_size = std::max(heading_style_.font_size + 2, 18);
+        heading_style_.color = DMStyles::AccentButton().text;
+
+        body_style_ = DMStyles::Label();
+        body_style_.font_size = std::max(12, body_style_.font_size - 2);
+        body_style_.color = dm::rgba(255, 255, 255, 230);
+    }
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int w) const override {
+        const int inner = std::max(1, w - 2 * padding());
+        ensure_lines(inner);
+        const int heading_h = heading_style_.font_size + kHeadingGap;
+        const int body_lines = std::max(1, static_cast<int>(lines_.size()));
+        const int line_h = body_style_.font_size + kLineGap;
+        return padding() * 2 + heading_h + body_lines * line_h;
+    }
+
+    bool handle_event(const SDL_Event&) override { return false; }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+        SDL_Color accent = DMStyles::AccentButton().bg;
+        SDL_Color background{ accent.r, accent.g, accent.b, static_cast<Uint8>(220) };
+        SDL_SetRenderDrawColor(renderer, background.r, background.g, background.b, background.a);
+        SDL_RenderFillRect(renderer, &rect_);
+
+        SDL_Color border = DMStyles::AccentButton().border;
+        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+        SDL_RenderDrawRect(renderer, &rect_);
+
+        const int pad = padding();
+        SDL_Rect content{ rect_.x + pad, rect_.y + pad, rect_.w - 2 * pad, rect_.h - 2 * pad };
+        DrawLabelText(renderer, heading_, content.x, content.y, heading_style_);
+        int text_y = content.y + heading_style_.font_size + kHeadingGap;
+
+        ensure_lines(content.w);
+        for (const auto& line : lines_) {
+            DrawLabelText(renderer, line, content.x, text_y, body_style_);
+            text_y += body_style_.font_size + kLineGap;
+        }
+    }
+
+    bool wants_full_row() const override { return true; }
+
+private:
+    static std::vector<std::string> wrap_lines(const std::string& text, int max_width, const DMLabelStyle& style) {
+        std::vector<std::string> lines;
+        if (text.empty() || max_width <= 0) {
+            if (!text.empty()) lines.push_back(text);
+            return lines;
+        }
+        std::istringstream stream(text);
+        std::string word;
+        std::string current;
+        while (stream >> word) {
+            std::string candidate = current.empty() ? word : current + " " + word;
+            SDL_Point dims = MeasureLabelText(style, candidate);
+            if (!current.empty() && dims.x > max_width) {
+                lines.push_back(current);
+                current = word;
+                continue;
+            }
+            current = candidate;
+        }
+        if (!current.empty()) {
+            lines.push_back(current);
+        }
+        if (lines.empty()) {
+            lines.push_back(text);
+        }
+        return lines;
+    }
+
+    void ensure_lines(int inner_width) const {
+        int width = std::max(1, inner_width);
+        if (width == cached_width_) {
+            return;
+        }
+        cached_width_ = width;
+        lines_ = wrap_lines(detail_, cached_width_, body_style_);
+    }
+
+    static int padding() { return DMSpacing::item_gap(); }
+
+private:
+    static constexpr int kHeadingGap = 6;
+    static constexpr int kLineGap = 4;
+    SDL_Rect rect_{0, 0, 0, 0};
+    std::string heading_;
+    std::string detail_;
+    DMLabelStyle heading_style_;
+    DMLabelStyle body_style_;
+    mutable std::vector<std::string> lines_;
+    mutable int cached_width_ = -1;
+};
 
 class SectionToggleWidget : public Widget {
 public:
@@ -125,6 +249,8 @@ private:
         if (!button_) return;
         const char* indicator = expanded_ ? "[-]" : "[+]";
         button_->set_text(std::string(indicator) + " " + label_);
+        const DMButtonStyle* style = expanded_ ? &DMStyles::HeaderButton() : &DMStyles::FooterToggleButton();
+        button_->set_style(style);
     }
 
     std::unique_ptr<DMButton> button_;
@@ -490,16 +616,25 @@ void CameraUIPanel::sync_from_camera() {
 }
 
 void CameraUIPanel::build_ui() {
+    set_header_button_style(&DMStyles::AccentButton());
+    set_header_highlight_color(DMStyles::AccentButton().bg);
     set_padding(DMSpacing::panel_padding());
     set_row_gap(DMSpacing::item_gap());
-    set_col_gap(DMSpacing::small_gap());
+    set_col_gap(DMSpacing::item_gap());
+    set_floating_content_width(420);
+
+    header_spacer_ = std::make_unique<SpacerWidget>(DMSpacing::header_gap());
+    hero_banner_widget_ = std::make_unique<PanelBannerWidget>(
+        "Camera realism",
+        "Dial in render buffers, parallax depth, and smoothing without leaving the editor.");
+    controls_spacer_ = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
 
     effects_checkbox_ = std::make_unique<DMCheckbox>("Depth Effects", true);
     effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
     effects_widget_->set_tooltip("Enable parallax, foreshortening, and distance-based scaling.");
 
-    load_button_ = std::make_unique<DMButton>("Load", &DMStyles::HeaderButton(), 110, DMButton::height());
-    reset_button_ = std::make_unique<DMButton>("Reset", &DMStyles::HeaderButton(), 110, DMButton::height());
+    load_button_ = std::make_unique<DMButton>("Load", &DMStyles::AccentButton(), 120, DMButton::height());
+    reset_button_ = std::make_unique<DMButton>("Reset", &DMStyles::WarnButton(), 120, DMButton::height());
     load_widget_ = std::make_unique<ButtonWidget>(load_button_.get(), [this]() { reload_from_json(); });
     reset_widget_ = std::make_unique<ButtonWidget>(reset_button_.get(), [this]() { reset_to_defaults(); });
     load_widget_->set_tooltip("Reload the current settings from disk.");
@@ -614,42 +749,49 @@ void CameraUIPanel::on_control_value_changed() {
 
 void CameraUIPanel::rebuild_rows() {
     Rows rows;
-    rows.push_back({ effects_widget_.get() });
+    if (header_spacer_) rows.push_back({ header_spacer_.get() });
+    if (hero_banner_widget_) rows.push_back({ hero_banner_widget_.get() });
+    if (effects_widget_) rows.push_back({ effects_widget_.get() });
+    if (controls_spacer_) rows.push_back({ controls_spacer_.get() });
 
-    rows.push_back({ visibility_section_header_.get() });
+    Row action_row;
+    if (load_widget_) action_row.push_back(load_widget_.get());
+    if (reset_widget_) action_row.push_back(reset_widget_.get());
+    if (!action_row.empty()) rows.push_back(action_row);
+
+    if (visibility_section_header_) rows.push_back({ visibility_section_header_.get() });
     if (visibility_section_expanded_) {
-        rows.push_back({ render_distance_slider_.get() });
-        rows.push_back({ min_render_size_slider_.get() });
-        rows.push_back({ render_quality_slider_.get() });
+        if (render_distance_slider_) rows.push_back({ render_distance_slider_.get() });
+        if (min_render_size_slider_) rows.push_back({ min_render_size_slider_.get() });
+        if (render_quality_slider_) rows.push_back({ render_quality_slider_.get() });
     }
 
-    rows.push_back({ depth_section_header_.get() });
+    if (depth_section_header_) rows.push_back({ depth_section_header_.get() });
     if (depth_section_expanded_) {
-        rows.push_back({ tripod_distance_slider_.get() });
-        rows.push_back({ height_zoom1_slider_.get() });
-        rows.push_back({ parallax_strength_slider_.get() });
-        rows.push_back({ foreshorten_strength_slider_.get() });
-        rows.push_back({ distance_strength_slider_.get() });
+        if (tripod_distance_slider_) rows.push_back({ tripod_distance_slider_.get() });
+        if (height_zoom1_slider_) rows.push_back({ height_zoom1_slider_.get() });
+        if (parallax_strength_slider_) rows.push_back({ parallax_strength_slider_.get() });
+        if (foreshorten_strength_slider_) rows.push_back({ foreshorten_strength_slider_.get() });
+        if (distance_strength_slider_) rows.push_back({ distance_strength_slider_.get() });
     }
 
-    rows.push_back({ zoom_section_header_.get() });
+    if (zoom_section_header_) rows.push_back({ zoom_section_header_.get() });
     if (zoom_section_expanded_) {
-        rows.push_back({ min_zoom_multiplier_slider_.get() });
-        rows.push_back({ max_zoom_multiplier_slider_.get() });
+        if (min_zoom_multiplier_slider_) rows.push_back({ min_zoom_multiplier_slider_.get() });
+        if (max_zoom_multiplier_slider_) rows.push_back({ max_zoom_multiplier_slider_.get() });
     }
 
-    rows.push_back({ smoothing_section_header_.get() });
+    if (smoothing_section_header_) rows.push_back({ smoothing_section_header_.get() });
     if (smoothing_section_expanded_) {
-        rows.push_back({ smoothing_widget_.get() });
-        rows.push_back({ smoothing_method_widget_.get() });
-        rows.push_back({ motion_tau_slider_.get() });
-        rows.push_back({ motion_stiffness_slider_.get() });
-        rows.push_back({ motion_max_step_slider_.get() });
-        rows.push_back({ motion_snap_slider_.get() });
-        rows.push_back({ parallax_smoothing_slider_.get() });
-        rows.push_back({ hysteresis_margin_slider_.get() });
+        if (smoothing_widget_) rows.push_back({ smoothing_widget_.get() });
+        if (smoothing_method_widget_) rows.push_back({ smoothing_method_widget_.get() });
+        if (motion_tau_slider_) rows.push_back({ motion_tau_slider_.get() });
+        if (motion_stiffness_slider_) rows.push_back({ motion_stiffness_slider_.get() });
+        if (motion_max_step_slider_) rows.push_back({ motion_max_step_slider_.get() });
+        if (motion_snap_slider_) rows.push_back({ motion_snap_slider_.get() });
+        if (parallax_smoothing_slider_) rows.push_back({ parallax_smoothing_slider_.get() });
+        if (hysteresis_margin_slider_) rows.push_back({ hysteresis_margin_slider_.get() });
     }
-    rows.push_back({ load_widget_.get(), reset_widget_.get() });
     set_rows(rows);
 }
 

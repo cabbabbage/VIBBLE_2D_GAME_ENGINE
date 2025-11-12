@@ -1,82 +1,74 @@
 #include "grid_tile_renderer.hpp"
 
+#include <algorithm>
+
+#include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
 #include "tiling/grid_tile.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
 
-namespace {
-
-SDL_Point chunk_center(const world::Chunk& chunk) {
-    return SDL_Point{
-        chunk.world_bounds.x + chunk.world_bounds.w / 2,
-        chunk.world_bounds.y + chunk.world_bounds.h / 2
-    };
-}
-
-}  // namespace
-
 void GridTileRenderer::render(SDL_Renderer* renderer) {
-    if (!renderer || !assets_) {
-        return;
-    }
+    if (!renderer || !assets_) return;
     render(renderer, assets_->getView(), assets_->world_grid());
 }
 
 void GridTileRenderer::render(SDL_Renderer* renderer, const camera& cam, const world::Grid& grid) {
-    if (!renderer) {
-        return;
-    }
+    if (!renderer) return;
 
     const auto& chunks = grid.active_chunks();
-    if (chunks.empty()) {
-        return;
-    }
+    if (chunks.empty()) return;
+
+    const SDL_Color white{255, 255, 255, 255};
+    int indices[6] = {0, 1, 2, 0, 2, 3};
 
     for (const world::Chunk* chunk : chunks) {
-        if (!chunk || chunk->tiles.empty()) {
-            continue;
-        }
-
-        const float chunk_parallax = grid.parallax_offset(chunk_center(*chunk));
-        const SDL_Rect chunk_bounds = chunk->world_bounds;
-
+        if (!chunk) continue;
         for (const auto& tile : chunk->tiles) {
-            if (!tile.texture || tile.world_rect.w <= 0 || tile.world_rect.h <= 0) {
+            if (!tile.texture || tile.world_rect.w <= 0 || tile.world_rect.h <= 0) continue;
+
+            SDL_Point world_tl{ tile.world_rect.x, tile.world_rect.y };
+            SDL_Point world_tr{ tile.world_rect.x + tile.world_rect.w, tile.world_rect.y };
+            SDL_Point world_br{ tile.world_rect.x + tile.world_rect.w, tile.world_rect.y + tile.world_rect.h };
+            SDL_Point world_bl{ tile.world_rect.x, tile.world_rect.y + tile.world_rect.h };
+
+            SDL_FPoint screen_tl = cam.map_to_screen(world_tl);
+            SDL_FPoint screen_tr = cam.map_to_screen(world_tr);
+            SDL_FPoint screen_br = cam.map_to_screen(world_br);
+            SDL_FPoint screen_bl = cam.map_to_screen(world_bl);
+
+            screen_tl.x = grid.parallax_adjusted_screen_x(world_tl, screen_tl.x);
+            screen_tr.x = grid.parallax_adjusted_screen_x(world_tr, screen_tr.x);
+            screen_br.x = grid.parallax_adjusted_screen_x(world_br, screen_br.x);
+            screen_bl.x = grid.parallax_adjusted_screen_x(world_bl, screen_bl.x);
+
+            int tex_w = 0;
+            int tex_h = 0;
+            if (SDL_QueryTexture(tile.texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
                 continue;
             }
 
-            SDL_Rect tile_bounds = tile.world_rect;
-            SDL_Rect overlap{};
-            if (!SDL_IntersectRect(&chunk_bounds, &tile_bounds, &overlap) || overlap.w <= 0 || overlap.h <= 0) {
-                continue;
-            }
+            const float padding_x = 0.5f / static_cast<float>(tex_w);
+            const float padding_y = 0.5f / static_cast<float>(tex_h);
 
-            SDL_Point overlap_tl{overlap.x, overlap.y};
-            SDL_Point overlap_br{overlap.x + overlap.w, overlap.y + overlap.h};
-            SDL_FPoint screen_tl = cam.map_to_screen(overlap_tl);
-            SDL_FPoint screen_br = cam.map_to_screen(overlap_br);
+            const float tx0 = padding_x;
+            const float ty0 = padding_y;
+            const float tx1 = 1.0f - padding_x;
+            const float ty1 = 1.0f - padding_y;
 
-            SDL_FRect dst{
-                screen_tl.x + chunk_parallax,
-                screen_tl.y,
-                screen_br.x - screen_tl.x,
-                screen_br.y - screen_tl.y
-            };
+            SDL_Vertex vertices[4]{};
+            vertices[0].position = SDL_FPoint{ screen_tl.x, screen_tl.y };
+            vertices[1].position = SDL_FPoint{ screen_tr.x, screen_tr.y };
+            vertices[2].position = SDL_FPoint{ screen_br.x, screen_br.y };
+            vertices[3].position = SDL_FPoint{ screen_bl.x, screen_bl.y };
+            vertices[0].color = vertices[1].color = vertices[2].color = vertices[3].color = white;
+            vertices[0].tex_coord = SDL_FPoint{ tx0, ty0 };
+            vertices[1].tex_coord = SDL_FPoint{ tx1, ty0 };
+            vertices[2].tex_coord = SDL_FPoint{ tx1, ty1 };
+            vertices[3].tex_coord = SDL_FPoint{ tx0, ty1 };
 
-            if (dst.w <= 0.0f || dst.h <= 0.0f) {
-                continue;
-            }
-
-            SDL_Rect src{
-                overlap.x - tile.world_rect.x,
-                overlap.y - tile.world_rect.y,
-                overlap.w,
-                overlap.h
-            };
-
-            SDL_RenderCopyF(renderer, tile.texture, &src, &dst);
+            SDL_RenderGeometry(renderer, tile.texture, vertices, 4, indices, 6);
         }
     }
 }

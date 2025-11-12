@@ -8,7 +8,6 @@
 #include <functional>
 #include <cctype>
 #include <cmath>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -39,9 +38,15 @@ constexpr int kInspectorSectionGap = 10;
 constexpr int kPreviewHeight = 120;
 constexpr int kHeaderButtonWidth = 160;
 constexpr int kMinToggleButtonWidth = 120;
+constexpr int kPreviewControlsButtonWidth = 64;
+constexpr int kPreviewControlsMinSliderWidth = 140;
 constexpr int kScrollWheelStep = 20;
 constexpr int kScrollbarWidth = 8;
 constexpr int kScrollbarMinThumbHeight = 28;
+
+int preview_controls_height() {
+    return std::max(DMButton::height(), DMSlider::height());
+}
 
 class ClipScope {
   public:
@@ -266,6 +271,17 @@ void render_summary_badges(SDL_Renderer* renderer, const SDL_Rect& bounds, const
     }
 }
 
+struct LayoutCursor {
+    int logical_y = 0;
+    int scroll = 0;
+
+    LayoutCursor(int logical_start, int scroll_offset)
+        : logical_y(logical_start), scroll(scroll_offset) {}
+
+    int visual_y() const { return logical_y - scroll; }
+    void advance(int delta) { logical_y += delta; }
+};
+
 }
 
 AnimationInspectorPanel::AnimationInspectorPanel() {
@@ -383,7 +399,7 @@ int AnimationInspectorPanel::height_for_width(int width) const {
     }
 
     total += item_gap;
-    total += DMButton::height(); // controls height
+    total += preview_controls_height();
     total += kPreviewHeight;
 
     bool added_section = false;
@@ -411,6 +427,9 @@ int AnimationInspectorPanel::height_for_width(int width) const {
 }
 
 void AnimationInspectorPanel::update() {
+    refresh_preview_metadata();
+    ensure_preview_controls();
+    ensure_preview_controls();
     layout_widgets();
 
     if (rename_pending_ && name_box_ && !name_box_->is_editing()) {
@@ -429,6 +448,8 @@ void AnimationInspectorPanel::update() {
         update_source_mode_button_styles();
         layout_dirty_ = true;
     }
+
+    update_preview_playback();
 
     if (playback_settings_) playback_settings_->update();
     if (movement_summary_) movement_summary_->update();
@@ -450,6 +471,7 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
         return;
     }
 
+    refresh_preview_metadata();
     layout_widgets();
     update_scrollbar_geometry();
 
@@ -497,104 +519,8 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
             source_config_->render(renderer);
         }
 
-        dm_draw::DrawBeveledRect(renderer,
-                                 preview_rect_,
-                                 DMStyles::CornerRadius(),
-                                 DMStyles::BevelDepth(),
-                                 DMStyles::PanelHeader(),
-                                 DMStyles::HighlightColor(),
-                                 DMStyles::ShadowColor(),
-                                 false,
-                                 DMStyles::HighlightIntensity(),
-                                 DMStyles::ShadowIntensity());
-
-        SDL_Rect preview_clip = preview_rect_;
-        const int preview_inset = DMStyles::BevelDepth();
-        preview_clip.x += preview_inset;
-        preview_clip.y += preview_inset;
-        preview_clip.w = std::max(0, preview_clip.w - preview_inset * 2);
-        preview_clip.h = std::max(0, preview_clip.h - preview_inset * 2);
-
-        std::optional<ClipScope> preview_scope;
-        if (preview_clip.w > 0 && preview_clip.h > 0) {
-            preview_scope.emplace(renderer, preview_clip);
-        }
-
-        if (preview_provider_) {
-            SDL_Texture* texture = nullptr;
-
-            int frame_to_render = 0;
-            if (scrub_mode_) {
-                if (frame_count_ <= 0) {
-                    frame_count_ = 1;
-                }
-                int clamped = scrub_frame_;
-                if (clamped < 0) clamped = 0;
-                if (clamped >= frame_count_) clamped = frame_count_ - 1;
-                frame_to_render = clamped;
-                current_frame_ = frame_to_render;
-            } else {
-                if (animation_start_time_ == 0) {
-                    animation_start_time_ = SDL_GetTicks();
-                    current_frame_ = 0;
-                }
-
-                float effective_fps = static_cast<float>(current_fps_);
-                if (effective_fps < 0.1f) effective_fps = 0.1f;
-                float frame_time_ms = 1000.0f / effective_fps;
-
-                Uint32 elapsed_ms = SDL_GetTicks() - animation_start_time_;
-
-                int raw_frame = static_cast<int>((elapsed_ms % static_cast<int>(frame_time_ms * frame_count_)) / frame_time_ms);
-                if (raw_frame >= frame_count_) raw_frame = frame_count_ - 1;
-
-                current_frame_ = preview_reverse_ ? (frame_count_ - 1 - raw_frame) : raw_frame;
-                if (current_frame_ < 0) current_frame_ = 0;
-                if (current_frame_ >= frame_count_) current_frame_ = frame_count_ - 1;
-                frame_to_render = current_frame_;
-            }
-
-            texture = preview_provider_->get_frame_texture(renderer, animation_id_, frame_to_render);
-
-            if (texture) {
-                int tex_w = 0;
-                int tex_h = 0;
-                SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h);
-                const int padding = kInspectorPadding;
-                int avail_w = std::max(1, preview_rect_.w - padding * 2);
-                int avail_h = std::max(1, preview_rect_.h - padding * 2);
-                float scale = std::min(avail_w / static_cast<float>(tex_w), avail_h / static_cast<float>(tex_h));
-                int draw_w = static_cast<int>(tex_w * scale);
-                int draw_h = static_cast<int>(tex_h * scale);
-                SDL_Rect dst{preview_rect_.x + (preview_rect_.w - draw_w) / 2,
-                             preview_rect_.y + (preview_rect_.h - draw_h) / 2,
-                             draw_w,
-                             draw_h};
-
-                SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
-                if (preview_flip_x_) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
-                if (preview_flip_y_) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
-
-                SDL_RenderCopyEx(renderer, texture, nullptr, &dst, 0.0, nullptr, flip_flags);
-            } else {
-                const DMLabelStyle& style = DMStyles::Label();
-                SDL_Color color = style.color;
-                render_label(renderer,
-                             "No Preview Available",
-                             preview_rect_.x + (preview_rect_.w - text_width(style, "No Preview Available")) / 2,
-                             preview_rect_.y + preview_rect_.h / 2 - style.font_size / 2,
-                             color);
-            }
-
-            if (!preview_modifier_badges_.empty()) {
-                SDL_Rect badge_rect{preview_rect_.x + DMSpacing::small_gap(),
-                                    preview_rect_.y + DMSpacing::small_gap(),
-                                    std::max(0, preview_rect_.w - DMSpacing::small_gap() * 2),
-                                    DMButton::height()};
-                render_summary_badges(renderer, badge_rect, preview_modifier_badges_);
-            }
-        }
-
+        render_preview_controls(renderer);
+        render_preview(renderer);
         if (playback_settings_) playback_settings_->render(renderer);
         if (movement_summary_) movement_summary_->render(renderer);
         if (children_panel_) children_panel_->render(renderer);
@@ -607,11 +533,30 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
 }
 
 void AnimationInspectorPanel::set_scrub_mode(bool enable) {
+    if (scrub_mode_ == enable) {
+        return;
+    }
     scrub_mode_ = enable;
+    if (scrub_mode_) {
+        preview_scrubbing_active_ = false;
+        was_playing_before_scrub_ = false;
+        if (preview_timeline_) {
+            preview_timeline_->pause();
+        }
+    } else if (preview_timeline_) {
+        preview_timeline_->play();
+    }
 }
 
 void AnimationInspectorPanel::set_scrub_frame(int frame) {
     scrub_frame_ = frame;
+    if (frame_count_ > 0) {
+        scrub_frame_ = std::clamp(scrub_frame_, 0, frame_count_ - 1);
+    }
+    if (scrub_mode_) {
+        current_frame_ = scrub_frame_;
+        sync_slider_to_current_frame();
+    }
 }
 
 bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
@@ -730,25 +675,8 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
         rename_pending_ = true;
     }
 
-    if (e.type == SDL_MOUSEWHEEL) {
-        int mx, my;
-        SDL_GetMouseState(&mx, &my);
-        SDL_Point mouse{mx, my};
-        if (SDL_PointInRect(&mouse, &bounds_)) {
-            // Don't consume mouse wheel events over the source config area if dropdown is expanded
-            bool over_source_config = source_config_ && SDL_PointInRect(&mouse, &source_rect_);
-            bool dropdown_expanded = source_config_ && source_config_->allow_out_of_bounds_pointer_events();
-            bool children_overlay_active = children_panel_ && children_panel_->allow_out_of_bounds_pointer_events();
-            if (!(over_source_config && dropdown_expanded) && !children_overlay_active) {
-                int delta = resolve_wheel_delta(e.wheel);
-                if (delta != 0) {
-                    if (scroll_controller_.apply_wheel_delta(delta)) {
-                        layout_dirty_ = true;
-                        handled = true;
-                    }
-                }
-            }
-        }
+    if (handle_scroll_wheel(e)) {
+        handled = true;
     }
 
     return handled;
@@ -764,12 +692,13 @@ void AnimationInspectorPanel::rebuild_widgets() {
     if (!preview_timeline_) {
         preview_timeline_ = std::make_unique<PreviewTimeline>();
     }
+    const int desired_slider_max = std::max(0, frame_count_ - 1);
     if (!preview_play_button_) {
-        preview_play_button_ = std::make_unique<DMButton>("▶️", &DMStyles::AccentButton(), 40, DMButton::height());
+        preview_play_button_ = std::make_unique<DMButton>("Play", &DMStyles::AccentButton(), kPreviewControlsButtonWidth, preview_controls_height());
     }
     if (!preview_scrub_slider_) {
-        preview_scrub_slider_ = std::make_unique<DMSlider>("", 0, 0, 0); // Will set range later
-        // Snapping to int is default behavior for DMSlider
+        preview_scrub_slider_ = std::make_unique<DMSlider>("Frame", 0, desired_slider_max, 0);
+        preview_scrub_slider_->set_defer_commit_until_unfocus(false);
     }
 
     if (!name_box_) {
@@ -803,6 +732,72 @@ void AnimationInspectorPanel::rebuild_widgets() {
             }
             if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) {
                 activate_focus_target(FocusTarget::kStart);
+            }
+            return true;
+        });
+    }
+
+    if (preview_play_button_) {
+        widget_registry_.add_handler([this](const SDL_Event& ev) {
+            if (!preview_play_button_) {
+                return false;
+            }
+            if (!preview_play_button_->handle_event(ev)) {
+                return false;
+            }
+            if (scrub_mode_) {
+                return true;
+            }
+            if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) {
+                if (preview_timeline_) {
+                    if (preview_timeline_->is_playing()) {
+                        preview_timeline_->pause();
+                    } else {
+                        preview_timeline_->play();
+                    }
+                }
+            }
+            return true;
+        });
+    }
+
+    if (preview_scrub_slider_) {
+        widget_registry_.add_handler([this](const SDL_Event& ev) {
+            if (!preview_scrub_slider_) {
+                return false;
+            }
+            int before = preview_scrub_slider_->value();
+            if (!preview_scrub_slider_->handle_event(ev)) {
+                if (ev.type == SDL_MOUSEBUTTONUP && preview_scrubbing_active_) {
+                    preview_scrubbing_active_ = false;
+                    if (!scrub_mode_ && preview_timeline_ && was_playing_before_scrub_) {
+                        preview_timeline_->play();
+                    }
+                    was_playing_before_scrub_ = false;
+                }
+                return false;
+            }
+
+            if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT) {
+                preview_scrubbing_active_ = true;
+                was_playing_before_scrub_ = preview_timeline_ && preview_timeline_->is_playing();
+                if (preview_timeline_) {
+                    preview_timeline_->pause();
+                }
+            }
+
+            if (before != preview_scrub_slider_->value()) {
+                sync_timeline_to_slider(preview_scrub_slider_->value());
+            }
+
+            if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) {
+                if (preview_scrubbing_active_) {
+                    preview_scrubbing_active_ = false;
+                    if (!scrub_mode_ && preview_timeline_ && was_playing_before_scrub_) {
+                        preview_timeline_->play();
+                    }
+                    was_playing_before_scrub_ = false;
+                }
             }
             return true;
         });
@@ -911,32 +906,11 @@ void AnimationInspectorPanel::layout_widgets() const {
     const int button_gap = DMSpacing::small_gap();
 
     const int width = std::max(0, bounds_.w - padding * 2);
-    const int content_width = width;
     const int x = bounds_.x + padding;
-    int y = bounds_.y + padding;
-    int scroll_offset = scroll_controller_.scroll();
-    int content_y = y - scroll_offset;
+    const int scroll = scroll_controller_.scroll();
 
     const int button_height = DMButton::height();
-    int action_buttons = 0;
-    if (start_button_) ++action_buttons;
-    int action_width = 0;
-    if (action_buttons > 0) {
-        action_width = action_buttons * kHeaderButtonWidth + std::max(0, action_buttons - 1) * button_gap;
-    }
-
-    int action_left = x + width - action_width;
-    if (action_left < x) {
-        action_left = x;
-    }
-    int next_button_x = action_left;
-
-    if (start_button_) {
-        SDL_Rect rect{next_button_x, y, kHeaderButtonWidth, button_height};
-        start_button_->set_rect(rect);
-        next_button_x += kHeaderButtonWidth + button_gap;
-    }
-
+    int action_width = start_button_ ? std::min(kHeaderButtonWidth, width) : 0;
     int name_left = x;
     int name_right = x + width - action_width;
     if (action_width > 0) {
@@ -947,104 +921,297 @@ void AnimationInspectorPanel::layout_widgets() const {
     int name_height = DMTextBox::height();
     if (name_box_) {
         name_height = name_box_->height_for_width(name_width);
-        SDL_Rect rect{name_left, y, name_width, name_height};
+        SDL_Rect rect{name_left, bounds_.y + padding, name_width, name_height};
         name_box_->set_rect(rect);
     }
 
-    int header_height = std::max(name_height, button_height);
-    y += header_height;
-    self->header_rect_ = SDL_Rect{bounds_.x, bounds_.y, bounds_.w, y - bounds_.y};
+    if (start_button_) {
+        int effective_button_width = std::min(kHeaderButtonWidth, width);
+        SDL_Rect rect{x + width - effective_button_width, bounds_.y + padding, effective_button_width, button_height};
+        start_button_->set_rect(rect);
+    }
 
-    const int content_top = y + item_gap;
-    content_y = content_top - scroll_offset;
+    const int header_content_height = std::max(name_height, button_height);
+    const int header_total_height = header_content_height + padding;
+    self->header_rect_ = SDL_Rect{bounds_.x, bounds_.y, bounds_.w, header_total_height};
+
+    LayoutCursor cursor(bounds_.y + padding + header_content_height + item_gap, scroll);
 
     const int selector_height = DMButton::height();
     const int selector_gap = DMSpacing::small_gap();
-    self->source_selector_rect_ = SDL_Rect{x, y, width, selector_height};
+    self->source_selector_rect_ = SDL_Rect{x, cursor.visual_y(), width, selector_height};
     int frames_width = std::max(0, (width - selector_gap) / 2);
     int animation_width = std::max(0, width - frames_width - selector_gap);
     if (source_frames_button_) {
-        SDL_Rect rect{x, y, frames_width, selector_height};
+        SDL_Rect rect{x, cursor.visual_y(), frames_width, selector_height};
         source_frames_button_->set_rect(rect);
     }
     if (source_animation_button_) {
-        SDL_Rect rect{x + frames_width + selector_gap, y, animation_width, selector_height};
+        SDL_Rect rect{x + frames_width + selector_gap, cursor.visual_y(), animation_width, selector_height};
         source_animation_button_->set_rect(rect);
     }
-    y += selector_height;
-
-    y += item_gap;
+    cursor.advance(selector_height);
+    cursor.advance(item_gap);
 
     refresh_preview_metadata();
     std::vector<std::string> badges = source_config_ ? source_config_->summary_badges() : std::vector<std::string>{};
     badges.insert(badges.end(), preview_modifier_badges_.begin(), preview_modifier_badges_.end());
     if (!badges.empty()) {
-        // Ensure badges don't overlap with the source mode buttons when scrolled
-        int button_bottom = y - item_gap; // y is after buttons + item_gap, so button_bottom = y - item_gap
-        int min_badge_y = button_bottom + item_gap;
-        int badge_y = std::max(content_y, min_badge_y);
-        self->source_summary_rect_ = SDL_Rect{x, badge_y, width, selector_height};
-        content_y = badge_y + selector_height;
+        self->source_summary_rect_ = SDL_Rect{x, cursor.visual_y(), width, selector_height};
+        cursor.advance(selector_height);
     } else {
-        self->source_summary_rect_ = SDL_Rect{x, content_y, width, 0};
+        self->source_summary_rect_ = SDL_Rect{x, cursor.visual_y(), width, 0};
     }
+    cursor.advance(item_gap);
 
-    content_y += item_gap;
-
-    int source_height = 0;
+    int source_height = source_config_ ? source_config_->preferred_height(width) : 0;
+    self->source_rect_ = SDL_Rect{x, cursor.visual_y(), width, source_height};
     if (source_config_) {
-        source_height = source_config_->preferred_height(content_width);
-        self->source_rect_ = SDL_Rect{x, content_y, width, source_height};
         source_config_->set_bounds(self->source_rect_);
-    } else {
-        self->source_rect_ = SDL_Rect{x, content_y, width, 0};
     }
-    content_y += source_height;
-    content_y += item_gap;
+    cursor.advance(source_height);
+    cursor.advance(item_gap);
 
-    self->preview_controls_rect_ = SDL_Rect{x, content_y, width, DMButton::height()};
-    content_y += DMButton::height();
-    self->preview_rect_ = SDL_Rect{x, content_y, width, kPreviewHeight};
-    content_y += kPreviewHeight;
+    const int controls_height = preview_controls_height();
+    self->preview_controls_rect_ = SDL_Rect{x, cursor.visual_y(), width, controls_height};
+    SDL_Rect slider_rect{self->preview_controls_rect_.x, self->preview_controls_rect_.y, self->preview_controls_rect_.w, controls_height};
+    if (preview_play_button_) {
+        int button_width = std::min(kPreviewControlsButtonWidth, self->preview_controls_rect_.w);
+        SDL_Rect button_rect{self->preview_controls_rect_.x,
+                             self->preview_controls_rect_.y + std::max(0, (controls_height - button_height) / 2),
+                             button_width,
+                             button_height};
+        preview_play_button_->set_rect(button_rect);
+        slider_rect.x = button_rect.x + button_rect.w + button_gap;
+        slider_rect.w = std::max(0, self->preview_controls_rect_.w - button_rect.w - button_gap);
+        if (slider_rect.w < kPreviewControlsMinSliderWidth) {
+            slider_rect.x = self->preview_controls_rect_.x;
+            slider_rect.w = self->preview_controls_rect_.w;
+        }
+    }
+    if (preview_scrub_slider_) {
+        preview_scrub_slider_->set_rect(slider_rect);
+    }
+    cursor.advance(controls_height);
+    cursor.advance(item_gap);
+
+    self->preview_rect_ = SDL_Rect{x, cursor.visual_y(), width, kPreviewHeight};
+    cursor.advance(kPreviewHeight);
 
     bool placed_section = false;
-    auto assign_section = [&](auto* widget, SDL_Rect& rect) {
+    auto place_section = [&](auto* widget, SDL_Rect& rect) {
         if (!widget) {
-            rect = SDL_Rect{x, content_y, width, 0};
+            rect = SDL_Rect{x, cursor.visual_y(), width, 0};
             return;
         }
-        int section_height = widget->preferred_height(content_width);
+        int section_height = widget->preferred_height(width);
         if (section_height <= 0) {
-            rect = SDL_Rect{x, content_y, width, 0};
+            rect = SDL_Rect{x, cursor.visual_y(), width, 0};
             widget->set_bounds(rect);
             return;
         }
-        if (!placed_section) {
-            content_y += item_gap;
-            placed_section = true;
-        } else {
-            content_y += section_gap;
-        }
-        rect = SDL_Rect{x, content_y, width, section_height};
+        cursor.advance(placed_section ? section_gap : item_gap);
+        rect = SDL_Rect{x, cursor.visual_y(), width, section_height};
         widget->set_bounds(rect);
-        content_y += section_height;
+        cursor.advance(section_height);
+        placed_section = true;
     };
 
-    assign_section(playback_settings_.get(), playback_rect_);
-    assign_section(movement_summary_.get(), movement_rect_);
-    assign_section(children_panel_.get(), children_rect_);
-    assign_section(on_end_selector_.get(), on_end_rect_);
-    assign_section(audio_panel_.get(), audio_rect_);
+    place_section(playback_settings_.get(), playback_rect_);
+    place_section(movement_summary_.get(), movement_rect_);
+    place_section(children_panel_.get(), children_rect_);
+    place_section(on_end_selector_.get(), on_end_rect_);
+    place_section(audio_panel_.get(), audio_rect_);
 
-    // content_y is tracked with scroll already subtracted, so add it back when measuring total height
-    self->content_height_ = content_y + scroll_offset + padding - bounds_.y;
-    const int previous_scroll = scroll_offset;
+    self->content_height_ = cursor.logical_y + padding - bounds_.y;
+    const int previous_scroll = scroll;
     self->scroll_controller_.set_content_height(self->content_height_);
     if (self->scroll_controller_.scroll() != previous_scroll) {
         self->layout_dirty_ = true;
     }
 
     refresh_focus_index();
+}
+
+void AnimationInspectorPanel::ensure_preview_controls() {
+    if (!preview_timeline_) {
+        preview_timeline_ = std::make_unique<PreviewTimeline>();
+    }
+    preview_timeline_->set_frame_count(std::max(1, frame_count_));
+    preview_timeline_->set_fps(static_cast<float>(std::max(1, current_fps_)));
+
+    const int desired_max = std::max(0, frame_count_ - 1);
+    if (!preview_scrub_slider_ || preview_slider_max_frame_ != desired_max) {
+        int slider_value = std::clamp(current_frame_, 0, desired_max);
+        preview_scrub_slider_ = std::make_unique<DMSlider>("Frame", 0, desired_max, slider_value);
+        preview_scrub_slider_->set_defer_commit_until_unfocus(false);
+        preview_slider_max_frame_ = desired_max;
+    }
+
+    if (!preview_play_button_) {
+        preview_play_button_ = std::make_unique<DMButton>("Play", &DMStyles::AccentButton(), kPreviewControlsButtonWidth, preview_controls_height());
+    }
+
+    sync_slider_to_current_frame();
+}
+
+void AnimationInspectorPanel::update_preview_playback() {
+    if (!preview_timeline_) {
+        return;
+    }
+
+    preview_timeline_->set_frame_count(std::max(1, frame_count_));
+    preview_timeline_->set_fps(static_cast<float>(std::max(1, current_fps_)));
+
+    if (scrub_mode_) {
+        preview_timeline_->pause();
+        current_frame_ = std::clamp(scrub_frame_, 0, std::max(0, frame_count_ - 1));
+        sync_slider_to_current_frame();
+    } else {
+        preview_timeline_->update();
+        int timeline_frame = std::clamp(preview_timeline_->current_frame(), 0, std::max(0, frame_count_ - 1));
+        current_frame_ = display_frame_from_timeline(timeline_frame);
+        sync_slider_to_current_frame();
+    }
+
+    if (preview_play_button_) {
+        if (scrub_mode_) {
+            preview_play_button_->set_text("Scrub");
+            preview_play_button_->set_style(&DMStyles::HeaderButton());
+        } else if (preview_timeline_->is_playing()) {
+            preview_play_button_->set_text("Pause");
+            preview_play_button_->set_style(&DMStyles::AccentButton());
+        } else {
+            preview_play_button_->set_text("Play");
+            preview_play_button_->set_style(&DMStyles::HeaderButton());
+        }
+    }
+}
+
+void AnimationInspectorPanel::render_preview_controls(SDL_Renderer* renderer) const {
+    if (!renderer) {
+        return;
+    }
+    if (preview_play_button_) {
+        preview_play_button_->render(renderer);
+    }
+    if (preview_scrub_slider_) {
+        preview_scrub_slider_->render(renderer);
+    }
+}
+
+void AnimationInspectorPanel::render_preview(SDL_Renderer* renderer) const {
+    if (!renderer || preview_rect_.w <= 0 || preview_rect_.h <= 0) {
+        return;
+    }
+
+    dm_draw::DrawBeveledRect(renderer,
+                             preview_rect_,
+                             DMStyles::CornerRadius(),
+                             DMStyles::BevelDepth(),
+                             DMStyles::PanelHeader(),
+                             DMStyles::HighlightColor(),
+                             DMStyles::ShadowColor(),
+                             false,
+                             DMStyles::HighlightIntensity(),
+                             DMStyles::ShadowIntensity());
+
+    SDL_Rect preview_clip = preview_rect_;
+    const int preview_inset = DMStyles::BevelDepth();
+    preview_clip.x += preview_inset;
+    preview_clip.y += preview_inset;
+    preview_clip.w = std::max(0, preview_clip.w - preview_inset * 2);
+    preview_clip.h = std::max(0, preview_clip.h - preview_inset * 2);
+
+    auto draw_contents = [&]() {
+        int max_frame = std::max(0, frame_count_ - 1);
+        int frame_to_render = std::clamp(current_frame_, 0, max_frame);
+        SDL_Texture* texture = preview_provider_ ? preview_provider_->get_frame_texture(renderer, animation_id_, frame_to_render) : nullptr;
+        if (texture) {
+            int tex_w = 0;
+            int tex_h = 0;
+            SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h);
+            const int padding = kInspectorPadding;
+            int avail_w = std::max(1, preview_rect_.w - padding * 2);
+            int avail_h = std::max(1, preview_rect_.h - padding * 2);
+            float scale = std::min(avail_w / static_cast<float>(tex_w), avail_h / static_cast<float>(tex_h));
+            int draw_w = std::max(1, static_cast<int>(tex_w * scale));
+            int draw_h = std::max(1, static_cast<int>(tex_h * scale));
+            SDL_Rect dst{preview_rect_.x + (preview_rect_.w - draw_w) / 2,
+                         preview_rect_.y + (preview_rect_.h - draw_h) / 2,
+                         draw_w,
+                         draw_h};
+
+            SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
+            if (preview_flip_x_) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
+            if (preview_flip_y_) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
+
+            SDL_RenderCopyEx(renderer, texture, nullptr, &dst, 0.0, nullptr, flip_flags);
+        } else {
+            const DMLabelStyle& style = DMStyles::Label();
+            const std::string text = "No Preview Available";
+            int label_w = text_width(style, text);
+            SDL_Color color = style.color;
+            render_label(renderer,
+                         text,
+                         preview_rect_.x + (preview_rect_.w - label_w) / 2,
+                         preview_rect_.y + preview_rect_.h / 2 - style.font_size / 2,
+                         color);
+        }
+
+        if (!preview_modifier_badges_.empty()) {
+            SDL_Rect badge_rect{preview_rect_.x + DMSpacing::small_gap(),
+                                preview_rect_.y + DMSpacing::small_gap(),
+                                std::max(0, preview_rect_.w - DMSpacing::small_gap() * 2),
+                                DMButton::height()};
+            render_summary_badges(renderer, badge_rect, preview_modifier_badges_);
+        }
+    };
+
+    if (preview_clip.w > 0 && preview_clip.h > 0) {
+        ClipScope scope(renderer, preview_clip);
+        draw_contents();
+    } else {
+        draw_contents();
+    }
+}
+
+void AnimationInspectorPanel::sync_slider_to_current_frame() {
+    if (!preview_scrub_slider_) {
+        return;
+    }
+    int max_frame = std::max(0, preview_slider_max_frame_);
+    int clamped = std::clamp(current_frame_, 0, max_frame);
+    if (preview_scrub_slider_->value() != clamped) {
+        preview_scrub_slider_->set_value(clamped);
+    }
+}
+
+void AnimationInspectorPanel::sync_timeline_to_slider(int display_frame) {
+    int clamped = std::clamp(display_frame, 0, std::max(0, frame_count_ - 1));
+    current_frame_ = clamped;
+    int timeline_frame = timeline_frame_from_display(clamped);
+    if (preview_timeline_) {
+        preview_timeline_->set_current_frame(timeline_frame);
+    }
+}
+
+int AnimationInspectorPanel::display_frame_from_timeline(int timeline_frame) const {
+    int max_frame = std::max(0, frame_count_ - 1);
+    timeline_frame = std::clamp(timeline_frame, 0, max_frame);
+    if (!preview_reverse_) {
+        return timeline_frame;
+    }
+    return max_frame - timeline_frame;
+}
+
+int AnimationInspectorPanel::timeline_frame_from_display(int display_frame) const {
+    int max_frame = std::max(0, frame_count_ - 1);
+    display_frame = std::clamp(display_frame, 0, max_frame);
+    if (!preview_reverse_) {
+        return display_frame;
+    }
+    return max_frame - display_frame;
 }
 
 void AnimationInspectorPanel::update_scrollbar_geometry() const {
@@ -1102,7 +1269,7 @@ void AnimationInspectorPanel::render_scrollbar(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawColor(renderer, track_color.r, track_color.g, track_color.b, track_color.a);
     SDL_RenderFillRect(renderer, &scrollbar_track_);
 
-    SDL_Color thumb_color = DMStyles::AccentButton().fill;
+    SDL_Color thumb_color = DMStyles::AccentButton().hover_bg;
     SDL_SetRenderDrawColor(renderer, thumb_color.r, thumb_color.g, thumb_color.b, 230);
     SDL_RenderFillRect(renderer, &scrollbar_thumb_);
 }
@@ -1114,6 +1281,36 @@ void AnimationInspectorPanel::render_overlays(SDL_Renderer* renderer) const {
     if (children_panel_) {
         children_panel_->render_overlays(renderer);
     }
+}
+
+bool AnimationInspectorPanel::handle_scroll_wheel(const SDL_Event& e) {
+    if (e.type != SDL_MOUSEWHEEL) {
+        return false;
+    }
+    int mx = 0;
+    int my = 0;
+    SDL_GetMouseState(&mx, &my);
+    SDL_Point mouse{mx, my};
+    if (!SDL_PointInRect(&mouse, &bounds_)) {
+        return false;
+    }
+
+    bool over_source = source_config_ && SDL_PointInRect(&mouse, &source_rect_);
+    bool dropdown_expanded = source_config_ && source_config_->allow_out_of_bounds_pointer_events();
+    bool children_overlay_active = children_panel_ && children_panel_->allow_out_of_bounds_pointer_events();
+    if ((over_source && dropdown_expanded) || children_overlay_active) {
+        return false;
+    }
+
+    int delta = resolve_wheel_delta(e.wheel);
+    if (delta == 0) {
+        return false;
+    }
+    if (!scroll_controller_.apply_wheel_delta(delta)) {
+        return false;
+    }
+    layout_dirty_ = true;
+    return true;
 }
 
 void AnimationInspectorPanel::apply_dependencies() {
@@ -1192,6 +1389,7 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
         return;
     }
 
+    int previous_frame_count = self->frame_count_;
     self->preview_signature_ = signature;
     self->preview_modifier_badges_.clear();
     self->preview_reverse_ = false;
@@ -1262,6 +1460,9 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
     if (payload.contains("number_of_frames")) {
         self->frame_count_ = parse_int_field(payload, "number_of_frames", 1);
         if (self->frame_count_ <= 0) self->frame_count_ = 1;
+    }
+    if (self->frame_count_ != previous_frame_count) {
+        self->preview_slider_max_frame_ = -1;
     }
 
     auto add_badge = [&](const char* text) { self->preview_modifier_badges_.emplace_back(text); };
