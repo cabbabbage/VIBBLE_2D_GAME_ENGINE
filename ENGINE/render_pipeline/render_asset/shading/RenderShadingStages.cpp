@@ -187,32 +187,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         }
     }
 
-    // Apply UI-configured toggles and clamps/boosts
-    if (const auto* settings = context.reactive_shadow_settings()) {
-        const auto& v = settings->virtual_light_map;
-        if (!v.enable_offset) {
-            offset_x = 0.0f;
-            offset_y = 0.0f;
-        } else {
-            // Also clamp offsets to configured maximums in px
-            if (std::isfinite(v.max_offset_x) && v.max_offset_x >= 0.0f) {
-                offset_x = std::clamp(offset_x, -v.max_offset_x, v.max_offset_x);
-            }
-            if (std::isfinite(v.max_offset_y) && v.max_offset_y >= 0.0f) {
-                offset_y = std::clamp(offset_y, -v.max_offset_y, v.max_offset_y);
-            }
-        }
-
-        if (!v.enable_opacity) {
-            opacity = std::clamp(context.base_shadow_opacity, 0.0f, 1.0f);
-        } else {
-            float boosted = opacity + std::clamp(v.opacity_boost, -1.0f, 1.0f);
-            float min_o = std::clamp(v.min_opacity, 0.0f, 1.0f);
-            float max_o = std::clamp(v.max_opacity, 0.0f, 1.0f);
-            if (max_o < min_o) std::swap(max_o, min_o);
-            opacity = std::clamp(boosted, min_o, max_o);
-        }
-    }
+    // TODO(#reactive-shadows): Apply configurable overrides when the new system is ready.
 
     SDL_Texture* mask_texture = nullptr;
     const auto& scale_usage   = asset.last_scale_usage();

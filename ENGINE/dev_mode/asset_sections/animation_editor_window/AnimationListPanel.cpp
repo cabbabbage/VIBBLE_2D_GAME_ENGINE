@@ -412,7 +412,9 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
     }
 
     SDL_RenderSetClipRect(renderer, nullptr);
-}bool AnimationListPanel::handle_event(const SDL_Event& e) {
+}
+
+bool AnimationListPanel::handle_event(const SDL_Event& e) {
     ensure_layout();
 
     if (e.type == SDL_MOUSEWHEEL) {

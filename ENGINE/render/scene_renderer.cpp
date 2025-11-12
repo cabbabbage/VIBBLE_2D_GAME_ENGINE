@@ -6,7 +6,6 @@
 #include "render/camera.hpp"
 #include "render/asset_light_renderer.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/log.hpp"
 #include "utils/ranged_color.hpp"
@@ -83,13 +82,11 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   screen_height_(screen_height),
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}),
-  reactive_shadow_settings_(render_pipeline::shading::sanitize_reactive_shadow_settings({})),
   render_pipeline_(renderer,
                     SceneLighting{ assets->getView(),
                                    main_light_source_,
                                    assets->player,
                                    nullptr,
-                                   &reactive_shadow_settings_,
                                    &assets->world_grid() }),
   update_map_light_enabled_(devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true))
 {
@@ -114,7 +111,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
-    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
     runtime_lighting_sampler_ = std::make_unique<runtime_lighting::RuntimeLightingSampler>(assets_);
     tile_renderer_ = std::make_unique<GridTileRenderer>(assets_);
 }
@@ -124,14 +120,6 @@ SceneRenderer::~SceneRenderer() {
 }
 
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
-
-render_pipeline::shading::ReactiveShadowSettings& SceneRenderer::reactive_shadow_settings() {
-    return reactive_shadow_settings_;
-}
-
-const render_pipeline::shading::ReactiveShadowSettings& SceneRenderer::reactive_shadow_settings() const {
-    return reactive_shadow_settings_;
-}
 
 void SceneRenderer::set_update_map_light_enabled(bool enabled) {
     update_map_light_enabled_ = enabled;
@@ -197,15 +185,6 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data){
     map_clear_color_ = utils::color::resolve_ranged_color(
         data.value("map_color", nlohmann::json{}),
         SDL_Color{0, 0, 0, 255});
-
-    using namespace render_pipeline::shading;
-    auto reactive_it = data.find("reactive_shadows");
-    if (reactive_it != data.end()) {
-        reactive_shadow_settings_ = reactive_shadow_settings_from_json(*reactive_it, reactive_shadow_settings_);
-    } else {
-        reactive_shadow_settings_ = sanitize_reactive_shadow_settings(reactive_shadow_settings_);
-    }
-    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
 }
 

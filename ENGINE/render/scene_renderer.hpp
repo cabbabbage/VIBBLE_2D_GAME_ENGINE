@@ -10,7 +10,6 @@
 #include <nlohmann/json.hpp>
 #include "global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
 #include "render/runtime_lighting_sampler.hpp"
 #include "render/grid_tile_renderer.hpp"
@@ -40,8 +39,6 @@ public:
     bool dark_mask_enabled() const { return dark_mask_enabled_; }
     Global_Light_Source& map_light_source() { return main_light_source_; }
     const Global_Light_Source& map_light_source() const { return main_light_source_; }
-    render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings();
-    const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const;
     LightMap* light_map();
     const LightMap* light_map() const;
 
@@ -85,7 +82,6 @@ private:
     int            screen_width_;
     int            screen_height_;
     Global_Light_Source main_light_source_;
-    render_pipeline::shading::ReactiveShadowSettings reactive_shadow_settings_;
     AssetRenderPipeline render_pipeline_;
     std::unique_ptr<GridTileRenderer> tile_renderer_;
     std::unique_ptr<LightMap> light_map_;
