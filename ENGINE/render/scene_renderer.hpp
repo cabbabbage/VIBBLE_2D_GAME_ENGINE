@@ -11,7 +11,7 @@
 #include "global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 #include "render/camera.hpp"
-#include "render/runtime_lighting_sampler.hpp"
+#include "render/asset_light.hpp"
 #include "render/grid_tile_renderer.hpp"
 
 class Assets;
@@ -102,7 +102,6 @@ private:
     std::vector<int>        darkness_overlay_indices_;
     std::size_t             darkness_overlay_vertex_capacity_hint_ = 0;
     std::size_t             darkness_overlay_index_capacity_hint_  = 0;
-    std::unique_ptr<runtime_lighting::RuntimeLightingSampler> runtime_lighting_sampler_;
     SDL_Texture* darkness_overlay_texture_ = nullptr;
     int          darkness_overlay_width_   = 0;
     int          darkness_overlay_height_  = 0;

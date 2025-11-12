@@ -32,9 +32,6 @@ int floor_div(int value, int step) {
 Grid::Grid(SDL_Point origin, int r_chunk)
     : origin_(origin)
     , r_chunk_(std::clamp(r_chunk, 0, vibble::grid::kMaxResolution)) {
-    const int default_subdivisions = std::clamp(1 << std::min(2, std::max(0, r_chunk_)), 1, 8);
-    requested_lighting_subdivisions_ = default_subdivisions;
-    cached_lighting_subdivisions_    = clamp_lighting_subdivisions(default_subdivisions);
     invalidate_active_cache();
 }
 
@@ -49,7 +46,6 @@ void Grid::set_chunk_resolution(int r) {
         return;
     }
     r_chunk_ = clamped;
-    refresh_lighting_subdivision_cache(true);
     rebuild_chunks();
 }
 
@@ -59,7 +55,7 @@ void Grid::register_asset(Asset* a) {
     const int step = 1 << r_chunk_;
     const int i = floor_div(p.x - origin_.x, step);
     const int j = floor_div(p.y - origin_.y, step);
-    Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_, lighting_subdivisions_per_chunk());
+    Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_);
     if (std::find(c.assets.begin(), c.assets.end(), a) == c.assets.end()) {
         c.assets.push_back(a);
         ++c.occlusion_revision;
@@ -71,7 +67,7 @@ Chunk* Grid::ensure_chunk_from_world(SDL_Point world_px) {
     const int step = 1 << r_chunk_;
     const int i    = floor_div(world_px.x - origin_.x, step);
     const int j    = floor_div(world_px.y - origin_.y, step);
-    return &chunks_.ensure(i, j, r_chunk_, origin_, lighting_subdivisions_per_chunk());
+    return &chunks_.ensure(i, j, r_chunk_, origin_);
 }
 
 std::vector<Chunk*> Grid::all_chunks() const {
@@ -102,7 +98,7 @@ void Grid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
     if (current) {
         remove_from_chunk(a, current);
     }
-    Chunk& dest = chunks_.ensure(new_i, new_j, r_chunk_, origin_, lighting_subdivisions_per_chunk());
+    Chunk& dest = chunks_.ensure(new_i, new_j, r_chunk_, origin_);
     dest.assets.push_back(a);
     ++dest.occlusion_revision;
     residency_[a] = &dest;
@@ -160,7 +156,7 @@ void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
     const int j_max = floor_div((expanded.y + expanded.h) - origin_.y, step);
     for (int j = j_min; j <= j_max; ++j) {
         for (int i = i_min; i <= i_max; ++i) {
-            Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_, lighting_subdivisions_per_chunk());
+            Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_);
             chunks_.active().push_back(&c);
         }
     }
@@ -186,36 +182,6 @@ void Grid::invalidate_active_cache() {
     last_expanded_camera_ = SDL_Rect{0, 0, 0, 0};
     last_margin_px_ = -1;
     last_chunk_resolution_ = -1;
-}
-
-int Grid::clamp_lighting_subdivisions(int subdivisions) const {
-    return std::clamp(subdivisions, 1, 8);
-}
-
-bool Grid::refresh_lighting_subdivision_cache(bool apply_to_chunks) {
-    const int clamped = clamp_lighting_subdivisions(requested_lighting_subdivisions_);
-    if (clamped == cached_lighting_subdivisions_) {
-        return false;
-    }
-    cached_lighting_subdivisions_ = clamped;
-    if (apply_to_chunks) {
-        for (const auto& chunk_ptr : chunks_.storage()) {
-            if (chunk_ptr) {
-                chunk_ptr->set_lighting_subdivisions(cached_lighting_subdivisions_);
-                chunk_ptr->releaseLightingArtifacts();
-            }
-        }
-    }
-    return true;
-}
-
-int Grid::lighting_subdivisions_per_chunk() const {
-    return clamp_lighting_subdivisions(cached_lighting_subdivisions_);
-}
-
-bool Grid::set_lighting_subdivisions_per_chunk(int subdivisions) {
-    requested_lighting_subdivisions_ = clamp_lighting_subdivisions(subdivisions);
-    return refresh_lighting_subdivision_cache(true);
 }
 
 std::uint64_t Grid::parallax_key(int i, int j) const {

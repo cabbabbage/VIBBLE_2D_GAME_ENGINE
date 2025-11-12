@@ -38,17 +38,17 @@ std::vector<LightMapManager::ChunkSnapshot> LightMapManager::all_snapshots() con
         return snapshots;
     }
 
-    const auto lighting_chunks = collect_active_lighting_chunks();
-    snapshots.reserve(lighting_chunks.size());
-    for (std::size_t i = 0; i < lighting_chunks.size(); ++i) {
-        const LightingChunk* chunk = lighting_chunks[i];
+    const auto chunks = collect_active_chunks();
+    snapshots.reserve(chunks.size());
+    for (std::size_t i = 0; i < chunks.size(); ++i) {
+        const world::Chunk* chunk = chunks[i];
         if (!chunk) {
             continue;
         }
         ChunkSnapshot snap;
         snap.index              = static_cast<int>(i);
         snap.world_rect         = chunk->world_bounds;
-        snap.active             = chunk->lighting.is_active;
+        snap.active             = chunk->lighting.current_strength < 0.999f;
         snap.needs_update       = chunk->lighting.needs_update;
         snap.has_runtime_sample = chunk->lighting.has_runtime_average;
         snap.runtime_sample     = chunk->lighting.runtime_average_strength;
@@ -57,7 +57,6 @@ std::vector<LightMapManager::ChunkSnapshot> LightMapManager::all_snapshots() con
         snap.dynamic_component  = chunk->lighting.dynamic_strength;
         snap.has_runtime_color  = chunk->lighting.has_runtime_average;
         snap.runtime_color      = chunk->lighting.runtime_average_color;
-        snap.shadow             = chunk->shadow;
         snapshots.push_back(snap);
     }
     return snapshots;
@@ -72,18 +71,18 @@ std::optional<LightMapManager::ChunkSnapshot> LightMapManager::snapshot_for_chun
     if (!map) {
         return std::nullopt;
     }
-    const auto lighting_chunks = collect_active_lighting_chunks();
-    if (index < 0 || static_cast<std::size_t>(index) >= lighting_chunks.size()) {
+    const auto chunks = collect_active_chunks();
+    if (index < 0 || static_cast<std::size_t>(index) >= chunks.size()) {
         return std::nullopt;
     }
-    const LightingChunk* chunk = lighting_chunks[static_cast<std::size_t>(index)];
+    const world::Chunk* chunk = chunks[static_cast<std::size_t>(index)];
     if (!chunk) {
         return std::nullopt;
     }
     ChunkSnapshot snap;
     snap.index              = index;
     snap.world_rect         = chunk->world_bounds;
-    snap.active             = chunk->lighting.is_active;
+    snap.active             = chunk->lighting.current_strength < 0.999f;
     snap.needs_update       = chunk->lighting.needs_update;
     snap.has_runtime_sample = chunk->lighting.has_runtime_average;
     snap.runtime_sample     = chunk->lighting.runtime_average_strength;
@@ -92,27 +91,7 @@ std::optional<LightMapManager::ChunkSnapshot> LightMapManager::snapshot_for_chun
     snap.dynamic_component  = chunk->lighting.dynamic_strength;
     snap.has_runtime_color  = chunk->lighting.has_runtime_average;
     snap.runtime_color      = chunk->lighting.runtime_average_color;
-    snap.shadow             = chunk->shadow;
     return snap;
-}
-
-std::optional<LightMapManager::ShadowParameters> LightMapManager::shadow_data_for_chunk(const LightingChunk* chunk) const {
-    if (!chunk) {
-        return std::nullopt;
-    }
-    return chunk->shadow;
-}
-
-std::optional<LightMapManager::ShadowParameters> LightMapManager::get_shadow_data_for_index(int index) const {
-    const LightMap* map = light_map();
-    if (!map) {
-        return std::nullopt;
-    }
-    const auto lighting_chunks = collect_active_lighting_chunks();
-    if (index < 0 || static_cast<std::size_t>(index) >= lighting_chunks.size()) {
-        return std::nullopt;
-    }
-    return shadow_data_for_chunk(lighting_chunks[static_cast<std::size_t>(index)]);
 }
 
 std::optional<int> LightMapManager::find_chunk_index(SDL_FPoint world_or_screen_pos) const {
@@ -135,42 +114,24 @@ std::optional<int> LightMapManager::find_chunk_index(SDL_FPoint world_or_screen_
         return std::nullopt;
     }
 
-    const LightingChunk* cell = chunk->lighting_chunk_from_world(search_point);
-    if (!cell) {
-        return std::nullopt;
-    }
-
-    const auto lighting_chunks = collect_active_lighting_chunks();
-    for (std::size_t i = 0; i < lighting_chunks.size(); ++i) {
-        if (lighting_chunks[i] == cell) {
+    const auto chunks = collect_active_chunks();
+    for (std::size_t i = 0; i < chunks.size(); ++i) {
+        if (chunks[i] == chunk) {
             return static_cast<int>(i);
         }
     }
     return std::nullopt;
 }
 
-std::optional<LightMapManager::ShadowParameters> LightMapManager::get_shadow_data(SDL_FPoint world_or_screen_pos) const {
-    if (auto index = find_chunk_index(world_or_screen_pos)) {
-        return get_shadow_data_for_index(*index);
-    }
-    return std::nullopt;
-}
-
-std::vector<const LightMapManager::LightingChunk*> LightMapManager::collect_active_lighting_chunks() const {
-    std::vector<const LightingChunk*> result;
+std::vector<const world::Chunk*> LightMapManager::collect_active_chunks() const {
+    std::vector<const world::Chunk*> result;
     const LightMap* map = light_map();
     if (!map) {
         return result;
     }
     const auto& chunks = map->active_chunks();
     for (const world::Chunk* chunk : chunks) {
-        if (!chunk) {
-            continue;
-        }
-        const auto& lighting_chunks = chunk->lighting_chunks();
-        for (const auto& cell : lighting_chunks) {
-            result.push_back(&cell);
-        }
+        result.push_back(chunk);
     }
     return result;
 }

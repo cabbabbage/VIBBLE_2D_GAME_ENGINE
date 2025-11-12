@@ -111,7 +111,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
-    runtime_lighting_sampler_ = std::make_unique<runtime_lighting::RuntimeLightingSampler>(assets_);
     tile_renderer_ = std::make_unique<GridTileRenderer>(assets_);
 }
 
@@ -423,11 +422,6 @@ void SceneRenderer::render(){
         SDL_SetRenderDrawBlendMode(renderer_, previous_mode);
         rendered_light_map = true;
     };
-
-    if (runtime_lighting_sampler_) {
-        runtime_lighting_sampler_->set_assets(assets_);
-        runtime_lighting_sampler_->begin_frame();
-    }
 
     light_overlay_sources_.clear();
 
@@ -949,13 +943,7 @@ void SceneRenderer::render(){
 
 
         render_commands(texture_commands_, /*overlay_passed=*/false);
-        runtime_lighting::RuntimeLightingFrame runtime_frame;
-        if (runtime_lighting_sampler_ && assets_) {
-            runtime_frame = runtime_lighting_sampler_->gather(light_overlay_sources_, assets_->getView());
-        }
-
         if (light_map_ && !chunk_lighting_suspended_) {
-            light_map_->ingest_runtime_samples(runtime_frame);
             light_map_->update(renderer_, 0u);
         }
         render_commands(remaining_commands_, /*overlay_passed=*/false);

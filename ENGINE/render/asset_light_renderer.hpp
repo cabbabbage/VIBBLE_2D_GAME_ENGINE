@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <vector>
 
-#include "render/runtime_lighting_sampler.hpp"
+#include "render/asset_light.hpp"
 #include "utils/light_source.hpp"
 
 class Asset;
