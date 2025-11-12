@@ -161,7 +161,7 @@ SDL_Color color_for_root_key(const std::string& key) {
     if (hue >= kOrangeMin && hue <= kOrangeMax) {
         // Push into a non-orange band while keeping distribution stable
         float span = kOrangeMax - kOrangeMin; // 25 deg
-        hue = std::fmod(kOrangeMax + (hue - kOrangeMin) + 60.0f, 360.0f); // jump past orange by +60Ã‚Â°
+        hue = std::fmod(kOrangeMax + (hue - kOrangeMin) + 60.0f, 360.0f); // jump past orange by +60Ãƒâ€šÃ‚Â°
     }
 
     // Prefer vivid saturation/value ranges for stronger differentiation
@@ -524,8 +524,7 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
     if (!document_) {
         if (!display_rows_.empty()) {
             display_rows_.clear();
-            row_bounds_.clear();
-            scroll_offset_ = 0;
+            row_geometry_.clear();
             content_height_ = 0;
             hovered_row_.reset();
             layout_dirty_ = true;
@@ -665,7 +664,7 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
 
     if (changed) {
         display_rows_ = std::move(flattened);
-        row_bounds_.assign(display_rows_.size(), SDL_Rect{});
+        row_geometry_.clear();
         layout_dirty_ = true;
         hovered_row_.reset();
     }
@@ -689,79 +688,51 @@ void AnimationListPanel::layout_rows() {
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::small_gap();
     const int base_width = std::max(0, bounds_.w - padding * 2);
+    const int row_padding = DMSpacing::small_gap();
 
-    row_bounds_.assign(display_rows_.size(), SDL_Rect{});
+    row_geometry_.clear();
+    row_geometry_.reserve(display_rows_.size());
 
-    int y = bounds_.y + padding - scroll_offset_;
+    int total_height = 0;
+    int cursor_y = bounds_.y + padding;
+
     for (size_t i = 0; i < display_rows_.size(); ++i) {
-        int level = display_rows_[i].level;
-        int row_height = row_height_for_level(level);
-        // Scale width for derived (smaller) animations so they shrink horizontally as well.
+        const int level = display_rows_[i].level;
+        const int row_height = row_height_for_level(level);
         const float width_factor = size_factor_for_level(level);
-        int row_width = std::max(1, static_cast<int>(std::round(base_width * width_factor)));
-        SDL_Rect rect{bounds_.x + padding, y, row_width, row_height};
-        row_bounds_[i] = rect;
-        y += row_height + gap;
-    }
+        const int row_width = std::max(1, static_cast<int>(std::round(base_width * width_factor)));
+        SDL_Rect rect{bounds_.x + padding, cursor_y, row_width, row_height};
 
-    content_height_ = padding * 2;
-    if (!display_rows_.empty()) {
-        int total_height = 0;
-        for (const auto& row : display_rows_) {
-            total_height += row_height_for_level(row.level);
+        RowGeometry geometry;
+        geometry.outer = rect;
+        geometry.content_offset_x = row_padding + indent_for_level(level);
+        geometry.content_offset_y = row_padding;
+        geometry.content_height = std::max(1, rect.h - row_padding * 2);
+        const int thumb_size = geometry.content_height;
+        geometry.preview_rel = SDL_Rect{geometry.content_offset_x,
+                                        std::max(0, (rect.h - thumb_size) / 2),
+                                        thumb_size,
+                                        thumb_size};
+        const int delete_button_size = 16;
+        geometry.delete_button_rel = SDL_Rect{rect.w - row_padding - delete_button_size,
+                                              row_padding,
+                                              delete_button_size,
+                                              delete_button_size};
+
+        row_geometry_.push_back(geometry);
+
+        cursor_y += row_height;
+        total_height += row_height;
+        if (i + 1 < display_rows_.size()) {
+            cursor_y += gap;
+            total_height += gap;
         }
-        content_height_ += total_height;
-        content_height_ += gap * static_cast<int>(display_rows_.size() - 1);
     }
 
-    clamp_scroll();
-}
-
-void AnimationListPanel::clamp_scroll() {
-    int viewport = std::max(0, bounds_.h);
-    int max_offset = std::max(0, content_height_ - viewport);
-    if (scroll_offset_ < 0) {
-        scroll_offset_ = 0;
-    } else if (scroll_offset_ > max_offset) {
-        scroll_offset_ = max_offset;
-    }
-}
-
-void AnimationListPanel::scroll_selection_into_view() {
-    if (!selected_animation_id_) {
-        return;
-    }
-    if (layout_dirty_) {
-        layout_rows();
-    }
-    auto it = std::find_if(display_rows_.begin(), display_rows_.end(), [&](const DisplayRow& row) {
-        return row.id == *selected_animation_id_;
-    });
-    if (it == display_rows_.end()) {
-        return;
-    }
-    size_t index = static_cast<size_t>(std::distance(display_rows_.begin(), it));
-    if (index >= row_bounds_.size()) {
-        return;
-    }
-    SDL_Rect rect = row_bounds_[index];
-    const int top = rect.y;
-    const int bottom = rect.y + rect.h;
-    const int viewport_top = bounds_.y;
-    const int viewport_bottom = bounds_.y + bounds_.h;
-
-    if (top < viewport_top) {
-        scroll_offset_ -= (viewport_top - top);
-        clamp_scroll();
-        layout_rows();
-    } else if (bottom > viewport_bottom) {
-        scroll_offset_ += (bottom - viewport_bottom);
-        clamp_scroll();
-        layout_rows();
-    }
-}
-
-std::optional<size_t> AnimationListPanel::row_index_at_point(const SDL_Point& p) const {
+    content_height_ = padding * 2 + total_height;
+    scroll_controller_.set_content_height(content_height_);
+    scroll_controller_.clamp();
+}std::optional<size_t> AnimationListPanel::row_index_at_point(const SDL_Point& p) const {
     for (size_t i = 0; i < row_geometry_.size(); ++i) {
         SDL_Rect rect = scroll_controller_.apply(row_geometry_[i].outer);
         if (SDL_PointInRect(&p, &rect)) {
