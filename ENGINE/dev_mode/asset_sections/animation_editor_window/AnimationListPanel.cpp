@@ -161,7 +161,7 @@ SDL_Color color_for_root_key(const std::string& key) {
     if (hue >= kOrangeMin && hue <= kOrangeMax) {
         // Push into a non-orange band while keeping distribution stable
         float span = kOrangeMax - kOrangeMin; // 25 deg
-        hue = std::fmod(kOrangeMax + (hue - kOrangeMin) + 60.0f, 360.0f); // jump past orange by +60Ãƒâ€šÃ‚Â°
+        hue = std::fmod(kOrangeMax + (hue - kOrangeMin) + 60.0f, 360.0f); // jump past orange by +60ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°
     }
 
     // Prefer vivid saturation/value ranges for stronger differentiation
@@ -310,7 +310,6 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         const RowGeometry& geometry = row_geometry_[i];
         int content_x = rect.x + geometry.content_offset_x;
         int content_y = rect.y + geometry.content_offset_y;
-        const int content_h = geometry.content_height;
         SDL_Rect preview_rect{rect.x + geometry.preview_rel.x,
                               rect.y + geometry.preview_rel.y,
                               geometry.preview_rel.w,
@@ -520,7 +519,9 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
     }
 
     return false;
-}void AnimationListPanel::rebuild_rows() {
+}
+
+void AnimationListPanel::rebuild_rows() {
     if (!document_) {
         if (!display_rows_.empty()) {
             display_rows_.clear();
@@ -732,7 +733,41 @@ void AnimationListPanel::layout_rows() {
     content_height_ = padding * 2 + total_height;
     scroll_controller_.set_content_height(content_height_);
     scroll_controller_.clamp();
-}std::optional<size_t> AnimationListPanel::row_index_at_point(const SDL_Point& p) const {
+}
+
+void AnimationListPanel::scroll_selection_into_view() {
+    if (!selected_animation_id_) {
+        return;
+    }
+    ensure_layout();
+
+    auto it = std::find_if(display_rows_.begin(), display_rows_.end(), [&](const DisplayRow& row) {
+        return row.id == *selected_animation_id_;
+    });
+    if (it == display_rows_.end()) {
+        return;
+    }
+
+    size_t index = static_cast<size_t>(std::distance(display_rows_.begin(), it));
+    if (index >= row_geometry_.size()) {
+        return;
+    }
+
+    const SDL_Rect& target = row_geometry_[index].outer;
+    const int viewport_top = bounds_.y;
+    const int viewport_bottom = bounds_.y + bounds_.h;
+    const int current_scroll = scroll_controller_.scroll();
+
+    const int row_top = target.y - current_scroll;
+    const int row_bottom = row_top + target.h;
+
+    if (row_top < viewport_top) {
+        scroll_controller_.set_scroll(target.y - viewport_top);
+    } else if (row_bottom > viewport_bottom) {
+        scroll_controller_.set_scroll(target.y + target.h - viewport_bottom);
+    }
+}
+std::optional<size_t> AnimationListPanel::row_index_at_point(const SDL_Point& p) const {
     for (size_t i = 0; i < row_geometry_.size(); ++i) {
         SDL_Rect rect = scroll_controller_.apply(row_geometry_[i].outer);
         if (SDL_PointInRect(&p, &rect)) {

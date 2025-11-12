@@ -232,6 +232,7 @@ void render_summary_badges(SDL_Renderer* renderer, const SDL_Rect& bounds, const
 AnimationInspectorPanel::AnimationInspectorPanel() {
     source_frames_button_ = std::make_unique<DMButton>("Frames", &DMStyles::AccentButton(), 120, DMButton::height());
     source_animation_button_ = std::make_unique<DMButton>("Animation", &DMStyles::HeaderButton(), 120, DMButton::height());
+    scroll_controller_.set_step_pixels(kScrollWheelStep);
 }
 
 void AnimationInspectorPanel::set_document(std::shared_ptr<AnimationDocument> document) {
@@ -246,6 +247,7 @@ void AnimationInspectorPanel::set_animation_id(const std::string& animation_id) 
 
 void AnimationInspectorPanel::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
+    scroll_controller_.set_bounds(bounds_);
     layout_dirty_ = true;
 }
 
@@ -415,7 +417,7 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     SDL_RenderSetClipRect(renderer, &bounds_);
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    ui::draw_panel_background(renderer, bounds_);
 
     dm_draw::DrawBeveledRect( renderer, header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
@@ -583,21 +585,8 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
 
     bool handled = false;
     bool was_editing = name_box_ && name_box_->is_editing();
-    auto handle_name_event = [&](const SDL_Event& ev) {
-        if (!name_box_) {
-            return;
-        }
-        if (name_box_->handle_event(ev)) {
-            rename_pending_ = true;
-            handled = true;
-        }
-};
 
     if (e.type == SDL_KEYDOWN) {
-        if (name_box_ && name_box_->is_editing()) {
-            handle_name_event(e);
-        }
-
         if (e.key.keysym.sym == SDLK_TAB) {
             auto order = focus_order();
             if (!order.empty()) {
@@ -629,9 +618,7 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
             }
         }
     } else if (e.type == SDL_TEXTINPUT) {
-        if (name_box_ && name_box_->is_editing()) {
-            handle_name_event(e);
-        }
+        // Text input is routed through the widget registry.
     }
 
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -649,33 +636,10 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
         set_focus(clicked);
     }
 
-    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
-        handle_name_event(e);
-    }
-
-    if (start_button_ && start_button_->handle_event(e)) {
+    // Dispatch standard widgets (buttons, text boxes, sliders)
+    if (widget_registry_.handle_event(e)) {
         handled = true;
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            activate_focus_target(FocusTarget::kStart);
-        }
     }
-
-
-
-    auto handle_button = [&](DMButton* button, FocusTarget target) {
-        if (!button) {
-            return;
-        }
-        if (button->handle_event(e)) {
-            handled = true;
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                activate_focus_target(target);
-            }
-        }
-    };
-
-    handle_button(source_frames_button_.get(), FocusTarget::kSourceFrames);
-    handle_button(source_animation_button_.get(), FocusTarget::kSourceAnimation);
 
     if (source_config_ && source_config_->handle_event(e)) handled = true;
 
@@ -700,10 +664,10 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
             if (!(over_source_config && dropdown_expanded)) {
                 int delta = resolve_wheel_delta(e.wheel);
                 if (delta != 0) {
-                    scroll_ -= delta * kScrollWheelStep;
-                    scroll_ = std::clamp(scroll_, 0, max_scroll_);
-                    layout_dirty_ = true;
-                    handled = true;
+                    if (scroll_controller_.apply_wheel_delta(delta)) {
+                        layout_dirty_ = true;
+                        handled = true;
+                    }
                 }
             }
         }
@@ -713,6 +677,8 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
 }
 
 void AnimationInspectorPanel::rebuild_widgets() {
+    widget_registry_.reset();
+
     if (!document_ || animation_id_.empty()) {
         return;
     }
@@ -733,9 +699,35 @@ void AnimationInspectorPanel::rebuild_widgets() {
     } else {
         name_box_->set_value(animation_id_);
     }
+    if (name_box_) {
+        widget_registry_.add_handler([this](const SDL_Event& ev) {
+            if (!name_box_) {
+                return false;
+            }
+            if (!name_box_->handle_event(ev)) {
+                return false;
+            }
+            rename_pending_ = true;
+            return true;
+        });
+    }
 
     if (!start_button_) {
         start_button_ = std::make_unique<DMButton>("Set as Start", &DMStyles::AccentButton(), kHeaderButtonWidth, DMButton::height());
+    }
+    if (start_button_) {
+        widget_registry_.add_handler([this](const SDL_Event& ev) {
+            if (!start_button_) {
+                return false;
+            }
+            if (!start_button_->handle_event(ev)) {
+                return false;
+            }
+            if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) {
+                activate_focus_target(FocusTarget::kStart);
+            }
+            return true;
+        });
     }
 
     if (!source_config_) {
@@ -752,6 +744,34 @@ void AnimationInspectorPanel::rebuild_widgets() {
         source_animation_button_ = std::make_unique<DMButton>("Animation", &DMStyles::HeaderButton(), 120, DMButton::height());
     }
     update_source_mode_button_styles();
+    if (source_frames_button_) {
+        widget_registry_.add_handler([this](const SDL_Event& ev) {
+            if (!source_frames_button_) {
+                return false;
+            }
+            if (!source_frames_button_->handle_event(ev)) {
+                return false;
+            }
+            if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) {
+                activate_focus_target(FocusTarget::kSourceFrames);
+            }
+            return true;
+        });
+    }
+    if (source_animation_button_) {
+        widget_registry_.add_handler([this](const SDL_Event& ev) {
+            if (!source_animation_button_) {
+                return false;
+            }
+            if (!source_animation_button_->handle_event(ev)) {
+                return false;
+            }
+            if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) {
+                activate_focus_target(FocusTarget::kSourceAnimation);
+            }
+            return true;
+        });
+    }
 
     if (!playback_settings_) {
         playback_settings_ = std::make_unique<PlaybackSettingsPanel>();
@@ -816,7 +836,8 @@ void AnimationInspectorPanel::layout_widgets() const {
     const int content_width = width;
     const int x = bounds_.x + padding;
     int y = bounds_.y + padding;
-    int content_y = y - scroll_;
+    int scroll_offset = scroll_controller_.scroll();
+    int content_y = y - scroll_offset;
 
     const int button_height = DMButton::height();
     int action_buttons = 0;
@@ -857,7 +878,7 @@ void AnimationInspectorPanel::layout_widgets() const {
     self->header_rect_ = SDL_Rect{bounds_.x, bounds_.y, bounds_.w, y - bounds_.y};
 
     const int content_top = y + item_gap;
-    content_y = content_top - scroll_;
+    content_y = content_top - scroll_offset;
 
     const int selector_height = DMButton::height();
     const int selector_gap = DMSpacing::small_gap();
@@ -938,9 +959,12 @@ void AnimationInspectorPanel::layout_widgets() const {
     assign_section(audio_panel_.get(), audio_rect_);
 
     // content_y is tracked with scroll already subtracted, so add it back when measuring total height
-    self->content_height_ = content_y + scroll_ + padding - bounds_.y;
-    self->max_scroll_ = std::max(0, self->content_height_ - bounds_.h);
-    self->scroll_ = std::clamp(self->scroll_, 0, self->max_scroll_);
+    self->content_height_ = content_y + scroll_offset + padding - bounds_.y;
+    const int previous_scroll = scroll_offset;
+    self->scroll_controller_.set_content_height(self->content_height_);
+    if (self->scroll_controller_.scroll() != previous_scroll) {
+        self->layout_dirty_ = true;
+    }
 
     refresh_focus_index();
 }

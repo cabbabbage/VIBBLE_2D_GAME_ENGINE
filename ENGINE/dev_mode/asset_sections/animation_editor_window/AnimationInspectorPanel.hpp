@@ -14,6 +14,7 @@ struct SDL_Renderer;
 
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
+#include "EditorUIPrimitives.hpp"
 
 namespace devmode::core {
 class ManifestStore;
@@ -167,6 +168,7 @@ class AnimationInspectorPanel {
     AudioFilePicker audio_file_picker_;
     std::function<void(const std::string&, const nlohmann::json&)> on_animation_properties_changed_;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
+    ui::WidgetRegistry widget_registry_;
 
     // Animation preview timing variables
     mutable Uint32 animation_start_time_ = 0;
@@ -180,8 +182,7 @@ class AnimationInspectorPanel {
 
     // Scrolling variables
     mutable int content_height_ = 0;
-    mutable int scroll_ = 0;
-    mutable int max_scroll_ = 0;
+    mutable ui::ScrollController scroll_controller_;
 };
 
 }
