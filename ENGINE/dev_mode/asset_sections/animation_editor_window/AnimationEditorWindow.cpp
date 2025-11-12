@@ -919,9 +919,25 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Route events to the inspector before header/list so dropdown overlays get priority
-    if (inspector_panel_ && selected_animation_id_ && inspector_panel_->handle_event(e)) {
-        return true;
+    // If the mouse is over the inspector area, give it exclusive mouse input (incl. scroll)
+    if (inspector_panel_ && selected_animation_id_) {
+        if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP ||
+            e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEWHEEL) {
+            int mx = 0, my = 0;
+            if (e.type == SDL_MOUSEMOTION) { mx = e.motion.x; my = e.motion.y; }
+            else if (e.type == SDL_MOUSEWHEEL) { SDL_GetMouseState(&mx, &my); }
+            else { mx = e.button.x; my = e.button.y; }
+            SDL_Point mp{mx, my};
+            if (SDL_PointInRect(&mp, &inspector_rect_)) {
+                // Forward to inspector, but consume regardless to prevent underlying panels from reacting
+                (void)inspector_panel_->handle_event(e);
+                return true;
+            }
+        }
+        // Otherwise, let the inspector handle globally significant events (e.g. overlays)
+        if (inspector_panel_->handle_event(e)) {
+            return true;
+        }
     }
 
     // Header (close / add) comes after inspector so overlays can capture clicks
@@ -962,9 +978,13 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         int my = 0;
         SDL_GetMouseState(&mx, &my);
         SDL_Point p{mx, my};
-        if (SDL_PointInRect(&p, &bounds_)) {
-            return true;
+
+        // When the cursor is over the inspector area, forward the wheel event to it
+        if (inspector_panel_ && selected_animation_id_ && SDL_PointInRect(&p, &inspector_rect_)) {
+            return inspector_panel_->handle_event(e);
         }
+
+        // Otherwise, do not consume the wheel event here
         return false;
     }
 

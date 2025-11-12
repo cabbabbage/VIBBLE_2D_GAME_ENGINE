@@ -62,7 +62,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T10:53:49Z",
+        "generated_at": "2025-11-12T11:05:21Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -115,7 +115,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T10:53:49Z",
+        "generated_at": "2025-11-12T11:05:21Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -168,7 +168,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T10:53:49Z",
+        "generated_at": "2025-11-12T11:05:21Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -377,7 +377,7 @@
           "number_of_frames": 1,
           "on_end": "default",
           "reverse_source": false,
-          "rnd_start": false,
+          "rnd_start": true,
           "source": {
             "kind": "folder",
             "name": "",
@@ -447,7 +447,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T10:53:49Z",
+        "generated_at": "2025-11-12T11:05:21Z",
         "max_scale": 0.1818181872367859,
         "min_scale": 0.1818181872367859,
         "recommended_percentages": [
@@ -544,13 +544,14 @@
             "kind": "folder",
             "name": "",
             "path": "default"
-          }
+          },
+          "speed_factor": 1.0
         }
       },
       "anti_tags": [],
       "asset_directory": "SRC/assets/trail",
       "asset_name": "trail",
-      "asset_type": "object",
+      "asset_type": "texture",
       "can_invert": false,
       "has_shading": false,
       "lighting_info": [],
@@ -558,11 +559,41 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-12T11:05:21Z",
+        "max_scale": 0.9090908765792847,
+        "min_scale": 0.9090908765792847,
+        "recommended_percentages": [
+          100,
+          91,
+          91
+        ],
+        "recommended_steps": [
+          1.0,
+          0.9090908765792847,
+          0.9090908765792847
+        ],
+        "revision": 10642336998275347472,
+        "screen_aspect": 1.6
+      },
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
       "size_settings": {
         "scale_percentage": 100.0
       },
+      "spawn_groups": [],
       "start": "default",
       "tags": [],
+      "tileable": true,
+      "tillable": true,
       "update_radius": 0
     }
   },
@@ -874,9 +905,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
+            37,
             242,
             36,
-            242,
             255
           ],
           "edge_smoothness": 101,
@@ -950,6 +981,35 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-6729f3448d43"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "trail"
+                }
+              ],
+              "display_name": "trail",
+              "dx": 247,
+              "dy": 136,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 16000,
+              "origional_width": 16000,
+              "position": "Exact",
+              "priority": 2,
+              "resolution": 4,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-0419044dd14f"
             }
           ]
         }
