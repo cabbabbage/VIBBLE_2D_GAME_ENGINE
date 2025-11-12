@@ -62,7 +62,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T08:40:39Z",
+        "generated_at": "2025-11-12T10:53:49Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -114,6 +114,23 @@
       "asset_name": "Grass_1",
       "asset_type": "texture",
       "neighbor_search_distance": 500,
+      "scaling_profile": {
+        "generated_at": "2025-11-12T10:53:49Z",
+        "max_scale": 0.05000000074505806,
+        "min_scale": 0.05000000074505806,
+        "recommended_percentages": [
+          100,
+          5,
+          5
+        ],
+        "recommended_steps": [
+          1.0,
+          0.05000000074505806,
+          0.05000000074505806
+        ],
+        "revision": 15640563384705236170,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -125,7 +142,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 4.0
+        "scale_percentage": 2.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -151,7 +168,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T08:40:39Z",
+        "generated_at": "2025-11-12T10:53:49Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -178,7 +195,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 4.0
+        "scale_percentage": 2.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -302,7 +319,7 @@
           "number_of_frames": 1,
           "on_end": "default",
           "reverse_source": false,
-          "rnd_start": true,
+          "rnd_start": false,
           "source": {
             "kind": "folder",
             "name": "",
@@ -310,9 +327,40 @@
           },
           "speed_factor": 1.0
         },
+        "forward": {
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "backward",
+            "path": ""
+          }
+        },
         "left": {
           "flipped_source": false,
-          "fps": 10,
+          "fps": 12,
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -336,13 +384,85 @@
             "path": "left"
           },
           "speed_factor": 1.0
+        },
+        "right": {
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": true,
+          "inherit_source_movement": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "left",
+            "path": ""
+          }
         }
       },
       "anti_tags": [],
       "asset_directory": "SRC/assets/Vibble",
       "asset_name": "Vibble",
-      "asset_type": "object",
+      "asset_type": "player",
+      "can_invert": false,
+      "lighting_info": [
+        {
+          "behind": false,
+          "falloff": 49,
+          "flare": 0,
+          "flicker": 0,
+          "flicker_smoothness": 100,
+          "flicker_speed": 0,
+          "has_light_source": true,
+          "in_front": false,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 141,
+          "offset_x": -1,
+          "offset_y": 0,
+          "radius": 409,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        }
+      ],
       "neighbor_search_distance": 500,
+      "scaling_profile": {
+        "generated_at": "2025-11-12T10:53:49Z",
+        "max_scale": 0.1818181872367859,
+        "min_scale": 0.1818181872367859,
+        "recommended_percentages": [
+          100,
+          18,
+          18
+        ],
+        "recommended_steps": [
+          1.0,
+          0.1818181872367859,
+          0.1818181872367859
+        ],
+        "revision": 4634089302953237708,
+        "screen_aspect": 1.6
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -354,11 +474,12 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 45.0
+        "scale_percentage": 20.0
       },
       "spawn_groups": [],
       "start": "default",
       "tags": [],
+      "tileable": false,
       "tillable": false,
       "z_threshold": -24
     },
@@ -396,6 +517,53 @@
       "asset_name": "Vibble_eyes",
       "asset_type": "object",
       "start": "default"
+    },
+    "trail": {
+      "animations": {
+        "default": {
+          "flipped_source": false,
+          "fps": 24,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          }
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/trail",
+      "asset_name": "trail",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
     }
   },
   "maps": {
@@ -408,7 +576,7 @@
       },
       "camera_settings": {
         "distance_scale_strength": 0.07999999821186066,
-        "foreshorten_strength": 0.5199999809265137,
+        "foreshorten_strength": 0.25999999046325684,
         "height_at_zoom1": 601.0,
         "max_zoom_multiplier": 2.999999761581421,
         "min_visible_screen_ratio": 0.00800000037997961,
@@ -423,13 +591,13 @@
         "parallax_smoothing_method": 1,
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 0.0,
-        "parallax_strength": 57.25,
+        "parallax_strength": 90.75,
         "realism_enabled": false,
         "render_distance": 460.0,
         "render_quality_percent": 10,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
-        "tripod_distance_y": -1765.0
+        "tripod_distance_y": -430.0
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -498,7 +666,7 @@
       },
       "map_layers": [
         {
-          "bounding_extent": 50000.0,
+          "bounding_extent": 8000.0,
           "level": 0,
           "max_rooms": 1,
           "min_rooms": 1,
@@ -509,22 +677,6 @@
               "max_instances": 1,
               "min_instances": 1,
               "name": "spawn",
-              "required_children": []
-            }
-          ]
-        },
-        {
-          "bounding_extent": 7071.067811865475,
-          "level": 1,
-          "max_rooms": 1,
-          "min_rooms": 0,
-          "name": "layer_1",
-          "ring_radius": 58992.0,
-          "rooms": [
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "faggot",
               "required_children": []
             }
           ]
@@ -719,32 +871,12 @@
         }
       },
       "rooms_data": {
-        "faggot": {
-          "curvyness": 2,
-          "display_color": [
-            36,
-            199,
-            242,
-            255
-          ],
-          "edge_smoothness": 2,
-          "geometry": "Square",
-          "inherits_map_assets": false,
-          "is_boss": false,
-          "is_spawn": false,
-          "max_height": 10000,
-          "max_width": 10000,
-          "min_height": 1500,
-          "min_width": 1500,
-          "name": "faggot",
-          "spawn_groups": []
-        },
         "spawn": {
           "curvyness": 2,
           "display_color": [
+            242,
             36,
             242,
-            121,
             255
           ],
           "edge_smoothness": 101,
@@ -752,14 +884,14 @@
           "inherits_map_assets": true,
           "is_boss": false,
           "is_spawn": true,
-          "max_height": 50000,
-          "max_radius": 25000,
-          "max_width": 50000,
-          "min_height": 50000,
-          "min_radius": 25000,
-          "min_width": 50000,
+          "max_height": 16000,
+          "max_radius": 8000,
+          "max_width": 16000,
+          "min_height": 16000,
+          "min_radius": 8000,
+          "min_width": 16000,
           "name": "spawn",
-          "radius": 25000,
+          "radius": 8000,
           "spawn_groups": [
             {
               "candidates": [
@@ -802,35 +934,6 @@
                 }
               ],
               "display_name": "Vibble",
-              "dx": 125,
-              "dy": -540,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 10752,
-              "origional_width": 12864,
-              "position": "Exact",
-              "priority": 1,
-              "resolution": 4,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-e2d80f5e0454"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Vibble"
-                }
-              ],
-              "display_name": "Vibble",
               "dx": -259,
               "dy": -325,
               "enforce_spacing": false,
@@ -842,6 +945,7 @@
               "origional_height": 99984,
               "origional_width": 100000,
               "position": "Exact",
+              "priority": 1,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,

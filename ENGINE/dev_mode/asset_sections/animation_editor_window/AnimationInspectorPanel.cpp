@@ -577,6 +577,10 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
             if (!allow_out_of_bounds && on_end_selector_ && on_end_selector_->allow_out_of_bounds_pointer_events()) {
                 allow_out_of_bounds = true;
             }
+            // Allow out-of-bounds events for embedded children search overlay
+            if (!allow_out_of_bounds && children_panel_ && children_panel_->allow_out_of_bounds_pointer_events()) {
+                allow_out_of_bounds = true;
+            }
             if (!allow_out_of_bounds) {
                 return false;
             }
@@ -661,7 +665,8 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
             // Don't consume mouse wheel events over the source config area if dropdown is expanded
             bool over_source_config = source_config_ && SDL_PointInRect(&mouse, &source_rect_);
             bool dropdown_expanded = source_config_ && source_config_->allow_out_of_bounds_pointer_events();
-            if (!(over_source_config && dropdown_expanded)) {
+            bool children_overlay_active = children_panel_ && children_panel_->allow_out_of_bounds_pointer_events();
+            if (!(over_source_config && dropdown_expanded) && !children_overlay_active) {
                 int delta = resolve_wheel_delta(e.wheel);
                 if (delta != 0) {
                     if (scroll_controller_.apply_wheel_delta(delta)) {

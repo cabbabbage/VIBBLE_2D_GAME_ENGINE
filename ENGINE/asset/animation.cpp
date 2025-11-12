@@ -695,6 +695,109 @@ void Animation::load(const std::string& trigger,
                                 frames.insert(frames.end(), new_frames.begin(), new_frames.end());
                                 frame_cache_.insert(frame_cache_.end(), std::make_move_iterator(new_caches.begin()), std::make_move_iterator(new_caches.end()));
                                 mask_frames.insert(mask_frames.end(), new_mask_frames.begin(), new_mask_frames.end());
+
+                                // Apply texture flips to derived frames if requested
+                                if ((flipped_source || flip_vertical_source) && renderer && !frame_cache_.empty()) {
+                                        SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
+                                        if (flipped_source) {
+                                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
+                                        }
+                                        if (flip_vertical_source) {
+                                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
+                                        }
+                                        for (std::size_t frame_index = 0; frame_index < frame_cache_.size(); ++frame_index) {
+                                                FrameCache& cache_entry = frame_cache_[frame_index];
+                                                for (std::size_t variant_idx = 0; variant_idx < cache_entry.textures.size(); ++variant_idx) {
+                                                        SDL_Texture* src_tex = cache_entry.textures[variant_idx];
+                                                        if (!src_tex) {
+                                                                continue;
+                                                        }
+                                                        Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
+                                                        int access = 0;
+                                                        int tex_w = cache_entry.widths[variant_idx];
+                                                        int tex_h = cache_entry.heights[variant_idx];
+                                                        if (tex_w <= 0 || tex_h <= 0) {
+                                                                if (SDL_QueryTexture(src_tex, &fmt, &access, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+                                                                        continue;
+                                                                }
+                                                        } else if (SDL_QueryTexture(src_tex, &fmt, &access, nullptr, nullptr) != 0) {
+                                                                fmt = SDL_PIXELFORMAT_RGBA8888;
+                                                        }
+                                                        SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
+                                                        if (!dst) {
+                                                                continue;
+                                                        }
+                                                        SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
+                                                        apply_scale_mode(dst, info);
+                                                        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+                                                        SDL_SetRenderTarget(renderer, dst);
+                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+                                                        SDL_RenderClear(renderer);
+                                                        SDL_Rect rect{0, 0, tex_w, tex_h};
+                                                        SDL_RenderCopyEx(renderer, src_tex, nullptr, &rect, 0.0, nullptr, flip_flags);
+                                                        SDL_SetRenderTarget(renderer, prev_target);
+                                                        SDL_DestroyTexture(src_tex);
+                                                        cache_entry.textures[variant_idx] = dst;
+                                                        cache_entry.widths[variant_idx]   = tex_w;
+                                                        cache_entry.heights[variant_idx]  = tex_h;
+
+                                                        SDL_Texture* src_mask = nullptr;
+                                                        if (variant_idx < cache_entry.mask_textures.size()) {
+                                                                src_mask = cache_entry.mask_textures[variant_idx];
+                                                        }
+                                                        if (src_mask) {
+                                                                Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
+                                                                int mask_access = 0;
+                                                                int mask_w = cache_entry.mask_widths[variant_idx];
+                                                                int mask_h = cache_entry.mask_heights[variant_idx];
+                                                                if (mask_w <= 0 || mask_h <= 0) {
+                                                                        if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
+                                                                                SDL_DestroyTexture(src_mask);
+                                                                                cache_entry.mask_textures[variant_idx] = nullptr;
+                                                                                cache_entry.mask_widths[variant_idx]   = 0;
+                                                                                cache_entry.mask_heights[variant_idx]  = 0;
+                                                                                continue;
+                                                                        }
+                                                                } else if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, nullptr, nullptr) != 0) {
+                                                                        mask_fmt = SDL_PIXELFORMAT_RGBA8888;
+                                                                }
+                                                                SDL_Texture* mask_dst = SDL_CreateTexture(renderer, mask_fmt, SDL_TEXTUREACCESS_TARGET, mask_w, mask_h);
+                                                                if (mask_dst) {
+                                                                        SDL_SetTextureBlendMode(mask_dst, SDL_BLENDMODE_BLEND);
+                                                                        apply_scale_mode(mask_dst, info);
+                                                                        SDL_Texture* prev_target_mask = SDL_GetRenderTarget(renderer);
+                                                                        SDL_SetRenderTarget(renderer, mask_dst);
+                                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+                                                                        SDL_RenderClear(renderer);
+                                                                        SDL_Rect rect{0, 0, mask_w, mask_h};
+                                                                        SDL_RenderCopyEx(renderer, src_mask, nullptr, &rect, 0.0, nullptr, flip_flags);
+                                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
+                                                                } else {
+                                                                        // Failed to create flipped mask; clear it to remain consistent
+                                                                        mask_w = 0;
+                                                                        mask_h = 0;
+                                                                }
+                                                                SDL_DestroyTexture(src_mask);
+                                                                cache_entry.mask_textures[variant_idx] = mask_dst;
+                                                                cache_entry.mask_widths[variant_idx]   = mask_w;
+                                                                cache_entry.mask_heights[variant_idx]  = mask_h;
+                                                        }
+                                                }
+                                                if (frame_index < frames.size()) {
+                                                        cache_entry.textures.size(); // no-op to keep static analyzers happy
+                                                        frames[frame_index] = cache_entry.textures[0];
+                                                }
+                                                if (frame_index < mask_frames.size() && !cache_entry.mask_textures.empty()) {
+                                                        mask_frames[frame_index] = cache_entry.mask_textures[0];
+                                                }
+                                        }
+                                }
+                                // Reverse frame order for derived animations if requested
+                                if (reverse_source && !frames.empty()) {
+                                        std::reverse(frames.begin(), frames.end());
+                                        std::reverse(mask_frames.begin(), mask_frames.end());
+                                        std::reverse(frame_cache_.begin(), frame_cache_.end());
+                                }
                         }
                 }
         } else {
@@ -1243,6 +1346,28 @@ void Animation::load(const std::string& trigger,
                                         }
                                 }
                                 movement_specified = true;
+                        }
+                }
+        }
+        // If movement is explicitly specified for a derived animation, still apply requested transforms
+        if (movement_specified && source.kind == "animation") {
+                if (reverse_source) {
+                        for (auto& path : movement_paths_) {
+                                std::reverse(path.begin(), path.end());
+                        }
+                }
+                if (flip_movement_horizontal) {
+                        for (auto& path : movement_paths_) {
+                                for (auto& frame : path) {
+                                        frame.dx = -frame.dx;
+                                }
+                        }
+                }
+                if (flip_movement_vertical) {
+                        for (auto& path : movement_paths_) {
+                                for (auto& frame : path) {
+                                        frame.dy = -frame.dy;
+                                }
                         }
                 }
         }

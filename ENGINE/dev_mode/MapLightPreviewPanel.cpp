@@ -919,10 +919,17 @@ void MapLightPreviewPanel::render_preview(SDL_Renderer* renderer) const {
 
         if (const auto* snap = snapshot_for_chunk(detail_chunk)) {
             detail_lines.push_back(std::string("Active: ") + (snap->active ? "yes" : "no"));
-            detail_lines.push_back("Shadow Opacity: " + format_float(snap->shadow.opacity, 3));
-            detail_lines.push_back("Shadow Scale: " + format_float(snap->shadow.scale, 3));
-            detail_lines.push_back("Shadow Offset X%: " + format_float(snap->shadow.offset_x_percent, 3));
-            detail_lines.push_back("Shadow Offset Y%: " + format_float(snap->shadow.offset_y_percent, 3));
+            if (snap->shadow.has_data) {
+                detail_lines.push_back("Shadow Opacity: " + format_float(snap->shadow.opacity, 3));
+                detail_lines.push_back("Shadow Scale: " + format_float(snap->shadow.scale, 3));
+                detail_lines.push_back("Shadow Offset X%: " + format_float(snap->shadow.offset_x_percent, 3));
+                detail_lines.push_back("Shadow Offset Y%: " + format_float(snap->shadow.offset_y_percent, 3));
+            } else {
+                detail_lines.push_back("Shadow Opacity: --");
+                detail_lines.push_back("Shadow Scale: --");
+                detail_lines.push_back("Shadow Offset X%: --");
+                detail_lines.push_back("Shadow Offset Y%: --");
+            }
         }
 
         detail_lines.push_back("");

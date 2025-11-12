@@ -218,6 +218,12 @@ int ChildrenPanel::preferred_height(int width) const {
     return height;
 }
 
+bool ChildrenPanel::allow_out_of_bounds_pointer_events() const {
+    // When the embedded search panel is visible, allow pointer events
+    // outside the inspector bounds so the overlay can receive clicks/typing.
+    return search_assets_ && search_assets_->visible();
+}
+
 void ChildrenPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
     if (bounds_.w <= 0 || bounds_.h <= 0) return;

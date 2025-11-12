@@ -101,7 +101,7 @@ void draw_panel_background(SDL_Renderer* renderer, const SDL_Rect& bounds) {
                              bounds,
                              DMStyles::CornerRadius(),
                              DMStyles::BevelDepth(),
-                             DMStyles::PanelBackground(),
+                             DMStyles::PanelBG(),
                              DMStyles::HighlightColor(),
                              DMStyles::ShadowColor(),
                              false,

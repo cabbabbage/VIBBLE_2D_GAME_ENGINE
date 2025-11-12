@@ -20,6 +20,14 @@ class LightMapManager {
 public:
 
     struct ChunkSnapshot {
+        struct ShadowInfo {
+            bool  has_data          = false;
+            float opacity           = 0.0f;
+            float scale             = 1.0f;
+            float offset_x_percent  = 0.0f;
+            float offset_y_percent  = 0.0f;
+        };
+
         int      index                 = -1;
         SDL_Rect world_rect{0, 0, 0, 0};
         bool     active                = false;
@@ -31,6 +39,7 @@ public:
         float    dynamic_component     = 1.0f;
         SDL_Color runtime_color{255, 255, 255, 255};
         bool      has_runtime_color = false;
+        ShadowInfo shadow{};
     };
 
     explicit LightMapManager(Assets* assets);

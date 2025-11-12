@@ -13,6 +13,15 @@
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
 
+namespace {
+LightMapManager::ChunkSnapshot::ShadowInfo BuildShadowInfo(const world::Chunk* chunk) {
+    LightMapManager::ChunkSnapshot::ShadowInfo info{};
+    (void)chunk;
+    // TODO(#reactive-shadows): Populate once runtime shadow data is exposed.
+    return info;
+}
+}
+
 LightMapManager::LightMapManager(Assets* assets) : assets_(assets) {}
 
 void LightMapManager::begin_frame() {
@@ -57,6 +66,7 @@ std::vector<LightMapManager::ChunkSnapshot> LightMapManager::all_snapshots() con
         snap.dynamic_component  = chunk->lighting.dynamic_strength;
         snap.has_runtime_color  = chunk->lighting.has_runtime_average;
         snap.runtime_color      = chunk->lighting.runtime_average_color;
+        snap.shadow             = BuildShadowInfo(chunk);
         snapshots.push_back(snap);
     }
     return snapshots;
@@ -91,6 +101,7 @@ std::optional<LightMapManager::ChunkSnapshot> LightMapManager::snapshot_for_chun
     snap.dynamic_component  = chunk->lighting.dynamic_strength;
     snap.has_runtime_color  = chunk->lighting.has_runtime_average;
     snap.runtime_color      = chunk->lighting.runtime_average_color;
+    snap.shadow             = BuildShadowInfo(chunk);
     return snap;
 }
 

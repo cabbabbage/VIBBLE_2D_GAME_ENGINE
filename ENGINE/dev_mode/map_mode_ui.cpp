@@ -489,7 +489,10 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
             break;
         }
 
-        const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) || (shadows && shadows->is_visible() && shadows->is_point_inside(p.x, p.y)) || (preview && preview->is_visible() && preview->is_point_inside(p.x, p.y)) || (layers_preview && layers_preview->is_visible() && layers_preview->is_point_inside(p.x, p.y)) || (!lights && !shadows && !preview && !layers_preview && panel->is_visible() && panel->is_point_inside(p.x, p.y));
+        const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) ||
+                            (preview && preview->is_visible() && preview->is_point_inside(p.x, p.y)) ||
+                            (layers_preview && layers_preview->is_visible() && layers_preview->is_point_inside(p.x, p.y)) ||
+                            (!lights && !preview && !layers_preview && panel->is_visible() && panel->is_point_inside(p.x, p.y));
 
         if ((pointer_event || wheel_event) && inside) {
             if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {

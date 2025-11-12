@@ -43,6 +43,11 @@ class ChildrenPanel {
 
     int preferred_height(int width) const;
 
+    // Returns true if an embedded overlay (e.g., search panel) is active
+    // and should be allowed to receive pointer events outside of the
+    // inspector panel's strict bounds.
+    bool allow_out_of_bounds_pointer_events() const;
+
   private:
     void refresh_from_document();
     std::vector<std::string> read_local_children(const nlohmann::json& payload) const;
