@@ -560,11 +560,13 @@ void ChildrenPanel::open_search_panel() {
     if (!search_assets_) {
         return;
     }
+    // Ensure the embedded panel has a valid rect before opening to avoid
+    // zero-sized layout during initial update.
+    position_search_panel();
     search_assets_->open([this](const std::string& selection) {
         add_child_entry(selection);
         close_search_panel();
     });
-    position_search_panel();
 }
 
 void ChildrenPanel::close_search_panel() {

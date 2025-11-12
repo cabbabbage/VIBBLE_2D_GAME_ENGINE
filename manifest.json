@@ -64,7 +64,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.2626262605190277,
         "min_scale": 0.23636361956596375,
         "recommended_percentages": [
@@ -175,699 +175,28 @@
           "speed_factor": 1
         }
       },
-      "anti_tags": [
-        "any",
-        "backward",
-        "center",
-        "forward",
-        "left",
-        "meadow",
-        "passable",
-        "player",
-        "right",
-        "spawn",
-        "start"
-      ],
-      "areas": [
-        {
-          "anchor": {
-            "x": 193,
-            "y": 490
-          },
-          "coordinate_space": {
-            "canvas_height": 69,
-            "canvas_width": 54,
-            "kind": "render_space",
-            "origin": "bottom_center",
-            "pivot": {
-              "x": 27,
-              "y": 69
-            },
-            "scale_at_save": 0.14000000059604645
-          },
-          "kind": "impassable",
-          "name": "impassable",
-          "points": [
-            {
-              "x": -150,
-              "y": -64
-            },
-            {
-              "x": -143,
-              "y": -64
-            },
-            {
-              "x": -136,
-              "y": -64
-            },
-            {
-              "x": -129,
-              "y": -64
-            },
-            {
-              "x": -121,
-              "y": -64
-            },
-            {
-              "x": -114,
-              "y": -64
-            },
-            {
-              "x": -107,
-              "y": -64
-            },
-            {
-              "x": -100,
-              "y": -64
-            },
-            {
-              "x": -93,
-              "y": -64
-            },
-            {
-              "x": -86,
-              "y": -64
-            },
-            {
-              "x": -79,
-              "y": -64
-            },
-            {
-              "x": -71,
-              "y": -64
-            },
-            {
-              "x": -64,
-              "y": -64
-            },
-            {
-              "x": -57,
-              "y": -64
-            },
-            {
-              "x": -50,
-              "y": -64
-            },
-            {
-              "x": -43,
-              "y": -64
-            },
-            {
-              "x": -36,
-              "y": -64
-            },
-            {
-              "x": -29,
-              "y": -64
-            },
-            {
-              "x": -21,
-              "y": -64
-            },
-            {
-              "x": -14,
-              "y": -64
-            },
-            {
-              "x": -7,
-              "y": -64
-            },
-            {
-              "x": 0,
-              "y": -64
-            },
-            {
-              "x": 7,
-              "y": -64
-            },
-            {
-              "x": 14,
-              "y": -64
-            },
-            {
-              "x": 21,
-              "y": -64
-            },
-            {
-              "x": 29,
-              "y": -64
-            },
-            {
-              "x": 36,
-              "y": -64
-            },
-            {
-              "x": 43,
-              "y": -64
-            },
-            {
-              "x": 50,
-              "y": -64
-            },
-            {
-              "x": 57,
-              "y": -64
-            },
-            {
-              "x": 64,
-              "y": -64
-            },
-            {
-              "x": 71,
-              "y": -64
-            },
-            {
-              "x": 79,
-              "y": -64
-            },
-            {
-              "x": 86,
-              "y": -64
-            },
-            {
-              "x": 93,
-              "y": -64
-            },
-            {
-              "x": 100,
-              "y": -64
-            },
-            {
-              "x": 107,
-              "y": -64
-            },
-            {
-              "x": 114,
-              "y": -64
-            },
-            {
-              "x": 121,
-              "y": -64
-            },
-            {
-              "x": 129,
-              "y": -64
-            },
-            {
-              "x": 136,
-              "y": -64
-            },
-            {
-              "x": 143,
-              "y": -64
-            },
-            {
-              "x": 150,
-              "y": -64
-            },
-            {
-              "x": 143,
-              "y": -57
-            },
-            {
-              "x": 143,
-              "y": -50
-            },
-            {
-              "x": 136,
-              "y": -43
-            },
-            {
-              "x": 129,
-              "y": -43
-            },
-            {
-              "x": 121,
-              "y": -36
-            },
-            {
-              "x": 114,
-              "y": -29
-            },
-            {
-              "x": 107,
-              "y": -29
-            },
-            {
-              "x": 100,
-              "y": -21
-            },
-            {
-              "x": 93,
-              "y": -21
-            },
-            {
-              "x": 86,
-              "y": -21
-            },
-            {
-              "x": 79,
-              "y": -21
-            },
-            {
-              "x": 71,
-              "y": -14
-            },
-            {
-              "x": 64,
-              "y": -14
-            },
-            {
-              "x": 57,
-              "y": -14
-            },
-            {
-              "x": 50,
-              "y": -14
-            },
-            {
-              "x": 43,
-              "y": -7
-            },
-            {
-              "x": 36,
-              "y": -7
-            },
-            {
-              "x": 29,
-              "y": -7
-            },
-            {
-              "x": 21,
-              "y": -7
-            },
-            {
-              "x": 14,
-              "y": -7
-            },
-            {
-              "x": 7,
-              "y": -7
-            },
-            {
-              "x": 0,
-              "y": -7
-            },
-            {
-              "x": -7,
-              "y": -7
-            },
-            {
-              "x": -14,
-              "y": -7
-            },
-            {
-              "x": -21,
-              "y": -7
-            },
-            {
-              "x": -29,
-              "y": -7
-            },
-            {
-              "x": -36,
-              "y": -7
-            },
-            {
-              "x": -43,
-              "y": -7
-            },
-            {
-              "x": -50,
-              "y": -7
-            },
-            {
-              "x": -57,
-              "y": -7
-            },
-            {
-              "x": -64,
-              "y": -14
-            },
-            {
-              "x": -71,
-              "y": -14
-            },
-            {
-              "x": -79,
-              "y": -14
-            },
-            {
-              "x": -86,
-              "y": -21
-            },
-            {
-              "x": -93,
-              "y": -21
-            },
-            {
-              "x": -100,
-              "y": -21
-            },
-            {
-              "x": -107,
-              "y": -29
-            },
-            {
-              "x": -114,
-              "y": -29
-            },
-            {
-              "x": -121,
-              "y": -36
-            },
-            {
-              "x": -129,
-              "y": -36
-            },
-            {
-              "x": -129,
-              "y": -43
-            },
-            {
-              "x": -136,
-              "y": -50
-            },
-            {
-              "x": -143,
-              "y": -57
-            }
-          ],
-          "resolution": 0,
-          "schema_version": 2,
-          "type": "impassable"
-        },
-        {
-          "anchor": {
-            "x": 193,
-            "y": 490
-          },
-          "coordinate_space": {
-            "canvas_height": 69,
-            "canvas_width": 54,
-            "kind": "render_space",
-            "origin": "bottom_center",
-            "pivot": {
-              "x": 27,
-              "y": 69
-            },
-            "scale_at_save": 0.14000000059604645
-          },
-          "kind": "child_top_barrel",
-          "name": "child",
-          "points": [
-            {
-              "x": -79,
-              "y": -464
-            },
-            {
-              "x": -79,
-              "y": -464
-            },
-            {
-              "x": -79,
-              "y": -464
-            },
-            {
-              "x": -79,
-              "y": -464
-            },
-            {
-              "x": -50,
-              "y": -464
-            },
-            {
-              "x": -50,
-              "y": -464
-            },
-            {
-              "x": -50,
-              "y": -464
-            },
-            {
-              "x": -50,
-              "y": -464
-            },
-            {
-              "x": -21,
-              "y": -464
-            },
-            {
-              "x": -21,
-              "y": -464
-            },
-            {
-              "x": -21,
-              "y": -464
-            },
-            {
-              "x": -21,
-              "y": -464
-            },
-            {
-              "x": 7,
-              "y": -464
-            },
-            {
-              "x": 7,
-              "y": -464
-            },
-            {
-              "x": 7,
-              "y": -464
-            },
-            {
-              "x": 7,
-              "y": -464
-            },
-            {
-              "x": 36,
-              "y": -464
-            },
-            {
-              "x": 36,
-              "y": -464
-            },
-            {
-              "x": 36,
-              "y": -464
-            },
-            {
-              "x": 36,
-              "y": -464
-            },
-            {
-              "x": 64,
-              "y": -464
-            },
-            {
-              "x": 64,
-              "y": -464
-            },
-            {
-              "x": 64,
-              "y": -464
-            },
-            {
-              "x": 64,
-              "y": -464
-            },
-            {
-              "x": 93,
-              "y": -464
-            },
-            {
-              "x": 93,
-              "y": -464
-            },
-            {
-              "x": 93,
-              "y": -464
-            },
-            {
-              "x": 93,
-              "y": -436
-            },
-            {
-              "x": 93,
-              "y": -436
-            },
-            {
-              "x": 93,
-              "y": -436
-            },
-            {
-              "x": 93,
-              "y": -436
-            },
-            {
-              "x": 93,
-              "y": -436
-            },
-            {
-              "x": 93,
-              "y": -436
-            },
-            {
-              "x": 64,
-              "y": -436
-            },
-            {
-              "x": 64,
-              "y": -436
-            },
-            {
-              "x": 64,
-              "y": -436
-            },
-            {
-              "x": 64,
-              "y": -436
-            },
-            {
-              "x": 36,
-              "y": -436
-            },
-            {
-              "x": 36,
-              "y": -436
-            },
-            {
-              "x": 36,
-              "y": -436
-            },
-            {
-              "x": 36,
-              "y": -436
-            },
-            {
-              "x": 7,
-              "y": -436
-            },
-            {
-              "x": 7,
-              "y": -436
-            },
-            {
-              "x": 7,
-              "y": -436
-            },
-            {
-              "x": 7,
-              "y": -436
-            },
-            {
-              "x": -21,
-              "y": -436
-            },
-            {
-              "x": -21,
-              "y": -436
-            },
-            {
-              "x": -21,
-              "y": -436
-            },
-            {
-              "x": -21,
-              "y": -436
-            },
-            {
-              "x": -50,
-              "y": -436
-            },
-            {
-              "x": -50,
-              "y": -436
-            },
-            {
-              "x": -50,
-              "y": -436
-            },
-            {
-              "x": -50,
-              "y": -436
-            },
-            {
-              "x": -79,
-              "y": -436
-            },
-            {
-              "x": -79,
-              "y": -436
-            },
-            {
-              "x": -79,
-              "y": -436
-            },
-            {
-              "x": -79,
-              "y": -436
-            },
-            {
-              "x": -79,
-              "y": -436
-            },
-            {
-              "x": -79,
-              "y": -436
-            },
-            {
-              "x": -79,
-              "y": -436
-            }
-          ],
-          "resolution": 2,
-          "schema_version": 2,
-          "type": "child_top_barrel"
-        }
-      ],
+      "anti_tags": [],
+      "asset_directory": "SRC/Barrel",
       "asset_name": "Barrel",
-      "asset_type": "Object",
-      "can_invert": true,
-      "duplicatable": false,
-      "duplication_interval_max": 60,
-      "duplication_interval_min": 30,
-      "has_shading": true,
-      "lighting_info": [
-        {
-          "factor": 100,
-          "falloff": 13,
-          "has_light_source": true,
-          "light_intensity": 255,
-          "offset_x": 0,
-          "offset_y": -85,
-          "radius": 225,
-          "x_radius": 131,
-          "y_radius": 89
-        }
-      ],
-      "mappings": {},
-      "max_child_depth": 2,
-      "min_child_depth": 0,
-      "min_distance_all": 0,
-      "min_same_type_distance": 557,
+      "asset_type": "object",
       "neighbor_search_distance": 500,
-      "render_radius": 1000,
-      "rnd_spawn_max": 400,
-      "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
-        "max_scale": 0.14141413569450378,
-        "min_scale": 0.12727272510528564,
+        "generated_at": "2025-11-12T03:28:13Z",
+        "max_scale": 0.24242423474788666,
+        "min_scale": 0.2181818038225174,
         "recommended_percentages": [
           100,
-          14,
-          13,
-          13
+          24,
+          23,
+          22
         ],
         "recommended_steps": [
           1.0,
-          0.14141413569450378,
-          0.1341572254896164,
-          0.12727272510528564
+          0.24242423474788666,
+          0.22998382151126862,
+          0.2181818038225174
         ],
-        "revision": 11647282840148632619,
+        "revision": 7743910685559865702,
         "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
@@ -881,58 +210,12 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 14.0
+        "scale_percentage": 24.0
       },
-      "spawn_groups": [
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            },
-            {
-              "chance": 0.25,
-              "name": "candle"
-            },
-            {
-              "chance": 0.25,
-              "name": "Axe"
-            },
-            {
-              "chance": 0.25,
-              "name": "Book_1"
-            },
-            {
-              "chance": 0.25,
-              "name": "#book"
-            },
-            {
-              "chance": 0.0125,
-              "name": "Booze_1"
-            }
-          ],
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "link_to_area": true,
-          "linked_area": "child_area_1_barrel",
-          "max_number": 100,
-          "min_number": 75,
-          "perimeter_radius": 1,
-          "placed_on_top_parent": true,
-          "position": "Random",
-          "priority": 0,
-          "quantity": 1,
-          "radius": 1,
-          "resolution": 0,
-          "resolve_geometry_to_room_size": true,
-          "resolve_quantity_to_room_size": false,
-          "spawn_id": "spn-37f623fb75ae"
-        }
-      ],
+      "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "update_radius": 1000,
-      "z_threshold": -10
+      "tillable": false
     },
     "Bench": {
       "animations": {
@@ -2742,7 +2025,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.17171716690063477,
         "min_scale": 0.17171716690063477,
         "recommended_percentages": [
@@ -4684,7 +3967,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.9191919565200806,
         "min_scale": 0.9191919565200806,
         "recommended_percentages": [
@@ -4773,7 +4056,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.6767677068710327,
         "min_scale": 0.6767677068710327,
         "recommended_percentages": [
@@ -5180,7 +4463,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.08080808073282242,
         "min_scale": 0.072727270424366,
         "recommended_percentages": [
@@ -5273,7 +4556,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.20202019810676575,
         "min_scale": 0.20202019810676575,
         "recommended_percentages": [
@@ -5340,7 +4623,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.24242423474788666,
         "min_scale": 0.24242423474788666,
         "recommended_percentages": [
@@ -5414,7 +4697,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.20202019810676575,
         "min_scale": 0.20202019810676575,
         "recommended_percentages": [
@@ -5480,7 +4763,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.12121211737394333,
         "min_scale": 0.12121211737394333,
         "recommended_percentages": [
@@ -5545,7 +4828,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.12121211737394333,
         "min_scale": 0.12121211737394333,
         "recommended_percentages": [
@@ -5609,7 +4892,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.20202019810676575,
         "min_scale": 0.20202019810676575,
         "recommended_percentages": [
@@ -5691,7 +4974,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.20202019810676575,
         "min_scale": 0.20202019810676575,
         "recommended_percentages": [
@@ -5772,7 +5055,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.09090909361839294,
         "min_scale": 0.09090909361839294,
         "recommended_percentages": [
@@ -5870,7 +5153,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.05050504952669144,
         "min_scale": 0.05050504952669144,
         "recommended_percentages": [
@@ -5958,7 +5241,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.13131313025951385,
         "min_scale": 0.13131313025951385,
         "recommended_percentages": [
@@ -6362,7 +5645,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.14141413569450378,
         "min_scale": 0.14141413569450378,
         "recommended_percentages": [
@@ -6758,7 +6041,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.12121211737394333,
         "min_scale": 0.12121211737394333,
         "recommended_percentages": [
@@ -6873,7 +6156,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.4141414165496826,
         "min_scale": 0.4141414165496826,
         "recommended_percentages": [
@@ -6909,403 +6192,65 @@
         "BL": {
           "custom_animation_controller_hpp_path": "SRC/assets/Davey",
           "custom_animation_controller_key": "SRC/assets/Davey",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": false
+          },
           "flipped_source": false,
           "has_custom_animation_controller": false,
-          "locked": true,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -1,
-              1,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": -21,
-            "dy": 21
-          },
+          "inherit_source_movement": true,
+          "loop": false,
           "number_of_frames": 12,
           "on_end": "SRC/assets/Davey/default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
             "kind": "animation",
-            "name": "SRC/assets/Davey/backward",
-            "path": "SRC/assets/Davey"
-          },
-          "speed_factor": -2
+            "name": "BR",
+            "path": ""
+          }
         },
         "BR": {
           "custom_animation_controller_hpp_path": "SRC/assets/Davey",
           "custom_animation_controller_key": "SRC/assets/Davey",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": false
+          },
           "flipped_source": false,
           "has_custom_animation_controller": false,
-          "locked": true,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              1,
-              1,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              2,
-              2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": 21,
-            "dy": 21
-          },
+          "inherit_source_movement": true,
+          "loop": false,
           "number_of_frames": 12,
           "on_end": "SRC/assets/Davey/default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
             "kind": "animation",
-            "name": "SRC/assets/Davey/backward",
-            "path": "SRC/assets/Davey"
-          },
-          "speed_factor": -2
+            "name": "BL",
+            "path": ""
+          }
         },
         "FL": {
           "custom_animation_controller_hpp_path": "SRC/assets/Davey",
           "custom_animation_controller_key": "SRC/assets/Davey",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
           "flipped_source": true,
           "has_custom_animation_controller": false,
-          "locked": true,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -1,
-              -1,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              -2,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": -21,
-            "dy": -21
-          },
+          "inherit_source_movement": true,
+          "loop": false,
           "number_of_frames": 12,
           "on_end": "SRC/assets/Davey/default",
           "reverse_source": false,
@@ -7314,15 +6259,17 @@
             "kind": "animation",
             "name": "FR",
             "path": "SRC/assets/Davey"
-          },
-          "speed_factor": -2
+          }
         },
         "FR": {
           "custom_animation_controller_hpp_path": "SRC/assets/Davey",
           "custom_animation_controller_key": "SRC/assets/Davey",
           "flipped_source": false,
+          "fps": 48,
           "has_custom_animation_controller": false,
+          "inherit_source_movement": false,
           "locked": true,
+          "loop": false,
           "movement": [
             [
               0,
@@ -7449,7 +6396,7 @@
           "rnd_start": false,
           "source": {
             "kind": "folder",
-            "name": null,
+            "name": "",
             "path": "SRC/assets/Davey/FL"
           },
           "speed_factor": -2
@@ -7458,8 +6405,11 @@
           "custom_animation_controller_hpp_path": "SRC/assets/Davey",
           "custom_animation_controller_key": "SRC/assets/Davey",
           "flipped_source": false,
+          "fps": 48,
           "has_custom_animation_controller": false,
+          "inherit_source_movement": false,
           "locked": true,
+          "loop": false,
           "movement": [
             [
               0,
@@ -7586,7 +6536,7 @@
           "rnd_start": false,
           "source": {
             "kind": "folder",
-            "name": null,
+            "name": "",
             "path": "SRC/assets/Davey/backward"
           },
           "speed_factor": -2
@@ -7595,9 +6545,12 @@
           "custom_animation_controller_hpp_path": "C:\\Users\\cal_m\\OneDrive\\Documents\\GitHub\\VIBBLE_2D_GAME_ENGINE\\ENGINE\\animation_update\\custom_controllers\\Davey_default_controller.hpp",
           "custom_animation_controller_key": "Davey_default_controller",
           "flipped_source": false,
+          "fps": 48,
           "has_custom_animation_controller": true,
           "has_custom_tick_update": false,
+          "inherit_source_movement": false,
           "locked": true,
+          "loop": false,
           "movement": [
             [
               0,
@@ -7696,13 +6649,17 @@
               0
             ]
           ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
           "number_of_frames": 24,
           "on_end": "SRC/assets/Davey/default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
             "kind": "folder",
-            "name": null,
+            "name": "",
             "path": "SRC/assets/Davey/default"
           },
           "speed_factor": -2
@@ -7711,8 +6668,11 @@
           "custom_animation_controller_hpp_path": "SRC/assets/Davey",
           "custom_animation_controller_key": "SRC/assets/Davey",
           "flipped_source": false,
+          "fps": 48,
           "has_custom_animation_controller": false,
+          "inherit_source_movement": false,
           "locked": true,
+          "loop": false,
           "movement": [
             [
               0,
@@ -7839,7 +6799,7 @@
           "rnd_start": false,
           "source": {
             "kind": "folder",
-            "name": null,
+            "name": "",
             "path": "SRC/assets/Davey/forward"
           },
           "speed_factor": -2
@@ -7847,147 +6807,37 @@
         "left": {
           "custom_animation_controller_hpp_path": "SRC/assets/Davey",
           "custom_animation_controller_key": "SRC/assets/Davey",
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
           "flipped_source": true,
           "has_custom_animation_controller": false,
-          "locked": true,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              -3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -2,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ],
-            [
-              -3,
-              0,
-              true,
-              [
-                255,
-                255,
-                255
-              ]
-            ]
-          ],
-          "movement_total": {
-            "dx": -30,
-            "dy": 0
-          },
+          "inherit_source_movement": true,
+          "loop": false,
           "number_of_frames": 12,
           "on_end": "SRC/assets/Davey/default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
             "kind": "animation",
-            "name": "SRC/assets/Davey/right",
-            "path": "SRC/assets/Davey"
-          },
-          "speed_factor": -2
+            "name": "BL",
+            "path": ""
+          }
         },
         "right": {
           "custom_animation_controller_hpp_path": "SRC/assets/Davey",
           "custom_animation_controller_key": "SRC/assets/Davey",
           "flipped_source": false,
+          "fps": 48,
           "has_custom_animation_controller": true,
           "has_custom_tick_update": true,
+          "inherit_source_movement": false,
           "locked": true,
+          "loop": false,
           "movement": [
             [
               0,
@@ -8114,107 +6964,16 @@
           "rnd_start": false,
           "source": {
             "kind": "folder",
-            "name": null,
+            "name": "",
             "path": "SRC/assets/Davey/right"
           },
           "speed_factor": -2
         }
       },
-      "anti_tags": [],
+      "asset_directory": "SRC/assets",
       "asset_name": "Davey",
       "asset_type": "player",
-      "can_invert": false,
-      "custom_controller_key": "Davey_controller",
-      "has_shading": true,
-      "impassable_area": null,
-      "layout": {
-        "__view": {
-          "geometry": "1920x1009+-13+-27",
-          "xview": 0.0,
-          "yview": 0.2047279214986619,
-          "zoom": 1.0
-        }
-      },
-      "lighting_info": [
-        {
-          "factor": 100,
-          "falloff": 0,
-          "has_light_source": true,
-          "light_intensity": 255,
-          "radius": 592,
-          "x_radius": 45,
-          "y_radius": 127
-        },
-        {
-          "falloff": 0,
-          "flare": 0,
-          "flicker": 0,
-          "has_light_source": true,
-          "light_color": [
-            255,
-            0,
-            0
-          ],
-          "light_intensity": 164,
-          "offset_x": 0,
-          "offset_y": -9,
-          "radius": 300
-        }
-      ],
-      "mappings": {},
-      "min_distance_all": 0,
-      "min_same_type_distance": 686,
-      "neighbor_search_distance": 500,
-      "render_radius": 1000,
-      "rnd_spawn_max": 400,
-      "rnd_spawn_min": 300,
-      "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
-        "max_scale": 0.09090909361839294,
-        "min_scale": 0.09090909361839294,
-        "recommended_percentages": [
-          100,
-          9,
-          9
-        ],
-        "recommended_steps": [
-          1.0,
-          0.09090909361839294,
-          0.09090909361839294
-        ],
-        "revision": 17826286536811119873,
-        "screen_aspect": 1.6
-      },
-      "shading_opacity_multiplier": 1.0,
-      "shading_parallax_amount": 0.0,
-      "shading_screen_brightness_multiplier": 1.0,
-      "shadow_mask_settings": {
-        "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
-        "expansion_ratio": 0.800000011920929,
-        "falloff_exponent": 1.0499999523162842,
-        "falloff_start": 0.0
-      },
-      "size_settings": {
-        "scale_percentage": 10
-      },
-      "spawn_groups": [],
-      "start": "SRC/assets/Davey/default",
-      "tags": [
-        "SRC/assets/Davey/backward",
-        "death",
-        "SRC/assets/Davey/default",
-        "SRC/assets/Davey/forward",
-        "SRC/assets/Davey/left",
-        "medium",
-        "passable",
-        "player",
-        "SRC/assets/Davey/right",
-        "SRC/assets/Davey/start"
-      ],
-      "tillable": false,
-      "update_radius": 1000,
-      "z_threshold": -8
+      "start": "BL"
     },
     "Fountain": {
       "animations": {
@@ -8330,7 +7089,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.12121211737394333,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -8635,7 +7394,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.1111111119389534,
         "min_scale": 0.1111111119389534,
         "recommended_percentages": [
@@ -8772,7 +7531,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -8915,7 +7674,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -9036,7 +7795,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.27272728085517883,
         "min_scale": 0.27272728085517883,
         "recommended_percentages": [
@@ -9147,7 +7906,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.17171716690063477,
         "min_scale": 0.17171716690063477,
         "recommended_percentages": [
@@ -9234,7 +7993,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 1.0101009607315063,
         "min_scale": 1.0101009607315063,
         "recommended_percentages": [
@@ -9343,7 +8102,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.5454545617103577,
         "min_scale": 0.5454545617103577,
         "recommended_percentages": [
@@ -9433,7 +8192,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.2222222238779068,
         "min_scale": 0.2222222238779068,
         "recommended_percentages": [
@@ -9514,7 +8273,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.2222222238779068,
         "min_scale": 0.2222222238779068,
         "recommended_percentages": [
@@ -9581,7 +8340,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.5151515007019043,
         "min_scale": 0.5151515007019043,
         "recommended_percentages": [
@@ -9649,7 +8408,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.08080808073282242,
         "min_scale": 0.08080808073282242,
         "recommended_percentages": [
@@ -9764,7 +8523,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 1.0505050420761108,
         "min_scale": 1.0505050420761108,
         "recommended_percentages": [
@@ -9871,7 +8630,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.2222222238779068,
         "min_scale": 0.2222222238779068,
         "recommended_percentages": [
@@ -9942,7 +8701,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.2626262605190277,
         "min_scale": 0.2626262605190277,
         "recommended_percentages": [
@@ -10016,7 +8775,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.2954545319080353,
         "min_scale": 0.23636361956596375,
         "recommended_percentages": [
@@ -11885,7 +10644,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.35353535413742065,
         "min_scale": 0.35353535413742065,
         "recommended_percentages": [
@@ -12959,7 +11718,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.9595959186553955,
         "min_scale": 0.9595959186553955,
         "recommended_percentages": [
@@ -14231,7 +12990,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 1.0505050420761108,
         "min_scale": 1.0505050420761108,
         "recommended_percentages": [
@@ -14348,7 +13107,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.7999999523162842,
         "min_scale": 0.7999999523162842,
         "recommended_percentages": [
@@ -14564,69 +13323,68 @@
           "speed_factor": 1
         }
       },
-      "anti_tags": [
-        "book",
-        "center",
-        "impassable",
-        "nature",
-        "plant",
-        "still",
-        "wood"
-      ],
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/candle",
       "asset_name": "candle",
-      "asset_type": "Object",
-      "blend_mode": "SDL_BLENDMODE_BLEND",
-      "can_invert": true,
-      "duplicatable": false,
-      "duplication_interval_max": 60,
-      "duplication_interval_min": 30,
-      "has_shading": false,
-      "impassable_area": null,
+      "asset_type": "object",
       "lighting_info": [
         {
           "behind": false,
           "falloff": 50,
           "flare": 0,
-          "flicker": 95,
+          "flicker": 20,
           "has_light_source": true,
           "in_front": false,
           "light_color": [
             255,
-            181,
-            184
+            255,
+            255
           ],
-          "light_intensity": 151,
-          "offset_x": 0,
-          "offset_y": 0,
-          "radius": 964,
+          "light_intensity": 255,
+          "offset_x": -25,
+          "offset_y": -322,
+          "radius": 192,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            187,
+            186
+          ],
+          "light_intensity": 100,
+          "offset_x": -46,
+          "offset_y": -348,
+          "radius": 41,
           "render_front_and_back_to_asset_alpha_mask": false,
           "render_to_dark_mask": true
         }
       ],
-      "max_child_depth": 2,
-      "min_child_depth": 0,
-      "min_distance_all": 0,
-      "min_same_type_distance": 1299,
       "neighbor_search_distance": 500,
-      "rnd_spawn_max": 400,
-      "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
-        "max_scale": 0.06818182021379471,
-        "min_scale": 0.05454545095562935,
+        "generated_at": "2025-11-12T03:28:13Z",
+        "max_scale": 0.11363636702299118,
+        "min_scale": 0.09090909361839294,
         "recommended_percentages": [
           100,
-          7,
-          6,
-          5
+          11,
+          10,
+          9
         ],
         "recommended_steps": [
           1.0,
-          0.06818182021379471,
-          0.06098366901278496,
-          0.05454545095562935
+          0.11363636702299118,
+          0.10163945704698563,
+          0.09090909361839294
         ],
-        "revision": 4566601308577559580,
+        "revision": 9542219388195748259,
         "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
@@ -14640,53 +13398,12 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 6.0
+        "scale_percentage": 10.0
       },
-      "spawn_groups": [
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            }
-          ],
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "priority": 0,
-          "spawn_id": "spn-c3fa5c634749"
-        },
-        {
-          "candidates": [
-            {
-              "chance": 0,
-              "name": "null"
-            }
-          ],
-          "display_name": "New Spawn",
-          "enforce_spacing": false,
-          "max_number": 1,
-          "min_number": 1,
-          "position": "Exact",
-          "priority": 1,
-          "resolution": 0,
-          "spawn_id": "spn-c36d009a35e8"
-        }
-      ],
-      "tags": [
-        "candle",
-        "SRC/assets/candle/default",
-        "light",
-        "man-made",
-        "orange",
-        "passable",
-        "small",
-        "yellow"
-      ],
-      "tillable": false,
-      "z_threshold": -4
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tillable": false
     },
     "candle_3": {
       "animations": {
@@ -14721,7 +13438,7 @@
       "can_invert": true,
       "mappings": {},
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.07070706784725189,
         "min_scale": 0.07070706784725189,
         "recommended_percentages": [
@@ -14800,7 +13517,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.34343433380126953,
         "min_scale": 0.30909091234207153,
         "recommended_percentages": [
@@ -15078,7 +13795,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.5454545617103577,
         "min_scale": 0.5454545617103577,
         "recommended_percentages": [
@@ -15174,7 +13891,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.4727272391319275,
         "min_scale": 0.4727272391319275,
         "recommended_percentages": [
@@ -15281,7 +13998,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.060606058686971664,
         "min_scale": 0.060606058686971664,
         "recommended_percentages": [
@@ -15358,7 +14075,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.060606058686971664,
         "min_scale": 0.060606058686971664,
         "recommended_percentages": [
@@ -15434,7 +14151,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.060606058686971664,
         "min_scale": 0.060606058686971664,
         "recommended_percentages": [
@@ -15544,7 +14261,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.060606058686971664,
         "min_scale": 0.060606058686971664,
         "recommended_percentages": [
@@ -15656,7 +14373,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.060606058686971664,
         "min_scale": 0.060606058686971664,
         "recommended_percentages": [
@@ -15920,53 +14637,27 @@
           }
         }
       },
-      "anti_tags": [],
       "asset_directory": "SRC/home_world_trail",
       "asset_name": "home_world_trail",
       "asset_type": "texture",
-      "can_invert": false,
-      "has_shading": false,
-      "lighting_info": [],
-      "min_distance_all": 0,
-      "min_same_type_distance": 0,
-      "neighbor_search_distance": 500,
-      "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
-        "max_scale": 0.9909090995788574,
-        "min_scale": 0.9909090995788574,
+        "generated_at": "2025-11-12T03:28:13Z",
+        "max_scale": 0.9090908765792847,
+        "min_scale": 0.9090908765792847,
         "recommended_percentages": [
           100,
-          99,
-          99
+          91,
+          91
         ],
         "recommended_steps": [
           1.0,
-          0.9909090995788574,
-          0.9909090995788574
+          0.9090908765792847,
+          0.9090908765792847
         ],
-        "revision": 3793306529986629289,
+        "revision": 585865780892763865,
         "screen_aspect": 1.6
       },
-      "shading_opacity_multiplier": 1.0,
-      "shading_parallax_amount": 0.0,
-      "shading_screen_brightness_multiplier": 1.0,
-      "shadow_mask_settings": {
-        "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
-        "expansion_ratio": 0.800000011920929,
-        "falloff_exponent": 1.0499999523162842,
-        "falloff_start": 0.0
-      },
-      "size_settings": {
-        "scale_percentage": 109.0
-      },
-      "spawn_groups": [],
-      "start": "default",
-      "tags": [],
-      "tileable": true,
-      "tillable": true,
-      "update_radius": 0
+      "start": "default"
     },
     "marker": {
       "animations": {
@@ -16133,7 +14824,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.05050504952669144,
         "min_scale": 0.05050504952669144,
         "recommended_percentages": [
@@ -16199,7 +14890,7 @@
       "rnd_spawn_max": 400,
       "rnd_spawn_min": 300,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.5252525210380554,
         "min_scale": 0.5252525210380554,
         "recommended_percentages": [
@@ -16352,7 +15043,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.5454545617103577,
         "min_scale": 0.5454545617103577,
         "recommended_percentages": [
@@ -16466,7 +15157,7 @@
       "mappings": {},
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.42424240708351135,
         "min_scale": 0.42424240708351135,
         "recommended_percentages": [
@@ -16539,7 +15230,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-12T01:45:32Z",
+        "generated_at": "2025-11-12T03:28:13Z",
         "max_scale": 0.5454545617103577,
         "min_scale": 0.5454545617103577,
         "recommended_percentages": [
@@ -17001,8 +15692,8 @@
         "NewRoom": {
           "display_color": [
             242,
-            217,
-            85,
+            36,
+            115,
             255
           ],
           "name": "NewRoom",
@@ -17010,9 +15701,9 @@
         },
         "NewRoom1": {
           "display_color": [
-            84,
-            31,
+            63,
             204,
+            31,
             255
           ],
           "name": "NewRoom1",
@@ -17022,8 +15713,8 @@
           "curvyness": 2,
           "display_color": [
             242,
-            36,
-            77,
+            85,
+            148,
             255
           ],
           "edge_smoothness": 5,
@@ -17094,9 +15785,9 @@
         "bomb_crater": {
           "curvyness": 3,
           "display_color": [
-            166,
-            85,
-            242,
+            51,
+            79,
+            204,
             255
           ],
           "edge_smoothness": 4,
@@ -17167,8 +15858,8 @@
           "curvyness": 2,
           "display_color": [
             242,
-            85,
-            242,
+            225,
+            36,
             255
           ],
           "edge_smoothness": 4,
@@ -17246,9 +15937,9 @@
         "book_archive": {
           "curvyness": 3,
           "display_color": [
-            242,
-            85,
-            156,
+            204,
+            138,
+            71,
             255
           ],
           "edge_smoothness": 7,
@@ -17401,9 +16092,9 @@
         "booze_cache": {
           "curvyness": 2,
           "display_color": [
+            183,
             242,
-            135,
-            85,
+            36,
             255
           ],
           "edge_smoothness": 6,
@@ -17500,9 +16191,9 @@
         "bush_maze": {
           "curvyness": 4,
           "display_color": [
-            215,
-            36,
-            242,
+            84,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 9,
@@ -17573,9 +16264,9 @@
         "candle_vigil": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            242,
+            61,
+            242,
             255
           ],
           "edge_smoothness": 8,
@@ -17646,9 +16337,9 @@
         "caravan_stop": {
           "curvyness": 2,
           "display_color": [
-            85,
-            211,
-            242,
+            204,
+            71,
+            95,
             255
           ],
           "edge_smoothness": 6,
@@ -17715,9 +16406,9 @@
         "chest_trove": {
           "curvyness": 2,
           "display_color": [
-            90,
-            204,
+            146,
             71,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -17784,9 +16475,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            172,
+            31,
             204,
-            71,
+            109,
             255
           ],
           "edge_smoothness": 2,
@@ -17835,9 +16526,9 @@
         "fountain_plaza": {
           "curvyness": 3,
           "display_color": [
-            242,
-            36,
-            131,
+            204,
+            31,
+            153,
             255
           ],
           "edge_smoothness": 12,
@@ -17937,9 +16628,9 @@
         "frog_bog": {
           "curvyness": 4,
           "display_color": [
+            85,
+            214,
             242,
-            71,
-            36,
             255
           ],
           "edge_smoothness": 9,
@@ -18009,9 +16700,9 @@
         "gravestone_ring": {
           "curvyness": 3,
           "display_color": [
-            31,
+            71,
             204,
-            185,
+            158,
             255
           ],
           "edge_smoothness": 7,
@@ -18085,9 +16776,9 @@
         "lantern_glade": {
           "curvyness": 3,
           "display_color": [
-            123,
-            71,
+            175,
             204,
+            71,
             255
           ],
           "edge_smoothness": 6,
@@ -18165,9 +16856,9 @@
         "mushroom_court": {
           "curvyness": 4,
           "display_color": [
-            31,
-            74,
-            204,
+            85,
+            141,
+            242,
             255
           ],
           "edge_smoothness": 10,
@@ -18277,9 +16968,9 @@
         "noose_clearing": {
           "curvyness": 2,
           "display_color": [
-            242,
-            199,
-            36,
+            96,
+            204,
+            71,
             255
           ],
           "edge_smoothness": 5,
@@ -18349,9 +17040,9 @@
         "rock_sentinels": {
           "curvyness": 3,
           "display_color": [
-            31,
             204,
-            111,
+            80,
+            31,
             255
           ],
           "edge_smoothness": 6,
@@ -18418,9 +17109,9 @@
         "sigil_garden": {
           "curvyness": 3,
           "display_color": [
-            71,
+            31,
             204,
-            152,
+            189,
             255
           ],
           "edge_smoothness": 10,
@@ -18494,9 +17185,9 @@
         "skull_hollow": {
           "curvyness": 2,
           "display_color": [
-            242,
-            138,
-            36,
+            204,
+            196,
+            31,
             255
           ],
           "edge_smoothness": 5,
@@ -18584,9 +17275,9 @@
           ],
           "curvyness": 2,
           "display_color": [
-            200,
             242,
-            85,
+            53,
+            36,
             255
           ],
           "edge_smoothness": 101,
@@ -19244,9 +17935,9 @@
         "stump_circle": {
           "curvyness": 3,
           "display_color": [
-            242,
-            85,
-            85,
+            71,
+            122,
+            204,
             255
           ],
           "edge_smoothness": 6,
@@ -19316,9 +18007,9 @@
         "vibble_camp": {
           "curvyness": 3,
           "display_color": [
-            85,
-            146,
-            242,
+            224,
+            124,
+            34,
             255
           ],
           "edge_smoothness": 7,

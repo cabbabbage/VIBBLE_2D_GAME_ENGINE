@@ -139,7 +139,8 @@ nlohmann::json build_folder_payload(const std::filesystem::path& folder) {
                 {
                     {"kind", "folder"},
                     {"path", folder.generic_string()},
-                    {"name", nullptr},
+                    // Use empty string for name to avoid UI code expecting a string throwing on null
+                    {"name", ""},
                 }},
             {"speed_factor", 1.0},
         };
@@ -165,6 +166,7 @@ nlohmann::json snapshot_from_asset_folders(const AssetInfo& info, const std::fil
     nlohmann::json animations = nlohmann::json::object();
     try {
         if (!asset_root.empty() && std::filesystem::exists(asset_root) && std::filesystem::is_directory(asset_root)) {
+            // 1) Collect animations from subdirectories (legacy/default behavior)
             for (const auto& entry : std::filesystem::directory_iterator(asset_root)) {
                 if (!entry.is_directory()) {
                     continue;
@@ -179,6 +181,23 @@ nlohmann::json snapshot_from_asset_folders(const AssetInfo& info, const std::fil
                 }
                 animations[anim_id] = std::move(payload);
             }
+
+            // 2) Also support loose image sequences directly under the asset root.
+            //    Treat them as a default/root animation if present (e.g., 0.png, 1.png, ...).
+            nlohmann::json root_payload = build_folder_payload(asset_root);
+            if (root_payload.is_object() && !root_payload.empty()) {
+                // Only add when a conflicting id doesn't already exist.
+                std::string preferred_id = "default";
+                if (animations.contains(preferred_id)) {
+                    // Fall back to a less common identifier to avoid collisions.
+                    preferred_id = "root";
+                    if (animations.contains(preferred_id)) {
+                        preferred_id = info.name.empty() ? std::string{"main"} : info.name;
+                        if (preferred_id.empty()) preferred_id = "main";
+                    }
+                }
+                animations[preferred_id] = std::move(root_payload);
+            }
         }
     } catch (...) {
         animations = nlohmann::json::object();
@@ -188,10 +207,15 @@ nlohmann::json snapshot_from_asset_folders(const AssetInfo& info, const std::fil
         snapshot["animations"] = std::move(animations);
         std::string start_id = info.start_animation;
         if (start_id.empty()) {
-            const auto& anims = snapshot["animations"];
-            auto it = anims.begin();
-            if (it != anims.end()) {
-                start_id = it.key();
+            // Prefer a sensible default if present
+            if (snapshot["animations"].contains("default")) {
+                start_id = "default";
+            } else {
+                const auto& anims = snapshot["animations"];
+                auto it = anims.begin();
+                if (it != anims.end()) {
+                    start_id = it.key();
+                }
             }
         }
         if (!start_id.empty()) {
@@ -335,89 +359,69 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
         asset_root_path_ = std::filesystem::path("SRC") / info->name;
     }
 
+    // Flush any pending auto-save before switching context
+    process_auto_save();
+
     using_manifest_store_ = false;
     manifest_asset_key_.clear();
     manifest_transaction_ = {};
 
-    enum class SnapshotRecoverySource { None, AssetMetadata, AssetFolders };
+    enum class SnapshotRecoverySource { None, AssetMetadata, AssetFolders, Manifest };
     SnapshotRecoverySource recovery_source = SnapshotRecoverySource::None;
 
-    auto build_folder_snapshot = [&]() -> nlohmann::json {
-        return snapshot_from_asset_folders(*info, asset_root_path_);
-    };
-    auto build_info_snapshot = [&]() -> nlohmann::json {
-        return snapshot_from_asset_info(*info);
-    };
-    auto apply_info_snapshot_if_needed = [&](nlohmann::json& candidate) -> bool {
-        if (has_animation_entries(candidate)) {
-            return false;
-        }
-        nlohmann::json info_snapshot = build_info_snapshot();
-        if (has_animation_entries(info_snapshot)) {
-            candidate = std::move(info_snapshot);
-            recovery_source = SnapshotRecoverySource::AssetMetadata;
-            return true;
-        }
-        return false;
-    };
-    auto apply_folder_snapshot_if_needed = [&](nlohmann::json& candidate) -> bool {
-        if (has_animation_entries(candidate)) {
-            return false;
-        }
-        nlohmann::json fallback = build_folder_snapshot();
-        if (has_animation_entries(fallback)) {
-            candidate = std::move(fallback);
-            recovery_source = SnapshotRecoverySource::AssetFolders;
-            return true;
-        }
-        return false;
-    };
+    auto build_folder_snapshot = [&]() -> nlohmann::json { return snapshot_from_asset_folders(*info, asset_root_path_); };
+    auto build_info_snapshot   = [&]() -> nlohmann::json { return snapshot_from_asset_info(*info); };
 
     nlohmann::json snapshot = nlohmann::json::object();
     std::function<void(const nlohmann::json&)> persist_callback;
     bool seed_transaction_with_recovery = false;
 
-    if (!manifest_store_) {
-        std::cerr << "[AnimationEditor] Manifest store unavailable; animations will not persist for '"
-                  << info->name << "'\n";
-        if (!apply_info_snapshot_if_needed(snapshot)) {
-            apply_folder_snapshot_if_needed(snapshot);
-        }
-        if (!has_animation_entries(snapshot)) {
-            snapshot = nlohmann::json::object();
-        }
-    } else if (auto key = resolve_manifest_key(*info)) {
-        manifest_asset_key_ = *key;
-        manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
-        if (manifest_transaction_) {
-            using_manifest_store_ = true;
-            snapshot = manifest_transaction_.data();
-            if (apply_info_snapshot_if_needed(snapshot)) {
-                seed_transaction_with_recovery = true;
-            } else if (apply_folder_snapshot_if_needed(snapshot)) {
-                seed_transaction_with_recovery = true;
+    // Prefer in-memory AssetInfo data when available
+    nlohmann::json info_snapshot = build_info_snapshot();
+
+    // Open manifest transaction if possible so we can persist any recovered snapshot
+    if (manifest_store_) {
+        if (auto key = resolve_manifest_key(*info)) {
+            manifest_asset_key_ = *key;
+            manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
+            if (manifest_transaction_) {
+                using_manifest_store_ = true;
+                persist_callback = [this](const nlohmann::json& payload) { this->persist_manifest_payload(payload); };
+            } else {
+                std::cerr << "[AnimationEditor] Failed to open manifest transaction for '" << manifest_asset_key_ << "'\n";
+                manifest_asset_key_.clear();
             }
-            persist_callback = [this](const nlohmann::json& payload) {
-                this->persist_manifest_payload(payload);
-            };
         } else {
-            std::cerr << "[AnimationEditor] Failed to open manifest transaction for '"
-                      << manifest_asset_key_ << "'\n";
-            manifest_asset_key_.clear();
-            if (!apply_info_snapshot_if_needed(snapshot)) {
-                apply_folder_snapshot_if_needed(snapshot);
-            }
-            if (!has_animation_entries(snapshot)) {
-                snapshot = nlohmann::json::object();
-            }
+            std::cerr << "[AnimationEditor] Unable to resolve manifest key for '" << info->name << "'\n";
         }
     } else {
-        std::cerr << "[AnimationEditor] Unable to resolve manifest key for '" << info->name << "'\n";
-        if (!apply_info_snapshot_if_needed(snapshot)) {
-            apply_folder_snapshot_if_needed(snapshot);
+        std::cerr << "[AnimationEditor] Manifest store unavailable; animations will not persist for '" << info->name << "'\n";
+    }
+
+    if (has_animation_entries(info_snapshot)) {
+        snapshot = std::move(info_snapshot);
+        recovery_source = SnapshotRecoverySource::AssetMetadata;
+        seed_transaction_with_recovery = true; // seed manifest with authoritative in-memory data
+        std::cerr << "[AnimationEditor] Using animations from AssetInfo for '" << info->name << "'\n";
+    } else if (manifest_transaction_) {
+        nlohmann::json manifest_data = manifest_transaction_.data();
+        if (has_animation_entries(manifest_data)) {
+            snapshot = std::move(manifest_data);
+            recovery_source = SnapshotRecoverySource::Manifest;
+            std::cerr << "[AnimationEditor] Loaded animations from manifest for '" << info->name << "'\n";
         }
-        if (!has_animation_entries(snapshot)) {
+    }
+
+    if (!has_animation_entries(snapshot)) {
+        nlohmann::json folder_snapshot = build_folder_snapshot();
+        if (has_animation_entries(folder_snapshot)) {
+            snapshot = std::move(folder_snapshot);
+            recovery_source = SnapshotRecoverySource::AssetFolders;
+            seed_transaction_with_recovery = true;
+            std::cerr << "[AnimationEditor] Recovered animations by scanning folders for '" << info->name << "'\n";
+        } else {
             snapshot = nlohmann::json::object();
+            std::cerr << "[AnimationEditor] No animations found for '" << info->name << "' (manifest/metadata/folders)\n";
         }
     }
 
@@ -436,19 +440,31 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
 
     if (document_->animation_ids().empty()) {
         bool recovered = false;
-        nlohmann::json metadata_snapshot = snapshot_from_asset_info(*info);
-        if (has_animation_entries(metadata_snapshot)) {
-            apply_snapshot(metadata_snapshot, SnapshotRecoverySource::AssetMetadata);
+        // Try AssetInfo again (might have been updated asynchronously)
+        nlohmann::json metadata_snapshot2 = snapshot_from_asset_info(*info);
+        if (has_animation_entries(metadata_snapshot2)) {
+            apply_snapshot(metadata_snapshot2, SnapshotRecoverySource::AssetMetadata);
             recovered = true;
         } else {
-            nlohmann::json folder_snapshot = snapshot_from_asset_folders(*info, asset_root_path_);
-            if (has_animation_entries(folder_snapshot)) {
-                apply_snapshot(folder_snapshot, SnapshotRecoverySource::AssetFolders);
+            nlohmann::json folder_snapshot2 = snapshot_from_asset_folders(*info, asset_root_path_);
+            if (has_animation_entries(folder_snapshot2)) {
+                apply_snapshot(folder_snapshot2, SnapshotRecoverySource::AssetFolders);
                 recovered = true;
             }
         }
         if (!recovered) {
-            recovery_source = SnapshotRecoverySource::None;
+            // As a last resort, if we have a runtime asset reference, mirror its info
+            if (target_asset_ && target_asset_->info) {
+                nlohmann::json runtime_snapshot = snapshot_from_asset_info(*target_asset_->info);
+                if (has_animation_entries(runtime_snapshot)) {
+                    apply_snapshot(runtime_snapshot, SnapshotRecoverySource::AssetMetadata);
+                    recovered = true;
+                    std::cerr << "[AnimationEditor] Fallback to runtime asset info for '" << info->name << "'\n";
+                }
+            }
+            if (!recovered) {
+                recovery_source = SnapshotRecoverySource::None;
+            }
         }
     }
 

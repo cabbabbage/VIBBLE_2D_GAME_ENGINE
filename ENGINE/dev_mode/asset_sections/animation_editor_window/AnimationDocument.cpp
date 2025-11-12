@@ -45,7 +45,8 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     std::string path = source.value("path", kind == "folder" ? animation_id : std::string{});
     nlohmann::json name_value;
     if (kind == "folder") {
-        name_value = nullptr;
+        // Use empty string so downstream UI code that calls get<std::string>() doesn't throw on null
+        name_value = std::string{};
     } else {
         if (source.contains("name") && source["name"].is_string()) {
             name_value = source["name"].get<std::string>();

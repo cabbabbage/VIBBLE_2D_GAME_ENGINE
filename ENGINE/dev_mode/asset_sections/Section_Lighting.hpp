@@ -57,14 +57,34 @@ public:
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
             const int row_top = y;
-            if (r.lbl) {
-                int lbl_x = rect_.x + DMSpacing::panel_padding() + (maxw - 180) / 2;
-                r.lbl->set_rect(SDL_Rect{ lbl_x, y - scroll_, 180, DMButton::height() });
+
+            // Lay out controls so they never overlap:
+            // - Right-aligned action buttons (Duplicate, Delete)
+            // - Label (expand/collapse) fills remaining space on the left
+            const int btn_w = 120;
+            const int gap = DMSpacing::item_gap();
+            int right_cursor = x + maxw; // place from right edge moving left
+
+            // Delete button at far right
+            if (r.b_delete) {
+                right_cursor -= btn_w;
+                r.b_delete->set_rect(SDL_Rect{ right_cursor, y - scroll_, btn_w, DMButton::height() });
+                right_cursor -= gap; // gap between buttons/label
             }
-            if (r.b_delete)
-                r.b_delete->set_rect(SDL_Rect{ x + maxw - 120, y - scroll_, 120, DMButton::height() });
-            if (r.b_duplicate)
-                r.b_duplicate->set_rect(SDL_Rect{ x + maxw - 240, y - scroll_, 120, DMButton::height() });
+
+            // Duplicate button left of delete if present
+            if (r.b_duplicate) {
+                right_cursor -= btn_w;
+                r.b_duplicate->set_rect(SDL_Rect{ right_cursor, y - scroll_, btn_w, DMButton::height() });
+                right_cursor -= gap;
+            }
+
+            // Label fills remaining space from left x to right_cursor
+            if (r.lbl) {
+                const int label_x = x;
+                const int label_w = std::max(0, right_cursor - label_x);
+                r.lbl->set_rect(SDL_Rect{ label_x, y - scroll_, label_w, DMButton::height() });
+            }
             y += DMButton::height() + DMSpacing::item_gap();
             if (r.expanded) {
                 place(r.s_intensity, DMSlider::height());
