@@ -307,8 +307,27 @@ void ChildrenPanel::render(SDL_Renderer* renderer) const {
         }
     }
 
-    if (search_assets_ && search_assets_->visible()) {
-        search_assets_->render(renderer);
+}
+
+void ChildrenPanel::render_overlays(SDL_Renderer* renderer) const {
+    if (!renderer) {
+        return;
+    }
+    if (!search_assets_ || !search_assets_->visible()) {
+        return;
+    }
+
+    SDL_bool had_clip = SDL_RenderIsClipEnabled(renderer);
+    SDL_Rect previous_clip{0, 0, 0, 0};
+    if (had_clip) {
+        SDL_RenderGetClipRect(renderer, &previous_clip);
+    }
+    SDL_RenderSetClipRect(renderer, nullptr);
+    search_assets_->render(renderer);
+    if (had_clip) {
+        SDL_RenderSetClipRect(renderer, &previous_clip);
+    } else {
+        SDL_RenderSetClipRect(renderer, nullptr);
     }
 }
 

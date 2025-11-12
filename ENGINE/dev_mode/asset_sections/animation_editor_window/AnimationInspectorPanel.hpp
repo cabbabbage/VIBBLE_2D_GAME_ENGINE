@@ -94,6 +94,9 @@ class AnimationInspectorPanel {
     void apply_dependencies();
     void update_source_mode_button_styles();
     void refresh_preview_metadata() const;
+    void update_scrollbar_geometry() const;
+    void render_scrollbar(SDL_Renderer* renderer) const;
+    void render_overlays(SDL_Renderer* renderer) const;
 
     enum class FocusTarget {
         kNone = -1,
@@ -134,7 +137,10 @@ class AnimationInspectorPanel {
     mutable SDL_Rect on_end_rect_{0, 0, 0, 0};
     mutable SDL_Rect audio_rect_{0, 0, 0, 0};
     mutable SDL_Rect children_rect_{0, 0, 0, 0};
+    mutable SDL_Rect scrollbar_track_{0, 0, 0, 0};
+    mutable SDL_Rect scrollbar_thumb_{0, 0, 0, 0};
     mutable bool layout_dirty_ = true;
+    mutable bool scrollbar_visible_ = false;
     mutable std::string preview_signature_;
     mutable bool preview_reverse_ = false;
     mutable bool preview_flip_x_ = false;

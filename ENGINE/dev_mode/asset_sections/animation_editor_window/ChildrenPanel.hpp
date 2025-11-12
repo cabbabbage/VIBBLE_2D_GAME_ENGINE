@@ -39,6 +39,7 @@ class ChildrenPanel {
 
     void update();
     void render(SDL_Renderer* renderer) const;
+    void render_overlays(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
 
     int preferred_height(int width) const;
