@@ -7,6 +7,7 @@
 #include "../../../widgets.hpp"
 #include "../PreviewProvider.hpp"
 #include "movement/FrameMovementEditor.hpp"
+#include "children/FrameChildrenEditor.hpp"
 #include "FrameToolsPanel.hpp"
 
 namespace animation_editor {
@@ -36,6 +37,9 @@ void FrameEditor::set_document(std::shared_ptr<AnimationDocument> document) {
     if (movement_editor_) {
         movement_editor_->set_document(document_);
     }
+    if (children_editor_) {
+        children_editor_->set_document(document_);
+    }
 }
 
 void FrameEditor::set_animation_id(const std::string& animation_id) {
@@ -43,6 +47,9 @@ void FrameEditor::set_animation_id(const std::string& animation_id) {
     ensure_children();
     if (movement_editor_) {
         movement_editor_->set_animation_id(animation_id_);
+    }
+    if (children_editor_) {
+        children_editor_->set_animation_id(animation_id_);
     }
 }
 
@@ -69,6 +76,9 @@ void FrameEditor::set_preview_provider(std::shared_ptr<PreviewProvider> provider
     ensure_children();
     if (movement_editor_) {
         movement_editor_->set_preview_provider(preview_provider_);
+    }
+    if (children_editor_) {
+        children_editor_->set_preview_provider(preview_provider_);
     }
 }
 
@@ -101,6 +111,10 @@ void FrameEditor::update() {
     update_button_styles();
     if (movement_editor_) {
         movement_editor_->update();
+    }
+    if (children_editor_ && movement_editor_) {
+        children_editor_->set_selected_frame(movement_editor_->selected_index());
+        children_editor_->update();
     }
     // Sync tools panel from movement editor state
     if (tools_panel_ && movement_editor_) {
@@ -139,6 +153,9 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         } else {
             // In other modes, still show the preview grid/canvas for context
             movement_editor_->render_canvas_only(renderer);
+            if (active_mode_ == Mode::Children && children_editor_) {
+                children_editor_->render(renderer);
+            }
             movement_editor_->render_frame_list(renderer);
         }
     }
@@ -206,19 +223,32 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Keyboard navigation for frames
-    if (e.type == SDL_KEYDOWN && movement_editor_) {
-        if (e.key.keysym.sym == SDLK_LEFT) {
-            if (movement_editor_->can_select_previous_frame()) {
-                movement_editor_->select_previous_frame();
-                update_navigation_styles();
+    if (!pointer_in_tools && children_editor_ && active_mode_ == Mode::Children) {
+        if (children_editor_->handle_event(e)) {
+            return true;
+        }
+    }
+
+    // Keyboard navigation or rotation adjustments
+    if (e.type == SDL_KEYDOWN) {
+        if (active_mode_ == Mode::Children && children_editor_) {
+            if (children_editor_->handle_key_event(e)) {
                 return true;
             }
-        } else if (e.key.keysym.sym == SDLK_RIGHT) {
-            if (movement_editor_->can_select_next_frame()) {
-                movement_editor_->select_next_frame();
-                update_navigation_styles();
-                return true;
+        }
+        if (active_mode_ == Mode::Movement && movement_editor_) {
+            if (e.key.keysym.sym == SDLK_LEFT) {
+                if (movement_editor_->can_select_previous_frame()) {
+                    movement_editor_->select_previous_frame();
+                    update_navigation_styles();
+                    return true;
+                }
+            } else if (e.key.keysym.sym == SDLK_RIGHT) {
+                if (movement_editor_->can_select_next_frame()) {
+                    movement_editor_->select_next_frame();
+                    update_navigation_styles();
+                    return true;
+                }
             }
         }
     }
@@ -299,6 +329,15 @@ void FrameEditor::ensure_children() {
             }
         });
     }
+    if (!children_editor_) {
+        children_editor_ = std::make_unique<FrameChildrenEditor>();
+    }
+    if (children_editor_) {
+        children_editor_->set_document(document_);
+        children_editor_->set_animation_id(animation_id_);
+        children_editor_->set_preview_provider(preview_provider_);
+        children_editor_->set_canvas(movement_editor_ ? movement_editor_->canvas() : nullptr);
+    }
     // Create Tools panel
     if (!tools_panel_) {
         tools_panel_ = std::make_unique<FrameToolsPanel>();
@@ -314,6 +353,12 @@ void FrameEditor::ensure_children() {
         tools_panel_->open();
     } else {
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
+    }
+    if (children_editor_) {
+        children_editor_->set_tools_panel(tools_panel_.get());
+    }
+    if (movement_editor_ && movement_editor_->canvas()) {
+        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement);
     }
     update_button_styles();
     update_navigation_styles();
@@ -449,6 +494,9 @@ void FrameEditor::set_mode(Mode mode) {
     update_navigation_styles();
     if (tools_panel_) {
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
+    }
+    if (movement_editor_ && movement_editor_->canvas()) {
+        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement);
     }
 }
 

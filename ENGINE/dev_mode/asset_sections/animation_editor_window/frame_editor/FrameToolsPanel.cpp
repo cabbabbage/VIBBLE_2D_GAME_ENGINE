@@ -6,6 +6,8 @@
 
 #include "dev_mode/dm_styles.hpp"
 
+namespace animation_editor {
+
 FrameToolsPanel::FrameToolsPanel()
     : DockableCollapsible("Tools", true /*floatable*/, 32, 32) {
     set_show_header(true);
@@ -19,6 +21,17 @@ FrameToolsPanel::FrameToolsPanel()
     show_anim_w_ = std::make_unique<CheckboxWidget>(show_anim_checkbox_.get());
     dx_w_ = std::make_unique<TextBoxWidget>(dx_box_.get(), false);
     dy_w_ = std::make_unique<TextBoxWidget>(dy_box_.get(), false);
+
+    child_dropdown_ = std::make_unique<DMDropdown>("Child", std::vector<std::string>{}, 0);
+    child_dropdown_widget_ = std::make_unique<DropdownWidget>(child_dropdown_.get());
+    child_apply_button_ = std::make_unique<DMButton>("Apply current frame settings to next", &DMStyles::AccentButton(), 240, DMButton::height());
+    child_apply_widget_ = std::make_unique<ButtonWidget>(child_apply_button_.get(), [this]() {
+        if (children_controls_enabled_ && on_child_apply_to_next_) {
+            on_child_apply_to_next_();
+        }
+    });
+    child_visible_checkbox_ = std::make_unique<DMCheckbox>("Visible", true);
+    child_visible_widget_ = std::make_unique<CheckboxWidget>(child_visible_checkbox_.get());
 
     last_dx_text_ = dx_box_->value();
     last_dy_text_ = dy_box_->value();
@@ -39,6 +52,14 @@ void FrameToolsPanel::set_callbacks(std::function<void()> on_smooth,
     on_smooth_ = std::move(on_smooth);
     on_toggle_show_animation_ = std::move(on_toggle_show_animation);
     on_totals_changed_ = std::move(on_totals_changed);
+}
+
+void FrameToolsPanel::set_children_callbacks(std::function<void(int)> on_child_selected,
+                                             std::function<void()> on_apply_to_next,
+                                             std::function<void(bool)> on_visible_changed) {
+    on_child_selected_ = std::move(on_child_selected);
+    on_child_apply_to_next_ = std::move(on_apply_to_next);
+    on_child_visible_ = std::move(on_visible_changed);
 }
 
 void FrameToolsPanel::set_totals(int dx, int dy, bool avoid_overwrite_if_editing) {
@@ -62,6 +83,37 @@ void FrameToolsPanel::set_show_animation(bool show) {
     }
 }
 
+void FrameToolsPanel::set_children_state(const std::vector<std::string>& options,
+                                         int selected_index,
+                                         bool visible,
+                                         bool enabled) {
+    child_options_ = options;
+    const bool has_children = !child_options_.empty();
+    children_controls_enabled_ = enabled && has_children;
+    std::vector<std::string> dropdown_options = has_children ? child_options_
+                                                             : std::vector<std::string>{"(no children configured)"};
+    int clamped_index = 0;
+    if (has_children) {
+        clamped_index = std::clamp(selected_index, 0, static_cast<int>(child_options_.size()) - 1);
+    }
+    child_selected_index_ = children_controls_enabled_ ? clamped_index : -1;
+    child_dropdown_last_index_ = children_controls_enabled_ ? child_selected_index_ : -1;
+    child_visible_state_ = children_controls_enabled_ ? visible : false;
+
+    child_dropdown_ = std::make_unique<DMDropdown>("Child", dropdown_options, clamped_index);
+    child_dropdown_widget_ = std::make_unique<DropdownWidget>(child_dropdown_.get());
+    if (child_visible_checkbox_) {
+        child_visible_checkbox_->set_value(child_visible_state_);
+    }
+    if (child_apply_button_) {
+        const DMButtonStyle* style = children_controls_enabled_ ? &DMStyles::AccentButton() : &DMStyles::HeaderButton();
+        child_apply_button_->set_style(style);
+    }
+    if (mode_ == Mode::Children) {
+        rebuild_rows();
+    }
+}
+
 void FrameToolsPanel::set_work_area_bounds(const SDL_Rect& bounds) {
     set_work_area(bounds);
 }
@@ -71,49 +123,74 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
 
     bool consumed = DockableCollapsible::handle_event(e);
 
-    // Smooth button click detection on mouse up inside rect
-    if (smooth_btn_) {
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            SDL_Point p{e.button.x, e.button.y};
-            if (SDL_PointInRect(&p, &smooth_btn_->rect())) {
-                if (on_smooth_) on_smooth_();
+    if (mode_ == Mode::Movement) {
+        // Smooth button click detection on mouse up inside rect
+        if (smooth_btn_) {
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                SDL_Point p{e.button.x, e.button.y};
+                if (SDL_PointInRect(&p, &smooth_btn_->rect())) {
+                    if (on_smooth_) on_smooth_();
+                    consumed = true;
+                }
+            }
+        }
+
+        // Checkbox toggling detection
+        if (show_anim_checkbox_) {
+            bool current = show_anim_checkbox_->value();
+            if (current != last_checkbox_value_) {
+                last_checkbox_value_ = current;
+                if (on_toggle_show_animation_) on_toggle_show_animation_(current);
                 consumed = true;
             }
         }
-    }
 
-    // Checkbox toggling detection
-    if (show_anim_checkbox_) {
-        bool current = show_anim_checkbox_->value();
-        if (current != last_checkbox_value_) {
-            last_checkbox_value_ = current;
-            if (on_toggle_show_animation_) on_toggle_show_animation_(current);
-            consumed = true;
+        // Totals edit: parse and call on change for integers
+        auto parse_int = [](const std::string& s, int& out) -> bool {
+            try {
+                size_t idx = 0;
+                int v = std::stoi(s, &idx);
+                if (idx == s.size()) { out = v; return true; }
+            } catch (...) {}
+            return false;
+        };
+        if (dx_box_ && dy_box_) {
+            const std::string now_dx = dx_box_->value();
+            const std::string now_dy = dy_box_->value();
+            if (now_dx != last_dx_text_ || now_dy != last_dy_text_) {
+                int dx = 0, dy = 0;
+                bool okx = parse_int(now_dx, dx);
+                bool oky = parse_int(now_dy, dy);
+                last_dx_text_ = now_dx;
+                last_dy_text_ = now_dy;
+                if (okx && oky && on_totals_changed_) {
+                    on_totals_changed_(dx, dy);
+                    consumed = true;
+                }
+            }
         }
-    }
-
-    // Totals edit: parse and call on change for integers
-    auto parse_int = [](const std::string& s, int& out) -> bool {
-        try {
-            size_t idx = 0;
-            int v = std::stoi(s, &idx);
-            if (idx == s.size()) { out = v; return true; }
-        } catch (...) {}
-        return false;
-    };
-    if (dx_box_ && dy_box_) {
-        const std::string now_dx = dx_box_->value();
-        const std::string now_dy = dy_box_->value();
-        if (now_dx != last_dx_text_ || now_dy != last_dy_text_) {
-            int dx = 0, dy = 0;
-            bool okx = parse_int(now_dx, dx);
-            bool oky = parse_int(now_dy, dy);
-            last_dx_text_ = now_dx;
-            last_dy_text_ = now_dy;
-            if (okx && oky && on_totals_changed_) {
-                on_totals_changed_(dx, dy);
+    } else if (mode_ == Mode::Children) {
+        if (children_controls_enabled_ && child_dropdown_) {
+            int current = child_dropdown_->selected();
+            if (current != child_dropdown_last_index_) {
+                child_dropdown_last_index_ = current;
+                if (on_child_selected_) {
+                    on_child_selected_(current);
+                }
                 consumed = true;
             }
+        }
+        if (children_controls_enabled_ && child_visible_checkbox_) {
+            bool current = child_visible_checkbox_->value();
+            if (current != child_visible_state_) {
+                child_visible_state_ = current;
+                if (on_child_visible_) {
+                    on_child_visible_(current);
+                }
+                consumed = true;
+            }
+        } else if (!children_controls_enabled_ && child_visible_checkbox_) {
+            child_visible_checkbox_->set_value(child_visible_state_);
         }
     }
 
@@ -129,7 +206,12 @@ void FrameToolsPanel::rebuild_rows() {
             rows.push_back({ dx_w_.get(), dy_w_.get() });
             break;
         }
-        case Mode::Children:
+        case Mode::Children: {
+            rows.push_back({ child_dropdown_widget_.get() });
+            rows.push_back({ child_apply_widget_.get() });
+            rows.push_back({ child_visible_widget_.get() });
+            break;
+        }
         case Mode::AttackGeometry:
         case Mode::HitGeometry: {
             rows.clear(); // empty for now
@@ -139,3 +221,4 @@ void FrameToolsPanel::rebuild_rows() {
     set_rows(rows);
 }
 
+}

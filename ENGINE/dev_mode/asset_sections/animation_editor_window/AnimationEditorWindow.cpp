@@ -94,6 +94,153 @@ std::vector<std::filesystem::path> split_paths(const std::string& raw) {
 
 std::string default_audio_subdir() { return "audio"; }
 
+bool has_animation_entries(const nlohmann::json& asset_json) {
+    if (!asset_json.is_object()) {
+        return false;
+    }
+    auto animations_it = asset_json.find("animations");
+    if (animations_it == asset_json.end() || !animations_it->is_object()) {
+        return false;
+    }
+    if (animations_it->contains("animations") && (*animations_it)["animations"].is_object()) {
+        return !(*animations_it)["animations"].empty();
+    }
+    return !animations_it->empty();
+}
+
+nlohmann::json build_folder_payload(const std::filesystem::path& folder) {
+    try {
+        if (folder.empty() || !std::filesystem::exists(folder) || !std::filesystem::is_directory(folder)) {
+            return {};
+        }
+        int frame_count = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(folder)) {
+            if (!entry.is_regular_file()) {
+                continue;
+            }
+            std::string ext = entry.path().extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+            if (ext == ".png" || ext == ".gif") {
+                ++frame_count;
+            }
+        }
+        if (frame_count == 0) {
+            return {};
+        }
+        nlohmann::json payload = {
+            {"loop", true},
+            {"locked", false},
+            {"reverse_source", false},
+            {"flipped_source", false},
+            {"rnd_start", false},
+            {"source",
+                {
+                    {"kind", "folder"},
+                    {"path", folder.generic_string()},
+                    {"name", nullptr},
+                }},
+            {"speed_factor", 1.0},
+        };
+        payload["number_of_frames"] = frame_count;
+        return payload;
+    } catch (...) {
+        return {};
+    }
+}
+
+nlohmann::json snapshot_from_asset_folders(const AssetInfo& info, const std::filesystem::path& asset_root) {
+    nlohmann::json snapshot = nlohmann::json::object();
+    if (!info.name.empty()) {
+        snapshot["asset_name"] = info.name;
+    }
+    if (!info.type.empty()) {
+        snapshot["asset_type"] = info.type;
+    }
+    if (!asset_root.empty()) {
+        snapshot["asset_directory"] = asset_root.generic_string();
+    }
+
+    nlohmann::json animations = nlohmann::json::object();
+    try {
+        if (!asset_root.empty() && std::filesystem::exists(asset_root) && std::filesystem::is_directory(asset_root)) {
+            for (const auto& entry : std::filesystem::directory_iterator(asset_root)) {
+                if (!entry.is_directory()) {
+                    continue;
+                }
+                std::string anim_id = entry.path().filename().string();
+                if (anim_id.empty()) {
+                    continue;
+                }
+                nlohmann::json payload = build_folder_payload(entry.path());
+                if (!payload.is_object() || payload.empty()) {
+                    continue;
+                }
+                animations[anim_id] = std::move(payload);
+            }
+        }
+    } catch (...) {
+        animations = nlohmann::json::object();
+    }
+
+    if (!animations.empty()) {
+        snapshot["animations"] = std::move(animations);
+        std::string start_id = info.start_animation;
+        if (start_id.empty()) {
+            const auto& anims = snapshot["animations"];
+            auto it = anims.begin();
+            if (it != anims.end()) {
+                start_id = it.key();
+            }
+        }
+        if (!start_id.empty()) {
+            snapshot["start"] = start_id;
+        }
+    }
+
+    return snapshot;
+}
+
+nlohmann::json snapshot_from_asset_info(const AssetInfo& info) {
+    nlohmann::json snapshot = nlohmann::json::object();
+    if (!info.name.empty()) {
+        snapshot["asset_name"] = info.name;
+    }
+    if (!info.type.empty()) {
+        snapshot["asset_type"] = info.type;
+    }
+    try {
+        std::filesystem::path dir = info.asset_dir_path();
+        if (!dir.empty()) {
+            snapshot["asset_directory"] = dir.generic_string();
+        }
+    } catch (...) {
+    }
+
+    nlohmann::json animations = nlohmann::json::object();
+    try {
+        auto names = info.animation_names();
+        for (const auto& anim_id : names) {
+            nlohmann::json payload = info.animation_payload(anim_id);
+            if (payload.is_object() && !payload.empty()) {
+                animations[anim_id] = std::move(payload);
+            }
+        }
+    } catch (...) {
+        animations = nlohmann::json::object();
+    }
+
+    if (!animations.empty()) {
+        snapshot["animations"] = std::move(animations);
+        if (!info.start_animation.empty()) {
+            snapshot["start"] = info.start_animation;
+        }
+    }
+
+    return snapshot;
+}
+
 }
 
 namespace animation_editor {
@@ -192,30 +339,117 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     manifest_asset_key_.clear();
     manifest_transaction_ = {};
 
+    enum class SnapshotRecoverySource { None, AssetMetadata, AssetFolders };
+    SnapshotRecoverySource recovery_source = SnapshotRecoverySource::None;
+
+    auto build_folder_snapshot = [&]() -> nlohmann::json {
+        return snapshot_from_asset_folders(*info, asset_root_path_);
+    };
+    auto build_info_snapshot = [&]() -> nlohmann::json {
+        return snapshot_from_asset_info(*info);
+    };
+    auto apply_info_snapshot_if_needed = [&](nlohmann::json& candidate) -> bool {
+        if (has_animation_entries(candidate)) {
+            return false;
+        }
+        nlohmann::json info_snapshot = build_info_snapshot();
+        if (has_animation_entries(info_snapshot)) {
+            candidate = std::move(info_snapshot);
+            recovery_source = SnapshotRecoverySource::AssetMetadata;
+            return true;
+        }
+        return false;
+    };
+    auto apply_folder_snapshot_if_needed = [&](nlohmann::json& candidate) -> bool {
+        if (has_animation_entries(candidate)) {
+            return false;
+        }
+        nlohmann::json fallback = build_folder_snapshot();
+        if (has_animation_entries(fallback)) {
+            candidate = std::move(fallback);
+            recovery_source = SnapshotRecoverySource::AssetFolders;
+            return true;
+        }
+        return false;
+    };
+
+    nlohmann::json snapshot = nlohmann::json::object();
+    std::function<void(const nlohmann::json&)> persist_callback;
+    bool seed_transaction_with_recovery = false;
+
     if (!manifest_store_) {
         std::cerr << "[AnimationEditor] Manifest store unavailable; animations will not persist for '"
                   << info->name << "'\n";
-        document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
+        if (!apply_info_snapshot_if_needed(snapshot)) {
+            apply_folder_snapshot_if_needed(snapshot);
+        }
+        if (!has_animation_entries(snapshot)) {
+            snapshot = nlohmann::json::object();
+        }
     } else if (auto key = resolve_manifest_key(*info)) {
         manifest_asset_key_ = *key;
         manifest_transaction_ = manifest_store_->begin_asset_transaction(manifest_asset_key_, true);
         if (manifest_transaction_) {
             using_manifest_store_ = true;
-            nlohmann::json snapshot = manifest_transaction_.data();
-            document_->load_from_manifest(snapshot,
-                                          asset_root_path_,
-                                          [this](const nlohmann::json& payload) {
-                                              this->persist_manifest_payload(payload);
-                                          });
+            snapshot = manifest_transaction_.data();
+            if (apply_info_snapshot_if_needed(snapshot)) {
+                seed_transaction_with_recovery = true;
+            } else if (apply_folder_snapshot_if_needed(snapshot)) {
+                seed_transaction_with_recovery = true;
+            }
+            persist_callback = [this](const nlohmann::json& payload) {
+                this->persist_manifest_payload(payload);
+            };
         } else {
             std::cerr << "[AnimationEditor] Failed to open manifest transaction for '"
                       << manifest_asset_key_ << "'\n";
             manifest_asset_key_.clear();
-            document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
+            if (!apply_info_snapshot_if_needed(snapshot)) {
+                apply_folder_snapshot_if_needed(snapshot);
+            }
+            if (!has_animation_entries(snapshot)) {
+                snapshot = nlohmann::json::object();
+            }
         }
     } else {
         std::cerr << "[AnimationEditor] Unable to resolve manifest key for '" << info->name << "'\n";
-        document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
+        if (!apply_info_snapshot_if_needed(snapshot)) {
+            apply_folder_snapshot_if_needed(snapshot);
+        }
+        if (!has_animation_entries(snapshot)) {
+            snapshot = nlohmann::json::object();
+        }
+    }
+
+    auto apply_snapshot = [&](const nlohmann::json& payload, SnapshotRecoverySource source) {
+        document_->load_from_manifest(payload, asset_root_path_, persist_callback);
+        recovery_source = source;
+        if (using_manifest_store_ && has_animation_entries(payload)) {
+            persist_manifest_payload(payload);
+        }
+    };
+
+    document_->load_from_manifest(snapshot, asset_root_path_, persist_callback);
+    if (seed_transaction_with_recovery) {
+        persist_manifest_payload(snapshot);
+    }
+
+    if (document_->animation_ids().empty()) {
+        bool recovered = false;
+        nlohmann::json metadata_snapshot = snapshot_from_asset_info(*info);
+        if (has_animation_entries(metadata_snapshot)) {
+            apply_snapshot(metadata_snapshot, SnapshotRecoverySource::AssetMetadata);
+            recovered = true;
+        } else {
+            nlohmann::json folder_snapshot = snapshot_from_asset_folders(*info, asset_root_path_);
+            if (has_animation_entries(folder_snapshot)) {
+                apply_snapshot(folder_snapshot, SnapshotRecoverySource::AssetFolders);
+                recovered = true;
+            }
+        }
+        if (!recovered) {
+            recovery_source = SnapshotRecoverySource::None;
+        }
     }
 
     document_->consume_dirty_flag();
@@ -234,7 +468,22 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     ensure_selection_valid();
     update_controller_button_label();
     std::string asset_label = info->name.empty() ? std::string("asset") : info->name;
-    set_status_message("Loaded " + asset_label, 240);
+    const bool has_any_animations = !document_->animation_ids().empty();
+    switch (recovery_source) {
+        case SnapshotRecoverySource::AssetMetadata:
+            set_status_message("Recovered animations from asset metadata for " + asset_label + ".", 300);
+            break;
+        case SnapshotRecoverySource::AssetFolders:
+            set_status_message("Recovered animations from asset folders for " + asset_label + ".", 300);
+            break;
+        default:
+            if (has_any_animations) {
+                set_status_message("Loaded " + asset_label, 240);
+            } else {
+                set_status_message("No animations found for " + asset_label + ".", 240);
+            }
+            break;
+    }
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;
 }
@@ -368,6 +617,7 @@ void AnimationEditorWindow::configure_inspector_panel() {
     });
     inspector_panel_->set_audio_importer(audio_importer_);
     inspector_panel_->set_audio_file_picker([this]() { return this->pick_audio_file(); });
+    inspector_panel_->set_manifest_store(manifest_store_);
     inspector_panel_->set_on_animation_properties_changed(on_animation_properties_changed_);
     if (selected_animation_id_) {
         inspector_panel_->set_animation_id(*selected_animation_id_);
@@ -1090,6 +1340,9 @@ void AnimationEditorWindow::set_manifest_store(devmode::core::ManifestStore* sto
     }
     close_manifest_transaction();
     manifest_store_ = store;
+    if (inspector_panel_) {
+        inspector_panel_->set_manifest_store(store);
+    }
     if (auto info_ptr = info_.lock()) {
         set_info(info_ptr);
     }

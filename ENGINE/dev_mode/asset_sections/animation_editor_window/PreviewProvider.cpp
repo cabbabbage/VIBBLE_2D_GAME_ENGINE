@@ -16,6 +16,7 @@
 namespace {
 
 using SurfacePtr = std::unique_ptr<SDL_Surface, decltype(&SDL_FreeSurface)>;
+using animation_editor::strings::has_numeric_stem;
 
 SurfacePtr make_surface_ptr(SDL_Surface* surface) { return SurfacePtr(surface, SDL_FreeSurface); }
 
@@ -82,12 +83,6 @@ SurfacePtr flip_vertical(SDL_Surface* surface) {
     if (SDL_MUSTLOCK(flipped.get())) SDL_UnlockSurface(flipped.get());
 
     return flipped;
-}
-
-bool has_numeric_stem(const std::filesystem::path& path) {
-    std::string stem = path.stem().string();
-    if (stem.empty()) return false;
-    return std::all_of(stem.begin(), stem.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; });
 }
 
 std::string lowercase_copy(std::string value) {

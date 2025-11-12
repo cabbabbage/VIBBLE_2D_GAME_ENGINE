@@ -8,12 +8,13 @@
 #include <string>
 #include <vector>
 
+#include "dev_mode/pan_and_zoom.hpp"
+
 class Assets;
 class Asset;
 class Input;
 struct SDL_Renderer;
 class DMButton;
-class PanAndZoom;
 
 namespace animation_editor {
 class AnimationDocument;

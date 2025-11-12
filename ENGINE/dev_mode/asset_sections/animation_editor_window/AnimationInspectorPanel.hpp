@@ -15,6 +15,10 @@ struct SDL_Renderer;
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 
+namespace devmode::core {
+class ManifestStore;
+}
+
 class DMButton;
 class DMTextBox;
 class DMSlider;
@@ -32,6 +36,7 @@ class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
 class PreviewTimeline;
+class ChildrenPanel;
 
 using DMButton = ::DMButton;
 using DMTextBox = ::DMTextBox;
@@ -63,6 +68,7 @@ class AnimationInspectorPanel {
     void set_navigate_to_animation_callback(AnimationNavigateCallback callback);
     void set_audio_importer(std::shared_ptr<AudioImporter> importer);
     void set_audio_file_picker(AudioFilePicker picker);
+    void set_manifest_store(devmode::core::ManifestStore* store);
     void set_on_animation_properties_changed(std::function<void(const std::string&, const nlohmann::json&)> callback) { on_animation_properties_changed_ = std::move(callback); }
 
     int height_for_width(int width) const;
@@ -110,6 +116,7 @@ class AnimationInspectorPanel {
     std::unique_ptr<MovementSummaryWidget> movement_summary_;
     std::unique_ptr<OnEndSelector> on_end_selector_;
     std::unique_ptr<AudioPanel> audio_panel_;
+    std::unique_ptr<ChildrenPanel> children_panel_;
     std::unique_ptr<DMTextBox> name_box_;
     std::unique_ptr<DMButton> start_button_;
     std::unique_ptr<DMButton> source_frames_button_;
@@ -125,6 +132,7 @@ class AnimationInspectorPanel {
     mutable SDL_Rect movement_rect_{0, 0, 0, 0};
     mutable SDL_Rect on_end_rect_{0, 0, 0, 0};
     mutable SDL_Rect audio_rect_{0, 0, 0, 0};
+    mutable SDL_Rect children_rect_{0, 0, 0, 0};
     mutable bool layout_dirty_ = true;
     mutable std::string preview_signature_;
     mutable bool preview_reverse_ = false;
@@ -158,6 +166,7 @@ class AnimationInspectorPanel {
     std::shared_ptr<AudioImporter> audio_importer_;
     AudioFilePicker audio_file_picker_;
     std::function<void(const std::string&, const nlohmann::json&)> on_animation_properties_changed_;
+    devmode::core::ManifestStore* manifest_store_ = nullptr;
 
     // Animation preview timing variables
     mutable Uint32 animation_start_time_ = 0;

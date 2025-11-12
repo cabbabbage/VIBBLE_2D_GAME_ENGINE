@@ -9,13 +9,14 @@
 #include <SDL.h>
 
 class DMButton;
-class FrameToolsPanel;
 
 namespace animation_editor {
 
 class AnimationDocument;
 class FrameMovementEditor;
+class FrameChildrenEditor;
 class PreviewProvider;
+class FrameToolsPanel;
 
 using DMButton = ::DMButton;
 
@@ -57,6 +58,7 @@ class FrameEditor {
   private:
     std::shared_ptr<AnimationDocument> document_;
     std::unique_ptr<FrameMovementEditor> movement_editor_;
+    std::unique_ptr<FrameChildrenEditor> children_editor_;
     std::unique_ptr<FrameToolsPanel> tools_panel_;
     std::shared_ptr<PreviewProvider> preview_provider_;
     std::array<std::unique_ptr<DMButton>, 4> mode_buttons_;

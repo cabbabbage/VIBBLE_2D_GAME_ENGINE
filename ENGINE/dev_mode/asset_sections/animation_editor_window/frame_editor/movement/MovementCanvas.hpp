@@ -41,6 +41,11 @@ class MovementCanvas {
     void set_show_animation_overlay(bool show) { show_animation_overlay_ = show; }
     // Configure snapping resolution (grid exponent r where step = 2^r). Set to <0 to disable.
     void set_snap_resolution(int r) { snap_resolution_ = r; }
+    // Toggle whether the preview sprite should follow the movement offsets or stay anchored at origin.
+    void set_anchor_follows_movement(bool follow) { anchor_follows_movement_ = follow; }
+    const SDL_Rect& bounds() const { return bounds_; }
+    SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
+    SDL_FPoint screen_to_world(SDL_Point screen) const;
 
   private:
     void render_pixel_grid(SDL_Renderer* renderer) const;
@@ -51,8 +56,6 @@ class MovementCanvas {
     void apply_frame_move_from_base(int index, const SDL_FPoint& new_position,
                                     const std::vector<SDL_FPoint>& base_positions);
     void update_selection_from_mouse();
-    SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
-    SDL_FPoint screen_to_world(SDL_Point screen) const;
 
   private:
     SDL_Rect bounds_{0, 0, 0, 0};
@@ -75,6 +78,7 @@ class MovementCanvas {
     bool show_animation_overlay_ = false;
     float base_scale_percentage_ = 100.0f;
     int snap_resolution_ = -1;
+    bool anchor_follows_movement_ = true;
 };
 
 }

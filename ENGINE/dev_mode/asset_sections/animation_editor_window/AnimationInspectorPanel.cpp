@@ -13,6 +13,7 @@
 
 #include "AnimationDocument.hpp"
 #include "AudioPanel.hpp"
+#include "ChildrenPanel.hpp"
 #include "MovementSummaryWidget.hpp"
 #include "OnEndSelector.hpp"
 #include "PlaybackSettingsPanel.hpp"
@@ -282,6 +283,13 @@ void AnimationInspectorPanel::set_audio_file_picker(AudioFilePicker picker) {
     apply_dependencies();
 }
 
+void AnimationInspectorPanel::set_manifest_store(devmode::core::ManifestStore* store) {
+    manifest_store_ = store;
+    if (children_panel_) {
+        children_panel_->set_manifest_store(store);
+    }
+}
+
 int AnimationInspectorPanel::height_for_width(int width) const {
     const int padding = kInspectorPadding;
     const int section_gap = kInspectorSectionGap;
@@ -331,6 +339,7 @@ int AnimationInspectorPanel::height_for_width(int width) const {
 
     add_section_height(playback_settings_.get());
     add_section_height(movement_summary_.get());
+    add_section_height(children_panel_.get());
     add_section_height(on_end_selector_.get());
     add_section_height(audio_panel_.get());
 
@@ -360,6 +369,7 @@ void AnimationInspectorPanel::update() {
 
     if (playback_settings_) playback_settings_->update();
     if (movement_summary_) movement_summary_->update();
+    if (children_panel_) children_panel_->update();
     if (on_end_selector_) on_end_selector_->update();
     if (audio_panel_) audio_panel_->update();
 }
@@ -507,6 +517,7 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
 
     if (playback_settings_) playback_settings_->render(renderer);
     if (movement_summary_) movement_summary_->render(renderer);
+    if (children_panel_) children_panel_->render(renderer);
     if (on_end_selector_) on_end_selector_->render(renderer);
     if (audio_panel_) audio_panel_->render(renderer);
 
@@ -648,6 +659,7 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
 
     if (playback_settings_ && playback_settings_->handle_event(e)) handled = true;
     if (movement_summary_ && movement_summary_->handle_event(e)) handled = true;
+    if (children_panel_ && children_panel_->handle_event(e)) handled = true;
     if (on_end_selector_ && on_end_selector_->handle_event(e)) handled = true;
     if (audio_panel_ && audio_panel_->handle_event(e)) handled = true;
 
@@ -739,6 +751,15 @@ void AnimationInspectorPanel::rebuild_widgets() {
     }
     audio_panel_->set_document(document_);
     audio_panel_->set_animation_id(animation_id_);
+
+    if (!children_panel_) {
+        children_panel_ = std::make_unique<ChildrenPanel>();
+        children_panel_->set_layout_dirty_callback([this]() { this->layout_dirty_ = true; });
+    }
+    children_panel_->set_document(document_);
+    children_panel_->set_animation_id(animation_id_);
+    children_panel_->set_manifest_store(manifest_store_);
+    children_panel_->set_status_callback(status_callback_);
 
     rename_pending_ = false;
     refresh_start_indicator();
@@ -887,6 +908,7 @@ void AnimationInspectorPanel::layout_widgets() const {
 
     assign_section(playback_settings_.get(), playback_rect_);
     assign_section(movement_summary_.get(), movement_rect_);
+    assign_section(children_panel_.get(), children_rect_);
     assign_section(on_end_selector_.get(), on_end_rect_);
     assign_section(audio_panel_.get(), audio_rect_);
 
@@ -938,6 +960,11 @@ void AnimationInspectorPanel::apply_dependencies() {
     if (audio_panel_) {
         audio_panel_->set_importer(audio_importer_);
         audio_panel_->set_file_picker(audio_file_picker_);
+    }
+
+    if (children_panel_) {
+        children_panel_->set_status_callback(status_callback_);
+        children_panel_->set_manifest_store(manifest_store_);
     }
 }
 
