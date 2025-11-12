@@ -172,7 +172,9 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     camera_.set_scale(static_cast<float>(intro_zoom));
 
     scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_info_json_, map_id_);
-    notify_reactive_shadow_settings_available();
+    if (scene) {
+        scene->set_dark_mask_enabled(render_dark_mask_enabled_);
+    }
     apply_map_light_config();
     apply_map_grid_settings(map_grid_settings_, false);
     moving_assets_for_grid_.clear();
@@ -285,36 +287,8 @@ void Assets::hydrate_map_info_sections() {
             map_info_json_["map_light_data"] = nlohmann::json::object();
         }
         nlohmann::json& D = map_info_json_["map_light_data"];
-        if (!D.contains("radius"))          D["radius"] = 0;
-        if (!D.contains("intensity"))       D["intensity"] = 255;
-        auto clamp_radius = [](int v) { return std::max(0, std::min(20000, v)); };
-        int orbit_radius = 0;
-        if (D.contains("orbit_radius")) {
-            try {
-                orbit_radius = clamp_radius(D["orbit_radius"].get<int>());
-            } catch (...) {
-                orbit_radius = 0;
-            }
-        }
-        int orbit_x = orbit_radius;
-        if (D.contains("orbit_x")) {
-            try {
-                orbit_x = clamp_radius(D["orbit_x"].get<int>());
-            } catch (...) {
-                orbit_x = orbit_radius;
-            }
-        }
-        int orbit_y = orbit_x;
-        if (D.contains("orbit_y")) {
-            try {
-                orbit_y = clamp_radius(D["orbit_y"].get<int>());
-            } catch (...) {
-                orbit_y = orbit_x;
-            }
-        }
-        D["orbit_x"] = orbit_x;
-        D["orbit_y"] = orbit_y;
-        D["orbit_radius"] = std::max(orbit_x, orbit_y);
+        if (!D.contains("radius"))    D["radius"] = 0;
+        if (!D.contains("intensity")) D["intensity"] = 255;
         if (!D.contains("update_interval")) D["update_interval"] = 10;
         if (!D.contains("mult"))            D["mult"] = 0.0;
         if (!D.contains("fall_off"))        D["fall_off"] = 100;
@@ -346,7 +320,6 @@ void Assets::hydrate_map_info_sections() {
         D["map_color"] = utils::color::ranged_color_to_json(map_color);
         D.erase("min_opacity");
         D.erase("max_opacity");
-        D.erase("screen_light");
     }
 }
 
@@ -603,7 +576,6 @@ Assets::~Assets() {
     if (input) {
         input->clear_screen_to_world_mapper();
     }
-    notify_reactive_shadow_settings_about_to_change();
     delete scene;
     scene = nullptr;
     delete finder_;
@@ -731,8 +703,6 @@ void Assets::ensure_dev_controls() {
     dev_mode_trace("[Assets] Dev Controls -> set_map_context");
     dev_controls_->set_map_context(&map_info_json_, map_path_);
     dev_mode_trace("[Assets] Dev Controls wiring complete");
-
-    dev_controls_->refresh_reactive_shadow_settings();
 }
 
 void Assets::set_input(Input* m) {
@@ -1034,6 +1004,16 @@ void Assets::set_force_high_quality_rendering(bool enable) {
     update_scene_render_quality();
 }
 
+void Assets::set_render_dark_mask_enabled(bool enabled) {
+    if (render_dark_mask_enabled_ == enabled) {
+        return;
+    }
+    render_dark_mask_enabled_ = enabled;
+    if (scene) {
+        scene->set_dark_mask_enabled(enabled);
+    }
+}
+
 void Assets::update_scene_render_quality() {
     apply_camera_runtime_settings();
 }
@@ -1302,18 +1282,6 @@ void Assets::register_pending_static_assets() {
         }
     }
     pending_static_grid_registration_.swap(still_pending);
-}
-
-void Assets::notify_reactive_shadow_settings_about_to_change() {
-    if (dev_controls_) {
-        dev_controls_->clear_reactive_shadow_settings();
-    }
-}
-
-void Assets::notify_reactive_shadow_settings_available() {
-    if (dev_controls_) {
-        dev_controls_->refresh_reactive_shadow_settings();
-    }
 }
 
 void Assets::initialize_active_assets(SDL_Point center) {
@@ -1738,17 +1706,6 @@ const Global_Light_Source* Assets::map_light_source() const {
     return const_cast<Assets*>(this)->map_light_source();
 }
 
-render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_settings() {
-    if (!scene) {
-        return nullptr;
-    }
-    return &scene->reactive_shadow_settings();
-}
-
-const render_pipeline::shading::ReactiveShadowSettings* Assets::reactive_shadow_settings() const {
-    return const_cast<Assets*>(this)->reactive_shadow_settings();
-}
-
 LightMap* Assets::light_map() {
     return scene ? scene->light_map() : nullptr;
 }
@@ -1796,15 +1753,8 @@ void Assets::force_shaded_assets_rerender() {
 }
 
 bool Assets::apply_lighting_grid_subdivide(int subdivisions) {
-    subdivisions = std::max(1, std::min(8, subdivisions));
-    bool changed = world_grid_.set_lighting_subdivisions_per_chunk(subdivisions);
-    if (changed) {
-        if (LightMap* map = light_map()) {
-            map->rebuild(nullptr);
-        }
-        force_shaded_assets_rerender();
-    }
-    return changed;
+    (void)subdivisions;
+    return false;
 }
 
 void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persist_json) {
@@ -1820,6 +1770,7 @@ void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persi
     }
 
     world_grid_.set_chunk_resolution(std::max(0, sanitized.r_chunk));
+    world_grid_.set_parallax_resolution(std::max(0, sanitized.resolution));
 
     if (chunk_changed) {
         for (Asset* asset : all) {

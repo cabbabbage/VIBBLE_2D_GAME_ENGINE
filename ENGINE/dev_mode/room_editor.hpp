@@ -80,6 +80,7 @@ public:
     void open_area_info_editor(Room* room, const std::string& area_name);
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
+    bool is_asset_info_lighting_section_expanded() const;
     bool has_active_modal() const;
     void pulse_active_modal_header();
 
@@ -303,7 +304,6 @@ private:
     DevFooterBar* shared_footer_bar_ = nullptr;
     bool room_config_dock_open_ = false;
     bool room_config_was_visible_ = false;
-    bool room_config_was_open_before_drag_ = false;
     bool suppress_room_config_selection_clear_ = false;
     ActiveModal active_modal_ = ActiveModal::None;
     std::function<void(bool)> header_visibility_callback_{};
@@ -324,6 +324,7 @@ private:
     std::vector<Asset*> selected_assets_;
     std::vector<Asset*> highlighted_assets_;
     bool highlight_dirty_ = true;
+    bool shift_asset_modifier_active_ = false;
 
     bool dragging_ = false;
     Asset* drag_anchor_asset_ = nullptr;

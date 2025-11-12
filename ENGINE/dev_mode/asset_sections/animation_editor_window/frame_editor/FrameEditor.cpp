@@ -7,6 +7,7 @@
 #include "../../../widgets.hpp"
 #include "../PreviewProvider.hpp"
 #include "movement/FrameMovementEditor.hpp"
+#include "children/FrameChildrenEditor.hpp"
 #include "FrameToolsPanel.hpp"
 
 namespace animation_editor {
@@ -36,6 +37,9 @@ void FrameEditor::set_document(std::shared_ptr<AnimationDocument> document) {
     if (movement_editor_) {
         movement_editor_->set_document(document_);
     }
+    if (children_editor_) {
+        children_editor_->set_document(document_);
+    }
 }
 
 void FrameEditor::set_animation_id(const std::string& animation_id) {
@@ -43,6 +47,9 @@ void FrameEditor::set_animation_id(const std::string& animation_id) {
     ensure_children();
     if (movement_editor_) {
         movement_editor_->set_animation_id(animation_id_);
+    }
+    if (children_editor_) {
+        children_editor_->set_animation_id(animation_id_);
     }
 }
 
@@ -69,6 +76,9 @@ void FrameEditor::set_preview_provider(std::shared_ptr<PreviewProvider> provider
     ensure_children();
     if (movement_editor_) {
         movement_editor_->set_preview_provider(preview_provider_);
+    }
+    if (children_editor_) {
+        children_editor_->set_preview_provider(preview_provider_);
     }
 }
 
@@ -102,6 +112,10 @@ void FrameEditor::update() {
     if (movement_editor_) {
         movement_editor_->update();
     }
+    if (children_editor_ && movement_editor_) {
+        children_editor_->set_selected_frame(movement_editor_->selected_index());
+        children_editor_->update();
+    }
     // Sync tools panel from movement editor state
     if (tools_panel_ && movement_editor_) {
         auto totals = movement_editor_->total_displacement();
@@ -116,9 +130,8 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         return;
     }
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    // Position tools panel within the frame editor layout
-    if (tools_panel_ && tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
-        tools_panel_->set_rect(tools_panel_rect_);
+    // Keep the floating tools panel clamped to the editor bounds
+    if (tools_panel_) {
         tools_panel_->set_work_area_bounds(bounds_);
     }
     if (header_rect_.w > 0 && header_rect_.h > 0) {
@@ -139,6 +152,9 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         } else {
             // In other modes, still show the preview grid/canvas for context
             movement_editor_->render_canvas_only(renderer);
+            if (active_mode_ == Mode::Children && children_editor_) {
+                children_editor_->render(renderer);
+            }
             movement_editor_->render_frame_list(renderer);
         }
     }
@@ -150,15 +166,25 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
 
 bool FrameEditor::handle_event(const SDL_Event& e) {
     ensure_children();
-    // Identify pointer inside tools panel early to avoid routing to the movement canvas
-    bool pointer_in_tools = false;
-    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL) {
+    auto compute_pointer_in_tools = [this](const SDL_Event& evt) -> bool {
+        if (evt.type != SDL_MOUSEMOTION && evt.type != SDL_MOUSEBUTTONDOWN &&
+            evt.type != SDL_MOUSEBUTTONUP && evt.type != SDL_MOUSEWHEEL) {
+            return false;
+        }
         SDL_Point p;
-        if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
-        else if (e.type == SDL_MOUSEWHEEL) { int mx=0,my=0; SDL_GetMouseState(&mx,&my); p.x = mx; p.y = my; }
-        else { p.x = e.button.x; p.y = e.button.y; }
-        pointer_in_tools = SDL_PointInRect(&p, &tools_panel_rect_) != 0;
-    }
+        if (evt.type == SDL_MOUSEMOTION) {
+            p = SDL_Point{evt.motion.x, evt.motion.y};
+        } else if (evt.type == SDL_MOUSEWHEEL) {
+            int mx = 0, my = 0;
+            SDL_GetMouseState(&mx, &my);
+            p = SDL_Point{mx, my};
+        } else {
+            p = SDL_Point{evt.button.x, evt.button.y};
+        }
+        SDL_Rect tools_bounds = tools_panel_hit_rect();
+        return SDL_PointInRect(&p, &tools_bounds) != 0;
+    };
+    bool pointer_in_tools = compute_pointer_in_tools(e);
     for (size_t i = 0; i < mode_buttons_.size(); ++i) {
         auto& button = mode_buttons_[i];
         if (button && button->handle_event(e)) {
@@ -168,8 +194,20 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
     }
 
     // Route to floating tools panel first
-    if (tools_panel_ && tools_panel_->handle_event(e)) {
-        return true;
+    if (tools_panel_) {
+        SDL_Rect before_rect = tools_panel_->rect();
+        bool consumed = tools_panel_->handle_event(e);
+        SDL_Rect after_rect = tools_panel_->rect();
+        const bool pointer_event =
+            (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+        if (tools_panel_follow_layout_ && pointer_event &&
+            (before_rect.x != after_rect.x || before_rect.y != after_rect.y)) {
+            tools_panel_follow_layout_ = false;
+        }
+        if (consumed) {
+            return true;
+        }
+        pointer_in_tools = compute_pointer_in_tools(e);
     }
 
     // Always feed events to the buttons for proper hover/press visuals
@@ -206,19 +244,32 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Keyboard navigation for frames
-    if (e.type == SDL_KEYDOWN && movement_editor_) {
-        if (e.key.keysym.sym == SDLK_LEFT) {
-            if (movement_editor_->can_select_previous_frame()) {
-                movement_editor_->select_previous_frame();
-                update_navigation_styles();
+    if (!pointer_in_tools && children_editor_ && active_mode_ == Mode::Children) {
+        if (children_editor_->handle_event(e)) {
+            return true;
+        }
+    }
+
+    // Keyboard navigation or rotation adjustments
+    if (e.type == SDL_KEYDOWN) {
+        if (active_mode_ == Mode::Children && children_editor_) {
+            if (children_editor_->handle_key_event(e)) {
                 return true;
             }
-        } else if (e.key.keysym.sym == SDLK_RIGHT) {
-            if (movement_editor_->can_select_next_frame()) {
-                movement_editor_->select_next_frame();
-                update_navigation_styles();
-                return true;
+        }
+        if (active_mode_ == Mode::Movement && movement_editor_) {
+            if (e.key.keysym.sym == SDLK_LEFT) {
+                if (movement_editor_->can_select_previous_frame()) {
+                    movement_editor_->select_previous_frame();
+                    update_navigation_styles();
+                    return true;
+                }
+            } else if (e.key.keysym.sym == SDLK_RIGHT) {
+                if (movement_editor_->can_select_next_frame()) {
+                    movement_editor_->select_next_frame();
+                    update_navigation_styles();
+                    return true;
+                }
             }
         }
     }
@@ -244,9 +295,10 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         SDL_Point p;
         if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
         else { p.x = e.button.x; p.y = e.button.y; }
+        SDL_Rect tools_bounds = tools_panel_hit_rect();
         if (SDL_PointInRect(&p, &header_rect_) || SDL_PointInRect(&p, &mode_controls_rect_) ||
             SDL_PointInRect(&p, &frame_display_rect_) || SDL_PointInRect(&p, &frame_list_rect_) ||
-            SDL_PointInRect(&p, &tools_panel_rect_) || SDL_PointInRect(&p, &prev_button_rect_) ||
+            SDL_PointInRect(&p, &tools_bounds) || SDL_PointInRect(&p, &prev_button_rect_) ||
             SDL_PointInRect(&p, &next_button_rect_)) {
             return true;
         }
@@ -256,7 +308,7 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
 
 void FrameEditor::ensure_children() {
     const DMButtonStyle& default_style = DMStyles::HeaderButton();
-    const char* labels[] = {"Movement", "Children", "Attacking"};
+    const char* labels[] = {"Movement", "Children", "Attack Geometry", "Hit Geometry"};
     for (size_t i = 0; i < mode_buttons_.size(); ++i) {
         if (!mode_buttons_[i]) {
             mode_buttons_[i] = std::make_unique<DMButton>(labels[i], &default_style, kTabButtonWidth, DMButton::height());
@@ -299,6 +351,15 @@ void FrameEditor::ensure_children() {
             }
         });
     }
+    if (!children_editor_) {
+        children_editor_ = std::make_unique<FrameChildrenEditor>();
+    }
+    if (children_editor_) {
+        children_editor_->set_document(document_);
+        children_editor_->set_animation_id(animation_id_);
+        children_editor_->set_preview_provider(preview_provider_);
+        children_editor_->set_canvas(movement_editor_ ? movement_editor_->canvas() : nullptr);
+    }
     // Create Tools panel
     if (!tools_panel_) {
         tools_panel_ = std::make_unique<FrameToolsPanel>();
@@ -312,8 +373,15 @@ void FrameEditor::ensure_children() {
             [this](int dx, int dy) { if (movement_editor_) movement_editor_->set_total_displacement(dx, dy); }
         );
         tools_panel_->open();
+        tools_panel_follow_layout_ = true;
     } else {
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
+    }
+    if (children_editor_) {
+        children_editor_->set_tools_panel(tools_panel_.get());
+    }
+    if (movement_editor_ && movement_editor_->canvas()) {
+        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement);
     }
     update_button_styles();
     update_navigation_styles();
@@ -419,6 +487,13 @@ void FrameEditor::update_layout() {
         tools_panel_rect_ = SDL_Rect{0, 0, 0, 0};
     }
 
+    if (tools_panel_) {
+        tools_panel_->set_work_area_bounds(bounds_);
+        if (tools_panel_follow_layout_ && tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
+            tools_panel_->set_rect(tools_panel_rect_);
+        }
+    }
+
     frame_display_rect_ = SDL_Rect{display_x, center_top, display_width, std::max(0, display_height)};
     int nav_height = std::min(kNavigationButtonHeight, frame_display_rect_.h);
     if (nav_height < 0) nav_height = 0;
@@ -450,6 +525,16 @@ void FrameEditor::set_mode(Mode mode) {
     if (tools_panel_) {
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
     }
+    if (movement_editor_ && movement_editor_->canvas()) {
+        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement);
+    }
+}
+
+SDL_Rect FrameEditor::tools_panel_hit_rect() const {
+    if (tools_panel_ && tools_panel_->is_visible()) {
+        return tools_panel_->rect();
+    }
+    return tools_panel_rect_;
 }
 
 void FrameEditor::update_button_styles() const {

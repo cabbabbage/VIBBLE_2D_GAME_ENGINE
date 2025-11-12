@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "world/chunk.hpp"
 
 class Assets;
@@ -19,10 +18,16 @@ struct Chunk;
 
 class LightMapManager {
 public:
-    using ShadowParameters   = world::Chunk::ChunkShadowParameters;
-    using LightingChunk      = world::Chunk::LightingChunk;
 
     struct ChunkSnapshot {
+        struct ShadowInfo {
+            bool  has_data          = false;
+            float opacity           = 0.0f;
+            float scale             = 1.0f;
+            float offset_x_percent  = 0.0f;
+            float offset_y_percent  = 0.0f;
+        };
+
         int      index                 = -1;
         SDL_Rect world_rect{0, 0, 0, 0};
         bool     active                = false;
@@ -34,8 +39,8 @@ public:
         float    dynamic_component     = 1.0f;
         SDL_Color runtime_color{255, 255, 255, 255};
         bool      has_runtime_color = false;
-        world::Chunk::ChunkShadowParameters shadow{};
-};
+        ShadowInfo shadow{};
+    };
 
     explicit LightMapManager(Assets* assets);
 
@@ -46,13 +51,10 @@ public:
     std::vector<ChunkSnapshot> all_snapshots() const;
     std::vector<std::string>      assets_sampling_chunk(int index) const;
     std::optional<ChunkSnapshot> snapshot_for_chunk(int index) const;
-    std::optional<ShadowParameters>      get_shadow_data(SDL_FPoint world_or_screen_pos) const;
-    std::optional<ShadowParameters>      get_shadow_data_for_index(int index) const;
+    std::optional<int> find_chunk_index(SDL_FPoint world_or_screen_pos) const;
 
 private:
-    std::vector<const LightingChunk*> collect_active_lighting_chunks() const;
-    std::optional<int> find_chunk_index(SDL_FPoint world_or_screen_pos) const;
-    std::optional<ShadowParameters> shadow_data_for_chunk(const LightingChunk* chunk) const;
+    std::vector<const world::Chunk*> collect_active_chunks() const;
 
     Assets* assets_ = nullptr;
     float last_map_light_opacity_ = -1.0f;

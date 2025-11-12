@@ -49,6 +49,8 @@ class FrameMovementEditor {
     void render_canvas_only(SDL_Renderer* renderer) const;
 
     int selected_index() const { return selected_index_; }
+    MovementCanvas* canvas() { return canvas_.get(); }
+    const MovementCanvas* canvas() const { return canvas_.get(); }
 
     // Tools integration
     void set_show_animation(bool show);

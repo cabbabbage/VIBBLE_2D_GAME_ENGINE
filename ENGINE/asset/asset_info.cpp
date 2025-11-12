@@ -3,6 +3,7 @@
 #include "asset/asset_types.hpp"
 #include "asset_info_methods/asset_child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
+#include "utils/cache_manager.hpp"
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
@@ -11,11 +12,15 @@
 #include <limits>
 #include <cmath>
 #include <cctype>
+#include <cstdint>
 #include <filesystem>
+#include <system_error>
 #include <utility>
 
 #include "dev_mode/core/manifest_store.hpp"
 #include "util/grid.hpp"
+
+namespace fs = std::filesystem;
 
 namespace {
 
@@ -39,6 +44,196 @@ std::vector<std::string> parse_string_array(const nlohmann::json& json_value) {
         }
     }
     return values;
+}
+
+constexpr int kLightTextureCacheVersion = 1;
+
+std::string light_signature(const LightSource& light) {
+    std::ostringstream oss;
+    oss << light.radius << '|'
+        << light.fall_off << '|'
+        << light.flare << '|'
+        << light.intensity << '|'
+        << light.flicker_speed << '|'
+        << light.flicker_smoothness;
+    return oss.str();
+}
+
+float compute_light_fade_exponent(const LightSource& light) {
+    const float falloff_norm =
+        std::clamp(static_cast<float>(light.fall_off) / 100.0f, 0.0f, 1.0f);
+    return 0.6f + 3.4f * falloff_norm;
+}
+
+SDL_Surface* build_light_surface(const LightSource& light) {
+    const int radius   = std::max(1, light.radius);
+    const int diameter = std::max(1, radius * 2);
+    SDL_Surface* surface =
+        SDL_CreateRGBSurfaceWithFormat(0, diameter, diameter, 32, SDL_PIXELFORMAT_RGBA8888);
+    if (!surface) {
+        return nullptr;
+    }
+
+    if (SDL_LockSurface(surface) != 0) {
+        SDL_FreeSurface(surface);
+        return nullptr;
+    }
+
+    auto* pixels = static_cast<std::uint32_t*>(surface->pixels);
+    const int stride = surface->pitch / 4;
+    const float center = static_cast<float>(diameter) * 0.5f;
+    const float fade_exponent = compute_light_fade_exponent(light);
+    const float radius_f = static_cast<float>(radius);
+
+    for (int y = 0; y < diameter; ++y) {
+        for (int x = 0; x < diameter; ++x) {
+            const float dx = (static_cast<float>(x) + 0.5f) - center;
+            const float dy = (static_cast<float>(y) + 0.5f) - center;
+            const float dist = std::sqrt(dx * dx + dy * dy);
+            float ratio = (radius_f > 0.0f) ? dist / radius_f : 0.0f;
+            ratio       = std::clamp(ratio, 0.0f, 1.0f);
+            const float base = std::max(0.0f, 1.0f - ratio);
+            const float alpha_ratio = std::pow(base, fade_exponent);
+            const auto alpha = static_cast<std::uint8_t>(std::clamp(
+                std::lround(alpha_ratio * 255.0f), 0L, 255L));
+            pixels[y * stride + x] = (static_cast<std::uint32_t>(alpha) << 24) | 0x00FFFFFFu;
+        }
+    }
+
+    SDL_UnlockSurface(surface);
+    return surface;
+}
+
+void destroy_light_textures(std::vector<LightSource>& lights) {
+    for (auto& light : lights) {
+        if (light.texture) {
+            SDL_DestroyTexture(light.texture);
+            light.texture = nullptr;
+        }
+        light.cached_w = 0;
+        light.cached_h = 0;
+    }
+}
+
+bool load_light_cache_metadata(const fs::path& meta_path,
+                               std::vector<std::string>& out_signatures) {
+    out_signatures.clear();
+    nlohmann::json meta;
+    if (!CacheManager::load_metadata(meta_path.generic_string(), meta)) {
+        return false;
+    }
+    if (!meta.is_object()) {
+        return false;
+    }
+    if (meta.value("version", -1) != kLightTextureCacheVersion) {
+        return false;
+    }
+    auto it = meta.find("signatures");
+    if (it == meta.end() || !it->is_array()) {
+        return false;
+    }
+    for (const auto& entry : *it) {
+        if (!entry.is_string()) {
+            return false;
+        }
+        out_signatures.push_back(entry.get<std::string>());
+    }
+    return true;
+}
+
+bool save_light_cache_metadata(const fs::path& meta_path,
+                               const std::vector<std::string>& signatures) {
+    nlohmann::json meta;
+    meta["version"]    = kLightTextureCacheVersion;
+    meta["signatures"] = signatures;
+    return CacheManager::save_metadata(meta_path.generic_string(), meta);
+}
+
+bool load_cached_light_textures(const fs::path& cache_dir,
+                                SDL_Renderer* renderer,
+                                std::vector<LightSource>& lights) {
+    if (!renderer) {
+        return false;
+    }
+    for (std::size_t i = 0; i < lights.size(); ++i) {
+        const fs::path png_path = cache_dir / ("light_" + std::to_string(i) + ".png");
+        if (!fs::exists(png_path)) {
+            destroy_light_textures(lights);
+            return false;
+        }
+        SDL_Surface* surface = CacheManager::load_surface(png_path.generic_string());
+        if (!surface) {
+            destroy_light_textures(lights);
+            return false;
+        }
+        SDL_Texture* tex = CacheManager::surface_to_texture(renderer, surface);
+        const int w = surface->w;
+        const int h = surface->h;
+        SDL_FreeSurface(surface);
+        if (!tex) {
+            destroy_light_textures(lights);
+            return false;
+        }
+        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+        lights[i].texture = tex;
+        lights[i].cached_w = w;
+        lights[i].cached_h = h;
+    }
+    return true;
+}
+
+bool build_and_cache_light_textures(const fs::path& cache_dir,
+                                    SDL_Renderer* renderer,
+                                    std::vector<LightSource>& lights,
+                                    const std::vector<std::string>& signatures) {
+    if (!renderer) {
+        return false;
+    }
+
+    std::error_code ec;
+    fs::remove_all(cache_dir, ec);
+    ec.clear();
+    if (!fs::exists(cache_dir) && !fs::create_directories(cache_dir, ec)) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < lights.size(); ++i) {
+        SDL_Surface* surface = build_light_surface(lights[i]);
+        if (!surface) {
+            destroy_light_textures(lights);
+            fs::remove_all(cache_dir, ec);
+            return false;
+        }
+
+        const fs::path png_path = cache_dir / ("light_" + std::to_string(i) + ".png");
+        if (!CacheManager::save_surface_as_png(surface, png_path.generic_string())) {
+            SDL_FreeSurface(surface);
+            destroy_light_textures(lights);
+            fs::remove_all(cache_dir, ec);
+            return false;
+        }
+
+        SDL_Texture* tex = CacheManager::surface_to_texture(renderer, surface);
+        const int w = surface->w;
+        const int h = surface->h;
+        SDL_FreeSurface(surface);
+        if (!tex) {
+            destroy_light_textures(lights);
+            fs::remove_all(cache_dir, ec);
+            return false;
+        }
+        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+        lights[i].texture = tex;
+        lights[i].cached_w = w;
+        lights[i].cached_h = h;
+    }
+
+    if (!save_light_cache_metadata(cache_dir / "metadata.json", signatures)) {
+        destroy_light_textures(lights);
+        fs::remove_all(cache_dir, ec);
+        return false;
+    }
+    return true;
 }
 
 float read_float_field(const nlohmann::json& data, const char* key, float fallback) {
@@ -69,6 +264,54 @@ float read_float_field(const nlohmann::json& data, const char* key, float fallba
     } catch (...) {
     }
     return fallback;
+}
+
+std::filesystem::path assets_root_for(const std::string& asset_name) {
+    std::filesystem::path base = std::filesystem::path("SRC") / "assets";
+    if (!asset_name.empty()) {
+        base /= asset_name;
+    }
+    return base.lexically_normal();
+}
+
+bool path_starts_with_src(const std::filesystem::path& path) {
+    if (path.empty()) {
+        return false;
+    }
+    const std::string generic = path.lexically_normal().generic_string();
+    return generic == "SRC" || generic.rfind("SRC/", 0) == 0;
+}
+
+std::string prefer_assets_directory(const std::string& configured, const std::string& asset_name) {
+    const auto preferred = assets_root_for(asset_name);
+
+    if (configured.empty()) {
+        return preferred.generic_string();
+    }
+
+    std::filesystem::path candidate = std::filesystem::path(configured).lexically_normal();
+    if (!path_starts_with_src(candidate)) {
+        return candidate.generic_string();
+    }
+
+    if (candidate == preferred) {
+        return candidate.generic_string();
+    }
+
+    std::error_code ec;
+    const bool preferred_exists = std::filesystem::exists(preferred, ec);
+    ec.clear();
+    const bool candidate_exists = std::filesystem::exists(candidate, ec);
+    ec.clear();
+    if (candidate_exists) {
+        return candidate.generic_string();
+    }
+
+    if (preferred_exists) {
+        return preferred.generic_string();
+    }
+
+    return preferred.generic_string();
 }
 
 std::string derive_asset_directory(const nlohmann::json& data, const std::string& fallback) {
@@ -511,10 +754,12 @@ AssetInfo::AssetInfo(const std::string& asset_folder_name, const nlohmann::json&
         }
         name = resolved_name;
 
-        dir_path_ = derive_asset_directory(data, "SRC/" + resolved_name);
+        const std::string default_dir = assets_root_for(resolved_name).generic_string();
+        dir_path_ = derive_asset_directory(data, default_dir);
         if (dir_path_.empty()) {
-                dir_path_ = "SRC/" + resolved_name;
+                dir_path_ = default_dir;
         }
+        dir_path_ = prefer_assets_directory(dir_path_, resolved_name);
         info_json_path_.clear();
 
         initialize_from_json(data);
@@ -534,13 +779,15 @@ void AssetInfo::set_manifest_store_provider(ManifestStoreProvider provider) {
 }
 
 AssetInfo::~AssetInfo() {
-	std::ostringstream oss;
-	oss << "[AssetInfo] Destructor for '" << name << "'\r";
-	std::cout << std::left << std::setw(60) << oss.str() << std::flush;
+	clear_light_textures();
 	for (auto &[key, anim] : animations) {
                 anim.clear_texture_cache();
 	}
 	animations.clear();
+}
+
+void AssetInfo::clear_light_textures() {
+	destroy_light_textures(light_sources);
 }
 
 void AssetInfo::loadAnimations(SDL_Renderer *renderer) {
@@ -602,7 +849,42 @@ bool AssetInfo::has_tag(const std::string &tag) const {
     return tag_lookup_.find(tag) != tag_lookup_.end();
 }
 
-void AssetInfo::generate_lights(SDL_Renderer* ) {}
+void AssetInfo::generate_lights(SDL_Renderer* renderer) {
+	clear_light_textures();
+	try {
+		LightingLoader::load(*this, info_json_);
+	} catch (...) {
+		std::cerr << "[AssetInfo] Failed to regenerate lighting info for '" << name << "'\n";
+		return;
+	}
+
+	if (!renderer || light_sources.empty()) {
+		return;
+	}
+
+	std::vector<std::string> signatures;
+	signatures.reserve(light_sources.size());
+	for (const auto& light : light_sources) {
+		signatures.push_back(light_signature(light));
+	}
+
+	const fs::path cache_dir = fs::path("cache") / name / "lights";
+	const fs::path meta_path = cache_dir / "metadata.json";
+
+	std::vector<std::string> cached_signatures;
+	bool loaded_from_cache = false;
+	if (load_light_cache_metadata(meta_path, cached_signatures) &&
+	    cached_signatures == signatures) {
+		loaded_from_cache = load_cached_light_textures(cache_dir, renderer, light_sources);
+	}
+
+	if (!loaded_from_cache) {
+		if (!build_and_cache_light_textures(cache_dir, renderer, light_sources, signatures)) {
+			clear_light_textures();
+			std::cerr << "[AssetInfo] Failed to rebuild light texture cache for '" << name << "'\n";
+		}
+	}
+}
 
 bool AssetInfo::commit_manifest() {
         nlohmann::json payload = info_json_;
@@ -1197,7 +1479,10 @@ void AssetInfo::set_lighting(const std::vector<LightSource>& lights) {
         j["light_intensity"] = l.intensity;
         j["radius"] = l.radius;
         j["falloff"] = l.fall_off;
-        j["flicker"] = l.flicker;
+        j["flicker_speed"] = l.flicker_speed;
+        j["flicker_smoothness"] = l.flicker_smoothness;
+        // Legacy key preserved so older tooling can still observe "some" flicker value
+        j["flicker"] = l.flicker_speed;
         j["flare"] = l.flare;
         j["offset_x"] = l.offset_x;
         j["offset_y"] = l.offset_y;

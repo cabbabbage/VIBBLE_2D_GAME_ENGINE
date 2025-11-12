@@ -1,9 +1,7 @@
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
 
 #include "asset/Asset.hpp"
-#include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
-#include "world/chunk.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -166,53 +164,9 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     }
     SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
 
-    float opacity  = 1.0f;
-    float offset_x = 0.0f;
-    float offset_y = 0.0f;
+    const float opacity = context.base_shadow_opacity;
 
-    if (const LightMap* vmap = context.light_map()) {
-        if (auto data = vmap->get_shadow_data(context.screen_center)) {
-            const auto& shadow = *data;
-            opacity = std::clamp(shadow.opacity, 0.0f, 1.0f);
-            offset_x = shadow.offset_x_px;
-            offset_y = shadow.offset_y_px;
-            if (std::abs(offset_x) <= 1e-4f && std::abs(shadow.offset_x_percent) > 1e-4f) {
-                offset_x = static_cast<float>(width) * (shadow.offset_x_percent / 100.0f);
-            }
-            if (std::abs(offset_y) <= 1e-4f && std::abs(shadow.offset_y_percent) > 1e-4f) {
-                offset_y = static_cast<float>(height) * (shadow.offset_y_percent / 100.0f);
-            }
-        } else {
-            opacity = std::clamp(context.base_shadow_opacity, 0.0f, 1.0f);
-        }
-    }
-
-    // Apply UI-configured toggles and clamps/boosts
-    if (const auto* settings = context.reactive_shadow_settings()) {
-        const auto& v = settings->virtual_light_map;
-        if (!v.enable_offset) {
-            offset_x = 0.0f;
-            offset_y = 0.0f;
-        } else {
-            // Also clamp offsets to configured maximums in px
-            if (std::isfinite(v.max_offset_x) && v.max_offset_x >= 0.0f) {
-                offset_x = std::clamp(offset_x, -v.max_offset_x, v.max_offset_x);
-            }
-            if (std::isfinite(v.max_offset_y) && v.max_offset_y >= 0.0f) {
-                offset_y = std::clamp(offset_y, -v.max_offset_y, v.max_offset_y);
-            }
-        }
-
-        if (!v.enable_opacity) {
-            opacity = std::clamp(context.base_shadow_opacity, 0.0f, 1.0f);
-        } else {
-            float boosted = opacity + std::clamp(v.opacity_boost, -1.0f, 1.0f);
-            float min_o = std::clamp(v.min_opacity, 0.0f, 1.0f);
-            float max_o = std::clamp(v.max_opacity, 0.0f, 1.0f);
-            if (max_o < min_o) std::swap(max_o, min_o);
-            opacity = std::clamp(boosted, min_o, max_o);
-        }
-    }
+    // TODO(#reactive-shadows): Mask currently renders unadjusted until new settings land.
 
     SDL_Texture* mask_texture = nullptr;
     const auto& scale_usage   = asset.last_scale_usage();
@@ -264,8 +218,8 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
     const int scaled_h = std::max(1, mask_h);
     const float base_center_x = static_cast<float>(width) * 0.5f;
     const float base_center_y = static_cast<float>(height) * 0.5f;
-    const float dest_x_f    = base_center_x - static_cast<float>(scaled_w) * 0.5f + offset_x;
-    const float dest_y_f    = base_center_y - static_cast<float>(scaled_h) * 0.5f + offset_y;
+    const float dest_x_f    = base_center_x - static_cast<float>(scaled_w) * 0.5f;
+    const float dest_y_f    = base_center_y - static_cast<float>(scaled_h) * 0.5f;
     const int   dest_px_x   = static_cast<int>(std::lround(dest_x_f));
     const int   dest_px_y   = static_cast<int>(std::lround(dest_y_f));
     SDL_Rect    dest{dest_px_x, dest_px_y, scaled_w, scaled_h};
@@ -298,16 +252,7 @@ SDL_Texture* RenderShadowMask::run(SDL_Renderer* renderer, const Asset& asset, S
         }
     }
 #endif
-
-    if (const LightMap* vmap = context.light_map()) {
-        const SDL_Color main_color      = context.main_light().get_current_color();
-        const float     alpha_multiplier =
-            std::clamp(static_cast<float>(main_color.a) / 255.0f, 0.0f, 1.0f);
-        SDL_Rect target_bounds{0, 0, width, height};
-        if (target_bounds.w > 0 && target_bounds.h > 0 && context.screen_rect.w > 0 && context.screen_rect.h > 0) {
-            vmap->subtract_runtime_shadow_from_texture(renderer, cache.texture, target_bounds, context.screen_rect, alpha_multiplier);
-        }
-    }
+    // TODO(#reactive-shadows): Runtime subtraction is disabled until reactive tuning returns.
 
     SDL_SetRenderTarget(renderer, prev_target);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);

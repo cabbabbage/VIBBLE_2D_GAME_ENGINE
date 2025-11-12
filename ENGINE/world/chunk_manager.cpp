@@ -19,19 +19,15 @@ SDL_Rect ChunkManager::bounds_for(int i, int j, int r_chunk, SDL_Point origin) {
     return SDL_Rect{x, y, step, step};
 }
 
-Chunk& ChunkManager::ensure(int i, int j, int r_chunk, SDL_Point origin, int lighting_subdivisions) {
+Chunk& ChunkManager::ensure(int i, int j, int r_chunk, SDL_Point origin) {
     const auto k = key(i, j);
     if (auto it = lookup_.find(k); it != lookup_.end()) {
         Chunk* existing = it->second;
-        if (existing) {
-            existing->set_lighting_subdivisions(lighting_subdivisions);
-        }
         return *existing;
     }
     SDL_Rect rect = bounds_for(i, j, r_chunk, origin);
     auto chunk = std::make_unique<Chunk>(i, j, r_chunk, rect);
     Chunk* raw = chunk.get();
-    raw->set_lighting_subdivisions(lighting_subdivisions);
     storage_.push_back(std::move(chunk));
     lookup_.emplace(k, raw);
     return *raw;

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <string>
 #include <string_view>
 
@@ -28,6 +30,12 @@ inline std::string to_lower_copy(std::string_view value) {
     std::string result = std::string(value);
     std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c){ return std::tolower(c); });
     return result;
+}
+
+inline bool has_numeric_stem(const std::filesystem::path& path) {
+    std::string stem = path.stem().string();
+    if (stem.empty()) return false;
+    return std::all_of(stem.begin(), stem.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; });
 }
 
 }

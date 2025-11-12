@@ -1,7 +1,6 @@
 #include "camera_ui.hpp"
 
 #include <SDL.h>
-#include <SDL_ttf.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -11,9 +10,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <functional>
+#include <sstream>
 
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/font_cache.hpp"
 #include "dev_mode/shared/formatting.hpp"
 #include "dev_mode/widgets.hpp"
 #include "utils/input.hpp"
@@ -50,43 +52,217 @@ namespace {
     }
 }
 
-class SectionLabelWidget : public Widget {
+class SpacerWidget : public Widget {
 public:
-    explicit SectionLabelWidget(std::string text)
-        : text_(std::move(text)) {}
+    explicit SpacerWidget(int height)
+        : height_(std::max(0, height)) {}
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return height_; }
+    bool handle_event(const SDL_Event&) override { return false; }
+    void render(SDL_Renderer*) const override {}
+    bool wants_full_row() const override { return true; }
+
+private:
+    SDL_Rect rect_{0, 0, 0, 0};
+    int height_ = 0;
+};
+
+class PanelBannerWidget : public Widget {
+public:
+    PanelBannerWidget(std::string heading, std::string detail)
+        : heading_(std::move(heading)),
+          detail_(std::move(detail)) {
+        heading_style_ = DMStyles::Label();
+        heading_style_.font_size = std::max(heading_style_.font_size + 2, 18);
+        heading_style_.color = DMStyles::AccentButton().text;
+
+        body_style_ = DMStyles::Label();
+        body_style_.font_size = std::max(12, body_style_.font_size - 2);
+        body_style_.color = dm::rgba(255, 255, 255, 230);
+    }
 
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
     const SDL_Rect& rect() const override { return rect_; }
 
-    int height_for_width(int) const override {
-        return DMCheckbox::height();
+    int height_for_width(int w) const override {
+        const int inner = std::max(1, w - 2 * padding());
+        ensure_lines(inner);
+        const int heading_h = heading_style_.font_size + kHeadingGap;
+        const int body_lines = std::max(1, static_cast<int>(lines_.size()));
+        const int line_h = body_style_.font_size + kLineGap;
+        return padding() * 2 + heading_h + body_lines * line_h;
     }
 
     bool handle_event(const SDL_Event&) override { return false; }
 
     void render(SDL_Renderer* renderer) const override {
-        const DMLabelStyle& style = DMStyles::Label();
-        TTF_Font* font = TTF_OpenFont(style.font_path.c_str(), style.font_size);
-        if (!font) return;
-        SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text_.c_str(), style.color);
-        if (surf) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-            if (tex) {
-                SDL_Rect dst{ rect_.x, rect_.y, surf->w, surf->h };
-                SDL_RenderCopy(renderer, tex, nullptr, &dst);
-                SDL_DestroyTexture(tex);
-            }
-            SDL_FreeSurface(surf);
+        if (!renderer) return;
+        SDL_Color accent = DMStyles::AccentButton().bg;
+        SDL_Color background{ accent.r, accent.g, accent.b, static_cast<Uint8>(220) };
+        SDL_SetRenderDrawColor(renderer, background.r, background.g, background.b, background.a);
+        SDL_RenderFillRect(renderer, &rect_);
+
+        SDL_Color border = DMStyles::AccentButton().border;
+        SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+        SDL_RenderDrawRect(renderer, &rect_);
+
+        const int pad = padding();
+        SDL_Rect content{ rect_.x + pad, rect_.y + pad, rect_.w - 2 * pad, rect_.h - 2 * pad };
+        DrawLabelText(renderer, heading_, content.x, content.y, heading_style_);
+        int text_y = content.y + heading_style_.font_size + kHeadingGap;
+
+        ensure_lines(content.w);
+        for (const auto& line : lines_) {
+            DrawLabelText(renderer, line, content.x, text_y, body_style_);
+            text_y += body_style_.font_size + kLineGap;
         }
-        TTF_CloseFont(font);
     }
 
+    bool wants_full_row() const override { return true; }
+
 private:
-    std::string text_;
+    static std::vector<std::string> wrap_lines(const std::string& text, int max_width, const DMLabelStyle& style) {
+        std::vector<std::string> lines;
+        if (text.empty() || max_width <= 0) {
+            if (!text.empty()) lines.push_back(text);
+            return lines;
+        }
+        std::istringstream stream(text);
+        std::string word;
+        std::string current;
+        while (stream >> word) {
+            std::string candidate = current.empty() ? word : current + " " + word;
+            SDL_Point dims = MeasureLabelText(style, candidate);
+            if (!current.empty() && dims.x > max_width) {
+                lines.push_back(current);
+                current = word;
+                continue;
+            }
+            current = candidate;
+        }
+        if (!current.empty()) {
+            lines.push_back(current);
+        }
+        if (lines.empty()) {
+            lines.push_back(text);
+        }
+        return lines;
+    }
+
+    void ensure_lines(int inner_width) const {
+        int width = std::max(1, inner_width);
+        if (width == cached_width_) {
+            return;
+        }
+        cached_width_ = width;
+        lines_ = wrap_lines(detail_, cached_width_, body_style_);
+    }
+
+    static int padding() { return DMSpacing::item_gap(); }
+
+private:
+    static constexpr int kHeadingGap = 6;
+    static constexpr int kLineGap = 4;
     SDL_Rect rect_{0, 0, 0, 0};
+    std::string heading_;
+    std::string detail_;
+    DMLabelStyle heading_style_;
+    DMLabelStyle body_style_;
+    mutable std::vector<std::string> lines_;
+    mutable int cached_width_ = -1;
+};
+
+class SectionToggleWidget : public Widget {
+public:
+    using ToggleCallback = std::function<void(bool)>;
+
+    SectionToggleWidget(std::string label, bool expanded)
+        : label_(std::move(label)),
+          expanded_(expanded) {
+        button_ = std::make_unique<DMButton>(
+            "",
+            &DMStyles::HeaderButton(),
+            DockableCollapsible::kDefaultFloatingContentWidth,
+            DMButton::height());
+        if (button_) {
+            button_->set_tooltip_state(this->tooltip_state());
+        }
+        update_button_text();
+    }
+
+    ~SectionToggleWidget() override {
+        if (button_) {
+            button_->set_tooltip_state(nullptr);
+        }
+    }
+
+    void set_rect(const SDL_Rect& r) override {
+        rect_ = r;
+        if (button_) {
+            button_->set_rect(r);
+        }
+    }
+
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int) const override { return DMButton::height(); }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (!button_) return false;
+        bool used = button_->handle_event(e);
+        if (used && e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            set_expanded(!expanded_);
+            if (on_toggle_) {
+                on_toggle_(expanded_);
+            }
+        }
+        return used;
+    }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (button_) button_->render(renderer);
+    }
+
+    bool wants_full_row() const override { return true; }
+
+    void set_on_toggle(ToggleCallback cb) { on_toggle_ = std::move(cb); }
+
+    void set_label(std::string label) {
+        label_ = std::move(label);
+        update_button_text();
+    }
+
+    void set_expanded(bool expanded) {
+        if (expanded_ == expanded) {
+            return;
+        }
+        expanded_ = expanded;
+        update_button_text();
+    }
+
+    bool expanded() const { return expanded_; }
+
+private:
+    void update_button_text() {
+        if (!button_) return;
+        const char* indicator = expanded_ ? "[-]" : "[+]";
+        button_->set_text(std::string(indicator) + " " + label_);
+        const DMButtonStyle* style = expanded_ ? &DMStyles::HeaderButton() : &DMStyles::FooterToggleButton();
+        button_->set_style(style);
+    }
+
+    std::unique_ptr<DMButton> button_;
+    SDL_Rect rect_{0, 0, 0, DMButton::height()};
+    std::string label_;
+    bool expanded_ = true;
+    ToggleCallback on_toggle_{};
 };
 class FloatSliderWidget : public Widget {
 public:
+    using ChangeCallback = std::function<void(float)>;
+
     FloatSliderWidget(std::string label,
                       float min_val,
                       float max_val,
@@ -100,6 +276,7 @@ public:
         slider_min_units_ = 0;
         slider_max_units_ = std::max(slider_min_units_, compute_units_for_value(max_));
         slider_ = std::make_unique<DMSlider>(label, slider_min_units_, slider_max_units_, value_to_slider(value));
+        slider_->set_defer_commit_until_unfocus(false);
         slider_->set_value_formatter([this](int units, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) {
             return format_units(units, buffer);
         });
@@ -107,6 +284,8 @@ public:
         slider_widget_ = std::make_unique<SliderWidget>(slider_.get());
         current_value_ = slider_to_value(slider_->value());
     }
+
+    void set_on_value_changed(ChangeCallback cb) { on_change_ = std::move(cb); }
 
     void set_value(float v) {
         if (!slider_) return;
@@ -140,9 +319,13 @@ public:
 
     bool handle_event(const SDL_Event& e) override {
         if (!slider_widget_) return false;
+        const float previous_value = current_value_;
         bool handled = slider_widget_->handle_event(e);
         if (slider_) {
             current_value_ = slider_to_value(slider_->value());
+            if (handled && on_change_ && std::fabs(current_value_ - previous_value) > 1e-5f) {
+                on_change_(current_value_);
+            }
         }
         return handled;
     }
@@ -214,10 +397,13 @@ private:
     int slider_min_units_ = 0;
     int slider_max_units_ = 0;
     float current_value_ = 0.0f;
+    ChangeCallback on_change_{};
 };
 
 class DiscreteSliderWidget : public Widget {
 public:
+    using ChangeCallback = std::function<void(int)>;
+
     DiscreteSliderWidget(std::string label,
                          std::vector<int> values,
                          int value)
@@ -228,6 +414,7 @@ public:
         slider_min_units_ = 0;
         slider_max_units_ = static_cast<int>(values_.size() - 1);
         slider_ = std::make_unique<DMSlider>(std::move(label), slider_min_units_, slider_max_units_, value_to_slider(value));
+        slider_->set_defer_commit_until_unfocus(false);
         slider_->set_value_formatter([this](int units, std::array<char, dev_mode::kSliderFormatBufferSize>& buffer) {
             const int idx = clamp_index(units);
             std::snprintf(buffer.data(), buffer.size(), "%d%%", values_[idx]);
@@ -244,6 +431,8 @@ public:
         slider_widget_ = std::make_unique<SliderWidget>(slider_.get());
         current_index_ = clamp_index(slider_->value());
     }
+
+    void set_on_value_changed(ChangeCallback cb) { on_change_ = std::move(cb); }
 
     void set_value(int v) {
         if (!slider_) return;
@@ -277,9 +466,14 @@ public:
 
     bool handle_event(const SDL_Event& e) override {
         if (!slider_widget_) return false;
+        const int previous_value = value();
         bool handled = slider_widget_->handle_event(e);
         if (slider_) {
             current_index_ = clamp_index(slider_->value());
+            const int new_value = value();
+            if (handled && on_change_ && new_value != previous_value) {
+                on_change_(new_value);
+            }
         }
         return handled;
     }
@@ -318,6 +512,7 @@ private:
     int slider_min_units_ = 0;
     int slider_max_units_ = 0;
     int current_index_ = 0;
+    ChangeCallback on_change_{};
 };
 
 CameraUIPanel::CameraUIPanel(Assets* assets, int x, int y)
@@ -326,6 +521,9 @@ CameraUIPanel::CameraUIPanel(Assets* assets, int x, int y)
     set_expanded(true);
     set_visible(false);
     set_padding(16);
+    set_close_button_enabled(true);
+    set_close_button_on_left(false);
+    set_floatable(true);
     build_ui();
     sync_from_camera();
 }
@@ -418,104 +616,182 @@ void CameraUIPanel::sync_from_camera() {
 }
 
 void CameraUIPanel::build_ui() {
-    effects_checkbox_ = std::make_unique<DMCheckbox>("Perspective Effects", true);
-    effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
-    effects_widget_->set_tooltip("Enable perspective-based camera effects such as parallax and distance scaling.");
+    set_header_button_style(&DMStyles::AccentButton());
+    set_header_highlight_color(DMStyles::AccentButton().bg);
+    set_padding(DMSpacing::panel_padding());
+    set_row_gap(DMSpacing::item_gap());
+    set_col_gap(DMSpacing::item_gap());
+    set_floating_content_width(420);
 
-    load_button_ = std::make_unique<DMButton>("Load", &DMStyles::HeaderButton(), 110, DMButton::height());
-    reset_button_ = std::make_unique<DMButton>("Reset", &DMStyles::HeaderButton(), 110, DMButton::height());
+    header_spacer_ = std::make_unique<SpacerWidget>(DMSpacing::header_gap());
+    hero_banner_widget_ = std::make_unique<PanelBannerWidget>(
+        "Camera realism",
+        "Dial in render buffers, parallax depth, and smoothing without leaving the editor.");
+    controls_spacer_ = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
+
+    effects_checkbox_ = std::make_unique<DMCheckbox>("Depth Effects", true);
+    effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
+    effects_widget_->set_tooltip("Enable parallax, foreshortening, and distance-based scaling.");
+
+    load_button_ = std::make_unique<DMButton>("Load", &DMStyles::AccentButton(), 120, DMButton::height());
+    reset_button_ = std::make_unique<DMButton>("Reset", &DMStyles::WarnButton(), 120, DMButton::height());
     load_widget_ = std::make_unique<ButtonWidget>(load_button_.get(), [this]() { reload_from_json(); });
     reset_widget_ = std::make_unique<ButtonWidget>(reset_button_.get(), [this]() { reset_to_defaults(); });
+    load_widget_->set_tooltip("Reload the current settings from disk.");
+    reset_widget_->set_tooltip("Restore the built-in camera defaults.");
 
     camera::RealismSettings defaults;
 
-    render_section_label_ = std::make_unique<SectionLabelWidget>("Rendering");
-    perspective_section_label_ = std::make_unique<SectionLabelWidget>("Perspective");
-    smoothing_section_label_ = std::make_unique<SectionLabelWidget>("Smoothing");
-    render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Distance (screen px)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
-    render_distance_slider_->set_tooltip("Screen-space margin in pixels around the view to activate and render assets (converted to world units based on zoom).");
-    min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min Visible Screen Ratio", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
-    min_render_size_slider_->set_tooltip("Cull sprites once their on-screen height falls below this fraction of the viewport.");
-    tripod_distance_slider_ = std::make_unique<FloatSliderWidget>("Tripod Distance (Y)", -2000.0f, 0.0f, 5.0f, defaults.tripod_distance_y, 0);
-    tripod_distance_slider_->set_tooltip("Offsets the camera's reference tripod on the Y axis to bias parallax.");
-    height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Height @ Zoom = 1 (px)", 0.0f, 1000.0f, 1.0f, defaults.height_at_zoom1, 0);
-    height_zoom1_slider_->set_tooltip("Defines the camera height in pixels when zoom is exactly 1.0.");
+    auto configure_section = [this](std::unique_ptr<SectionToggleWidget>& target,
+                                    const std::string& label,
+                                    bool* expanded_flag) {
+        target = std::make_unique<SectionToggleWidget>(label, *expanded_flag);
+        target->set_on_toggle([this, expanded_flag](bool expanded) {
+            *expanded_flag = expanded;
+            rebuild_rows();
+        });
+        target->set_tooltip("Click to collapse or expand this section.");
+    };
+
+    configure_section(visibility_section_header_, "Visibility & Performance", &visibility_section_expanded_);
+    configure_section(depth_section_header_,      "Depth & Perspective",      &depth_section_expanded_);
+    configure_section(zoom_section_header_,       "Zoom Range",               &zoom_section_expanded_);
+    configure_section(smoothing_section_header_,  "Motion & Smoothing",       &smoothing_section_expanded_);
+
+    render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Buffer (px)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
+    render_distance_slider_->set_tooltip("Keeps this many extra pixels alive outside the viewport so objects never snap in.");
+    render_distance_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min On-Screen Size", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
+    min_render_size_slider_->set_tooltip("Cull sprites once their height drops below this fraction of the screen (0.01 = 1%).");
+    min_render_size_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    tripod_distance_slider_ = std::make_unique<FloatSliderWidget>("Depth Offset (px)", -2000.0f, 0.0f, 5.0f, defaults.tripod_distance_y, 0);
+    tripod_distance_slider_->set_tooltip("Shifts the parallax anchor up or down to bias how layers separate.");
+    tripod_distance_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Base Camera Height (px)", 0.0f, 1000.0f, 1.0f, defaults.height_at_zoom1, 0);
+    height_zoom1_slider_->set_tooltip("Camera height when zoom is 1.0; higher values flatten the scene.");
+    height_zoom1_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     parallax_strength_slider_ = std::make_unique<FloatSliderWidget>("Parallax Strength", 0.0f, 100.0f, 0.25f, defaults.parallax_strength, 2);
-    parallax_strength_slider_->set_tooltip("Amount of horizontal parallax offset applied relative to camera panning.");
-    foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Foreshortening Strength", 0.0f, 1.0f, 0.01f, defaults.foreshorten_strength, 2);
-    foreshorten_strength_slider_->set_tooltip("Scale applied to vertical stretching to fake depth in the scene.");
-    distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scaling Strength", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
-    distance_strength_slider_->set_tooltip("Controls how aggressively distant objects are scaled down.");
+    parallax_strength_slider_->set_tooltip("Amount of parallax offset applied relative to camera movement.");
+    parallax_strength_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Stretch", 0.0f, 2.0f, 0.01f, defaults.foreshorten_strength, 2);
+    foreshorten_strength_slider_->set_tooltip("Controls how much tall sprites stretch or compress with depth.");
+    foreshorten_strength_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scale", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
+    distance_strength_slider_->set_tooltip("Higher values shrink faraway sprites more aggressively.");
+    distance_strength_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
-    render_quality_slider_->set_tooltip("Overrides the percentage used when rendering downscaled textures for performance.");
+    render_quality_slider_->set_tooltip("Trade fidelity for speed; lowers the number of sprites drawn each frame.");
+    render_quality_slider_->set_on_value_changed([this](int) { on_control_value_changed(); });
 
-    smoothing_checkbox_ = std::make_unique<DMCheckbox>("Smooth Motion/Zoom", defaults.smooth_motion_zoom);
+    smoothing_checkbox_ = std::make_unique<DMCheckbox>("Smooth Motion", defaults.smooth_motion_zoom);
     smoothing_widget_   = std::make_unique<CheckboxWidget>(smoothing_checkbox_.get());
-    smoothing_widget_->set_tooltip("Toggle smoothing for camera motion, zoom, and asset interpolation.");
+    smoothing_widget_->set_tooltip("Blend camera motion and zoom instead of stepping directly to the target.");
 
-    const std::vector<std::string> method_options{"Lerp", "Spring"};
+    const std::vector<std::string> method_options{"Smooth Lerp", "Spring"};
     smoothing_method_dropdown_ = std::make_unique<DMDropdown>(
-        "Method",
+        "Smoothing Type",
         method_options,
         method_to_index(defaults.motion_smoothing_method));
     smoothing_method_widget_ = std::make_unique<DropdownWidget>(smoothing_method_dropdown_.get());
-    smoothing_method_widget_->set_tooltip("Choose the smoothing function applied to motion and parallax.");
+    smoothing_method_widget_->set_tooltip("Pick between a simple lerp or a spring-like response for smoothing.");
 
-    motion_tau_slider_ = std::make_unique<FloatSliderWidget>("Motion Tau (s)", 0.0f, 1.0f, 0.01f, defaults.motion_smoothing_tau, 3);
-    motion_tau_slider_->set_tooltip("Time constant used when the Lerp method is active (smaller reacts faster).");
+    motion_tau_slider_ = std::make_unique<FloatSliderWidget>("Lerp Response (s)", 0.0f, 1.0f, 0.01f, defaults.motion_smoothing_tau, 3);
+    motion_tau_slider_->set_tooltip("When using lerp smoothing, this is how long it takes to settle (smaller reacts faster).");
+    motion_tau_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     motion_stiffness_slider_ = std::make_unique<FloatSliderWidget>(
-        "Motion Spring Frequency (Hz)", 0.0f, 10.0f, 0.05f, defaults.motion_smoothing_spring_frequency, 2);
-    motion_stiffness_slider_->set_tooltip("Oscillation frequency for critically damped spring smoothing.");
+        "Spring Frequency (Hz)", 0.0f, 10.0f, 0.05f, defaults.motion_smoothing_spring_frequency, 2);
+    motion_stiffness_slider_->set_tooltip("When using the spring method, higher values track the target faster.");
+    motion_stiffness_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     motion_max_step_slider_ = std::make_unique<FloatSliderWidget>(
-        "Motion Max Step (units/s)", 0.0f, 12000.0f, 25.0f, defaults.motion_smoothing_max_step, 0);
-    motion_max_step_slider_->set_tooltip("Upper bound on how far smoothing may advance toward the target per second.");
-    motion_snap_slider_ = std::make_unique<FloatSliderWidget>("Motion Snap Threshold", 0.0f, 5.0f, 0.01f, defaults.motion_smoothing_snap_threshold, 2);
-    motion_snap_slider_->set_tooltip("Snap directly to the target when the remaining distance falls below this amount.");
+        "Max Catch-Up Speed", 0.0f, 12000.0f, 25.0f, defaults.motion_smoothing_max_step, 0);
+    motion_max_step_slider_->set_tooltip("Largest distance the smoothing can cover per second while chasing the target.");
+    motion_max_step_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    motion_snap_slider_ = std::make_unique<FloatSliderWidget>("Snap Distance", 0.0f, 5.0f, 0.01f, defaults.motion_smoothing_snap_threshold, 2);
+    motion_snap_slider_->set_tooltip("When closer than this amount, skip smoothing and snap immediately.");
+    motion_snap_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     const float default_parallax_value = (defaults.parallax_smoothing.method == TransformSmoothingMethod::Lerp)
         ? tau_from_rate(defaults.parallax_smoothing.lerp_rate)
         : defaults.parallax_smoothing.spring_frequency;
     parallax_smoothing_slider_ = std::make_unique<FloatSliderWidget>(
-        "Parallax Smoothing", 0.0f, 12.0f, 0.05f, default_parallax_value, 2);
+        "Parallax Ease", 0.0f, 12.0f, 0.05f, default_parallax_value, 2);
     parallax_smoothing_slider_->set_tooltip(
-        "Controls smoothing for parallax offsets (seconds for Lerp, frequency for Spring).");
+        "Extra smoothing just for parallax offsets (seconds for lerp, Hz for spring).");
+    parallax_smoothing_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     hysteresis_margin_slider_ = std::make_unique<FloatSliderWidget>(
-        "Scale Variant Hysteresis", 0.0f, 0.5f, 0.005f, defaults.scale_variant_hysteresis_margin, 3);
+        "Texture Switch Cushion", 0.0f, 0.5f, 0.005f, defaults.scale_variant_hysteresis_margin, 3);
     hysteresis_margin_slider_->set_tooltip(
-        "Adjusts the hysteresis margin when choosing between pre-scaled texture variants.");
+        "Padding before swapping between pre-scaled sprite variants to avoid flicker.");
+    hysteresis_margin_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     min_zoom_multiplier_slider_ = std::make_unique<FloatSliderWidget>(
-        "Min Zoom Multiplier", 0.1f, 2.0f, 0.01f, defaults.min_zoom_multiplier, 2);
+        "Minimum Zoom", 0.1f, 2.0f, 0.01f, defaults.min_zoom_multiplier, 2);
     min_zoom_multiplier_slider_->set_tooltip(
-        "Minimum zoom multiplier applied during automatic camera zoom in normal gameplay.");
+        "Lower bound for automatic zooming (smaller = closer look).");
+    min_zoom_multiplier_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     max_zoom_multiplier_slider_ = std::make_unique<FloatSliderWidget>(
-        "Max Zoom Multiplier", 0.1f, 3.0f, 0.01f, defaults.max_zoom_multiplier, 2);
+        "Maximum Zoom", 0.1f, 3.0f, 0.01f, defaults.max_zoom_multiplier, 2);
     max_zoom_multiplier_slider_->set_tooltip(
-        "Maximum zoom multiplier applied during automatic camera zoom in normal gameplay.");
+        "Upper bound for automatic zooming (larger = wider view).");
+    max_zoom_multiplier_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     rebuild_rows();
 }
 
+void CameraUIPanel::on_control_value_changed() {
+    if (!assets_ || !is_visible()) {
+        return;
+    }
+    apply_settings_if_needed();
+}
+
 void CameraUIPanel::rebuild_rows() {
     Rows rows;
-    rows.push_back({ effects_widget_.get() });
-    rows.push_back({ render_section_label_.get() });
-    rows.push_back({ render_distance_slider_.get() });
-    rows.push_back({ min_render_size_slider_.get() });
-    rows.push_back({ render_quality_slider_.get() });
-    rows.push_back({ perspective_section_label_.get() });
-    rows.push_back({ tripod_distance_slider_.get(), height_zoom1_slider_.get() });
-    rows.push_back({ parallax_strength_slider_.get(), foreshorten_strength_slider_.get() });
-    rows.push_back({ distance_strength_slider_.get() });
-    rows.push_back({ smoothing_section_label_.get() });
-    rows.push_back({ smoothing_widget_.get(), smoothing_method_widget_.get() });
-    rows.push_back({ motion_tau_slider_.get(), motion_stiffness_slider_.get() });
-    rows.push_back({ motion_max_step_slider_.get(), motion_snap_slider_.get() });
-    rows.push_back({ parallax_smoothing_slider_.get(), hysteresis_margin_slider_.get() });
-    rows.push_back({ min_zoom_multiplier_slider_.get(), max_zoom_multiplier_slider_.get() });
-    rows.push_back({ load_widget_.get(), reset_widget_.get() });
+    if (header_spacer_) rows.push_back({ header_spacer_.get() });
+    if (hero_banner_widget_) rows.push_back({ hero_banner_widget_.get() });
+    if (effects_widget_) rows.push_back({ effects_widget_.get() });
+    if (controls_spacer_) rows.push_back({ controls_spacer_.get() });
+
+    Row action_row;
+    if (load_widget_) action_row.push_back(load_widget_.get());
+    if (reset_widget_) action_row.push_back(reset_widget_.get());
+    if (!action_row.empty()) rows.push_back(action_row);
+
+    if (visibility_section_header_) rows.push_back({ visibility_section_header_.get() });
+    if (visibility_section_expanded_) {
+        if (render_distance_slider_) rows.push_back({ render_distance_slider_.get() });
+        if (min_render_size_slider_) rows.push_back({ min_render_size_slider_.get() });
+        if (render_quality_slider_) rows.push_back({ render_quality_slider_.get() });
+    }
+
+    if (depth_section_header_) rows.push_back({ depth_section_header_.get() });
+    if (depth_section_expanded_) {
+        if (tripod_distance_slider_) rows.push_back({ tripod_distance_slider_.get() });
+        if (height_zoom1_slider_) rows.push_back({ height_zoom1_slider_.get() });
+        if (parallax_strength_slider_) rows.push_back({ parallax_strength_slider_.get() });
+        if (foreshorten_strength_slider_) rows.push_back({ foreshorten_strength_slider_.get() });
+        if (distance_strength_slider_) rows.push_back({ distance_strength_slider_.get() });
+    }
+
+    if (zoom_section_header_) rows.push_back({ zoom_section_header_.get() });
+    if (zoom_section_expanded_) {
+        if (min_zoom_multiplier_slider_) rows.push_back({ min_zoom_multiplier_slider_.get() });
+        if (max_zoom_multiplier_slider_) rows.push_back({ max_zoom_multiplier_slider_.get() });
+    }
+
+    if (smoothing_section_header_) rows.push_back({ smoothing_section_header_.get() });
+    if (smoothing_section_expanded_) {
+        if (smoothing_widget_) rows.push_back({ smoothing_widget_.get() });
+        if (smoothing_method_widget_) rows.push_back({ smoothing_method_widget_.get() });
+        if (motion_tau_slider_) rows.push_back({ motion_tau_slider_.get() });
+        if (motion_stiffness_slider_) rows.push_back({ motion_stiffness_slider_.get() });
+        if (motion_max_step_slider_) rows.push_back({ motion_max_step_slider_.get() });
+        if (motion_snap_slider_) rows.push_back({ motion_snap_slider_.get() });
+        if (parallax_smoothing_slider_) rows.push_back({ parallax_smoothing_slider_.get() });
+        if (hysteresis_margin_slider_) rows.push_back({ hysteresis_margin_slider_.get() });
+    }
     set_rows(rows);
 }
 

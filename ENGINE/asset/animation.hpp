@@ -16,6 +16,10 @@ struct Mix_Chunk;
 class Animation {
 
 public:
+    struct LoadDiagnostics {
+        bool cache_invalid = false;
+    };
+
     struct FrameCache {
         std::vector<SDL_Texture*> textures;
         std::vector<int> widths;
@@ -43,7 +47,7 @@ public:
 
 public:
     Animation();
-    void load(const std::string& trigger, const nlohmann::json& anim_json, class AssetInfo& info, const std::string& dir_path, const std::string& root_cache, float scale_factor, SDL_Renderer* renderer, SDL_Texture*& base_sprite, int& scaled_sprite_w, int& scaled_sprite_h, int& original_canvas_width, int& original_canvas_height, bool scaling_refresh_pending);
+    void load(const std::string& trigger, const nlohmann::json& anim_json, class AssetInfo& info, const std::string& dir_path, const std::string& root_cache, float scale_factor, SDL_Renderer* renderer, SDL_Texture*& base_sprite, int& scaled_sprite_w, int& scaled_sprite_h, int& original_canvas_width, int& original_canvas_height, bool scaling_refresh_pending, LoadDiagnostics* diagnostics = nullptr);
     SDL_Texture* get_frame(const AnimationFrame* frame) const;
     const AnimationFrame* get_first_frame(std::size_t path_index = 0) const;
     AnimationFrame* get_first_frame(std::size_t path_index = 0);
@@ -51,9 +55,9 @@ public:
     void change(AnimationFrame*& frame, bool& static_flag) const;
     void freeze();
     bool is_frozen() const;
-   bool is_static() const;
-   bool has_audio() const;
-   Mix_Chunk* audio_chunk() const;
+    bool is_static() const;
+    bool has_audio() const;
+    Mix_Chunk* audio_chunk() const;
     const AudioClip* audio_data() const;
     void clear_texture_cache();
     SDL_Texture* frame_variant(std::size_t frame_index, std::size_t variant_index) const;
@@ -77,7 +81,6 @@ public:
     int total_dy = 0;
     bool movment = false;
     bool rnd_start = false;
-    std::string on_end_mapping;
     std::string on_end_animation;
     std::vector<SDL_Texture*> frames;
     std::vector<SDL_Texture*> mask_frames;
@@ -91,9 +94,13 @@ public:
     std::size_t clamp_path_index(std::size_t index) const;
     std::size_t variant_count() const { return variant_steps_.size(); }
     const std::vector<float>& variant_steps() const { return variant_steps_; }
+    const std::vector<std::string>& child_assets() const { return child_asset_names_; }
+    std::vector<std::string>& child_assets() { return child_asset_names_; }
+    bool has_child_assets() const { return !child_asset_names_.empty(); }
 private:
     std::vector<FrameCache> frame_cache_;
     AudioClip audio_clip;
     std::vector<std::vector<AnimationFrame>> movement_paths_;
     std::vector<float> variant_steps_;
+    std::vector<std::string> child_asset_names_;
 };

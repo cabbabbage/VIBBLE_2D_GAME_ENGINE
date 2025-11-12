@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "AnimationDocument.hpp"
+#include "EditorUIPrimitives.hpp"
 #include "PreviewProvider.hpp"
 #include "string_utils.hpp"
 #include "dm_icons.hpp"
@@ -74,6 +75,26 @@ SDL_Point event_point(const SDL_Event& e) {
 bool rects_intersect(const SDL_Rect& a, const SDL_Rect& b) {
     SDL_Rect result{};
     return SDL_IntersectRect(&a, &b, &result) == SDL_TRUE;
+}
+
+int resolve_wheel_delta(const SDL_MouseWheelEvent& wheel) {
+    int delta = wheel.y;
+    if (wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+        delta = -delta;
+    }
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+    if (delta == 0) {
+        float precise = wheel.preciseY;
+        if (wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+            precise = -precise;
+        }
+        delta = static_cast<int>(std::round(precise));
+        if (delta == 0 && precise != 0.0f) {
+            delta = precise > 0.0f ? 1 : -1;
+        }
+    }
+#endif
+    return delta;
 }
 
 // --- Color helpers for SFF/SFA coloring ---
@@ -140,7 +161,7 @@ SDL_Color color_for_root_key(const std::string& key) {
     if (hue >= kOrangeMin && hue <= kOrangeMax) {
         // Push into a non-orange band while keeping distribution stable
         float span = kOrangeMax - kOrangeMin; // 25 deg
-        hue = std::fmod(kOrangeMax + (hue - kOrangeMin) + 60.0f, 360.0f); // jump past orange by +60°
+        hue = std::fmod(kOrangeMax + (hue - kOrangeMin) + 60.0f, 360.0f); // jump past orange by +60ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°
     }
 
     // Prefer vivid saturation/value ranges for stronger differentiation
@@ -177,7 +198,9 @@ SDL_Color grey_variant_for_level(SDL_Color root, int level) {
 
 namespace animation_editor {
 
-AnimationListPanel::AnimationListPanel() = default;
+AnimationListPanel::AnimationListPanel() {
+    scroll_controller_.set_step_pixels(DMButton::height() + DMSpacing::section_gap());
+}
 
 void AnimationListPanel::set_document(std::shared_ptr<AnimationDocument> document) {
     document_ = std::move(document);
@@ -186,7 +209,7 @@ void AnimationListPanel::set_document(std::shared_ptr<AnimationDocument> documen
 
 void AnimationListPanel::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
-    clamp_scroll();
+    scroll_controller_.set_bounds(bounds_);
     layout_dirty_ = true;
 }
 
@@ -228,8 +251,10 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         return;
     }
 
+    ensure_layout();
+
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    ui::draw_panel_background(renderer, bounds_);
 
     SDL_Rect clip = bounds_;
     const int inset = DMStyles::BevelDepth();
@@ -241,12 +266,11 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         SDL_RenderSetClipRect(renderer, &clip);
     }
 
-    const DMButtonStyle& style = DMStyles::ListButton();
-
+    const DMButtonStyle& list_style = DMStyles::ListButton();
     const int row_padding = DMSpacing::small_gap();
 
-    for (size_t i = 0; i < display_rows_.size(); ++i) {
-        const SDL_Rect& rect = row_bounds_.at(i);
+    for (size_t i = 0; i < display_rows_.size() && i < row_geometry_.size(); ++i) {
+        SDL_Rect rect = scroll_controller_.apply(row_geometry_[i].outer);
         if (!rects_intersect(rect, bounds_)) {
             continue;
         }
@@ -256,69 +280,87 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         const bool selected = selected_animation_id_ && *selected_animation_id_ == row.id;
         const bool hovered = hovered_row_ && *hovered_row_ == i;
 
-        // Compute per-row base fill color from its root SFF id
-        SDL_Color base = DMStyles::ListButton().bg;
+        SDL_Color base = list_style.bg;
         auto it_root = root_for_id_.find(row.id);
         if (it_root != root_for_id_.end()) {
             SDL_Color root_col = color_for_root_key(it_root->second);
             base = grey_variant_for_level(root_col, row.level);
         }
-        SDL_Color fill = base;
-        if (hovered) {
-            fill = dm_draw::LightenColor(base, 0.08f);
-        }
-        // Keep the unique background color for selected items and use an orange outline to highlight.
-        dm_draw::DrawBeveledRect(renderer, rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        SDL_Color fill = hovered ? dm_draw::LightenColor(base, 0.08f) : base;
+
+        dm_draw::DrawBeveledRect(renderer,
+                                 rect,
+                                 DMStyles::CornerRadius(),
+                                 DMStyles::BevelDepth(),
+                                 fill,
+                                 DMStyles::HighlightColor(),
+                                 DMStyles::ShadowColor(),
+                                 false,
+                                 DMStyles::HighlightIntensity(),
+                                 DMStyles::ShadowIntensity());
+
         SDL_Color border_col = dm_draw::DarkenColor(base, 0.45f);
         int border_thickness = 1;
         if (selected) {
-            border_col = DMStyles::AccentButton().bg; // orange highlight
             border_thickness = 2;
+            border_col = DMStyles::AccentButton().bg;
         }
         dm_draw::DrawRoundedOutline(renderer, rect, DMStyles::CornerRadius(), border_thickness, border_col);
 
-        int content_x = rect.x + row_padding + indent_for_level(row.level);
-        int content_y = rect.y + row_padding;
-        const int content_h = rect.h - row_padding * 2;
+        const RowGeometry& geometry = row_geometry_[i];
+        int content_x = rect.x + geometry.content_offset_x;
+        int content_y = rect.y + geometry.content_offset_y;
+        SDL_Rect preview_rect{rect.x + geometry.preview_rel.x,
+                              rect.y + geometry.preview_rel.y,
+                              geometry.preview_rel.w,
+                              geometry.preview_rel.h};
 
         if (preview_provider_) {
             SDL_Texture* texture = preview_provider_->get_preview_texture(renderer, row.id);
             if (texture) {
-                const int thumb_size = content_h;
-                SDL_Rect thumb_rect{content_x, rect.y + (rect.h - thumb_size) / 2, thumb_size, thumb_size};
                 int tex_w = 0;
                 int tex_h = 0;
                 SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h);
-                if (tex_w > 0 && tex_h > 0) {
-                    float scale = std::min(static_cast<float>(thumb_rect.w) / static_cast<float>(tex_w), static_cast<float>(thumb_rect.h) / static_cast<float>(tex_h));
+                if (tex_w > 0 && tex_h > 0 && preview_rect.w > 0 && preview_rect.h > 0) {
+                    float scale = std::min(static_cast<float>(preview_rect.w) / static_cast<float>(tex_w),
+                                           static_cast<float>(preview_rect.h) / static_cast<float>(tex_h));
                     int draw_w = std::max(1, static_cast<int>(tex_w * scale));
                     int draw_h = std::max(1, static_cast<int>(tex_h * scale));
-                    SDL_Rect dst{thumb_rect.x + (thumb_rect.w - draw_w) / 2,
-                                 thumb_rect.y + (thumb_rect.h - draw_h) / 2, draw_w, draw_h};
+                    SDL_Rect dst{preview_rect.x + (preview_rect.w - draw_w) / 2,
+                                 preview_rect.y + (preview_rect.h - draw_h) / 2,
+                                 draw_w,
+                                 draw_h};
                     SDL_RenderCopy(renderer, texture, nullptr, &dst);
+                    content_x = preview_rect.x + preview_rect.w + row_padding;
                 }
-                content_x += thumb_rect.w + row_padding;
             }
         }
 
         DMLabelStyle label_style = DMStyles::Label();
-        label_style.color = style.label.color;
+        label_style.color = list_style.label.color;
         label_style.font_size = std::max(1, static_cast<int>(std::round(label_style.font_size * size_factor)));
         DMFontCache::instance().draw_text(renderer, label_style, row.id, content_x, content_y);
 
-        // Draw delete button (X) in top-right corner
-        const int delete_button_size = 16;
-        const int delete_x = rect.x + rect.w - row_padding - delete_button_size;
-        const int delete_y = rect.y + row_padding;
-        SDL_Rect delete_rect{delete_x, delete_y, delete_button_size, delete_button_size};
-
-        // Style the delete button - use DeleteButton style but smaller
+        SDL_Rect delete_rect{rect.x + geometry.delete_button_rel.x,
+                             rect.y + geometry.delete_button_rel.y,
+                             geometry.delete_button_rel.w,
+                             geometry.delete_button_rel.h};
         const DMButtonStyle& delete_style = DMStyles::DeleteButton();
-        SDL_Color delete_bg = hovered_delete_row_ && *hovered_delete_row_ == i ? delete_style.hover_bg : delete_style.bg;
-        dm_draw::DrawBeveledRect(renderer, delete_rect, DMStyles::CornerRadius(), 1, delete_bg,
-                                DMStyles::HighlightColor(), DMStyles::ShadowColor(),
-                                false, DMStyles::HighlightIntensity() * 0.5f, DMStyles::ShadowIntensity() * 0.5f);
-
+        SDL_Color delete_bg = delete_style.bg;
+        if (hovered_delete_row_ && *hovered_delete_row_ == i) {
+            delete_bg = delete_style.hover_bg;
+        }
+        dm_draw::DrawBeveledRect(renderer,
+                                 delete_rect,
+                                 DMStyles::CornerRadius(),
+                                 1,
+                                 delete_bg,
+                                 DMStyles::HighlightColor(),
+                                 DMStyles::ShadowColor(),
+                                 false,
+                                 DMStyles::HighlightIntensity() * 0.5f,
+                                 DMStyles::ShadowIntensity() * 0.5f);
+        dm_draw::DrawRoundedOutline(renderer, delete_rect, DMStyles::CornerRadius(), 1, delete_style.border);
         DMLabelStyle delete_label_style{delete_style.label.font_path, 12, delete_style.text};
         std::string delete_text{DMIcons::Close()};
         SDL_Point delete_size = DMFontCache::instance().measure_text(delete_label_style, delete_text);
@@ -349,9 +391,22 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
                 badge_x = min_badge_x;
             }
             SDL_Rect badge_rect{badge_x, rect.y + std::max(0, (rect.h - badge_height) / 2), badge_width, badge_height};
-            dm_draw::DrawBeveledRect(renderer, badge_rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), badge_style->bg, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+            dm_draw::DrawBeveledRect(renderer,
+                                     badge_rect,
+                                     DMStyles::CornerRadius(),
+                                     DMStyles::BevelDepth(),
+                                     badge_style->bg,
+                                     DMStyles::HighlightColor(),
+                                     DMStyles::ShadowColor(),
+                                     false,
+                                     DMStyles::HighlightIntensity(),
+                                     DMStyles::ShadowIntensity());
             dm_draw::DrawRoundedOutline(renderer, badge_rect, DMStyles::CornerRadius(), 1, badge_style->border);
-            DMFontCache::instance().draw_text(renderer, badge_label, it->second, badge_rect.x + badge_padding, badge_rect.y + (badge_rect.h - badge_size.y) / 2);
+            DMFontCache::instance().draw_text(renderer,
+                                              badge_label,
+                                              it->second,
+                                              badge_rect.x + badge_padding,
+                                              badge_rect.y + (badge_rect.h - badge_size.y) / 2);
             badge_x -= badge_padding;
         }
     }
@@ -360,19 +415,27 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
 }
 
 bool AnimationListPanel::handle_event(const SDL_Event& e) {
+    ensure_layout();
+
     if (e.type == SDL_MOUSEWHEEL) {
         int mx = 0;
         int my = 0;
         SDL_GetMouseState(&mx, &my);
         SDL_Point mouse{mx, my};
-        if (!SDL_PointInRect(&mouse, &bounds_) && !DMWidgetsSliderScrollCaptured()) {
+        const bool inside_bounds = SDL_PointInRect(&mouse, &bounds_) != 0;
+        if (!inside_bounds && !DMWidgetsSliderScrollCaptured()) {
             return false;
         }
-        const int step = DMButton::height() + DMSpacing::section_gap();
-        scroll_offset_ -= e.wheel.y * step;
-        clamp_scroll();
-        layout_dirty_ = true;
-        return true;
+        int delta = resolve_wheel_delta(e.wheel);
+        if (delta == 0) {
+            return false;
+        }
+        bool changed = scroll_controller_.apply_wheel_delta(delta);
+        if (changed) {
+            hovered_row_.reset();
+            hovered_delete_row_.reset();
+        }
+        return changed;
     }
 
     if (e.type == SDL_MOUSEMOTION) {
@@ -383,20 +446,18 @@ bool AnimationListPanel::handle_event(const SDL_Event& e) {
             return false;
         }
         hovered_row_ = row_index_at_point(p);
-
-        // Check if hovering over delete button
         hovered_delete_row_.reset();
         if (hovered_row_) {
-            const SDL_Rect& rect = row_bounds_[*hovered_row_];
-            const int delete_button_size = 16;
-            const int delete_x = rect.x + rect.w - DMSpacing::small_gap() - delete_button_size;
-            const int delete_y = rect.y + DMSpacing::small_gap();
-            SDL_Rect delete_rect{delete_x, delete_y, delete_button_size, delete_button_size};
+            const RowGeometry& geometry = row_geometry_.at(*hovered_row_);
+            SDL_Rect delete_rect{geometry.outer.x + geometry.delete_button_rel.x,
+                                 geometry.outer.y + geometry.delete_button_rel.y,
+                                 geometry.delete_button_rel.w,
+                                 geometry.delete_button_rel.h};
+            delete_rect = scroll_controller_.apply(delete_rect);
             if (SDL_PointInRect(&p, &delete_rect)) {
                 hovered_delete_row_ = *hovered_row_;
             }
         }
-
         return hovered_row_.has_value() || hovered_delete_row_.has_value();
     }
 
@@ -408,35 +469,30 @@ bool AnimationListPanel::handle_event(const SDL_Event& e) {
 
         auto index = row_index_at_point(p);
         if (!index) {
-            if (e.button.button == SDL_BUTTON_LEFT) {
-                if (selected_animation_id_) {
-                    selected_animation_id_.reset();
-                    if (on_selection_changed_) {
-                        on_selection_changed_(std::nullopt);
-                    }
+            if (e.button.button == SDL_BUTTON_LEFT && selected_animation_id_) {
+                selected_animation_id_.reset();
+                if (on_selection_changed_) {
+                    on_selection_changed_(std::nullopt);
                 }
             }
             return true;
         }
 
         const std::string& animation_id = display_rows_.at(*index).id;
-
-        // Check if clicking on delete button (left click only)
         if (e.button.button == SDL_BUTTON_LEFT) {
-            const SDL_Rect& rect = row_bounds_[*index];
-            const int delete_button_size = 16;
-            const int delete_x = rect.x + rect.w - DMSpacing::small_gap() - delete_button_size;
-            const int delete_y = rect.y + DMSpacing::small_gap();
-            SDL_Rect delete_rect{delete_x, delete_y, delete_button_size, delete_button_size};
+            const RowGeometry& geometry = row_geometry_.at(*index);
+            SDL_Rect delete_rect{geometry.outer.x + geometry.delete_button_rel.x,
+                                 geometry.outer.y + geometry.delete_button_rel.y,
+                                 geometry.delete_button_rel.w,
+                                 geometry.delete_button_rel.h};
+            delete_rect = scroll_controller_.apply(delete_rect);
             if (SDL_PointInRect(&p, &delete_rect)) {
-                // Clicked on delete button - call delete callback
                 if (on_delete_animation_) {
                     on_delete_animation_(animation_id);
                 }
                 return true;
             }
 
-            // Clicked on row - select it
             if (!selected_animation_id_ || *selected_animation_id_ != animation_id) {
                 selected_animation_id_ = animation_id;
                 scroll_selection_into_view();
@@ -471,8 +527,7 @@ void AnimationListPanel::rebuild_rows() {
     if (!document_) {
         if (!display_rows_.empty()) {
             display_rows_.clear();
-            row_bounds_.clear();
-            scroll_offset_ = 0;
+            row_geometry_.clear();
             content_height_ = 0;
             hovered_row_.reset();
             layout_dirty_ = true;
@@ -612,7 +667,7 @@ void AnimationListPanel::rebuild_rows() {
 
     if (changed) {
         display_rows_ = std::move(flattened);
-        row_bounds_.assign(display_rows_.size(), SDL_Rect{});
+        row_geometry_.clear();
         layout_dirty_ = true;
         hovered_row_.reset();
     }
@@ -636,85 +691,99 @@ void AnimationListPanel::layout_rows() {
     const int padding = DMSpacing::panel_padding();
     const int gap = DMSpacing::small_gap();
     const int base_width = std::max(0, bounds_.w - padding * 2);
+    const int row_padding = DMSpacing::small_gap();
 
-    row_bounds_.assign(display_rows_.size(), SDL_Rect{});
+    row_geometry_.clear();
+    row_geometry_.reserve(display_rows_.size());
 
-    int y = bounds_.y + padding - scroll_offset_;
+    int total_height = 0;
+    int cursor_y = bounds_.y + padding;
+
     for (size_t i = 0; i < display_rows_.size(); ++i) {
-        int level = display_rows_[i].level;
-        int row_height = row_height_for_level(level);
-        // Scale width for derived (smaller) animations so they shrink horizontally as well.
+        const int level = display_rows_[i].level;
+        const int row_height = row_height_for_level(level);
         const float width_factor = size_factor_for_level(level);
-        int row_width = std::max(1, static_cast<int>(std::round(base_width * width_factor)));
-        SDL_Rect rect{bounds_.x + padding, y, row_width, row_height};
-        row_bounds_[i] = rect;
-        y += row_height + gap;
-    }
+        const int row_width = std::max(1, static_cast<int>(std::round(base_width * width_factor)));
+        SDL_Rect rect{bounds_.x + padding, cursor_y, row_width, row_height};
 
-    content_height_ = padding * 2;
-    if (!display_rows_.empty()) {
-        int total_height = 0;
-        for (const auto& row : display_rows_) {
-            total_height += row_height_for_level(row.level);
+        RowGeometry geometry;
+        geometry.outer = rect;
+        geometry.content_offset_x = row_padding + indent_for_level(level);
+        geometry.content_offset_y = row_padding;
+        geometry.content_height = std::max(1, rect.h - row_padding * 2);
+        const int thumb_size = geometry.content_height;
+        geometry.preview_rel = SDL_Rect{geometry.content_offset_x,
+                                        std::max(0, (rect.h - thumb_size) / 2),
+                                        thumb_size,
+                                        thumb_size};
+        const int delete_button_size = 16;
+        geometry.delete_button_rel = SDL_Rect{rect.w - row_padding - delete_button_size,
+                                              row_padding,
+                                              delete_button_size,
+                                              delete_button_size};
+
+        row_geometry_.push_back(geometry);
+
+        cursor_y += row_height;
+        total_height += row_height;
+        if (i + 1 < display_rows_.size()) {
+            cursor_y += gap;
+            total_height += gap;
         }
-        content_height_ += total_height;
-        content_height_ += gap * static_cast<int>(display_rows_.size() - 1);
     }
 
-    clamp_scroll();
-}
-
-void AnimationListPanel::clamp_scroll() {
-    int viewport = std::max(0, bounds_.h);
-    int max_offset = std::max(0, content_height_ - viewport);
-    if (scroll_offset_ < 0) {
-        scroll_offset_ = 0;
-    } else if (scroll_offset_ > max_offset) {
-        scroll_offset_ = max_offset;
-    }
+    content_height_ = padding * 2 + total_height;
+    scroll_controller_.set_content_height(content_height_);
+    scroll_controller_.clamp();
 }
 
 void AnimationListPanel::scroll_selection_into_view() {
     if (!selected_animation_id_) {
         return;
     }
-    if (layout_dirty_) {
-        layout_rows();
-    }
+    ensure_layout();
+
     auto it = std::find_if(display_rows_.begin(), display_rows_.end(), [&](const DisplayRow& row) {
         return row.id == *selected_animation_id_;
     });
     if (it == display_rows_.end()) {
         return;
     }
+
     size_t index = static_cast<size_t>(std::distance(display_rows_.begin(), it));
-    if (index >= row_bounds_.size()) {
+    if (index >= row_geometry_.size()) {
         return;
     }
-    SDL_Rect rect = row_bounds_[index];
-    const int top = rect.y;
-    const int bottom = rect.y + rect.h;
+
+    const SDL_Rect& target = row_geometry_[index].outer;
     const int viewport_top = bounds_.y;
     const int viewport_bottom = bounds_.y + bounds_.h;
+    const int current_scroll = scroll_controller_.scroll();
 
-    if (top < viewport_top) {
-        scroll_offset_ -= (viewport_top - top);
-        clamp_scroll();
-        layout_rows();
-    } else if (bottom > viewport_bottom) {
-        scroll_offset_ += (bottom - viewport_bottom);
-        clamp_scroll();
-        layout_rows();
+    const int row_top = target.y - current_scroll;
+    const int row_bottom = row_top + target.h;
+
+    if (row_top < viewport_top) {
+        scroll_controller_.set_scroll(target.y - viewport_top);
+    } else if (row_bottom > viewport_bottom) {
+        scroll_controller_.set_scroll(target.y + target.h - viewport_bottom);
     }
 }
-
 std::optional<size_t> AnimationListPanel::row_index_at_point(const SDL_Point& p) const {
-    for (size_t i = 0; i < row_bounds_.size(); ++i) {
-        if (SDL_PointInRect(&p, &row_bounds_[i])) {
+    for (size_t i = 0; i < row_geometry_.size(); ++i) {
+        SDL_Rect rect = scroll_controller_.apply(row_geometry_[i].outer);
+        if (SDL_PointInRect(&p, &rect)) {
             return i;
         }
     }
     return std::nullopt;
 }
 
+void AnimationListPanel::ensure_layout() const {
+    if (!layout_dirty_) {
+        return;
+    }
+    auto* self = const_cast<AnimationListPanel*>(this);
+    self->layout_rows();
+}
 }

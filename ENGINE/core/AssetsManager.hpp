@@ -39,10 +39,6 @@ class AnimationEditorWindow;
 namespace devmode::core {
 class ManifestStore;
 }
-namespace render_pipeline::shading {
-struct ReactiveShadowSettings;
-}
-
 class Assets {
 public:
     Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
@@ -66,6 +62,8 @@ public:
     void set_dev_mode(bool mode);
     void set_force_high_quality_rendering(bool enable);
     bool force_high_quality_rendering() const { return force_high_quality_rendering_; }
+    void set_render_dark_mask_enabled(bool enabled);
+    bool render_dark_mask_enabled() const { return render_dark_mask_enabled_; }
     void set_render_suppressed(bool suppressed);
     void set_input(Input* m);
     Input* get_input() const { return input; }
@@ -159,8 +157,6 @@ public:
 
     Global_Light_Source* map_light_source();
     const Global_Light_Source* map_light_source() const;
-    render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings();
-    const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
     const LightMap* light_map() const;
     LightMap*       light_map();
     LightMapManager*       light_map_manager();
@@ -212,8 +208,6 @@ private:
     void update_scene_render_quality();
     int  saved_render_quality_percent() const;
     int  effective_render_quality_percent() const;
-    void notify_reactive_shadow_settings_about_to_change();
-    void notify_reactive_shadow_settings_available();
     void sync_dev_controls_current_room(Room* room, bool force_refresh = false);
     void reset_dev_controls_current_room_cache();
     void update_motion_smoothing_settings(const camera::RealismSettings& settings);
@@ -256,6 +250,7 @@ private:
     bool dev_mode = false;
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
+    bool render_dark_mask_enabled_ = true;
     world::Grid world_grid_{};
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;

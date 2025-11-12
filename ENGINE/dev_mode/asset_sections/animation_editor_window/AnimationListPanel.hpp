@@ -4,10 +4,12 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include <SDL.h>
+
+#include "EditorUIPrimitives.hpp"
 
 namespace animation_editor {
 
@@ -33,9 +35,9 @@ class AnimationListPanel {
   private:
     void rebuild_rows();
     void layout_rows();
-    void clamp_scroll();
     void scroll_selection_into_view();
     std::optional<size_t> row_index_at_point(const SDL_Point& p) const;
+    void ensure_layout() const;
 
   private:
     struct DisplayRow {
@@ -44,8 +46,17 @@ class AnimationListPanel {
         bool missing_source = false;
     };
 
+    struct RowGeometry {
+        SDL_Rect outer{0, 0, 0, 0};
+        SDL_Rect delete_button_rel{0, 0, 0, 0};
+        SDL_Rect preview_rel{0, 0, 0, 0};
+        int content_offset_x = 0;
+        int content_offset_y = 0;
+        int content_height = 0;
+    };
+
     std::shared_ptr<AnimationDocument> document_;
-    std::vector<SDL_Rect> row_bounds_;
+    std::vector<RowGeometry> row_geometry_;
     std::vector<DisplayRow> display_rows_;
     std::optional<std::string> start_animation_id_;
     std::shared_ptr<PreviewProvider> preview_provider_;
@@ -56,9 +67,9 @@ class AnimationListPanel {
     std::optional<size_t> hovered_row_;
     std::optional<size_t> hovered_delete_row_;
     SDL_Rect bounds_{0, 0, 0, 0};
-    int scroll_offset_ = 0;
     int content_height_ = 0;
-    bool layout_dirty_ = true;
+    mutable bool layout_dirty_ = true;
+    ui::ScrollController scroll_controller_;
 
     // Maps each animation id to its root SFF id for coloring.
     std::unordered_map<std::string, std::string> root_for_id_;

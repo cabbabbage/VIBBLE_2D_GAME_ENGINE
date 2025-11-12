@@ -934,6 +934,7 @@ void DevControls::set_enabled(bool enabled) {
         if (camera_was_visible && camera_panel_) {
             camera_panel_->open();
         }
+        apply_dark_mask_visibility();
         const char* msg_enable_done = "[DevControls] enable flow complete";
         dev_mode_trace(msg_enable_done);
         std::cout << msg_enable_done << "\n";
@@ -956,6 +957,9 @@ void DevControls::set_enabled(bool enabled) {
         }
         close_camera_panel();
         restore_filter_hidden_assets();
+        if (assets_) {
+            assets_->set_render_dark_mask_enabled(true);
+        }
         const char* msg_disable_done = "[DevControls] disable flow complete";
         dev_mode_trace(msg_disable_done);
         std::cout << msg_disable_done << "\n";
@@ -976,6 +980,7 @@ void DevControls::set_enabled(bool enabled) {
 
 void DevControls::update(const Input& input) {
     if (!enabled_) return;
+    apply_dark_mask_visibility();
 
     const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (ctrl && input.wasScancodePressed(SDL_SCANCODE_M)) {
@@ -1677,26 +1682,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-        bool drew_indicator = false;
-        if (const Global_Light_Source* light = assets_->map_light_source()) {
-            SDL_Point start_map = light->get_direction_reference();
-            SDL_Point end_map = light->get_direction_target();
-            SDL_FPoint start_f = cam.map_to_screen(start_map);
-            SDL_FPoint end_f = cam.map_to_screen(end_map);
-            SDL_Point start{static_cast<int>(std::lround(start_f.x)), static_cast<int>(std::lround(start_f.y))};
-            SDL_Point end{static_cast<int>(std::lround(end_f.x)), static_cast<int>(std::lround(end_f.y))};
-            SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
-            SDL_RenderDrawLine(renderer, start.x, start.y, end.x, end.y);
-            SDL_Rect tip{ end.x - 4, end.y - 4, 8, 8 };
-            SDL_RenderFillRect(renderer, &tip);
-            drew_indicator = true;
-        }
-
-        if (!drew_indicator) {
-            SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
-            SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y - 6, screen_center.x + 6, screen_center.y + 6);
-            SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y + 6, screen_center.x + 6, screen_center.y - 6);
-        }
+        SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
+        SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y - 6, screen_center.x + 6, screen_center.y + 6);
+        SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y + 6, screen_center.x + 6, screen_center.y - 6);
 
         SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
@@ -1904,18 +1892,6 @@ void DevControls::notify_spawn_group_removed(const std::string& spawn_id) {
     remove_spawn_group_assets(spawn_id);
     // Clear any flip override associated with this spawn group
     Asset::ClearFlipOverrideForSpawnId(spawn_id);
-}
-
-void DevControls::refresh_reactive_shadow_settings() {
-    if (map_mode_ui_) {
-        map_mode_ui_->refresh_reactive_shadow_settings();
-    }
-}
-
-void DevControls::clear_reactive_shadow_settings() {
-    if (map_mode_ui_) {
-        map_mode_ui_->clear_reactive_shadow_settings();
-    }
 }
 
 const std::vector<Asset*>& DevControls::get_selected_assets() const {
@@ -3215,6 +3191,29 @@ void DevControls::refresh_active_asset_filters() {
             asset->set_selected(false);
         }
     }
+    apply_dark_mask_visibility();
+}
+
+void DevControls::apply_dark_mask_visibility() {
+    if (!assets_) {
+        return;
+    }
+    const bool force_dark_mask = lighting_section_forces_dark_mask();
+    const bool should_render = asset_filter_.render_dark_mask_enabled() || force_dark_mask;
+    assets_->set_render_dark_mask_enabled(should_render);
+}
+
+bool DevControls::lighting_section_forces_dark_mask() const {
+    if (!enabled_) {
+        return false;
+    }
+    if (mode_ != Mode::RoomEditor) {
+        return false;
+    }
+    if (!room_editor_ || !room_editor_->is_enabled()) {
+        return false;
+    }
+    return room_editor_->is_asset_info_lighting_section_expanded();
 }
 
 void DevControls::reset_asset_filters() {

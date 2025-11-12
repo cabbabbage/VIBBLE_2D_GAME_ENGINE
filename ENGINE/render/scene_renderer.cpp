@@ -6,7 +6,6 @@
 #include "render/camera.hpp"
 #include "render/asset_light_renderer.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettingsJSON.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/log.hpp"
 #include "utils/ranged_color.hpp"
@@ -83,13 +82,11 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
   screen_height_(screen_height),
   main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}),
-  reactive_shadow_settings_(render_pipeline::shading::sanitize_reactive_shadow_settings({})),
   render_pipeline_(renderer,
                     SceneLighting{ assets->getView(),
                                    main_light_source_,
                                    assets->player,
                                    nullptr,
-                                   &reactive_shadow_settings_,
                                    &assets->world_grid() }),
   update_map_light_enabled_(devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true))
 {
@@ -114,9 +111,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
     } else {
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
-    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
-    runtime_lighting_sampler_ = std::make_unique<runtime_lighting::RuntimeLightingSampler>(assets_);
-    main_light_source_.update(std::nullopt, std::nullopt);
     tile_renderer_ = std::make_unique<GridTileRenderer>(assets_);
 }
 
@@ -128,6 +122,16 @@ SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
 
 void SceneRenderer::set_update_map_light_enabled(bool enabled) {
     update_map_light_enabled_ = enabled;
+}
+
+void SceneRenderer::set_dark_mask_enabled(bool enabled) {
+    if (dark_mask_enabled_ == enabled) {
+        return;
+    }
+    dark_mask_enabled_ = enabled;
+    if (!dark_mask_enabled_) {
+        destroy_darkness_overlay();
+    }
 }
 
 LightMap* SceneRenderer::light_map() {
@@ -180,15 +184,6 @@ void SceneRenderer::apply_map_light_config(const nlohmann::json& data){
     map_clear_color_ = utils::color::resolve_ranged_color(
         data.value("map_color", nlohmann::json{}),
         SDL_Color{0, 0, 0, 255});
-
-    using namespace render_pipeline::shading;
-    auto reactive_it = data.find("reactive_shadows");
-    if (reactive_it != data.end()) {
-        reactive_shadow_settings_ = reactive_shadow_settings_from_json(*reactive_it, reactive_shadow_settings_);
-    } else {
-        reactive_shadow_settings_ = sanitize_reactive_shadow_settings(reactive_shadow_settings_);
-    }
-    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
 
 }
 
@@ -303,22 +298,87 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
 
     return SDL_FRect{ left, top, width, height };
 }
+
+SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
+                                                 SDL_Point world_point,
+                                                 int fw,
+                                                 int fh,
+                                                 float inv_scale,
+                                                 int min_w,
+                                                 int min_h,
+                                                 float reference_screen_height) {
+    if (!parent || fw <= 0 || fh <= 0) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
+    float base_scale = parent->smoothed_scale();
+    if (!std::isfinite(base_scale) || base_scale <= 0.0f) {
+        base_scale = 1.0f;
+    }
+    const float scaled_fw = static_cast<float>(fw) * base_scale;
+    const float scaled_fh = static_cast<float>(fh) * base_scale;
+    const float base_sw   = scaled_fw * inv_scale;
+    const float base_sh   = scaled_fh * inv_scale;
+
+    camera& cam = assets_->getView();
+    const camera::RenderSmoothingKey smoothing_key =
+        reinterpret_cast<camera::RenderSmoothingKey>(parent);
+    camera::RenderEffects ef = cam.compute_render_effects(
+        world_point,
+        base_sh,
+        reference_screen_height,
+        smoothing_key);
+    SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{
+        static_cast<float>(world_point.x),
+        static_cast<float>(world_point.y)
+    });
+    ef.screen_position = screen;
+
+    float center_x = ef.screen_position.x;
+    if (assets_ && assets_->player != parent) {
+        world::Grid& grid = assets_->world_grid();
+        center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
+    }
+
+    const bool apply_distance = parent->info && parent->info->apply_distance_scaling;
+    const bool apply_vertical = parent->info && parent->info->apply_vertical_scaling;
+    const float distance_scale = apply_distance ? ef.distance_scale : 1.0f;
+    const float vertical_scale = apply_vertical ? ef.vertical_scale : 1.0f;
+
+    float width  = base_sw * distance_scale;
+    float height = (base_sh * distance_scale) * vertical_scale;
+
+    const float min_w_f = static_cast<float>(min_w);
+    const float min_h_f = static_cast<float>(min_h);
+    if (width < min_w_f && height < min_h_f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    bool enforced_min = false;
+    if (width < min_w_f) {
+        width = min_w_f;
+        enforced_min = true;
+    }
+    if (height < min_h_f) {
+        height = min_h_f;
+        enforced_min = true;
+    }
+
+    width  = std::max(width, 1.0f);
+    height = std::max(height, 1.0f);
+
+    const float left = center_x - width * 0.5f;
+    const float top  = ef.screen_position.y - height;
+
+    if (enforced_min) {
+        width  = static_cast<float>(std::max(1, static_cast<int>(std::lround(width))));
+        height = static_cast<float>(std::max(1, static_cast<int>(std::lround(height))));
+    }
+
+    return SDL_FRect{ left, top, width, height };
+}
 void SceneRenderer::render(){
-    static int render_call_count=0; ++render_call_count;
     ++frame_counter_;
 
-    SDL_Point orbit_center{ screen_width_ / 2, screen_height_ / 2 };
-    main_light_source_.set_screen_orbit_center(orbit_center);
-
-    const camera* camera_state_ptr = assets_ ? &assets_->getView() : nullptr;
-    if (camera_state_ptr) {
-        main_light_source_.set_direction_reference_world(camera_state_ptr->get_screen_center());
-    }
-
-    bool should_update_light = true;
-    if (assets_ && assets_->is_dev_mode()) {
-        should_update_light = update_map_light_enabled_;
-    }
 
     if (light_map_ && !chunk_lighting_suspended_){
         render_pipeline_.lighting().light_map_sampler = light_map_.get();
@@ -326,12 +386,12 @@ void SceneRenderer::render(){
         render_pipeline_.lighting().light_map_sampler = nullptr;
     }
 
-    render_pipeline_.lighting().reactive_shadow_settings = &reactive_shadow_settings_;
-
     const SDL_Color map_light_color = main_light_source_.get_current_color();
     const float     map_light_opacity =
         std::clamp(static_cast<float>(map_light_color.a) / 255.0f, 0.0f, 1.0f);
     const float light_overlay_visibility = map_light_opacity;
+    const float frame_flicker_time_seconds =
+        static_cast<float>(SDL_GetTicks64() % 1000000ULL) * 0.001f;
 
     SDL_SetRenderTarget(renderer_,nullptr);
     SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
@@ -362,12 +422,6 @@ void SceneRenderer::render(){
         SDL_SetRenderDrawBlendMode(renderer_, previous_mode);
         rendered_light_map = true;
     };
-
-    if (runtime_lighting_sampler_) {
-        runtime_lighting_sampler_->set_assets(assets_);
-        runtime_lighting_sampler_->begin_frame();
-        inject_map_light_sample();
-    }
 
     light_overlay_sources_.clear();
 
@@ -514,6 +568,61 @@ void SceneRenderer::render(){
                 enqueue_command(a, final_tex, nullptr, dst, /*suppress_sprite_draw=*/true);
             }
 
+            if (!a->animation_children().empty()) {
+                const auto& child_slots = a->animation_children();
+                for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
+                    const auto& attachment = child_slots[child_index];
+                    if (!attachment.visible || !attachment.animation || !attachment.current_frame) {
+                        continue;
+                    }
+                    SDL_Texture* child_tex = attachment.animation->get_frame(attachment.current_frame);
+                    if (!child_tex) {
+                        continue;
+                    }
+                    int child_fw = attachment.cached_w;
+                    int child_fh = attachment.cached_h;
+                    if ((child_fw == 0 || child_fh == 0)) {
+                        SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh);
+                        if (child_fw > 0 && child_fh > 0) {
+                            auto& mutable_slot = const_cast<Asset::AnimationChildAttachment&>(child_slots[child_index]);
+                            mutable_slot.cached_w = child_fw;
+                            mutable_slot.cached_h = child_fh;
+                        }
+                    }
+                    SDL_FRect child_rect = get_child_position_rect(
+                        a,
+                        attachment.world_pos,
+                        child_fw,
+                        child_fh,
+                        inv_scale,
+                        min_w,
+                        min_h,
+                        player_sh);
+                    if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
+                        continue;
+                    }
+                    AssetRenderCommand child_cmd;
+                    child_cmd.asset = a;
+                    child_cmd.final_texture = child_tex;
+                    child_cmd.source_texture = child_tex;
+                    child_cmd.dst = child_rect;
+                    child_cmd.highlighted = a->is_highlighted();
+                    child_cmd.selected = a->is_selected();
+                    child_cmd.flipped = a->flipped;
+                    child_cmd.alpha = a ? a->smoothed_alpha() : 1.0f;
+                    if (!std::isfinite(child_cmd.alpha)) {
+                        child_cmd.alpha = 1.0f;
+                    }
+                    child_cmd.alpha = std::clamp(child_cmd.alpha, 0.0f, 1.0f);
+                    child_cmd.rotation_degrees = attachment.rotation_degrees;
+                    if (std::fabs(attachment.rotation_degrees) > std::numeric_limits<float>::epsilon()) {
+                        child_cmd.has_custom_pivot = true;
+                        child_cmd.rotation_pivot = SDL_FPoint{ child_rect.w * 0.5f, child_rect.h };
+                    }
+                    remaining_commands_.push_back(std::move(child_cmd));
+                }
+            }
+
             if (has_light_sources && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
                 bool has_front_lights         = false;
                 bool has_back_lights          = false;
@@ -523,7 +632,9 @@ void SceneRenderer::render(){
                     has_front_lights         |= light.in_front;
                     has_back_lights          |= light.behind;
                     has_dark_mask_lights     |= light.render_to_dark_mask;
-                    has_alpha_mask_only_lights |= light.render_front_and_back_to_asset_alpha_mask;
+                    has_alpha_mask_only_lights |=
+                        light.render_front_and_back_to_asset_alpha_mask && !light.in_front &&
+                        !light.behind;
                     if (has_front_lights && has_back_lights && has_dark_mask_lights && has_alpha_mask_only_lights) {
                         break;
                     }
@@ -587,7 +698,8 @@ void SceneRenderer::render(){
                                                               src,
                                                               darkness_overlay_vertices_,
                                                               darkness_overlay_indices_,
-                                                              light_overlay_visibility);
+                                                              light_overlay_visibility,
+                                                              frame_flicker_time_seconds);
                             light_renderer.draw_behind();
                         }
                         has_front_light = light_overlay_visibility > 0.0f && src.has_front_lights;
@@ -629,15 +741,15 @@ void SceneRenderer::render(){
                     SDL_FRect orect = cmd.dst;
                     orect.x += o.x * outline_px;
                     orect.y += o.y * outline_px;
-                    SDL_RenderCopyExF(
-                        renderer_,
-                        tex,
-                        nullptr,
-                        &orect,
-                        0.0,
-                        nullptr,
-                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
-                    );
+                SDL_RenderCopyExF(
+                    renderer_,
+                    tex,
+                    nullptr,
+                    &orect,
+                    cmd.rotation_degrees,
+                    cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
+                    cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
+                );
                 }
 
                 // Restore defaults on the texture before the base pass
@@ -807,8 +919,8 @@ void SceneRenderer::render(){
                     cmd.source_texture,
                     nullptr,
                     &cmd.dst,
-                    0.0,
-                    nullptr,
+                    cmd.rotation_degrees,
+                    cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
                     cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
                 );
             }
@@ -831,33 +943,15 @@ void SceneRenderer::render(){
 
 
         render_commands(texture_commands_, /*overlay_passed=*/false);
-        runtime_lighting::RuntimeLightingFrame runtime_frame;
-        if (runtime_lighting_sampler_ && assets_) {
-            runtime_frame = runtime_lighting_sampler_->gather(light_overlay_sources_, assets_->getView());
-        }
-
-        if (should_update_light) {
-            std::optional<SDL_FPoint> aggregated_target;
-            std::optional<SDL_FPoint> aggregated_direction;
-            if (runtime_frame.has_brightest_centroid) {
-                aggregated_target = runtime_frame.brightest_centroid;
-            } else if (runtime_frame.has_brightest_sample) {
-                aggregated_target = runtime_frame.brightest_sample_position;
-            }
-            if (runtime_frame.has_brightest_direction) {
-                aggregated_direction = runtime_frame.brightest_direction;
-            }
-            main_light_source_.update(aggregated_target, aggregated_direction);
-        }
-
         if (light_map_ && !chunk_lighting_suspended_) {
-            light_map_->ingest_runtime_samples(runtime_frame);
             light_map_->update(renderer_, 0u);
         }
         render_commands(remaining_commands_, /*overlay_passed=*/false);
 
         // After all base sprites are drawn, apply the dynamic darkness overlay once
-        render_dynamic_darkness_overlay(map_light_opacity);
+        if (dark_mask_enabled_) {
+            render_dynamic_darkness_overlay(map_light_opacity, frame_flicker_time_seconds);
+        }
         render_light_map();
 
         // Draw all deferred front-lights above the darkness overlay
@@ -868,7 +962,8 @@ void SceneRenderer::render(){
                                                       *src,
                                                       darkness_overlay_vertices_,
                                                       darkness_overlay_indices_,
-                                                      light_overlay_visibility);
+                                                      light_overlay_visibility,
+                                                      frame_flicker_time_seconds);
                     light_renderer.draw_in_front();
                 }
             }
@@ -935,62 +1030,7 @@ void SceneRenderer::destroy_darkness_overlay() {
     }
 }
 
-void SceneRenderer::inject_map_light_sample() {
-    if (!runtime_lighting_sampler_ || !assets_) {
-        return;
-    }
-
-    const Global_Light_Source* map_light = assets_->map_light_source();
-    if (!map_light) {
-        return;
-    }
-
-    const SDL_Color light_color = map_light->get_current_color();
-    const float     opacity     = std::clamp(static_cast<float>(light_color.a) / 255.0f, 0.0f, 1.0f);
-    const float     brightness  = std::clamp(1.0f - opacity, 0.0f, 1.0f);
-    const float     strength    = std::clamp( reactive_shadow_settings_.virtual_light_map.map_light_dir_offset_strength, 0.0f, 1.0f);
-    const float effective_intensity = brightness * strength;
-    if (effective_intensity <= 1e-4f) {
-        return;
-    }
-
-    const camera& cam = assets_->getView();
-    const SDL_Point screen_pos = map_light->get_position();
-    const SDL_FPoint world_pos  = cam.screen_to_map(screen_pos);
-
-    runtime_lighting::ExternalLightSample sample{};
-    sample.position.x = world_pos.x;
-    sample.position.y = world_pos.y;
-    sample.intensity  = std::clamp(effective_intensity, 0.0f, 1.0f);
-    sample.color      = light_color;
-
-    SDL_FPoint world00 = cam.screen_to_map({0, 0});
-    SDL_FPoint worldX  = cam.screen_to_map({screen_width_, 0});
-    SDL_FPoint worldY  = cam.screen_to_map({0, screen_height_});
-    const float span_x = std::abs(worldX.x - world00.x);
-    const float span_y = std::abs(worldY.y - world00.y);
-    float       dominant_span = std::max(span_x, span_y);
-    if (!(dominant_span > 1e-3f)) {
-        dominant_span = static_cast<float>(std::max(screen_width_, screen_height_));
-    }
-    sample.radius = std::max(dominant_span * 0.75f, 1000.0f);
-
-    SDL_Point reference = map_light->get_direction_reference();
-    SDL_FPoint default_dir{
-        static_cast<float>(reference.x) - sample.position.x, static_cast<float>(reference.y) - sample.position.y};
-    const float dir_len = std::sqrt(default_dir.x * default_dir.x + default_dir.y * default_dir.y);
-    if (dir_len > 1e-4f) {
-        const float inv = 1.0f / dir_len;
-        default_dir.x *= inv;
-        default_dir.y *= inv;
-        sample.direction     = default_dir;
-        sample.has_direction = true;
-    }
-
-    runtime_lighting_sampler_->add_external_sample(sample);
-}
-
-void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
+void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds) {
     if (!renderer_) {
         return;
     }
@@ -1035,7 +1075,8 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
                                           source,
                                           darkness_overlay_vertices_,
                                           darkness_overlay_indices_,
-                                          light_overlay_visibility);
+                                          light_overlay_visibility,
+                                          flicker_time_seconds);
         auto               result = light_renderer.accumulate_dark_mask();
         frame_max_vertices        = std::max(frame_max_vertices, result.max_vertices);
         frame_max_indices         = std::max(frame_max_indices, result.max_indices);

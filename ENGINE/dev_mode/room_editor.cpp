@@ -2005,6 +2005,10 @@ bool RoomEditor::is_asset_info_editor_open() const {
     return info_ui_ && info_ui_->is_visible();
 }
 
+bool RoomEditor::is_asset_info_lighting_section_expanded() const {
+    return info_ui_ && info_ui_->is_lighting_section_expanded();
+}
+
 bool RoomEditor::has_active_modal() const {
     return active_modal_ != ActiveModal::None;
 }
@@ -2365,11 +2369,31 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const SDL_Point screen_pt{ input_->getX(), input_->getY() };
     const SDL_FPoint world_f = cam.screen_to_map(screen_pt);
     const SDL_Point world_pt{ (int)std::lround(world_f.x), (int)std::lround(world_f.y) };
+    const bool left_down                = input_->isDown(Input::LEFT);
+    const bool left_pressed_this_frame  = input_->wasPressed(Input::LEFT);
+    const bool left_released_this_frame = input_->wasReleased(Input::LEFT);
+    const bool shift_down =
+        input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
+
+    if (shift_asset_modifier_active_ && !shift_down) {
+        if (dragging_) {
+            finalize_drag_session();
+            dragging_ = false;
+        }
+        clear_selection();
+    }
+    shift_asset_modifier_active_ = shift_down;
+
+    // Block camera panning if the pointer is pressed over a spawn-group gizmo so dragging can edit it.
+    Asset* hit_before_pan = shift_down ? hit_test_asset(screen_pt, nullptr) : nullptr;
+    const bool pointer_blocks_pan = dragging_ ||
+                                    (shift_down && hit_before_pan && !hit_before_pan->spawn_id.empty() &&
+                                     (left_down || left_pressed_this_frame));
 
     // --- Pan/zoom first ---
     // Allow panning when the pointer is over the scene (not over blocking UI).
     // At this point, caller has already ensured input is not over UI via is_ui_blocking_input.
-    pan_zoom_.handle_input(cam, input, false);
+    pan_zoom_.handle_input(cam, input, pointer_blocks_pan);
     if (std::fabs(cam.get_scale() - prev_scale) > 1e-6 ||
         cam.get_screen_center().x != prev_center.x ||
         cam.get_screen_center().y != prev_center.y) {
@@ -2377,7 +2401,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     }
 
     // --- Hit-test for hover (screen-space rects) ---
-    Asset* hit = hit_test_asset(screen_pt, nullptr);
+    Asset* hit = shift_down ? hit_test_asset(screen_pt, nullptr) : nullptr;
 
     // --- Highlight rebuild helper ---
     auto rebuild_highlight = [this]() {
@@ -2404,6 +2428,11 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     static bool       was_dragged    = false;
     static const int  kDragPx        = 4;
 
+    if (!shift_down) {
+        pressed_asset = nullptr;
+        was_dragged = false;
+    }
+
     // Swallow-window for left clicks after we consume an up
     if (suppress_next_left_click_) {
         if (click_buffer_frames_ > 0) {
@@ -2413,12 +2442,8 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         }
     }
 
-    const bool left_down                = input_->isDown(Input::LEFT);
-    const bool left_pressed_this_frame  = input_->wasPressed(Input::LEFT);
-    const bool left_released_this_frame = input_->wasReleased(Input::LEFT);
-
     // ---- LEFT DOWN edge ----
-    if (left_down && !prev_left_down) {
+    if (shift_down && left_down && !prev_left_down) {
         // Selection only on press; NEVER open panels here.
         pressed_asset = hit;
         was_dragged   = false;
@@ -2457,7 +2482,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     }
 
     // ---- While held: detect & run drag ----
-    if (left_down && pressed_asset) {
+    if (shift_down && left_down && pressed_asset) {
         const int dx = screen_pt.x - press_screen.x;
         const int dy = screen_pt.y - press_screen.y;
         const int dist2 = dx*dx + dy*dy;
@@ -2481,7 +2506,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     }
 
     // ---- LEFT UP edge ----
-    if (!left_down && prev_left_down) {
+    if (shift_down && !left_down && prev_left_down) {
         if (pressed_asset) {
             if (was_dragged) {
                 // End drag: do NOT treat as click, do NOT open Room Config
@@ -3246,15 +3271,6 @@ void RoomEditor::handle_click(const Input& input) {
             }
         }
 
-        if (inside_room && !asset_info_open2 && !floating_modal_open2 &&
-            !area_editor_active && hovered_asset_ == nullptr) {
-            if (assets_) {
-                camera& cam = assets_->getView();
-
-                cam.pan_and_zoom_to_point(world_mouse, 1.0, 0);
-                mark_spatial_index_dirty();
-            }
-        }
     }
     if (selection_changed || highlight_changed) {
         mark_highlight_dirty();
@@ -3844,8 +3860,7 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         }
     }
 
-    // Close room config if it's open and remember the state
-    room_config_was_open_before_drag_ = room_config_dock_open_;
+    // Close the room config panel while dragging to maximize workspace
     if (room_config_dock_open_) {
         // Preserve current selection when closing config due to drag start
         suppress_room_config_selection_clear_ = true;
@@ -4082,6 +4097,21 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
 
     // Standard translate drag
     SDL_Point delta{world_mouse.x - drag_last_world_.x, world_mouse.y - drag_last_world_.y};
+    const bool anchor_should_follow_pointer =
+        (drag_mode_ == DragMode::Exact || drag_mode_ == DragMode::Percent);
+    if (anchor_should_follow_pointer) {
+        Asset* anchor_asset = drag_anchor_asset_;
+        if (!anchor_asset && !drag_states_.empty()) {
+            anchor_asset = drag_states_.front().asset;
+        }
+        if (anchor_asset) {
+            vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+            SDL_Point snapped_pointer = grid_service.snap_to_vertex(world_mouse, drag_resolution_);
+            delta.x = snapped_pointer.x - anchor_asset->pos.x;
+            delta.y = snapped_pointer.y - anchor_asset->pos.y;
+        }
+    }
+
     if (delta.x == 0 && delta.y == 0) {
         drag_last_world_ = world_mouse;
         return;
@@ -4445,11 +4475,6 @@ void RoomEditor::finalize_drag_session() {
         suppress_next_left_click_ = true;
     }
 
-    // Reopen room config if it was open before the drag
-    if (room_config_was_open_before_drag_) {
-        set_room_config_visible(true);
-    }
-
     reset_drag_state();
 }
 
@@ -4473,7 +4498,6 @@ void RoomEditor::reset_drag_state() {
     drag_edge_inset_percent_ = 100.0;
     drag_moved_ = false;
     drag_spawn_id_.clear();
-    room_config_was_open_before_drag_ = false;
     overlay_resolution_before_drag_.reset();
 }
 

@@ -9,13 +9,14 @@
 #include <SDL.h>
 
 class DMButton;
-class FrameToolsPanel;
 
 namespace animation_editor {
 
 class AnimationDocument;
 class FrameMovementEditor;
+class FrameChildrenEditor;
 class PreviewProvider;
+class FrameToolsPanel;
 
 using DMButton = ::DMButton;
 
@@ -24,7 +25,8 @@ class FrameEditor {
     enum class Mode {
         Movement = 0,
         Children = 1,
-        Attacking = 2,
+        AttackGeometry = 2,
+        HitGeometry = 3,
 };
 
     using CloseCallback = std::function<void()>;
@@ -56,9 +58,10 @@ class FrameEditor {
   private:
     std::shared_ptr<AnimationDocument> document_;
     std::unique_ptr<FrameMovementEditor> movement_editor_;
+    std::unique_ptr<FrameChildrenEditor> children_editor_;
     std::unique_ptr<FrameToolsPanel> tools_panel_;
     std::shared_ptr<PreviewProvider> preview_provider_;
-    std::array<std::unique_ptr<DMButton>, 3> mode_buttons_;
+    std::array<std::unique_ptr<DMButton>, 4> mode_buttons_;
     std::unique_ptr<DMButton> prev_frame_button_;
     std::unique_ptr<DMButton> next_frame_button_;
     SDL_Rect bounds_{0, 0, 0, 0};
@@ -73,6 +76,9 @@ class FrameEditor {
     CloseCallback close_callback_;
     FrameChangedCallback frame_changed_callback_;
     Mode active_mode_ = Mode::Movement;
+    bool tools_panel_follow_layout_ = true;
+
+    SDL_Rect tools_panel_hit_rect() const;
 };
 
 }

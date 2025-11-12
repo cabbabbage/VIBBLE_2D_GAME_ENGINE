@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <vector>
 
-#include "render/runtime_lighting_sampler.hpp"
+#include "render/asset_light.hpp"
 #include "utils/light_source.hpp"
 
 class Asset;
@@ -21,7 +21,8 @@ public:
                        const runtime_lighting::AssetLight& source,
                        std::vector<SDL_Vertex>& scratch_vertices,
                        std::vector<int>& scratch_indices,
-                       float light_visibility);
+                       float light_visibility,
+                       float flicker_time_seconds);
     ~AssetLightRenderer();
 
     bool valid() const { return valid_; }

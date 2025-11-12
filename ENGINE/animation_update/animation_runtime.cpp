@@ -68,6 +68,24 @@ std::string resolve_animation(const Asset& asset, const std::string& requested) 
 bool same_point(SDL_Point lhs, SDL_Point rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
+
+void update_child_attachment_dimensions(Asset::AnimationChildAttachment& slot) {
+    slot.cached_w = 0;
+    slot.cached_h = 0;
+    if (!slot.animation || !slot.current_frame) {
+        return;
+    }
+    SDL_Texture* texture = slot.animation->get_frame(slot.current_frame);
+    if (!texture) {
+        return;
+    }
+    int width = 0;
+    int height = 0;
+    if (SDL_QueryTexture(texture, nullptr, nullptr, &width, &height) == 0) {
+        slot.cached_w = width;
+        slot.cached_h = height;
+    }
+}
 }
 
 AnimationRuntime::AnimationRuntime(Asset* self, Assets* assets)
@@ -185,11 +203,15 @@ void AnimationRuntime::apply_pending_move() {
 
 bool AnimationRuntime::advance(AnimationFrame*& frame) {
     if (!self_ || !self_->info) {
+        if (self_) {
+            self_->animation_children_.clear();
+        }
         return false;
     }
 
     auto it = self_->info->animations.find(self_->current_animation);
     if (it == self_->info->animations.end()) {
+        self_->animation_children_.clear();
         return false;
     }
 
@@ -198,12 +220,14 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
     if (!frame) {
         frame = anim.get_first_frame(path_index);
         if (!frame) {
+            self_->animation_children_.clear();
             return false;
         }
     }
 
     if (anim.locked) {
         self_->static_frame = anim.is_static() || anim.locked;
+        update_child_attachments(anim, 0.0f);
         return true;
     }
 
@@ -233,10 +257,12 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
                 advanced_any = true;
             } else {
                 // Reached end of non-looping animation
+                update_child_attachments(anim, dt);
                 return false;
             }
         }
     }
+    update_child_attachments(anim, dt);
     return advanced_any || true;
 }
 
@@ -298,6 +324,129 @@ void AnimationRuntime::reset_plan_progress() {
     stride_index_ = 0;
     stride_frame_counter_ = 0;
     next_checkpoint_index_ = 0;
+}
+
+void AnimationRuntime::update_child_attachments(Animation& anim, float dt) {
+    if (!self_) {
+        return;
+    }
+    if (!anim.has_child_assets()) {
+        self_->animation_children_.clear();
+        return;
+    }
+    ensure_child_slots(anim);
+    if (self_->animation_children_.empty()) {
+        return;
+    }
+    advance_child_frames(dt);
+    apply_child_frame_data(self_->current_frame);
+}
+
+void AnimationRuntime::ensure_child_slots(Animation& anim) {
+    if (!self_) {
+        return;
+    }
+    auto& slots = self_->animation_children_;
+    const auto& requested = anim.child_assets();
+    if (slots.size() != requested.size()) {
+        slots.resize(requested.size());
+    }
+    AssetLibrary* library = nullptr;
+    if (assets_owner_) {
+        library = &assets_owner_->library();
+    }
+    for (std::size_t i = 0; i < requested.size(); ++i) {
+        auto& slot = slots[i];
+        const AnimationFrame* previous_frame = slot.current_frame;
+        bool slot_invalidated = false;
+        if (slot.child_index != static_cast<int>(i) || slot.asset_name != requested[i]) {
+            slot = Asset::AnimationChildAttachment{};
+            slot.child_index = static_cast<int>(i);
+            slot.asset_name = requested[i];
+            slot_invalidated = true;
+        }
+        if (!slot.info && library && !slot.asset_name.empty()) {
+            slot.info = library->get(slot.asset_name);
+            if (slot.info) {
+                auto child_anim_it = slot.info->animations.find(animation_update::detail::kDefaultAnimation);
+                if (child_anim_it == slot.info->animations.end() && !slot.info->animations.empty()) {
+                    child_anim_it = slot.info->animations.begin();
+                }
+                if (child_anim_it != slot.info->animations.end()) {
+                    slot.animation = &child_anim_it->second;
+                    slot.current_frame = slot.animation->get_first_frame();
+                    slot.frame_progress = 0.0f;
+                    slot_invalidated = true;
+                }
+            }
+        }
+        if (slot_invalidated || slot.current_frame != previous_frame) {
+            update_child_attachment_dimensions(slot);
+        }
+    }
+}
+
+void AnimationRuntime::advance_child_frames(float dt) {
+    if (!self_ || self_->animation_children_.empty()) {
+        return;
+    }
+    if (!(dt > 0.0f)) {
+        dt = 1.0f / 60.0f;
+    }
+    for (auto& slot : self_->animation_children_) {
+        if (!slot.animation || !slot.current_frame) {
+            continue;
+        }
+        const AnimationFrame* previous_frame = slot.current_frame;
+        int fps = slot.animation->playback_fps;
+        if (fps <= 0) {
+            fps = 24;
+        }
+        const float interval = 1.0f / static_cast<float>(fps);
+        slot.frame_progress += dt;
+        while (slot.frame_progress >= interval) {
+            slot.frame_progress -= interval;
+            if (slot.current_frame->next) {
+                slot.current_frame = slot.current_frame->next;
+            } else if (slot.animation->loop ||
+                       self_->current_animation == animation_update::detail::kDefaultAnimation) {
+                slot.current_frame = slot.animation->get_first_frame();
+            } else {
+                break;
+            }
+        }
+        if (slot.current_frame != previous_frame) {
+            update_child_attachment_dimensions(slot);
+        }
+    }
+}
+
+void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
+    if (!self_ || self_->animation_children_.empty()) {
+        return;
+    }
+    for (auto& slot : self_->animation_children_) {
+        slot.visible = false;
+        slot.rotation_degrees = 0.0f;
+        slot.world_pos = self_->pos;
+    }
+    if (!frame) {
+        return;
+    }
+    for (const auto& child_data : frame->children) {
+        if (child_data.child_index < 0 ||
+            child_data.child_index >= static_cast<int>(self_->animation_children_.size())) {
+            continue;
+        }
+        auto& slot = self_->animation_children_[child_data.child_index];
+        if (!slot.animation) {
+            continue;
+        }
+        slot.visible = child_data.visible;
+        slot.world_pos.x = self_->pos.x + child_data.dx;
+        slot.world_pos.y = self_->pos.y + child_data.dy;
+        slot.rotation_degrees = child_data.degree;
+    }
 }
 
 SDL_Point AnimationRuntime::bottom_middle(SDL_Point pos) const {

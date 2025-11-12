@@ -13,7 +13,7 @@ class DMDropdown;
 class DropdownWidget;
 class Input;
 class FloatSliderWidget;
-class SectionLabelWidget;
+class SectionToggleWidget;
 class DiscreteSliderWidget;
 
 class CameraUIPanel : public DockableCollapsible {
@@ -42,6 +42,7 @@ private:
     void apply_settings_if_needed();
     void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled);
     camera::RealismSettings read_settings_from_ui() const;
+    void on_control_value_changed();
 
 private:
     Assets* assets_ = nullptr;
@@ -57,10 +58,13 @@ private:
     std::unique_ptr<DMButton> reset_button_;
     std::unique_ptr<ButtonWidget> load_widget_;
     std::unique_ptr<ButtonWidget> reset_widget_;
-
-    std::unique_ptr<SectionLabelWidget> render_section_label_;
-    std::unique_ptr<SectionLabelWidget> perspective_section_label_;
-    std::unique_ptr<SectionLabelWidget> smoothing_section_label_;
+    std::unique_ptr<Widget> header_spacer_;
+    std::unique_ptr<Widget> hero_banner_widget_;
+    std::unique_ptr<Widget> controls_spacer_;
+    std::unique_ptr<SectionToggleWidget> visibility_section_header_;
+    std::unique_ptr<SectionToggleWidget> depth_section_header_;
+    std::unique_ptr<SectionToggleWidget> zoom_section_header_;
+    std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
     std::unique_ptr<FloatSliderWidget> render_distance_slider_;
     std::unique_ptr<FloatSliderWidget> tripod_distance_slider_;
@@ -82,6 +86,11 @@ private:
     std::unique_ptr<FloatSliderWidget> hysteresis_margin_slider_;
     std::unique_ptr<FloatSliderWidget> min_zoom_multiplier_slider_;
     std::unique_ptr<FloatSliderWidget> max_zoom_multiplier_slider_;
+
+    bool visibility_section_expanded_ = true;
+    bool depth_section_expanded_ = true;
+    bool zoom_section_expanded_ = false;
+    bool smoothing_section_expanded_ = false;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }

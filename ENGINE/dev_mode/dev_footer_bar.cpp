@@ -10,6 +10,11 @@
 
 namespace {
 constexpr int kDefaultFooterHeight = 40;
+constexpr int kFooterHorizontalPadding = 20;
+constexpr int kFooterVerticalPadding = 6;
+constexpr int kFooterGroupGap = 18;
+constexpr int kFooterButtonSpacing = 12;
+constexpr int kFooterButtonMinWidth = 110;
 
 const DMButtonStyle* button_style_for(const DevFooterBar::Button& btn) {
     if (btn.active) {
@@ -250,7 +255,28 @@ bool DevFooterBar::handle_event(const SDL_Event& e) {
 void DevFooterBar::render(SDL_Renderer* renderer) const {
     if (!visible_ || !renderer) return;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect( renderer, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    const SDL_Color top = DMStyles::PanelHeader();
+    const SDL_Color bottom = dm_draw::DarkenColor(top, 0.25f);
+    dm_draw::DrawRoundedGradientRect(renderer, rect_, DMStyles::CornerRadius(), top, bottom);
+    dm_draw::DrawRoundedOutline(renderer, rect_, DMStyles::CornerRadius(), 1, DMStyles::Border());
+
+    SDL_Color highlight = DMStyles::HighlightColor();
+    highlight.a = static_cast<Uint8>(std::clamp<int>(static_cast<int>(highlight.a * 0.35f), 0, 255));
+    SDL_SetRenderDrawColor(renderer, highlight.r, highlight.g, highlight.b, highlight.a);
+    SDL_RenderDrawLine(renderer, rect_.x, rect_.y, rect_.x + rect_.w - 1, rect_.y);
+
+    const bool draw_separator = (grid_checkbox_ && grid_stepper_) && (title_bounds_.w > 0 || !buttons_.empty());
+    if (draw_separator) {
+        SDL_Color separator = DMStyles::Border();
+        separator.a = static_cast<Uint8>(std::clamp<int>(static_cast<int>(separator.a * 0.8f), 0, 255));
+        SDL_SetRenderDrawColor(renderer, separator.r, separator.g, separator.b, separator.a);
+        const int separator_x = std::min(rect_.x + rect_.w - 1, grid_controls_right_ + kFooterGroupGap / 2);
+        SDL_RenderDrawLine(renderer,
+                           separator_x,
+                           rect_.y + kFooterVerticalPadding,
+                           separator_x,
+                           rect_.y + rect_.h - kFooterVerticalPadding);
+    }
 
     // Render grid controls first (on the left)
     if (grid_checkbox_) {
@@ -263,12 +289,9 @@ void DevFooterBar::render(SDL_Renderer* renderer) const {
         grid_stepper_->render(renderer);
     }
 
-    if (show_title_ && !title_.empty()) {
-        int text_x = rect_.x + DMSpacing::item_gap();
-        int text_y = rect_.y + (rect_.h - DMStyles::Label().font_size) / 2;
-        if (rect_.h > DMStyles::Label().font_size + DMSpacing::item_gap() * 2) {
-            text_y = rect_.y + DMSpacing::item_gap();
-        }
+    if (title_bounds_.w > 0 && !title_.empty()) {
+        int text_y = title_bounds_.y + (title_bounds_.h - DMStyles::Label().font_size) / 2;
+        const int text_x = title_bounds_.x;
         draw_label(renderer, title_, text_x, text_y);
     }
 
@@ -311,36 +334,45 @@ void DevFooterBar::layout() {
     rect_.x = 0;
     rect_.y = std::max(0, screen_h_ - rect_.h);
     update_title_width();
+    grid_controls_right_ = rect_.x + kFooterHorizontalPadding;
+    title_bounds_ = SDL_Rect{0, 0, 0, 0};
     layout_grid_controls();
+    layout_title_region();
     layout_buttons();
 }
 
-void DevFooterBar::layout_buttons() {
-    int button_start = rect_.x + DMSpacing::item_gap();
+void DevFooterBar::layout_title_region() {
+    title_bounds_ = SDL_Rect{0, 0, 0, 0};
+    if (!show_title_ || title_width_ <= 0) {
+        return;
+    }
 
-    // Account for grid controls on the left
+    int x = rect_.x + kFooterHorizontalPadding;
     if (grid_checkbox_ && grid_stepper_) {
-        SDL_Rect checkbox_rect = grid_checkbox_->rect();
-        SDL_Rect stepper_rect = grid_stepper_->rect();
-        int grid_controls_width = checkbox_rect.w + DMSpacing::small_gap();
-        if (snap_checkbox_) {
-            SDL_Rect snap_rect = snap_checkbox_->rect();
-            grid_controls_width += snap_rect.w + DMSpacing::small_gap();
-        }
-        grid_controls_width += stepper_rect.w;
-        button_start += grid_controls_width + DMSpacing::item_gap();
+        x = std::max(x, grid_controls_right_ + kFooterGroupGap);
     }
 
-    if (title_width_ > 0) {
-        button_start += title_width_ + DMSpacing::item_gap();
-    }
-    if (!buttons_.empty()) {
-        button_start += DMSpacing::item_gap();
+    const int max_width = std::max(0, rect_.w - (x - rect_.x) - kFooterHorizontalPadding);
+    if (max_width <= 0) {
+        return;
     }
 
-    const int right_limit = rect_.x + rect_.w - DMSpacing::item_gap();
+    const int clamped_width = std::min(title_width_, max_width);
+    title_bounds_ = SDL_Rect{x, rect_.y, clamped_width, rect_.h};
+}
+
+void DevFooterBar::layout_buttons() {
+    int button_start = rect_.x + kFooterHorizontalPadding;
+    if (grid_checkbox_ && grid_stepper_) {
+        button_start = std::max(button_start, grid_controls_right_ + kFooterGroupGap);
+    }
+    if (title_bounds_.w > 0) {
+        button_start = std::max(button_start, title_bounds_.x + title_bounds_.w + kFooterGroupGap);
+    }
+
+    const int right_limit = rect_.x + rect_.w - kFooterHorizontalPadding;
     const int span = right_limit - button_start;
-    const int min_gap = DMSpacing::small_gap();
+    const int button_gap = kFooterButtonSpacing;
 
     if (span <= 0) {
         for (auto& btn : buttons_) {
@@ -352,13 +384,14 @@ void DevFooterBar::layout_buttons() {
     }
 
     struct ButtonLayoutInfo {
-        DMButton* widget;
-        int width;
-};
+        DMButton* widget = nullptr;
+        int width = 0;
+    };
 
     std::vector<ButtonLayoutInfo> visible;
     visible.reserve(buttons_.size());
     int total_width = 0;
+    int count = 0;
     bool out_of_space = false;
 
     for (auto& btn : buttons_) {
@@ -369,60 +402,37 @@ void DevFooterBar::layout_buttons() {
             continue;
         }
 
-        int width = btn.widget->rect().w;
-        if (width <= 0) {
-            width = 120;
-        }
+        int width = std::max(btn.widget->preferred_width(), kFooterButtonMinWidth);
 
-        int needed = total_width + width;
-        if (!visible.empty()) {
-            needed += min_gap * static_cast<int>(visible.size());
-        }
+        const int projected_total = total_width + width;
+        const int projected_count = count + 1;
+        const int projected_block = projected_total + button_gap * std::max(0, projected_count - 1);
 
-        if (needed > span) {
+        if (projected_block > span) {
             btn.widget->set_rect(SDL_Rect{0, 0, 0, 0});
             out_of_space = true;
             continue;
         }
 
         visible.push_back({btn.widget.get(), width});
-        total_width += width;
-    }
-
-    int y = rect_.y + DMSpacing::item_gap();
-    if (rect_.h <= DMButton::height() + DMSpacing::item_gap() * 2) {
-        y = rect_.y + (rect_.h - DMButton::height()) / 2;
+        total_width = projected_total;
+        count = projected_count;
     }
 
     if (visible.empty()) {
         return;
     }
 
-    if (visible.size() == 1) {
-        const int span_remaining = span - total_width;
-        int x = button_start + span_remaining / 2;
-        x = std::max(x, button_start);
-        x = std::min(x, right_limit - visible.front().width);
-        visible.front().widget->set_rect(SDL_Rect{x, y, visible.front().width, DMButton::height()});
-        return;
-    }
+    const int y = rect_.y + (rect_.h - DMButton::height()) / 2;
+    const int block_width = total_width + button_gap * std::max(0, count - 1);
+    int current_x = std::max(button_start, right_limit - block_width);
 
-    const int gaps = static_cast<int>(visible.size()) - 1;
-    int remaining_space = span - total_width;
-    int base_gap = gaps > 0 ? remaining_space / gaps : 0;
-    int extra = gaps > 0 ? remaining_space % gaps : 0;
-    int current_x = button_start;
     for (size_t i = 0; i < visible.size(); ++i) {
         auto& info = visible[i];
         info.widget->set_rect(SDL_Rect{current_x, y, info.width, DMButton::height()});
         current_x += info.width;
         if (i + 1 < visible.size()) {
-            int gap = base_gap;
-            if (extra > 0) {
-                ++gap;
-                --extra;
-            }
-            current_x += gap;
+            current_x += button_gap;
         }
     }
 }
@@ -477,28 +487,30 @@ void DevFooterBar::set_grid_controls_callbacks(std::function<void(bool)> on_over
 }
 
 void DevFooterBar::layout_grid_controls() {
-    if (!grid_checkbox_ || !grid_stepper_) return;
-
-    // Position grid controls at the very left of the footer
-    int x = rect_.x + DMSpacing::item_gap();
-    int y = rect_.y + DMSpacing::item_gap();
-
-    // Checkbox first
-    SDL_Rect checkbox_rect{x, y, grid_checkbox_->preferred_width(), DMCheckbox::height()};
-    grid_checkbox_->set_rect(checkbox_rect);
-
-    // Optional Snap checkbox next
-    x += checkbox_rect.w + DMSpacing::small_gap();
-    if (snap_checkbox_) {
-        SDL_Rect snap_rect{x, y, snap_checkbox_->preferred_width(), DMCheckbox::height()};
-        snap_checkbox_->set_rect(snap_rect);
-        x += snap_rect.w + DMSpacing::small_gap();
+    grid_controls_right_ = rect_.x + kFooterHorizontalPadding;
+    if (!grid_checkbox_ || !grid_stepper_) {
+        return;
     }
 
-    // Stepper to the right of checkboxes
-    int stepper_w = 180; // Fixed width for stepper
-    SDL_Rect stepper_rect{x, y, stepper_w, DMNumericStepper::height()};
+    int x = grid_controls_right_;
+    const int checkbox_y = rect_.y + (rect_.h - DMCheckbox::height()) / 2;
+    const int stepper_y = rect_.y + (rect_.h - DMNumericStepper::height()) / 2;
+    const int gap = DMSpacing::small_gap();
+
+    SDL_Rect checkbox_rect{x, checkbox_y, grid_checkbox_->preferred_width(), DMCheckbox::height()};
+    grid_checkbox_->set_rect(checkbox_rect);
+    x += checkbox_rect.w + gap;
+
+    if (snap_checkbox_) {
+        SDL_Rect snap_rect{x, checkbox_y, snap_checkbox_->preferred_width(), DMCheckbox::height()};
+        snap_checkbox_->set_rect(snap_rect);
+        x += snap_rect.w + gap;
+    }
+
+    constexpr int kStepperWidth = 180;
+    SDL_Rect stepper_rect{x, stepper_y, kStepperWidth, DMNumericStepper::height()};
     grid_stepper_->set_rect(stepper_rect);
+    grid_controls_right_ = stepper_rect.x + stepper_rect.w;
 }
 
 void DevFooterBar::set_snap_to_grid_enabled(bool enabled) {

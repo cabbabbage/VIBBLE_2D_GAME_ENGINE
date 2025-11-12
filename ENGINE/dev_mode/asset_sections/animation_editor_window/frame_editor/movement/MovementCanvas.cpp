@@ -117,7 +117,8 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
                 const float dst_w_px = static_cast<float>(tw) * scale_factor * scale;
                 const float dst_h_px = static_cast<float>(th) * scale_factor * scale;
                 SDL_FPoint anchor_world = SDL_FPoint{0.0f, 0.0f};
-                if (selected_index_ >= 0 && selected_index_ < static_cast<int>(positions_.size())) {
+                if (anchor_follows_movement_ &&
+                    selected_index_ >= 0 && selected_index_ < static_cast<int>(positions_.size())) {
                     anchor_world = positions_[selected_index_];
                 }
                 SDL_FPoint anchor_screen = world_to_screen(anchor_world);
@@ -203,7 +204,8 @@ void MovementCanvas::render_background(SDL_Renderer* renderer) const {
                 const float dst_w_px = static_cast<float>(tw) * scale_factor * scale;
                 const float dst_h_px = static_cast<float>(th) * scale_factor * scale;
                 SDL_FPoint anchor_world = SDL_FPoint{0.0f, 0.0f};
-                if (selected_index_ >= 0 && selected_index_ < static_cast<int>(positions_.size())) {
+                if (anchor_follows_movement_ &&
+                    selected_index_ >= 0 && selected_index_ < static_cast<int>(positions_.size())) {
                     anchor_world = positions_[selected_index_];
                 }
                 SDL_FPoint anchor_screen = world_to_screen(anchor_world);

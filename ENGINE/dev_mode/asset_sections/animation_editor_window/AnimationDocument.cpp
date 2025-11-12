@@ -45,7 +45,8 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     std::string path = source.value("path", kind == "folder" ? animation_id : std::string{});
     nlohmann::json name_value;
     if (kind == "folder") {
-        name_value = nullptr;
+        // Use empty string so downstream UI code that calls get<std::string>() doesn't throw on null
+        name_value = std::string{};
     } else {
         if (source.contains("name") && source["name"].is_string()) {
             name_value = source["name"].get<std::string>();
@@ -66,7 +67,7 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     ensure_bool("flipped_source", false);
     ensure_bool("reverse_source", false);
     ensure_bool("locked", false);
-    ensure_bool("loop", false);
+    ensure_bool("loop", true);
     ensure_bool("rnd_start", false);
 
     bool derived_from_animation = (kind == "animation");
@@ -213,6 +214,21 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
         }
     }
     payload["on_end"] = on_end;
+
+    // Normalize children list: keep unique, non-empty strings in declared order
+    if (payload.contains("children") && payload["children"].is_array()) {
+        nlohmann::json dedup = nlohmann::json::array();
+        std::unordered_set<std::string> seen;
+        for (const auto& entry : payload["children"]) {
+            if (!entry.is_string()) continue;
+            std::string name = entry.get<std::string>();
+            if (name.empty()) continue;
+            if (seen.insert(name).second) {
+                dedup.push_back(name);
+            }
+        }
+        payload["children"] = std::move(dedup);
+    }
 
     if (!derived_from_animation) {
         if (payload.contains("audio") && payload["audio"].is_object()) {
@@ -519,7 +535,100 @@ void AnimationDocument::rename_animation(const std::string& old_id, const std::s
     if (start_animation_ && *start_animation_ == old_id) {
         start_animation_ = candidate;
     }
+    // After the key change, walk all payloads and rewrite references that
+    // point to the old id. This includes:
+    //  - source.kind == "animation": update both name and fallback path
+    //  - on_end fields equal to old id
+    //  - any id-bearing entries in movement_variants if present
+    for (auto& entry : animations_) {
+        const std::string& id = entry.first;
+        nlohmann::json payload = parse_payload(entry.second, id);
+
+        bool changed = false;
+
+        // Helper to trim a string for lenient comparisons
+        auto trim_copy = [](std::string s) {
+            auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
+            s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
+            s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
+            return s;
+        };
+
+        // Update source references that may point to the renamed id
+        if (payload.contains("source") && payload["source"].is_object()) {
+            nlohmann::json& src = payload["source"];
+            std::string kind = src.value("kind", std::string{"folder"});
+            if (kind == std::string{"animation"}) {
+                // Preferred explicit name
+                if (src.contains("name")) {
+                    if (src["name"].is_string()) {
+                        std::string name = trim_copy(src["name"].get<std::string>());
+                        if (name == old_id) {
+                            src["name"] = candidate;
+                            changed = true;
+                        }
+                    } else if (src["name"].is_null()) {
+                        // keep fallback below
+                    }
+                }
+                // Fallback path (used when name is null/empty)
+                if (src.contains("path") && src["path"].is_string()) {
+                    std::string path = trim_copy(src["path"].get<std::string>());
+                    if (path == old_id) {
+                        src["path"] = candidate;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        // Update on_end transition if it references the old id
+        if (payload.contains("on_end") && payload["on_end"].is_string()) {
+            std::string oe = trim_copy(payload["on_end"].get<std::string>());
+            if (oe == old_id) {
+                payload["on_end"] = candidate;
+                changed = true;
+            }
+        }
+
+        // Update any id-bearing fields in movement_variants if present
+        if (payload.contains("movement_variants")) {
+            nlohmann::json& mv = payload["movement_variants"];
+            // Best-effort: replace any string value equal to old_id anywhere within
+            std::function<void(nlohmann::json&)> rewrite_strings = [&](nlohmann::json& node) {
+                if (node.is_string()) {
+                    try {
+                        std::string v = node.get<std::string>();
+                        if (trim_copy(v) == old_id) {
+                            node = candidate;
+                            changed = true;
+                        }
+                    } catch (...) {
+                    }
+                    return;
+                }
+                if (node.is_array()) {
+                    for (auto& item : node) rewrite_strings(item);
+                    return;
+                }
+                if (node.is_object()) {
+                    for (auto it2 = node.begin(); it2 != node.end(); ++it2) {
+                        rewrite_strings(it2.value());
+                    }
+                    return;
+                }
+            };
+            rewrite_strings(mv);
+        }
+
+        if (changed) {
+            entry.second = serialize_payload(coerce_payload(id, payload));
+        }
+    }
+
+    // Keep UI/model caches coherent after cascading edits
     mark_dirty();
+    rebuild_animation_cache();
 }
 
 void AnimationDocument::replace_animation_payload(const std::string& animation_id, const std::string& payload_json) {

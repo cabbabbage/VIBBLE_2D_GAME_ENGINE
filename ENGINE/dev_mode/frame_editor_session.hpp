@@ -8,12 +8,13 @@
 #include <string>
 #include <vector>
 
+#include "dev_mode/pan_and_zoom.hpp"
+
 class Assets;
 class Asset;
 class Input;
 struct SDL_Renderer;
 class DMButton;
-class PanAndZoom;
 
 namespace animation_editor {
 class AnimationDocument;
@@ -25,7 +26,7 @@ class AnimationEditorWindow;
 // Non-modal; anchors panels near the target asset and draws gizmos in world space.
 class FrameEditorSession {
 public:
-    enum class Mode { Movement, Children, Attacking };
+    enum class Mode { Movement, Children, AttackGeometry, HitGeometry };
 
     FrameEditorSession();
     ~FrameEditorSession();
@@ -49,7 +50,8 @@ public:
     void set_grid_overlay_enabled_transient(bool enabled);
 
 private:
-    struct MovementFrame { float dx = 0.0f; float dy = 0.0f; bool resort_z = false; };
+    struct ChildFrame { int child_index = -1; float dx = 0.0f; float dy = 0.0f; float degree = 0.0f; bool visible = false; };
+    struct MovementFrame { float dx = 0.0f; float dy = 0.0f; bool resort_z = false; std::vector<ChildFrame> children; };
 
     // State wiring
     Assets* assets_ = nullptr;
@@ -65,6 +67,7 @@ private:
     int selected_index_ = 0;
     Mode mode_ = Mode::Movement;
     bool show_animation_ = true;
+    int selected_child_index_ = 0;
 
     // Camera + overlay snapshot
     bool prev_realism_enabled_ = true;
@@ -80,12 +83,19 @@ private:
     mutable std::unique_ptr<DMButton> btn_back_;
     mutable std::unique_ptr<DMButton> btn_movement_;
     mutable std::unique_ptr<DMButton> btn_children_;
-    mutable std::unique_ptr<DMButton> btn_attacking_;
+    mutable std::unique_ptr<DMButton> btn_attack_geometry_;
+    mutable std::unique_ptr<DMButton> btn_hit_geometry_;
     mutable std::unique_ptr<DMButton> btn_prev_;
     mutable std::unique_ptr<DMButton> btn_next_;
     mutable std::unique_ptr<DMButton> btn_smooth_;
     // Replaced button with checkbox per request
     mutable std::unique_ptr<class DMCheckbox> cb_show_anim_;
+    mutable std::unique_ptr<DMButton> btn_child_prev_;
+    mutable std::unique_ptr<DMButton> btn_child_next_;
+    mutable std::unique_ptr<class DMTextBox> tb_child_dx_;
+    mutable std::unique_ptr<class DMTextBox> tb_child_dy_;
+    mutable std::unique_ptr<class DMTextBox> tb_child_deg_;
+    mutable std::unique_ptr<class DMCheckbox> cb_child_visible_;
     // Editable totals fields
     mutable std::unique_ptr<class DMTextBox> tb_total_dx_;
     mutable std::unique_ptr<class DMTextBox> tb_total_dy_;
@@ -93,6 +103,10 @@ private:
     mutable std::string last_totals_dx_text_{};
     mutable std::string last_totals_dy_text_{};
     mutable bool last_show_anim_value_ = true;
+    mutable std::string last_child_dx_text_{};
+    mutable std::string last_child_dy_text_{};
+    mutable std::string last_child_deg_text_{};
+    mutable bool last_child_visible_value_ = false;
 
     // UI layout (computed each frame)
     // Panel rectangles are derived from stored top-left positions to allow dragging.
@@ -112,6 +126,7 @@ private:
 
     // Camera pan/zoom handler (wheel zoom enabled; panning is blocked by default)
     mutable class PanAndZoom pan_zoom_;
+    std::vector<std::string> child_assets_;
 
 private:
     void ensure_widgets() const;
@@ -121,7 +136,39 @@ private:
     void persist_changes();
     void smooth_frames();
     void select_frame(int index);
+    void select_child(int index);
     void update_asset_preview_frame() const;
     static MovementFrame clamp_frame(const MovementFrame& in);
     static std::vector<MovementFrame> parse_movement_frames_json(const std::string& payload_json);
+    void sync_child_frames();
+    ChildFrame* current_child_frame();
+    const ChildFrame* current_child_frame() const;
+
+    struct MovementToolboxMetrics {
+        int padding = 0;
+        int gap = 0;
+        int width = 0;
+        int height = 0;
+        int row_height = 0;
+        int checkbox_width = 0;
+        int totals_width = 0;
+        int total_dx_height = 0;
+        int total_dy_height = 0;
+    };
+    struct ChildrenToolboxMetrics {
+        int padding = 0;
+        int gap = 0;
+        int width = 0;
+        int height = 0;
+        int nav_row_height = 0;
+        int form_row_height = 0;
+        int textbox_width = 0;
+        int child_dx_height = 0;
+        int child_dy_height = 0;
+        int child_rotation_height = 0;
+        int checkbox_width = 0;
+    };
+
+    MovementToolboxMetrics build_movement_toolbox_metrics() const;
+    ChildrenToolboxMetrics build_children_toolbox_metrics() const;
 };

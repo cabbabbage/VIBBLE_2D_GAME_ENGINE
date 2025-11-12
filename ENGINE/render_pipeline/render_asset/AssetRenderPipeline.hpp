@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <vector>
 
@@ -7,7 +8,6 @@
 
 #include "render_pipeline/render_asset/IRenderStage.hpp"
 #include "render_pipeline/render_asset/render_asset.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 
 class Asset;
 class camera;
@@ -16,16 +16,13 @@ class LightMap;
 class LightMapManager;
 namespace world { class Grid; }
 
-namespace render_pipeline::shading {
-struct ReactiveShadowSettings;
-}
 struct SceneLighting {
     camera&                camera_view;
     Global_Light_Source&   main_light;
     Asset*                 player = nullptr;
     const LightMap*        light_map_sampler = nullptr;
-    render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings = nullptr;
     world::Grid*           world_grid = nullptr;
+    std::nullptr_t         reactive_shadow_settings_stub = nullptr; // TODO(#reactive-shadows): placeholder until settings return.
 };
 
 struct StageContext {
@@ -36,7 +33,7 @@ struct StageContext {
     SDL_Texture*  reusable_final = nullptr;
     SDL_Texture*  final_texture = nullptr;
     SDL_Rect      screen_rect{ 0, 0, 0, 0 };
-    SDL_FPoint    screen_center{ 0.0f, 0.0f };
+    SDL_FPoint    screen_center{ 0.0f, 0.0f }; // Reserved for future reactive shadow alignment.
     float         reference_screen_height = 1.0f;
     float         base_shadow_opacity     = 204.0f / 255.0f;
     int           screen_width_px         = 0;
@@ -62,11 +59,8 @@ struct StageContext {
     const camera&            camera_view() const;
     Asset*                   player() const;
     const LightMap*   light_map() const { return lighting ? lighting->light_map_sampler : nullptr; }
-    const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings() const;
-
     void update_projection(Asset& asset);
-
-    const render_pipeline::shading::ReactiveShadowSettings* reactive_shadow_settings_override = nullptr;
+    std::nullptr_t reactive_shadow_settings() const { return nullptr; } // TODO(#reactive-shadows): Remove stub when new settings land.
 };
 
 class AssetRenderPipeline {

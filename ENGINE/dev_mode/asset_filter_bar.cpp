@@ -23,6 +23,7 @@ constexpr int kPanelOutlineThickness = 1;
 constexpr const char* kSettingsInitializedKey = "dev.asset_filter.initialized";
 constexpr const char* kSettingsMapAssetsKey = "dev.asset_filter.map_assets";
 constexpr const char* kSettingsCurrentRoomKey = "dev.asset_filter.current_room";
+constexpr const char* kSettingsRenderDarkMaskKey = "dev.asset_filter.render_dark_mask";
 constexpr const char* kSettingsFiltersExpandedKey = "dev.asset_filter.filters_expanded";
 constexpr const char* kSettingsMethodPrefix = "dev.asset_filter.methods.";
 
@@ -85,12 +86,14 @@ void AssetFilterBar::ensure_persistent_state_loaded() {
         FilterState& state = persistent_state();
         state.map_assets = true;
         state.current_room = true;
+        state.render_dark_mask = true;
         persistent_filters_expanded_flag() = false;
         return;
     }
     FilterState& state = persistent_state();
     state.map_assets = devmode::ui_settings::load_bool(kSettingsMapAssetsKey, true);
     state.current_room = devmode::ui_settings::load_bool(kSettingsCurrentRoomKey, true);
+    state.render_dark_mask = devmode::ui_settings::load_bool(kSettingsRenderDarkMaskKey, true);
     persistent_filters_expanded_flag() = devmode::ui_settings::load_bool(kSettingsFiltersExpandedKey, false);
 }
 
@@ -106,6 +109,7 @@ AssetFilterBar::FilterState& AssetFilterBar::mutable_state() {
         if (!has_saved_state_) {
             state_->map_assets = true;
             state_->current_room = true;
+            state_->render_dark_mask = true;
         }
     }
     return *state_;
@@ -141,6 +145,16 @@ void AssetFilterBar::initialize() {
         state_ref.current_room = current_room_value;
     }
     entries_.push_back(std::move(room_entry));
+
+    FilterEntry dark_mask_entry;
+    dark_mask_entry.id = "render_dark_mask";
+    dark_mask_entry.kind = FilterKind::RenderDarkMask;
+    const bool render_dark_mask_value = use_saved_state ? state_ref.render_dark_mask : true;
+    dark_mask_entry.checkbox = std::make_unique<DMCheckbox>("Render Dark Mask", render_dark_mask_value);
+    if (!use_saved_state) {
+        state_ref.render_dark_mask = render_dark_mask_value;
+    }
+    entries_.push_back(std::move(dark_mask_entry));
 
     static const std::vector<std::string> kSpawnMethods = {
         "Random",
@@ -535,6 +549,9 @@ void AssetFilterBar::reset() {
             case FilterKind::CurrentRoom:
                 entry.checkbox->set_value(true);
                 break;
+            case FilterKind::RenderDarkMask:
+                entry.checkbox->set_value(true);
+                break;
             case FilterKind::Type:
                 entry.checkbox->set_value(default_type_enabled(entry.id));
                 break;
@@ -546,6 +563,7 @@ void AssetFilterBar::reset() {
     FilterState& state_ref = mutable_state();
     state_ref.map_assets = true;
     state_ref.current_room = true;
+    state_ref.render_dark_mask = true;
     for (auto& kv : state_ref.type_filters) {
         kv.second = default_type_enabled(kv.first);
     }
@@ -593,6 +611,10 @@ bool AssetFilterBar::passes(const Asset& asset) const {
     return true;
 }
 
+bool AssetFilterBar::render_dark_mask_enabled() const {
+    return state().render_dark_mask;
+}
+
 void AssetFilterBar::rebuild_map_spawn_ids() {
     map_spawn_ids_.clear();
     if (!map_info_json_) {
@@ -632,6 +654,9 @@ void AssetFilterBar::sync_state_from_ui() {
             break;
         case FilterKind::CurrentRoom:
             state_ref.current_room = value;
+            break;
+        case FilterKind::RenderDarkMask:
+            state_ref.render_dark_mask = value;
             break;
         case FilterKind::Type:
             state_ref.type_filters[entry.id] = value;
@@ -757,6 +782,7 @@ void AssetFilterBar::layout_filter_checkboxes() {
     const int margin_x = DMSpacing::item_gap();
     const int margin_y = DMSpacing::item_gap();
     const int row_gap = DMSpacing::small_gap();
+    const int section_gap = DMSpacing::section_gap();
     const int checkbox_width = 180;
     const int checkbox_height = DMCheckbox::height();
     const int available_width = std::max(0, filters_rect_.w - margin_x * 2);
@@ -764,74 +790,150 @@ void AssetFilterBar::layout_filter_checkboxes() {
         return;
     }
 
-    std::vector<std::vector<FilterEntry*>> rows(1);
+    std::vector<FilterEntry*> primary_entries;
+    std::vector<FilterEntry*> advanced_entries;
+    primary_entries.reserve(entries_.size());
+    advanced_entries.reserve(entries_.size());
+    FilterEntry* dark_mask_entry = nullptr;
     for (auto& entry : entries_) {
         if (!entry.checkbox) {
             continue;
         }
-        auto& current_row = rows.back();
-        int current_width = 0;
-        if (!current_row.empty()) {
-            current_width = static_cast<int>(current_row.size()) * checkbox_width + static_cast<int>(current_row.size() - 1) * margin_x;
-        }
-        int width_with_new = current_width + checkbox_width;
-        if (!current_row.empty()) {
-            width_with_new += margin_x;
-        }
-        if (!current_row.empty() && width_with_new > available_width) {
-            rows.emplace_back();
-        }
-        rows.back().push_back(&entry);
-    }
-
-    if (!rows.empty() && rows.back().empty()) {
-        rows.pop_back();
-    }
-
-    int row_count = 0;
-    for (const auto& row : rows) {
-        if (!row.empty()) {
-            ++row_count;
+        switch (entry.kind) {
+        case FilterKind::MapAssets:
+        case FilterKind::CurrentRoom:
+            primary_entries.push_back(&entry);
+            break;
+        case FilterKind::RenderDarkMask:
+            dark_mask_entry = &entry;
+            break;
+        default:
+            advanced_entries.push_back(&entry);
+            break;
         }
     }
 
-    if (row_count == 0) {
+    auto build_rows_for = [&](const std::vector<FilterEntry*>& source) {
+        std::vector<std::vector<FilterEntry*>> section_rows(1);
+        for (FilterEntry* entry : source) {
+            if (!entry || !entry->checkbox) {
+                continue;
+            }
+            auto& current_row = section_rows.back();
+            int current_width = 0;
+            if (!current_row.empty()) {
+                current_width = static_cast<int>(current_row.size()) * checkbox_width + static_cast<int>(current_row.size() - 1) * margin_x;
+            }
+            int width_with_new = current_width + checkbox_width;
+            if (!current_row.empty()) {
+                width_with_new += margin_x;
+            }
+            if (!current_row.empty() && width_with_new > available_width) {
+                section_rows.emplace_back();
+            }
+            section_rows.back().push_back(entry);
+        }
+        if (!section_rows.empty() && section_rows.back().empty()) {
+            section_rows.pop_back();
+        }
+        return section_rows;
+    };
+
+    const auto primary_rows = build_rows_for(primary_entries);
+    const auto advanced_rows = build_rows_for(advanced_entries);
+    auto rows_have_content = [](const std::vector<std::vector<FilterEntry*>>& rows) {
+        for (const auto& row : rows) {
+            if (!row.empty()) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const bool has_primary = rows_have_content(primary_rows);
+    const bool has_advanced = rows_have_content(advanced_rows);
+    const bool has_dark_mask = dark_mask_entry && dark_mask_entry->checkbox;
+    if (!has_primary && !has_advanced && !has_dark_mask) {
         return;
     }
-
-    const int checkbox_rows_height = row_count * checkbox_height + (row_count - 1) * row_gap;
-    filters_rect_.h = margin_y + checkbox_rows_height + margin_y;
 
     int y = filters_rect_.y + margin_y;
     const int left_limit = filters_rect_.x + margin_x;
     const int right_limit = filters_rect_.x + filters_rect_.w - margin_x;
 
-    for (const auto& row : rows) {
-        if (row.empty()) {
-            continue;
-        }
-        const int row_width = static_cast<int>(row.size()) * checkbox_width + static_cast<int>(row.size() - 1) * margin_x;
-        int x = filters_rect_.x + (filters_rect_.w - row_width) / 2;
-        if (row_width > (right_limit - left_limit)) {
-            x = left_limit;
-        } else {
-            if (x < left_limit) x = left_limit;
-            if (x + row_width > right_limit) {
-                x = right_limit - row_width;
-            }
-        }
-
-        for (FilterEntry* entry : row) {
-            if (!entry || !entry->checkbox) {
+    auto layout_rows = [&](const std::vector<std::vector<FilterEntry*>>& rows) {
+        for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
+            const auto& row = rows[row_idx];
+            if (row.empty()) {
                 continue;
             }
-            SDL_Rect rect{x, y, checkbox_width, checkbox_height};
-            entry->checkbox->set_rect(rect);
-            x += checkbox_width + margin_x;
-        }
+            const int row_width = static_cast<int>(row.size()) * checkbox_width + static_cast<int>(row.size() - 1) * margin_x;
+            int x = filters_rect_.x + (filters_rect_.w - row_width) / 2;
+            if (row_width > (right_limit - left_limit)) {
+                x = left_limit;
+            } else {
+                if (x < left_limit) x = left_limit;
+                if (x + row_width > right_limit) {
+                    x = right_limit - row_width;
+                }
+            }
 
-        y += checkbox_height + row_gap;
+            for (FilterEntry* entry : row) {
+                if (!entry || !entry->checkbox) {
+                    continue;
+                }
+                SDL_Rect rect{x, y, checkbox_width, checkbox_height};
+                entry->checkbox->set_rect(rect);
+                x += checkbox_width + margin_x;
+            }
+
+            y += checkbox_height;
+
+            bool more_rows_pending = false;
+            for (size_t next_row = row_idx + 1; next_row < rows.size(); ++next_row) {
+                if (!rows[next_row].empty()) {
+                    more_rows_pending = true;
+                    break;
+                }
+            }
+            if (more_rows_pending) {
+                y += row_gap;
+            }
+        }
+    };
+
+    bool section_emitted = false;
+    if (has_primary) {
+        layout_rows(primary_rows);
+        section_emitted = true;
     }
+
+    if (has_dark_mask) {
+        if (section_emitted) {
+            y += section_gap;
+        }
+        int x = filters_rect_.x + (filters_rect_.w - checkbox_width) / 2;
+        if (x + checkbox_width > right_limit) {
+            x = right_limit - checkbox_width;
+        }
+        if (x < left_limit) {
+            x = left_limit;
+        }
+        SDL_Rect rect{x, y, checkbox_width, checkbox_height};
+        dark_mask_entry->checkbox->set_rect(rect);
+        y += checkbox_height;
+        section_emitted = true;
+    }
+
+    if (has_advanced) {
+        if (section_emitted) {
+            y += section_gap;
+        }
+        layout_rows(advanced_rows);
+    }
+
+    y += margin_y;
+    filters_rect_.h = y - filters_rect_.y;
 }
 
 bool AssetFilterBar::type_filter_enabled(const std::string& type) const {
@@ -957,11 +1059,13 @@ void AssetFilterBar::load_persisted_state() {
     if (!has_saved_state_) {
         state_ref.map_assets = true;
         state_ref.current_room = true;
+        state_ref.render_dark_mask = true;
         filters_expanded_ = false;
         return;
     }
     state_ref.map_assets = devmode::ui_settings::load_bool(kSettingsMapAssetsKey, true);
     state_ref.current_room = devmode::ui_settings::load_bool(kSettingsCurrentRoomKey, true);
+    state_ref.render_dark_mask = devmode::ui_settings::load_bool(kSettingsRenderDarkMaskKey, true);
     filters_expanded_ = persistent_filters_expanded_flag();
 }
 
@@ -970,6 +1074,7 @@ void AssetFilterBar::persist_state() {
     devmode::ui_settings::save_bool(kSettingsInitializedKey, true);
     devmode::ui_settings::save_bool(kSettingsMapAssetsKey, state_ref.map_assets);
     devmode::ui_settings::save_bool(kSettingsCurrentRoomKey, state_ref.current_room);
+    devmode::ui_settings::save_bool(kSettingsRenderDarkMaskKey, state_ref.render_dark_mask);
     for (const auto& kv : state_ref.type_filters) {
         devmode::ui_settings::save_bool(make_type_setting_key(kv.first), kv.second);
     }

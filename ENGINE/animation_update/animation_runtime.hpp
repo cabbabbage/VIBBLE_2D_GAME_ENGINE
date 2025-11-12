@@ -19,6 +19,7 @@ class Grid;
 class Asset;
 class Assets;
 class AnimationFrame;
+class Animation;
 class AnimationUpdate; // planner (public-facing)
 
 class PathSanitizer;
@@ -60,6 +61,10 @@ private:
     bool       attempt_unstick(SDL_Point from, SDL_Point to, const std::vector<const Asset*>& blockers);
     bool       adjust_next_checkpoint(const std::vector<const Asset*>& blockers);
     bool       replan_to_destination();
+    void       update_child_attachments(Animation& anim, float dt);
+    void       ensure_child_slots(Animation& anim);
+    void       advance_child_frames(float dt);
+    void       apply_child_frame_data(const AnimationFrame* frame);
 
     // Apply a pending one-shot move from the planner
     void       apply_pending_move();
@@ -78,9 +83,6 @@ private:
     std::size_t next_checkpoint_index_ = 0;
 
     // Executors that can also re-plan when blocked
-    PathSanitizer* sanitizer_impl_ = nullptr; // deprecated (kept for ABI); not used
-    GetBestPath*   planner_impl_   = nullptr; // deprecated (kept for ABI); not used
-    // Keep concrete members to avoid dynamic allocation
     PathSanitizer  sanitizer_{};
     GetBestPath    planner_{};
     StridePlayer   player_{};

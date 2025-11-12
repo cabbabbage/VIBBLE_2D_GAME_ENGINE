@@ -10,7 +10,6 @@
 #include "DockableCollapsible.hpp"
 #include "widgets.hpp"
 #include <nlohmann/json.hpp>
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "utils/ranged_color.hpp"
 
 struct OrbitSettings;
@@ -25,7 +24,6 @@ public:
     ~MapLightPanel() override;
 
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
-    void set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings);
     void set_update_map_light_callback(std::function<void(bool)> cb);
 
     using ColorSampleRequestCallback = std::function<void( const utils::color::RangedColor&, std::function<void(SDL_Color)>, std::function<void()>)>;
@@ -62,9 +60,6 @@ private:
     void sync_json_from_ui();
     void load_update_map_light_setting();
     nlohmann::json& ensure_light();
-    render_pipeline::shading::ReactiveShadowSettings load_reactive_settings_from_json() const;
-    void sync_reactive_settings_shared();
-
     struct OrbitSettings {
         int update_interval = 10;
         int orbit_x = 0;
@@ -149,8 +144,6 @@ private:
     std::function<void(bool)> update_map_light_callback_{};
 
     OrbitSettings last_applied_orbit_{};
-
-    render_pipeline::shading::ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
 
     friend class OrbitKeyWidget;
 

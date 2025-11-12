@@ -396,6 +396,7 @@ void AssetLoader::createAssets(world::Grid& grid) {
         const auto t0 = std::chrono::steady_clock::now();
 
         grid.set_chunk_resolution(std::max(0, map_grid_settings_.r_chunk));
+        grid.set_parallax_resolution(std::max(0, map_grid_settings_.resolution));
         vibble::log::debug(std::string("[AssetLoader] createAssets: requested r_chunk=") + std::to_string(map_grid_settings_.r_chunk));
 
         spawned_assets_ = extract_all_assets();

@@ -27,6 +27,7 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -46,10 +47,19 @@ namespace fs = std::filesystem;
 
 namespace {
 
+struct SkyBackgroundTaskResult {
+    std::optional<fs::path> sky_path;
+    std::string log_message;
+    bool log_is_warning = false;
+};
+
+SkyBackgroundTaskResult compute_sky_background_task();
+void log_sky_background_task_result(const SkyBackgroundTaskResult& result);
 std::optional<fs::path> prepare_sky_background();
 nlohmann::json build_default_map_manifest(const std::string& map_name);
 
-std::optional<fs::path> prepare_sky_background() {
+SkyBackgroundTaskResult compute_sky_background_task() {
+    SkyBackgroundTaskResult task_result;
     try {
         const fs::path manifest_root = fs::absolute(fs::path(manifest::manifest_path()).parent_path());
         const fs::path sky_dir = manifest_root / "TEMP" / "sky_cache";
@@ -63,16 +73,37 @@ std::optional<fs::path> prepare_sky_background() {
             if (result.reused_cached) {
                 message += " (cached)";
             }
-            vibble::log::info(message);
-            return fs::path(result.saved_png_path);
+            task_result.sky_path = fs::path(result.saved_png_path);
+            task_result.log_message = std::move(message);
+            task_result.log_is_warning = false;
+            return task_result;
         }
 
-        vibble::log::warn(std::string("[Main] Sky map unavailable: ") + result.message);
+        task_result.log_message = std::string("[Main] Sky map unavailable: ") + result.message;
+        task_result.log_is_warning = true;
     } catch (const std::exception& ex) {
-        vibble::log::warn(std::string("[Main] Sky map error: ") + ex.what());
+        task_result.log_message = std::string("[Main] Sky map error: ") + ex.what();
+        task_result.log_is_warning = true;
     }
 
-    return std::nullopt;
+    return task_result;
+}
+
+void log_sky_background_task_result(const SkyBackgroundTaskResult& result) {
+    if (result.log_message.empty()) {
+        return;
+    }
+    if (result.log_is_warning) {
+        vibble::log::warn(result.log_message);
+    } else {
+        vibble::log::info(result.log_message);
+    }
+}
+
+std::optional<fs::path> prepare_sky_background() {
+    auto result = compute_sky_background_task();
+    log_sky_background_task_result(result);
+    return result.sky_path;
 }
 
 }
@@ -385,39 +416,147 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
     constexpr int kSpawnRadius = 1500;
     const int diameter = kSpawnRadius * 2;
 
+    auto spawn_id_for = [&](const std::string& suffix) {
+        std::string cleaned = map_name;
+        for (char& ch : cleaned) {
+            if (std::isspace(static_cast<unsigned char>(ch))) {
+                ch = '_';
+            }
+        }
+        return std::string("spn-") + cleaned + "-" + suffix;
+    };
+
+    auto make_room_spawn_group = [&](const std::string& display_name, const std::string& asset_name) {
+        nlohmann::json group;
+        group["display_name"] = display_name;
+        group["spawn_id"] = spawn_id_for(display_name);
+        group["position"] = "Exact";
+        group["priority"] = 0;
+        group["dx"] = 0;
+        group["dy"] = 0;
+        group["enforce_spacing"] = false;
+        group["explicit_flip"] = false;
+        group["force_flipped"] = false;
+        group["locked"] = false;
+        group["min_number"] = 1;
+        group["max_number"] = 1;
+        group["origional_height"] = diameter;
+        group["origional_width"] = diameter;
+        group["resolution"] = 6;
+        group["resolve_geometry_to_room_size"] = true;
+        group["resolve_quantity_to_room_size"] = false;
+        group["candidates"] = nlohmann::json::array({
+            nlohmann::json::object({{"name", "null"},   {"chance", 0}}),
+            nlohmann::json::object({{"name", asset_name}, {"chance", 100}})
+        });
+        return group;
+    };
+
+    auto make_batch_spawn_group = [&](const std::string& suffix, const std::string& display_name) {
+        nlohmann::json group;
+        group["display_name"] = display_name;
+        group["spawn_id"] = spawn_id_for(suffix);
+        group["position"] = "Random";
+        group["priority"] = 0;
+        group["min_number"] = 0;
+        group["max_number"] = 0;
+        group["enforce_spacing"] = false;
+        group["grid_resolution"] = 6;
+        group["resolution"] = 0;
+        group["resolve_geometry_to_room_size"] = false;
+        group["resolve_quantity_to_room_size"] = false;
+        group["candidates"] = nlohmann::json::array({
+            nlohmann::json::object({{"name", "null"}, {"chance", 100}})
+        });
+        return group;
+    };
+
     nlohmann::json map_info;
 
+    // Map layers
     nlohmann::json layer;
+    layer["name"] = "layer_0";
     layer["level"] = 0;
+    layer["min_rooms"] = 1;
     layer["max_rooms"] = 1;
     nlohmann::json spawn_spec;
     spawn_spec["name"] = "spawn";
+    spawn_spec["min_instances"] = 1;
     spawn_spec["max_instances"] = 1;
     spawn_spec["required_children"] = nlohmann::json::array();
     layer["rooms"] = nlohmann::json::array({spawn_spec});
     map_info["map_layers"] = nlohmann::json::array({layer});
 
+    // Lighting defaults (map + runtime reactive shadows)
     nlohmann::json default_light = nlohmann::json::object({
-        {"radius", 0},
-        {"intensity", 255},
-        {"orbit_x", 0},
-        {"orbit_y", 0},
-        {"orbit_radius", 0},
-        {"update_interval", 10},
-        {"mult", 0.0},
-        {"fall_off", 100},
+        {"radius", 1800},
+        {"intensity", 220},
+        {"update_interval", 4},
+        {"mult", 0.2},
+        {"fall_off", 50},
         {"base_color", nlohmann::json::array({255, 255, 255, 255})},
+        {"map_color", nlohmann::json::array({69, 101, 74, 255})},
         {"keys", nlohmann::json::array({
-            nlohmann::json::array({0.0, nlohmann::json::array({255, 255, 255, 255})})
+            nlohmann::json::array({0.0, nlohmann::json::array({255, 255, 255, 255})}),
+            nlohmann::json::array({0.5, nlohmann::json::array({245, 240, 228, 255})})
+        })},
+        {"reactive_shadows", nlohmann::json::object({
+            {"virtual_light_map", nlohmann::json::object({
+                {"horizontal_falloff", 2.0},
+                {"vertical_falloff", 2.0},
+                {"max_offset_x", 96.0},
+                {"max_offset_y", 64.0},
+                {"max_scale_percent", 120},
+                {"min_scale_percent", 70},
+                {"parallax_percent", 4.0},
+                {"shadow_scale", 1.2}
+            })}
         })}
     });
 
-    map_info["map_assets_data"] = nlohmann::json::object();
-    map_info["map_boundary_data"] = nlohmann::json::object();
-    map_info["map_light_data"] = std::move(default_light);
-    map_info["trails_data"] = nlohmann::json::object();
+    map_info["map_assets_data"] = nlohmann::json::object({
+        {"spawn_groups", nlohmann::json::array({ make_batch_spawn_group("map_assets", "batch_map_assets") })}
+    });
+    map_info["map_boundary_data"] = nlohmann::json::object({
+        {"inherits_map_assets", false},
+        {"spawn_groups", nlohmann::json::array({ make_batch_spawn_group("map_boundary", "batch_map_boundary") })}
+    });
+    map_info["map_light_data"] = default_light;
+    map_info["reactive_shadows"] = nlohmann::json::object({
+        {"frame_blend_falloff_frames", 15},
+        {"opacity_sensitivity_percent", 100.0},
+        {"opacity_strength", 1.0},
+        {"sampling_weights", nlohmann::json::object({
+            {"dynamic_weight", 1.0},
+            {"static_weight", 0.0}
+        })},
+        {"shadow_lut", nlohmann::json::array({
+            nlohmann::json::object({
+                {"brightness", 0.0},
+                {"offset", 0.0},
+                {"opacity", 1.0},
+                {"scale", 1.0}
+            })
+        })}
+    });
+    map_info["trails_data"] = nlohmann::json::object({
+        {"basic", nlohmann::json::object({
+            {"name", "basic"},
+            {"display_color", nlohmann::json::array({85, 242, 143, 255})},
+            {"edge_smoothness", 2},
+            {"geometry", "Line"},
+            {"inherits_map_assets", false},
+            {"is_spawn", false},
+            {"is_boss", false},
+            {"min_width", 400},
+            {"max_width", 800},
+            {"min_height", 400},
+            {"max_height", 800},
+            {"spawn_groups", nlohmann::json::array()}
+        })}
+    });
 
-    // Provide a stable default for layer settings so geometry math has a sane min edge.
+    // Provide stable defaults so geometry math has a sane min edge and grid is well-defined.
     map_info["map_layers_settings"] = nlohmann::json::object({
         {"min_edge_distance", 200}
     });
@@ -433,17 +572,59 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
     spawn_room["min_height"] = diameter;
     spawn_room["max_height"] = diameter;
     spawn_room["edge_smoothness"] = 2;
+    spawn_room["curvyness"] = 2;
     spawn_room["is_spawn"] = true;
     spawn_room["is_boss"] = false;
-    spawn_room["inherits_map_assets"] = false;
-    spawn_room["spawn_groups"] = nlohmann::json::array();
+    spawn_room["inherits_map_assets"] = true;
+    spawn_room["display_color"] = nlohmann::json::array({120, 170, 235, 255});
+    spawn_room["areas"] = nlohmann::json::array({
+        nlohmann::json::object({
+            {"name", "spawn_center"},
+            {"type", "spawning"},
+            {"kind", "Spawn"},
+            {"resolution", 3},
+            {"points", nlohmann::json::array({
+                nlohmann::json::object({{"x", -256}, {"y", -256}}),
+                nlohmann::json::object({{"x", 256}, {"y", -256}}),
+                nlohmann::json::object({{"x", 256}, {"y", 256}}),
+                nlohmann::json::object({{"x", -256}, {"y", 256}})
+            })}
+        })
+    });
+    spawn_room["spawn_groups"] = nlohmann::json::array({
+        make_room_spawn_group("Vibble", "Vibble")
+    });
 
     map_info["rooms_data"] = nlohmann::json::object();
     map_info["rooms_data"]["spawn"] = std::move(spawn_room);
-    map_info["camera_settings"] = nlohmann::json::object();
+    map_info["camera_settings"] = nlohmann::json::object({
+        {"render_distance", 1600.0},
+        {"render_quality_percent", 80},
+        {"smooth_motion_zoom", true},
+        {"min_zoom_multiplier", 0.75},
+        {"max_zoom_multiplier", 3.0},
+        {"height_at_zoom1", 320.0},
+        {"parallax_strength", 45.0},
+        {"distance_scale_strength", 0.1},
+        {"foreshorten_strength", 0.5},
+        {"motion_smoothing_method", 1},
+        {"motion_smoothing_max_step", 8000.0},
+        {"motion_smoothing_snap_threshold", 0.25},
+        {"tripod_distance_y", -860.0},
+        {"min_visible_screen_ratio", 0.01}
+    });
     map_info["map_grid_settings"] = nlohmann::json::object({
+        {"resolution", 6},
         {"spacing", 100},
-        {"jitter", 0}
+        {"jitter", 0},
+        {"r_chunk", 6},
+        {"chunk_size", 64}
+    });
+    map_info["audio"] = nlohmann::json::object({
+        {"music", nlohmann::json::object({
+            {"content_root", (fs::path("content") / map_name / "music").generic_string()},
+            {"tracks", nlohmann::json::array()}
+        })}
     });
     map_info["map_name"] = map_name;
 
@@ -505,8 +686,24 @@ std::optional<MapDescriptor> create_new_map_interactively() {
             tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
             continue;
         }
+        dir_error.clear();
+        fs::create_directories(map_dir / "music", dir_error);
 
         map_info["content_root"] = (fs::path("content") / *sanitized).generic_string();
+        auto audio_it = map_info.find("audio");
+        if (audio_it == map_info.end() || !audio_it->is_object()) {
+            map_info["audio"] = nlohmann::json::object();
+            audio_it = map_info.find("audio");
+        }
+        nlohmann::json& audio_section = (*audio_it);
+        nlohmann::json& music_section = audio_section["music"];
+        if (!music_section.is_object()) {
+            music_section = nlohmann::json::object();
+        }
+        music_section["content_root"] = (fs::path(map_info["content_root"].get<std::string>()) / "music").generic_string();
+        if (!music_section.contains("tracks") || !music_section["tracks"].is_array()) {
+            music_section["tracks"] = nlohmann::json::array();
+        }
 
 
 
@@ -548,7 +745,14 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         return;
     }
 
-    std::optional<fs::path> preloaded_sky_background = prepare_sky_background();
+    std::future<SkyBackgroundTaskResult> sky_background_preload_future;
+    try {
+        sky_background_preload_future = std::async(std::launch::async, [] {
+            return compute_sky_background_task();
+        });
+    } catch (const std::exception& ex) {
+        vibble::log::warn(std::string("[Main] Failed to start sky background preload: ") + ex.what());
+    }
 
     std::shared_ptr<AssetLibrary> shared_asset_library = std::make_shared<AssetLibrary>(false);
     vibble::log::info("[Main] Preparing asset metadata cache...");
@@ -560,7 +764,24 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
     { SDL_Event ev; while (SDL_PollEvent(&ev)) {} }
     vibble::log::info("[Main] Cached asset resources loaded.");
 
+    std::optional<fs::path> preloaded_sky_background;
+    auto finalize_sky_preload_if_needed = [&]() {
+        if (!sky_background_preload_future.valid()) {
+            return;
+        }
+        try {
+            SkyBackgroundTaskResult task_result = sky_background_preload_future.get();
+            log_sky_background_task_result(task_result);
+            preloaded_sky_background = std::move(task_result.sky_path);
+        } catch (const std::exception& ex) {
+            vibble::log::warn(std::string("[Main] Sky background preload failed: ") + ex.what());
+        } catch (...) {
+            vibble::log::warn("[Main] Sky background preload failed due to an unknown error.");
+        }
+    };
+
     while (true) {
+        finalize_sky_preload_if_needed();
         std::optional<fs::path> sky_background;
         if (preloaded_sky_background.has_value()) {
             sky_background = preloaded_sky_background;

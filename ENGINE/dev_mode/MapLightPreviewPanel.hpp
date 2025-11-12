@@ -13,7 +13,6 @@
 #include "DockableCollapsible.hpp"
 #include "world/chunk.hpp"
 #include "render/light_map_manager.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "dev_mode/PreviewViewport.hpp"
 
 class Assets;
@@ -38,7 +37,6 @@ public:
 
     void set_assets(Assets* assets);
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
-    void set_reactive_settings(render_pipeline::shading::ReactiveShadowSettings* settings);
     int  selected_chunk() const { return selected_chunk_; }
 
 protected:
@@ -65,13 +63,6 @@ private:
     void                          sync_ui_from_json();
     void                          sync_json_from_ui();
     void                          apply_immediate_settings();
-    render_pipeline::shading::ReactiveShadowSettings current_settings_from_ui() const;
-    void                          set_reactive_sliders(const render_pipeline::shading::ReactiveShadowSettings& settings);
-    render_pipeline::shading::ReactiveShadowSettings load_reactive_settings_from_dev_settings();
-    void                          persist_reactive_settings_to_dev_settings(const render_pipeline::shading::ReactiveShadowSettings& settings) const;
-    void                          write_reactive_settings_to_json(const render_pipeline::shading::ReactiveShadowSettings& settings);
-    nlohmann::json&               ensure_reactive_settings_json();
-    void                          force_shading_refresh_if_needed(bool force_refresh);
     void                          handle_chunk_resolution_changed();
 
     Assets* assets_ = nullptr;
@@ -88,22 +79,10 @@ private:
     int selected_chunk_ = -1;
     std::string chunk_note_text_;
 
-    std::unique_ptr<class DMSlider> horizontal_falloff_;
-    std::unique_ptr<class DMSlider> vertical_falloff_;
-    std::unique_ptr<class DMSlider> max_offset_x_;
-    std::unique_ptr<class DMSlider> max_offset_y_;
-    std::unique_ptr<class DMSlider> search_radius_;
     std::unique_ptr<class DMSlider> chunk_resolution_;
     std::vector<std::unique_ptr<class Widget>> widget_wrappers_{};
 
     bool needs_sync_to_json_ = false;
-
-    render_pipeline::shading::ReactiveShadowSettings last_applied_settings_ =
-        render_pipeline::shading::sanitize_reactive_shadow_settings({});
-    render_pipeline::shading::ReactiveShadowSettings* reactive_settings_shared_ = nullptr;
-    bool reactive_settings_initialized_ = false;
-    render_pipeline::shading::ReactiveShadowSettings forced_settings_snapshot_ =
-        render_pipeline::shading::sanitize_reactive_shadow_settings({});
     int last_chunk_resolution_ = 0;
 
     mutable PreviewViewport preview_viewport_{};

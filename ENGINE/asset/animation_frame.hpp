@@ -1,5 +1,15 @@
 #pragma once
+
+#include <vector>
 #include <SDL.h>
+
+struct AnimationChildFrameData {
+    int   child_index = -1;
+    int   dx          = 0;
+    int   dy          = 0;
+    float degree      = 0.0f;
+    bool  visible     = false;
+};
 
 class AnimationFrame {
 public:
@@ -12,5 +22,6 @@ public:
     AnimationFrame* next = nullptr;
     bool is_last = false;
     bool is_first = false;
+    std::vector<AnimationChildFrameData> children;
 };
 

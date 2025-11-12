@@ -52,6 +52,11 @@
 #include "draw_utils.hpp"
 #include <SDL_ttf.h>
 #include "dev_mode/manifest_spawn_group_utils.hpp"
+#include "dev_mode/manifest_asset_utils.hpp"
+#include "dev_mode/asset_paths.hpp"
+#include "asset_info_methods/animation_loader.hpp"
+
+namespace asset_paths = devmode::asset_paths;
 
 namespace {
 
@@ -431,6 +436,10 @@ void AssetInfoUI::clear_info() {
         forcing_high_quality_rendering_ = false;
     }
     info_.reset();
+    hovered_light_index_ = -1;
+    if (lighting_section_) {
+        lighting_section_->set_highlighted_light(std::nullopt);
+    }
     container_.reset_scroll();
     if (asset_selector_) asset_selector_->close();
     if (animation_editor_window_) {
@@ -496,6 +505,10 @@ bool AssetInfoUI::is_locked() const {
         }
     }
     return false;
+}
+
+bool AssetInfoUI::is_lighting_section_expanded() const {
+    return visible_ && info_ && lighting_section_ && lighting_section_->is_expanded();
 }
 
 void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
@@ -602,6 +615,15 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
     if (!area_mode_ && !info_) return false;
 
     // World overlay: click-and-drag light crosshairs when Lighting section is open
+    auto clear_light_hover = [&]() {
+        if (hovered_light_index_ == -1) {
+            return;
+        }
+        hovered_light_index_ = -1;
+        if (lighting_section_) {
+            lighting_section_->set_highlighted_light(std::nullopt);
+        }
+    };
     if (lighting_section_ && lighting_section_->is_expanded() && info_ && assets_) {
         const bool pointer_event =
             (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
@@ -687,14 +709,33 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 return -1;
             };
 
-            if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-                int idx = hit_test_index(mx, my);
+            auto set_light_hover = [&](int idx) {
+                if (idx == hovered_light_index_) {
+                    return;
+                }
+                hovered_light_index_ = idx;
+                if (!lighting_section_) return;
                 if (idx >= 0) {
+                    lighting_section_->set_highlighted_light(static_cast<std::size_t>(idx));
+                } else {
+                    lighting_section_->set_highlighted_light(std::nullopt);
+                }
+            };
+
+            const int hovered_idx = hit_test_index(mx, my);
+
+            if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                set_light_hover(hovered_idx);
+                if (hovered_idx >= 0) {
                     light_drag_active_ = true;
-                    light_drag_index_ = idx;
+                    light_drag_index_ = hovered_idx;
+                    lighting_section_->open();
+                    lighting_section_->set_expanded(true);
+                    lighting_section_->expand_light_row(static_cast<std::size_t>(hovered_idx));
                     return true;
                 }
-            } else if (e.type == SDL_MOUSEMOTION && light_drag_active_ && light_drag_index_ >= 0 && light_drag_index_ < static_cast<int>(info_->light_sources.size())) {
+            } else if (e.type == SDL_MOUSEMOTION && light_drag_active_ && light_drag_index_ >= 0 &&
+                       light_drag_index_ < static_cast<int>(info_->light_sources.size())) {
                 auto& L = info_->light_sources[light_drag_index_];
                 // Invert the screen mapping so the crosshair sits under the mouse
                 const float dx_screen = static_cast<float>(mx) - xform.cx;
@@ -705,6 +746,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 const int final_off_x = static_cast<int>(std::lround(new_off_x));
                 const int final_off_y = static_cast<int>(std::lround(new_off_y));
                 if (L.offset_x == final_off_x && L.offset_y == final_off_y) {
+                    set_light_hover(light_drag_index_);
                     return true;
                 }
                 L.offset_x = final_off_x;
@@ -714,9 +756,12 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 if (lighting_section_) {
                     lighting_section_->update_light_offsets(static_cast<std::size_t>(light_drag_index_), final_off_x, final_off_y);
                 }
+                set_light_hover(light_drag_index_);
                 this->notify_light_sources_modified(true);
                 (void)info_->commit_manifest();
                 return true;
+            } else if (e.type == SDL_MOUSEMOTION) {
+                set_light_hover(hovered_idx);
             } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 if (light_drag_active_) {
                     light_drag_active_ = false;
@@ -726,7 +771,11 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     return true;
                 }
             }
+        } else if (pointer_event) {
+            clear_light_hover();
         }
+    } else {
+        clear_light_hover();
     }
 
     if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
@@ -1074,6 +1123,22 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
             return out;
         }();
 
+        const int crosshair_arm_px = 6;
+        const int crosshair_thickness_px = 3; // odd value to stay centered
+        const int offset_start = -crosshair_thickness_px / 2;
+        const int offset_end = crosshair_thickness_px / 2;
+        auto draw_thick_line = [&](int x1, int y1, int x2, int y2) {
+            if (y1 == y2) {
+                for (int offset = offset_start; offset <= offset_end; ++offset) {
+                    SDL_RenderDrawLine(r, x1, y1 + offset, x2, y2 + offset);
+                }
+                return;
+            }
+            for (int offset = offset_start; offset <= offset_end; ++offset) {
+                SDL_RenderDrawLine(r, x1 + offset, y1, x2 + offset, y2);
+            }
+        };
+
         for (const auto& light : info_->light_sources) {
             int offx = light.offset_x;
             if (target_asset_->flipped) {
@@ -1082,11 +1147,10 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
             const float cx = compute_light_transform.cx + static_cast<float>(offx) * compute_light_transform.sx;
             const float cy = compute_light_transform.cy + static_cast<float>(light.offset_y) * compute_light_transform.sy;
 
-            const int arm = 6; // pixels
             const int ix = static_cast<int>(std::lround(cx));
             const int iy = static_cast<int>(std::lround(cy));
-            SDL_RenderDrawLine(r, ix - arm, iy, ix + arm, iy);
-            SDL_RenderDrawLine(r, ix, iy - arm, ix, iy + arm);
+            draw_thick_line(ix - crosshair_arm_px, iy, ix + crosshair_arm_px, iy);
+            draw_thick_line(ix, iy - crosshair_arm_px, ix, iy + crosshair_arm_px);
         }
     }
 
@@ -1674,20 +1738,11 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
         return;
     }
 
-    // Clear animation cache when animation sources change
+    // Clear the entire asset cache when animation sources change
     if (!info_->name.empty()) {
-        std::filesystem::path asset_cache = std::filesystem::path("cache") / info_->name / "animations";
-        try {
-            if (std::filesystem::exists(asset_cache)) {
-                std::filesystem::remove_all(asset_cache);
-                std::cout << "[AssetInfoUI] Cleared animation cache for " << info_->name << " due to source changes\n";
-            }
-        } catch (const std::exception& ex) {
-            std::cerr << "[AssetInfoUI] Failed to clear animation cache for " << info_->name
-                      << ": " << ex.what() << "\n";
-        } catch (...) {
-            std::cerr << "[AssetInfoUI] Failed to clear animation cache for " << info_->name
-                      << " due to unknown error\n";
+        if (!AnimationLoader::clear_asset_cache(info_->name)) {
+            std::cerr << "[AssetInfoUI] Failed to clear cache for " << info_->name
+                      << " after source changes\n";
         }
     }
 
@@ -1858,7 +1913,7 @@ bool AssetInfoUI::duplicate_current_asset(const std::string& raw_name) {
     }
 
     namespace fs = std::filesystem;
-    fs::path base("SRC");
+    fs::path base = asset_paths::assets_root_path();
     fs::path src_dir;
     try {
         const std::string src_dir_str = info_->asset_dir_path();
@@ -1937,7 +1992,7 @@ void AssetInfoUI::request_delete_current_asset() {
     pending.name = info_->name;
     pending.asset_dir = info_->asset_dir_path();
     if (pending.asset_dir.empty() && !info_->name.empty()) {
-        pending.asset_dir = (std::filesystem::path("SRC") / info_->name).lexically_normal().string();
+        pending.asset_dir = asset_paths::asset_folder_path(info_->name).generic_string();
     }
     pending_delete_ = std::move(pending);
     showing_delete_popup_ = true;
@@ -1959,7 +2014,7 @@ void AssetInfoUI::confirm_delete_request() {
 
     const PendingDeleteInfo pending = *pending_delete_;
     const std::string asset_name = pending.name;
-    const std::filesystem::path asset_dir = pending.asset_dir.empty() ? std::filesystem::path("SRC") / asset_name : std::filesystem::path(pending.asset_dir);
+    const std::filesystem::path asset_dir = pending.asset_dir.empty() ? asset_paths::asset_folder_path(asset_name) : std::filesystem::path(pending.asset_dir);
     const std::filesystem::path cache_dir = std::filesystem::path("cache") / asset_name;
 
     showing_delete_popup_ = false;
@@ -1981,16 +2036,29 @@ void AssetInfoUI::confirm_delete_request() {
     }
 
     bool manifest_flush_required = false;
+    bool manifest_entry_removed = false;
     if (!asset_name.empty()) {
         if (manifest_store_) {
-            bool removed = manifest_store_->remove_asset(asset_name);
-            if (!removed) {
+            manifest_entry_removed = manifest_store_->remove_asset(asset_name);
+            if (!manifest_entry_removed) {
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to remove '%s' from manifest", asset_name.c_str());
             } else {
                 manifest_flush_required = true;
             }
         } else {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Manifest store unavailable; manifest not updated for '%s'", asset_name.c_str());
+        }
+
+        if (!manifest_entry_removed) {
+            if (devmode::manifest_utils::remove_manifest_asset_entry(asset_name, &std::cerr)) {
+                manifest_entry_removed = true;
+                manifest_flush_required = true;
+                if (manifest_store_) {
+                    manifest_store_->reload();
+                }
+            } else {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to remove '%s' from manifest assets list", asset_name.c_str());
+            }
         }
     }
 
@@ -2003,19 +2071,20 @@ void AssetInfoUI::confirm_delete_request() {
     };
 
     if (!asset_dir.empty()) {
-        const std::string dir_name = asset_dir.filename().string();
-        const bool is_src_root = (dir_name == "SRC" && asset_dir.parent_path().empty());
-        if (!is_src_root) {
-            remove_directory_if_exists(asset_dir);
+        const auto normalized_dir = asset_dir.lexically_normal();
+        if (asset_paths::is_protected_asset_root(normalized_dir)) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "[AssetInfoUI] Refusing to remove protected asset root '%s'",
+                        normalized_dir.generic_string().c_str());
         } else {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Refusing to remove root SRC directory");
+            remove_directory_if_exists(normalized_dir);
         }
     }
     if (!asset_name.empty()) {
         remove_directory_if_exists(cache_dir);
     }
 
-    if (!asset_name.empty() && manifest_store_) {
+    if (!asset_name.empty() && manifest_store_ && manifest_entry_removed) {
         const nlohmann::json& manifest = manifest_store_->manifest_json();
         auto maps_it = manifest.find("maps");
         if (maps_it != manifest.end() && maps_it->is_object()) {
@@ -2055,9 +2124,6 @@ void AssetInfoUI::confirm_delete_request() {
 
     if (assets_ && !asset_name.empty()) {
         assets_->library().remove(asset_name);
-        if (SDL_Renderer* renderer = assets_->renderer()) {
-            assets_->library().ensureAllAnimationsLoaded(renderer);
-        }
     }
 
     // Close the editor if we just deleted the current asset
