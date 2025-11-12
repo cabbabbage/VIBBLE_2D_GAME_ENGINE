@@ -575,7 +575,9 @@ void SceneRenderer::render(){
             }
 
             if (!a->animation_children().empty()) {
-                for (const auto& attachment : a->animation_children()) {
+                const auto& child_slots = a->animation_children();
+                for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
+                    const auto& attachment = child_slots[child_index];
                     if (!attachment.visible || !attachment.animation || !attachment.current_frame) {
                         continue;
                     }
@@ -587,6 +589,11 @@ void SceneRenderer::render(){
                     int child_fh = attachment.cached_h;
                     if ((child_fw == 0 || child_fh == 0)) {
                         SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh);
+                        if (child_fw > 0 && child_fh > 0) {
+                            auto& mutable_slot = const_cast<Asset::AnimationChildAttachment&>(child_slots[child_index]);
+                            mutable_slot.cached_w = child_fw;
+                            mutable_slot.cached_h = child_fh;
+                        }
                     }
                     SDL_FRect child_rect = get_child_position_rect(
                         a,
