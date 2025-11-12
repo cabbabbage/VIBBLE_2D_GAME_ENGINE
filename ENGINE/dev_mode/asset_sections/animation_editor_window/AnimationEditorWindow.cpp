@@ -1358,7 +1358,21 @@ bool AnimationEditorWindow::persist_manifest_payload(const nlohmann::json& paylo
         using_manifest_store_ = true;
     }
 
-    manifest_transaction_.data() = payload;
+    nlohmann::json& draft = manifest_transaction_.data();
+    if (payload.is_null()) {
+        // No payload update requested; still finalize/save below to keep transaction flow.
+    } else if (payload.is_object()) {
+        if (!draft.is_object()) {
+            draft = nlohmann::json::object();
+        }
+        // Merge keys instead of overwriting the entire asset entry so other sections persist.
+        for (auto it = payload.begin(); it != payload.end(); ++it) {
+            draft[it.key()] = it.value();
+        }
+    } else {
+        // Non-object payloads should replace the draft verbatim (legacy callers expect this).
+        draft = payload;
+    }
     bool committed = finalize ? manifest_transaction_.finalize() : manifest_transaction_.save();
     if (committed) {
         manifest_store_->flush();

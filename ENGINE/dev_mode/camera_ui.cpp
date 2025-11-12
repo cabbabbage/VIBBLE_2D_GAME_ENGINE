@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <functional>
 
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
@@ -87,6 +88,8 @@ private:
 };
 class FloatSliderWidget : public Widget {
 public:
+    using ChangeCallback = std::function<void(float)>;
+
     FloatSliderWidget(std::string label,
                       float min_val,
                       float max_val,
@@ -107,6 +110,8 @@ public:
         slider_widget_ = std::make_unique<SliderWidget>(slider_.get());
         current_value_ = slider_to_value(slider_->value());
     }
+
+    void set_on_value_changed(ChangeCallback cb) { on_change_ = std::move(cb); }
 
     void set_value(float v) {
         if (!slider_) return;
@@ -140,9 +145,13 @@ public:
 
     bool handle_event(const SDL_Event& e) override {
         if (!slider_widget_) return false;
+        const float previous_value = current_value_;
         bool handled = slider_widget_->handle_event(e);
         if (slider_) {
             current_value_ = slider_to_value(slider_->value());
+            if (handled && on_change_ && std::fabs(current_value_ - previous_value) > 1e-5f) {
+                on_change_(current_value_);
+            }
         }
         return handled;
     }
@@ -214,10 +223,13 @@ private:
     int slider_min_units_ = 0;
     int slider_max_units_ = 0;
     float current_value_ = 0.0f;
+    ChangeCallback on_change_{};
 };
 
 class DiscreteSliderWidget : public Widget {
 public:
+    using ChangeCallback = std::function<void(int)>;
+
     DiscreteSliderWidget(std::string label,
                          std::vector<int> values,
                          int value)
@@ -244,6 +256,8 @@ public:
         slider_widget_ = std::make_unique<SliderWidget>(slider_.get());
         current_index_ = clamp_index(slider_->value());
     }
+
+    void set_on_value_changed(ChangeCallback cb) { on_change_ = std::move(cb); }
 
     void set_value(int v) {
         if (!slider_) return;
@@ -277,9 +291,14 @@ public:
 
     bool handle_event(const SDL_Event& e) override {
         if (!slider_widget_) return false;
+        const int previous_value = value();
         bool handled = slider_widget_->handle_event(e);
         if (slider_) {
             current_index_ = clamp_index(slider_->value());
+            const int new_value = value();
+            if (handled && on_change_ && new_value != previous_value) {
+                on_change_(new_value);
+            }
         }
         return handled;
     }
@@ -318,6 +337,7 @@ private:
     int slider_min_units_ = 0;
     int slider_max_units_ = 0;
     int current_index_ = 0;
+    ChangeCallback on_change_{};
 };
 
 CameraUIPanel::CameraUIPanel(Assets* assets, int x, int y)

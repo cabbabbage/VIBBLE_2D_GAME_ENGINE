@@ -191,6 +191,7 @@ private:
     friend class Move;
     friend class AssetInfoUI;
     friend class RenderAsset;
+    friend class FrameEditorSession;
     friend class Assets;
     camera* window = nullptr;
     bool highlighted = false;

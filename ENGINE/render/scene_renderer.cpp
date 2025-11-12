@@ -125,6 +125,14 @@ SceneRenderer::~SceneRenderer() {
 
 SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
 
+render_pipeline::shading::ReactiveShadowSettings& SceneRenderer::reactive_shadow_settings() {
+    return reactive_shadow_settings_;
+}
+
+const render_pipeline::shading::ReactiveShadowSettings& SceneRenderer::reactive_shadow_settings() const {
+    return reactive_shadow_settings_;
+}
+
 void SceneRenderer::set_update_map_light_enabled(bool enabled) {
     update_map_light_enabled_ = enabled;
 }

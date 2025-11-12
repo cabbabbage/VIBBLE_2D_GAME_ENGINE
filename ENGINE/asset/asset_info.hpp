@@ -180,6 +180,7 @@ class AssetInfo {
         private:
     void load_base_properties(const nlohmann::json &data);
     void generate_lights(SDL_Renderer* renderer);
+    void clear_light_textures();
     void load_animations(const nlohmann::json& data);
     void load_areas(const nlohmann::json &data);
     void load_children(const nlohmann::json &data);

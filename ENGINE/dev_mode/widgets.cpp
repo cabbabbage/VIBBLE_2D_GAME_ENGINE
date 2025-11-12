@@ -1372,14 +1372,20 @@ bool DMSlider::handle_event(const SDL_Event& e) {
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
-        if (!focused_) {
+        SDL_Point mouse{0, 0};
+        SDL_GetMouseState(&mouse.x, &mouse.y);
+        const bool pointer_inside = SDL_PointInRect(&mouse, &rect_);
+        if (!pointer_inside && !focused_) {
             return false;
         }
-        // Only update hover if mouse is over our window; adjustment still requires focus.
-        if (SDL_GetMouseFocus() != nullptr) {
-            SDL_Point mouse{0, 0};
-            SDL_GetMouseState(&mouse.x, &mouse.y);
+        if (pointer_inside) {
             update_hover(mouse);
+        } else if (!dragging_) {
+            hovered_ = false;
+            knob_hovered_ = false;
+        }
+        if (!focused_) {
+            set_focus(true);
         }
         int delta = e.wheel.y;
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
