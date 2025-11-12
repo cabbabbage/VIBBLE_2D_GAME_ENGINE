@@ -77,13 +77,6 @@ Asset* StageContext::player() const {
     return lighting ? lighting->player : nullptr;
 }
 
-const render_pipeline::shading::ReactiveShadowSettings* StageContext::reactive_shadow_settings() const {
-    if (reactive_shadow_settings_override) {
-        return reactive_shadow_settings_override;
-    }
-    return (lighting ? lighting->reactive_shadow_settings : nullptr);
-}
-
 void StageContext::update_projection(Asset& asset) {
     base_shadow_opacity     = 204.0f / 255.0f;
     screen_rect             = SDL_Rect{ 0, 0, 0, 0 };
@@ -226,19 +219,13 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
     context.width        = width;
     context.height       = height;
     context.reusable_final = asset.get_final_texture();
-    context.reactive_shadow_settings_override = low_quality_mode_ ? nullptr : lighting_.reactive_shadow_settings;
     if (renderer_) {
         SDL_GetRendererOutputSize(renderer_, &context.screen_width_px, &context.screen_height_px);
     }
 
     SDL_Texture* previous_final       = context.reusable_final;
     SDL_Texture* previous_final_copy  = nullptr;
-    float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f);
-    if (const auto* rs = context.reactive_shadow_settings()) {
-        // Map 0..200 frames to 0..1 strength
-        const float s = static_cast<float>(std::clamp(rs->frame_blend_falloff_frames, 0, 200)) / 200.0f;
-        clamped_blur_strength = std::clamp(s, 0.0f, 1.0f);
-    }
+    float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f); // TODO(#reactive-shadows): expose tuning knobs again.
     const bool   apply_motion_blur     = previous_final && clamped_blur_strength > 0.0f && !low_quality_mode_;
     if (apply_motion_blur) {
         int    prev_w      = 0;
