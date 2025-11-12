@@ -112,6 +112,53 @@ std::string format_percent_steps(const std::vector<int>& steps) {
         return oss.str();
 }
 
+struct SourceSignatureResult {
+        std::uint64_t value = 0;
+        bool          success = false;
+};
+
+constexpr std::uint64_t kSignatureOffset = 1469598103934665603ull;
+constexpr std::uint64_t kSignaturePrime  = 1099511628211ull;
+
+std::uint64_t mix_signature(std::uint64_t seed, std::uint64_t value) {
+        seed ^= value;
+        seed *= kSignaturePrime;
+        return seed;
+}
+
+SourceSignatureResult compute_source_signature(const fs::path& folder, int frame_count) {
+        if (frame_count <= 0) {
+                return {};
+        }
+
+        std::uint64_t signature = kSignatureOffset;
+        std::error_code ec;
+        for (int idx = 0; idx < frame_count; ++idx) {
+                const fs::path frame_path = folder / (std::to_string(idx) + ".png");
+                if (!fs::exists(frame_path, ec) || ec) {
+                        return {};
+                }
+
+                const auto file_size = fs::file_size(frame_path, ec);
+                if (ec) {
+                        return {};
+                }
+
+                const auto write_time = fs::last_write_time(frame_path, ec);
+                if (ec) {
+                        return {};
+                }
+
+                signature = mix_signature(signature, static_cast<std::uint64_t>(idx));
+                signature = mix_signature(signature, static_cast<std::uint64_t>(file_size));
+                const auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(write_time.time_since_epoch()).count();
+                signature = mix_signature(signature, static_cast<std::uint64_t>(nanos));
+        }
+
+        signature = mix_signature(signature, static_cast<std::uint64_t>(frame_count));
+        return {signature, true};
+}
+
 using AudioCache = std::unordered_map<std::string, std::weak_ptr<Mix_Chunk>>;
 
 constexpr int kAnimationCacheVersion = 3;
@@ -272,12 +319,19 @@ void Animation::load(const std::string& trigger,
                      int& scaled_sprite_h,
                      int& original_canvas_width,
                      int& original_canvas_height,
-                     bool scaling_refresh_pending)
+                     bool scaling_refresh_pending,
+                     LoadDiagnostics* diagnostics)
 {
         CacheManager cache;
         const auto load_start = std::chrono::steady_clock::now();
         bool       loaded_from_cache = false;
         bool       reused_animation  = false;
+        bool       cache_invalid_detected = false;
+        const auto flush_diagnostics = [&]() {
+                if (diagnostics) {
+                        diagnostics->cache_invalid = diagnostics->cache_invalid || cache_invalid_detected;
+                }
+        };
         const double safe_scale = sanitize_scale_factor(scale_factor);
         clear_texture_cache();
         const bool prefer_cached = !scaling_refresh_pending;
@@ -349,7 +403,7 @@ void Animation::load(const std::string& trigger,
 		}
 	}
 	playback_fps = parsed_fps;
-	loop      = anim_json.value("loop", false);
+	loop      = anim_json.value("loop", true);
 	randomize = anim_json.value("randomize", false);
 	rnd_start = anim_json.value("rnd_start", false);
 	on_end_animation = anim_json.value("on_end", std::string{"default"});
@@ -373,6 +427,19 @@ void Animation::load(const std::string& trigger,
                 if (src_child_it != info.animations.end()) {
                         child_asset_names_ = src_child_it->second.child_assets();
                 }
+        }
+        // Deduplicate child asset list while preserving order
+        if (!child_asset_names_.empty()) {
+                std::unordered_set<std::string> seen;
+                std::vector<std::string> unique;
+                unique.reserve(child_asset_names_.size());
+                for (const auto& n : child_asset_names_) {
+                        if (n.empty()) continue;
+                        if (seen.insert(n).second) {
+                                unique.push_back(n);
+                        }
+                }
+                child_asset_names_.swap(unique);
         }
         total_dx = 0;
         total_dy = 0;
@@ -482,6 +549,17 @@ void Animation::load(const std::string& trigger,
                                 locked = src_anim.locked;
                                 playback_fps = src_anim.playback_fps;
                                 reused_animation = true;
+                                // Normalize variant count for derived cloning; mirror non-derived path behavior
+                                std::size_t variant_count = initial_variant_count;
+                                if (variant_count == 0) {
+                                        // Ensure at least one variant; update steps and info to stay consistent
+                                        variant_steps_.push_back(1.0f);
+                                        variant_count = 1;
+                                        info.scale_variants = variant_steps_;
+                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                  << " normalized zero-variant derived source to one step: "
+                                                  << format_steps(variant_steps_) << "\n";
+                                }
                                 std::vector<SDL_Texture*> new_frames;
                                 std::vector<FrameCache>   new_caches;
                                 std::vector<SDL_Texture*> new_mask_frames;
@@ -490,10 +568,10 @@ void Animation::load(const std::string& trigger,
                                 new_mask_frames.reserve(src_anim.frames.size());
                                 for (std::size_t frame_idx = 0; frame_idx < src_anim.frames.size(); ++frame_idx) {
                                         FrameCache cache_entry;
-                                        cache_entry.resize(initial_variant_count);
+                                        cache_entry.resize(variant_count);
                                         bool base_ok = false;
                                         SDL_Texture* base_mask = nullptr;
-                                        for (std::size_t variant_idx = 0; variant_idx < initial_variant_count; ++variant_idx) {
+                                        for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
                                                 SDL_Texture* source_tex = src_anim.frame_variant(frame_idx, variant_idx);
                                                 if (!source_tex) {
                                                         cache_entry.textures[variant_idx] = nullptr;
@@ -577,7 +655,8 @@ void Animation::load(const std::string& trigger,
                                                         base_mask = mask_copy;
                                                 }
                                         }
-                                        if (!base_ok || !cache_entry.textures[0]) {
+                                        // Bail out cleanly if no textures were produced; avoid indexing empty containers
+                                        if (!base_ok || cache_entry.textures.empty() || !cache_entry.textures[0]) {
                                                 for (SDL_Texture*& tex : cache_entry.textures) {
                                                         if (tex) {
                                                                 SDL_DestroyTexture(tex);
@@ -590,11 +669,28 @@ void Animation::load(const std::string& trigger,
                                                                 mask_tex = nullptr;
                                                         }
                                                 }
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " skipped cloned frame index " << frame_idx
+                                                          << " due to missing base texture\n";
                                                 continue;
                                         }
-                                        new_frames.push_back(cache_entry.textures[0]);
-                                        new_mask_frames.push_back(base_mask);
-                                        new_caches.push_back(std::move(cache_entry));
+                                        // Defensive: ensure a texture exists before pushing
+                                        if (!cache_entry.textures.empty() && cache_entry.textures[0]) {
+                                                new_frames.push_back(cache_entry.textures[0]);
+                                                new_mask_frames.push_back(base_mask);
+                                                new_caches.push_back(std::move(cache_entry));
+                                        } else {
+                                                // Should be unreachable due to check above, but stay safe
+                                                for (SDL_Texture*& tex : cache_entry.textures) {
+                                                        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
+                                                }
+                                                for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
+                                                        if (mask_tex) { SDL_DestroyTexture(mask_tex); mask_tex = nullptr; }
+                                                }
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " failed to push cloned frame index " << frame_idx
+                                                          << " due to empty texture container\n";
+                                        }
                                 }
                                 frames.insert(frames.end(), new_frames.begin(), new_frames.end());
                                 frame_cache_.insert(frame_cache_.end(), std::make_move_iterator(new_caches.begin()), std::make_move_iterator(new_caches.end()));
@@ -619,7 +715,10 @@ void Animation::load(const std::string& trigger,
                         }
 			++expected_frames;
 		}
-		if (expected_frames == 0) return;
+		if (expected_frames == 0) {
+                        flush_diagnostics();
+                        return;
+                }
                 bool metadata_valid = false;
                 nlohmann::json meta;
                 std::vector<int> expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
@@ -656,6 +755,39 @@ void Animation::load(const std::string& trigger,
                                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                                   << " metadata missing scale_steps -> forcing rebuild\n";
                                         meta_ok = false;
+                                }
+                        }
+                        if (meta_ok && prefer_cached) {
+                                const bool has_signature =
+                                        meta.contains("source_signature") &&
+                                        (meta["source_signature"].is_number_unsigned() || meta["source_signature"].is_number_integer());
+                                if (!has_signature) {
+                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                  << " metadata missing source signature -> forcing rebuild\n";
+                                        meta_ok = false;
+                                } else {
+                                        std::uint64_t stored_signature = 0;
+                                        try {
+                                                stored_signature = meta["source_signature"].get<std::uint64_t>();
+                                        } catch (...) {
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " metadata source signature invalid -> forcing rebuild\n";
+                                                meta_ok = false;
+                                        }
+                                        if (meta_ok) {
+                                                const auto current_signature = compute_source_signature(src_folder, expected_frames);
+                                                if (!current_signature.success) {
+                                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                                  << " unable to compute source signature for '" << src_folder.string()
+                                                                  << "' -> forcing rebuild\n";
+                                                        meta_ok = false;
+                                                } else if (stored_signature != current_signature.value) {
+                                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                                  << " source signature mismatch (0x" << std::hex << stored_signature
+                                                                  << " != 0x" << current_signature.value << std::dec << ") -> rebuild\n";
+                                                        meta_ok = false;
+                                                }
+                                        }
                                 }
                         }
                         if (meta_ok) {
@@ -742,6 +874,7 @@ void Animation::load(const std::string& trigger,
                                 std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, variant_steps_, idx);
                                 std::vector<SDL_Surface*> loaded;
                                 if (!cache.load_surface_sequence(variant_path, expected_frames, loaded)) {
+                                        cache_invalid_detected = true;
                                         if (idx == 0 && cache.load_surface_sequence(cache_folder, expected_frames, loaded)) {
                                                 legacy_detected = true;
                                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
@@ -755,12 +888,14 @@ void Animation::load(const std::string& trigger,
                                 variant_surfaces[idx] = std::move(loaded);
                         }
                         if (legacy_detected) {
+                                cache_invalid_detected = true;
                                 std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
                                 free_surface_lists(variant_surfaces);
                         }
                 }
 
                 if (variant_surfaces.empty() || variant_surfaces[0].empty() || !variant_surfaces[0][0]) {
+                        cache_invalid_detected = true;
                         std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
                         free_surface_lists(variant_surfaces);
                 } else if (!rebuild_variant[0]) {
@@ -811,6 +946,7 @@ void Animation::load(const std::string& trigger,
                                                         SDL_FreeSurface(surf);
                                                 }
                                         }
+                                        flush_diagnostics();
                                         return;
                                 }
                                 variant_surfaces[0] = std::move(base_surfaces);
@@ -848,6 +984,15 @@ void Animation::load(const std::string& trigger,
                         new_meta["scale_steps"] = std::move(step_arr);
                         new_meta["scale_profile_revision"] = expected_revision;
                         new_meta["has_masks"] = info.is_shaded;
+                        const auto generated_signature = compute_source_signature(src_folder, expected_frames);
+                        if (generated_signature.success) {
+                                new_meta["source_signature"] = generated_signature.value;
+                        } else {
+                                new_meta["source_signature"] = 0;
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " unable to record source signature for '" << src_folder.string()
+                                          << "' -> metadata will be refreshed on next load\n";
+                        }
                         cache.save_metadata(meta_file, new_meta);
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " wrote metadata with steps "
@@ -1206,6 +1351,7 @@ void Animation::load(const std::string& trigger,
                 oss << " from " << origin_label << " in " << std::fixed << std::setprecision(3) << elapsed_secs << "s";
                 vibble::log::debug(oss.str());
         }
+        flush_diagnostics();
 }
 
 SDL_Texture* Animation::get_frame(const AnimationFrame* frame) const {

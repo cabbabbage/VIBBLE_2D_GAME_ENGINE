@@ -26,7 +26,6 @@
 #include "AudioImporter.hpp"
 #include "CroppingService.hpp"
 #include "PreviewProvider.hpp"
-#include "frame_editor/FrameEditor.hpp"
 #include "string_utils.hpp"
 #include "ui/tinyfiledialogs.h"
 #ifdef _WIN32
@@ -41,17 +40,132 @@
 
 #include "asset/asset_info.hpp"
 #include "dev_mode/core/manifest_store.hpp"
-#include "dev_mode/dm_icons.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
 #include "core/AssetsManager.hpp"
+#include "dev_mode/asset_paths.hpp"
 
 namespace {
 
 using animation_editor::AnimationEditorWindow;
+namespace fs = std::filesystem;
+namespace asset_paths = devmode::asset_paths;
 
 constexpr int kAutoSaveDelayFrames = 12;
+
+fs::path preferred_asset_folder(const std::string& asset_name) {
+    if (asset_name.empty()) {
+        return asset_paths::assets_root_path();
+    }
+    return (asset_paths::assets_root_path() / asset_name).lexically_normal();
+}
+
+bool path_has_prefix(fs::path path, fs::path prefix) {
+    path = path.lexically_normal();
+    prefix = prefix.lexically_normal();
+    if (prefix.empty()) {
+        return false;
+    }
+    auto pit = prefix.begin();
+    auto it = path.begin();
+    for (; pit != prefix.end(); ++pit, ++it) {
+        if (it == path.end() || *it != *pit) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool is_inside_assets_root(const fs::path& path) {
+    return path_has_prefix(path, asset_paths::assets_root_path());
+}
+
+bool is_inside_src_root(const fs::path& path) {
+    return path_has_prefix(path, fs::path("SRC"));
+}
+
+void copy_directory_contents(const fs::path& source, const fs::path& destination, const std::string& asset_name) {
+    std::error_code ec;
+    if (source.empty() || destination.empty()) {
+        return;
+    }
+    if (!fs::exists(source, ec) || !fs::is_directory(source, ec)) {
+        return;
+    }
+    fs::create_directories(destination, ec);
+    if (ec) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[AnimationEditor] Failed to prepare destination '%s' for '%s': %s",
+                    destination.generic_string().c_str(),
+                    asset_name.c_str(),
+                    ec.message().c_str());
+        return;
+    }
+    for (fs::directory_iterator it(source, ec); !ec && it != fs::directory_iterator(); ++it) {
+        const fs::path target = destination / it->path().filename();
+        fs::copy(it->path(),
+                 target,
+                 fs::copy_options::recursive | fs::copy_options::overwrite_existing,
+                 ec);
+        if (ec) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "[AnimationEditor] Failed to copy '%s' to '%s' for '%s': %s",
+                        it->path().generic_string().c_str(),
+                        target.generic_string().c_str(),
+                        asset_name.c_str(),
+                        ec.message().c_str());
+            ec.clear();
+        }
+    }
+}
+
+fs::path ensure_assets_storage(const fs::path& candidate, const AssetInfo& info) {
+    const std::string asset_name = info.name;
+    if (asset_name.empty()) {
+        return candidate.lexically_normal();
+    }
+
+    const fs::path preferred = preferred_asset_folder(asset_name);
+    fs::path normalized_candidate = candidate.lexically_normal();
+
+    if (normalized_candidate.empty()) {
+        normalized_candidate = preferred;
+    }
+
+    if (is_inside_assets_root(normalized_candidate)) {
+        return normalized_candidate;
+    }
+
+    if (!normalized_candidate.empty() && !is_inside_src_root(normalized_candidate)) {
+        return normalized_candidate;
+    }
+
+    std::error_code ec;
+    const bool preferred_exists = fs::exists(preferred, ec);
+    ec.clear();
+    const bool candidate_exists = !normalized_candidate.empty() && fs::exists(normalized_candidate, ec);
+    ec.clear();
+
+    if (!preferred_exists && candidate_exists) {
+        const fs::path source = normalized_candidate;
+        if (!source.empty() && source != preferred) {
+            copy_directory_contents(source, preferred, asset_name);
+        }
+    }
+
+    fs::create_directories(preferred, ec);
+    if (ec) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[AnimationEditor] Failed to create assets directory '%s' for '%s': %s",
+                    preferred.generic_string().c_str(),
+                    asset_name.c_str(),
+                    ec.message().c_str());
+        return normalized_candidate.empty() ? preferred : normalized_candidate;
+    }
+
+    return preferred;
+}
 
 void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
     if (!renderer || text.empty()) return;
@@ -286,18 +400,15 @@ AnimationEditorWindow::AnimationEditorWindow() {
     configure_inspector_panel();
     list_context_menu_ = std::make_unique<AnimationListContextMenu>();
 
-    header_corner_button_ =
-        std::make_unique<DMButton>(std::string(DMIcons::Close()), &DMStyles::DeleteButton(), DMButton::height(), DMButton::height());
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
     controller_button_ = std::make_unique<DMButton>("Add Controller", &DMStyles::CreateButton(), 140, DMButton::height());
     layout_dirty_ = true;
-    update_corner_button();
 }
 
 AnimationEditorWindow::~AnimationEditorWindow() = default;
 
-void AnimationEditorWindow::set_visible(bool visible) {
-    if (!visible && visible_) {
+void AnimationEditorWindow::set_visible(bool visible, bool process_close) {
+    if (!visible && visible_ && process_close) {
         // Quick debug switch: force rebuild on panel close for testing
         // Uncomment the following lines to enable:
         // if (on_document_saved_) {
@@ -355,9 +466,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     } catch (...) {
         asset_root_path_.clear();
     }
-    if (asset_root_path_.empty() && !info->name.empty()) {
-        asset_root_path_ = std::filesystem::path("SRC") / info->name;
-    }
+    asset_root_path_ = ensure_assets_storage(asset_root_path_, *info);
 
     // Flush any pending auto-save before switching context
     process_auto_save();
@@ -508,9 +617,7 @@ void AnimationEditorWindow::clear_info() {
     info_.reset();
     asset_root_path_.clear();
     close_manifest_transaction();
-    frame_editor_visible_ = false;
-    frame_editor_animation_id_.clear();
-    update_corner_button();
+    live_frame_editor_session_active_ = false;
     document_->load_from_manifest(nlohmann::json::object(), std::filesystem::path{}, {});
     document_->consume_dirty_flag();
     preview_provider_->invalidate_all();
@@ -566,39 +673,6 @@ void AnimationEditorWindow::layout_children() {
     if (list_panel_) list_panel_->set_bounds(list_rect_);
     if (inspector_panel_) inspector_panel_->set_bounds(inspector_rect_);
 
-    frame_editor_rect_ = SDL_Rect{bounds_.x + padding, bounds_.y + padding,
-                                  std::max(0, bounds_.w - padding * 2), std::max(0, bounds_.h - padding * 2)};
-
-    if (frame_editor_visible_) {
-
-        const int modal_outer_margin = DMSpacing::panel_padding();
-        const int modal_max_w = std::min(bounds_.w - modal_outer_margin * 2, 1200);
-        const int modal_max_h = std::min(bounds_.h - modal_outer_margin * 2, 800);
-        const int modal_w = std::max(640, modal_max_w);
-        const int modal_h = std::max(480, modal_max_h);
-        frame_editor_modal_rect_ = SDL_Rect{
-            bounds_.x + (bounds_.w - modal_w) / 2, bounds_.y + (bounds_.h - modal_h) / 2, modal_w, modal_h};
-
-        const int modal_header_gap = DMSpacing::small_gap();
-        const int modal_header_h = DMButton::height() + modal_header_gap * 2;
-        frame_editor_modal_header_rect_ = SDL_Rect{frame_editor_modal_rect_.x,
-                                                   frame_editor_modal_rect_.y,
-                                                   frame_editor_modal_rect_.w,
-                                                   modal_header_h};
-
-        const int modal_inner_pad = DMSpacing::panel_padding();
-        const int content_x = frame_editor_modal_rect_.x + modal_inner_pad;
-        const int content_y = frame_editor_modal_header_rect_.y + frame_editor_modal_header_rect_.h + modal_inner_pad;
-        const int content_w = std::max(0, frame_editor_modal_rect_.w - modal_inner_pad * 2);
-        const int content_h = std::max(0, frame_editor_modal_rect_.y + frame_editor_modal_rect_.h - content_y - modal_inner_pad);
-        frame_editor_rect_ = SDL_Rect{content_x, content_y, content_w, content_h};
-    } else {
-
-        frame_editor_modal_rect_ = SDL_Rect{0, 0, 0, 0};
-        frame_editor_modal_header_rect_ = SDL_Rect{0, 0, 0, 0};
-    }
-
-    if (frame_editor_) frame_editor_->set_bounds(frame_editor_rect_);
 }
 
 void AnimationEditorWindow::configure_list_panel() {
@@ -756,15 +830,6 @@ void AnimationEditorWindow::update(const Input& input, int screen_w, int screen_
             inspector_panel_->update();
         }
     }
-    if (frame_editor_visible_ && frame_editor_) {
-        frame_editor_->set_bounds(frame_editor_rect_);
-        // Keep snapping resolution in sync with current map grid settings
-        if (assets_) {
-            frame_editor_->set_grid_snap_resolution(assets_->map_grid_settings().resolution);
-        }
-        frame_editor_->update();
-    }
-
     if (document_ && document_->consume_dirty_flag()) {
         auto_save_pending_ = true;
         auto_save_timer_frames_ = kAutoSaveDelayFrames;
@@ -793,9 +858,6 @@ void AnimationEditorWindow::render(SDL_Renderer* renderer) const {
     if (list_context_menu_ && list_context_menu_->is_open()) {
         list_context_menu_->render(renderer);
     }
-    if (frame_editor_visible_) {
-        render_frame_editor_overlay(renderer);
-    }
 
     DMDropdown::render_active_options(renderer);
 }
@@ -805,52 +867,16 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
 
     ensure_layout();
 
-    // First, route to modal frame editor if visible
-    if (frame_editor_visible_ && frame_editor_) {
-        if (frame_editor_->handle_event(e)) {
-            return true;
-        }
-        // If the event occurs inside the modal bounds, consume it so underlying panels
-        // cannot interfere with the frame editor's interactions.
-        if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
-            SDL_Point p;
-            if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
-            else { p.x = e.button.x; p.y = e.button.y; }
-            if (SDL_PointInRect(&p, &frame_editor_modal_rect_)) {
-                return true;
-            }
-        }
-        if (e.type == SDL_MOUSEWHEEL) {
-            int mx = 0, my = 0; SDL_GetMouseState(&mx, &my);
-            SDL_Point p{mx, my};
-            if (SDL_PointInRect(&p, &frame_editor_modal_rect_)) {
-                return true;
-            }
-        }
-        // While modal is open, consume all keyboard/text input so underlying panels don't react.
-        if (e.type == SDL_KEYDOWN) {
-            if (e.key.keysym.sym == SDLK_ESCAPE) {
-                close_frame_editor();
-            }
-            return true;
-        }
-        if (e.type == SDL_KEYUP || e.type == SDL_TEXTINPUT) {
-            return true;
-        }
-    }
-
     // If any dropdown is currently active (expanded), give it global priority
-    // so option clicks outside local widgets are captured reliably. Disabled while modal is open.
-    if (!frame_editor_visible_) {
-        if (auto* active_dd = DMDropdown::active_dropdown()) {
-            if (active_dd->handle_event(e)) {
-                // Ensure any selection made via the global dropdown overlay
-                // is propagated into the inspector panels.
-                if (inspector_panel_) {
-                    inspector_panel_->apply_dropdown_selections();
-                }
-                return true;
+    // so option clicks outside local widgets are captured reliably.
+    if (auto* active_dd = DMDropdown::active_dropdown()) {
+        if (active_dd->handle_event(e)) {
+            // Ensure any selection made via the global dropdown overlay
+            // is propagated into the inspector panels.
+            if (inspector_panel_) {
+                inspector_panel_->apply_dropdown_selections();
             }
+            return true;
         }
     }
 
@@ -889,12 +915,8 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
     }
 
     if (e.type == SDL_KEYDOWN) {
-        if (frame_editor_visible_ && e.key.keysym.sym == SDLK_ESCAPE) {
-            close_frame_editor();
-            return true;
-        }
-        if (!frame_editor_visible_ && e.key.keysym.sym == SDLK_ESCAPE) {
-            visible_ = false;
+        if (e.key.keysym.sym == SDLK_ESCAPE) {
+            set_visible(false);
             return true;
         }
     }
@@ -908,16 +930,7 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
             list_context_menu_->close();
         }
 
-        if (frame_editor_visible_) {
-            if (!SDL_PointInRect(&p, &frame_editor_modal_rect_)) {
-                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-                    close_frame_editor();
-                }
-                return true;
-            }
-            // Inside modal, we already routed to the frame editor; consume to prevent bleed-through
-            return true;
-        } else if (SDL_PointInRect(&p, &bounds_)) {
+        if (SDL_PointInRect(&p, &bounds_)) {
             return true;
         } else {
             // Outside bounds, do not consume
@@ -930,10 +943,6 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         int my = 0;
         SDL_GetMouseState(&mx, &my);
         SDL_Point p{mx, my};
-        if (frame_editor_visible_) {
-            // Always consume wheel while modal is open so it doesn't scroll other panels
-            return true;
-        }
         if (SDL_PointInRect(&p, &bounds_)) {
             return true;
         }
@@ -1097,9 +1106,6 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
     if (controller_button_) controller_button_->render(renderer);
 
     int label_x = header_rect_.x + DMSpacing::panel_padding();
-    if (!frame_editor_visible_ && header_corner_button_) {
-        label_x = std::max(label_x, header_corner_button_->rect().x + header_corner_button_->rect().w + DMSpacing::small_gap());
-    }
     if (add_button_) {
         label_x = std::max(label_x, add_button_->rect().x + add_button_->rect().w + DMSpacing::small_gap());
     }
@@ -1138,49 +1144,6 @@ void AnimationEditorWindow::render_inspector(SDL_Renderer* renderer) const {
     render_label(renderer, message, text_x, text_y);
 }
 
-void AnimationEditorWindow::render_frame_editor_overlay(SDL_Renderer* renderer) const {
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
-    SDL_SetRenderDrawColor(renderer, 10, 10, 14, 192);
-    SDL_RenderFillRect(renderer, &bounds_);
-
-    ensure_layout();
-
-    const SDL_Color bg = DMStyles::PanelBG();
-    const SDL_Color hi = DMStyles::HighlightColor();
-    const SDL_Color sh = DMStyles::ShadowColor();
-    const SDL_Color border = DMStyles::Border();
-    dm_draw::DrawBeveledRect( renderer, frame_editor_modal_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), bg, hi, sh, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-    dm_draw::DrawRoundedOutline(renderer, frame_editor_modal_rect_, DMStyles::CornerRadius(), 1, border);
-
-    dm_draw::DrawBeveledRect( renderer, frame_editor_modal_header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), hi, sh, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-
-    if (header_corner_button_) {
-        const int pad = DMSpacing::panel_padding();
-        const int y = frame_editor_modal_header_rect_.y + DMSpacing::small_gap();
-        const int w = header_corner_button_->rect().w;
-        header_corner_button_->set_style(&DMStyles::DeleteButton());
-        header_corner_button_->set_rect(SDL_Rect{frame_editor_modal_header_rect_.x + pad, y, w, DMButton::height()});
-        header_corner_button_->render(renderer);
-    }
-
-    std::string title = "Frame Editor";
-    if (!frame_editor_animation_id_.empty()) {
-        title += " — ";
-        title += frame_editor_animation_id_;
-    }
-    int label_x = frame_editor_modal_header_rect_.x + DMSpacing::panel_padding();
-    if (header_corner_button_) {
-        label_x = std::max(label_x, header_corner_button_->rect().x + header_corner_button_->rect().w + DMSpacing::small_gap());
-    }
-    render_label(renderer, title, label_x, frame_editor_modal_header_rect_.y + DMSpacing::small_gap());
-
-    if (frame_editor_) {
-        frame_editor_->set_bounds(frame_editor_rect_);
-        frame_editor_->render(renderer);
-    }
-}
-
 bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
     bool consumed = false;
     auto handle_button = [&](const std::unique_ptr<DMButton>& button, auto&& callback) {
@@ -1194,15 +1157,8 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
         consumed = true;
     };
 
-    if (frame_editor_visible_) {
-        handle_button(header_corner_button_, [this]() {
-            close_frame_editor();
-        });
-    }
-    if (!frame_editor_visible_) {
-        handle_button(add_button_, [this]() { create_animation_via_prompt(); });
-        handle_button(controller_button_, [this]() { handle_controller_button_click(); });
-    }
+    handle_button(add_button_, [this]() { create_animation_via_prompt(); });
+    handle_button(controller_button_, [this]() { handle_controller_button_click(); });
     return consumed;
 }
 
@@ -1211,63 +1167,80 @@ void AnimationEditorWindow::set_status_message(const std::string& message, int f
     status_timer_frames_ = std::max(frames, 0);
 }
 
-void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
-    // New behavior: launch in-world frame editor session via DevControls/Assets and hide this window
-    if (assets_ && target_asset_) {
-        assets_->begin_frame_editor_session(target_asset_, document_, preview_provider_, animation_id, this);
-        set_visible(false);
-        return;
+Asset* AnimationEditorWindow::resolve_frame_editor_asset() {
+    if (target_asset_) {
+        return target_asset_;
     }
-    // Fallback to legacy modal if assets not wired
-    if (!frame_editor_) {
-        frame_editor_ = std::make_unique<FrameEditor>();
-        frame_editor_->set_close_callback([this]() { this->close_frame_editor(); });
+    if (!assets_) {
+        return nullptr;
     }
-    frame_editor_animation_id_ = animation_id;
-    frame_editor_->set_preview_provider(preview_provider_);
-    frame_editor_->set_document(document_);
-    frame_editor_->set_animation_id(animation_id);
-    frame_editor_->set_bounds(frame_editor_rect_);
-    if (assets_) {
-        frame_editor_->set_grid_snap_resolution(assets_->map_grid_settings().resolution);
+    auto info = info_.lock();
+    if (!info) {
+        return nullptr;
     }
-    if (inspector_panel_) {
-        inspector_panel_->set_scrub_mode(true);
-        inspector_panel_->set_scrub_frame(frame_editor_->selected_index());
+    const std::string context_name_lower = animation_editor::strings::to_lower_copy(info->name);
+    auto matches_context = [&](Asset* candidate) -> bool {
+        if (!candidate || !candidate->info) {
+            return false;
+        }
+        if (candidate->info == info) {
+            return true;
+        }
+        if (context_name_lower.empty() || candidate->info->name.empty()) {
+            return false;
+        }
+        return animation_editor::strings::to_lower_copy(candidate->info->name) == context_name_lower;
+    };
+    auto pick_from = [&](const std::vector<Asset*>& candidates) -> Asset* {
+        for (Asset* candidate : candidates) {
+            if (matches_context(candidate)) {
+                return candidate;
+            }
+        }
+        return nullptr;
+    };
+
+    if (Asset* hovered = assets_->get_hovered_asset(); hovered && matches_context(hovered)) {
+        return hovered;
     }
-    frame_editor_->set_frame_changed_callback([this](int frame) {
-        if (inspector_panel_) inspector_panel_->set_scrub_frame(frame);
-    });
-    frame_editor_visible_ = true;
-    SDL_CaptureMouse(SDL_TRUE);
-    update_corner_button();
+    if (Asset* from_selection = pick_from(assets_->get_selected_assets())) {
+        return from_selection;
+    }
+    if (Asset* from_highlight = pick_from(assets_->get_highlighted_assets())) {
+        return from_highlight;
+    }
+    if (Asset* from_active = pick_from(assets_->getActive())) {
+        return from_active;
+    }
+    return nullptr;
 }
 
-void AnimationEditorWindow::close_frame_editor() {
-    frame_editor_visible_ = false;
-    if (!frame_editor_animation_id_.empty()) {
-        focus_animation(frame_editor_animation_id_);
+void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
+    if (animation_id.empty() || !document_) {
+        return;
     }
-    frame_editor_animation_id_.clear();
-    if (inspector_panel_) {
-        inspector_panel_->set_scrub_mode(false);
+    if (!assets_) {
+        set_status_message("Live Frame Editor is only available inside the room editor.", 240);
+        return;
+    }
+    Asset* runtime_asset = resolve_frame_editor_asset();
+    if (!runtime_asset) {
+        set_status_message("Select an in-room asset to edit frames in-scene.", 240);
+        return;
+    }
+    target_asset_ = runtime_asset;
+    live_frame_editor_session_active_ = true;
+    assets_->begin_frame_editor_session(runtime_asset, document_, preview_provider_, animation_id, this);
+    set_visible(false, false /*suspend without closing hooks*/);
+}
+
+void AnimationEditorWindow::on_live_frame_editor_closed(const std::string& animation_id) {
+    live_frame_editor_session_active_ = false;
+    set_visible(true);
+    if (!animation_id.empty()) {
+        focus_animation(animation_id);
     }
     set_status_message("Movement updated.", 180);
-    SDL_CaptureMouse(SDL_FALSE);
-    update_corner_button();
-}
-
-void AnimationEditorWindow::update_corner_button() {
-    if (!header_corner_button_) {
-        return;
-    }
-    if (frame_editor_visible_) {
-        header_corner_button_->set_text(u8"\u2190");
-        header_corner_button_->set_style(&DMStyles::DeleteButton());
-    } else {
-        header_corner_button_->set_text(std::string(DMIcons::Close()));
-        header_corner_button_->set_style(&DMStyles::DeleteButton());
-    }
 }
 
 void AnimationEditorWindow::create_animation_via_prompt() {

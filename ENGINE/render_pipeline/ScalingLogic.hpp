@@ -71,6 +71,7 @@ struct ScalingLogic {
         std::uint64_t revision  = 0;
         bool          had_entry = false;
         bool          created_entry = false;
+        bool          revision_changed = false;
         float         min_scale = 1.0f;
         float         max_scale = 1.0f;
         bool has_custom_steps() const { return !steps.empty(); }
@@ -360,6 +361,7 @@ struct ScalingLogic {
                 profile.revision  = it->second.revision;
                 profile.min_scale = it->second.min_scale;
                 profile.max_scale = it->second.max_scale;
+                record_profile_history(state, asset_key, profile);
                 return profile;
             }
         }
@@ -367,6 +369,7 @@ struct ScalingLogic {
         const auto& defaults = DefaultScaleSteps();
         profile.steps.assign(defaults.begin(), defaults.end());
         profile.revision = 0;
+        record_profile_history(state, asset_key, profile);
         return profile;
     }
 
@@ -477,10 +480,16 @@ private:
         float         max_scale = 1.0f;
     };
 
+    struct ProfileObservation {
+        bool          had_entry = false;
+        std::uint64_t revision  = 0;
+    };
+
     struct ProfilesState {
         bool                   loaded = false;
         std::mutex             mutex;
         std::unordered_map<std::string, ProfileEntry> entries;
+        std::unordered_map<std::string, ProfileObservation> history;
     };
 
     static inline ProfilesState& profiles_state() {
@@ -541,6 +550,35 @@ private:
             NormalizeVariantSteps(entry.steps);
             state.entries.emplace(it.key(), std::move(entry));
         }
+    }
+
+    static inline void record_profile_history(ProfilesState& state,
+                                              const std::string& asset_key,
+                                              ScaleProfile& profile) {
+        if (asset_key.empty()) {
+            return;
+        }
+
+        auto [it, inserted] = state.history.emplace(asset_key, ProfileObservation{
+            profile.had_entry,
+            profile.revision
+        });
+
+        if (inserted) {
+            // First observation becomes the baseline; do not flag any changes.
+            return;
+        }
+
+        ProfileObservation& previous = it->second;
+        if (!previous.had_entry && profile.had_entry) {
+            profile.created_entry = true;
+        }
+        if (previous.had_entry && profile.had_entry && previous.revision != profile.revision) {
+            profile.revision_changed = true;
+        }
+
+        previous.had_entry = profile.had_entry;
+        previous.revision  = profile.revision;
     }
 };
 

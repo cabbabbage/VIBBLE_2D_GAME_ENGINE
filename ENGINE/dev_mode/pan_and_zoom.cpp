@@ -11,6 +11,7 @@ void PanAndZoom::set_zoom_scale_factor(double factor) {
 }
 
 void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked) {
+    const SDL_Point mouse{ input.getX(), input.getY() };
     const int wheel_y = input.getScrollY();
     if (wheel_y != 0) {
         // mouse wheel -> zoom
@@ -29,35 +30,55 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
             cam.animate_zoom_multiply(eff, dur);
         } else {
             // Not panning: zoom toward the cursor.
-            const SDL_Point mouse{ input.getX(), input.getY() };
             cam.animate_zoom_towards_point(eff, mouse, dur);
         }
     }
 
     if (input.wasReleased(Input::LEFT)) {
         panning_ = false;
+        pan_drag_pending_ = false;
     }
 
     if (input.wasPressed(Input::LEFT)) {
         if (!pan_blocked) {
-            panning_ = true;
-            pan_start_mouse_screen_ = SDL_Point{ input.getX(), input.getY() };
+            pan_drag_pending_ = true;
+            pan_start_mouse_screen_ = mouse;
             pan_start_center_ = cam.get_screen_center();
-            cam.set_manual_zoom_override(true);
-            cam.set_focus_override(pan_start_center_);
         } else {
             panning_ = false;
+            pan_drag_pending_ = false;
         }
     }
 
-    if (!panning_ || !input.isDown(Input::LEFT)) {
+    const bool left_down = input.isDown(Input::LEFT);
+
+    if (!left_down) {
+        pan_drag_pending_ = false;
+    }
+
+    if (pan_blocked && !panning_) {
+        pan_drag_pending_ = false;
+    }
+
+    if (!panning_ && pan_drag_pending_ && left_down) {
+        const int dx = mouse.x - pan_start_mouse_screen_.x;
+        const int dy = mouse.y - pan_start_mouse_screen_.y;
+        if (dx != 0 || dy != 0) {
+            panning_ = true;
+            pan_drag_pending_ = false;
+            cam.set_manual_zoom_override(true);
+            cam.set_focus_override(pan_start_center_);
+        }
+    }
+
+    if (!panning_ || !left_down) {
         return;
     }
 
     // Drag to pan: move screen center and keep focus in sync.
     const double scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
-    const int dx = input.getX() - pan_start_mouse_screen_.x;
-    const int dy = input.getY() - pan_start_mouse_screen_.y;
+    const int dx = mouse.x - pan_start_mouse_screen_.x;
+    const int dy = mouse.y - pan_start_mouse_screen_.y;
     SDL_Point new_center{
         static_cast<int>(std::lround(static_cast<double>(pan_start_center_.x) - static_cast<double>(dx) * scale)),
         static_cast<int>(std::lround(static_cast<double>(pan_start_center_.y) - static_cast<double>(dy) * scale))
@@ -67,6 +88,7 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
 }
 
 void PanAndZoom::cancel(camera& cam) {
+    pan_drag_pending_ = false;
     if (!panning_) {
         return;
     }

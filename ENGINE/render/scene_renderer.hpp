@@ -10,7 +10,6 @@
 #include <nlohmann/json.hpp>
 #include "global_light_source.hpp"
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
-#include "render_pipeline/render_asset/shading/ReactiveShadowSettings.hpp"
 #include "render/camera.hpp"
 #include "render/runtime_lighting_sampler.hpp"
 #include "render/grid_tile_renderer.hpp"
@@ -36,10 +35,10 @@ public:
     bool chunk_preview_enabled() const { return chunk_preview_enabled_; }
     bool update_map_light_enabled() const { return update_map_light_enabled_; }
     void set_update_map_light_enabled(bool enabled);
+    void set_dark_mask_enabled(bool enabled);
+    bool dark_mask_enabled() const { return dark_mask_enabled_; }
     Global_Light_Source& map_light_source() { return main_light_source_; }
     const Global_Light_Source& map_light_source() const { return main_light_source_; }
-    render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() { return reactive_shadow_settings_; }
-    const render_pipeline::shading::ReactiveShadowSettings& reactive_shadow_settings() const { return reactive_shadow_settings_; }
     LightMap* light_map();
     const LightMap* light_map() const;
 
@@ -76,14 +75,13 @@ private:
 
     bool ensure_darkness_overlay();
     void destroy_darkness_overlay();
-    void render_dynamic_darkness_overlay(float map_light_opacity);
+    void render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds);
 
     SDL_Renderer*  renderer_;
     Assets*        assets_;
     int            screen_width_;
     int            screen_height_;
     Global_Light_Source main_light_source_;
-    render_pipeline::shading::ReactiveShadowSettings reactive_shadow_settings_{};
     AssetRenderPipeline render_pipeline_;
     std::unique_ptr<GridTileRenderer> tile_renderer_;
     std::unique_ptr<LightMap> light_map_;
@@ -93,6 +91,7 @@ private:
     bool           chunk_preview_enabled_ = false;
     bool           update_map_light_enabled_ = true;
     bool           chunk_lighting_suspended_ = false;
+    bool           dark_mask_enabled_ = true;
 
     std::unordered_map<Asset*, const AnimationFrame*> last_rendered_frames_;
     std::uint64_t frame_counter_ = 0;

@@ -20,12 +20,36 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                 auto clamp_int = [](int value, int min_value, int max_value) {
                         return std::clamp(value, min_value, max_value);
 };
+                auto read_int = [](const json& src, const char* key, int fallback) -> int {
+                        try {
+                                auto it = src.find(key);
+                                if (it == src.end()) {
+                                        return fallback;
+                                }
+                                if (it->is_number_integer()) {
+                                        return it->get<int>();
+                                }
+                                if (it->is_number_unsigned()) {
+                                        return static_cast<int>(it->get<unsigned int>());
+                                }
+                                if (it->is_number_float()) {
+                                        return static_cast<int>(std::lround(it->get<double>()));
+                                }
+                                if (it->is_boolean()) {
+                                        return it->get<bool>() ? 100 : 0;
+                                }
+                        } catch (...) {
+                        }
+                        return fallback;
+                };
 
                 light.intensity = clamp_int(l.value("light_intensity", light.intensity), 1, 255);
                 light.radius    = std::max(1, l.value("radius", light.radius));
                 light.fall_off  = std::max(0, l.value("fall_off", light.fall_off));
                 light.flare     = clamp_int(l.value("flare", light.flare), 0, 100);
-                light.flicker   = std::max(0, l.value("flicker", light.flicker));
+                const int legacy_flicker = std::clamp(read_int(l, "flicker", light.flicker_speed), 0, 100);
+                light.flicker_speed      = std::clamp(read_int(l, "flicker_speed", legacy_flicker), 0, 100);
+                light.flicker_smoothness = std::clamp(read_int(l, "flicker_smoothness", legacy_flicker), 0, 100);
                 light.offset_x  = l.value("offset_x", light.offset_x);
                 light.offset_y  = l.value("offset_y", light.offset_y);
                 light.color     = {255, 255, 255, 255};
@@ -47,37 +71,6 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                 light.render_front_and_back_to_asset_alpha_mask =
                     l.value("render_front_and_back_to_asset_alpha_mask", false);
 
-                // Legacy key migration: support historical fields once on read.
-                if (!l.contains("in_front")) {
-                    if (l.contains("front")) {
-                        try {
-                            light.in_front = l.value("front", false);
-                        } catch (...) {
-                            light.in_front = false;
-                        }
-                    }
-                }
-
-                if (!l.contains("render_to_dark_mask") && l.contains("dark_mask")) {
-                    try {
-                        light.render_to_dark_mask = l.value("dark_mask", false);
-                    } catch (...) {
-                        light.render_to_dark_mask = false;
-                    }
-                }
-
-                if (l.contains("render_texture")) {
-                    bool legacy_render_texture = true;
-                    try {
-                        legacy_render_texture = l.value("render_texture", true);
-                    } catch (...) {
-                        legacy_render_texture = true;
-                    }
-                    if (!legacy_render_texture) {
-                        light.in_front = false;
-                        light.behind   = false;
-                    }
-                }
                 return light;
 };
         auto append_light = [&](const LightSource& light) {

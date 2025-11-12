@@ -66,6 +66,8 @@ public:
     void set_dev_mode(bool mode);
     void set_force_high_quality_rendering(bool enable);
     bool force_high_quality_rendering() const { return force_high_quality_rendering_; }
+    void set_render_dark_mask_enabled(bool enabled);
+    bool render_dark_mask_enabled() const { return render_dark_mask_enabled_; }
     void set_render_suppressed(bool suppressed);
     void set_input(Input* m);
     Input* get_input() const { return input; }
@@ -256,6 +258,7 @@ private:
     bool dev_mode = false;
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
+    bool render_dark_mask_enabled_ = true;
     world::Grid world_grid_{};
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;

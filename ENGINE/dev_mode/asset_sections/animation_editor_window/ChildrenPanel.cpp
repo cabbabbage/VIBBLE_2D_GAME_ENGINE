@@ -576,17 +576,54 @@ void ChildrenPanel::close_search_panel() {
 }
 
 void ChildrenPanel::position_search_panel() const {
-    if (!search_assets_ || !search_assets_->visible()) {
+    if (!search_assets_) {
         return;
     }
-    SDL_Rect target = add_button_rect_;
-    if (target.w <= 0 || target.h <= 0) {
-        target = SDL_Rect{bounds_.x + kPanelPadding,
-                          bounds_.y + kPanelPadding,
-                          std::max(bounds_.w / 2, 280),
-                          260};
+    const int padding = kPanelPadding;
+    constexpr int kMinSearchWidth = 280;
+    constexpr int kMinSearchHeight = 240;
+    constexpr int kMaxSearchHeight = 420;
+
+    int width = kMinSearchWidth;
+    if (bounds_.w > padding * 2) {
+        width = std::min(std::max(bounds_.w / 2, kMinSearchWidth), bounds_.w - padding * 2);
     }
-    search_assets_->set_embedded_rect(target);
+    if (width <= 0) {
+        width = kMinSearchWidth;
+    }
+
+    int header_bottom = header_rect_.h > 0 ? header_rect_.y + header_rect_.h : bounds_.y + padding;
+    int height = std::min(std::max(kMinSearchHeight, bounds_.h / 3), kMaxSearchHeight);
+    int available_height = bounds_.h - header_bottom - padding;
+    if (available_height > 0) {
+        height = std::min(height, available_height);
+    }
+    if (height <= 0) {
+        height = kMinSearchHeight;
+    }
+
+    int min_x = bounds_.x + padding;
+    int max_x = bounds_.x + bounds_.w - padding - width;
+    if (max_x < min_x) {
+        max_x = min_x;
+    }
+
+    int min_y = bounds_.y + padding;
+    int max_y = bounds_.y + bounds_.h - padding - height;
+    if (max_y < min_y) {
+        max_y = min_y;
+    }
+
+    int x = min_x;
+    if (add_button_rect_.w > 0 && add_button_rect_.h > 0) {
+        int desired_x = add_button_rect_.x + add_button_rect_.w - width;
+        x = std::clamp(desired_x, min_x, max_x);
+    }
+
+    int y = std::clamp(header_bottom + padding, min_y, max_y);
+
+    // Keep the embedded search overlay wide and anchored below the header so results are visible immediately.
+    search_assets_->set_embedded_rect(SDL_Rect{x, y, width, height});
 }
 
 void ChildrenPanel::request_layout() const {

@@ -83,9 +83,6 @@ private:
     std::size_t next_checkpoint_index_ = 0;
 
     // Executors that can also re-plan when blocked
-    PathSanitizer* sanitizer_impl_ = nullptr; // deprecated (kept for ABI); not used
-    GetBestPath*   planner_impl_   = nullptr; // deprecated (kept for ABI); not used
-    // Keep concrete members to avoid dynamic allocation
     PathSanitizer  sanitizer_{};
     GetBestPath    planner_{};
     StridePlayer   player_{};

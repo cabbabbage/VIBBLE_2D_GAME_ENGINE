@@ -76,6 +76,9 @@ class FrameEditor {
     CloseCallback close_callback_;
     FrameChangedCallback frame_changed_callback_;
     Mode active_mode_ = Mode::Movement;
+    bool tools_panel_follow_layout_ = true;
+
+    SDL_Rect tools_panel_hit_rect() const;
 };
 
 }

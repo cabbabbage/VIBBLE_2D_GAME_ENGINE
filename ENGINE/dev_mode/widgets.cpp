@@ -386,13 +386,37 @@ void DMButton::draw_label(SDL_Renderer* r, SDL_Color col) const {
 void DMButton::render(SDL_Renderer* r) const {
     if (!style_) return;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    const SDL_Color bg = pressed_ ? style_->press_bg : (hovered_ ? style_->hover_bg : style_->bg);
-    const SDL_Color& highlight = DMStyles::HighlightColor();
-    const SDL_Color& shadow = DMStyles::ShadowColor();
-    dm_draw::DrawBeveledRect( r, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), bg, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    SDL_Rect button_rect = rect_;
+    const int corner_radius = DMStyles::CornerRadius();
 
-    SDL_Color border = style_->border;
-    dm_draw::DrawRoundedOutline( r, rect_, DMStyles::CornerRadius(), kControlOutlineThickness, border);
+    const SDL_Color base = pressed_ ? style_->press_bg : (hovered_ ? style_->hover_bg : style_->bg);
+    const float top_bias = pressed_ ? 0.02f : 0.12f;
+    const float bottom_bias = pressed_ ? 0.18f : 0.1f;
+    const SDL_Color top_color = dm_draw::LightenColor(base, top_bias);
+    const SDL_Color bottom_color = dm_draw::DarkenColor(base, bottom_bias);
+
+    SDL_Rect shadow_rect = button_rect;
+    shadow_rect.y += 2;
+    SDL_Color shadow_color = DMStyles::ShadowColor();
+    shadow_color.a = static_cast<Uint8>(std::clamp<int>(static_cast<int>(shadow_color.a * 0.45f), 0, 255));
+    dm_draw::DrawRoundedSolidRect(r, shadow_rect, corner_radius, shadow_color);
+
+    if (hovered_ && !pressed_) {
+        SDL_Rect glow_rect = button_rect;
+        glow_rect.x -= 1;
+        glow_rect.y -= 1;
+        glow_rect.w += 2;
+        glow_rect.h += 2;
+        SDL_Color glow = DMStyles::HighlightColor();
+        glow.a = static_cast<Uint8>(std::clamp<int>(static_cast<int>(glow.a * 0.3f), 0, 255));
+        dm_draw::DrawRoundedSolidRect(r, glow_rect, corner_radius + 2, glow);
+    }
+
+    dm_draw::DrawRoundedGradientRect(r, button_rect, corner_radius, top_color, bottom_color);
+
+    SDL_Color border = (hovered_ || pressed_) ? DMStyles::ButtonFocusOutline() : style_->border;
+    dm_draw::DrawRoundedOutline(r, button_rect, corner_radius, kControlOutlineThickness, border);
+
     draw_label(r, style_->text);
     if (tooltip_state_) {
         DMWidgetTooltipRender(r, rect_, *tooltip_state_);
@@ -400,7 +424,7 @@ void DMButton::render(SDL_Renderer* r) const {
 }
 
 DMTextBox::DMTextBox(const std::string& label, const std::string& value)
-    : label_(label), text_(value), caret_pos_(value.size()) {}
+    : label_(label), default_label_(label), text_(value), caret_pos_(value.size()) {}
 
 void DMTextBox::set_rect(const SDL_Rect& r) {
     rect_ = r;
@@ -429,6 +453,26 @@ int DMTextBox::height_for_width(int w) const {
 
 void DMTextBox::set_on_height_changed(std::function<void()> cb) {
     on_height_changed_ = std::move(cb);
+}
+
+void DMTextBox::set_label_text(const std::string& label) {
+    if (label_ == label) {
+        return;
+    }
+    label_ = label;
+    update_geometry(true);
+}
+
+void DMTextBox::reset_label_text() {
+    set_label_text(default_label_);
+}
+
+void DMTextBox::set_label_color_override(const SDL_Color& color) {
+    label_color_override_ = color;
+}
+
+void DMTextBox::clear_label_color_override() {
+    label_color_override_.reset();
 }
 
 bool DMTextBox::handle_event(const SDL_Event& e) {
@@ -515,6 +559,9 @@ void DMTextBox::render(SDL_Renderer* r) const {
     const DMTextBoxStyle& st = DMStyles::TextBox();
     if (!label_.empty() && label_height_ > 0) {
         DMLabelStyle lbl = DMStyles::Label();
+        if (label_color_override_) {
+            lbl.color = *label_color_override_;
+        }
         draw_text(r, label_, label_rect_.x, label_rect_.y, label_rect_.w, lbl);
     }
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -581,17 +628,18 @@ std::vector<std::string> DMTextBox::wrap_lines(TTF_Font* f, const std::string& s
         while (pos < para.size()) {
             size_t best_break = pos;
             size_t last_space = std::string::npos;
+            bool consumed_all = false;
             for (size_t i = pos; i <= para.size(); ++i) {
                 std::string trial = para.substr(pos, i - pos);
                 int w=0,h=0; TTF_SizeUTF8(f, trial.c_str(), &w, &h);
                 if (w <= max_width) {
                     best_break = i;
                     if (i < para.size() && std::isspace((unsigned char)para[i])) last_space = i;
-                    if (i == para.size()) break;
+                    if (i == para.size()) { consumed_all = true; break; }
                 } else break;
             }
             size_t brk = best_break;
-            if (brk > pos && last_space != std::string::npos && last_space >= pos) {
+            if (!consumed_all && brk > pos && last_space != std::string::npos && last_space >= pos) {
                 brk = (brk > last_space) ? std::min(para.size(), last_space + 1) : last_space;
             }
             if (brk == pos) brk = std::min(para.size(), pos + 1);

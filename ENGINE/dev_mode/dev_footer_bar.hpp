@@ -74,6 +74,7 @@ private:
     void layout();
     void layout_buttons();
     void layout_grid_controls();
+    void layout_title_region();
     void update_title_width();
 
     std::string title_;
@@ -85,6 +86,7 @@ private:
 
     SDL_Rect rect_{0, 0, 0, 0};
     int title_width_ = 0;
+    SDL_Rect title_bounds_{0, 0, 0, 0};
 
     std::vector<Button> buttons_;
 
@@ -98,4 +100,5 @@ private:
     std::function<void(bool)> on_grid_overlay_toggle_;
     std::function<void(int)> on_grid_resolution_change_;
     std::function<void(bool)> on_snap_to_grid_toggle_;
+    int grid_controls_right_ = 0;
 };

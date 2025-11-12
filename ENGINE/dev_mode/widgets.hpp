@@ -65,6 +65,10 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     void set_value(const std::string& v);
     const std::string& value() const { return text_; }
+    void set_label_text(const std::string& label);
+    void reset_label_text();
+    void set_label_color_override(const SDL_Color& color);
+    void clear_label_color_override();
     void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
@@ -88,7 +92,9 @@ private:
     SDL_Rect label_rect_{0,0,0,0};
     int label_height_ = 0;
     std::string label_;
+    std::string default_label_;
     std::string text_;
+    std::optional<SDL_Color> label_color_override_;
     bool hovered_ = false;
     bool editing_ = false;
     size_t caret_pos_ = 0;

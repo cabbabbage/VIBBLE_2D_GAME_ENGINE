@@ -143,4 +143,32 @@ private:
     void sync_child_frames();
     ChildFrame* current_child_frame();
     const ChildFrame* current_child_frame() const;
+
+    struct MovementToolboxMetrics {
+        int padding = 0;
+        int gap = 0;
+        int width = 0;
+        int height = 0;
+        int row_height = 0;
+        int checkbox_width = 0;
+        int totals_width = 0;
+        int total_dx_height = 0;
+        int total_dy_height = 0;
+    };
+    struct ChildrenToolboxMetrics {
+        int padding = 0;
+        int gap = 0;
+        int width = 0;
+        int height = 0;
+        int nav_row_height = 0;
+        int form_row_height = 0;
+        int textbox_width = 0;
+        int child_dx_height = 0;
+        int child_dy_height = 0;
+        int child_rotation_height = 0;
+        int checkbox_width = 0;
+    };
+
+    MovementToolboxMetrics build_movement_toolbox_metrics() const;
+    ChildrenToolboxMetrics build_children_toolbox_metrics() const;
 };

@@ -38,6 +38,7 @@ class AssetInfoUI {
     void close();
     void toggle();
     bool is_visible() const { return visible_; }
+    bool is_lighting_section_expanded() const;
     bool is_locked() const;
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);

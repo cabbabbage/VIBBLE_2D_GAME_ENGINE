@@ -7,6 +7,7 @@
 #include <array>
 #include <functional>
 #include <cctype>
+#include <cmath>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +38,7 @@ constexpr int kInspectorSectionGap = 10;
 constexpr int kPreviewHeight = 120;
 constexpr int kHeaderButtonWidth = 160;
 constexpr int kMinToggleButtonWidth = 120;
+constexpr int kScrollWheelStep = 20;
 
 int header_toggle_width() {
     return DMButton::height();
@@ -84,6 +86,26 @@ int text_width(const DMLabelStyle& style, const std::string& text) {
     }
     TTF_CloseFont(font);
     return width;
+}
+
+int resolve_wheel_delta(const SDL_MouseWheelEvent& wheel) {
+    int delta = wheel.y;
+    if (wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+        delta = -delta;
+    }
+#if SDL_VERSION_ATLEAST(2,0,18)
+    if (delta == 0) {
+        float precise = wheel.preciseY;
+        if (wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+            precise = -precise;
+        }
+        delta = static_cast<int>(std::round(precise));
+        if (delta == 0 && precise != 0.0f) {
+            delta = precise > 0.0f ? 1 : -1;
+        }
+    }
+#endif
+    return delta;
 }
 
 bool is_pointer_event(const SDL_Event& e) {
@@ -676,10 +698,13 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
             bool over_source_config = source_config_ && SDL_PointInRect(&mouse, &source_rect_);
             bool dropdown_expanded = source_config_ && source_config_->allow_out_of_bounds_pointer_events();
             if (!(over_source_config && dropdown_expanded)) {
-                scroll_ -= e.wheel.y * 20;
-                scroll_ = std::clamp(scroll_, 0, max_scroll_);
-                layout_dirty_ = true;
-                handled = true;
+                int delta = resolve_wheel_delta(e.wheel);
+                if (delta != 0) {
+                    scroll_ -= delta * kScrollWheelStep;
+                    scroll_ = std::clamp(scroll_, 0, max_scroll_);
+                    layout_dirty_ = true;
+                    handled = true;
+                }
             }
         }
     }
@@ -912,7 +937,8 @@ void AnimationInspectorPanel::layout_widgets() const {
     assign_section(on_end_selector_.get(), on_end_rect_);
     assign_section(audio_panel_.get(), audio_rect_);
 
-    self->content_height_ = content_y + padding - bounds_.y;
+    // content_y is tracked with scroll already subtracted, so add it back when measuring total height
+    self->content_height_ = content_y + scroll_ + padding - bounds_.y;
     self->max_scroll_ = std::max(0, self->content_height_ - bounds_.h);
     self->scroll_ = std::clamp(self->scroll_, 0, self->max_scroll_);
 

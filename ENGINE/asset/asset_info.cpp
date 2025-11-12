@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cctype>
 #include <filesystem>
+#include <system_error>
 #include <utility>
 
 #include "dev_mode/core/manifest_store.hpp"
@@ -69,6 +70,54 @@ float read_float_field(const nlohmann::json& data, const char* key, float fallba
     } catch (...) {
     }
     return fallback;
+}
+
+std::filesystem::path assets_root_for(const std::string& asset_name) {
+    std::filesystem::path base = std::filesystem::path("SRC") / "assets";
+    if (!asset_name.empty()) {
+        base /= asset_name;
+    }
+    return base.lexically_normal();
+}
+
+bool path_starts_with_src(const std::filesystem::path& path) {
+    if (path.empty()) {
+        return false;
+    }
+    const std::string generic = path.lexically_normal().generic_string();
+    return generic == "SRC" || generic.rfind("SRC/", 0) == 0;
+}
+
+std::string prefer_assets_directory(const std::string& configured, const std::string& asset_name) {
+    const auto preferred = assets_root_for(asset_name);
+
+    if (configured.empty()) {
+        return preferred.generic_string();
+    }
+
+    std::filesystem::path candidate = std::filesystem::path(configured).lexically_normal();
+    if (!path_starts_with_src(candidate)) {
+        return candidate.generic_string();
+    }
+
+    if (candidate == preferred) {
+        return candidate.generic_string();
+    }
+
+    std::error_code ec;
+    const bool preferred_exists = std::filesystem::exists(preferred, ec);
+    ec.clear();
+    const bool candidate_exists = std::filesystem::exists(candidate, ec);
+    ec.clear();
+    if (candidate_exists) {
+        return candidate.generic_string();
+    }
+
+    if (preferred_exists) {
+        return preferred.generic_string();
+    }
+
+    return preferred.generic_string();
 }
 
 std::string derive_asset_directory(const nlohmann::json& data, const std::string& fallback) {
@@ -511,10 +560,12 @@ AssetInfo::AssetInfo(const std::string& asset_folder_name, const nlohmann::json&
         }
         name = resolved_name;
 
-        dir_path_ = derive_asset_directory(data, "SRC/" + resolved_name);
+        const std::string default_dir = assets_root_for(resolved_name).generic_string();
+        dir_path_ = derive_asset_directory(data, default_dir);
         if (dir_path_.empty()) {
-                dir_path_ = "SRC/" + resolved_name;
+                dir_path_ = default_dir;
         }
+        dir_path_ = prefer_assets_directory(dir_path_, resolved_name);
         info_json_path_.clear();
 
         initialize_from_json(data);
@@ -602,7 +653,13 @@ bool AssetInfo::has_tag(const std::string &tag) const {
     return tag_lookup_.find(tag) != tag_lookup_.end();
 }
 
-void AssetInfo::generate_lights(SDL_Renderer* ) {}
+void AssetInfo::generate_lights(SDL_Renderer* ) {
+        try {
+                LightingLoader::load(*this, info_json_);
+        } catch (...) {
+                std::cerr << "[AssetInfo] Failed to regenerate lighting info for '" << name << "'\n";
+        }
+}
 
 bool AssetInfo::commit_manifest() {
         nlohmann::json payload = info_json_;
@@ -1197,7 +1254,10 @@ void AssetInfo::set_lighting(const std::vector<LightSource>& lights) {
         j["light_intensity"] = l.intensity;
         j["radius"] = l.radius;
         j["falloff"] = l.fall_off;
-        j["flicker"] = l.flicker;
+        j["flicker_speed"] = l.flicker_speed;
+        j["flicker_smoothness"] = l.flicker_smoothness;
+        // Legacy key preserved so older tooling can still observe "some" flicker value
+        j["flicker"] = l.flicker_speed;
         j["flare"] = l.flare;
         j["offset_x"] = l.offset_x;
         j["offset_y"] = l.offset_y;

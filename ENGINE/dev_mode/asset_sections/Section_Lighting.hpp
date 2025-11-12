@@ -90,7 +90,8 @@ public:
                 place(r.s_intensity, DMSlider::height());
                 place(r.s_radius,    DMSlider::height());
                 place(r.s_falloff,   DMSlider::height());
-                place(r.s_flicker,   DMSlider::height());
+                place(r.s_flicker_speed, DMSlider::height());
+                place(r.s_flicker_smoothness, DMSlider::height());
                 place(r.s_offset_x,  DMSlider::height());
                 place(r.s_offset_y,  DMSlider::height());
                 if (r.c_front) {
@@ -118,7 +119,8 @@ public:
                 hide(r.s_intensity);
                 hide(r.s_radius);
                 hide(r.s_falloff);
-                hide(r.s_flicker);
+                hide(r.s_flicker_speed);
+                hide(r.s_flicker_smoothness);
                 hide(r.s_offset_x);
                 hide(r.s_offset_y);
                 hide(r.c_front);
@@ -247,9 +249,13 @@ public:
                           [&]() { return r.light.fall_off; },
                           [&](int v) { r.light.fall_off = v; },
                           true);
-            handle_slider(r.s_flicker,
-                          [&]() { return r.light.flicker; },
-                          [&](int v) { r.light.flicker = v; },
+            handle_slider(r.s_flicker_speed,
+                          [&]() { return r.light.flicker_speed; },
+                          [&](int v) { r.light.flicker_speed = v; },
+                          true);
+            handle_slider(r.s_flicker_smoothness,
+                          [&]() { return r.light.flicker_smoothness; },
+                          [&](int v) { r.light.flicker_smoothness = v; },
                           true);
             handle_slider(r.s_offset_x,
                           [&]() { return r.light.offset_x; },
@@ -323,7 +329,8 @@ public:
             if (rrow.s_intensity) rrow.s_intensity->render(r);
             if (rrow.s_radius)    rrow.s_radius->render(r);
             if (rrow.s_falloff)   rrow.s_falloff->render(r);
-            if (rrow.s_flicker)   rrow.s_flicker->render(r);
+            if (rrow.s_flicker_speed)   rrow.s_flicker_speed->render(r);
+            if (rrow.s_flicker_smoothness)   rrow.s_flicker_smoothness->render(r);
             if (rrow.s_offset_x)  rrow.s_offset_x->render(r);
             if (rrow.s_offset_y)  rrow.s_offset_y->render(r);
             if (rrow.c_front)  rrow.c_front->render(r);
@@ -348,7 +355,8 @@ private:
         std::unique_ptr<DMSlider> s_intensity;
         std::unique_ptr<DMSlider> s_radius;
         std::unique_ptr<DMSlider> s_falloff;
-        std::unique_ptr<DMSlider> s_flicker;
+        std::unique_ptr<DMSlider> s_flicker_speed;
+        std::unique_ptr<DMSlider> s_flicker_smoothness;
         std::unique_ptr<DMSlider> s_offset_x;
         std::unique_ptr<DMSlider> s_offset_y;
         std::unique_ptr<DMCheckbox> c_front;
@@ -370,7 +378,9 @@ private:
         r.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, ls.intensity);
         r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, ls.radius);
         r.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, ls.fall_off);
-        r.s_flicker   = std::make_unique<DMSlider>("Flicker", 0, 100, ls.flicker);
+        r.s_flicker_speed = std::make_unique<DMSlider>("Flicker Speed", 0, 100, ls.flicker_speed);
+        r.s_flicker_smoothness =
+            std::make_unique<DMSlider>("Flicker Smoothness", 0, 100, ls.flicker_smoothness);
         r.s_offset_x  = std::make_unique<DMSlider>("Offset X", -2000, 2000, ls.offset_x);
         r.s_offset_y  = std::make_unique<DMSlider>("Offset Y", -2000, 2000, ls.offset_y);
         r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", ls.in_front);
@@ -433,7 +443,8 @@ private:
         configure_regen_slider(r.s_intensity);
         configure_regen_slider(r.s_radius);
         configure_regen_slider(r.s_falloff);
-        configure_regen_slider(r.s_flicker);
+        configure_regen_slider(r.s_flicker_speed);
+        configure_regen_slider(r.s_flicker_smoothness);
         if (r.s_offset_x) r.s_offset_x->set_defer_commit_until_unfocus(false);
         if (r.s_offset_y) r.s_offset_y->set_defer_commit_until_unfocus(false);
     }
@@ -512,7 +523,8 @@ public:
             if (r.s_intensity) r.s_intensity->set_value(src.intensity);
             if (r.s_radius)    r.s_radius->set_value(src.radius);
             if (r.s_falloff)   r.s_falloff->set_value(src.fall_off);
-            if (r.s_flicker)   r.s_flicker->set_value(src.flicker);
+            if (r.s_flicker_speed)        r.s_flicker_speed->set_value(src.flicker_speed);
+            if (r.s_flicker_smoothness)   r.s_flicker_smoothness->set_value(src.flicker_smoothness);
             if (r.s_offset_x)  r.s_offset_x->set_value(src.offset_x);
             if (r.s_offset_y)  r.s_offset_y->set_value(src.offset_y);
             if (r.c_front)           r.c_front->set_value(src.in_front);

@@ -129,6 +129,16 @@ void SceneRenderer::set_update_map_light_enabled(bool enabled) {
     update_map_light_enabled_ = enabled;
 }
 
+void SceneRenderer::set_dark_mask_enabled(bool enabled) {
+    if (dark_mask_enabled_ == enabled) {
+        return;
+    }
+    dark_mask_enabled_ = enabled;
+    if (!dark_mask_enabled_) {
+        destroy_darkness_overlay();
+    }
+}
+
 LightMap* SceneRenderer::light_map() {
     return light_map_ ? light_map_.get() : nullptr;
 }
@@ -397,6 +407,8 @@ void SceneRenderer::render(){
     const float     map_light_opacity =
         std::clamp(static_cast<float>(map_light_color.a) / 255.0f, 0.0f, 1.0f);
     const float light_overlay_visibility = map_light_opacity;
+    const float frame_flicker_time_seconds =
+        static_cast<float>(SDL_GetTicks64() % 1000000ULL) * 0.001f;
 
     SDL_SetRenderTarget(renderer_,nullptr);
     SDL_SetRenderDrawBlendMode(renderer_,SDL_BLENDMODE_BLEND);
@@ -699,7 +711,8 @@ void SceneRenderer::render(){
                                                               src,
                                                               darkness_overlay_vertices_,
                                                               darkness_overlay_indices_,
-                                                              light_overlay_visibility);
+                                                              light_overlay_visibility,
+                                                              frame_flicker_time_seconds);
                             light_renderer.draw_behind();
                         }
                         has_front_light = light_overlay_visibility > 0.0f && src.has_front_lights;
@@ -955,7 +968,9 @@ void SceneRenderer::render(){
         render_commands(remaining_commands_, /*overlay_passed=*/false);
 
         // After all base sprites are drawn, apply the dynamic darkness overlay once
-        render_dynamic_darkness_overlay(map_light_opacity);
+        if (dark_mask_enabled_) {
+            render_dynamic_darkness_overlay(map_light_opacity, frame_flicker_time_seconds);
+        }
         render_light_map();
 
         // Draw all deferred front-lights above the darkness overlay
@@ -966,7 +981,8 @@ void SceneRenderer::render(){
                                                       *src,
                                                       darkness_overlay_vertices_,
                                                       darkness_overlay_indices_,
-                                                      light_overlay_visibility);
+                                                      light_overlay_visibility,
+                                                      frame_flicker_time_seconds);
                     light_renderer.draw_in_front();
                 }
             }
@@ -1033,7 +1049,7 @@ void SceneRenderer::destroy_darkness_overlay() {
     }
 }
 
-void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
+void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds) {
     if (!renderer_) {
         return;
     }
@@ -1078,7 +1094,8 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity) {
                                           source,
                                           darkness_overlay_vertices_,
                                           darkness_overlay_indices_,
-                                          light_overlay_visibility);
+                                          light_overlay_visibility,
+                                          flicker_time_seconds);
         auto               result = light_renderer.accumulate_dark_mask();
         frame_max_vertices        = std::max(frame_max_vertices, result.max_vertices);
         frame_max_indices         = std::max(frame_max_indices, result.max_indices);

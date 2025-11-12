@@ -9,6 +9,8 @@
 #include <sstream>
 #include <utility>
 #include <iomanip>
+#include <unordered_set>
+#include <iostream>
 
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
@@ -27,11 +29,37 @@
 #include "asset_sections/animation_editor_window/frame_editor/movement/MovementCanvas.hpp" // for helper signatures
 #include "animation_update/animation_update.hpp" // bottom middle helper
 #include "util/grid.hpp"
+#include "asset_info_methods/animation_loader.hpp"
 
 using animation_editor::AnimationDocument;
 using animation_editor::PreviewProvider;
 
 namespace {
+
+constexpr int kMovementTotalsFieldWidth = 140;
+constexpr int kChildrenFieldWidth = 132;
+constexpr int kShowAnimCheckboxMinWidth = 150;
+constexpr int kChildVisibilityCheckboxMinWidth = 140;
+
+int resolve_wheel_delta(const SDL_MouseWheelEvent& wheel) {
+    int delta = wheel.y;
+    if (wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+        delta = -delta;
+    }
+#if SDL_VERSION_ATLEAST(2,0,18)
+    if (delta == 0) {
+        float precise = wheel.preciseY;
+        if (wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+            precise = -precise;
+        }
+        delta = static_cast<int>(std::round(precise));
+        if (delta == 0 && precise != 0.0f) {
+            delta = precise > 0.0f ? 1 : -1;
+        }
+    }
+#endif
+    return delta;
+}
 
 inline SDL_Point round_point(SDL_FPoint p) {
     return SDL_Point{ static_cast<int>(std::lround(p.x)), static_cast<int>(std::lround(p.y)) };
@@ -179,18 +207,23 @@ void FrameEditorSession::begin(Assets* assets,
         const int nav_h = 90;
         const int nav_w = 560;
 
-        // Compute toolbox width (similar to rebuild_layout)
-        const int tool_padding = DMSpacing::small_gap();
-        int tool_w = tool_padding * 2;
-        const int gaps_between = DMSpacing::small_gap();
-        const int line_h = std::max(std::max(DMButton::height(), DMCheckbox::height()), DMTextBox::height());
-        const int cb_w = cb_show_anim_ ? std::max(140, cb_show_anim_->preferred_width()) : 0;
-        const int tb_w = 120;
-        if (btn_smooth_) tool_w += btn_smooth_->rect().w;
-        if (cb_show_anim_) tool_w += (tool_w > tool_padding*2 ? gaps_between : 0) + cb_w;
-        if (tb_total_dx_) tool_w += gaps_between + tb_w;
-        if (tb_total_dy_) tool_w += gaps_between + tb_w;
-        const int tool_h = line_h + tool_padding * 2;
+        int tool_w = 0;
+        int tool_h = 0;
+        if (mode_ == Mode::Movement) {
+            MovementToolboxMetrics metrics = build_movement_toolbox_metrics();
+            tool_w = metrics.width;
+            tool_h = metrics.height;
+        } else if (mode_ == Mode::Children) {
+            ChildrenToolboxMetrics metrics = build_children_toolbox_metrics();
+            tool_w = metrics.width;
+            tool_h = metrics.height;
+        }
+        if (tool_w <= 0) {
+            tool_w = 320;
+        }
+        if (tool_h <= 0) {
+            tool_h = DMButton::height() + DMSpacing::small_gap() * 2;
+        }
 
         // Position panels relative to asset
         // Frame navigator: 400 pixels below asset, horizontally centered
@@ -234,8 +267,7 @@ void FrameEditorSession::end() {
     }
     // Reopen animation editor window
     if (host_) {
-        host_->set_visible(true);
-        host_->focus_animation(animation_id_);
+        host_->on_live_frame_editor_closed(animation_id_);
     }
     // Clear session
     active_ = false;
@@ -616,10 +648,23 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL) {
         SDL_Point sp;
         if (e.type == SDL_MOUSEMOTION) { sp = SDL_Point{ e.motion.x, e.motion.y }; }
-        else if (e.type == SDL_MOUSEWHEEL) { int mx=0,my=0; SDL_GetMouseState(&mx,&my); sp = SDL_Point{mx,my}; }
+        else if (e.type == SDL_MOUSEWHEEL) { int mx = 0, my = 0; SDL_GetMouseState(&mx, &my); sp = SDL_Point{ mx, my }; }
         else { sp = SDL_Point{ e.button.x, e.button.y }; }
         if (SDL_PointInRect(&sp, &directory_rect_) || SDL_PointInRect(&sp, &nav_rect_) || SDL_PointInRect(&sp, &toolbox_rect_)) {
             return true;
+        }
+    }
+
+    if (e.type == SDL_MOUSEWHEEL) {
+        SDL_Point mouse{0, 0};
+        SDL_GetMouseState(&mouse.x, &mouse.y);
+        if (!SDL_PointInRect(&mouse, &directory_rect_) && !SDL_PointInRect(&mouse, &nav_rect_) &&
+            !SDL_PointInRect(&mouse, &toolbox_rect_)) {
+            int delta = resolve_wheel_delta(e.wheel);
+            if (delta != 0) {
+                select_frame(selected_index_ - delta);
+                return true;
+            }
         }
     }
 
@@ -804,72 +849,116 @@ void FrameEditorSession::rebuild_layout() const {
     }
 
     // Toolbox panel placement
-    const int tool_padding = DMSpacing::small_gap();
     if (mode_ == Mode::Movement) {
-        int tool_w = tool_padding * 2;
-        const int gaps_between = DMSpacing::small_gap();
-        const int line_h = std::max(std::max(DMButton::height(), DMCheckbox::height()), DMTextBox::height());
-        const int cb_w = cb_show_anim_ ? std::max(140, cb_show_anim_->preferred_width()) : 0;
-        const int tb_w = 120;
-        if (btn_smooth_) tool_w += btn_smooth_->rect().w;
-        if (cb_show_anim_) tool_w += (tool_w > tool_padding*2 ? gaps_between : 0) + cb_w;
-        if (tb_total_dx_) tool_w += gaps_between + tb_w;
-        if (tb_total_dy_) tool_w += gaps_between + tb_w;
-        const int tool_h = line_h + tool_padding * 2;
-        toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h };
-        int tx = toolbox_rect_.x + tool_padding;
-        int ty = toolbox_rect_.y + tool_padding;
-        if (btn_smooth_) {
-            btn_smooth_->set_rect(SDL_Rect{ tx, ty, btn_smooth_->rect().w, line_h });
-            tx += btn_smooth_->rect().w + gaps_between;
-        }
-        if (cb_show_anim_) {
-            cb_show_anim_->set_rect(SDL_Rect{ tx, ty, cb_w, line_h });
-            tx += cb_w + gaps_between;
-        }
-        if (tb_total_dx_) {
-            tb_total_dx_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
-            tx += tb_w + gaps_between;
-        }
-        if (tb_total_dy_) {
-            tb_total_dy_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
+        MovementToolboxMetrics metrics = build_movement_toolbox_metrics();
+        if (metrics.width <= 0 || metrics.height <= 0) {
+            toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
+        } else {
+            toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, metrics.width, metrics.height };
+            int tx = toolbox_rect_.x + metrics.padding;
+            const int row_top = toolbox_rect_.y + metrics.padding;
+            bool first = true;
+            auto reserve = [&](int w) -> int {
+                if (w <= 0) return tx;
+                if (!first) {
+                    tx += metrics.gap;
+                }
+                first = false;
+                int x = tx;
+                tx += w;
+                return x;
+            };
+            if (btn_smooth_) {
+                const int w = btn_smooth_->rect().w;
+                const int h = DMButton::height();
+                const int y = row_top + (metrics.row_height - h) / 2;
+                const int x = reserve(w);
+                btn_smooth_->set_rect(SDL_Rect{ x, y, w, h });
+            }
+            if (cb_show_anim_) {
+                const int w = std::max(metrics.checkbox_width, DMCheckbox::height());
+                const int h = DMCheckbox::height();
+                const int y = row_top + (metrics.row_height - h) / 2;
+                const int x = reserve(w);
+                cb_show_anim_->set_rect(SDL_Rect{ x, y, w, h });
+            }
+            if (tb_total_dx_) {
+                const int field_height = metrics.total_dx_height > 0 ? metrics.total_dx_height
+                                                                     : tb_total_dx_->height_for_width(metrics.totals_width);
+                const int y = row_top + (metrics.row_height - field_height) / 2;
+                const int x = reserve(metrics.totals_width);
+                tb_total_dx_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
+            }
+            if (tb_total_dy_) {
+                const int field_height = metrics.total_dy_height > 0 ? metrics.total_dy_height
+                                                                     : tb_total_dy_->height_for_width(metrics.totals_width);
+                const int y = row_top + (metrics.row_height - field_height) / 2;
+                const int x = reserve(metrics.totals_width);
+                tb_total_dy_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
+            }
         }
     } else if (mode_ == Mode::Children) {
-        const int gaps_between = DMSpacing::small_gap();
-        const int line_h = std::max(DMButton::height(), DMTextBox::height());
-        const int tb_w = 110;
-        int tool_w = tool_padding * 2;
-        if (btn_child_prev_) tool_w += btn_child_prev_->rect().w;
-        if (btn_child_next_) tool_w += btn_child_next_->rect().w + gaps_between;
-        tool_w += (tb_w * 3) + gaps_between * 4;
-        const int tool_h = line_h * 2 + tool_padding * 3;
-        toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h };
-        int tx = toolbox_rect_.x + tool_padding;
-        int ty = toolbox_rect_.y + tool_padding;
-        if (btn_child_prev_) {
-            btn_child_prev_->set_rect(SDL_Rect{ tx, ty, btn_child_prev_->rect().w, line_h });
-            tx += btn_child_prev_->rect().w + gaps_between;
-        }
-        if (btn_child_next_) {
-            btn_child_next_->set_rect(SDL_Rect{ tx, ty, btn_child_next_->rect().w, line_h });
-            tx += btn_child_next_->rect().w + gaps_between;
-        }
-        ty += line_h + gaps_between;
-        tx = toolbox_rect_.x + tool_padding;
-        if (tb_child_dx_) {
-            tb_child_dx_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
-            tx += tb_w + gaps_between;
-        }
-        if (tb_child_dy_) {
-            tb_child_dy_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
-            tx += tb_w + gaps_between;
-        }
-        if (tb_child_deg_) {
-            tb_child_deg_->set_rect(SDL_Rect{ tx, ty, tb_w, DMTextBox::height() });
-            tx += tb_w + gaps_between;
-        }
-        if (cb_child_visible_) {
-            cb_child_visible_->set_rect(SDL_Rect{ tx, ty, std::max(100, cb_child_visible_->preferred_width()), DMCheckbox::height() });
+        ChildrenToolboxMetrics metrics = build_children_toolbox_metrics();
+        if (metrics.width <= 0 || metrics.height <= 0) {
+            toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
+        } else {
+            toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, metrics.width, metrics.height };
+            const int top = toolbox_rect_.y + metrics.padding;
+            int tx = toolbox_rect_.x + metrics.padding;
+            int row_y = top;
+            bool first_row_item = true;
+            auto reserve = [&](int w) -> int {
+                if (!first_row_item) {
+                    tx += metrics.gap;
+                }
+                first_row_item = false;
+                int x = tx;
+                tx += w;
+                return x;
+            };
+
+            // Row 1: navigation between children
+            if (btn_child_prev_ || btn_child_next_) {
+                if (btn_child_prev_) {
+                    const int w = btn_child_prev_->rect().w;
+                    const int h = DMButton::height();
+                    const int y = row_y + (metrics.nav_row_height - h) / 2;
+                    const int x = reserve(w);
+                    btn_child_prev_->set_rect(SDL_Rect{ x, y, w, h });
+                }
+                if (btn_child_next_) {
+                    const int w = btn_child_next_->rect().w;
+                    const int h = DMButton::height();
+                    const int y = row_y + (metrics.nav_row_height - h) / 2;
+                    const int x = reserve(w);
+                    btn_child_next_->set_rect(SDL_Rect{ x, y, w, h });
+                }
+                row_y += metrics.nav_row_height + metrics.gap;
+                tx = toolbox_rect_.x + metrics.padding;
+                first_row_item = true;
+            }
+
+            // Row 2: editable child transforms + visibility
+            if (tb_child_dx_ || tb_child_dy_ || tb_child_deg_ || cb_child_visible_) {
+                auto place_textbox = [&](DMTextBox* tb, int height) {
+                    if (!tb) return;
+                    const int w = metrics.textbox_width;
+                    const int h = height > 0 ? height : tb->height_for_width(w);
+                    const int y = row_y + (metrics.form_row_height - h) / 2;
+                    const int x = reserve(w);
+                    tb->set_rect(SDL_Rect{ x, y, w, h });
+                };
+                place_textbox(tb_child_dx_.get(), metrics.child_dx_height);
+                place_textbox(tb_child_dy_.get(), metrics.child_dy_height);
+                place_textbox(tb_child_deg_.get(), metrics.child_rotation_height);
+                if (cb_child_visible_) {
+                    const int w = std::max(metrics.checkbox_width, DMCheckbox::height());
+                    const int h = DMCheckbox::height();
+                    const int y = row_y + (metrics.form_row_height - h) / 2;
+                    const int x = reserve(w);
+                    cb_child_visible_->set_rect(SDL_Rect{ x, y, w, h });
+                }
+            }
         }
     } else {
         toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
@@ -910,6 +999,102 @@ void FrameEditorSession::rebuild_layout() const {
     }
     // Ensure we have rects for all frames (non-visible indices will be empty {0,0,0,0})
     if (static_cast<int>(thumb_rects_.size()) < count) thumb_rects_.resize(count);
+}
+
+FrameEditorSession::MovementToolboxMetrics FrameEditorSession::build_movement_toolbox_metrics() const {
+    MovementToolboxMetrics metrics;
+    metrics.padding = DMSpacing::small_gap();
+    metrics.gap = DMSpacing::small_gap();
+    metrics.totals_width = kMovementTotalsFieldWidth;
+    metrics.checkbox_width = cb_show_anim_ ? std::max(kShowAnimCheckboxMinWidth, cb_show_anim_->preferred_width()) : 0;
+    metrics.total_dx_height = tb_total_dx_ ? tb_total_dx_->height_for_width(metrics.totals_width) : 0;
+    metrics.total_dy_height = tb_total_dy_ ? tb_total_dy_->height_for_width(metrics.totals_width) : 0;
+    metrics.row_height = std::max(
+        std::max(DMButton::height(), DMCheckbox::height()),
+        std::max(metrics.total_dx_height, metrics.total_dy_height));
+
+    int row_width = 0;
+    auto append = [&](int w) {
+        if (w <= 0) return;
+        if (row_width > 0) {
+            row_width += metrics.gap;
+        }
+        row_width += w;
+    };
+    if (btn_smooth_) append(btn_smooth_->rect().w);
+    if (cb_show_anim_ && metrics.checkbox_width > 0) append(metrics.checkbox_width);
+    if (tb_total_dx_) append(metrics.totals_width);
+    if (tb_total_dy_) append(metrics.totals_width);
+    if (row_width == 0) {
+        metrics.row_height = 0;
+        return metrics;
+    }
+    metrics.width = row_width + metrics.padding * 2;
+    metrics.height = metrics.row_height + metrics.padding * 2;
+    return metrics;
+}
+
+FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_toolbox_metrics() const {
+    ChildrenToolboxMetrics metrics;
+    metrics.padding = DMSpacing::small_gap();
+    metrics.gap = DMSpacing::small_gap();
+    metrics.textbox_width = kChildrenFieldWidth;
+    metrics.child_dx_height = tb_child_dx_ ? tb_child_dx_->height_for_width(metrics.textbox_width) : 0;
+    metrics.child_dy_height = tb_child_dy_ ? tb_child_dy_->height_for_width(metrics.textbox_width) : 0;
+    metrics.child_rotation_height = tb_child_deg_ ? tb_child_deg_->height_for_width(metrics.textbox_width) : 0;
+    const int max_textbox_height = std::max(
+        metrics.child_dx_height,
+        std::max(metrics.child_dy_height, metrics.child_rotation_height));
+    metrics.nav_row_height = DMButton::height();
+    const int checkbox_height = DMCheckbox::height();
+    metrics.checkbox_width = cb_child_visible_
+                                 ? std::max(kChildVisibilityCheckboxMinWidth, cb_child_visible_->preferred_width())
+                                 : 0;
+    int form_content_height = max_textbox_height;
+    if (cb_child_visible_) {
+        form_content_height = std::max(form_content_height, checkbox_height);
+    }
+    metrics.form_row_height = form_content_height > 0 ? form_content_height : checkbox_height;
+
+    int nav_row_width = 0;
+    auto append_nav = [&](int w) {
+        if (w <= 0) return;
+        if (nav_row_width > 0) nav_row_width += metrics.gap;
+        nav_row_width += w;
+    };
+    if (btn_child_prev_) append_nav(btn_child_prev_->rect().w);
+    if (btn_child_next_) append_nav(btn_child_next_->rect().w);
+
+    int form_row_width = 0;
+    auto append_form = [&](int w) {
+        if (w <= 0) return;
+        if (form_row_width > 0) form_row_width += metrics.gap;
+        form_row_width += w;
+    };
+    if (tb_child_dx_) append_form(metrics.textbox_width);
+    if (tb_child_dy_) append_form(metrics.textbox_width);
+    if (tb_child_deg_) append_form(metrics.textbox_width);
+    if (cb_child_visible_ && metrics.checkbox_width > 0) append_form(metrics.checkbox_width);
+
+    const bool has_nav_row = nav_row_width > 0;
+    const bool has_form_row = form_row_width > 0;
+    if (!has_nav_row && !has_form_row) {
+        metrics.form_row_height = 0;
+        return metrics;
+    }
+    const int content_width = std::max(nav_row_width, form_row_width);
+    metrics.width = content_width + metrics.padding * 2;
+    metrics.height = metrics.padding * 2;
+    if (has_nav_row) {
+        metrics.height += metrics.nav_row_height;
+    }
+    if (has_form_row) {
+        if (has_nav_row) {
+            metrics.height += metrics.gap;
+        }
+        metrics.height += metrics.form_row_height;
+    }
+    return metrics;
 }
 
 void FrameEditorSession::apply_frame_move_from_base(int index, SDL_FPoint desired_rel, const std::vector<SDL_FPoint>& base_rel) {
@@ -1069,6 +1254,117 @@ void FrameEditorSession::persist_changes() {
     document_->replace_animation_payload(animation_id_, payload.dump());
     // Persist immediately because the AnimationEditorWindow may be hidden during in-world sessions
     document_->save_to_file();
+
+    if (!assets_ || !target_ || !target_->info) {
+        return;
+    }
+
+    auto info = target_->info;
+    if (!info) {
+        return;
+    }
+
+    if (!info->name.empty()) {
+        if (!AnimationLoader::clear_asset_cache(info->name)) {
+            std::cerr << "[FrameEditorSession] Failed to clear cache for " << info->name << " after edit\n";
+        }
+    }
+
+    const bool manifest_reloaded = info->reload_animations_from_disk();
+    if (!manifest_reloaded) {
+        std::cerr << "[FrameEditorSession] Unable to reload manifest entry for " << info->name << " after edit; using in-memory data\n";
+    }
+
+    SDL_Renderer* renderer = assets_->renderer();
+    info->loadAnimations(renderer);
+
+    auto refresh_assets_for_info = [&](const std::shared_ptr<AssetInfo>& candidate) -> bool {
+        if (!candidate || !assets_) {
+            return false;
+        }
+
+        bool refreshed = false;
+        std::unordered_set<Asset*> visited;
+        auto refresh_asset = [&](Asset* asset) {
+            if (!asset || asset->info.get() != candidate.get()) {
+                return;
+            }
+            if (!visited.insert(asset).second) {
+                return;
+            }
+
+            asset->clear_render_caches();
+            asset->clear_downscale_cache();
+            asset->set_final_texture(nullptr);
+            asset->current_frame = nullptr;
+            asset->set_frame_progress(0.0f);
+            asset->static_frame = false;
+
+            std::string desired = asset->current_animation.empty() ? std::string{"default"} : asset->current_animation;
+            if (asset->anim_) {
+                asset->anim_->move(SDL_Point{0, 0}, desired);
+            } else if (asset->info) {
+                auto it = asset->info->animations.find(desired);
+                if (it == asset->info->animations.end()) {
+                    it = asset->info->animations.find("default");
+                }
+                if (it == asset->info->animations.end() && !asset->info->animations.empty()) {
+                    it = asset->info->animations.begin();
+                }
+                if (it != asset->info->animations.end()) {
+                    auto& anim = it->second;
+                    asset->current_animation = it->first;
+                    asset->current_frame = anim.get_first_frame();
+                    asset->static_frame = anim.is_static() || anim.locked;
+                } else {
+                    asset->current_animation.clear();
+                    asset->current_frame = nullptr;
+                }
+            }
+
+            asset->refresh_cached_dimensions();
+            refreshed = true;
+        };
+
+        for (Asset* asset : assets_->all) {
+            refresh_asset(asset);
+        }
+        for (const auto& owned : assets_->owned_assets) {
+            refresh_asset(owned.get());
+        }
+        refresh_asset(target_);
+        return refreshed;
+    };
+
+    bool refreshed_any = refresh_assets_for_info(info);
+
+    if (!info->name.empty()) {
+        for (auto& [lib_name, lib_info] : assets_->library().all()) {
+            if (!lib_info || lib_name == info->name) {
+                continue;
+            }
+
+            bool needs_refresh = false;
+            for (const auto& [anim_id, anim_data] : lib_info->animations) {
+                if (anim_data.source.kind == "animation" && anim_data.source.path == info->name) {
+                    needs_refresh = true;
+                    break;
+                }
+            }
+
+            if (!needs_refresh) {
+                continue;
+            }
+
+            if (refresh_assets_for_info(lib_info)) {
+                refreshed_any = true;
+            }
+        }
+    }
+
+    if (refreshed_any) {
+        assets_->mark_active_assets_dirty();
+    }
 }
 
 void FrameEditorSession::smooth_frames() {

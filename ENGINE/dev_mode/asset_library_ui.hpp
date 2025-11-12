@@ -53,6 +53,16 @@ public:
     std::optional<AreaRef> consume_area_selection();
 
 private:
+    struct PendingDeleteInfo {
+        std::string name;
+        std::string asset_dir;
+    };
+    enum class CreateAssetResult {
+        Success,
+        AlreadyExists,
+        Failed
+    };
+
     void ensure_items(AssetLibrary& lib);
     void rebuild_rows();
     void refresh_tiles(Assets& assets);
@@ -65,7 +75,10 @@ private:
     void clear_delete_state();
     bool handle_delete_modal_event(const SDL_Event& e);
     void update_delete_modal_geometry(int screen_w, int screen_h);
-    bool create_new_asset(const std::string& name);
+    CreateAssetResult create_new_asset(const std::string& name);
+    void handle_create_button_pressed();
+    void show_search_error(const std::string& message);
+    void clear_search_error();
     bool refresh_tag_items();
     void rebuild_tag_asset_lookup();
     std::shared_ptr<AssetInfo> resolve_tag_to_asset(const std::string& tag) const;
@@ -73,17 +86,29 @@ private:
     void delete_hashtag(const std::string& tag);
     bool remove_tag_from_manifest_assets(const std::string& tag);
     bool remove_tag_from_manifest_maps(const std::string& tag);
+    void toggle_multi_select_mode();
+    void update_multi_select_controls();
+    void handle_multi_select_selection(const std::shared_ptr<AssetInfo>& info, bool selected);
+    void handle_delete_all_request();
+    void begin_bulk_delete(std::vector<PendingDeleteInfo> requests);
+    void execute_bulk_delete_queue();
+    void perform_delete(const PendingDeleteInfo& pending, bool defer_multi_select_refresh = false);
 
 private:
     std::unique_ptr<DockableCollapsible> floating_;
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<class ButtonWidget> add_button_widget_;
+    std::unique_ptr<DMButton> multi_select_button_;
+    std::unique_ptr<class ButtonWidget> multi_select_button_widget_;
+    std::unique_ptr<DMButton> delete_all_button_;
+    std::unique_ptr<class ButtonWidget> delete_all_button_widget_;
     std::unique_ptr<DMTextBox> search_box_;
     std::unique_ptr<TextBoxWidget> search_widget_;
     std::vector<std::shared_ptr<AssetInfo>> items_;
     bool items_cached_ = false;
     bool tag_items_initialized_ = false;
     std::string search_query_;
+    bool search_error_active_ = false;
     bool filter_dirty_ = true;
 
     struct AssetTileWidget;
@@ -95,11 +120,6 @@ private:
     std::uint64_t tag_version_token_ = 0;
     bool tag_assets_dirty_ = true;
 
-    struct PendingDeleteInfo {
-        std::string name;
-        std::string asset_dir;
-};
-
     Assets* assets_owner_ = nullptr;
     AssetLibrary* library_owner_ = nullptr;
     devmode::core::ManifestStore* manifest_store_owner_ = nullptr;
@@ -107,9 +127,9 @@ private:
 
     std::shared_ptr<AssetInfo> pending_selection_{};
     std::optional<AreaRef> pending_area_selection_{};
+    bool multi_select_mode_ = false;
+    std::unordered_set<std::string> multi_select_selection_;
 
-    bool showing_create_popup_ = false;
-    std::string new_asset_name_;
     bool showing_delete_popup_ = false;
     std::optional<PendingDeleteInfo> pending_delete_;
     SDL_Rect delete_modal_rect_{0, 0, 0, 0};
@@ -119,4 +139,10 @@ private:
     bool delete_no_hovered_ = false;
     bool delete_yes_pressed_ = false;
     bool delete_no_pressed_ = false;
+    bool delete_skip_hovered_ = false;
+    bool delete_skip_pressed_ = false;
+    SDL_Rect delete_skip_rect_{0, 0, 0, 0};
+    bool skip_delete_confirmation_in_session_ = false;
+    std::vector<PendingDeleteInfo> bulk_delete_queue_;
+    bool bulk_delete_mode_ = false;
 };

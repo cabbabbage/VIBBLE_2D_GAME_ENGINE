@@ -67,9 +67,10 @@ public:
     void reset();
 
     bool passes(const Asset& asset) const;
+    bool render_dark_mask_enabled() const;
 
 private:
-    enum class FilterKind { MapAssets, CurrentRoom, Type, SpawnMethod };
+    enum class FilterKind { MapAssets, CurrentRoom, RenderDarkMask, Type, SpawnMethod };
 
     struct FilterEntry {
         std::string id;
@@ -80,6 +81,7 @@ private:
     struct FilterState {
         bool map_assets = false;
         bool current_room = true;
+        bool render_dark_mask = true;
         std::unordered_map<std::string, bool> type_filters;
         std::unordered_map<std::string, bool> method_filters;
 };

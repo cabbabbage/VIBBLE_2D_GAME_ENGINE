@@ -280,7 +280,6 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     const ShadowMaskSettings settings = SanitizeShadowMaskSettings(raw_settings);
 
     const fs::path preferred_folder = fs::path("cache") / asset_name / "animations" / animation_id / "masks";
-    const fs::path legacy_folder    = fs::path("cache") / asset_name / "animations" / animation_id / "mask";
 
     fs::path cache_folder = preferred_folder;
     fs::path meta_path    = cache_folder / "metadata.json";
@@ -307,16 +306,6 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     json meta;
     bool cache_ok = false;
     bool metadata_loaded = CacheManager::load_metadata(meta_path.string(), meta);
-    if (!metadata_loaded) {
-        cache_folder = legacy_folder;
-        meta_path    = cache_folder / "metadata.json";
-        if (CacheManager::load_metadata(meta_path.string(), meta)) {
-            metadata_loaded = true;
-        } else {
-            cache_folder = preferred_folder;
-            meta_path    = cache_folder / "metadata.json";
-        }
-    }
 
     if (metadata_loaded) {
         try {

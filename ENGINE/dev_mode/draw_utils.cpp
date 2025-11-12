@@ -149,6 +149,42 @@ bool draw_outline_layer(SDL_Renderer* renderer, const SDL_Rect& rect, int effect
     return drew_any;
 }
 
+SDL_Color lerp_color(const SDL_Color& a, const SDL_Color& b, float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    SDL_Color result{};
+    result.r = clamp_to_byte(static_cast<int>(a.r + (b.r - a.r) * t + 0.5f));
+    result.g = clamp_to_byte(static_cast<int>(a.g + (b.g - a.g) * t + 0.5f));
+    result.b = clamp_to_byte(static_cast<int>(a.b + (b.b - a.b) * t + 0.5f));
+    result.a = clamp_to_byte(static_cast<int>(a.a + (b.a - a.a) * t + 0.5f));
+    return result;
+}
+
+template <typename ColorProvider>
+void fill_rounded_rect(SDL_Renderer* renderer,
+                       const SDL_Rect& rect,
+                       int corner_radius,
+                       ColorProvider&& color_provider) {
+    if (!renderer || rect.w <= 0 || rect.h <= 0) {
+        return;
+    }
+
+    const int effective_radius = effective_corner_radius(rect, corner_radius);
+    const int span = std::max(1, rect.h - 1);
+
+    for (int y = rect.y; y < rect.y + rect.h; ++y) {
+        int span_start = 0;
+        int span_end = -1;
+        if (!compute_horizontal_span(rect, effective_radius, 0, y, span_start, span_end)) {
+            continue;
+        }
+
+        const float t = static_cast<float>(y - rect.y) / static_cast<float>(span);
+        SDL_Color line_color = color_provider(t);
+        SDL_SetRenderDrawColor(renderer, line_color.r, line_color.g, line_color.b, line_color.a);
+        SDL_RenderDrawLine(renderer, span_start, y, span_end, y);
+    }
+}
+
 }
 
 SDL_Color LightenColor(const SDL_Color& color, float amount) {
@@ -157,6 +193,23 @@ SDL_Color LightenColor(const SDL_Color& color, float amount) {
 
 SDL_Color DarkenColor(const SDL_Color& color, float amount) {
     return blend_toward(color, amount, false);
+}
+
+void DrawRoundedSolidRect(SDL_Renderer* renderer,
+                          const SDL_Rect& rect,
+                          int corner_radius,
+                          const SDL_Color& color) {
+    fill_rounded_rect(renderer, rect, corner_radius, [color](float) { return color; });
+}
+
+void DrawRoundedGradientRect(SDL_Renderer* renderer,
+                             const SDL_Rect& rect,
+                             int corner_radius,
+                             const SDL_Color& top_color,
+                             const SDL_Color& bottom_color) {
+    fill_rounded_rect(renderer, rect, corner_radius, [top_color, bottom_color](float t) {
+        return lerp_color(top_color, bottom_color, t);
+    });
 }
 
 void DrawBeveledRect(

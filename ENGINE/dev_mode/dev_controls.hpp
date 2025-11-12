@@ -196,6 +196,8 @@ private:
     void set_mode(Mode new_mode);
     std::string generate_unique_room_area_name(const std::string& base) const;
     void restore_filter_hidden_assets() const;
+    void apply_dark_mask_visibility();
+    bool lighting_section_forces_dark_mask() const;
 
 private:
     int map_radius_or_default() const;

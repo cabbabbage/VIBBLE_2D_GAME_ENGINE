@@ -16,6 +16,10 @@ struct Mix_Chunk;
 class Animation {
 
 public:
+    struct LoadDiagnostics {
+        bool cache_invalid = false;
+    };
+
     struct FrameCache {
         std::vector<SDL_Texture*> textures;
         std::vector<int> widths;
@@ -43,7 +47,7 @@ public:
 
 public:
     Animation();
-    void load(const std::string& trigger, const nlohmann::json& anim_json, class AssetInfo& info, const std::string& dir_path, const std::string& root_cache, float scale_factor, SDL_Renderer* renderer, SDL_Texture*& base_sprite, int& scaled_sprite_w, int& scaled_sprite_h, int& original_canvas_width, int& original_canvas_height, bool scaling_refresh_pending);
+    void load(const std::string& trigger, const nlohmann::json& anim_json, class AssetInfo& info, const std::string& dir_path, const std::string& root_cache, float scale_factor, SDL_Renderer* renderer, SDL_Texture*& base_sprite, int& scaled_sprite_w, int& scaled_sprite_h, int& original_canvas_width, int& original_canvas_height, bool scaling_refresh_pending, LoadDiagnostics* diagnostics = nullptr);
     SDL_Texture* get_frame(const AnimationFrame* frame) const;
     const AnimationFrame* get_first_frame(std::size_t path_index = 0) const;
     AnimationFrame* get_first_frame(std::size_t path_index = 0);
@@ -77,7 +81,6 @@ public:
     int total_dy = 0;
     bool movment = false;
     bool rnd_start = false;
-    std::string on_end_mapping;
     std::string on_end_animation;
     std::vector<SDL_Texture*> frames;
     std::vector<SDL_Texture*> mask_frames;
