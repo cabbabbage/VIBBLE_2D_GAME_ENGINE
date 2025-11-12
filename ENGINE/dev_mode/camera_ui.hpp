@@ -42,6 +42,8 @@ private:
     void apply_settings_if_needed();
     void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled);
     camera::RealismSettings read_settings_from_ui() const;
+    void on_control_value_changed();
+    void update_advanced_toggle_label();
 
 private:
     Assets* assets_ = nullptr;
@@ -57,6 +59,8 @@ private:
     std::unique_ptr<DMButton> reset_button_;
     std::unique_ptr<ButtonWidget> load_widget_;
     std::unique_ptr<ButtonWidget> reset_widget_;
+    std::unique_ptr<DMButton> advanced_toggle_button_;
+    std::unique_ptr<ButtonWidget> advanced_toggle_widget_;
 
     std::unique_ptr<SectionLabelWidget> render_section_label_;
     std::unique_ptr<SectionLabelWidget> perspective_section_label_;
@@ -82,6 +86,7 @@ private:
     std::unique_ptr<FloatSliderWidget> hysteresis_margin_slider_;
     std::unique_ptr<FloatSliderWidget> min_zoom_multiplier_slider_;
     std::unique_ptr<FloatSliderWidget> max_zoom_multiplier_slider_;
+    bool show_advanced_ = false;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }

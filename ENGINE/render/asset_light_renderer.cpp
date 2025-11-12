@@ -270,7 +270,13 @@ void AssetLightRenderer::render_textured_light(const ComputedLight& info, const 
     SDL_GetTextureColorMod(tex, &prev_r, &prev_g, &prev_b);
     SDL_GetTextureBlendMode(tex, &prev_blend);
 
+    SDL_Color draw_color{255, 255, 255, 255};
+    if (info.source) {
+        draw_color = info.source->color;
+    }
+
     SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+    SDL_SetTextureColorMod(tex, draw_color.r, draw_color.g, draw_color.b);
     SDL_SetTextureAlphaMod(tex, static_cast<Uint8>(info.intensity));
     SDL_RenderCopy(renderer_, tex, nullptr, &dst);
     SDL_SetTextureAlphaMod(tex, prev_a);
