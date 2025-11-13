@@ -158,14 +158,8 @@ void MapEditor::render(SDL_Renderer* renderer) {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    // Only show room labels while Shift is held
-    const bool shift_down = input_ &&
-        (input_->isScancodeDown(SDL_SCANCODE_LSHIFT) || input_->isScancodeDown(SDL_SCANCODE_RSHIFT));
-
     label_rects_.clear();
-    if (!shift_down) {
-        return;
-    }
+    // Always render room/trail geometry and labels in Map Mode
 
     // Resolve active label bounds from provider or fall back to full screen
     active_label_bounds_ = effective_label_bounds();

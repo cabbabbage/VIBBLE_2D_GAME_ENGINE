@@ -50,6 +50,69 @@ SDL_FPoint snap_to_resolution(SDL_FPoint p, int resolution_r) {
     return SDL_FPoint{ static_cast<float>(snapped.x), static_cast<float>(snapped.y) };
 }
 
+// Quadratic Bezier helpers for curved smoothing
+static SDL_FPoint bezier2_point(const SDL_FPoint& p0, const SDL_FPoint& p1, const SDL_FPoint& p2, double t) {
+    const double u = 1.0 - t;
+    const double uu = u * u;
+    const double tt = t * t;
+    return SDL_FPoint{
+        static_cast<float>(uu * p0.x + 2.0 * u * t * p1.x + tt * p2.x),
+        static_cast<float>(uu * p0.y + 2.0 * u * t * p1.y + tt * p2.y)
+    };
+}
+
+static std::vector<SDL_FPoint> bezier2_sampled_polyline(const SDL_FPoint& p0,
+                                                        const SDL_FPoint& p1,
+                                                        const SDL_FPoint& p2,
+                                                        int samples) {
+    samples = std::max(2, samples);
+    std::vector<SDL_FPoint> pts;
+    pts.reserve(samples);
+    for (int i = 0; i < samples; ++i) {
+        double t = (samples == 1) ? 0.0 : static_cast<double>(i) / static_cast<double>(samples - 1);
+        pts.push_back(bezier2_point(p0, p1, p2, t));
+    }
+    return pts;
+}
+
+static std::vector<double> cumulative_lengths(const std::vector<SDL_FPoint>& polyline) {
+    std::vector<double> acc;
+    acc.reserve(polyline.size());
+    double total = 0.0;
+    for (size_t i = 0; i < polyline.size(); ++i) {
+        if (i == 0) {
+            acc.push_back(0.0);
+        } else {
+            const double dx = static_cast<double>(polyline[i].x) - static_cast<double>(polyline[i - 1].x);
+            const double dy = static_cast<double>(polyline[i].y) - static_cast<double>(polyline[i - 1].y);
+            total += std::sqrt(dx * dx + dy * dy);
+            acc.push_back(total);
+        }
+    }
+    return acc;
+}
+
+static SDL_FPoint interpolate_along_polyline(const std::vector<SDL_FPoint>& polyline,
+                                             const std::vector<double>& cumlen,
+                                             double distance) {
+    if (polyline.empty()) return SDL_FPoint{0.0f, 0.0f};
+    if (distance <= 0.0) return polyline.front();
+    const double total = cumlen.back();
+    if (distance >= total) return polyline.back();
+    // binary search
+    size_t lo = 0, hi = cumlen.size() - 1;
+    while (hi - lo > 1) {
+        size_t mid = (lo + hi) / 2;
+        if (cumlen[mid] < distance) lo = mid; else hi = mid;
+    }
+    const double seg_len = cumlen[hi] - cumlen[lo];
+    const double seg_t = (seg_len > 0.0) ? (distance - cumlen[lo]) / seg_len : 0.0;
+    const SDL_FPoint a = polyline[lo];
+    const SDL_FPoint b = polyline[hi];
+    return SDL_FPoint{ static_cast<float>(a.x + (b.x - a.x) * seg_t),
+                       static_cast<float>(a.y + (b.y - a.y) * seg_t) };
+}
+
 }
 
 MovementCanvas::MovementCanvas() : zoom_(16.0f) {}
@@ -526,45 +589,109 @@ void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new
     const SDL_FPoint start = base_positions.front();
     const SDL_FPoint end   = base_positions.back();
 
-    // First segment: from start (index 0) to selected point (index k)
-    const int steps1 = k;
-    const double seg1_dx = static_cast<double>(new_position.x - start.x);
-    const double seg1_dy = static_cast<double>(new_position.y - start.y);
-    int accum1_x = 0;
-    int accum1_y = 0;
-    for (int i = 1; i <= steps1; ++i) {
-        const double t = steps1 > 0 ? static_cast<double>(i) / static_cast<double>(steps1) : 1.0;
-        const double target_x = (i == steps1) ? seg1_dx : (seg1_dx * t);
-        const double target_y = (i == steps1) ? seg1_dy : (seg1_dy * t);
-        const int rounded_x = static_cast<int>(std::lround(target_x));
-        const int rounded_y = static_cast<int>(std::lround(target_y));
-        const int step_x = rounded_x - accum1_x;
-        const int step_y = rounded_y - accum1_y;
-        accum1_x = rounded_x;
-        accum1_y = rounded_y;
-        frames_[i].dx = round_delta_to_pixel(static_cast<float>(step_x));
-        frames_[i].dy = round_delta_to_pixel(static_cast<float>(step_y));
-    }
+    if (!smoothing_curve_enabled_) {
+        // Linear redistribution (existing behavior)
+        const int steps1 = k;
+        const double seg1_dx = static_cast<double>(new_position.x - start.x);
+        const double seg1_dy = static_cast<double>(new_position.y - start.y);
+        int accum1_x = 0;
+        int accum1_y = 0;
+        for (int i = 1; i <= steps1; ++i) {
+            const double t = steps1 > 0 ? static_cast<double>(i) / static_cast<double>(steps1) : 1.0;
+            const double target_x = (i == steps1) ? seg1_dx : (seg1_dx * t);
+            const double target_y = (i == steps1) ? seg1_dy : (seg1_dy * t);
+            const int rounded_x = static_cast<int>(std::lround(target_x));
+            const int rounded_y = static_cast<int>(std::lround(target_y));
+            const int step_x = rounded_x - accum1_x;
+            const int step_y = rounded_y - accum1_y;
+            accum1_x = rounded_x;
+            accum1_y = rounded_y;
+            frames_[i].dx = round_delta_to_pixel(static_cast<float>(step_x));
+            frames_[i].dy = round_delta_to_pixel(static_cast<float>(step_y));
+        }
 
-    // Second segment: from selected point (index k) to end (index n-1)
-    const int steps2 = std::max(0, (n - 1) - k);
-    const double seg2_dx = static_cast<double>(end.x - new_position.x);
-    const double seg2_dy = static_cast<double>(end.y - new_position.y);
-    int accum2_x = 0;
-    int accum2_y = 0;
-    for (int s = 1; s <= steps2; ++s) {
-        const double u = steps2 > 0 ? static_cast<double>(s) / static_cast<double>(steps2) : 1.0;
-        const double target_x = (s == steps2) ? seg2_dx : (seg2_dx * u);
-        const double target_y = (s == steps2) ? seg2_dy : (seg2_dy * u);
-        const int rounded_x = static_cast<int>(std::lround(target_x));
-        const int rounded_y = static_cast<int>(std::lround(target_y));
-        const int step_x = rounded_x - accum2_x;
-        const int step_y = rounded_y - accum2_y;
-        accum2_x = rounded_x;
-        accum2_y = rounded_y;
-        const int j = k + s;
-        frames_[j].dx = round_delta_to_pixel(static_cast<float>(step_x));
-        frames_[j].dy = round_delta_to_pixel(static_cast<float>(step_y));
+        const int steps2 = std::max(0, (n - 1) - k);
+        const double seg2_dx = static_cast<double>(end.x - new_position.x);
+        const double seg2_dy = static_cast<double>(end.y - new_position.y);
+        int accum2_x = 0;
+        int accum2_y = 0;
+        for (int s = 1; s <= steps2; ++s) {
+            const double u = steps2 > 0 ? static_cast<double>(s) / static_cast<double>(steps2) : 1.0;
+            const double target_x = (s == steps2) ? seg2_dx : (seg2_dx * u);
+            const double target_y = (s == steps2) ? seg2_dy : (seg2_dy * u);
+            const int rounded_x = static_cast<int>(std::lround(target_x));
+            const int rounded_y = static_cast<int>(std::lround(target_y));
+            const int step_x = rounded_x - accum2_x;
+            const int step_y = rounded_y - accum2_y;
+            accum2_x = rounded_x;
+            accum2_y = rounded_y;
+            const int j = k + s;
+            frames_[j].dx = round_delta_to_pixel(static_cast<float>(step_x));
+            frames_[j].dy = round_delta_to_pixel(static_cast<float>(step_y));
+        }
+    } else {
+        // Curved redistribution: place points along quadratic Bezier approximations
+        const int steps1 = k;
+        const int steps2 = std::max(0, (n - 1) - k);
+
+        // Choose control points from base path midpoints to approximate original curvature
+        SDL_FPoint ctrl1 = start;
+        if (steps1 > 1) {
+            int mid1 = std::clamp(k / 2, 0, k);
+            ctrl1 = base_positions[static_cast<size_t>(mid1)];
+        }
+        SDL_FPoint ctrl2 = end;
+        if (steps2 > 1) {
+            int mid2 = k + std::max(1, (n - 1 - k) / 2);
+            ctrl2 = base_positions[static_cast<size_t>(std::clamp(mid2, 0, n - 1))];
+        }
+
+        // First curve polyline and cumulative lengths
+        if (steps1 > 0) {
+            auto poly1 = bezier2_sampled_polyline(start, ctrl1, new_position, std::max(32, steps1 * 8));
+            auto cum1  = cumulative_lengths(poly1);
+            const double total1 = cum1.back();
+            int accum1_x = 0;
+            int accum1_y = 0;
+            for (int i = 1; i <= steps1; ++i) {
+                const double target_len = (total1 * static_cast<double>(i)) / static_cast<double>(steps1);
+                SDL_FPoint abs = (i == steps1) ? new_position : interpolate_along_polyline(poly1, cum1, target_len);
+                const double rel_x = static_cast<double>(abs.x - start.x);
+                const double rel_y = static_cast<double>(abs.y - start.y);
+                const int rounded_x = static_cast<int>(std::lround(rel_x));
+                const int rounded_y = static_cast<int>(std::lround(rel_y));
+                const int step_x = rounded_x - accum1_x;
+                const int step_y = rounded_y - accum1_y;
+                accum1_x = rounded_x;
+                accum1_y = rounded_y;
+                frames_[i].dx = round_delta_to_pixel(static_cast<float>(step_x));
+                frames_[i].dy = round_delta_to_pixel(static_cast<float>(step_y));
+            }
+        }
+
+        // Second curve polyline and cumulative lengths
+        if (steps2 > 0) {
+            auto poly2 = bezier2_sampled_polyline(new_position, ctrl2, end, std::max(32, steps2 * 8));
+            auto cum2  = cumulative_lengths(poly2);
+            const double total2 = cum2.back();
+            int accum2_x = 0;
+            int accum2_y = 0;
+            for (int s = 1; s <= steps2; ++s) {
+                const double target_len = (total2 * static_cast<double>(s)) / static_cast<double>(steps2);
+                SDL_FPoint abs = (s == steps2) ? end : interpolate_along_polyline(poly2, cum2, target_len);
+                const double rel_x = static_cast<double>(abs.x - new_position.x);
+                const double rel_y = static_cast<double>(abs.y - new_position.y);
+                const int rounded_x = static_cast<int>(std::lround(rel_x));
+                const int rounded_y = static_cast<int>(std::lround(rel_y));
+                const int step_x = rounded_x - accum2_x;
+                const int step_y = rounded_y - accum2_y;
+                accum2_x = rounded_x;
+                accum2_y = rounded_y;
+                const int j = k + s;
+                frames_[j].dx = round_delta_to_pixel(static_cast<float>(step_x));
+                frames_[j].dy = round_delta_to_pixel(static_cast<float>(step_y));
+            }
+        }
     }
 
     rebuild_path();

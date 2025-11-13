@@ -53,6 +53,8 @@ class camera {
         // Perspective Blur (Aperture Blur)
         float max_foreground_blur = 0.0f;
         float max_background_blur = 0.0f;
+        float blur_foreground_screen_y = 1080.0f;
+        float blur_background_screen_y = 0.0f;
         BlurFalloffMethod blur_falloff_method = BlurFalloffMethod::Linear;
         TransformSmoothingParams parallax_smoothing{
             TransformSmoothingMethod::CriticallyDampedSpring,

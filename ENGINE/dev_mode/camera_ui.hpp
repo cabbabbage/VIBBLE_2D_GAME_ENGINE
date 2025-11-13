@@ -26,6 +26,7 @@ public:
     void close();
     void toggle();
     bool is_point_inside(int x, int y) const;
+    bool is_blur_section_visible() const { return is_visible() && depthcue_section_expanded_; }
 
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
@@ -37,7 +38,7 @@ private:
     void build_ui();
     void rebuild_rows();
     void apply_settings_if_needed();
-    void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled);
+    void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled, bool depthcue_enabled);
     camera::RealismSettings read_settings_from_ui() const;
     void on_control_value_changed();
     void enforce_depth_effects_choice();
@@ -58,8 +59,7 @@ private:
     std::unique_ptr<Widget> controls_spacer_;
     std::unique_ptr<SectionToggleWidget> visibility_section_header_;
     std::unique_ptr<SectionToggleWidget> depth_section_header_;
-    std::unique_ptr<SectionToggleWidget> colors_section_header_;
-    std::unique_ptr<SectionToggleWidget> blur_section_header_;
+    std::unique_ptr<SectionToggleWidget> depthcue_section_header_;
     std::unique_ptr<SectionToggleWidget> zoom_section_header_;
     std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
@@ -81,6 +81,8 @@ private:
     // Perspective Blur sliders
     std::unique_ptr<FloatSliderWidget> max_foreground_blur_slider_;
     std::unique_ptr<FloatSliderWidget> max_background_blur_slider_;
+    std::unique_ptr<FloatSliderWidget> foreground_blur_plane_slider_;
+    std::unique_ptr<FloatSliderWidget> background_blur_plane_slider_;
     // Interpolation dropdowns (UI-only for now)
     std::unique_ptr<DMDropdown> blur_falloff_dropdown_;
     std::unique_ptr<DropdownWidget> blur_falloff_widget_;
@@ -88,6 +90,10 @@ private:
     std::unique_ptr<DropdownWidget> color_primary_interp_widget_;
     std::unique_ptr<DMDropdown> color_brightness_interp_dropdown_;
     std::unique_ptr<DropdownWidget> color_brightness_interp_widget_;
+
+    // DepthCue section enable/disable
+    std::unique_ptr<DMCheckbox> depthcue_checkbox_;
+    std::unique_ptr<CheckboxWidget> depthcue_widget_;
     std::unique_ptr<DiscreteSliderWidget> render_quality_slider_;
     std::unique_ptr<DMCheckbox> smoothing_checkbox_;
     std::unique_ptr<CheckboxWidget> smoothing_widget_;
@@ -104,10 +110,11 @@ private:
 
     bool visibility_section_expanded_ = true;
     bool depth_section_expanded_ = true;
-    bool colors_section_expanded_ = false;
-    bool blur_section_expanded_ = false;
+    bool depthcue_section_expanded_ = false;
     bool zoom_section_expanded_ = false;
     bool smoothing_section_expanded_ = false;
+
+    bool last_depthcue_enabled_ = true;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }

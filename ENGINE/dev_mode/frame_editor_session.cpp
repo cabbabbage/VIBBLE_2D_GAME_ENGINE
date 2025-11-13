@@ -711,10 +711,11 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         rebuild_rel_positions();
         const bool should_smooth = (mode_ == Mode::Movement) &&
                                    smooth_enabled_ &&
-                                   selected_index_ > 0 &&
-                                   selected_index_ < static_cast<int>(frames_.size()) - 1;
+                                   selected_index_ > 0;
         if (should_smooth) {
-            redistribute_frames_from_middle_drag(selected_index_);
+            // Smooth on every adjustment, including when the adjusted point is the final one
+            // (then we smooth all the points before).
+            redistribute_frames_after_adjustment(selected_index_);
         } else {
             persist_changes();
         }
@@ -1344,13 +1345,19 @@ void FrameEditorSession::apply_frame_move_from_base(int index, SDL_FPoint desire
 }
 
 void FrameEditorSession::redistribute_frames_from_middle_drag(int adjusted_index) {
+    // Backwards-compatible helper kept for clarity; delegate to the generalized version.
+    redistribute_frames_after_adjustment(adjusted_index);
+}
+
+void FrameEditorSession::redistribute_frames_after_adjustment(int adjusted_index) {
     const size_t count = frames_.size();
     if (count < 3) {
         persist_changes();
         return;
     }
     const int last_index = static_cast<int>(count) - 1;
-    if (adjusted_index <= 0 || adjusted_index >= last_index) {
+    if (adjusted_index <= 0) {
+        // Nothing to smooth when the first point is adjusted (it is fixed at origin).
         persist_changes();
         return;
     }
@@ -1361,24 +1368,46 @@ void FrameEditorSession::redistribute_frames_from_middle_drag(int adjusted_index
         persist_changes();
         return;
     }
+
     std::vector<SDL_FPoint> redistributed = rel_positions_;
     const SDL_FPoint start = redistributed.front();
-    const SDL_FPoint end = redistributed.back();
+    const SDL_FPoint end   = redistributed.back();
     const float steps = static_cast<float>(last_index);
     if (steps <= 0.0f) {
         persist_changes();
         return;
     }
-    SDL_FPoint delta{ end.x - start.x, end.y - start.y };
-    for (int j = 1; j < last_index; ++j) {
-        if (j == adjusted_index) continue;
-        const float t = static_cast<float>(j) / steps;
-        SDL_FPoint new_pos{
-            start.x + delta.x * t,
-            start.y + delta.y * t
-        };
-        redistributed[j] = new_pos;
+    // Evenly space points. If the adjusted point is not the last, distribute points on
+    // either side independently so connecting segments to the anchor match their sides.
+    if (adjusted_index >= 1 && adjusted_index < last_index) {
+        // Before anchor: j in [1, adjusted_index-1]
+        const SDL_FPoint anchor = redistributed[adjusted_index];
+        const float pre_steps = static_cast<float>(adjusted_index);
+        const SDL_FPoint pre_delta{ anchor.x - start.x, anchor.y - start.y };
+        for (int j = 1; j < adjusted_index; ++j) {
+            const float t = pre_steps > 0.0f ? (static_cast<float>(j) / pre_steps) : 0.0f;
+            SDL_FPoint new_pos{ start.x + pre_delta.x * t, start.y + pre_delta.y * t };
+            redistributed[j] = new_pos;
+        }
+        // After anchor: j in [adjusted_index+1, last_index-1]
+        const float post_steps = static_cast<float>(last_index - adjusted_index);
+        const SDL_FPoint post_delta{ end.x - anchor.x, end.y - anchor.y };
+        for (int j = adjusted_index + 1; j < last_index; ++j) {
+            const float u = post_steps > 0.0f ? (static_cast<float>(j - adjusted_index) / post_steps) : 0.0f;
+            SDL_FPoint new_pos{ anchor.x + post_delta.x * u, anchor.y + post_delta.y * u };
+            redistributed[j] = new_pos;
+        }
+    } else {
+        // Adjusted is last: smooth all points before last along start->end line
+        const SDL_FPoint delta{ end.x - start.x, end.y - start.y };
+        for (int j = 1; j < last_index; ++j) {
+            const float t = static_cast<float>(j) / steps;
+            SDL_FPoint new_pos{ start.x + delta.x * t, start.y + delta.y * t };
+            redistributed[j] = new_pos;
+        }
     }
+
+    // Rebuild frame deltas from redistributed absolute positions
     frames_[0].dx = 0.0f;
     frames_[0].dy = 0.0f;
     for (size_t i = 1; i < count; ++i) {

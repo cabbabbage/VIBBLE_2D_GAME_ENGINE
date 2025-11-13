@@ -544,14 +544,12 @@ void CameraUIPanel::open() {
     // Collapse all sections by default when opened
     visibility_section_expanded_ = false;
     depth_section_expanded_ = false;
-    colors_section_expanded_ = false;
-    blur_section_expanded_ = false;
+    depthcue_section_expanded_ = false;
     zoom_section_expanded_ = false;
     smoothing_section_expanded_ = false;
     if (visibility_section_header_) visibility_section_header_->set_expanded(false);
     if (depth_section_header_)      depth_section_header_->set_expanded(false);
-    if (colors_section_header_)     colors_section_header_->set_expanded(false);
-    if (blur_section_header_)       blur_section_header_->set_expanded(false);
+    if (depthcue_section_header_)   depthcue_section_header_->set_expanded(false);
     if (zoom_section_header_)       zoom_section_header_->set_expanded(false);
     if (smoothing_section_header_)  smoothing_section_header_->set_expanded(false);
     rebuild_rows();
@@ -584,14 +582,12 @@ void CameraUIPanel::update(const Input& input, int screen_w, int screen_h) {
         // Collapse all sections by default when the panel becomes visible
         visibility_section_expanded_ = false;
         depth_section_expanded_ = false;
-        colors_section_expanded_ = false;
-        blur_section_expanded_ = false;
+        depthcue_section_expanded_ = false;
         zoom_section_expanded_ = false;
         smoothing_section_expanded_ = false;
         if (visibility_section_header_) visibility_section_header_->set_expanded(false);
         if (depth_section_header_)      depth_section_header_->set_expanded(false);
-        if (colors_section_header_)     colors_section_header_->set_expanded(false);
-        if (blur_section_header_)       blur_section_header_->set_expanded(false);
+        if (depthcue_section_header_)   depthcue_section_header_->set_expanded(false);
         if (zoom_section_header_)       zoom_section_header_->set_expanded(false);
         if (smoothing_section_header_)  smoothing_section_header_->set_expanded(false);
         rebuild_rows();
@@ -676,7 +672,10 @@ void CameraUIPanel::sync_from_camera() {
     // Perspective Blur
     if (max_foreground_blur_slider_)           max_foreground_blur_slider_->set_value(last_settings_.max_foreground_blur);
     if (max_background_blur_slider_)           max_background_blur_slider_->set_value(last_settings_.max_background_blur);
+    if (background_blur_plane_slider_)         background_blur_plane_slider_->set_value(last_settings_.blur_background_screen_y);
+    if (foreground_blur_plane_slider_)         foreground_blur_plane_slider_->set_value(last_settings_.blur_foreground_screen_y);
     if (blur_falloff_dropdown_)                blur_falloff_dropdown_->set_selected(static_cast<int>(last_settings_.blur_falloff_method));
+    if (depthcue_checkbox_)                    depthcue_checkbox_->set_value(last_depthcue_enabled_);
 }
 
 void CameraUIPanel::build_ui() {
@@ -712,8 +711,7 @@ void CameraUIPanel::build_ui() {
 
     configure_section(visibility_section_header_, "Visibility & Performance", &visibility_section_expanded_);
     configure_section(depth_section_header_,      "Depth & Perspective",      &depth_section_expanded_);
-    configure_section(colors_section_header_,     "Perspective Colors",       &colors_section_expanded_);
-    configure_section(blur_section_header_,       "Perspective Blur (Aperture Blur)", &blur_section_expanded_);
+    configure_section(depthcue_section_header_,   "DepthCue",                 &depthcue_section_expanded_);
     configure_section(zoom_section_header_,       "Zoom Range",               &zoom_section_expanded_);
     configure_section(smoothing_section_header_,  "Motion & Smoothing",       &smoothing_section_expanded_);
 
@@ -795,6 +793,18 @@ void CameraUIPanel::build_ui() {
         "Max Background Blur", 0.0f, 50.0f, 1.0f, defaults.max_background_blur, 0);
     max_background_blur_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
+    background_blur_plane_slider_ = std::make_unique<FloatSliderWidget>(
+        "Background Y position", 0.0f, 4000.0f, 1.0f, defaults.blur_background_screen_y, 0);
+    background_blur_plane_slider_->set_tooltip(
+        "Screen Y coordinate treated as the background blur plane (top of focus stack).");
+    background_blur_plane_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+
+    foreground_blur_plane_slider_ = std::make_unique<FloatSliderWidget>(
+        "Foreground Y position", 0.0f, 4000.0f, 1.0f, defaults.blur_foreground_screen_y, 0);
+    foreground_blur_plane_slider_->set_tooltip(
+        "Screen Y coordinate treated as the foreground blur plane (bottom of focus stack).");
+    foreground_blur_plane_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+
     // Blur interpolation dropdown (UI-only)
     {
         std::vector<std::string> options{ "Linear", "Quadratic", "Cubic", "Logarithmic", "Exponential" };
@@ -802,6 +812,11 @@ void CameraUIPanel::build_ui() {
         blur_falloff_widget_   = std::make_unique<DropdownWidget>(blur_falloff_dropdown_.get());
         blur_falloff_widget_->set_tooltip("Interpolation/falloff shape for aperture blur between min/max.");
     }
+
+    // DepthCue enable toggle
+    depthcue_checkbox_ = std::make_unique<DMCheckbox>("Enable DepthCue", true);
+    depthcue_widget_   = std::make_unique<CheckboxWidget>(depthcue_checkbox_.get());
+    depthcue_widget_->set_tooltip("Toggle depth cue effects (color adjustments + aperture blur).\nDoes not affect core depth/perspective behaviors.");
 
     smoothing_checkbox_ = std::make_unique<DMCheckbox>("Smooth Motion", defaults.smooth_motion_zoom);
     smoothing_widget_   = std::make_unique<CheckboxWidget>(smoothing_checkbox_.get());
@@ -891,8 +906,9 @@ void CameraUIPanel::rebuild_rows() {
         if (distance_strength_slider_) rows.push_back({ distance_strength_slider_.get() });
     }
 
-    if (colors_section_header_) rows.push_back({ colors_section_header_.get() });
-    if (colors_section_expanded_) {
+    if (depthcue_section_header_) rows.push_back({ depthcue_section_header_.get() });
+    if (depthcue_section_expanded_) {
+        if (depthcue_widget_) rows.push_back({ depthcue_widget_.get() });
         if (distance_saturation_factor_min_slider_) rows.push_back({ distance_saturation_factor_min_slider_.get() });
         if (distance_saturation_factor_max_slider_) rows.push_back({ distance_saturation_factor_max_slider_.get() });
         if (primary_color_boost_min_slider_) rows.push_back({ primary_color_boost_min_slider_.get() });
@@ -901,12 +917,11 @@ void CameraUIPanel::rebuild_rows() {
         if (ground_brightness_factor_slider_) rows.push_back({ ground_brightness_factor_slider_.get() });
         if (background_brightness_slider_) rows.push_back({ background_brightness_slider_.get() });
         if (color_brightness_interp_widget_) rows.push_back({ color_brightness_interp_widget_.get() });
-    }
 
-    if (blur_section_header_) rows.push_back({ blur_section_header_.get() });
-    if (blur_section_expanded_) {
         if (max_foreground_blur_slider_) rows.push_back({ max_foreground_blur_slider_.get() });
         if (max_background_blur_slider_) rows.push_back({ max_background_blur_slider_.get() });
+        if (background_blur_plane_slider_) rows.push_back({ background_blur_plane_slider_.get() });
+        if (foreground_blur_plane_slider_) rows.push_back({ foreground_blur_plane_slider_.get() });
         if (blur_falloff_widget_) rows.push_back({ blur_falloff_widget_.get() });
     }
 
@@ -934,12 +949,13 @@ void CameraUIPanel::apply_settings_if_needed() {
     if (!assets_) return;
     camera::RealismSettings settings = read_settings_from_ui();
     const bool effects_enabled = effects_checkbox_ ? effects_checkbox_->value() : last_realism_enabled_;
+    const bool depthcue_enabled = depthcue_checkbox_ ? depthcue_checkbox_->value() : last_depthcue_enabled_;
 
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;
 };
 
-    bool changed = effects_enabled != last_realism_enabled_;
+    bool changed = (effects_enabled != last_realism_enabled_) || (depthcue_enabled != last_depthcue_enabled_);
     const camera::RealismSettings& prev = last_settings_;
     changed = changed || differs(settings.render_distance, prev.render_distance) || differs(settings.render_radius_y_offset_px, prev.render_radius_y_offset_px) || differs(settings.tripod_distance_y, prev.tripod_distance_y) || differs(settings.height_at_zoom1, prev.height_at_zoom1) || differs(settings.parallax_strength, prev.parallax_strength) || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength) || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
     if (render_quality_slider_) {
@@ -967,10 +983,12 @@ void CameraUIPanel::apply_settings_if_needed() {
     changed = changed || differs(settings.background_brightness, prev.background_brightness);
     changed = changed || differs(settings.max_foreground_blur, prev.max_foreground_blur);
     changed = changed || differs(settings.max_background_blur, prev.max_background_blur);
+    changed = changed || differs(settings.blur_foreground_screen_y, prev.blur_foreground_screen_y);
+    changed = changed || differs(settings.blur_background_screen_y, prev.blur_background_screen_y);
     changed = changed || static_cast<int>(settings.blur_falloff_method) != static_cast<int>(prev.blur_falloff_method);
 
     if (changed) {
-        apply_settings_to_camera(settings, effects_enabled);
+        apply_settings_to_camera(settings, effects_enabled, depthcue_enabled);
 
         assets_->on_camera_settings_changed();
     }
@@ -996,10 +1014,16 @@ void CameraUIPanel::enforce_depth_effects_choice() {
 }
 
 void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& settings,
-                                             bool effects_enabled) {
+                                             bool effects_enabled,
+                                             bool depthcue_enabled) {
     if (!assets_) return;
     camera& cam = assets_->getView();
-    cam.set_realism_settings(settings);
+    camera::RealismSettings effective = settings;
+    if (!depthcue_enabled) {
+        effective.max_foreground_blur = 0.0f;
+        effective.max_background_blur = 0.0f;
+    }
+    cam.set_realism_settings(effective);
     cam.set_realism_enabled(effects_enabled);
     cam.set_parallax_enabled(effects_enabled);
     if (assets_) {
@@ -1007,6 +1031,7 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
     }
     last_settings_ = settings;
     last_realism_enabled_ = effects_enabled;
+    last_depthcue_enabled_ = depthcue_enabled;
 }
 
 camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
@@ -1063,6 +1088,8 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     // Perspective Blur
     if (max_foreground_blur_slider_) settings.max_foreground_blur = std::clamp(max_foreground_blur_slider_->value(), 0.0f, 50.0f);
     if (max_background_blur_slider_) settings.max_background_blur = std::clamp(max_background_blur_slider_->value(), 0.0f, 50.0f);
+    if (background_blur_plane_slider_) settings.blur_background_screen_y = std::clamp(background_blur_plane_slider_->value(), 0.0f, 4000.0f);
+    if (foreground_blur_plane_slider_) settings.blur_foreground_screen_y = std::clamp(foreground_blur_plane_slider_->value(), 0.0f, 4000.0f);
     if (blur_falloff_dropdown_) {
         int sel = blur_falloff_dropdown_->selected();
         if (sel < 0) sel = 0; if (sel > 4) sel = 4;

@@ -142,6 +142,11 @@ private:
     void rebuild_layout() const;
     void apply_frame_move_from_base(int index, SDL_FPoint desired_rel, const std::vector<SDL_FPoint>& base_rel);
     void redistribute_frames_from_middle_drag(int adjusted_index);
+    // Redistribute points after any adjustment. Keeps first and last fixed, and
+    // does not move the adjusted index. All other points are placed at even
+    // fractions between start and end in a straight line. If the adjusted
+    // index is the final point, this effectively smooths all points before it.
+    void redistribute_frames_after_adjustment(int adjusted_index);
     void rebuild_rel_positions();
     void persist_changes();
     void select_frame(int index);

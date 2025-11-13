@@ -56,6 +56,7 @@ class FrameMovementEditor {
     void set_show_animation(bool show);
     bool show_animation() const { return show_animation_; }
     void set_smoothing_enabled(bool enabled);
+    void set_curve_enabled(bool enabled);
     void apply_smoothing();
     std::pair<int,int> total_displacement() const;
     void set_total_displacement(int dx, int dy);
@@ -143,6 +144,7 @@ class FrameMovementEditor {
     int hovered_frame_index_ = -1;
     bool show_animation_ = true;
     bool smoothing_enabled_ = false;
+    bool curve_enabled_ = false;
     FrameChangedCallback frame_changed_callback_;
 };
 

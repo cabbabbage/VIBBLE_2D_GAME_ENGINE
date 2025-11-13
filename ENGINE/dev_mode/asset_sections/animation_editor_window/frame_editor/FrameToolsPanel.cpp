@@ -13,11 +13,13 @@ FrameToolsPanel::FrameToolsPanel()
     set_show_header(true);
     // Build initial widgets for movement mode
     smooth_checkbox_ = std::make_unique<DMCheckbox>("Smooth", false);
+    curve_checkbox_  = std::make_unique<DMCheckbox>("Curve", false);
     show_anim_checkbox_ = std::make_unique<DMCheckbox>("Show Animation", true);
     dx_box_ = std::make_unique<DMTextBox>("Total dX", "0");
     dy_box_ = std::make_unique<DMTextBox>("Total dY", "0");
 
     smooth_widget_ = std::make_unique<CheckboxWidget>(smooth_checkbox_.get());
+    curve_widget_  = std::make_unique<CheckboxWidget>(curve_checkbox_.get());
     show_anim_w_ = std::make_unique<CheckboxWidget>(show_anim_checkbox_.get());
     dx_w_ = std::make_unique<TextBoxWidget>(dx_box_.get(), false);
     dy_w_ = std::make_unique<TextBoxWidget>(dy_box_.get(), false);
@@ -36,6 +38,7 @@ FrameToolsPanel::FrameToolsPanel()
     last_dx_text_ = dx_box_->value();
     last_dy_text_ = dy_box_->value();
     last_checkbox_value_ = show_anim_checkbox_->value();
+    last_curve_value_ = curve_checkbox_->value();
 
     rebuild_rows();
 }
@@ -47,9 +50,11 @@ void FrameToolsPanel::set_mode(Mode mode) {
 }
 
 void FrameToolsPanel::set_callbacks(std::function<void(bool)> on_toggle_smooth,
+                                    std::function<void(bool)> on_toggle_curve,
                                     std::function<void(bool)> on_toggle_show_animation,
                                     std::function<void(int,int)> on_totals_changed) {
     on_toggle_smooth_ = std::move(on_toggle_smooth);
+    on_toggle_curve_ = std::move(on_toggle_curve);
     on_toggle_show_animation_ = std::move(on_toggle_show_animation);
     on_totals_changed_ = std::move(on_totals_changed);
 }
@@ -130,6 +135,18 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
             if (current != last_smooth_value_) {
                 last_smooth_value_ = current;
                 if (on_toggle_smooth_) on_toggle_smooth_(current);
+                // Show/hide Curve row when Smooth toggles
+                rebuild_rows();
+                consumed = true;
+            }
+        }
+
+        // Curve checkbox toggle detection (only has effect if Smooth is true)
+        if (curve_checkbox_) {
+            bool current = curve_checkbox_->value();
+            if (current != last_curve_value_) {
+                last_curve_value_ = current;
+                if (on_toggle_curve_) on_toggle_curve_(current);
                 consumed = true;
             }
         }
@@ -201,6 +218,9 @@ void FrameToolsPanel::rebuild_rows() {
     switch (mode_) {
         case Mode::Movement: {
             rows.push_back({ smooth_widget_.get() });
+            if (smooth_checkbox_ && smooth_checkbox_->value()) {
+                rows.push_back({ curve_widget_.get() });
+            }
             rows.push_back({ show_anim_w_.get() });
             rows.push_back({ dx_w_.get(), dy_w_.get() });
             break;

@@ -6,6 +6,7 @@
 #include <array>
 #include <cmath>
 #include <cctype>
+#include <cstdio>
 #include <numeric>
 
 #include "dev_mode/map_editor.hpp"
@@ -16,6 +17,7 @@
 #include "FloatingPanelLayoutManager.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
+#include "dev_mode/font_cache.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
@@ -1141,6 +1143,19 @@ void DevControls::update(const Input& input) {
     if (frame_editor_session_ && frame_editor_session_->is_active()) {
         frame_editor_session_->update(input);
     }
+
+    // If we are suppressing render during a Map→Room transition, resume
+    // once the camera finishes its pan/zoom animation.
+    if (render_suppression_in_progress_) {
+        camera* cam = assets_ ? &assets_->getView() : nullptr;
+        const bool camera_idle = !cam || !cam->zooming_;
+        if (camera_idle) {
+            if (assets_) {
+                assets_->set_render_suppressed(false);
+            }
+            render_suppression_in_progress_ = false;
+        }
+    }
 }
 
 void DevControls::update_ui(const Input& input) {
@@ -1709,6 +1724,74 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 220, 32, 32, 230);
         SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y - 6, screen_center.x + 6, screen_center.y + 6);
         SDL_RenderDrawLine(renderer, screen_center.x - 6, screen_center.y + 6, screen_center.x + 6, screen_center.y - 6);
+
+        SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
+        SDL_SetRenderDrawBlendMode(renderer, prev_mode);
+    }
+
+    if (renderer && camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && screen_w_ > 0 && screen_h_ > 0) {
+        const camera& cam = assets_->getView();
+        const camera::RealismSettings& settings = cam.realism_settings();
+        SDL_FPoint center_world_f = cam.get_view_center_f();
+        SDL_FPoint center_screen_f = cam.map_to_screen_f(center_world_f);
+        float center_y = std::isfinite(center_screen_f.y)
+            ? std::clamp(center_screen_f.y, 0.0f, static_cast<float>(screen_h_))
+            : static_cast<float>(screen_h_) * 0.5f;
+        auto clamp_line = [&](float value) {
+            if (!std::isfinite(value)) {
+                return center_y;
+            }
+            return std::clamp(value, 0.0f, static_cast<float>(screen_h_));
+        };
+        const float bg_line = clamp_line(settings.blur_background_screen_y);
+        const float fg_line = clamp_line(settings.blur_foreground_screen_y);
+
+        SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+        SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+        Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
+        SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+        const SDL_Color accent = DMStyles::AccentButton().hover_bg;
+        SDL_Color fg_color = dm_draw::LightenColor(accent, 0.2f);
+        fg_color.a = 220;
+        SDL_Color bg_color = dm_draw::LightenColor(accent, 0.05f);
+        bg_color.a = 220;
+        SDL_Color center_color = DMStyles::AccentButton().text;
+        center_color.a = 230;
+
+        DMLabelStyle base_label = DMStyles::Label();
+        base_label.font_size = std::max(12, base_label.font_size - 2);
+
+        auto draw_line = [&](float y, const SDL_Color& color) {
+            const int yi = static_cast<int>(std::lround(y));
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+            SDL_RenderDrawLine(renderer, 0, yi, screen_w_, yi);
+        };
+        auto draw_label = [&](float line_y, const SDL_Color& color, const std::string& text) {
+            DMLabelStyle style = base_label;
+            style.color = color;
+            const int yi = static_cast<int>(std::lround(line_y));
+            int text_y = yi - style.font_size - DMSpacing::small_gap();
+            if (text_y < 0) {
+                text_y = yi + DMSpacing::small_gap();
+            }
+            DrawLabelText(renderer, text, DMSpacing::panel_padding(), text_y, style);
+        };
+        auto make_blur_label = [](const char* prefix, float amount) {
+            char buffer[64];
+            std::snprintf(buffer, sizeof(buffer), "%s blur %.1fpx", prefix, amount);
+            return std::string(buffer);
+        };
+
+        draw_line(bg_line, bg_color);
+        draw_label(bg_line, bg_color, make_blur_label("BG", settings.max_background_blur));
+
+        draw_line(center_y, center_color);
+        draw_label(center_y, center_color, "blur 0");
+
+        draw_line(fg_line, fg_color);
+        draw_label(fg_line, fg_color, make_blur_label("FG", settings.max_foreground_blur));
 
         SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
@@ -3126,7 +3209,23 @@ void DevControls::handle_map_selection() {
     Room* selected = map_editor_->consume_selected_room();
     if (!selected) return;
 
-    map_editor_->focus_on_room(selected);
+    // Before entering Room mode, glide the camera to the selected room
+    // and temporarily suppress heavy scene rendering until settled.
+    if (assets_) {
+        assets_->set_render_suppressed(true);
+        render_suppression_in_progress_ = true;
+    }
+    if (assets_) {
+        camera* cam = &assets_->getView();
+        if (cam && selected && selected->room_area) {
+            const SDL_Point center = selected->room_area->get_center();
+            const double current_scale = std::max(0.0001, static_cast<double>(cam->get_scale()));
+            const double target_scale  = cam->default_zoom_for_room(selected);
+            const double factor = (target_scale > 0.0) ? (target_scale / current_scale) : 1.0;
+            const int duration_steps = 30; // smooth but quick
+            cam->pan_and_zoom_to_point(center, factor, duration_steps);
+        }
+    }
     if (is_trail_room(selected)) {
         if (trail_suite_) {
             trail_suite_->open(selected);

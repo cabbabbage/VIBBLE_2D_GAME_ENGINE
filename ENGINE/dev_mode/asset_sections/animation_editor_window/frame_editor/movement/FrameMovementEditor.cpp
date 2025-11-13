@@ -978,6 +978,13 @@ void FrameMovementEditor::set_smoothing_enabled(bool enabled) {
     }
 }
 
+void FrameMovementEditor::set_curve_enabled(bool enabled) {
+    curve_enabled_ = enabled;
+    if (canvas_) {
+        canvas_->set_smoothing_curve_enabled(enabled);
+    }
+}
+
 bool FrameMovementEditor::handle_variant_header_event(const SDL_Event& e) {
     switch (e.type) {
         case SDL_MOUSEMOTION: {

@@ -734,6 +734,8 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     // Perspective Blur (Aperture Blur)
     try_read_float("max_foreground_blur", settings_.max_foreground_blur);
     try_read_float("max_background_blur", settings_.max_background_blur);
+    try_read_float("blur_foreground_screen_y", settings_.blur_foreground_screen_y);
+    try_read_float("blur_background_screen_y", settings_.blur_background_screen_y);
     {
         auto it = data.find("blur_falloff_method");
         if (it != data.end()) {
@@ -748,6 +750,16 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     settings_.max_foreground_blur = std::max(0.0f, settings_.max_foreground_blur);
     settings_.max_background_blur = std::max(0.0f, settings_.max_background_blur);
+    if (!std::isfinite(settings_.blur_foreground_screen_y)) {
+        settings_.blur_foreground_screen_y = 1080.0f;
+    } else {
+        settings_.blur_foreground_screen_y = std::clamp(settings_.blur_foreground_screen_y, 0.0f, 4000.0f);
+    }
+    if (!std::isfinite(settings_.blur_background_screen_y)) {
+        settings_.blur_background_screen_y = 0.0f;
+    } else {
+        settings_.blur_background_screen_y = std::clamp(settings_.blur_background_screen_y, 0.0f, 4000.0f);
+    }
 
     if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
         settings_.render_distance = 800.0f;
@@ -871,6 +883,8 @@ nlohmann::json camera::camera_settings_to_json() const {
     // Perspective Blur (Aperture Blur)
     j["max_foreground_blur"] = settings_.max_foreground_blur;
     j["max_background_blur"] = settings_.max_background_blur;
+    j["blur_foreground_screen_y"] = settings_.blur_foreground_screen_y;
+    j["blur_background_screen_y"] = settings_.blur_background_screen_y;
     j["blur_falloff_method"] = static_cast<int>(settings_.blur_falloff_method);
     return j;
 }

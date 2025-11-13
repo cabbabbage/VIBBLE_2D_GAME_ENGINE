@@ -475,31 +475,20 @@ void SceneRenderer::render(){
         const bool blur_depth_enabled = camera_state && camera_state->realism_enabled() &&
             (blur_foreground_max_px > 0.0f || blur_background_max_px > 0.0f);
 
-        float base_y = 0.0f;
+        float center_screen_y = static_cast<float>(screen_height_) * 0.5f;
+        float fg_plane_screen_y = std::clamp(cam_settings.blur_foreground_screen_y, 0.0f, static_cast<float>(screen_height_));
+        float bg_plane_screen_y = std::clamp(cam_settings.blur_background_screen_y, 0.0f, static_cast<float>(screen_height_));
         if (camera_state) {
-            const SDL_Point cam_center_world = camera_state->get_screen_center();
-            base_y = static_cast<float>(cam_center_world.y) - cam_settings.tripod_distance_y;
-        }
-
-        const auto& active = assets_->getActive();
-        // Precompute foreground/background distance ranges (world-space dy from camera focus)
-        float fg_max_dy = 0.0f; // positive dy
-        float bg_max_abs_dy = 0.0f; // magnitude of negative dy
-        if (blur_depth_enabled) {
-            for (Asset* a : active) {
-                if (!a || !a->info) continue;
-                float wy = a->smoothed_translation_y();
-                if (assets_ && assets_->is_dev_mode()) {
-                    wy = static_cast<float>(a->pos.y);
-                }
-                const float dy = wy - base_y;
-                if (dy > 0.0f) {
-                    fg_max_dy = std::max(fg_max_dy, dy);
-                } else if (dy < 0.0f) {
-                    bg_max_abs_dy = std::max(bg_max_abs_dy, std::abs(dy));
-                }
+            SDL_FPoint center_world_f = camera_state->get_view_center_f();
+            SDL_FPoint center_screen_f = camera_state->map_to_screen_f(center_world_f);
+            if (std::isfinite(center_screen_f.y)) {
+                center_screen_y = std::clamp(center_screen_f.y, 0.0f, static_cast<float>(screen_height_));
             }
         }
+        const float fg_span_screen = std::max(0.0f, fg_plane_screen_y - center_screen_y);
+        const float bg_span_screen = std::max(0.0f, center_screen_y - bg_plane_screen_y);
+
+        const auto& active = assets_->getActive();
         texture_commands_.clear();
         texture_commands_.reserve(active.size());
         remaining_commands_.clear();
@@ -533,27 +522,35 @@ void SceneRenderer::render(){
 
             // Compute perspective blur radius per asset
             cmd.depth_blur_px = 0.0f;
-            if (blur_depth_enabled && (fg_max_dy > 0.0f || bg_max_abs_dy > 0.0f)) {
+            if (blur_depth_enabled) {
+                float wx = asset ? asset->smoothed_translation_x() : 0.0f;
                 float wy = asset ? asset->smoothed_translation_y() : 0.0f;
-                if (assets_ && assets_->is_dev_mode()) {
-                    wy = asset ? static_cast<float>(asset->pos.y) : 0.0f;
+                if (assets_ && assets_->is_dev_mode() && asset) {
+                    wx = static_cast<float>(asset->pos.x);
+                    wy = static_cast<float>(asset->pos.y);
                 }
-                const float dy = wy - base_y;
-                const float screen_dy = std::fabs(dy) * inv_scale;
+                SDL_FPoint screen_pos = camera_state->map_to_screen_f(SDL_FPoint{ wx, wy });
+                const float screen_y = screen_pos.y;
                 float t = 0.0f;
                 float max_blur = 0.0f;
-                // Ensure exact center stays unblurred; guard tiny floating drift using both world and screen tolerances
-                constexpr float kCenterDeadzoneWorld = 0.5f;
                 constexpr float kCenterDeadzoneScreen = 1.5f;
-                if (std::fabs(dy) <= kCenterDeadzoneWorld || screen_dy <= kCenterDeadzoneScreen) {
+                if (!std::isfinite(screen_y) || std::fabs(screen_y - center_screen_y) <= kCenterDeadzoneScreen) {
                     t = 0.0f;
                     max_blur = 0.0f;
-                } else if (dy > 0.0f && fg_max_dy > 0.0f) {
-                    t = std::clamp(dy / fg_max_dy, 0.0f, 1.0f);
+                } else if (screen_y > center_screen_y && blur_foreground_max_px > 0.0f) {
                     max_blur = blur_foreground_max_px;
-                } else if (dy < 0.0f && bg_max_abs_dy > 0.0f) {
-                    t = std::clamp(std::abs(dy) / bg_max_abs_dy, 0.0f, 1.0f);
+                    if (screen_y >= fg_plane_screen_y || fg_span_screen <= 0.0f) {
+                        t = 1.0f;
+                    } else {
+                        t = std::clamp((screen_y - center_screen_y) / fg_span_screen, 0.0f, 1.0f);
+                    }
+                } else if (screen_y < center_screen_y && blur_background_max_px > 0.0f) {
                     max_blur = blur_background_max_px;
+                    if (screen_y <= bg_plane_screen_y || bg_span_screen <= 0.0f) {
+                        t = 1.0f;
+                    } else {
+                        t = std::clamp((center_screen_y - screen_y) / bg_span_screen, 0.0f, 1.0f);
+                    }
                 }
                 if (t > 0.0f && max_blur > 0.0f) {
                     // Shape with selected falloff
@@ -851,30 +848,47 @@ void SceneRenderer::render(){
 
             // --------------------
             // 2) PERSPECTIVE BLUR (if any)
+            //     New: golden‑angle disk sampling for a soft, natural blur
             // --------------------
             bool drew_blur = false;
             const float blur_px = std::clamp(cmd.depth_blur_px, 0.0f, 50.0f);
             if (tex && blur_px > 0.0f) {
-                // Draw multiple offset copies to approximate a blur
-                // Sample count scales modestly with radius
-                int samples = 8 + static_cast<int>(std::lround(blur_px * 0.6f));
-                samples = std::clamp(samples, 8, 28);
-                const float step = 6.2831853f / static_cast<float>(samples);
+                // Soft blur via spiral disk sampling (no harsh ring artifacts)
+                // Sample density scales with radius
+                int samples = 12 + static_cast<int>(std::lround(blur_px * 0.8f));
+                samples = std::clamp(samples, 12, 64);
+
+                // Base alpha for this sprite
                 const Uint8 base_alpha_mod = static_cast<Uint8>(
                     std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
-                // Distribute alpha over samples; kept conservative since we also draw a base pass
-                const float per_alpha = std::clamp(0.6f / static_cast<float>(samples), 0.0f, 1.0f);
-                const Uint8 per_alpha_mod = static_cast<Uint8>(
-                    std::clamp(std::lround(per_alpha * static_cast<float>(base_alpha_mod)), 0L, 255L));
 
+                // Blend settings
                 SDL_SetTextureColorMod(tex, 255, 255, 255);
                 SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-                SDL_SetTextureAlphaMod(tex, per_alpha_mod);
+
+                // Weight each sample with w = 1 - r^2 (gaussian‑ish interior emphasis)
+                // With r^2 = (i+0.5)/N, sum(w) = N/2 exactly. Use that to normalize.
+                constexpr float kGolden = 2.39996323f; // golden angle in radians
+                const float blur_mix = 0.65f;          // overall blur contribution (kept conservative)
+                const float inv_samples = samples > 0 ? (1.0f / static_cast<float>(samples)) : 1.0f;
+
                 for (int i = 0; i < samples; ++i) {
-                    const float a = step * static_cast<float>(i);
+                    const float r2 = (static_cast<float>(i) + 0.5f) * inv_samples; // in (0,1)
+                    const float r  = std::sqrt(std::clamp(r2, 0.0f, 1.0f));
+                    const float a  = kGolden * static_cast<float>(i);
+                    const float w  = 1.0f - r2; // interior slightly stronger than rim
+
+                    // Normalize alpha per sample: total weight = N/2 => factor 2/N
+                    const float weight_norm = (2.0f * w) * inv_samples;
+                    const float sample_alpha_f = std::clamp(blur_mix * weight_norm, 0.0f, 1.0f);
+                    const Uint8 sample_alpha = static_cast<Uint8>(
+                        std::clamp(std::lround(sample_alpha_f * static_cast<float>(base_alpha_mod)), 0L, 255L));
+
+                    SDL_SetTextureAlphaMod(tex, sample_alpha);
+
                     SDL_FRect orect = cmd.dst;
-                    orect.x += std::cos(a) * blur_px;
-                    orect.y += std::sin(a) * blur_px;
+                    orect.x += std::cos(a) * (r * blur_px);
+                    orect.y += std::sin(a) * (r * blur_px);
                     SDL_RenderCopyExF(
                         renderer_,
                         tex,
@@ -885,6 +899,7 @@ void SceneRenderer::render(){
                         cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
                     );
                 }
+
                 // Restore alpha for next pass
                 SDL_SetTextureAlphaMod(tex, 255);
                 drew_blur = true;

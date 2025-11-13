@@ -277,4 +277,8 @@ private:
     // Track AssetInfo panel visibility during Frame Editor session
     bool frame_editor_prev_asset_info_open_ = false;
     Asset* frame_editor_asset_for_reopen_ = nullptr;
+
+    // When true, Assets rendering is suppressed until the camera finishes
+    // the pan/zoom transition triggered by Map→Room selection.
+    bool render_suppression_in_progress_ = false;
 };

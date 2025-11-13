@@ -63,7 +63,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:31:02Z",
+        "generated_at": "2025-11-13T03:12:07Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -116,7 +116,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:31:02Z",
+        "generated_at": "2025-11-13T03:12:07Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -169,7 +169,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:31:02Z",
+        "generated_at": "2025-11-13T03:12:07Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -222,7 +222,7 @@
       "asset_type": "boundary",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:31:02Z",
+        "generated_at": "2025-11-13T03:12:07Z",
         "max_scale": 0.7272727489471436,
         "min_scale": 0.7272727489471436,
         "recommended_percentages": [
@@ -508,7 +508,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:31:02Z",
+        "generated_at": "2025-11-13T03:12:07Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -621,7 +621,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:31:02Z",
+        "generated_at": "2025-11-13T03:12:07Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.9090908765792847,
         "recommended_percentages": [
@@ -668,7 +668,9 @@
       },
       "camera_settings": {
         "background_brightness": 0.0,
+        "blur_background_screen_y": 59.0,
         "blur_falloff_method": 2,
+        "blur_foreground_screen_y": 956.0,
         "distance_saturation_factor_max": 0.0,
         "distance_saturation_factor_min": 0.0,
         "distance_scale_strength": 0.14999999105930328,
@@ -676,7 +678,7 @@
         "ground_brightness_factor": 0.0,
         "height_at_zoom1": 306.0,
         "max_background_blur": 29.0,
-        "max_foreground_blur": 15.0,
+        "max_foreground_blur": 28.0,
         "max_zoom_multiplier": 2.999999761581421,
         "min_visible_screen_ratio": 0.020000001415610313,
         "min_zoom_multiplier": 0.35999998450279236,
@@ -771,11 +773,11 @@
         ]
       },
       "map_grid_settings": {
-        "chunk_size": 256,
+        "chunk_size": 64,
         "jitter": 0,
-        "r_chunk": 8,
-        "resolution": 8,
-        "spacing": 256
+        "r_chunk": 6,
+        "resolution": 6,
+        "spacing": 64
       },
       "map_layers": [
         {
@@ -1003,8 +1005,8 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            37,
             242,
-            138,
             36,
             255
           ],
@@ -1026,8 +1028,8 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
+            242,
             36,
-            137,
             242,
             255
           ],
@@ -1165,11 +1167,30 @@
         }
       },
       "trails_data": {
-        "NewTrail": {
+        "": {
           "display_color": [
             85,
             242,
             143,
+            255
+          ],
+          "edge_smoothness": 2,
+          "geometry": "",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 3000,
+          "max_width": 3000,
+          "min_height": 2500,
+          "min_width": 2500,
+          "name": "",
+          "spawn_groups": []
+        },
+        "NewTrail": {
+          "display_color": [
+            204,
+            31,
+            111,
             255
           ],
           "edge_smoothness": 2,

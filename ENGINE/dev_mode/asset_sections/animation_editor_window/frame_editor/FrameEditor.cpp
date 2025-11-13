@@ -367,6 +367,8 @@ void FrameEditor::ensure_children() {
         tools_panel_->set_callbacks(
             // Toggle smooth
             [this](bool smooth) { if (movement_editor_) movement_editor_->set_smoothing_enabled(smooth); },
+            // Toggle curve (only used when smooth is true)
+            [this](bool curve) { if (movement_editor_) movement_editor_->set_curve_enabled(curve); },
             // Toggle show animation
             [this](bool show) { if (movement_editor_) movement_editor_->set_show_animation(show); },
             // Totals changed
