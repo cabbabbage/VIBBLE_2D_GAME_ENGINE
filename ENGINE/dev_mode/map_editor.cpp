@@ -49,6 +49,10 @@ void MapEditor::set_ui_blocker(std::function<bool(int, int)> blocker) {
     ui_blocker_ = std::move(blocker);
 }
 
+void MapEditor::set_label_safe_area_provider(std::function<SDL_Rect()> provider) {
+    label_safe_area_provider_ = std::move(provider);
+}
+
 void MapEditor::set_camera_override_for_testing(camera* camera_override) {
     camera_override_for_testing_ = camera_override;
 }
@@ -163,6 +167,9 @@ void MapEditor::render(SDL_Renderer* renderer) {
         return;
     }
 
+    // Resolve active label bounds from provider or fall back to full screen
+    active_label_bounds_ = effective_label_bounds();
+
     struct LabelInfo {
         Room* room = nullptr;
         SDL_FPoint desired_center{0.0f, 0.0f};
@@ -172,8 +179,9 @@ void MapEditor::render(SDL_Renderer* renderer) {
     std::vector<LabelInfo> render_queue;
     render_queue.reserve(rooms_->size());
 
-    SDL_FPoint screen_center{static_cast<float>(screen_w_) * 0.5f,
-                             static_cast<float>(screen_h_) * 0.5f};
+    const float bounds_center_x = static_cast<float>(active_label_bounds_.x) + static_cast<float>(active_label_bounds_.w) * 0.5f;
+    const float bounds_center_y = static_cast<float>(active_label_bounds_.y) + static_cast<float>(active_label_bounds_.h) * 0.5f;
+    SDL_FPoint screen_center{bounds_center_x, bounds_center_y};
 
     camera& view = assets_->getView();
 
@@ -432,12 +440,16 @@ SDL_Rect MapEditor::label_background_rect(const SDL_Surface* surface, SDL_FPoint
         return rect;
     }
 
+    const SDL_Rect bounds = active_label_bounds_.w > 0 && active_label_bounds_.h > 0
+                                ? active_label_bounds_
+                                : SDL_Rect{0, 0, std::max(0, screen_w_), std::max(0, screen_h_)};
+
     const float half_w = static_cast<float>(rect_w) * 0.5f;
     const float half_h = static_cast<float>(rect_h) * 0.5f;
-    const float min_x = half_w;
-    const float max_x = static_cast<float>(screen_w_) - half_w;
-    const float min_y = half_h;
-    const float max_y = static_cast<float>(screen_h_) - half_h;
+    const float min_x = static_cast<float>(bounds.x) + half_w;
+    const float max_x = static_cast<float>(bounds.x + bounds.w) - half_w;
+    const float min_y = static_cast<float>(bounds.y) + half_h;
+    const float max_y = static_cast<float>(bounds.y + bounds.h) - half_h;
 
     auto clamp_center = [&](const SDL_FPoint& point) {
         SDL_FPoint clamped = point;
@@ -452,8 +464,8 @@ SDL_Rect MapEditor::label_background_rect(const SDL_Surface* surface, SDL_FPoint
                         desired_center.y >= min_y && desired_center.y <= max_y;
 
     if (!inside) {
-        SDL_FPoint screen_center{static_cast<float>(screen_w_) * 0.5f,
-                                 static_cast<float>(screen_h_) * 0.5f};
+        SDL_FPoint screen_center{ static_cast<float>(bounds.x) + static_cast<float>(bounds.w) * 0.5f,
+                                  static_cast<float>(bounds.y) + static_cast<float>(bounds.h) * 0.5f };
         const float dx = desired_center.x - screen_center.x;
         const float dy = desired_center.y - screen_center.y;
         const float epsilon = 0.0001f;
@@ -491,11 +503,15 @@ SDL_Rect MapEditor::resolve_edge_overlap(SDL_Rect rect, SDL_FPoint desired_cente
         return rect;
     }
 
+    const SDL_Rect bounds = active_label_bounds_.w > 0 && active_label_bounds_.h > 0
+                                ? active_label_bounds_
+                                : SDL_Rect{0, 0, std::max(0, screen_w_), std::max(0, screen_h_)};
+
     const int tolerance = 1;
-    const bool touches_left = rect.x <= tolerance;
-    const bool touches_right = rect.x + rect.w >= screen_w_ - tolerance;
-    const bool touches_top = rect.y <= tolerance;
-    const bool touches_bottom = rect.y + rect.h >= screen_h_ - tolerance;
+    const bool touches_left   = rect.x <= bounds.x + tolerance;
+    const bool touches_right  = rect.x + rect.w >= (bounds.x + bounds.w) - tolerance;
+    const bool touches_top    = rect.y <= bounds.y + tolerance;
+    const bool touches_bottom = rect.y + rect.h >= (bounds.y + bounds.h) - tolerance;
 
     if (touches_top || touches_bottom) {
         rect = resolve_horizontal_edge_overlap(rect, desired_center.x, touches_top);
@@ -511,8 +527,11 @@ SDL_Rect MapEditor::resolve_edge_overlap(SDL_Rect rect, SDL_FPoint desired_cente
 SDL_Rect MapEditor::resolve_horizontal_edge_overlap(SDL_Rect rect, float desired_center_x, bool top_edge) {
     if (screen_w_ <= 0) return rect;
 
-    const int min_x = 0;
-    const int max_x = std::max(0, screen_w_ - rect.w);
+    const SDL_Rect bounds = active_label_bounds_.w > 0 && active_label_bounds_.h > 0
+                                ? active_label_bounds_
+                                : SDL_Rect{0, 0, std::max(0, screen_w_), std::max(0, screen_h_)};
+    const int min_x = bounds.x;
+    const int max_x = std::max(bounds.x, bounds.x + std::max(0, bounds.w - rect.w));
     if (max_x <= min_x) {
         rect.x = min_x;
         return rect;
@@ -524,8 +543,8 @@ SDL_Rect MapEditor::resolve_horizontal_edge_overlap(SDL_Rect rect, float desired
 
     for (const auto& entry : label_rects_) {
         const SDL_Rect& other = entry.second;
-        bool other_on_edge = top_edge ? other.y <= tolerance
-                                      : other.y + other.h >= screen_h_ - tolerance;
+        bool other_on_edge = top_edge ? other.y <= bounds.y + tolerance
+                                      : other.y + other.h >= (bounds.y + bounds.h) - tolerance;
         if (other_on_edge) {
             same_edge_rects.push_back(other);
         }
@@ -604,8 +623,11 @@ SDL_Rect MapEditor::resolve_horizontal_edge_overlap(SDL_Rect rect, float desired
 SDL_Rect MapEditor::resolve_vertical_edge_overlap(SDL_Rect rect, float desired_center_y, bool left_edge) {
     if (screen_h_ <= 0) return rect;
 
-    const int min_y = 0;
-    const int max_y = std::max(0, screen_h_ - rect.h);
+    const SDL_Rect bounds = active_label_bounds_.w > 0 && active_label_bounds_.h > 0
+                                ? active_label_bounds_
+                                : SDL_Rect{0, 0, std::max(0, screen_w_), std::max(0, screen_h_)};
+    const int min_y = bounds.y;
+    const int max_y = std::max(bounds.y, bounds.y + std::max(0, bounds.h - rect.h));
     if (max_y <= min_y) {
         rect.y = min_y;
         return rect;
@@ -617,8 +639,8 @@ SDL_Rect MapEditor::resolve_vertical_edge_overlap(SDL_Rect rect, float desired_c
 
     for (const auto& entry : label_rects_) {
         const SDL_Rect& other = entry.second;
-        bool other_on_edge = left_edge ? other.x <= tolerance
-                                       : other.x + other.w >= screen_w_ - tolerance;
+        bool other_on_edge = left_edge ? other.x <= bounds.x + tolerance
+                                       : other.x + other.w >= (bounds.x + bounds.w) - tolerance;
         if (other_on_edge) {
             same_edge_rects.push_back(other);
         }
@@ -696,4 +718,26 @@ SDL_Rect MapEditor::resolve_vertical_edge_overlap(SDL_Rect rect, float desired_c
 
 bool MapEditor::rects_overlap(const SDL_Rect& a, const SDL_Rect& b) {
     return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+}
+
+SDL_Rect MapEditor::effective_label_bounds() const {
+    // Default to full screen if we can't compute bounds
+    SDL_Rect fallback{0, 0, std::max(0, screen_w_), std::max(0, screen_h_)};
+    if (!label_safe_area_provider_) {
+        return fallback;
+    }
+    SDL_Rect area = label_safe_area_provider_();
+    // Sanitize area against current screen
+    if (area.w <= 0 || area.h <= 0) return fallback;
+    if (screen_w_ > 0 && screen_h_ > 0) {
+        // Clamp within screen
+        int max_x = std::max(0, screen_w_ - area.w);
+        int max_y = std::max(0, screen_h_ - area.h);
+        area.x = std::clamp(area.x, 0, max_x);
+        area.y = std::clamp(area.y, 0, max_y);
+        // Ensure does not exceed screen
+        if (area.x + area.w > screen_w_) area.w = std::max(0, screen_w_ - area.x);
+        if (area.y + area.h > screen_h_) area.h = std::max(0, screen_h_ - area.y);
+    }
+    return area;
 }

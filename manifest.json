@@ -63,7 +63,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:14:53Z",
+        "generated_at": "2025-11-13T02:31:02Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -116,7 +116,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:14:53Z",
+        "generated_at": "2025-11-13T02:31:02Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -169,7 +169,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:14:53Z",
+        "generated_at": "2025-11-13T02:31:02Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -222,7 +222,7 @@
       "asset_type": "boundary",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:14:53Z",
+        "generated_at": "2025-11-13T02:31:02Z",
         "max_scale": 0.7272727489471436,
         "min_scale": 0.7272727489471436,
         "recommended_percentages": [
@@ -508,7 +508,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:14:53Z",
+        "generated_at": "2025-11-13T02:31:02Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -621,7 +621,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:14:53Z",
+        "generated_at": "2025-11-13T02:31:02Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.9090908765792847,
         "recommended_percentages": [
@@ -668,15 +668,15 @@
       },
       "camera_settings": {
         "background_brightness": 0.0,
-        "blur_falloff_method": 0,
+        "blur_falloff_method": 2,
         "distance_saturation_factor_max": 0.0,
         "distance_saturation_factor_min": 0.0,
         "distance_scale_strength": 0.14999999105930328,
         "foreshorten_strength": 0.38999998569488525,
         "ground_brightness_factor": 0.0,
         "height_at_zoom1": 306.0,
-        "max_background_blur": 41.0,
-        "max_foreground_blur": 7.0,
+        "max_background_blur": 29.0,
+        "max_foreground_blur": 15.0,
         "max_zoom_multiplier": 2.999999761581421,
         "min_visible_screen_ratio": 0.020000001415610313,
         "min_zoom_multiplier": 0.35999998450279236,

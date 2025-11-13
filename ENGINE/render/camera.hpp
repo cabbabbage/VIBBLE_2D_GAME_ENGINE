@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <SDL.h>
 #include <algorithm>
@@ -95,6 +95,10 @@ class camera {
     SDL_FPoint map_to_screen(SDL_Point world) const;
     SDL_FPoint map_to_screen_f(SDL_FPoint world) const;
     SDL_FPoint screen_to_map(SDL_Point screen) const;
+
+    // Returns the actual rendered view center in world space.
+    // Uses the smoothed center when motion smoothing is enabled.
+    SDL_FPoint get_view_center_f() const;
 
     using RenderSmoothingKey = std::uintptr_t;
 

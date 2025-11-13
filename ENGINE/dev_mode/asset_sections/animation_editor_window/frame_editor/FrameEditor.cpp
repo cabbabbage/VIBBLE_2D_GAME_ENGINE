@@ -501,10 +501,10 @@ void FrameEditor::update_layout() {
     prev_button_rect_ = SDL_Rect{prev_x, nav_y, nav_width, nav_height};
     next_button_rect_ = SDL_Rect{next_x, nav_y, nav_width, nav_height};
 
-    // Nudge frame navigation panel slightly downward
+    // Nudge frame navigation panel slightly downward and keep it clear of the tools panel on the right
     frame_list_rect_ = SDL_Rect{header_rect_.x,
                                 frame_display_rect_.y + frame_display_rect_.h + gap_display_list + kFrameListYOffset,
-                                header_rect_.w,
+                                std::max(0, remaining_width),
                                 std::max(0, frame_list_height)};
 
     if (prev_frame_button_) prev_frame_button_->set_rect(prev_button_rect_);

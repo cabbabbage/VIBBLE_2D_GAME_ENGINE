@@ -1,4 +1,4 @@
-#include "dev_controls.hpp"
+﻿#include "dev_controls.hpp"
 
 #include <SDL.h>
 #include <fstream>
@@ -516,6 +516,35 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
         room_editor_->set_boundary_assets_panel_callback([this]() { this->open_boundary_assets_modal(); });
     }
     map_editor_ = std::make_unique<MapEditor>(assets_);
+    // Constrain map-mode label spawn area between header bottom and footer top
+    map_editor_->set_label_safe_area_provider([this]() -> SDL_Rect {
+        // Default full-screen area
+        SDL_Rect area{0, 0, screen_w_, screen_h_};
+        // Header: AssetFilterBar header (if not suppressed)
+        if (!asset_filter_.header_suppressed()) {
+            const SDL_Rect header = asset_filter_.header_rect();
+            if (header.h > 0) {
+                const int safe_top = header.y + header.h;
+                if (safe_top < area.y + area.h) {
+                    area.h = std::max(0, (area.y + area.h) - safe_top);
+                    area.y = safe_top;
+                }
+            }
+        }
+        // Footer: Dev footer bar (if visible)
+        if (map_mode_ui_) {
+            if (DevFooterBar* fb = map_mode_ui_->get_footer_bar()) {
+                if (fb->visible()) {
+                    const SDL_Rect fr = fb->rect();
+                    const int safe_bottom = fr.y;
+                    if (safe_bottom > area.y) {
+                        area.h = std::max(0, safe_bottom - area.y);
+                    }
+                }
+            }
+        }
+        return area;
+    });
     map_mode_ui_ = std::make_unique<MapModeUI>(assets_);
     if (map_mode_ui_) {
         map_mode_ui_->set_manifest_store(&manifest_store_);
@@ -1271,6 +1300,25 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
+    // Ensure the Dev footer bar always intercepts pointer input first.
+    // This guarantees clicks over the footer (e.g., grid snap widgets)
+    // never leak into scene interactions or the frame editor session.
+    if (map_mode_ui_) {
+        if (DevFooterBar* footer = map_mode_ui_->get_footer_bar()) {
+            if (footer->visible()) {
+                if (consume(footer->handle_event(event))) {
+                    return;
+                }
+                if (pointer_relevant) {
+                    if (footer->contains(pointer.x, pointer.y)) {
+                        consume(true);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     const bool room_editor_active = can_use_room_editor_ui();
     const bool spawn_panel_visible = room_editor_ && room_editor_->is_spawn_group_panel_visible();
     const bool can_route_room_editor = room_editor_ && (room_editor_active || spawn_panel_visible);
@@ -1311,7 +1359,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
-    // Route events to in-world frame editor session before footer/map UI
+    // Route events to in-world frame editor session after footer UI has a chance to consume them
     if (frame_editor_session_ && frame_editor_session_->is_active()) {
         if (consume(frame_editor_session_->handle_event(event))) {
             return;
@@ -1666,11 +1714,11 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
     }
 
-    // When the Camera Settings panel is open, draw a crosshair at the camera focus (screen center).
+    // When the Camera Settings panel is open, draw a crosshair at the rendered focus point (actual view center).
     if (renderer && camera_panel_ && camera_panel_->is_visible() && assets_) {
         const camera& cam = assets_->getView();
-        SDL_Point center_world = cam.get_screen_center();
-        SDL_FPoint center_screen_f = cam.map_to_screen(center_world);
+        SDL_FPoint center_world_f = cam.get_view_center_f();
+        SDL_FPoint center_screen_f = cam.map_to_screen_f(center_world_f);
         const int cx = static_cast<int>(std::lround(center_screen_f.x));
         const int cy = static_cast<int>(std::lround(center_screen_f.y));
 
@@ -3226,6 +3274,18 @@ bool DevControls::lighting_section_forces_dark_mask() const {
     return room_editor_->is_asset_info_lighting_section_expanded();
 }
 
+bool DevControls::should_hide_assets_for_map_mode() const {
+    if (!enabled_) {
+        return false;
+    }
+    if (mode_ != Mode::MapEditor) {
+        return false;
+    }
+    const bool map_assets_open = map_assets_modal_ && map_assets_modal_->visible();
+    const bool boundary_open = boundary_assets_modal_ && boundary_assets_modal_->visible();
+    return !(map_assets_open || boundary_open);
+}
+
 void DevControls::reset_asset_filters() {
     asset_filter_.reset();
     restore_filter_hidden_assets();
@@ -3234,6 +3294,9 @@ void DevControls::reset_asset_filters() {
 
 bool DevControls::passes_asset_filters(Asset* asset) const {
     if (!asset) {
+        return false;
+    }
+    if (should_hide_assets_for_map_mode()) {
         return false;
     }
     return asset_filter_.passes(*asset);

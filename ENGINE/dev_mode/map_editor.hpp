@@ -23,6 +23,9 @@ public:
     void set_rooms(std::vector<Room*>* rooms);
     void set_screen_dimensions(int width, int height);
     void set_ui_blocker(std::function<bool(int, int)> blocker);
+    // Provide the screen-space safe area within which labels may spawn.
+    // When not provided, labels may spawn across the full screen.
+    void set_label_safe_area_provider(std::function<SDL_Rect()> provider);
     void set_camera_override_for_testing(camera* camera_override);
 
     void enter();
@@ -52,12 +55,14 @@ private:
     static bool rects_overlap(const SDL_Rect& a, const SDL_Rect& b);
     Room* find_spawn_room() const;
     camera* active_camera() const;
+    SDL_Rect effective_label_bounds() const;
 
 private:
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
     std::vector<Room*>* rooms_ = nullptr;
     std::function<bool(int, int)> ui_blocker_;
+    std::function<SDL_Rect()> label_safe_area_provider_{};
 
     int screen_w_ = 0;
     int screen_h_ = 0;
@@ -86,4 +91,5 @@ private:
     PanAndZoom pan_zoom_;
     std::vector<std::pair<Room*, SDL_Rect>> label_rects_;
     camera* camera_override_for_testing_ = nullptr;
+    mutable SDL_Rect active_label_bounds_{0,0,0,0};
 };

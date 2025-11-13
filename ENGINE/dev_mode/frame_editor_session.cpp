@@ -192,6 +192,7 @@ void FrameEditorSession::begin(Assets* assets,
 
     // Show animation initially; ensure asset visible
     show_animation_ = true;
+    smooth_enabled_ = false;
     target_->set_hidden(false);
     scroll_offset_ = 0;
     dragging_scrollbar_thumb_ = false;

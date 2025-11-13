@@ -189,6 +189,7 @@ private:
     void refresh_active_asset_filters();
     void reset_asset_filters();
     bool passes_asset_filters(Asset* asset) const;
+    bool should_hide_assets_for_map_mode() const;
     void apply_camera_area_render_flag();
     void set_mode_from_header(int header_mode);
     void set_mode(Mode new_mode);

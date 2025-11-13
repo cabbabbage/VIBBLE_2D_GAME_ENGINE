@@ -31,11 +31,12 @@ constexpr int kVariantTabWidth = 140;
 constexpr int kVariantCloseSize = 18;
 // Slightly increase base thumbnail size to make the frame navigation panel feel wider
 constexpr int kFrameListBaseSize = 64;
+constexpr int kFrameListMaxSize  = 144; // allow growth to better fill panel width
 constexpr int kFrameListMinSize = 36;
 constexpr int kFrameThumbnailPadding = 6;
 constexpr int kFrameListTitleHeight = 22;
 // Frame navigator horizontal scrollbar
-constexpr int kFrameListScrollbarHeight = 14;
+constexpr int kFrameListScrollbarHeight = 18;
 constexpr int kScrollbarMinKnobWidth   = 32;
 
 int clamp_index(int index, int max_value) {
@@ -333,6 +334,7 @@ void FrameMovementEditor::select_previous_frame() {
     selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
     if (selected_index_ <= 0) return;
     --selected_index_;
+    ensure_selection_visible();
     synchronize_selection();
 }
 
@@ -340,6 +342,7 @@ void FrameMovementEditor::select_next_frame() {
     selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
     if (selected_index_ >= static_cast<int>(frames_.size()) - 1) return;
     ++selected_index_;
+    ensure_selection_visible();
     synchronize_selection();
 }
 
@@ -588,6 +591,41 @@ void FrameMovementEditor::apply_changes() {
     if (totals_panel_) totals_panel_->set_frames(frames_);
 }
 
+void FrameMovementEditor::ensure_selection_visible() {
+    if (frame_list_rect_.w <= 0 || frame_list_rect_.h <= 0) {
+        return;
+    }
+    const int padding = kPanelPadding;
+    const int viewport_left = frame_list_rect_.x + padding;
+    const int viewport_width = std::max(0, frame_list_rect_.w - padding * 2);
+    if (viewport_width <= 0) {
+        return;
+    }
+    if (frame_item_rects_.empty()) {
+        layout_frame_list();
+    }
+    if (selected_index_ < 0 || selected_index_ >= static_cast<int>(frame_item_rects_.size())) {
+        return;
+    }
+    SDL_Rect item = frame_item_rects_[selected_index_];
+    // If item is left of viewport, scroll left
+    if (item.x < viewport_left) {
+        int delta = viewport_left - item.x;
+        hscroll_offset_px_ = std::max(0, hscroll_offset_px_ - delta);
+        layout_frame_list();
+        return;
+    }
+    // If item is right of viewport, scroll right
+    int viewport_right = viewport_left + viewport_width;
+    int item_right = item.x + item.w;
+    if (item_right > viewport_right) {
+        int delta = item_right - viewport_right;
+        const int max_offset = std::max(0, hscroll_content_px_ - viewport_width);
+        hscroll_offset_px_ = std::min(max_offset, hscroll_offset_px_ + delta);
+        layout_frame_list();
+    }
+}
+
 void FrameMovementEditor::ensure_children() {
     if (!canvas_) {
         canvas_ = std::make_unique<MovementCanvas>();
@@ -636,6 +674,7 @@ void FrameMovementEditor::update_layout() {
     smooth_button_rect_ = SDL_Rect{0,0,0,0};
     show_anim_button_rect_ = SDL_Rect{0,0,0,0};
     layout_frame_list();
+    ensure_selection_visible();
 }
 
 void FrameMovementEditor::synchronize_selection() {
@@ -645,6 +684,7 @@ void FrameMovementEditor::synchronize_selection() {
     if (frame_changed_callback_) {
         frame_changed_callback_(selected_index_);
     }
+    ensure_selection_visible();
 }
 
 void FrameMovementEditor::mark_dirty() {
@@ -657,6 +697,7 @@ void FrameMovementEditor::mark_dirty() {
     }
     if (totals_panel_) totals_panel_->set_frames(frames_);
     layout_frame_list();
+    ensure_selection_visible();
     // Persist immediately on any value change to ensure movement points are saved
     apply_changes();
     dirty_ = false;
@@ -908,6 +949,26 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
         dm_draw::DrawBeveledRect(renderer, hscroll_knob_rect_, knob_radius, 1, knob_bg, knob_bg, knob_bg, false, 0.0f, 0.0f);
         dm_draw::DrawRoundedOutline(renderer, hscroll_knob_rect_, knob_radius, 1, knob_border);
     }
+
+    // Inline carousel navigation buttons
+    if (fl_prev_button_rect_.w > 0 && fl_prev_button_rect_.h > 0) {
+        const DMButtonStyle& style = DMStyles::AccentButton();
+        SDL_Color bg = style.bg;
+        if (fl_prev_pressed_) bg = style.press_bg; else if (fl_prev_hovered_) bg = style.hover_bg;
+        const int radius = std::min(DMStyles::CornerRadius(), std::min(fl_prev_button_rect_.w, fl_prev_button_rect_.h) / 2);
+        dm_draw::DrawBeveledRect(renderer, fl_prev_button_rect_, radius, 1, bg, bg, bg, false, 0.0f, 0.0f);
+        dm_draw::DrawRoundedOutline(renderer, fl_prev_button_rect_, radius, 1, style.border);
+        render_tab_text(renderer, "<", fl_prev_button_rect_, style.text);
+    }
+    if (fl_next_button_rect_.w > 0 && fl_next_button_rect_.h > 0) {
+        const DMButtonStyle& style = DMStyles::AccentButton();
+        SDL_Color bg = style.bg;
+        if (fl_next_pressed_) bg = style.press_bg; else if (fl_next_hovered_) bg = style.hover_bg;
+        const int radius = std::min(DMStyles::CornerRadius(), std::min(fl_next_button_rect_.w, fl_next_button_rect_.h) / 2);
+        dm_draw::DrawBeveledRect(renderer, fl_next_button_rect_, radius, 1, bg, bg, bg, false, 0.0f, 0.0f);
+        dm_draw::DrawRoundedOutline(renderer, fl_next_button_rect_, radius, 1, style.border);
+        render_tab_text(renderer, ">", fl_next_button_rect_, style.text);
+    }
 }
 
 void FrameMovementEditor::set_smoothing_enabled(bool enabled) {
@@ -1055,6 +1116,9 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
                 return true;
             }
             SDL_Point p{e.motion.x, e.motion.y};
+            // Update hover states for carousel buttons
+            fl_prev_hovered_ = SDL_PointInRect(&p, &fl_prev_button_rect_) != 0;
+            fl_next_hovered_ = SDL_PointInRect(&p, &fl_next_button_rect_) != 0;
             hovered_frame_index_ = index_at_point(p);
             return SDL_PointInRect(&p, &frame_list_rect_) != 0;
         }
@@ -1063,6 +1127,15 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
                 break;
             }
             SDL_Point p{e.button.x, e.button.y};
+            // Carousel buttons
+            if (SDL_PointInRect(&p, &fl_prev_button_rect_)) {
+                fl_prev_pressed_ = true;
+                return true;
+            }
+            if (SDL_PointInRect(&p, &fl_next_button_rect_)) {
+                fl_next_pressed_ = true;
+                return true;
+            }
             // Scrollbar interactions first
             if (hscroll_track_rect_.w > 0 && SDL_PointInRect(&p, &hscroll_knob_rect_)) {
                 hscroll_dragging_ = true;
@@ -1098,6 +1171,22 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
                 break;
             }
             SDL_Point p{e.button.x, e.button.y};
+            if (fl_prev_pressed_) {
+                bool inside = SDL_PointInRect(&p, &fl_prev_button_rect_) != 0;
+                fl_prev_pressed_ = false;
+                if (inside && can_select_previous_frame()) {
+                    select_previous_frame();
+                    return true;
+                }
+            }
+            if (fl_next_pressed_) {
+                bool inside = SDL_PointInRect(&p, &fl_next_button_rect_) != 0;
+                fl_next_pressed_ = false;
+                if (inside && can_select_next_frame()) {
+                    select_next_frame();
+                    return true;
+                }
+            }
             if (hscroll_dragging_) {
                 hscroll_dragging_ = false;
                 return true;
@@ -1143,11 +1232,11 @@ void FrameMovementEditor::layout_frame_list() {
     }
 
     // Single-row layout with horizontal scrolling when needed
-    int item_height = std::max(kFrameListMinSize, std::min(kFrameListBaseSize, available_height));
-    int item_width  = std::max(kFrameListMinSize, std::min(kFrameListBaseSize, item_height));
+    int item_height = std::max(kFrameListMinSize, std::min(std::min(kFrameListMaxSize, available_height), kFrameListBaseSize));
+    int item_width  = std::max(kFrameListMinSize, std::min(item_height, kFrameListMaxSize));
 
     const int count = static_cast<int>(frames_.size());
-    const int content_width = (count > 0) ? (count * item_width + (count - 1) * spacing) : 0;
+    int content_width = (count > 0) ? (count * item_width + (count - 1) * spacing) : 0;
     hscroll_content_px_ = content_width;
 
     // If content overflows horizontally, reserve space for a scrollbar
@@ -1156,6 +1245,7 @@ void FrameMovementEditor::layout_frame_list() {
         available_height = std::max(0, available_height - (kFrameListScrollbarHeight + spacing));
         item_height = std::max(kFrameListMinSize, std::min(item_height, available_height));
         item_width  = std::max(kFrameListMinSize, std::min(item_width,  item_height));
+        content_width = (count > 0) ? (count * item_width + (count - 1) * spacing) : 0;
     }
 
     // Clamp scroll offset
@@ -1163,8 +1253,13 @@ void FrameMovementEditor::layout_frame_list() {
     if (hscroll_offset_px_ < 0) hscroll_offset_px_ = 0;
     if (hscroll_offset_px_ > max_offset) hscroll_offset_px_ = max_offset;
 
-    // Layout items left-aligned, applying scroll offset
-    const int start_x = frame_list_rect_.x + padding - hscroll_offset_px_;
+    // If not scrolling, center the content to better fill the width
+    int centering_offset = 0;
+    if (!need_scroll && viewport_width > content_width) {
+        centering_offset = (viewport_width - content_width) / 2;
+    }
+    // Layout items applying scroll offset and centering
+    const int start_x = frame_list_rect_.x + padding + centering_offset - hscroll_offset_px_;
     const int start_y = frame_list_rect_.y + padding + kFrameListTitleHeight + std::max(0, (available_height - item_height) / 2);
 
     frame_item_rects_.reserve(frames_.size());
@@ -1192,6 +1287,16 @@ void FrameMovementEditor::layout_frame_list() {
         hscroll_knob_rect_  = SDL_Rect{0,0,0,0};
         hscroll_offset_px_  = 0;
     }
+
+    // Inline carousel navigation buttons (always available if there are frames)
+    const int items_area_y = frame_list_rect_.y + padding + kFrameListTitleHeight;
+    const int items_area_h = available_height;
+    int btn_h = std::max(24, std::min(32, items_area_h));
+    int btn_w = btn_h;
+    int btn_y = items_area_y + std::max(0, (items_area_h - btn_h) / 2);
+    const int nav_pad = 4;
+    fl_prev_button_rect_ = SDL_Rect{ frame_list_rect_.x + nav_pad, btn_y, btn_w, btn_h };
+    fl_next_button_rect_ = SDL_Rect{ frame_list_rect_.x + frame_list_rect_.w - nav_pad - btn_w, btn_y, btn_w, btn_h };
 }
 
 void FrameMovementEditor::set_active_variant(int index, bool preserve_view) {
@@ -1225,6 +1330,7 @@ void FrameMovementEditor::update_child_frames(bool preserve_view) {
         properties_panel_->refresh_from_selection();
     }
     layout_frame_list();
+    ensure_selection_visible();
 }
 
 void FrameMovementEditor::sync_active_variant_frames() {

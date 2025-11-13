@@ -67,6 +67,7 @@ class FrameMovementEditor {
     void ensure_children();
     void update_layout();
     void synchronize_selection();
+    void ensure_selection_visible();
     void mark_dirty();
     void layout_variant_header();
     void render_variant_header(SDL_Renderer* renderer) const;
@@ -127,6 +128,13 @@ class FrameMovementEditor {
     SDL_Rect hscroll_knob_rect_{0,0,0,0};     // scrollbar knob rect
     bool hscroll_dragging_ = false;           // dragging the knob
     int  hscroll_drag_dx_ = 0;                // drag offset within knob
+    // Inline carousel navigation buttons inside frame list
+    SDL_Rect fl_prev_button_rect_{0,0,0,0};
+    SDL_Rect fl_next_button_rect_{0,0,0,0};
+    bool fl_prev_hovered_ = false;
+    bool fl_next_hovered_ = false;
+    bool fl_prev_pressed_ = false;
+    bool fl_next_pressed_ = false;
     int selected_index_ = 0;
     int active_variant_index_ = 0;
     bool dirty_ = false;

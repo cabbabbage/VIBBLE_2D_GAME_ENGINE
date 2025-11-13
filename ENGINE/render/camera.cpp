@@ -894,3 +894,14 @@ int camera::get_render_radius_world_y_offset() const {
     const double world_offset = px_offset * scale_for_world;
     return static_cast<int>(std::lround(world_offset));
 }
+
+SDL_FPoint camera::get_view_center_f() const {
+    if (std::isfinite(smoothed_center_.x) && std::isfinite(smoothed_center_.y)) {
+        return smoothed_center_;
+    }
+    int left, top, right, bottom;
+    std::tie(left, top, right, bottom) = current_view_.get_bounds();
+    const float cx = (static_cast<float>(left) + static_cast<float>(right)) * 0.5f;
+    const float cy = (static_cast<float>(top)  + static_cast<float>(bottom)) * 0.5f;
+    return SDL_FPoint{ cx, cy };
+}
