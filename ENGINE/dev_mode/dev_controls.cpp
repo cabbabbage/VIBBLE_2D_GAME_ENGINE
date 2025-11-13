@@ -1666,6 +1666,38 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
     }
 
+    // When the Camera Settings panel is open, draw a crosshair at the camera focus (screen center).
+    if (renderer && camera_panel_ && camera_panel_->is_visible() && assets_) {
+        const camera& cam = assets_->getView();
+        SDL_Point center_world = cam.get_screen_center();
+        SDL_FPoint center_screen_f = cam.map_to_screen(center_world);
+        const int cx = static_cast<int>(std::lround(center_screen_f.x));
+        const int cy = static_cast<int>(std::lround(center_screen_f.y));
+
+        SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+        SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+        Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
+        SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+        // Use an accent-like color with good visibility.
+        const SDL_Color c = DMStyles::AccentButton().hover_bg;
+        SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 230);
+
+        // Draw a simple thick plus-style crosshair centered at (cx, cy).
+        constexpr int arm = 8;
+        constexpr int thickness = 3; // odd thickness keeps center pixel aligned
+        const int offset_start = -thickness / 2;
+        const int offset_end   =  thickness / 2;
+        for (int o = offset_start; o <= offset_end; ++o) {
+            SDL_RenderDrawLine(renderer, cx - arm, cy + o, cx + arm, cy + o); // horizontal
+            SDL_RenderDrawLine(renderer, cx + o, cy - arm, cx + o, cy + arm); // vertical
+        }
+
+        SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
+        SDL_SetRenderDrawBlendMode(renderer, prev_mode);
+    }
+
 
     if (map_mode_ui_) map_mode_ui_->render(renderer);
     if (map_assets_modal_ && map_assets_modal_->visible()) {

@@ -656,6 +656,7 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     }
 
     try_read_float("render_distance", settings_.render_distance);
+    try_read_float("render_radius_y_offset_px", settings_.render_radius_y_offset_px);
     try_read_float("parallax_strength", settings_.parallax_strength);
     try_read_float("foreshorten_strength", settings_.foreshorten_strength);
     try_read_float("distance_scale_strength", settings_.distance_scale_strength);
@@ -749,6 +750,12 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         settings_.render_distance = 800.0f;
     }
 
+    if (!std::isfinite(settings_.render_radius_y_offset_px)) {
+        settings_.render_radius_y_offset_px = 0.0f;
+    } else {
+        settings_.render_radius_y_offset_px = std::clamp(settings_.render_radius_y_offset_px, -4000.0f, 4000.0f);
+    }
+
     settings_.parallax_strength = std::isfinite(settings_.parallax_strength) ? std::max(0.0f, settings_.parallax_strength) : 0.0f;
 
     settings_.foreshorten_strength = std::isfinite(settings_.foreshorten_strength) ? std::max(0.0f, settings_.foreshorten_strength) : 0.0f;
@@ -827,6 +834,7 @@ nlohmann::json camera::camera_settings_to_json() const {
     nlohmann::json j = nlohmann::json::object();
     j["realism_enabled"]       = realism_enabled_;
     j["render_distance"]       = settings_.render_distance;
+    j["render_radius_y_offset_px"] = settings_.render_radius_y_offset_px;
     j["parallax_strength"]     = settings_.parallax_strength;
     j["foreshorten_strength"]  = settings_.foreshorten_strength;
     j["distance_scale_strength"] = settings_.distance_scale_strength;
@@ -875,4 +883,11 @@ int camera::get_render_distance_world_margin() const {
     const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
     const double world_margin = px_margin * scale_for_world;
     return static_cast<int>(std::lround(world_margin));
+}
+
+int camera::get_render_radius_world_y_offset() const {
+    const double px_offset = static_cast<double>(settings_.render_radius_y_offset_px);
+    const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
+    const double world_offset = px_offset * scale_for_world;
+    return static_cast<int>(std::lround(world_offset));
 }

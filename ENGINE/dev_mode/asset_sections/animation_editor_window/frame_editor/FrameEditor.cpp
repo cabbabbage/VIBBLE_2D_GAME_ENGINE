@@ -365,8 +365,8 @@ void FrameEditor::ensure_children() {
         tools_panel_ = std::make_unique<FrameToolsPanel>();
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
         tools_panel_->set_callbacks(
-            // Smooth
-            [this]() { if (movement_editor_) movement_editor_->apply_smoothing(); },
+            // Toggle smooth
+            [this](bool smooth) { if (movement_editor_) movement_editor_->set_smoothing_enabled(smooth); },
             // Toggle show animation
             [this](bool show) { if (movement_editor_) movement_editor_->set_show_animation(show); },
             // Totals changed

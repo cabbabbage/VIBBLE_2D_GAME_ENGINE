@@ -12,12 +12,12 @@ FrameToolsPanel::FrameToolsPanel()
     : DockableCollapsible("Tools", true /*floatable*/, 32, 32) {
     set_show_header(true);
     // Build initial widgets for movement mode
-    smooth_btn_ = std::make_unique<DMButton>("Smooth", &DMStyles::AccentButton(), 120, DMButton::height());
+    smooth_checkbox_ = std::make_unique<DMCheckbox>("Smooth", false);
     show_anim_checkbox_ = std::make_unique<DMCheckbox>("Show Animation", true);
     dx_box_ = std::make_unique<DMTextBox>("Total dX", "0");
     dy_box_ = std::make_unique<DMTextBox>("Total dY", "0");
 
-    smooth_btn_w_ = std::make_unique<ButtonWidget>(smooth_btn_.get());
+    smooth_widget_ = std::make_unique<CheckboxWidget>(smooth_checkbox_.get());
     show_anim_w_ = std::make_unique<CheckboxWidget>(show_anim_checkbox_.get());
     dx_w_ = std::make_unique<TextBoxWidget>(dx_box_.get(), false);
     dy_w_ = std::make_unique<TextBoxWidget>(dy_box_.get(), false);
@@ -46,10 +46,10 @@ void FrameToolsPanel::set_mode(Mode mode) {
     rebuild_rows();
 }
 
-void FrameToolsPanel::set_callbacks(std::function<void()> on_smooth,
+void FrameToolsPanel::set_callbacks(std::function<void(bool)> on_toggle_smooth,
                                     std::function<void(bool)> on_toggle_show_animation,
                                     std::function<void(int,int)> on_totals_changed) {
-    on_smooth_ = std::move(on_smooth);
+    on_toggle_smooth_ = std::move(on_toggle_smooth);
     on_toggle_show_animation_ = std::move(on_toggle_show_animation);
     on_totals_changed_ = std::move(on_totals_changed);
 }
@@ -124,18 +124,17 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
     bool consumed = DockableCollapsible::handle_event(e);
 
     if (mode_ == Mode::Movement) {
-        // Smooth button click detection on mouse up inside rect
-        if (smooth_btn_) {
-            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-                SDL_Point p{e.button.x, e.button.y};
-                if (SDL_PointInRect(&p, &smooth_btn_->rect())) {
-                    if (on_smooth_) on_smooth_();
-                    consumed = true;
-                }
+        // Smooth checkbox toggle detection
+        if (smooth_checkbox_) {
+            bool current = smooth_checkbox_->value();
+            if (current != last_smooth_value_) {
+                last_smooth_value_ = current;
+                if (on_toggle_smooth_) on_toggle_smooth_(current);
+                consumed = true;
             }
         }
 
-        // Checkbox toggling detection
+        // Show Animation checkbox toggling detection
         if (show_anim_checkbox_) {
             bool current = show_anim_checkbox_->value();
             if (current != last_checkbox_value_) {
@@ -201,7 +200,7 @@ void FrameToolsPanel::rebuild_rows() {
     Rows rows;
     switch (mode_) {
         case Mode::Movement: {
-            rows.push_back({ smooth_btn_w_.get() });
+            rows.push_back({ smooth_widget_.get() });
             rows.push_back({ show_anim_w_.get() });
             rows.push_back({ dx_w_.get(), dy_w_.get() });
             break;

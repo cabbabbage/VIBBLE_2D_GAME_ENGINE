@@ -43,6 +43,8 @@ class MovementCanvas {
     void set_snap_resolution(int r) { snap_resolution_ = r; }
     // Toggle whether the preview sprite should follow the movement offsets or stay anchored at origin.
     void set_anchor_follows_movement(bool follow) { anchor_follows_movement_ = follow; }
+    // Toggle smoothing behavior when moving a point.
+    void set_smoothing_enabled(bool enabled) { smoothing_enabled_ = enabled; }
     const SDL_Rect& bounds() const { return bounds_; }
     SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
     SDL_FPoint screen_to_world(SDL_Point screen) const;
@@ -79,6 +81,7 @@ class MovementCanvas {
     float base_scale_percentage_ = 100.0f;
     int snap_resolution_ = -1;
     bool anchor_follows_movement_ = true;
+    bool smoothing_enabled_ = false;
 };
 
 }

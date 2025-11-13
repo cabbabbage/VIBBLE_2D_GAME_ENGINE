@@ -29,7 +29,8 @@ constexpr int kVariantTabHeight = 28;
 constexpr int kVariantTabSpacing = 6;
 constexpr int kVariantTabWidth = 140;
 constexpr int kVariantCloseSize = 18;
-constexpr int kFrameListBaseSize = 56;
+// Slightly increase base thumbnail size to make the frame navigation panel feel wider
+constexpr int kFrameListBaseSize = 64;
 constexpr int kFrameListMinSize = 36;
 constexpr int kFrameThumbnailPadding = 6;
 constexpr int kFrameListTitleHeight = 22;
@@ -127,6 +128,36 @@ void render_tab_text(SDL_Renderer* renderer, const std::string& text, const SDL_
     }
 
     const DMLabelStyle& style = DMStyles::Label();
+    TTF_Font* font = style.open_font();
+    if (!font) {
+        return;
+    }
+
+    SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), color);
+    if (!surface) {
+        TTF_CloseFont(font);
+        return;
+    }
+
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    if (texture) {
+        SDL_Rect dst{rect.x + (rect.w - surface->w) / 2, rect.y + (rect.h - surface->h) / 2, surface->w, surface->h};
+        SDL_RenderCopy(renderer, texture, nullptr, &dst);
+        SDL_DestroyTexture(texture);
+    }
+
+    SDL_FreeSurface(surface);
+    TTF_CloseFont(font);
+}
+
+// Render compact text for small badges (e.g., frame index overlay)
+void render_badge_text_small(SDL_Renderer* renderer, const std::string& text, const SDL_Rect& rect, SDL_Color color) {
+    if (!renderer || text.empty()) {
+        return;
+    }
+
+    DMLabelStyle style = DMStyles::Label();
+    style.font_size = std::max(10, style.font_size - 2); // 16 -> 14 by default
     TTF_Font* font = style.open_font();
     if (!font) {
         return;
@@ -859,7 +890,8 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
         const int badge_radius = std::min(DMStyles::CornerRadius(), std::min(badge.w, badge.h) / 2);
         dm_draw::DrawBeveledRect(renderer, badge, badge_radius, 1, badge_bg, badge_bg, badge_bg, false, 0.0f, 0.0f);
         dm_draw::DrawRoundedOutline(renderer, badge, badge_radius, 1, list_style.border);
-        render_tab_text(renderer, std::to_string(i + 1), badge, index_text_color);
+        // Use slightly smaller font so the index fits inside the beveled badge
+        render_badge_text_small(renderer, std::to_string(i + 1), badge, index_text_color);
     }
 
     // Draw horizontal scrollbar if needed
@@ -875,6 +907,13 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
         const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(hscroll_knob_rect_.w, hscroll_knob_rect_.h) / 2);
         dm_draw::DrawBeveledRect(renderer, hscroll_knob_rect_, knob_radius, 1, knob_bg, knob_bg, knob_bg, false, 0.0f, 0.0f);
         dm_draw::DrawRoundedOutline(renderer, hscroll_knob_rect_, knob_radius, 1, knob_border);
+    }
+}
+
+void FrameMovementEditor::set_smoothing_enabled(bool enabled) {
+    smoothing_enabled_ = enabled;
+    if (canvas_) {
+        canvas_->set_smoothing_enabled(enabled);
     }
 }
 

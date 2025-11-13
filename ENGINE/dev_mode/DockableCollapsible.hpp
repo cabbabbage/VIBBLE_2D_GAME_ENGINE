@@ -87,6 +87,11 @@ public:
 
     void force_pointer_ready();
 
+protected:
+    // Allows derived panels to designate an additional draggable area
+    // (beyond the header) for initiating panel drag/reposition.
+    void set_drag_handle_rect(const SDL_Rect& rect) const { handle_rect_ = rect; }
+
 private:
     void layout(int screen_w, int screen_h) const;
     void invalidate_layout(bool geometry_only = false) const;

@@ -63,7 +63,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T01:29:40Z",
+        "generated_at": "2025-11-13T02:09:53Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -116,7 +116,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T01:29:40Z",
+        "generated_at": "2025-11-13T02:09:53Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -169,7 +169,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T01:29:40Z",
+        "generated_at": "2025-11-13T02:09:53Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -222,20 +222,20 @@
       "asset_type": "boundary",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T01:24:26Z",
-        "max_scale": 0.9090908765792847,
-        "min_scale": 0.9090908765792847,
+        "generated_at": "2025-11-13T02:09:53Z",
+        "max_scale": 0.7272727489471436,
+        "min_scale": 0.7272727489471436,
         "recommended_percentages": [
           100,
-          91,
-          91
+          73,
+          73
         ],
         "recommended_steps": [
           1.0,
-          0.9090908765792847,
-          0.9090908765792847
+          0.7272727489471436,
+          0.7272727489471436
         ],
-        "revision": 17746232452603320394,
+        "revision": 16783313425787201898,
         "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
@@ -508,7 +508,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T01:29:40Z",
+        "generated_at": "2025-11-13T02:09:53Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -621,7 +621,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-13T01:29:40Z",
+        "generated_at": "2025-11-13T02:09:53Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.9090908765792847,
         "recommended_percentages": [
@@ -675,10 +675,10 @@
         "foreshorten_strength": 0.38999998569488525,
         "ground_brightness_factor": 0.0,
         "height_at_zoom1": 306.0,
-        "max_background_blur": 0.0,
-        "max_foreground_blur": 0.0,
+        "max_background_blur": 41.0,
+        "max_foreground_blur": 7.0,
         "max_zoom_multiplier": 2.999999761581421,
-        "min_visible_screen_ratio": 0.006000000052154064,
+        "min_visible_screen_ratio": 0.020000001415610313,
         "min_zoom_multiplier": 0.35999998450279236,
         "motion_smoothing_max_step": 8000.0,
         "motion_smoothing_method": 1,
@@ -696,6 +696,7 @@
         "realism_enabled": true,
         "render_distance": 1240.0,
         "render_quality_percent": 10,
+        "render_radius_y_offset_px": 0.0,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
         "tripod_distance_y": -1345.0

@@ -21,7 +21,7 @@ public:
     Mode mode() const { return mode_; }
 
     // Movement mode widgets wiring
-    void set_callbacks(std::function<void()> on_smooth,
+    void set_callbacks(std::function<void(bool)> on_toggle_smooth,
                        std::function<void(bool)> on_toggle_show_animation,
                        std::function<void(int,int)> on_totals_changed);
     void set_children_callbacks(std::function<void(int)> on_child_selected,
@@ -48,11 +48,11 @@ private:
 
 private:
     Mode mode_ = Mode::Movement;
-    std::unique_ptr<DMButton> smooth_btn_;
+    std::unique_ptr<DMCheckbox> smooth_checkbox_;
     std::unique_ptr<DMCheckbox> show_anim_checkbox_;
     std::unique_ptr<DMTextBox> dx_box_;
     std::unique_ptr<DMTextBox> dy_box_;
-    std::unique_ptr<ButtonWidget> smooth_btn_w_;
+    std::unique_ptr<CheckboxWidget> smooth_widget_;
     std::unique_ptr<CheckboxWidget> show_anim_w_;
     std::unique_ptr<TextBoxWidget> dx_w_;
     std::unique_ptr<TextBoxWidget> dy_w_;
@@ -63,7 +63,7 @@ private:
     std::unique_ptr<DMCheckbox> child_visible_checkbox_;
     std::unique_ptr<CheckboxWidget> child_visible_widget_;
 
-    std::function<void()> on_smooth_{};
+    std::function<void(bool)> on_toggle_smooth_{};
     std::function<void(bool)> on_toggle_show_animation_{};
     std::function<void(int,int)> on_totals_changed_{};
     std::function<void(int)> on_child_selected_{};
@@ -73,6 +73,7 @@ private:
     // Track last-known values to detect edits
     std::string last_dx_text_{};
     std::string last_dy_text_{};
+    bool last_smooth_value_ = false;
     bool last_checkbox_value_ = true;
     std::vector<std::string> child_options_;
     int child_selected_index_ = -1;

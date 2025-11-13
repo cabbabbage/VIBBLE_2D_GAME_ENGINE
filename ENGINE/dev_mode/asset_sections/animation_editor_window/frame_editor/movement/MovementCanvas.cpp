@@ -504,16 +504,67 @@ void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new
     frames_.front().dx = 0.0f;
     frames_.front().dy = 0.0f;
 
-    SDL_FPoint prev_abs = base_positions[index - 1];
-    frames_[index].dx = round_delta_to_pixel(new_position.x - prev_abs.x);
-    frames_[index].dy = round_delta_to_pixel(new_position.y - prev_abs.y);
+    if (!smoothing_enabled_) {
+        SDL_FPoint prev_abs = base_positions[index - 1];
+        frames_[index].dx = round_delta_to_pixel(new_position.x - prev_abs.x);
+        frames_[index].dy = round_delta_to_pixel(new_position.y - prev_abs.y);
 
-    SDL_FPoint last_abs = new_position;
-    for (int j = index + 1; j < static_cast<int>(frames_.size()); ++j) {
-        const SDL_FPoint desired = base_positions[j];
-        frames_[j].dx = round_delta_to_pixel(desired.x - last_abs.x);
-        frames_[j].dy = round_delta_to_pixel(desired.y - last_abs.y);
-        last_abs = desired;
+        SDL_FPoint last_abs = new_position;
+        for (int j = index + 1; j < static_cast<int>(frames_.size()); ++j) {
+            const SDL_FPoint desired = base_positions[j];
+            frames_[j].dx = round_delta_to_pixel(desired.x - last_abs.x);
+            frames_[j].dy = round_delta_to_pixel(desired.y - last_abs.y);
+            last_abs = desired;
+        }
+        rebuild_path();
+        return;
+    }
+
+    // Smoothing enabled: redistribute intermediate points to near-equal spacing
+    const int n = static_cast<int>(frames_.size());
+    const int k = index;
+    const SDL_FPoint start = base_positions.front();
+    const SDL_FPoint end   = base_positions.back();
+
+    // First segment: from start (index 0) to selected point (index k)
+    const int steps1 = k;
+    const double seg1_dx = static_cast<double>(new_position.x - start.x);
+    const double seg1_dy = static_cast<double>(new_position.y - start.y);
+    int accum1_x = 0;
+    int accum1_y = 0;
+    for (int i = 1; i <= steps1; ++i) {
+        const double t = steps1 > 0 ? static_cast<double>(i) / static_cast<double>(steps1) : 1.0;
+        const double target_x = (i == steps1) ? seg1_dx : (seg1_dx * t);
+        const double target_y = (i == steps1) ? seg1_dy : (seg1_dy * t);
+        const int rounded_x = static_cast<int>(std::lround(target_x));
+        const int rounded_y = static_cast<int>(std::lround(target_y));
+        const int step_x = rounded_x - accum1_x;
+        const int step_y = rounded_y - accum1_y;
+        accum1_x = rounded_x;
+        accum1_y = rounded_y;
+        frames_[i].dx = round_delta_to_pixel(static_cast<float>(step_x));
+        frames_[i].dy = round_delta_to_pixel(static_cast<float>(step_y));
+    }
+
+    // Second segment: from selected point (index k) to end (index n-1)
+    const int steps2 = std::max(0, (n - 1) - k);
+    const double seg2_dx = static_cast<double>(end.x - new_position.x);
+    const double seg2_dy = static_cast<double>(end.y - new_position.y);
+    int accum2_x = 0;
+    int accum2_y = 0;
+    for (int s = 1; s <= steps2; ++s) {
+        const double u = steps2 > 0 ? static_cast<double>(s) / static_cast<double>(steps2) : 1.0;
+        const double target_x = (s == steps2) ? seg2_dx : (seg2_dx * u);
+        const double target_y = (s == steps2) ? seg2_dy : (seg2_dy * u);
+        const int rounded_x = static_cast<int>(std::lround(target_x));
+        const int rounded_y = static_cast<int>(std::lround(target_y));
+        const int step_x = rounded_x - accum2_x;
+        const int step_y = rounded_y - accum2_y;
+        accum2_x = rounded_x;
+        accum2_y = rounded_y;
+        const int j = k + s;
+        frames_[j].dx = round_delta_to_pixel(static_cast<float>(step_x));
+        frames_[j].dy = round_delta_to_pixel(static_cast<float>(step_y));
     }
 
     rebuild_path();

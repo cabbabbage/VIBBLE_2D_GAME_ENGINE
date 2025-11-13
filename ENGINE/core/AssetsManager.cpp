@@ -799,6 +799,11 @@ void Assets::update(const Input& input)
     const Area view = camera_.get_camera_area();
     auto [minx, miny, maxx, maxy] = view.get_bounds();
     SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
+    // Apply vertical offset to render radius selection without moving the focus point.
+    const int render_radius_y_world_offset = camera_.get_render_radius_world_y_offset();
+    if (render_radius_y_world_offset != 0) {
+        cam_rect.y += render_radius_y_world_offset;
+    }
     world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
     world_grid_.update_parallax(camera_, last_frame_dt_seconds_);
 

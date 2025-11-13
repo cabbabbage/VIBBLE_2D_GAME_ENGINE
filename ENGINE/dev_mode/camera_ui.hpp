@@ -64,6 +64,7 @@ private:
     std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
     std::unique_ptr<FloatSliderWidget> render_distance_slider_;
+    std::unique_ptr<FloatSliderWidget> render_radius_y_offset_slider_;
     std::unique_ptr<FloatSliderWidget> tripod_distance_slider_;
     std::unique_ptr<FloatSliderWidget> height_zoom1_slider_;
     std::unique_ptr<FloatSliderWidget> parallax_strength_slider_;
@@ -111,4 +112,5 @@ private:
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }
     std::string_view lock_settings_id() const override { return "controls"; }
+    void layout_custom_content(int screen_w, int screen_h) const override;
 };

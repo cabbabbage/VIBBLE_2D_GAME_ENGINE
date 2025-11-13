@@ -41,6 +41,10 @@ constexpr int kMovementTotalsFieldWidth = 140;
 constexpr int kChildrenFieldWidth = 132;
 constexpr int kShowAnimCheckboxMinWidth = 150;
 constexpr int kChildVisibilityCheckboxMinWidth = 140;
+constexpr int kNavTitleHeight = 22;
+constexpr int kNavSpacing = 8;
+// Extra vertical gap between frame thumbnails and the horizontal slider
+constexpr int kNavSliderGap = 12;
 
 int resolve_wheel_delta(const SDL_MouseWheelEvent& wheel) {
     int delta = wheel.y;
@@ -85,6 +89,19 @@ void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y)
     }
     SDL_FreeSurface(surf);
     TTF_CloseFont(font);
+}
+
+SDL_Point measure_label_size(const std::string& text) {
+    SDL_Point size{0, 0};
+    if (text.empty()) return size;
+    const DMLabelStyle& style = DMStyles::Label();
+    TTF_Font* font = style.open_font();
+    if (!font) return size;
+    if (TTF_SizeUTF8(font, text.c_str(), &size.x, &size.y) != 0) {
+        size = SDL_Point{0, 0};
+    }
+    TTF_CloseFont(font);
+    return size;
 }
 
 } // namespace
@@ -175,6 +192,8 @@ void FrameEditorSession::begin(Assets* assets,
     // Show animation initially; ensure asset visible
     show_animation_ = true;
     target_->set_hidden(false);
+    scroll_offset_ = 0;
+    dragging_scrollbar_thumb_ = false;
 
     ensure_widgets();
     // Initialize panel positions relative to the asset for better UX
@@ -362,35 +381,75 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         }
         return false;
     };
+    auto point_in_scrollbar = [&](const SDL_Point& p) -> bool {
+        return scrollbar_visible_ && SDL_PointInRect(&p, &scrollbar_track_);
+    };
+    auto update_scrollbar_from_mouse = [&](int mouse_x) {
+        if (!scrollbar_visible_) return;
+        const int thumb_w = scrollbar_thumb_.w;
+        int track_min = scrollbar_track_.x;
+        int track_max = scrollbar_track_.x + scrollbar_track_.w - thumb_w;
+        if (track_max < track_min) track_max = track_min;
+        int new_thumb_x = mouse_x - scrollbar_drag_offset_x_;
+        new_thumb_x = std::clamp(new_thumb_x, track_min, track_max);
+        const float denom = static_cast<float>(track_max - track_min);
+        float ratio = 0.0f;
+        if (denom > 0.0f) {
+            ratio = static_cast<float>(new_thumb_x - track_min) / denom;
+        }
+        const int max_scroll = max_scroll_offset();
+        scroll_offset_ = std::clamp(static_cast<int>(std::round(ratio * static_cast<float>(max_scroll))), 0, max_scroll);
+    };
 
     // Handle dragging (motion and release)
-    if (dragging_dir_ || dragging_toolbox_ || dragging_nav_) {
+    if (dragging_dir_ || dragging_toolbox_ || dragging_nav_ || dragging_scrollbar_thumb_) {
         if (e.type == SDL_MOUSEMOTION) {
+            bool moved = false;
             if (dragging_dir_) {
                 dir_pos_.x = e.motion.x - drag_offset_dir_.x;
                 dir_pos_.y = e.motion.y - drag_offset_dir_.y;
                 DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
                 clamp_panel_pos(dir_pos_.x, dir_pos_.y, dir_metrics.width, dir_metrics.height);
+                moved = true;
             } else if (dragging_toolbox_) {
                 toolbox_pos_.x = e.motion.x - drag_offset_toolbox_.x;
                 toolbox_pos_.y = e.motion.y - drag_offset_toolbox_.y;
                 const int tool_w = toolbox_rect_.w;
                 const int tool_h = toolbox_rect_.h;
                 clamp_panel_pos(toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h);
+                moved = true;
             } else if (dragging_nav_) {
                 nav_pos_.x = e.motion.x - drag_offset_nav_.x;
                 nav_pos_.y = e.motion.y - drag_offset_nav_.y;
-                const int nav_w = 560;
-                const int nav_h = 90;
+                const int nav_w = nav_rect_.w;
+                const int nav_h = nav_rect_.h;
                 clamp_panel_pos(nav_pos_.x, nav_pos_.y, nav_w, nav_h);
+                moved = true;
+            } else if (dragging_scrollbar_thumb_) {
+                update_scrollbar_from_mouse(e.motion.x);
+                moved = true;
             }
-            rebuild_layout();
+            if (moved) {
+                rebuild_layout();
+            }
             return true; // consume while dragging
         } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             dragging_dir_ = false;
             dragging_toolbox_ = false;
             dragging_nav_ = false;
+            dragging_scrollbar_thumb_ = false;
             return true; // consume mouse up at end of drag
+        }
+    }
+
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        SDL_Point p{ e.button.x, e.button.y };
+        if (point_in_scrollbar(p)) {
+            dragging_scrollbar_thumb_ = true;
+            scrollbar_drag_offset_x_ = std::clamp(p.x - scrollbar_thumb_.x, 0, scrollbar_thumb_.w);
+            update_scrollbar_from_mouse(p.x);
+            rebuild_layout();
+            return true;
         }
     }
 
@@ -450,9 +509,23 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             if (btn_prev_) { const SDL_Rect& r = btn_prev_->rect(); if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true; }
             if (!over_nav_ctrl && btn_next_) { const SDL_Rect& r = btn_next_->rect(); if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true; }
             if (!over_nav_ctrl) over_nav_ctrl = point_in_any_thumb(p);
+            if (!over_nav_ctrl && point_in_scrollbar(p)) over_nav_ctrl = true;
             if (!over_nav_ctrl) {
                 dragging_nav_ = true;
                 drag_offset_nav_ = SDL_Point{ p.x - nav_rect_.x, p.y - nav_rect_.y };
+                return true;
+            }
+        }
+    }
+
+    if (e.type == SDL_MOUSEWHEEL) {
+        SDL_Point mouse{0, 0};
+        SDL_GetMouseState(&mouse.x, &mouse.y);
+        if (SDL_PointInRect(&mouse, &nav_rect_) && scrollbar_visible_) {
+            int delta = resolve_wheel_delta(e.wheel);
+            if (delta != 0) {
+                scroll_offset_ = std::clamp(scroll_offset_ - delta * 20, 0, max_scroll_offset());
+                rebuild_layout();
                 return true;
             }
         }
@@ -595,11 +668,11 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
 
     // Thumbnails (skip if we were dragging)
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-        if (dragging_dir_ || dragging_nav_) return true;
+        if (dragging_dir_ || dragging_nav_ || dragging_scrollbar_thumb_) return true;
         SDL_Point p{e.button.x, e.button.y};
-        for (size_t i = 0; i < thumb_rects_.size(); ++i) {
+        for (size_t i = 0; i < thumb_rects_.size() && i < thumb_indices_.size(); ++i) {
             if (SDL_PointInRect(&p, &thumb_rects_[i])) {
-                select_frame(static_cast<int>(i));
+                select_frame(thumb_indices_[i]);
                 return true;
             }
         }
@@ -751,16 +824,17 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (btn_next_) btn_next_->render(renderer);
 
     // Thumbnails
-    for (size_t i = 0; i < thumb_rects_.size(); ++i) {
+    for (size_t i = 0; i < thumb_rects_.size() && i < thumb_indices_.size(); ++i) {
         const SDL_Rect& r = thumb_rects_[i];
+        const int frame_index = thumb_indices_[i];
         SDL_Color border = DMStyles::Border();
-        const bool is_current = static_cast<int>(i) == selected_index_;
+        const bool is_current = frame_index == selected_index_;
         if (is_current) {
             border = DMStyles::AccentButton().border;
         }
         SDL_Texture* tex = nullptr;
         if (preview_) {
-            tex = preview_->get_frame_texture(renderer, animation_id_, static_cast<int>(i));
+            tex = preview_->get_frame_texture(renderer, animation_id_, frame_index);
         }
         if (tex) {
             int tw = 0, th = 0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
@@ -775,6 +849,41 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             }
         }
         dm_draw::DrawRoundedOutline(renderer, r, DMStyles::CornerRadius(), 1, border);
+
+        const std::string index_text = std::to_string(frame_index);
+        SDL_Point label_size = measure_label_size(index_text);
+        if (label_size.x > 0 && label_size.y > 0) {
+            const int badge_padding = 3;
+            SDL_Rect badge{
+                r.x + r.w - label_size.x - badge_padding * 2 - 2,
+                r.y + r.h - label_size.y - badge_padding * 2 - 2,
+                label_size.x + badge_padding * 2,
+                label_size.y + badge_padding * 2
+            };
+            const int min_badge_x = r.x + 2;
+            const int min_badge_y = r.y + 2;
+            const int max_badge_x = std::max(min_badge_x, r.x + r.w - badge.w - 2);
+            const int max_badge_y = std::max(min_badge_y, r.y + r.h - badge.h - 2);
+            badge.x = std::clamp(badge.x, min_badge_x, max_badge_x);
+            badge.y = std::clamp(badge.y, min_badge_y, max_badge_y);
+            SDL_Color bg{0, 0, 0, 180};
+            SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
+            SDL_RenderFillRect(renderer, &badge);
+            SDL_Color outline = DMStyles::Border();
+            SDL_RenderDrawRect(renderer, &badge);
+            render_label(renderer, index_text, badge.x + badge_padding, badge.y + badge_padding);
+        }
+    }
+
+    if (scrollbar_visible_) {
+        SDL_Color track_col = devmode::utils::with_alpha(DMStyles::PanelHeader(), 180);
+        SDL_SetRenderDrawColor(renderer, track_col.r, track_col.g, track_col.b, track_col.a);
+        SDL_RenderFillRect(renderer, &scrollbar_track_);
+        SDL_Color thumb_col = DMStyles::AccentButton().bg;
+        SDL_SetRenderDrawColor(renderer, thumb_col.r, thumb_col.g, thumb_col.b, 220);
+        SDL_RenderFillRect(renderer, &scrollbar_thumb_);
+        SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, 255);
+        SDL_RenderDrawRect(renderer, &scrollbar_thumb_);
     }
 }
 
@@ -998,33 +1107,69 @@ void FrameEditorSession::rebuild_layout() const {
     if (btn_prev_) btn_prev_->set_rect(SDL_Rect{ nav_rect_.x + 6, nav_rect_.y + (nav_rect_.h - 40)/2, prev_w, 40 });
     if (btn_next_) btn_next_->set_rect(SDL_Rect{ nav_rect_.x + nav_rect_.w - next_w - 6, nav_rect_.y + (nav_rect_.h - 40)/2, next_w, 40 });
 
-    // Thumbs area
-    const int title_h = 22;
-    const int thumb_h = std::max(1, nav_rect_.h - 16 - title_h);
-    const int thumb_w = thumb_h; // square thumbs
-    const int spacing = 8;
-    int x0 = (btn_prev_ ? btn_prev_->rect().x + btn_prev_->rect().w + spacing : nav_rect_.x + spacing);
-    int x1 = (btn_next_ ? btn_next_->rect().x - spacing : nav_rect_.x + nav_rect_.w - spacing);
-    int available = std::max(0, x1 - x0);
-    int per = thumb_w + spacing;
-    int max_visible = per > 0 ? std::max(1, available / per) : 1;
-    // Center thumbnails
-    int used = max_visible * per - spacing;
-    int start_x = x0 + std::max(0, (available - used) / 2);
+    const int title_h = kNavTitleHeight;
+    const int thumb_h = std::max(1, nav_rect_.h - 16 - title_h - kNavSliderGap);
+    const int thumb_w = thumb_h;
+    const int spacing = kNavSpacing;
+    const int viewport_left = (btn_prev_ ? btn_prev_->rect().x + btn_prev_->rect().w + spacing : nav_rect_.x + spacing);
+    const int viewport_right = (btn_next_ ? btn_next_->rect().x - spacing : nav_rect_.x + nav_rect_.w - spacing);
+    thumb_viewport_width_ = std::max(0, viewport_right - viewport_left);
+    const int per = thumb_w + spacing;
+    const int count = static_cast<int>(frames_.size());
+    thumb_content_width_ = (per > 0 && count > 0) ? std::max(0, count * per - spacing) : 0;
+    clamp_scroll_offset();
+
     thumb_rects_.clear();
-    int count = static_cast<int>(frames_.size());
-    int visible = std::min(count, max_visible);
-    int first_index = std::clamp(selected_index_ - visible/2, 0, std::max(0, count - visible));
-    for (int i = 0; i < visible; ++i) {
-        int idx = first_index + i;
-        SDL_Rect r{ start_x + i * per, nav_rect_.y + 8 + title_h, thumb_w, thumb_h };
-        if (idx >= 0 && idx < count) {
-            if (static_cast<int>(thumb_rects_.size()) <= idx) thumb_rects_.resize(idx+1);
-            thumb_rects_[idx] = r;
+    thumb_indices_.clear();
+    const int viewport_right_px = viewport_left + thumb_viewport_width_;
+    int current_x = viewport_left - scroll_offset_;
+    for (int idx = 0; idx < count; ++idx) {
+        SDL_Rect r{ current_x, nav_rect_.y + 8 + title_h, thumb_w, thumb_h };
+        if (thumb_viewport_width_ <= 0 ||
+            (r.x + r.w >= viewport_left && r.x <= viewport_right_px)) {
+            thumb_rects_.push_back(r);
+            thumb_indices_.push_back(idx);
         }
+        current_x += per;
     }
-    // Ensure we have rects for all frames (non-visible indices will be empty {0,0,0,0})
-    if (static_cast<int>(thumb_rects_.size()) < count) thumb_rects_.resize(count);
+
+    const int scrollbar_height = 8;
+    scrollbar_visible_ = thumb_content_width_ > thumb_viewport_width_ && thumb_viewport_width_ > 0;
+    if (scrollbar_visible_) {
+        scrollbar_track_ = SDL_Rect{
+            viewport_left,
+            nav_rect_.y + nav_rect_.h - scrollbar_height - spacing,
+            thumb_viewport_width_,
+            scrollbar_height
+        };
+        const float viewport_ratio = thumb_content_width_ > 0
+            ? static_cast<float>(thumb_viewport_width_) / static_cast<float>(thumb_content_width_)
+            : 1.0f;
+        int thumb_len = scrollbar_track_.w > 0
+            ? std::max(20, static_cast<int>(std::round(static_cast<float>(scrollbar_track_.w) * viewport_ratio)))
+            : scrollbar_track_.w;
+        thumb_len = std::min(thumb_len, scrollbar_track_.w);
+        const int max_scroll = max_scroll_offset();
+        int thumb_x = scrollbar_track_.x;
+        if (max_scroll > 0 && scrollbar_track_.w > thumb_len) {
+            const float scroll_ratio = static_cast<float>(scroll_offset_) / static_cast<float>(max_scroll);
+            thumb_x += static_cast<int>(std::round(scroll_ratio * static_cast<float>(scrollbar_track_.w - thumb_len)));
+        }
+        scrollbar_thumb_ = SDL_Rect{ thumb_x, scrollbar_track_.y, thumb_len, scrollbar_track_.h };
+    } else {
+        scrollbar_track_ = SDL_Rect{0, 0, 0, 0};
+        scrollbar_thumb_ = SDL_Rect{0, 0, 0, 0};
+        scroll_offset_ = 0;
+    }
+}
+
+int FrameEditorSession::max_scroll_offset() const {
+    if (thumb_viewport_width_ <= 0) return 0;
+    return std::max(0, thumb_content_width_ - thumb_viewport_width_);
+}
+
+void FrameEditorSession::clamp_scroll_offset() const {
+    scroll_offset_ = std::clamp(scroll_offset_, 0, max_scroll_offset());
 }
 
 FrameEditorSession::DirectoryPanelMetrics FrameEditorSession::build_directory_panel_metrics() const {
@@ -1458,7 +1603,39 @@ void FrameEditorSession::select_frame(int index) {
     index = std::clamp(index, 0, static_cast<int>(frames_.size()) - 1);
     if (index == selected_index_) return;
     selected_index_ = index;
+    ensure_selected_thumb_visible();
     update_asset_preview_frame();
+}
+
+void FrameEditorSession::ensure_selected_thumb_visible() {
+    if (frames_.empty()) {
+        scroll_offset_ = 0;
+        return;
+    }
+    rebuild_layout();
+    const int viewport_w = thumb_viewport_width_;
+    if (viewport_w <= 0) return;
+    const int title_h = kNavTitleHeight;
+    const int thumb_h = std::max(1, nav_rect_.h - 16 - title_h - kNavSliderGap);
+    const int thumb_w = thumb_h;
+    const int spacing = kNavSpacing;
+    const int per = thumb_w + spacing;
+    if (per <= 0) return;
+    const int index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+    const int item_start = index * per;
+    const int item_end = item_start + thumb_w;
+    int desired_offset = scroll_offset_;
+    if (item_start < scroll_offset_) {
+        desired_offset = item_start;
+    } else if (item_end > scroll_offset_ + viewport_w) {
+        desired_offset = item_end - viewport_w;
+    }
+    clamp_scroll_offset();
+    desired_offset = std::clamp(desired_offset, 0, max_scroll_offset());
+    if (desired_offset != scroll_offset_) {
+        scroll_offset_ = desired_offset;
+        rebuild_layout();
+    }
 }
 
 void FrameEditorSession::update_asset_preview_frame() const {

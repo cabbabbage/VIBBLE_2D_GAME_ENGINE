@@ -119,10 +119,19 @@ private:
     bool dragging_dir_ = false;
     bool dragging_toolbox_ = false;
     bool dragging_nav_ = false;
+    bool dragging_scrollbar_thumb_ = false;
     SDL_Point drag_offset_dir_{0, 0};
     SDL_Point drag_offset_toolbox_{0, 0};
     SDL_Point drag_offset_nav_{0, 0};
+    int scrollbar_drag_offset_x_ = 0;
+    mutable int scroll_offset_ = 0;
+    mutable int thumb_content_width_ = 0;
+    mutable int thumb_viewport_width_ = 0;
+    mutable SDL_Rect scrollbar_track_{0,0,0,0};
+    mutable SDL_Rect scrollbar_thumb_{0,0,0,0};
+    mutable bool scrollbar_visible_ = false;
     mutable std::vector<SDL_Rect> thumb_rects_;
+    mutable std::vector<int> thumb_indices_;
 
     // Camera pan/zoom handler (wheel zoom enabled; panning is blocked by default)
     mutable class PanAndZoom pan_zoom_;
@@ -143,6 +152,9 @@ private:
     void sync_child_frames();
     ChildFrame* current_child_frame();
     const ChildFrame* current_child_frame() const;
+    int max_scroll_offset() const;
+    void clamp_scroll_offset() const;
+    void ensure_selected_thumb_visible();
 
     struct DirectoryPanelMetrics {
         int width = 0;

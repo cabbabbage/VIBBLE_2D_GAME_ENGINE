@@ -24,6 +24,9 @@ class camera {
     };
     struct RealismSettings {
         float render_distance = 800.0f;
+        // Screen-space offset to bias the render radius vertically.
+        // Positive values move the render range downward on screen.
+        float render_radius_y_offset_px = 0.0f;
         float parallax_strength = 12.0f;
         float foreshorten_strength = 0.35f;
         float distance_scale_strength = 0.3f;
@@ -118,6 +121,7 @@ class camera {
     nlohmann::json camera_settings_to_json() const;
 
     int get_render_distance_world_margin() const;
+    int get_render_radius_world_y_offset() const;
 
     Area     get_camera_area() const { return current_view_; }
 

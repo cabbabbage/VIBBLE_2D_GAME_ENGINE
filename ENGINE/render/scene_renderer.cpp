@@ -539,7 +539,12 @@ void SceneRenderer::render(){
                     const float dy = wy - base_y;
                     float t = 0.0f;
                     float max_blur = 0.0f;
-                    if (dy > 0.0f && fg_max_dy > 0.0f) {
+                    // Ensure exact center stays unblurred; also guard tiny floating drift
+                    constexpr float kCenterDeadzone = 0.5f; // world px tolerance
+                    if (std::fabs(dy) <= kCenterDeadzone) {
+                        t = 0.0f;
+                        max_blur = 0.0f;
+                    } else if (dy > 0.0f && fg_max_dy > 0.0f) {
                         t = std::clamp(dy / fg_max_dy, 0.0f, 1.0f);
                         max_blur = max_fg;
                     } else if (dy < 0.0f && bg_max_abs_dy > 0.0f) {
@@ -854,8 +859,8 @@ void SceneRenderer::render(){
                 const float step = 6.2831853f / static_cast<float>(samples);
                 const Uint8 base_alpha_mod = static_cast<Uint8>(
                     std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
-                // Distribute alpha over samples (slightly higher to compensate overlap)
-                const float per_alpha = std::clamp(1.2f / static_cast<float>(samples), 0.0f, 1.0f);
+                // Distribute alpha over samples; kept conservative since we also draw a base pass
+                const float per_alpha = std::clamp(0.6f / static_cast<float>(samples), 0.0f, 1.0f);
                 const Uint8 per_alpha_mod = static_cast<Uint8>(
                     std::clamp(std::lround(per_alpha * static_cast<float>(base_alpha_mod)), 0L, 255L));
 
@@ -884,10 +889,10 @@ void SceneRenderer::render(){
 
             // --------------------
             // 3) BASE SPRITE PASS (grid-sliced trapezoids when large relative to grid)
-            //     Skip base pass if we drew blur (blurred-only look for DoF)
+            //    Always draw base pass so blur never reduces opacity
             // --------------------
             bool drew_grid_sliced = false;
-            if (!drew_blur && assets_ && cmd.asset && tex) {
+            if (assets_ && cmd.asset && tex) {
                 // Only apply when not already handled by loader-composed grid tiles
                 const auto& tiling_opt = cmd.asset->tiling_info();
                 const bool allow_grid_sliced = (cmd.asset->info && cmd.asset->info->tillable);
@@ -1034,7 +1039,7 @@ void SceneRenderer::render(){
                 }
             }
 
-            if (!drew_blur && !drew_grid_sliced) {
+            if (!drew_grid_sliced) {
                 // Fallback: draw normally as a rect
                 SDL_SetTextureColorMod(tex, 255, 255, 255);
                 SDL_SetTextureAlphaMod(tex, base_alpha_mod);

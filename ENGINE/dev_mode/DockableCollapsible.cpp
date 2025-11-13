@@ -625,17 +625,18 @@ bool DockableCollapsible::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (show_header_ && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{e.button.x, e.button.y};
-        const bool on_header_button = header_btn_ && SDL_PointInRect(&p, &header_rect_);
+        const bool on_header_button = show_header_ && header_btn_ && SDL_PointInRect(&p, &header_rect_);
         const bool on_close = close_btn_ && SDL_PointInRect(&p, &close_rect_);
         const bool on_lock = lock_btn_ && SDL_PointInRect(&p, &lock_rect_);
         SDL_Rect drag_rect{ rect_.x + padding_, rect_.y + padding_, std::max(0, rect_.w - 2 * padding_), header_rect_.h };
         if (drag_rect.h <= 0) {
             drag_rect.h = DMButton::height();
         }
-        const bool on_header_area = SDL_PointInRect(&p, &drag_rect);
-        if (floatable_ && on_header_area && !on_close && !on_lock) {
+        const bool on_header_area = show_header_ && SDL_PointInRect(&p, &drag_rect);
+        const bool on_custom_handle = (handle_rect_.w > 0 && handle_rect_.h > 0 && SDL_PointInRect(&p, &handle_rect_));
+        if (floatable_ && (on_header_area || on_custom_handle) && !on_close && !on_lock) {
             dragging_ = true;
             header_dragging_via_button_ = on_header_button;
             drag_exceeded_threshold_ = false;

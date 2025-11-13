@@ -105,25 +105,37 @@ void MapEditor::update(const Input& input) {
     SDL_Point map_pt{static_cast<int>(std::lround(map_pt_f.x)), static_cast<int>(std::lround(map_pt_f.y))};
     const bool pointer_over_ui = ui_blocker_ ? ui_blocker_(screen_pt.x, screen_pt.y) : false;
 
+    // Determine modifier state for Map Mode interactions
+    const bool shift_down =
+        input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
+
     Room* area_hit = hit_test_room(map_pt);
     Room* label_hit = nullptr;
-    for (const auto& entry : label_rects_) {
-        if (SDL_PointInRect(&screen_pt, &entry.second)) {
-            label_hit = entry.first;
-            break;
+    // Only treat label rects as interactive when Shift is held
+    if (shift_down) {
+        for (const auto& entry : label_rects_) {
+            if (SDL_PointInRect(&screen_pt, &entry.second)) {
+                label_hit = entry.first;
+                break;
+            }
         }
     }
 
     Room* hit = label_hit ? label_hit : area_hit;
 
-    pan_zoom_.handle_input(*cam, input, pointer_over_ui || hit != nullptr);
+    // Match Room Editor pan behavior: allow click-drag panning unless Shift-clicking a target
+    const bool left_down = input.isDown(Input::LEFT);
+    const bool left_pressed = input.wasPressed(Input::LEFT);
+    const bool pan_blocked = pointer_over_ui || (shift_down && hit != nullptr && (left_down || left_pressed));
+    pan_zoom_.handle_input(*cam, input, pan_blocked);
 
     if (pointer_over_ui) {
         return;
     }
 
+    // Only enter Room/Trail mode when Shift is held and a target is clicked
     if (input.wasClicked(Input::LEFT)) {
-        if (hit) {
+        if (shift_down && hit) {
             pending_selection_ = hit;
             if (input_) {
                 input_->consumeMouseButton(Input::LEFT);
@@ -142,7 +154,14 @@ void MapEditor::render(SDL_Renderer* renderer) {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
+    // Only show room labels while Shift is held
+    const bool shift_down = input_ &&
+        (input_->isScancodeDown(SDL_SCANCODE_LSHIFT) || input_->isScancodeDown(SDL_SCANCODE_RSHIFT));
+
     label_rects_.clear();
+    if (!shift_down) {
+        return;
+    }
 
     struct LabelInfo {
         Room* room = nullptr;
