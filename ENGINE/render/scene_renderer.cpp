@@ -470,14 +470,22 @@ void SceneRenderer::render(){
             tile_renderer_->render(renderer_, assets_->getView(), assets_->world_grid());
         }
 
+        const float blur_foreground_max_px = std::max(0.0f, cam_settings.max_foreground_blur);
+        const float blur_background_max_px = std::max(0.0f, cam_settings.max_background_blur);
+        const bool blur_depth_enabled = camera_state && camera_state->realism_enabled() &&
+            (blur_foreground_max_px > 0.0f || blur_background_max_px > 0.0f);
+
+        float base_y = 0.0f;
+        if (camera_state) {
+            const SDL_Point cam_center_world = camera_state->get_screen_center();
+            base_y = static_cast<float>(cam_center_world.y) - cam_settings.tripod_distance_y;
+        }
+
         const auto& active = assets_->getActive();
         // Precompute foreground/background distance ranges (world-space dy from camera focus)
         float fg_max_dy = 0.0f; // positive dy
         float bg_max_abs_dy = 0.0f; // magnitude of negative dy
-        if (camera_state) {
-            const camera::RealismSettings& camset = camera_state->realism_settings();
-            const SDL_Point cam_center_world = camera_state->get_screen_center();
-            const float base_y = static_cast<float>(cam_center_world.y) - camset.tripod_distance_y;
+        if (blur_depth_enabled) {
             for (Asset* a : active) {
                 if (!a || !a->info) continue;
                 float wy = a->smoothed_translation_y();
@@ -525,37 +533,33 @@ void SceneRenderer::render(){
 
             // Compute perspective blur radius per asset
             cmd.depth_blur_px = 0.0f;
-            if (camera_state && camera_state->realism_enabled()) {
-                const camera::RealismSettings& camset = camera_state->realism_settings();
-                float max_fg = std::max(0.0f, camset.max_foreground_blur);
-                float max_bg = std::max(0.0f, camset.max_background_blur);
-                if ((max_fg > 0.0f || max_bg > 0.0f) && (fg_max_dy > 0.0f || bg_max_abs_dy > 0.0f)) {
-                    const SDL_Point cam_center_world = camera_state->get_screen_center();
-                    const float base_y = static_cast<float>(cam_center_world.y) - camset.tripod_distance_y;
-                    float wy = asset ? asset->smoothed_translation_y() : 0.0f;
-                    if (assets_ && assets_->is_dev_mode()) {
-                        wy = asset ? static_cast<float>(asset->pos.y) : 0.0f;
-                    }
-                    const float dy = wy - base_y;
-                    float t = 0.0f;
-                    float max_blur = 0.0f;
-                    // Ensure exact center stays unblurred; also guard tiny floating drift
-                    constexpr float kCenterDeadzone = 0.5f; // world px tolerance
-                    if (std::fabs(dy) <= kCenterDeadzone) {
-                        t = 0.0f;
-                        max_blur = 0.0f;
-                    } else if (dy > 0.0f && fg_max_dy > 0.0f) {
-                        t = std::clamp(dy / fg_max_dy, 0.0f, 1.0f);
-                        max_blur = max_fg;
-                    } else if (dy < 0.0f && bg_max_abs_dy > 0.0f) {
-                        t = std::clamp(std::abs(dy) / bg_max_abs_dy, 0.0f, 1.0f);
-                        max_blur = max_bg;
-                    }
-                    if (t > 0.0f && max_blur > 0.0f) {
-                        // Shape with selected falloff
-                        auto shape = [&](float x) -> float {
-                            x = std::clamp(x, 0.0f, 1.0f);
-                            switch (camset.blur_falloff_method) {
+            if (blur_depth_enabled && (fg_max_dy > 0.0f || bg_max_abs_dy > 0.0f)) {
+                float wy = asset ? asset->smoothed_translation_y() : 0.0f;
+                if (assets_ && assets_->is_dev_mode()) {
+                    wy = asset ? static_cast<float>(asset->pos.y) : 0.0f;
+                }
+                const float dy = wy - base_y;
+                const float screen_dy = std::fabs(dy) * inv_scale;
+                float t = 0.0f;
+                float max_blur = 0.0f;
+                // Ensure exact center stays unblurred; guard tiny floating drift using both world and screen tolerances
+                constexpr float kCenterDeadzoneWorld = 0.5f;
+                constexpr float kCenterDeadzoneScreen = 1.5f;
+                if (std::fabs(dy) <= kCenterDeadzoneWorld || screen_dy <= kCenterDeadzoneScreen) {
+                    t = 0.0f;
+                    max_blur = 0.0f;
+                } else if (dy > 0.0f && fg_max_dy > 0.0f) {
+                    t = std::clamp(dy / fg_max_dy, 0.0f, 1.0f);
+                    max_blur = blur_foreground_max_px;
+                } else if (dy < 0.0f && bg_max_abs_dy > 0.0f) {
+                    t = std::clamp(std::abs(dy) / bg_max_abs_dy, 0.0f, 1.0f);
+                    max_blur = blur_background_max_px;
+                }
+                if (t > 0.0f && max_blur > 0.0f) {
+                    // Shape with selected falloff
+                    auto shape = [&](float x) -> float {
+                        x = std::clamp(x, 0.0f, 1.0f);
+                        switch (cam_settings.blur_falloff_method) {
                             case camera::BlurFalloffMethod::Quadratic:
                                 return x * x;
                             case camera::BlurFalloffMethod::Cubic:
@@ -575,11 +579,10 @@ void SceneRenderer::render(){
                             case camera::BlurFalloffMethod::Linear:
                             default:
                                 return x;
-                            }
-                        };
-                        const float shaped = shape(t);
-                        cmd.depth_blur_px = std::clamp(shaped * max_blur, 0.0f, 50.0f);
-                    }
+                        }
+                    };
+                    const float shaped = shape(t);
+                    cmd.depth_blur_px = std::clamp(shaped * max_blur, 0.0f, 50.0f);
                 }
             }
 

@@ -67,6 +67,7 @@ private:
     int selected_index_ = 0;
     Mode mode_ = Mode::Movement;
     bool show_animation_ = true;
+    bool smooth_enabled_ = false;
     int selected_child_index_ = 0;
 
     // Camera + overlay snapshot
@@ -87,8 +88,7 @@ private:
     mutable std::unique_ptr<DMButton> btn_hit_geometry_;
     mutable std::unique_ptr<DMButton> btn_prev_;
     mutable std::unique_ptr<DMButton> btn_next_;
-    mutable std::unique_ptr<DMButton> btn_smooth_;
-    // Replaced button with checkbox per request
+    mutable std::unique_ptr<class DMCheckbox> cb_smooth_;
     mutable std::unique_ptr<class DMCheckbox> cb_show_anim_;
     mutable std::unique_ptr<DMButton> btn_child_prev_;
     mutable std::unique_ptr<DMButton> btn_child_next_;
@@ -141,9 +141,9 @@ private:
     void ensure_widgets() const;
     void rebuild_layout() const;
     void apply_frame_move_from_base(int index, SDL_FPoint desired_rel, const std::vector<SDL_FPoint>& base_rel);
+    void redistribute_frames_from_middle_drag(int adjusted_index);
     void rebuild_rel_positions();
     void persist_changes();
-    void smooth_frames();
     void select_frame(int index);
     void select_child(int index);
     void update_asset_preview_frame() const;
@@ -168,7 +168,8 @@ private:
         int width = 0;
         int height = 0;
         int row_height = 0;
-        int checkbox_width = 0;
+        int smooth_checkbox_width = 0;
+        int show_checkbox_width = 0;
         int totals_width = 0;
         int total_dx_height = 0;
         int total_dy_height = 0;

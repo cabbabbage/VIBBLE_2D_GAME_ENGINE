@@ -63,7 +63,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:09:53Z",
+        "generated_at": "2025-11-13T02:14:53Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -116,7 +116,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:09:53Z",
+        "generated_at": "2025-11-13T02:14:53Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -169,7 +169,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:09:53Z",
+        "generated_at": "2025-11-13T02:14:53Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -222,7 +222,7 @@
       "asset_type": "boundary",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:09:53Z",
+        "generated_at": "2025-11-13T02:14:53Z",
         "max_scale": 0.7272727489471436,
         "min_scale": 0.7272727489471436,
         "recommended_percentages": [
@@ -508,7 +508,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:09:53Z",
+        "generated_at": "2025-11-13T02:14:53Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -621,7 +621,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-13T02:09:53Z",
+        "generated_at": "2025-11-13T02:14:53Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.9090908765792847,
         "recommended_percentages": [

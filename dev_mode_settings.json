@@ -2,7 +2,7 @@
     "dev": {
         "asset_filter": {
             "current_room": true,
-            "filters_expanded": false,
+            "filters_expanded": true,
             "initialized": true,
             "map_assets": true,
             "methods": {
@@ -10,7 +10,7 @@
                 "childrandom": true,
                 "edge": true,
                 "exact": true,
-                "exact_position": true,
+                "exact_position": false,
                 "percent": true,
                 "perimeter": true,
                 "random": true

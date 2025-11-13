@@ -50,7 +50,7 @@ class camera {
         float primary_color_boost_max = 0.0f;
         float ground_brightness_factor = 0.0f;
         float background_brightness = 0.0f;
-        // Perspective Blur (Aperture Blur) (UI-only; not used in render yet)
+        // Perspective Blur (Aperture Blur)
         float max_foreground_blur = 0.0f;
         float max_background_blur = 0.0f;
         BlurFalloffMethod blur_falloff_method = BlurFalloffMethod::Linear;

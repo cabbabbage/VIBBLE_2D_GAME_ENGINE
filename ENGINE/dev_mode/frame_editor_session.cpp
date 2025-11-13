@@ -38,6 +38,7 @@ namespace {
 
 constexpr int kDirectoryPanelMinWidth = 700;
 constexpr int kMovementTotalsFieldWidth = 140;
+constexpr int kSmoothCheckboxMinWidth = 110;
 constexpr int kChildrenFieldWidth = 132;
 constexpr int kShowAnimCheckboxMinWidth = 150;
 constexpr int kChildVisibilityCheckboxMinWidth = 140;
@@ -305,6 +306,9 @@ void FrameEditorSession::update(const Input& input) {
     if (cb_show_anim_) {
         cb_show_anim_->set_value(show_animation_);
     }
+    if (cb_smooth_) {
+        cb_smooth_->set_value(smooth_enabled_);
+    }
     int total_dx = 0, total_dy = 0;
     for (size_t i = 1; i < frames_.size(); ++i) {
         total_dx += static_cast<int>(std::lround(frames_[i].dx));
@@ -480,10 +484,9 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         // Toolbox panel drag: avoid interactive controls (buttons/checkbox/textboxes)
         if (mode_ == Mode::Movement && SDL_PointInRect(&p, &toolbox_rect_)) {
             bool over_interactive = false;
-            const DMButton* buttons[] = { btn_smooth_.get() };
-            for (const DMButton* b : buttons) {
-                if (!b) continue; const SDL_Rect& r = b->rect();
-                if (SDL_PointInRect(&p, &r)) { over_interactive = true; break; }
+            if (!over_interactive && cb_smooth_) {
+                const SDL_Rect& r = cb_smooth_->rect();
+                if (SDL_PointInRect(&p, &r)) over_interactive = true;
             }
             if (!over_interactive && cb_show_anim_) {
                 const SDL_Rect& r = cb_show_anim_->rect();
@@ -549,7 +552,13 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
 
     // Movement tool panel widgets
     if (mode_ == Mode::Movement) {
-        if (handle_button(btn_smooth_, [this]() { this->smooth_frames(); })) return true;
+        if (cb_smooth_ && cb_smooth_->handle_event(e)) {
+            bool current = cb_smooth_->value();
+            if (current != smooth_enabled_) {
+                smooth_enabled_ = current;
+            }
+            return true;
+        }
 
         // Checkbox toggle
         if (cb_show_anim_ && cb_show_anim_->handle_event(e)) {
@@ -699,7 +708,15 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         std::vector<SDL_FPoint> base = rel_positions_;
         apply_frame_move_from_base(selected_index_, desired_rel, base);
         rebuild_rel_positions();
-        persist_changes();
+        const bool should_smooth = (mode_ == Mode::Movement) &&
+                                   smooth_enabled_ &&
+                                   selected_index_ > 0 &&
+                                   selected_index_ < static_cast<int>(frames_.size()) - 1;
+        if (should_smooth) {
+            redistribute_frames_from_middle_drag(selected_index_);
+        } else {
+            persist_changes();
+        }
         return true;
     }
 
@@ -800,7 +817,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     // Toolbox panel
     if (mode_ == Mode::Movement && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-        if (btn_smooth_) btn_smooth_->render(renderer);
+        if (cb_smooth_) cb_smooth_->render(renderer);
         if (cb_show_anim_) cb_show_anim_->render(renderer);
         if (tb_total_dx_) tb_total_dx_->render(renderer);
         if (tb_total_dy_) tb_total_dy_->render(renderer);
@@ -903,7 +920,7 @@ void FrameEditorSession::ensure_widgets() const {
     if (!btn_hit_geometry_) btn_hit_geometry_ = std::make_unique<DMButton>("Hit Geometry", mode_ == Mode::HitGeometry ? &tab_active : &header, bw, bh);
     if (!btn_prev_) btn_prev_ = std::make_unique<DMButton>("<", &header, 40, 40);
     if (!btn_next_) btn_next_ = std::make_unique<DMButton>(">", &header, 40, 40);
-    if (!btn_smooth_) btn_smooth_ = std::make_unique<DMButton>("Smooth", &DMStyles::AccentButton(), 120, bh);
+    if (!cb_smooth_) cb_smooth_ = std::make_unique<DMCheckbox>("Smooth", smooth_enabled_);
     if (!cb_show_anim_) cb_show_anim_ = std::make_unique<DMCheckbox>("Show Animation", show_animation_);
     if (!tb_total_dx_) tb_total_dx_ = std::make_unique<DMTextBox>("Total dX", "0");
     if (!tb_total_dy_) tb_total_dy_ = std::make_unique<DMTextBox>("Total dY", "0");
@@ -1003,15 +1020,15 @@ void FrameEditorSession::rebuild_layout() const {
                 tx += w;
                 return x;
             };
-            if (btn_smooth_) {
-                const int w = btn_smooth_->rect().w;
-                const int h = DMButton::height();
+            if (cb_smooth_) {
+                const int w = std::max(metrics.smooth_checkbox_width, DMCheckbox::height());
+                const int h = DMCheckbox::height();
                 const int y = row_top + (metrics.row_height - h) / 2;
                 const int x = reserve(w);
-                btn_smooth_->set_rect(SDL_Rect{ x, y, w, h });
+                cb_smooth_->set_rect(SDL_Rect{ x, y, w, h });
             }
             if (cb_show_anim_) {
-                const int w = std::max(metrics.checkbox_width, DMCheckbox::height());
+                const int w = std::max(metrics.show_checkbox_width, DMCheckbox::height());
                 const int h = DMCheckbox::height();
                 const int y = row_top + (metrics.row_height - h) / 2;
                 const int x = reserve(w);
@@ -1209,12 +1226,16 @@ FrameEditorSession::MovementToolboxMetrics FrameEditorSession::build_movement_to
     metrics.padding = DMSpacing::small_gap();
     metrics.gap = DMSpacing::small_gap();
     metrics.totals_width = kMovementTotalsFieldWidth;
-    metrics.checkbox_width = cb_show_anim_ ? std::max(kShowAnimCheckboxMinWidth, cb_show_anim_->preferred_width()) : 0;
+    metrics.smooth_checkbox_width = cb_smooth_ ? std::max(kSmoothCheckboxMinWidth, cb_smooth_->preferred_width()) : 0;
+    metrics.show_checkbox_width = cb_show_anim_ ? std::max(kShowAnimCheckboxMinWidth, cb_show_anim_->preferred_width()) : 0;
     metrics.total_dx_height = tb_total_dx_ ? tb_total_dx_->height_for_width(metrics.totals_width) : 0;
     metrics.total_dy_height = tb_total_dy_ ? tb_total_dy_->height_for_width(metrics.totals_width) : 0;
-    metrics.row_height = std::max(
-        std::max(DMButton::height(), DMCheckbox::height()),
-        std::max(metrics.total_dx_height, metrics.total_dy_height));
+    int max_row_height = 0;
+    if (cb_smooth_) max_row_height = std::max(max_row_height, DMCheckbox::height());
+    if (cb_show_anim_) max_row_height = std::max(max_row_height, DMCheckbox::height());
+    if (tb_total_dx_) max_row_height = std::max(max_row_height, metrics.total_dx_height);
+    if (tb_total_dy_) max_row_height = std::max(max_row_height, metrics.total_dy_height);
+    metrics.row_height = max_row_height;
 
     int row_width = 0;
     auto append = [&](int w) {
@@ -1224,8 +1245,8 @@ FrameEditorSession::MovementToolboxMetrics FrameEditorSession::build_movement_to
         }
         row_width += w;
     };
-    if (btn_smooth_) append(btn_smooth_->rect().w);
-    if (cb_show_anim_ && metrics.checkbox_width > 0) append(metrics.checkbox_width);
+    if (cb_smooth_ && metrics.smooth_checkbox_width > 0) append(metrics.smooth_checkbox_width);
+    if (cb_show_anim_ && metrics.show_checkbox_width > 0) append(metrics.show_checkbox_width);
     if (tb_total_dx_) append(metrics.totals_width);
     if (tb_total_dy_) append(metrics.totals_width);
     if (row_width == 0) {
@@ -1319,6 +1340,54 @@ void FrameEditorSession::apply_frame_move_from_base(int index, SDL_FPoint desire
         frames_[j].dy = static_cast<float>(std::round(desired.y - last_abs.y));
         last_abs = desired;
     }
+}
+
+void FrameEditorSession::redistribute_frames_from_middle_drag(int adjusted_index) {
+    const size_t count = frames_.size();
+    if (count < 3) {
+        persist_changes();
+        return;
+    }
+    const int last_index = static_cast<int>(count) - 1;
+    if (adjusted_index <= 0 || adjusted_index >= last_index) {
+        persist_changes();
+        return;
+    }
+    if (rel_positions_.size() != count) {
+        rebuild_rel_positions();
+    }
+    if (rel_positions_.size() != count) {
+        persist_changes();
+        return;
+    }
+    std::vector<SDL_FPoint> redistributed = rel_positions_;
+    const SDL_FPoint start = redistributed.front();
+    const SDL_FPoint end = redistributed.back();
+    const float steps = static_cast<float>(last_index);
+    if (steps <= 0.0f) {
+        persist_changes();
+        return;
+    }
+    SDL_FPoint delta{ end.x - start.x, end.y - start.y };
+    for (int j = 1; j < last_index; ++j) {
+        if (j == adjusted_index) continue;
+        const float t = static_cast<float>(j) / steps;
+        SDL_FPoint new_pos{
+            start.x + delta.x * t,
+            start.y + delta.y * t
+        };
+        redistributed[j] = new_pos;
+    }
+    frames_[0].dx = 0.0f;
+    frames_[0].dy = 0.0f;
+    for (size_t i = 1; i < count; ++i) {
+        const SDL_FPoint prev = redistributed[i - 1];
+        const SDL_FPoint curr = redistributed[i];
+        frames_[i].dx = static_cast<float>(std::round(curr.x - prev.x));
+        frames_[i].dy = static_cast<float>(std::round(curr.y - prev.y));
+    }
+    rebuild_rel_positions();
+    persist_changes();
 }
 
 void FrameEditorSession::rebuild_rel_positions() {
@@ -1568,35 +1637,6 @@ void FrameEditorSession::persist_changes() {
     if (refreshed_any) {
         assets_->mark_active_assets_dirty();
     }
-}
-
-void FrameEditorSession::smooth_frames() {
-    const size_t n = frames_.size();
-    if (n <= 2) return;
-    // Compute running total and redistribute evenly across steps (reuse behavior)
-    double total_dx = 0.0, total_dy = 0.0;
-    for (size_t i = 1; i < n; ++i) {
-        total_dx += std::isfinite(frames_[i].dx) ? frames_[i].dx : 0.0;
-        total_dy += std::isfinite(frames_[i].dy) ? frames_[i].dy : 0.0;
-    }
-    const size_t steps = n - 1;
-    frames_[0].dx = frames_[0].dy = 0.0f;
-    int accum_x = 0, accum_y = 0;
-    for (size_t i = 1; i < n; ++i) {
-        const double t = static_cast<double>(i) / static_cast<double>(steps);
-        const double target_x = total_dx * t;
-        const double target_y = total_dy * t;
-        int rounded_x = (i == steps) ? static_cast<int>(std::lround(total_dx)) : static_cast<int>(std::lround(target_x));
-        int rounded_y = (i == steps) ? static_cast<int>(std::lround(total_dy)) : static_cast<int>(std::lround(target_y));
-        const int dx = rounded_x - accum_x;
-        const int dy = rounded_y - accum_y;
-        accum_x = rounded_x;
-        accum_y = rounded_y;
-        frames_[i].dx = static_cast<float>(dx);
-        frames_[i].dy = static_cast<float>(dy);
-    }
-    rebuild_rel_positions();
-    persist_changes();
 }
 
 void FrameEditorSession::select_frame(int index) {

@@ -746,6 +746,9 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
 
+    settings_.max_foreground_blur = std::max(0.0f, settings_.max_foreground_blur);
+    settings_.max_background_blur = std::max(0.0f, settings_.max_background_blur);
+
     if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
         settings_.render_distance = 800.0f;
     }

@@ -786,13 +786,13 @@ void CameraUIPanel::build_ui() {
         color_brightness_interp_widget_->set_tooltip("Interpolation/falloff shape for brightness across range.");
     }
 
-    // Perspective Blur (Aperture Blur) sliders (UI-only; default 0)
+    // Perspective Blur (Aperture Blur)
     max_foreground_blur_slider_ = std::make_unique<FloatSliderWidget>(
-        "Max Foreground Blur", -50.0f, 50.0f, 1.0f, defaults.max_foreground_blur, 0);
+        "Max Foreground Blur", 0.0f, 50.0f, 1.0f, defaults.max_foreground_blur, 0);
     max_foreground_blur_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     max_background_blur_slider_ = std::make_unique<FloatSliderWidget>(
-        "Max Background Blur", -50.0f, 50.0f, 1.0f, defaults.max_background_blur, 0);
+        "Max Background Blur", 0.0f, 50.0f, 1.0f, defaults.max_background_blur, 0);
     max_background_blur_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     // Blur interpolation dropdown (UI-only)
@@ -1061,8 +1061,8 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     if (ground_brightness_factor_slider_) settings.ground_brightness_factor = std::clamp(ground_brightness_factor_slider_->value(), -50.0f, 50.0f);
     if (background_brightness_slider_) settings.background_brightness = std::clamp(background_brightness_slider_->value(), -50.0f, 50.0f);
     // Perspective Blur
-    if (max_foreground_blur_slider_) settings.max_foreground_blur = std::clamp(max_foreground_blur_slider_->value(), -50.0f, 50.0f);
-    if (max_background_blur_slider_) settings.max_background_blur = std::clamp(max_background_blur_slider_->value(), -50.0f, 50.0f);
+    if (max_foreground_blur_slider_) settings.max_foreground_blur = std::clamp(max_foreground_blur_slider_->value(), 0.0f, 50.0f);
+    if (max_background_blur_slider_) settings.max_background_blur = std::clamp(max_background_blur_slider_->value(), 0.0f, 50.0f);
     if (blur_falloff_dropdown_) {
         int sel = blur_falloff_dropdown_->selected();
         if (sel < 0) sel = 0; if (sel > 4) sel = 4;
