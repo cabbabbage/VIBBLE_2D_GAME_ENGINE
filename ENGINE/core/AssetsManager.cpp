@@ -1407,6 +1407,12 @@ bool Assets::rebuild_active_assets_if_needed() {
     const int min_w_px = static_cast<int>(std::lround(static_cast<double>(screen_width)  * static_cast<double>(min_ratio)));
     const int min_h_px = static_cast<int>(std::lround(static_cast<double>(screen_height) * static_cast<double>(min_ratio)));
     const int min_size_px = std::min(min_w_px, min_h_px);
+
+    // Convert pixel threshold to world units to match is_asset_visible_on_screen bounds.
+    // Asset world bounds are computed in world units (using camera scale),
+    // so compare like with like to avoid location-dependent culling.
+    const float camera_scale_for_world = std::max(0.0001f, camera_.get_scale());
+    const int   min_size_world = static_cast<int>(std::lround(static_cast<float>(min_size_px) * camera_scale_for_world));
     auto consider_asset = [&](Asset* asset) {
         if (!asset) {
             return;
@@ -1415,7 +1421,8 @@ bool Assets::rebuild_active_assets_if_needed() {
             return;
         }
         // Use expanded rect for mild hysteresis near screen edges and apply min-size filter
-        bool visible = is_asset_visible_on_screen(asset, expanded_rect, min_size_px);
+        // Note: pass threshold in world units so the comparison matches asset bounds units.
+        bool visible = is_asset_visible_on_screen(asset, expanded_rect, min_size_world);
 
         // Cheap alpha visibility probe for simple texture assets: sample a few points in
         // the relevant mask region and ensure there is at least one non-zero alpha pixel.
