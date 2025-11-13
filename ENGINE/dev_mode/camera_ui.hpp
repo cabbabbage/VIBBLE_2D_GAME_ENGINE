@@ -7,6 +7,7 @@
 class Assets;
 class DMCheckbox;
 class DMButton;
+class Widget;
 class CheckboxWidget;
 class DMDropdown;
 class DropdownWidget;
@@ -94,6 +95,16 @@ private:
     // DepthCue section enable/disable
     std::unique_ptr<DMCheckbox> depthcue_checkbox_;
     std::unique_ptr<CheckboxWidget> depthcue_widget_;
+    // DepthCue grouping labels and spacers
+    std::unique_ptr<Widget> depthcue_header_planes_;
+    std::unique_ptr<Widget> depthcue_header_blur_;
+    std::unique_ptr<Widget> depthcue_header_brightness_;
+    std::unique_ptr<Widget> depthcue_header_saturation_;
+    std::unique_ptr<Widget> depthcue_header_primary_;
+    std::unique_ptr<Widget> depthcue_gap1_;
+    std::unique_ptr<Widget> depthcue_gap2_;
+    std::unique_ptr<Widget> depthcue_gap3_;
+    std::unique_ptr<Widget> depthcue_gap4_;
     std::unique_ptr<DiscreteSliderWidget> render_quality_slider_;
     std::unique_ptr<DMCheckbox> smoothing_checkbox_;
     std::unique_ptr<CheckboxWidget> smoothing_widget_;

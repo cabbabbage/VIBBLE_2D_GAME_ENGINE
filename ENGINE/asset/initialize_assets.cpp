@@ -75,14 +75,15 @@ void InitializeAssets::initialize(Assets& assets,
                 }
         }
 	find_player(assets);
-        assets.initialize_active_assets(SDL_Point{screen_center_x, screen_center_y});
-        assets.refresh_active_asset_lists();
+        // Do not trigger active asset rebuild during construction.
+        // Just mark lists dirty; the first rebuild will occur lazily on
+        // the first update after the world grid populates active chunks.
+        assets.mark_active_assets_dirty();
         if (kAssetLoggingEnabled) {
                 std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
                 << assets.all.size() << "\n";
         }
-    assets.mark_active_assets_dirty();
-    assets.refresh_active_asset_lists();
+    // Leave rebuild to the runtime update once chunks are available.
 
 }
 

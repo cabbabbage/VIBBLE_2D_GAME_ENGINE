@@ -7,6 +7,7 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_utils.hpp"
+#include "asset/asset_types.hpp"
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
@@ -37,6 +38,7 @@
 #include <thread>
 #include <vector>
 #include <unordered_set>
+#include <array>
 #include <SDL.h>
 #include <SDL_ttf.h>
 
@@ -218,6 +220,11 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     }
     apply_map_light_config();
     apply_map_grid_settings(map_grid_settings_, false);
+
+    // Mark that we should defer the first active-assets rebuild
+    // until the grid has computed active chunks on the first update.
+    pending_initial_rebuild_ = true;
+    logged_initial_rebuild_warning_ = false;
     moving_assets_for_grid_.clear();
     moving_assets_for_grid_.reserve(all.size());
     pending_static_grid_registration_.clear();
@@ -1160,7 +1167,13 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
 
     invalidate_max_asset_dimensions();
     initialize_active_assets(camera_.get_screen_center());
-    update_filtered_active_assets();
+    if (!world_grid_.active_chunks().empty()) {
+        // Immediate rebuild requested; grid is ready.
+        refresh_active_asset_lists();
+    } else {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[Assets::addAsset] Immediate rebuild requested before grid initialized; skipping until update().");
+    }
 
     std::cout << "[Assets::addAsset] Active assets=" << active_assets.size() << "\n";
 
@@ -1228,7 +1241,13 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
 
     invalidate_max_asset_dimensions();
     initialize_active_assets(camera_.get_screen_center());
-    update_filtered_active_assets();
+    if (!world_grid_.active_chunks().empty()) {
+        // Immediate rebuild requested; grid is ready.
+        refresh_active_asset_lists();
+    } else {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[Assets::spawn_asset] Immediate rebuild requested before grid initialized; skipping until update().");
+    }
 
     std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size() << "\n";
 
@@ -1329,7 +1348,8 @@ void Assets::initialize_active_assets(SDL_Point center) {
     active_assets_dirty_.store(true, std::memory_order_release);
     mark_non_player_update_buffer_dirty();
     (void)center;
-    rebuild_active_assets_if_needed();
+    // Defer rebuild here; it will occur lazily on update when
+    // the world grid has populated active chunks.
 }
 
 void Assets::update_active_assets(SDL_Point center) {
@@ -1339,6 +1359,20 @@ void Assets::update_active_assets(SDL_Point center) {
 }
 
 bool Assets::rebuild_active_assets_if_needed() {
+    // Guard against early rebuild requests before the grid is ready.
+    if (pending_initial_rebuild_) {
+        const auto& chunks = world_grid_.active_chunks();
+        if (chunks.empty()) {
+            if (!logged_initial_rebuild_warning_) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "[Assets] Active-asset rebuild requested before grid initialized; deferring until first update populates chunks.");
+                logged_initial_rebuild_warning_ = true;
+            }
+            return false;
+        }
+        // Grid has active chunks; allow the first rebuild to proceed.
+        pending_initial_rebuild_ = false;
+    }
     if (!active_assets_dirty_.load(std::memory_order_acquire)) {
         return false;
     }
@@ -1354,11 +1388,25 @@ bool Assets::rebuild_active_assets_if_needed() {
         return !(ax2 <= b.x || bx2 <= a.x || ay2 <= b.y || by2 <= a.y);
     };
 
+    // Clear last-cycle culled overlay info
+    culled_debug_rects_.clear();
+
     auto& new_active_assets = visible_candidate_buffer_;
     new_active_assets.clear();
     new_active_assets.reserve(active_assets.size() + 32);
 
     const float screen_top = static_cast<float>(screen_rect.y);
+
+    // Derive a minimum on-screen size (in px) using the existing camera realism knob.
+    const camera::RealismSettings cam_settings = camera_.realism_settings();
+    float min_ratio = cam_settings.min_visible_screen_ratio;
+    if (!std::isfinite(min_ratio) || min_ratio < 0.0f) {
+        min_ratio = 0.015f;
+    }
+    min_ratio = std::clamp(min_ratio, 0.0f, 0.5f);
+    const int min_w_px = static_cast<int>(std::lround(static_cast<double>(screen_width)  * static_cast<double>(min_ratio)));
+    const int min_h_px = static_cast<int>(std::lround(static_cast<double>(screen_height) * static_cast<double>(min_ratio)));
+    const int min_size_px = std::min(min_w_px, min_h_px);
     auto consider_asset = [&](Asset* asset) {
         if (!asset) {
             return;
@@ -1366,7 +1414,101 @@ bool Assets::rebuild_active_assets_if_needed() {
         if (static_cast<float>(asset->pos.y) < screen_top) {
             return;
         }
-        if (is_asset_visible_on_screen(asset, screen_rect)) {
+        // Use expanded rect for mild hysteresis near screen edges and apply min-size filter
+        bool visible = is_asset_visible_on_screen(asset, expanded_rect, min_size_px);
+
+        // Cheap alpha visibility probe for simple texture assets: sample a few points in
+        // the relevant mask region and ensure there is at least one non-zero alpha pixel.
+        if (visible && asset && asset->info) {
+            try {
+                if (asset_types::canonicalize(asset->info->type) == asset_types::texture) {
+                    const float camera_scale = std::max(0.0001f, camera_.get_scale());
+                    AssetWorldBounds bnds;
+                    if (compute_asset_world_bounds(asset, camera_scale, bnds)) {
+                        const int ax = static_cast<int>(std::floor(bnds.left));
+                        const int ay = static_cast<int>(std::floor(bnds.top));
+                        const int aw = std::max(0, static_cast<int>(std::ceil(bnds.right  - bnds.left)));
+                        const int ah = std::max(0, static_cast<int>(std::ceil(bnds.bottom - bnds.top)));
+                        SDL_Rect asset_rect{ ax, ay, aw, ah };
+                        SDL_Rect inter{};
+                        if (SDL_IntersectRect(&asset_rect, &expanded_rect, &inter) && inter.w > 0 && inter.h > 0) {
+                            SDL_Texture* mask_tex = asset->get_current_mask_texture(0);
+                            if (scene && scene->get_renderer() && mask_tex) {
+                                SDL_Renderer* rdr = scene->get_renderer();
+                                int tex_w = 0, tex_h = 0, access = 0; Uint32 fmt = 0;
+                                if (SDL_QueryTexture(mask_tex, &fmt, &access, &tex_w, &tex_h) == 0 && tex_w > 0 && tex_h > 0) {
+                                    // Map world-intersection rect to mask texture space
+                                    const float awf = std::max(1.0f, static_cast<float>(aw));
+                                    const float ahf = std::max(1.0f, static_cast<float>(ah));
+                                    const float u0 = (static_cast<float>(inter.x - ax) / awf) * static_cast<float>(tex_w);
+                                    const float v0 = (static_cast<float>(inter.y - ay) / ahf) * static_cast<float>(tex_h);
+                                    const float u1 = (static_cast<float>((inter.x - ax) + inter.w) / awf) * static_cast<float>(tex_w);
+                                    const float v1 = (static_cast<float>((inter.y - ay) + inter.h) / ahf) * static_cast<float>(tex_h);
+                                    const int su0 = std::clamp(static_cast<int>(std::floor(std::min(u0, u1))), 0, std::max(0, tex_w - 1));
+                                    const int sv0 = std::clamp(static_cast<int>(std::floor(std::min(v0, v1))), 0, std::max(0, tex_h - 1));
+                                    const int su1 = std::clamp(static_cast<int>(std::ceil (std::max(u0, u1))),  0, tex_w);
+                                    const int sv1 = std::clamp(static_cast<int>(std::ceil (std::max(v0, v1))),  0, tex_h);
+                                    const int rw  = std::max(0, su1 - su0);
+                                    const int rh  = std::max(0, sv1 - sv0);
+                                    if (rw > 0 && rh > 0) {
+                                        SDL_Texture* readable = mask_tex;
+                                        SDL_Texture* temp     = nullptr;
+                                        if (access != SDL_TEXTUREACCESS_TARGET) {
+                                            temp = SDL_CreateTexture(rdr, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
+                                            if (temp) {
+                                                SDL_Texture* prev = SDL_GetRenderTarget(rdr);
+                                                SDL_SetRenderTarget(rdr, temp);
+                                                SDL_RenderCopy(rdr, mask_tex, nullptr, nullptr);
+                                                SDL_SetRenderTarget(rdr, prev);
+                                                readable = temp;
+                                            }
+                                        }
+                                        SDL_Texture* prev = SDL_GetRenderTarget(rdr);
+                                        SDL_SetRenderTarget(rdr, readable);
+                                        auto read_alpha_at = [&](int px, int py) -> Uint8 {
+                                            Uint32 pixel = 0;
+                                            SDL_Rect r{ px, py, 1, 1 };
+                                            if (SDL_RenderReadPixels(rdr, &r, SDL_PIXELFORMAT_RGBA8888, &pixel, static_cast<int>(sizeof(Uint32))) != 0) {
+                                                return 255; // fail-open to avoid over-cull
+                                            }
+                                            Uint8 a = static_cast<Uint8>((pixel >> 24) & 0xFF);
+                                            return a;
+                                        };
+                                        const int sx0 = su0;
+                                        const int sy0 = sv0;
+                                        const int sx1 = std::max(su0, su1 - 1);
+                                        const int sy1 = std::max(sv0, sv1 - 1);
+                                        const int cx  = su0 + std::max(0, rw / 2);
+                                        const int cy  = sv0 + std::max(0, rh / 2);
+                                        bool any = false;
+                                        // 2x2 corners + center sample
+                                        if (read_alpha_at(sx0, sy0) > 0) any = true;
+                                        else if (read_alpha_at(sx1, sy0) > 0) any = true;
+                                        else if (read_alpha_at(sx0, sy1) > 0) any = true;
+                                        else if (read_alpha_at(sx1, sy1) > 0) any = true;
+                                        else if (read_alpha_at(cx,  cy)  > 0) any = true;
+                                        SDL_SetRenderTarget(rdr, prev);
+                                        if (temp) SDL_DestroyTexture(temp);
+                                        if (!any) {
+                                            visible = false;
+                                            if (culled_debug_logged_.insert(asset).second) {
+                                                dev_mode_trace(std::string{"[Assets] Culled (no visible pixels) asset: "} + (asset->info ? asset->info->name : std::string{"<unnamed>"}));
+                                            }
+                                            // record debug overlay rect in world coords
+                                            culled_debug_rects_.push_back(inter);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (...) {
+                // Fail-open; keep asset visible if probe has issues
+            }
+        }
+
+        if (visible) {
             new_active_assets.push_back(asset);
         }
     };
@@ -1596,10 +1738,10 @@ int Assets::audio_effect_max_distance_world() const {
 }
 
 bool Assets::is_asset_visible_on_screen(const Asset* asset) const {
-    return is_asset_visible_on_screen(asset, screen_world_rect());
+    return is_asset_visible_on_screen(asset, screen_world_rect(), 0);
 }
 
-bool Assets::is_asset_visible_on_screen(const Asset* asset, const SDL_Rect& screen_rect) const {
+bool Assets::is_asset_visible_on_screen(const Asset* asset, const SDL_Rect& screen_rect, int min_size_px) const {
     const float camera_scale = std::max(0.0001f, camera_.get_scale());
     AssetWorldBounds bounds;
     if (!compute_asset_world_bounds(asset, camera_scale, bounds)) {
@@ -1616,6 +1758,18 @@ bool Assets::is_asset_visible_on_screen(const Asset* asset, const SDL_Rect& scre
     }
     if (bounds.bottom < screen_top || bounds.top > screen_bottom) {
         return false;
+    }
+
+    if (min_size_px > 0) {
+        const float w = std::max(0.0f, bounds.right - bounds.left);
+        const float h = std::max(0.0f, bounds.bottom - bounds.top);
+        // Cull only when the projected sprite is tiny in both dimensions.
+        if (w < static_cast<float>(min_size_px) && h < static_cast<float>(min_size_px)) {
+            if (asset && culled_debug_logged_.insert(asset).second) {
+                dev_mode_trace(std::string{"[Assets] Culled (min-size) asset: "} + (asset->info ? asset->info->name : std::string{"<unnamed>"}));
+            }
+            return false;
+        }
     }
     return true;
 }
@@ -1716,6 +1870,18 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
 
     if (!renderer) {
         return;
+    }
+
+    // Draw debug overlays for culled objects (if any)
+    if (!culled_debug_rects_.empty()) {
+        SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+        SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 160);
+        for (const SDL_Rect& r : culled_debug_rects_) {
+            SDL_RenderDrawRect(renderer, &r);
+        }
+        SDL_SetRenderDrawBlendMode(renderer, prev_mode);
     }
 
     if (dev_notice_) {

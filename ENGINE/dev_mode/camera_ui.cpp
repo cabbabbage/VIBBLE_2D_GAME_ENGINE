@@ -71,6 +71,29 @@ private:
     int height_ = 0;
 };
 
+class GroupLabelWidget : public Widget {
+public:
+    explicit GroupLabelWidget(std::string text)
+        : text_(std::move(text)) {
+        style_ = DMStyles::Label();
+    }
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return DMCheckbox::height(); }
+    bool handle_event(const SDL_Event&) override { return false; }
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+        const int text_y = rect_.y + std::max(0, (DMCheckbox::height() - style_.font_size) / 2);
+        DrawLabelText(renderer, text_, rect_.x, text_y, style_);
+    }
+    bool wants_full_row() const override { return true; }
+private:
+    std::string text_{};
+    DMLabelStyle style_{};
+    SDL_Rect rect_{0,0,0,DMCheckbox::height()};
+};
+
 class PanelBannerWidget : public Widget {
 public:
     PanelBannerWidget(std::string heading, std::string detail)
@@ -714,7 +737,7 @@ void CameraUIPanel::build_ui() {
 
     configure_section(visibility_section_header_, "Visibility & Performance", &visibility_section_expanded_);
     configure_section(depth_section_header_,      "Depth & Perspective",      &depth_section_expanded_);
-    configure_section(depthcue_section_header_,   "DepthCue",                 &depthcue_section_expanded_);
+    configure_section(depthcue_section_header_,   "Depth Cue",               &depthcue_section_expanded_);
     configure_section(zoom_section_header_,       "Zoom Range",               &zoom_section_expanded_);
     configure_section(smoothing_section_header_,  "Motion & Smoothing",       &smoothing_section_expanded_);
 
@@ -743,10 +766,12 @@ void CameraUIPanel::build_ui() {
     // Saturation sliders
     saturation_background_slider_ = std::make_unique<FloatSliderWidget>(
         "Saturation Background", -50.0f, 0.0f, 1.0f, defaults.saturation_background, 0);
+    saturation_background_slider_->set_tooltip("Reduce or increase saturation behind focus.");
     saturation_background_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     saturation_foreground_slider_ = std::make_unique<FloatSliderWidget>(
         "Saturation Foreground", 0.0f, 50.0f, 1.0f, defaults.saturation_foreground, 0);
+    saturation_foreground_slider_->set_tooltip("Reduce or increase saturation in front of focus.");
     saturation_foreground_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     // Saturation interpolation dropdown
@@ -761,10 +786,12 @@ void CameraUIPanel::build_ui() {
     // Primary boost sliders
     primary_boost_background_slider_ = std::make_unique<FloatSliderWidget>(
         "Primary Boost Background", -50.0f, 0.0f, 1.0f, defaults.primary_boost_background, 0);
+    primary_boost_background_slider_->set_tooltip("Adjust primary color boost behind focus.");
     primary_boost_background_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     primary_boost_foreground_slider_ = std::make_unique<FloatSliderWidget>(
         "Primary Boost Foreground", 0.0f, 50.0f, 1.0f, defaults.primary_boost_foreground, 0);
+    primary_boost_foreground_slider_->set_tooltip("Adjust primary color boost in front of focus.");
     primary_boost_foreground_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     // Primary boost interpolation dropdown
@@ -779,10 +806,12 @@ void CameraUIPanel::build_ui() {
     // Brightness sliders
     foreground_brightness_slider_ = std::make_unique<FloatSliderWidget>(
         "Foreground Brightness", -50.0f, 50.0f, 1.0f, defaults.foreground_brightness, 0);
+    foreground_brightness_slider_->set_tooltip("Adjust brightness for objects in front of focus.");
     foreground_brightness_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     background_brightness_slider_ = std::make_unique<FloatSliderWidget>(
         "Background Brightness", -50.0f, 50.0f, 1.0f, defaults.background_brightness, 0);
+    background_brightness_slider_->set_tooltip("Adjust brightness for objects behind the focus.");
     background_brightness_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     {
@@ -796,10 +825,12 @@ void CameraUIPanel::build_ui() {
     // Perspective Blur (Aperture Blur)
     max_foreground_blur_slider_ = std::make_unique<FloatSliderWidget>(
         "Max Foreground Blur", 0.0f, 50.0f, 1.0f, defaults.max_foreground_blur, 0);
+    max_foreground_blur_slider_->set_tooltip("Maximum blur for objects closer than the focus plane.");
     max_foreground_blur_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     max_background_blur_slider_ = std::make_unique<FloatSliderWidget>(
         "Max Background Blur", 0.0f, 50.0f, 1.0f, defaults.max_background_blur, 0);
+    max_background_blur_slider_->set_tooltip("Maximum blur for objects farther than the focus plane.");
     max_background_blur_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     background_blur_plane_slider_ = std::make_unique<FloatSliderWidget>(
@@ -823,10 +854,21 @@ void CameraUIPanel::build_ui() {
         blur_falloff_dropdown_->set_on_selection_changed([this](int) { on_control_value_changed(); });
     }
 
-    // DepthCue enable toggle
-    depthcue_checkbox_ = std::make_unique<DMCheckbox>("Enable DepthCue", last_depthcue_enabled_);
+    // Depth Cue enable toggle
+    depthcue_checkbox_ = std::make_unique<DMCheckbox>("Enable Depth Cue", last_depthcue_enabled_);
     depthcue_widget_   = std::make_unique<CheckboxWidget>(depthcue_checkbox_.get());
     depthcue_widget_->set_tooltip("Toggle depth cue effects (color adjustments + aperture blur).\nDoes not affect core depth/perspective behaviors.");
+
+    // Group labels for Depth Cue organization
+    depthcue_header_planes_     = std::make_unique<GroupLabelWidget>("Depth Planes");
+    depthcue_header_blur_       = std::make_unique<GroupLabelWidget>("Aperture Blur");
+    depthcue_header_brightness_ = std::make_unique<GroupLabelWidget>("Brightness");
+    depthcue_header_saturation_ = std::make_unique<GroupLabelWidget>("Saturation");
+    depthcue_header_primary_    = std::make_unique<GroupLabelWidget>("Primary Boost");
+    depthcue_gap1_ = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
+    depthcue_gap2_ = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
+    depthcue_gap3_ = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
+    depthcue_gap4_ = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
 
     smoothing_checkbox_ = std::make_unique<DMCheckbox>("Smooth Motion", defaults.smooth_motion_zoom);
     smoothing_widget_   = std::make_unique<CheckboxWidget>(smoothing_checkbox_.get());
@@ -925,20 +967,35 @@ void CameraUIPanel::rebuild_rows() {
     if (depthcue_section_header_) rows.push_back({ depthcue_section_header_.get() });
     if (depthcue_section_expanded_) {
         if (depthcue_widget_) rows.push_back({ depthcue_widget_.get() });
+
+        if (depthcue_header_planes_) rows.push_back({ depthcue_header_planes_.get() });
         if (foreground_blur_plane_slider_) rows.push_back({ foreground_blur_plane_slider_.get() });
         if (background_blur_plane_slider_) rows.push_back({ background_blur_plane_slider_.get() });
+
+        if (depthcue_gap1_) rows.push_back({ depthcue_gap1_.get() });
+
+        if (depthcue_header_blur_) rows.push_back({ depthcue_header_blur_.get() });
         if (max_foreground_blur_slider_) rows.push_back({ max_foreground_blur_slider_.get() });
         if (max_background_blur_slider_) rows.push_back({ max_background_blur_slider_.get() });
         if (blur_falloff_widget_) rows.push_back({ blur_falloff_widget_.get() });
 
+        if (depthcue_gap2_) rows.push_back({ depthcue_gap2_.get() });
+
+        if (depthcue_header_brightness_) rows.push_back({ depthcue_header_brightness_.get() });
         if (foreground_brightness_slider_) rows.push_back({ foreground_brightness_slider_.get() });
         if (background_brightness_slider_) rows.push_back({ background_brightness_slider_.get() });
         if (brightness_interp_widget_) rows.push_back({ brightness_interp_widget_.get() });
 
+        if (depthcue_gap3_) rows.push_back({ depthcue_gap3_.get() });
+
+        if (depthcue_header_saturation_) rows.push_back({ depthcue_header_saturation_.get() });
         if (saturation_background_slider_) rows.push_back({ saturation_background_slider_.get() });
         if (saturation_foreground_slider_) rows.push_back({ saturation_foreground_slider_.get() });
         if (saturation_interp_widget_) rows.push_back({ saturation_interp_widget_.get() });
 
+        if (depthcue_gap4_) rows.push_back({ depthcue_gap4_.get() });
+
+        if (depthcue_header_primary_) rows.push_back({ depthcue_header_primary_.get() });
         if (primary_boost_background_slider_) rows.push_back({ primary_boost_background_slider_.get() });
         if (primary_boost_foreground_slider_) rows.push_back({ primary_boost_foreground_slider_.get() });
         if (primary_interp_widget_) rows.push_back({ primary_interp_widget_.get() });

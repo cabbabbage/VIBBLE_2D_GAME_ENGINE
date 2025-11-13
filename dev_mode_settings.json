@@ -29,7 +29,7 @@
         "grid": {
             "cell_size_px": 35.0,
             "overlay": {
-                "enabled": false
+                "enabled": true
             },
             "snap": {
                 "enabled": false
@@ -58,7 +58,7 @@
                         "vertical_falloff": 1.909999966621399
                     }
                 },
-                "update_map_light": true
+                "update_map_light": false
             },
             "shadow_panel": {
                 "render_shadows": true
