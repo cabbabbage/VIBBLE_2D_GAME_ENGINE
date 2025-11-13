@@ -561,8 +561,17 @@ bool CameraUIPanel::is_point_inside(int x, int y) const {
 }
 
 void CameraUIPanel::update(const Input& input, int screen_w, int screen_h) {
+    const bool previously_visible = was_visible_;
     DockableCollapsible::update(input, screen_w, screen_h);
-    if (!is_visible()) return;
+    const bool currently_visible = is_visible();
+    if (currently_visible && !previously_visible) {
+        // Panel might be shown via base-class helpers; always resync when this happens.
+        suppress_apply_once_ = true;
+        sync_from_camera();
+    }
+    was_visible_ = currently_visible;
+
+    if (!currently_visible) return;
     if (!assets_) return;
     if (suppress_apply_once_) {
         suppress_apply_once_ = false;

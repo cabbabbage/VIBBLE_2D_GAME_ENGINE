@@ -48,6 +48,7 @@ private:
     bool last_realism_enabled_ = true;
 
     bool suppress_apply_once_ = false;
+    bool was_visible_ = false;
 
     std::unique_ptr<DMCheckbox> effects_checkbox_;
     std::unique_ptr<CheckboxWidget> effects_widget_;
