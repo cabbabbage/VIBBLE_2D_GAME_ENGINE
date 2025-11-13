@@ -12,6 +12,8 @@
 #include <nlohmann/json.hpp>
 #include "utils/ranged_color.hpp"
 
+class Assets;
+
 struct OrbitSettings;
 struct ScreenLightSettings;
 class DMColorRangeWidget;
@@ -24,6 +26,7 @@ public:
     ~MapLightPanel() override;
 
     void set_map_info(nlohmann::json* map_info, SaveCallback on_save = nullptr);
+    void set_assets(Assets* assets);
     void set_update_map_light_callback(std::function<void(bool)> cb);
 
     using ColorSampleRequestCallback = std::function<void( const utils::color::RangedColor&, std::function<void(SDL_Color)>, std::function<void()>)>;
@@ -58,6 +61,8 @@ private:
     void update_section_header_labels();
     void sync_ui_from_json();
     void sync_json_from_ui();
+    void sync_chunk_slider_from_json();
+    void persist_chunk_resolution();
     void load_update_map_light_setting();
     nlohmann::json& ensure_light();
     struct OrbitSettings {
@@ -104,6 +109,8 @@ private:
     SaveCallback on_save_;
     nlohmann::json editing_light_{};
 
+    Assets* assets_ = nullptr;
+
     std::unique_ptr<DMCheckbox> update_map_light_checkbox_;
     std::unique_ptr<DMButton> orbit_section_btn_;
     std::unique_ptr<DMButton> texture_section_btn_;
@@ -112,6 +119,8 @@ private:
     std::unique_ptr<DMSlider> orbit_x_;
     std::unique_ptr<DMSlider> orbit_y_;
     std::unique_ptr<DMSlider> update_interval_;
+    std::unique_ptr<DMSlider> chunk_resolution_;
+    int chunk_resolution_value_ = 0;
 
     class OrbitKeyWidget;
     class SectionToggleWidget;

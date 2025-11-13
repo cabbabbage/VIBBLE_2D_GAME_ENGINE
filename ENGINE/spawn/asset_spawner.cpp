@@ -1,5 +1,6 @@
 #include "asset_spawner.hpp"
 #include "asset_spawn_planner.hpp"
+#include "spacing_util.hpp"
 #include "spawn_context.hpp"
 #include "methods/exact_spawner.hpp"
 #include "methods/center_spawner.hpp"
@@ -169,11 +170,13 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                 run_edge_spawning(area);
                 return;
         }
+        auto spacing_names = collect_spacing_asset_names(spawn_queue_);
     const int resolution = std::max(0, map_grid_settings_.resolution);
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
     checker_.begin_session(grid_service, resolution);
     vibble::grid::Occupancy occupancy(area, resolution, grid_service);
     SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
+    ctx.set_spacing_filter(std::move(spacing_names));
     ctx.set_map_grid_settings(map_grid_settings_);
     ctx.set_spawn_resolution(resolution);
         std::vector<const Area*> trail_areas;
@@ -310,7 +313,8 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                                 attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
-                                        ctx.checker().register_asset(result, enforce_spacing, true);
+                                        const bool track_spacing = ctx.track_spacing_for(result->info, enforce_spacing);
+                                        ctx.checker().register_asset(result, enforce_spacing, track_spacing);
                                         occupancy.set_occupied(vertex, true);
                                         // Collect zone assets for secondary pass
                                         if (candidate.info && candidate.info->type == std::string("zone_asset")) {
@@ -414,6 +418,7 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
 };
 
         vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+        auto spacing_names = collect_spacing_asset_names(spawn_queue_);
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
 
@@ -429,6 +434,7 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
 
                 vibble::grid::Occupancy occupancy(area, edge_resolution, grid_service);
                 SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &occupancy);
+                ctx.set_spacing_filter(&spacing_names);
                 ctx.set_map_grid_settings(map_grid_settings_);
                 ctx.set_spawn_resolution(edge_resolution);
                 ctx.set_trail_areas({});
@@ -532,6 +538,7 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
                                       const std::unordered_map<std::string, Area>& area_lookup) {
         asset_info_library_ = asset_library_->all();
         spawn_queue_ = planner->get_spawn_queue();
+        auto spacing_names = collect_spacing_asset_names(spawn_queue_);
 
         vibble::grid::Grid& grid_service = vibble::grid::global_grid();
         const int resolution = std::max(0, map_grid_settings_.resolution);
@@ -588,6 +595,7 @@ void AssetSpawner::run_child_spawning(AssetSpawnPlanner* planner,
                 }
 
                 SpawnContext ctx(rng_, checker_, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, occupancy);
+                ctx.set_spacing_filter(&spacing_names);
                 ctx.set_map_grid_settings(map_grid_settings_);
                 ctx.set_spawn_resolution(resolution);
                 ctx.set_trail_areas({});

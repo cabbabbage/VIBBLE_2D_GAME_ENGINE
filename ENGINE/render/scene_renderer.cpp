@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 #include <cstdlib>
+#include <unordered_map>
 
 static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
@@ -673,6 +674,15 @@ void SceneRenderer::render(){
         }
 
     // ---- Modified: bold outline around non-transparent pixels (no interior fill) ----
+    std::unordered_map<const Asset*, const LightOverlaySource*> overlay_lookup;
+    overlay_lookup.reserve(light_overlay_sources_.size());
+    for (const auto& source : light_overlay_sources_) {
+        if (!source.asset) {
+            continue;
+        }
+        overlay_lookup.emplace(source.asset, &source);
+    }
+
     std::vector<const LightOverlaySource*> pending_front_lights;
 
     auto render_commands = [&](const std::vector<AssetRenderCommand>& commands, bool overlay_passed) {
@@ -690,21 +700,18 @@ void SceneRenderer::render(){
             const LightOverlaySource* overlay_source = nullptr;
             bool has_front_light = false;
             if (cmd.asset) {
-                for (const auto& src : light_overlay_sources_) {
-                    if (src.asset == cmd.asset) {
-                        overlay_source = &src;
-                        if (src.has_back_lights && light_overlay_visibility > 0.0f) {
-                            AssetLightRenderer light_renderer(renderer_,
-                                                              src,
-                                                              darkness_overlay_vertices_,
-                                                              darkness_overlay_indices_,
-                                                              light_overlay_visibility,
-                                                              frame_flicker_time_seconds);
-                            light_renderer.draw_behind();
-                        }
-                        has_front_light = light_overlay_visibility > 0.0f && src.has_front_lights;
-                        break;
+                if (const auto it = overlay_lookup.find(cmd.asset); it != overlay_lookup.end()) {
+                    overlay_source = it->second;
+                    if (overlay_source->has_back_lights && light_overlay_visibility > 0.0f) {
+                        AssetLightRenderer light_renderer(renderer_,
+                                                          *overlay_source,
+                                                          darkness_overlay_vertices_,
+                                                          darkness_overlay_indices_,
+                                                          light_overlay_visibility,
+                                                          frame_flicker_time_seconds);
+                        light_renderer.draw_behind();
                     }
+                    has_front_light = light_overlay_visibility > 0.0f && overlay_source->has_front_lights;
                 }
             }
             if (!cmd.source_texture) {

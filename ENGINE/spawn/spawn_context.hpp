@@ -5,6 +5,7 @@
 #include <random>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <SDL.h>
 #include "asset/Asset.hpp"
@@ -67,6 +68,10 @@ class SpawnContext {
     void set_map_grid_settings(const MapGridSettings& settings);
     const MapGridSettings& map_grid_settings() const { return map_grid_settings_; }
 
+    void set_spacing_filter(std::unordered_set<std::string> names);
+    void set_spacing_filter(const std::unordered_set<std::string>* names);
+    bool track_spacing_for(const std::shared_ptr<AssetInfo>& info, bool enforce_spacing, bool default_track = true) const;
+
     void set_clip_area(const Area* a) { clip_area_ = a; }
     const Area* clip_area() const { return clip_area_; }
 
@@ -89,6 +94,8 @@ class SpawnContext {
     MapGridSettings map_grid_settings_ = MapGridSettings::defaults();
     bool checks_enabled_ = true;
     bool allow_partial_clip_overlap_ = false;
+    std::unordered_set<std::string> spacing_filter_storage_;
+    const std::unordered_set<std::string>* spacing_filter_ = nullptr;
 
     Asset* spawnAssetInternal(const std::string& name,
                               const std::shared_ptr<AssetInfo>& info,

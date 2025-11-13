@@ -299,6 +299,36 @@ void SpawnContext::set_map_grid_settings(const MapGridSettings& settings) {
         spawn_resolution_ = occupancy_ ? occupancy_->resolution() : vibble::grid::clamp_resolution(map_grid_settings_.resolution);
 }
 
+void SpawnContext::set_spacing_filter(std::unordered_set<std::string> names) {
+        spacing_filter_storage_ = std::move(names);
+        spacing_filter_ = &spacing_filter_storage_;
+}
+
+void SpawnContext::set_spacing_filter(const std::unordered_set<std::string>* names) {
+        if (names) {
+                spacing_filter_storage_.clear();
+        }
+        spacing_filter_ = names;
+}
+
+bool SpawnContext::track_spacing_for(const std::shared_ptr<AssetInfo>& info,
+                                     bool enforce_spacing,
+                                     bool default_track) const {
+        if (!default_track) {
+            return false;
+        }
+        if (enforce_spacing) {
+            return true;
+        }
+        if (!spacing_filter_) {
+            return default_track;
+        }
+        if (!info) {
+            return false;
+        }
+        return spacing_filter_->count(info->name) > 0;
+}
+
 bool SpawnContext::position_allowed(const Area& area, SDL_Point pos) const {
         if (area.contains_point(pos)) {
                 return true;

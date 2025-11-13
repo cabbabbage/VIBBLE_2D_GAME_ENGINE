@@ -689,20 +689,38 @@ void Asset::ClearFlipOverrideForSpawnId(const std::string& id) {
 }
 
 void Asset::set_final_texture(SDL_Texture* tex) {
-        if (tex != final_texture) {
+        int new_w = 0;
+        int new_h = 0;
+        if (tex) {
+                if (SDL_QueryTexture(tex, nullptr, nullptr, &new_w, &new_h) != 0) {
+                        new_w = 0;
+                        new_h = 0;
+                }
+        }
+
+        const bool texture_changed = (tex != final_texture);
+        const bool size_changed    = (new_w != cached_w) || (new_h != cached_h);
+
+        if (texture_changed) {
                 if (final_texture) {
                         SDL_DestroyTexture(final_texture);
                 }
                 final_texture = tex;
+                if (size_changed) {
+                        clear_downscale_cache();
+                }
+        } else if (size_changed) {
                 clear_downscale_cache();
         }
 
         invalidate_downscale_cache();
 
         if (tex) {
-                SDL_QueryTexture(tex, nullptr, nullptr, &cached_w, &cached_h);
+                cached_w = new_w;
+                cached_h = new_h;
         } else {
-                cached_w = cached_h = 0;
+                cached_w = 0;
+                cached_h = 0;
         }
 }
 

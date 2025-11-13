@@ -11,6 +11,7 @@
 #include <random>
 #include <sstream>
 #include <cmath>
+#include <cctype>
 
 #include "core/manifest/manifest_loader.hpp"
 
@@ -175,21 +176,12 @@ void MainMenu::showLoadingScreen() {
                 renderAnimatedBackground(bg);
         }
 	drawVignette(110);
-	std::vector<fs::path> folders;
-	const fs::path loading_root = resolve_manifest_path("SRC/loading_screen_content");
-	if (fs::exists(loading_root) && fs::is_directory(loading_root)) {
-		for (const auto& e : fs::directory_iterator(loading_root)) {
-			if (e.is_directory()) folders.push_back(e.path());
-		}
-	}
 	SDL_Texture* tarot = nullptr;
 	std::string msg;
-	if (!folders.empty()) {
-		std::mt19937 rng{std::random_device{}()};
-		const fs::path folder = folders[ std::uniform_int_distribution<size_t>(0, folders.size()-1)(rng) ];
-		const fs::path img = firstImageIn(folder);
-		if (!img.empty()) tarot = loadTexture(img);
-		msg = pickRandomLine(folder / "messages.csv");
+	const fs::path image_path = pick_loading_image();
+	if (!image_path.empty()) {
+		tarot = loadTexture(image_path);
+		msg = pickRandomLine(image_path.parent_path() / "messages.csv");
 	}
 	const std::string loading = "LOADING...";
 	SDL_Point tsize = measureText(Styles::LabelTitle(), loading);
@@ -271,6 +263,59 @@ std::filesystem::path MainMenu::resolve_manifest_path(const std::string& forward
 	}
 	fs::path resolved = base / relative;
 	return resolved.lexically_normal();
+}
+
+std::filesystem::path MainMenu::loading_content_root() const {
+	return resolve_manifest_path("SRC/LOADING CONTENT");
+}
+
+std::filesystem::path MainMenu::legacy_loading_content_root() const {
+	return resolve_manifest_path("SRC/loading_screen_content");
+}
+
+std::vector<fs::path> MainMenu::list_loading_images(const fs::path& root, bool recursive) const {
+	std::vector<fs::path> out;
+	if (root.empty() || !fs::exists(root)) return out;
+
+	auto try_add = [&](const fs::path& candidate) {
+		std::string ext = candidate.extension().string();
+		for (auto& c : ext) {
+			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		}
+		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
+			out.push_back(candidate);
+		}
+	};
+
+	if (recursive) {
+		for (const auto& entry : fs::recursive_directory_iterator(root)) {
+			if (entry.is_regular_file()) {
+				try_add(entry.path());
+			}
+		}
+	} else {
+		for (const auto& entry : fs::directory_iterator(root)) {
+			if (entry.is_regular_file()) {
+				try_add(entry.path());
+			}
+		}
+	}
+
+	std::sort(out.begin(), out.end());
+	return out;
+}
+
+fs::path MainMenu::pick_loading_image() const {
+	auto images = list_loading_images(loading_content_root(), false);
+	if (images.empty()) {
+		images = list_loading_images(legacy_loading_content_root(), true);
+	}
+	if (images.empty()) {
+		return {};
+	}
+	std::mt19937 rng{std::random_device{}()};
+	std::uniform_int_distribution<size_t> dist(0, images.size() - 1);
+	return images[dist(rng)];
 }
 
 std::filesystem::path MainMenu::firstImageIn(const fs::path& folder) const {

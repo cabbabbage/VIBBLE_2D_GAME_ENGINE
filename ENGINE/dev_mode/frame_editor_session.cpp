@@ -36,6 +36,7 @@ using animation_editor::PreviewProvider;
 
 namespace {
 
+constexpr int kDirectoryPanelMinWidth = 640;
 constexpr int kMovementTotalsFieldWidth = 140;
 constexpr int kChildrenFieldWidth = 132;
 constexpr int kShowAnimCheckboxMinWidth = 150;
@@ -202,8 +203,9 @@ void FrameEditorSession::begin(Assets* assets,
         SDL_FPoint anchor_screen_f = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
         SDL_Point anchor_screen = round_point(anchor_screen_f);
 
-        const int dir_w = 600;
-        const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
+        DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
+        const int dir_w = dir_metrics.width;
+        const int dir_h = dir_metrics.height;
         const int nav_h = 90;
         const int nav_w = 560;
 
@@ -382,9 +384,8 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             if (dragging_dir_) {
                 dir_pos_.x = e.motion.x - drag_offset_dir_.x;
                 dir_pos_.y = e.motion.y - drag_offset_dir_.y;
-                const int dir_w = 600;
-                const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
-                clamp_panel_pos(dir_pos_.x, dir_pos_.y, dir_w, dir_h);
+                DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
+                clamp_panel_pos(dir_pos_.x, dir_pos_.y, dir_metrics.width, dir_metrics.height);
             } else if (dragging_toolbox_) {
                 toolbox_pos_.x = e.motion.x - drag_offset_toolbox_.x;
                 toolbox_pos_.y = e.motion.y - drag_offset_toolbox_.y;
@@ -829,12 +830,11 @@ void FrameEditorSession::rebuild_layout() const {
     const int screen_w = assets_->renderer() ? assets_->getView().get_current_view().width() : 0; // not used for clamp heavily
     (void)screen_w;
     (void)cam; // anchor-based layout replaced by draggable screen-space positions
-    const int dir_w = 600;
-    const int dir_h = DMButton::height() + DMSpacing::small_gap()*2;
-    directory_rect_ = SDL_Rect{ dir_pos_.x, dir_pos_.y, dir_w, dir_h };
-    // Place buttons inside
-    int x = directory_rect_.x + DMSpacing::small_gap();
-    int y = directory_rect_.y + DMSpacing::small_gap();
+    DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
+    directory_rect_ = SDL_Rect{ dir_pos_.x, dir_pos_.y, dir_metrics.width, dir_metrics.height };
+    const int dir_padding = DMSpacing::small_gap();
+    int x = directory_rect_.x + dir_padding;
+    int y = directory_rect_.y + dir_metrics.top_padding;
     if (btn_back_) { btn_back_->set_rect(SDL_Rect{ x, y, btn_back_->rect().w, DMButton::height() }); x += btn_back_->rect().w + DMSpacing::small_gap(); }
     if (btn_movement_) { btn_movement_->set_style(mode_==Mode::Movement? &DMStyles::AccentButton() : &DMStyles::HeaderButton()); btn_movement_->set_rect(SDL_Rect{ x, y, btn_movement_->rect().w, DMButton::height() }); x += btn_movement_->rect().w + DMSpacing::small_gap(); }
     if (btn_children_) { btn_children_->set_style(mode_==Mode::Children? &DMStyles::AccentButton() : &DMStyles::HeaderButton()); btn_children_->set_rect(SDL_Rect{ x, y, btn_children_->rect().w, DMButton::height() }); x += btn_children_->rect().w + DMSpacing::small_gap(); }
@@ -999,6 +999,36 @@ void FrameEditorSession::rebuild_layout() const {
     }
     // Ensure we have rects for all frames (non-visible indices will be empty {0,0,0,0})
     if (static_cast<int>(thumb_rects_.size()) < count) thumb_rects_.resize(count);
+}
+
+FrameEditorSession::DirectoryPanelMetrics FrameEditorSession::build_directory_panel_metrics() const {
+    DirectoryPanelMetrics metrics;
+    const int padding = DMSpacing::small_gap();
+    const int drag_padding = DMSpacing::small_gap();
+    metrics.top_padding = padding + drag_padding;
+    const int bottom_padding = padding;
+    metrics.height = metrics.top_padding + DMButton::height() + bottom_padding;
+
+    int row_width = 0;
+    auto append_button = [&](const std::unique_ptr<DMButton>& btn) {
+        if (!btn) return;
+        int w = std::max(btn->rect().w, btn->preferred_width());
+        if (w <= 0) return;
+        if (row_width > 0) {
+            row_width += padding;
+        }
+        row_width += w;
+    };
+
+    append_button(btn_back_);
+    append_button(btn_movement_);
+    append_button(btn_children_);
+    append_button(btn_attack_geometry_);
+    append_button(btn_hit_geometry_);
+
+    const int content_width = row_width > 0 ? row_width : 0;
+    metrics.width = std::max(kDirectoryPanelMinWidth, content_width + padding * 2);
+    return metrics;
 }
 
 FrameEditorSession::MovementToolboxMetrics FrameEditorSession::build_movement_toolbox_metrics() const {

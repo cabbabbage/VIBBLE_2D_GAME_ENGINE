@@ -1,6 +1,7 @@
 #include "grid_tile_renderer.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
@@ -8,6 +9,16 @@
 #include "tiling/grid_tile.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
+
+namespace {
+
+constexpr float kParallaxEqualityEpsilon = 0.001f;
+
+inline bool nearly_equal(float a, float b) {
+    return std::fabs(a - b) <= kParallaxEqualityEpsilon;
+}
+
+}  // namespace
 
 void GridTileRenderer::render(SDL_Renderer* renderer) {
     if (!renderer || !assets_) return;
@@ -33,6 +44,37 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const camera& cam, const w
             SDL_Point world_br{ tile.world_rect.x + tile.world_rect.w, tile.world_rect.y + tile.world_rect.h };
             SDL_Point world_bl{ tile.world_rect.x, tile.world_rect.y + tile.world_rect.h };
 
+            const float offset_tl = grid.parallax_offset(world_tl);
+            const float offset_tr = grid.parallax_offset(world_tr);
+            const float offset_br = grid.parallax_offset(world_br);
+            const float offset_bl = grid.parallax_offset(world_bl);
+
+            const bool uniform_parallax =
+                nearly_equal(offset_tl, offset_tr) &&
+                nearly_equal(offset_tl, offset_br) &&
+                nearly_equal(offset_tl, offset_bl);
+
+            if (uniform_parallax) {
+                SDL_FPoint screen_tl = cam.map_to_screen(world_tl);
+                SDL_FPoint screen_br = cam.map_to_screen(world_br);
+
+                const float width  = screen_br.x - screen_tl.x;
+                const float height = screen_br.y - screen_tl.y;
+                if (width <= 0.0f || height <= 0.0f) {
+                    continue;
+                }
+
+                SDL_FRect dest{
+                    grid.parallax_adjusted_screen_x(world_tl, screen_tl.x),
+                    screen_tl.y,
+                    width,
+                    height
+                };
+
+                SDL_RenderCopyF(renderer, tile.texture, nullptr, &dest);
+                continue;
+            }
+
             SDL_FPoint screen_tl = cam.map_to_screen(world_tl);
             SDL_FPoint screen_tr = cam.map_to_screen(world_tr);
             SDL_FPoint screen_br = cam.map_to_screen(world_br);
@@ -43,14 +85,13 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const camera& cam, const w
             screen_br.x = grid.parallax_adjusted_screen_x(world_br, screen_br.x);
             screen_bl.x = grid.parallax_adjusted_screen_x(world_bl, screen_bl.x);
 
-            int tex_w = 0;
-            int tex_h = 0;
-            if (SDL_QueryTexture(tile.texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+            const float tex_w = static_cast<float>(tile.world_rect.w);
+            const float tex_h = static_cast<float>(tile.world_rect.h);
+            if (tex_w <= 0.0f || tex_h <= 0.0f) {
                 continue;
             }
-
-            const float padding_x = 0.5f / static_cast<float>(tex_w);
-            const float padding_y = 0.5f / static_cast<float>(tex_h);
+            const float padding_x = 0.5f / tex_w;
+            const float padding_y = 0.5f / tex_h;
 
             const float tx0 = padding_x;
             const float ty0 = padding_y;

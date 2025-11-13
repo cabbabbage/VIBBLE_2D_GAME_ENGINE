@@ -18,7 +18,6 @@ class ManifestStore;
 }
 class Input;
 class MapLightPanel;
-class MapLightPreviewPanel;
 class MapLayersPreviewPanel;
 class MapLayersPanel;
 class MapLayerControlsDisplay;
@@ -62,14 +61,10 @@ public:
     void open_light_panel();
     void close_light_panel();
     void toggle_light_panel();
-    void open_light_map_panel();
-    void close_light_map_panel();
-    void toggle_light_map_panel();
     void toggle_layers_panel();
     void close_all_panels();
 
     bool is_light_panel_visible() const;
-    bool is_light_map_panel_visible() const;
     using LightSaveCallback = std::function<bool()>;
 
     void set_light_save_callback(LightSaveCallback cb);
@@ -153,7 +148,6 @@ private:
 
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     std::unique_ptr<MapLightPanel> light_panel_;
-    std::unique_ptr<MapLightPreviewPanel> preview_panel_;
     std::unique_ptr<MapLayersPreviewPanel> layers_preview_panel_;
     std::shared_ptr<MapLayersController> layers_controller_;
     std::unique_ptr<SlidingWindowContainer> room_config_container_;
@@ -180,9 +174,7 @@ private:
     LightSaveCallback light_save_callback_;
     std::function<void(HeaderMode)> on_mode_changed_;
     bool light_panel_centered_ = false;
-    bool preview_panel_centered_ = false;
     bool last_lights_visible_ = false;
-    bool last_preview_visible_ = false;
     std::unique_ptr<RoomConfigurator> room_configurator_;
     std::string active_room_config_key_;
     SlidingPanel active_sliding_panel_ = SlidingPanel::None;

@@ -5,7 +5,10 @@
 #include <random>
 #include <iostream>
 #include <cmath>
+#include <algorithm>
+#include <cctype>
 #include "font_paths.hpp"
+#include "core/manifest/manifest_loader.hpp"
 namespace fs = std::filesystem;
 
 LoadingScreen::LoadingScreen(SDL_Renderer* renderer, int screen_w, int screen_h)
@@ -18,30 +21,55 @@ LoadingScreen::~LoadingScreen() {
         }
 }
 
-fs::path LoadingScreen::pick_random_loading_folder() {
-	std::vector<fs::path> folders;
-	if (!fs::exists("loading") || !fs::is_directory("loading")) return "";
-	for (auto& p : fs::directory_iterator("loading")) {
-		if (p.is_directory()) folders.push_back(p.path());
-	}
-	if (folders.empty()) return "";
-	std::mt19937 rng{std::random_device{}()};
-	std::uniform_int_distribution<size_t> dist(0, folders.size() - 1);
-	return folders[dist(rng)];
+fs::path LoadingScreen::project_root() const {
+    try {
+        fs::path manifest = manifest::manifest_path();
+        if (!manifest.empty()) {
+            return fs::absolute(fs::path(manifest)).parent_path();
+        }
+    } catch (...) {
+    }
+    return fs::current_path();
 }
 
-std::vector<fs::path> LoadingScreen::list_images_in(const fs::path& dir) {
-	std::vector<fs::path> out;
-	if (!fs::exists(dir) || !fs::is_directory(dir)) return out;
-	for (auto& p : fs::directory_iterator(dir)) {
-		if (p.is_regular_file()) {
-			auto ext = p.path().extension().string();
-			for (auto& c : ext) c = (char)tolower(c);
-			if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") out.push_back(p.path());
-		}
-	}
-	std::sort(out.begin(), out.end());
-	return out;
+fs::path LoadingScreen::loading_content_root() const {
+    return project_root() / "SRC" / "LOADING CONTENT";
+}
+
+fs::path LoadingScreen::legacy_loading_content_root() const {
+    return project_root() / "SRC" / "loading_screen_content";
+}
+
+std::vector<fs::path> LoadingScreen::list_images_in(const fs::path& dir, bool recursive) const {
+    std::vector<fs::path> out;
+    if (dir.empty() || !fs::exists(dir)) return out;
+
+    auto try_add = [&](const fs::path& file) {
+        std::string ext = file.extension().string();
+        for (auto& c : ext) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
+            out.push_back(file);
+        }
+    };
+
+    if (recursive) {
+        for (const auto& entry : fs::recursive_directory_iterator(dir)) {
+            if (entry.is_regular_file()) {
+                try_add(entry.path());
+            }
+        }
+    } else {
+        for (const auto& entry : fs::directory_iterator(dir)) {
+            if (entry.is_regular_file()) {
+                try_add(entry.path());
+            }
+        }
+    }
+
+    std::sort(out.begin(), out.end());
+    return out;
 }
 
 std::string LoadingScreen::pick_random_message_from_csv(const fs::path& csv_path) {
@@ -118,15 +146,32 @@ void LoadingScreen::render_scaled_center(SDL_Texture* tex, int target_w, int tar
 }
 
 void LoadingScreen::init() {
-        fs::path folder = pick_random_loading_folder();
-        if (folder.empty()) return;
-        images_ = list_images_in(folder);
-        message_ = pick_random_message_from_csv(folder / "messages.csv");
-        current_index_ = 0;
-        last_switch_time_ = SDL_GetTicks();
+        if (current_texture_) {
+                SDL_DestroyTexture(current_texture_);
+                current_texture_ = nullptr;
+                current_texture_path_.clear();
+        }
+
+        selected_image_path_.clear();
+        message_.clear();
+
+        fs::path active_root = loading_content_root();
+        auto images = list_images_in(active_root, false);
+        if (images.empty()) {
+                active_root = legacy_loading_content_root();
+                images = list_images_in(active_root, true);
+        }
+
+        if (!images.empty()) {
+                std::mt19937 rng{std::random_device{}()};
+                std::uniform_int_distribution<size_t> dist(0, images.size() - 1);
+                selected_image_path_ = images[dist(rng)];
+                message_ = pick_random_message_from_csv(selected_image_path_.parent_path() / "messages.csv");
+        }
+
         status_text_.clear();
         rotation_angle_ = 0.0;
-        last_frame_time_ = last_switch_time_;
+        last_frame_time_ = SDL_GetTicks();
 }
 
 void LoadingScreen::set_status(std::string status) {
@@ -138,33 +183,32 @@ void LoadingScreen::draw_frame() {
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
         SDL_RenderClear(renderer_);
 
-        if (!images_.empty()) {
-                Uint32 now = SDL_GetTicks();
-                Uint32 delta = last_frame_time_ ? (now - last_frame_time_) : 0;
-                last_frame_time_ = now;
-                const double rotation_speed = 20.0; // degrees per second
-                rotation_angle_ = std::fmod(rotation_angle_ + (delta * rotation_speed) / 1000.0, 360.0);
-                if (now - last_switch_time_ > 250) {
-                        current_index_ = (current_index_ + 1) % images_.size();
-                        last_switch_time_ = now;
-                }
+        const double rotation_speed = 20.0; // degrees per second
+        Uint32 now = SDL_GetTicks();
+        Uint32 delta = last_frame_time_ ? (now - last_frame_time_) : 0;
+        last_frame_time_ = now;
+        rotation_angle_ = std::fmod(rotation_angle_ + (delta * rotation_speed) / 1000.0, 360.0);
 
-                const fs::path& target_path = images_[current_index_];
-                if (!current_texture_ || target_path != current_texture_path_) {
+        if (!selected_image_path_.empty()) {
+                if (!current_texture_ || selected_image_path_ != current_texture_path_) {
                         if (current_texture_) {
                                 SDL_DestroyTexture(current_texture_);
                                 current_texture_ = nullptr;
                                 current_texture_path_.clear();
                         }
-                        SDL_Surface* surf = IMG_Load(target_path.string().c_str());
+                        SDL_Surface* surf = IMG_Load(selected_image_path_.string().c_str());
                         if (surf) {
                                 current_texture_ = SDL_CreateTextureFromSurface(renderer_, surf);
                                 SDL_FreeSurface(surf);
                                 if (current_texture_) {
-                                        current_texture_path_ = target_path;
+                                        current_texture_path_ = selected_image_path_;
                                 }
                         }
                 }
+        } else if (current_texture_) {
+                SDL_DestroyTexture(current_texture_);
+                current_texture_ = nullptr;
+                current_texture_path_.clear();
         }
 
         const std::string mono_font = ui_fonts::monospace();

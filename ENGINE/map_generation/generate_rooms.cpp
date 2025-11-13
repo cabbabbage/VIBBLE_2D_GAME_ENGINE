@@ -8,11 +8,123 @@
 #include <random>
 #include <iostream>
 #include <fstream>
+#include <unordered_map>
+#include <cstdint>
+#include <limits>
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
 namespace {
 constexpr double kTau = 6.28318530717958647692;
+
+inline int div_floor(int value, int divisor) {
+        if (divisor == 0) {
+                return 0;
+        }
+        if (value >= 0) {
+                return value / divisor;
+        }
+        return -static_cast<int>((static_cast<long long>(-value) + divisor - 1) / divisor);
+}
+
+inline std::int64_t bucket_key(int x, int y) {
+        return (static_cast<std::int64_t>(x) << 32) ^ static_cast<std::int64_t>(static_cast<std::uint32_t>(y));
+}
+
+class RoomSpatialIndex {
+public:
+        explicit RoomSpatialIndex(const std::vector<std::unique_ptr<Room>>& rooms, int bucket_size = 2048, int max_radius = 8)
+        : bucket_size_(std::max(1, bucket_size)), max_radius_(std::max(1, max_radius)) {
+                entries_.reserve(rooms.size());
+                for (const auto& room_ptr : rooms) {
+                        Room* room = room_ptr.get();
+                        if (!room || !room->room_area) {
+                                continue;
+                        }
+                        SDL_Point center = room->room_area->get_center();
+                        entries_.push_back(RoomEntry{room, center});
+                        const int bx = div_floor(center.x, bucket_size_);
+                        const int by = div_floor(center.y, bucket_size_);
+                        buckets_[bucket_key(bx, by)].push_back(&entries_.back());
+                }
+        }
+
+        Room* find_owner(SDL_Point pt) const {
+                const RoomEntry* best = nullptr;
+                double best_dist_sq = std::numeric_limits<double>::max();
+                const int base_bx = div_floor(pt.x, bucket_size_);
+                const int base_by = div_floor(pt.y, bucket_size_);
+
+                auto consider_bucket = [&](int bx, int by) -> bool {
+                        auto it = buckets_.find(bucket_key(bx, by));
+                        if (it == buckets_.end()) {
+                                return false;
+                        }
+                        for (const RoomEntry* entry : it->second) {
+                                if (!entry || !entry->room || !entry->room->room_area) {
+                                        continue;
+                                }
+                                if (entry->room->room_area->contains_point(pt)) {
+                                        best = entry;
+                                        best_dist_sq = 0.0;
+                                        return true;
+                                }
+                                const double dx = static_cast<double>(pt.x - entry->center.x);
+                                const double dy = static_cast<double>(pt.y - entry->center.y);
+                                const double dist_sq = dx * dx + dy * dy;
+                                if (dist_sq < best_dist_sq) {
+                                        best_dist_sq = dist_sq;
+                                        best = entry;
+                                }
+                        }
+                        return false;
+                };
+
+                for (int radius = 0; radius <= max_radius_; ++radius) {
+                        for (int by = base_by - radius; by <= base_by + radius; ++by) {
+                                for (int bx = base_bx - radius; bx <= base_bx + radius; ++bx) {
+                                        if (consider_bucket(bx, by) && best_dist_sq == 0.0) {
+                                                return best ? best->room : nullptr;
+                                        }
+                                }
+                        }
+                        if (best) {
+                                return best->room;
+                        }
+                }
+
+                if (!best) {
+                        for (const RoomEntry& entry : entries_) {
+                                if (!entry.room || !entry.room->room_area) {
+                                        continue;
+                                }
+                                if (entry.room->room_area->contains_point(pt)) {
+                                        return entry.room;
+                                }
+                                const double dx = static_cast<double>(pt.x - entry.center.x);
+                                const double dy = static_cast<double>(pt.y - entry.center.y);
+                                const double dist_sq = dx * dx + dy * dy;
+                                if (!best || dist_sq < best_dist_sq) {
+                                        best = &entry;
+                                        best_dist_sq = dist_sq;
+                                }
+                        }
+                }
+
+                return best ? best->room : nullptr;
+        }
+
+private:
+        struct RoomEntry {
+                Room* room = nullptr;
+                SDL_Point center{0, 0};
+        };
+
+        int bucket_size_ = 2048;
+        int max_radius_ = 8;
+        std::vector<RoomEntry> entries_;
+        std::unordered_map<std::int64_t, std::vector<const RoomEntry*>> buckets_;
+};
 }
 
 GenerateRooms::GenerateRooms(const std::vector<LayerSpec>& layers,
@@ -415,27 +527,16 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 AssetSpawner spawner(asset_lib, exclusion_zones);
                 std::vector<std::unique_ptr<Asset>> boundary_assets = spawner.spawn_boundary_from_json( boundary_data, area, map_id_ + "::map_boundary_data");
                 int assigned_count = 0;
+                RoomSpatialIndex room_index(all_rooms);
                 for (auto& asset_ptr : boundary_assets) {
                         Asset* asset = asset_ptr.get();
                         if (!asset) continue;
-			Room* closest_room = nullptr;
-			double closest_dist_sq = std::numeric_limits<double>::max();
-			for (const auto& room_ptr : all_rooms) {
-					auto [minx, miny, maxx, maxy] = room_ptr->room_area->get_bounds();
-					int center_x = (minx + maxx) / 2;
-					int center_y = (miny + maxy) / 2;
-					double dx = static_cast<double>(asset->pos.x - center_x);
-					double dy = static_cast<double>(asset->pos.y - center_y);
-					double dist_sq = dx * dx + dy * dy;
-					if (dist_sq < closest_dist_sq) {
-								closest_dist_sq = dist_sq;
-								closest_room = room_ptr.get();
-					}
-			}
-			if (closest_room) {
-					std::vector<std::unique_ptr<Asset>> wrapper;
+                        Room* owner = room_index.find_owner(asset->pos);
+                        if (owner) {
+                                asset->set_owning_room_name(owner->room_name);
+                                std::vector<std::unique_ptr<Asset>> wrapper;
                                         wrapper.push_back(std::move(asset_ptr));
-                                        closest_room->add_room_assets(std::move(wrapper));
+                                        owner->add_room_assets(std::move(wrapper));
                                         assigned_count++;
                         }
                 }

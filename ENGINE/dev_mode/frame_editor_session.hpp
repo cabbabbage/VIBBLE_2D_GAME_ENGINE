@@ -144,6 +144,12 @@ private:
     ChildFrame* current_child_frame();
     const ChildFrame* current_child_frame() const;
 
+    struct DirectoryPanelMetrics {
+        int width = 0;
+        int height = 0;
+        int top_padding = 0;
+    };
+
     struct MovementToolboxMetrics {
         int padding = 0;
         int gap = 0;
@@ -169,6 +175,7 @@ private:
         int checkbox_width = 0;
     };
 
+    DirectoryPanelMetrics build_directory_panel_metrics() const;
     MovementToolboxMetrics build_movement_toolbox_metrics() const;
     ChildrenToolboxMetrics build_children_toolbox_metrics() const;
 };

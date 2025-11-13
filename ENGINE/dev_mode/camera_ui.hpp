@@ -8,7 +8,6 @@ class Assets;
 class DMCheckbox;
 class DMButton;
 class CheckboxWidget;
-class ButtonWidget;
 class DMDropdown;
 class DropdownWidget;
 class Input;
@@ -37,12 +36,11 @@ public:
 private:
     void build_ui();
     void rebuild_rows();
-    void reset_to_defaults();
-    void reload_from_json();
     void apply_settings_if_needed();
     void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled);
     camera::RealismSettings read_settings_from_ui() const;
     void on_control_value_changed();
+    void enforce_depth_effects_choice();
 
 private:
     Assets* assets_ = nullptr;
@@ -54,10 +52,6 @@ private:
     std::unique_ptr<DMCheckbox> effects_checkbox_;
     std::unique_ptr<CheckboxWidget> effects_widget_;
 
-    std::unique_ptr<DMButton> load_button_;
-    std::unique_ptr<DMButton> reset_button_;
-    std::unique_ptr<ButtonWidget> load_widget_;
-    std::unique_ptr<ButtonWidget> reset_widget_;
     std::unique_ptr<Widget> header_spacer_;
     std::unique_ptr<Widget> hero_banner_widget_;
     std::unique_ptr<Widget> controls_spacer_;

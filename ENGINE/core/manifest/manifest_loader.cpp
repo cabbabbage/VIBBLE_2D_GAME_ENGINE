@@ -56,6 +56,7 @@ void ensure_project_structure(const std::filesystem::path& root) {
     ensure_directory_exists(root / "SRC" / "assets", "SRC assets");
     ensure_directory_exists(root / "SRC" / "misc_content", "SRC misc content");
     ensure_directory_exists(root / "SRC" / "loading_screen_content", "SRC loading screen content");
+    ensure_directory_exists(root / "SRC" / "LOADING CONTENT", "SRC loading content");
 }
 
 void write_manifest_file(const std::filesystem::path& path,

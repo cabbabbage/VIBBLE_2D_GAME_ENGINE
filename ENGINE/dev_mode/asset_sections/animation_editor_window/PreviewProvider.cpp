@@ -523,39 +523,41 @@ std::filesystem::path PreviewProvider::find_first_frame(const std::filesystem::p
 
 std::vector<std::filesystem::path> PreviewProvider::find_frame_sequence(const std::filesystem::path& folder,
                                                                         int frames) const {
-    std::vector<std::filesystem::path> sequence;
+    std::vector<std::filesystem::path> numeric_frames;
+    std::vector<std::filesystem::path> fallback_sequence;
+    bool has_fallback_sequence = false;
     std::error_code ec;
 
     if (frames > 0) {
-        sequence.reserve(frames);
+        fallback_sequence.reserve(frames);
         std::filesystem::path fallback;
         for (int i = 0; i < frames; ++i) {
             std::filesystem::path candidate = folder / (std::to_string(i) + ".png");
             if (std::filesystem::exists(candidate, ec)) {
-                sequence.push_back(candidate);
+                fallback_sequence.push_back(candidate);
                 if (fallback.empty()) {
                     fallback = candidate;
                 }
             } else {
-                sequence.emplace_back();
+                fallback_sequence.emplace_back();
             }
         }
         if (!fallback.empty()) {
-            for (auto& path : sequence) {
+            for (auto& path : fallback_sequence) {
                 if (path.empty()) {
                     path = fallback;
                 }
             }
-            return sequence;
+            has_fallback_sequence = true;
+        } else {
+            fallback_sequence.clear();
         }
-        sequence.clear();
     }
 
     if (!std::filesystem::exists(folder, ec) || !std::filesystem::is_directory(folder, ec)) {
-        return sequence;
+        return has_fallback_sequence ? fallback_sequence : std::vector<std::filesystem::path>{};
     }
 
-    std::vector<std::filesystem::path> numbered;
     for (const auto& entry : std::filesystem::directory_iterator(folder, ec)) {
         if (ec) break;
         if (!entry.is_regular_file(ec)) continue;
@@ -563,38 +565,46 @@ std::vector<std::filesystem::path> PreviewProvider::find_frame_sequence(const st
         std::string ext = lowercase_copy(path.extension().string());
         if (ext != ".png") continue;
         if (!has_numeric_stem(path)) continue;
-        numbered.push_back(path);
+        numeric_frames.push_back(path);
     }
 
-    if (numbered.empty()) {
-        return sequence;
+    if (numeric_frames.empty()) {
+        return has_fallback_sequence ? fallback_sequence : std::vector<std::filesystem::path>{};
     }
 
-    std::sort(numbered.begin(), numbered.end(), [](const std::filesystem::path& a, const std::filesystem::path& b) {
-        int lhs = 0;
-        int rhs = 0;
-        try {
-            lhs = std::stoi(a.stem().string());
-        } catch (...) {
-            lhs = 0;
-        }
-        try {
-            rhs = std::stoi(b.stem().string());
-        } catch (...) {
-            rhs = 0;
-        }
-        return lhs < rhs;
-    });
+    std::sort(numeric_frames.begin(), numeric_frames.end(),
+              [](const std::filesystem::path& a, const std::filesystem::path& b) {
+                  int lhs = 0;
+                  int rhs = 0;
+                  try {
+                      lhs = std::stoi(a.stem().string());
+                  } catch (...) {
+                      lhs = 0;
+                  }
+                  try {
+                      rhs = std::stoi(b.stem().string());
+                  } catch (...) {
+                      rhs = 0;
+                  }
+                  return lhs < rhs;
+              });
 
     if (frames > 0) {
-        sequence.reserve(frames);
-        for (int i = 0; i < frames; ++i) {
-            sequence.push_back(numbered[std::min(i, static_cast<int>(numbered.size()) - 1)]);
+        const int available = static_cast<int>(numeric_frames.size());
+        const int target = std::max(frames, available);
+        std::vector<std::filesystem::path> sequence;
+        sequence.reserve(target);
+        for (int i = 0; i < target; ++i) {
+            if (i < available) {
+                sequence.push_back(numeric_frames[i]);
+            } else {
+                sequence.push_back(numeric_frames.back());
+            }
         }
         return sequence;
     }
 
-    return numbered;
+    return numeric_frames;
 }
 
 }

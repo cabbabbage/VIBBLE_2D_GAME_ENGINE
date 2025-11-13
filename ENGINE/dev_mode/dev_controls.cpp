@@ -43,6 +43,7 @@
 #include "spawn/methods/edge_spawner.hpp"
 #include "spawn/methods/percent_spawner.hpp"
 #include "spawn/methods/random_spawner.hpp"
+#include "spawn/spacing_util.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "spawn/spawn_context.hpp"
 #include "utils/area.hpp"
@@ -532,8 +533,12 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
             nlohmann::json& section = (*map_info_json_)["map_grid_settings"];
             MapGridSettings settings = MapGridSettings::from_json(&section);
             settings.resolution = clamped_r;
+            settings.r_chunk   = clamped_r;
             settings.clamp();
             settings.apply_to_json(section);
+            if (assets_) {
+                assets_->apply_map_grid_settings(settings, /*persist_json=*/false);
+            }
             if (map_grid_save_cb_) {
                 map_grid_save_cb_();
             }
@@ -602,8 +607,12 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                         nlohmann::json& section = (*map_info_json_)["map_grid_settings"];
                         MapGridSettings settings = MapGridSettings::from_json(&section);
                         settings.resolution = resolution;
+                        settings.r_chunk   = resolution;
                         settings.clamp();
                         settings.apply_to_json(section);
+                        if (assets_) {
+                            assets_->apply_map_grid_settings(settings, /*persist_json=*/false);
+                        }
                         if (map_grid_save_cb_) {
                             map_grid_save_cb_();
                         }
@@ -1449,6 +1458,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     // Render grid overlay if enabled (moved to beginning to render behind UI)
     if (grid_overlay_enabled_ && assets_) {
         const camera& cam = assets_->getView();
+        world::Grid& grid = assets_->world_grid();
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
         SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -1480,51 +1490,17 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             // Vertical lines
             float start_x = std::floor(top_left_world.x / cell) * cell;
 
-            // Compute constant angular step so outermost visible lines reach a chosen max angle
-            int out_w = 0, out_h = 0;
-            if (SDL_GetRendererOutputSize(renderer, &out_w, &out_h) != 0) {
-                // Fallback to a reasonable default if query fails
-                out_w = 1920; out_h = 1080;
-            }
-            const SDL_Point screen_center_px{ out_w / 2, out_h / 2 };
-            const float cam_scale = std::max(0.0001f, cam.get_scale());
-            const float cell_screen_px = static_cast<float>(static_cast<double>(cell) / static_cast<double>(cam_scale));
-            const int max_right = (cell_screen_px > 0.0f)
-                ? static_cast<int>(std::ceil(std::max(0.0f, static_cast<float>(out_w - screen_center_px.x)) / cell_screen_px))
-                : 1;
-            const int max_left = (cell_screen_px > 0.0f)
-                ? static_cast<int>(std::ceil(std::max(0.0f, static_cast<float>(screen_center_px.x)) / cell_screen_px))
-                : 1;
-            const int max_i = std::max(1, std::max(max_left, max_right));
-
-            // Choose maximum angle at edges and derive uniform step
-            constexpr double kThetaMaxDegrees = 24.0; // approximately 24 degrees at outermost lines
-            const double theta_max = kThetaMaxDegrees * (3.14159265358979323846 / 180.0);
-            const double dtheta = theta_max / static_cast<double>(max_i);
-
             for (float x = start_x; x <= bottom_right_world.x + cell; x += cell) {
                 // Base screen coordinates (no parallax skew)
                 SDL_Point world_start{ static_cast<int>(std::lround(x)), static_cast<int>(std::lround(top_left_world.y)) };
                 SDL_Point world_end  { static_cast<int>(std::lround(x)), static_cast<int>(std::lround(bottom_right_world.y)) };
                 SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
                 SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
-
-                // Determine line index i from screen-center using uniform cell spacing in screen-space
-                const float base_sx = screen_start.x; // same for any y along the line
-                const double fi = (cell_screen_px > 0.0f)
-                    ? static_cast<double>((base_sx - static_cast<float>(screen_center_px.x)) / cell_screen_px)
-                    : 0.0;
-                const int i = static_cast<int>(std::llround(fi));
-                const double theta = std::clamp(static_cast<double>(i) * dtheta, -theta_max, theta_max);
-                const double t = std::tan(theta);
-
-                // Apply angular skew around screen center so slope = tan(theta)
-                const double dx0 = t * static_cast<double>(screen_start.y - static_cast<float>(screen_center_px.y));
-                const double dx1 = t * static_cast<double>(screen_end.y   - static_cast<float>(screen_center_px.y));
-
-                int sx0 = static_cast<int>(std::lround(static_cast<double>(base_sx) + dx0));
+                const float sx0_f = grid.parallax_adjusted_screen_x(world_start, screen_start.x);
+                const float sx1_f = grid.parallax_adjusted_screen_x(world_end,   screen_end.x);
+                int sx0 = static_cast<int>(std::lround(sx0_f));
                 int sy0 = static_cast<int>(std::lround(screen_start.y));
-                int sx1 = static_cast<int>(std::lround(static_cast<double>(base_sx) + dx1));
+                int sx1 = static_cast<int>(std::lround(sx1_f));
                 int sy1 = static_cast<int>(std::lround(screen_end.y));
 
                 const bool is_major = (static_cast<long long>(std::llround(x)) % (cell * major_interval) == 0);
@@ -1540,8 +1516,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 SDL_Point world_end  { static_cast<int>(std::lround(bottom_right_world.x)), static_cast<int>(std::lround(y)) };
                 SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
                 SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
-                const float sx0_f = assets_->world_grid().parallax_adjusted_screen_x(world_start, screen_start.x);
-                const float sx1_f = assets_->world_grid().parallax_adjusted_screen_x(world_end,   screen_end.x);
+                const float sx0_f = grid.parallax_adjusted_screen_x(world_start, screen_start.x);
+                const float sx1_f = grid.parallax_adjusted_screen_x(world_end,   screen_end.x);
                 int sx0 = static_cast<int>(std::lround(sx0_f));
                 int sy0 = static_cast<int>(std::lround(screen_start.y));
                 int sx1 = static_cast<int>(std::lround(sx1_f));
@@ -1732,18 +1708,23 @@ void DevControls::begin_frame_editor_session(Asset* asset,
     // Close AssetInfo panel while Frame Editor is active; remember to reopen on exit.
     frame_editor_prev_asset_info_open_ = false;
     frame_editor_asset_for_reopen_ = nullptr;
+    const bool launched_from_animation_editor = (host_to_toggle != nullptr);
+    bool asset_info_was_open = false;
     if (room_editor_) {
-        if (room_editor_->is_asset_info_editor_open()) {
-            frame_editor_prev_asset_info_open_ = true;
-            frame_editor_asset_for_reopen_ = asset;
+        asset_info_was_open = room_editor_->is_asset_info_editor_open();
+        if (asset_info_was_open) {
             room_editor_->close_asset_info_editor();
         }
+    }
+    frame_editor_prev_asset_info_open_ = asset_info_was_open || launched_from_animation_editor;
+    if (frame_editor_prev_asset_info_open_) {
+        frame_editor_asset_for_reopen_ = asset;
     }
     frame_editor_session_->begin(assets_, asset, std::move(document), std::move(preview), animation_id, host_to_toggle, [this]() {
         // Restore grid overlay when session ends
         this->grid_overlay_enabled_ = this->frame_editor_prev_grid_overlay_;
         // Reopen AssetInfo panel if it was previously open
-        if (this->frame_editor_prev_asset_info_open_ && this->room_editor_) {
+        if (this->frame_editor_prev_asset_info_open_ && this->room_editor_ && this->frame_editor_asset_for_reopen_) {
             this->room_editor_->open_asset_info_editor_for_asset(this->frame_editor_asset_for_reopen_);
         }
         this->frame_editor_prev_asset_info_open_ = false;
@@ -2155,8 +2136,6 @@ void DevControls::sync_header_button_states() {
     const bool lights_open = map_mode_ui_->is_light_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "lights", lights_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Room, "lights", lights_open);
-    const bool light_map_open = map_mode_ui_->is_light_map_panel_visible();
-    map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "light_map", light_map_open);
     const bool layers_open = map_mode_ui_->is_layers_panel_visible();
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "layers", layers_open);
     map_mode_ui_->set_button_state(MapModeUI::HeaderMode::Map, "map_layers", layers_open);
@@ -2395,6 +2374,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         ctx.set_trail_areas(std::move(trail_areas));
 
         const auto& queue = planner.get_spawn_queue();
+        ctx.set_spacing_filter(collect_spacing_asset_names(queue));
         const Area* area_ptr = room->room_area.get();
         for (const auto& info : queue) {
             if (info.name == "batch_map_assets") {
@@ -2459,7 +2439,8 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
                             attempt_weights[idx] = 0.0;
                             continue;
                         }
-                        ctx.checker().register_asset(result, enforce_spacing, true);
+                        const bool track_spacing = ctx.track_spacing_for(result->info, enforce_spacing);
+                        ctx.checker().register_asset(result, enforce_spacing, track_spacing);
                         occupancy.set_occupied(vertex, true);
                         placed = true;
                         break;

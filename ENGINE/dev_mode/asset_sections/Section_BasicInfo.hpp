@@ -74,6 +74,7 @@ inline void Section_BasicInfo::build() {
     type_options_ = asset_types::all_as_strings();
     // Prevent selecting area type unless it's already an area; and prevent changing area to anything else
     const bool is_area_asset = (asset_types::canonicalize(info_->type) == std::string(asset_types::area));
+    const bool is_tiled_asset = info_->tillable;
     if (is_area_asset) {
         type_options_.clear();
         type_options_.emplace_back(std::string(asset_types::area));
@@ -85,9 +86,15 @@ inline void Section_BasicInfo::build() {
     int pct = std::max(0, static_cast<int>(std::lround(info_->scale_factor * 100.0f)));
     s_scale_pct_ = std::make_unique<DMSlider>("Scale (%)", 1, 400, pct);
     s_zindex_    = std::make_unique<DMSlider>("Z Index Offset", -1000, 1000, info_->z_threshold);
-    c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
-    c_apply_distance_scaling_ = std::make_unique<DMCheckbox>("Apply distance scaling", info_->apply_distance_scaling);
-    c_apply_vertical_scaling_ = std::make_unique<DMCheckbox>("Apply vertical scaling", info_->apply_vertical_scaling);
+    if (!is_tiled_asset) {
+        c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
+        c_apply_distance_scaling_ = std::make_unique<DMCheckbox>("Apply distance scaling", info_->apply_distance_scaling);
+        c_apply_vertical_scaling_ = std::make_unique<DMCheckbox>("Apply vertical scaling", info_->apply_vertical_scaling);
+    } else {
+        c_flipable_.reset();
+        c_apply_distance_scaling_.reset();
+        c_apply_vertical_scaling_.reset();
+    }
     c_tillable_ = std::make_unique<DMCheckbox>("Tileable (grid tiles)", info_->tillable);
 
     auto w_type = std::make_unique<DropdownWidget>(dd_type_.get());
@@ -102,17 +109,23 @@ inline void Section_BasicInfo::build() {
     rows.push_back({ w_z.get() });
     widgets_.push_back(std::move(w_z));
 
-    auto w_flip = std::make_unique<CheckboxWidget>(c_flipable_.get());
-    rows.push_back({ w_flip.get() });
-    widgets_.push_back(std::move(w_flip));
+    if (c_flipable_) {
+        auto w_flip = std::make_unique<CheckboxWidget>(c_flipable_.get());
+        rows.push_back({ w_flip.get() });
+        widgets_.push_back(std::move(w_flip));
+    }
 
-    auto w_distance = std::make_unique<CheckboxWidget>(c_apply_distance_scaling_.get());
-    rows.push_back({ w_distance.get() });
-    widgets_.push_back(std::move(w_distance));
+    if (c_apply_distance_scaling_) {
+        auto w_distance = std::make_unique<CheckboxWidget>(c_apply_distance_scaling_.get());
+        rows.push_back({ w_distance.get() });
+        widgets_.push_back(std::move(w_distance));
+    }
 
-    auto w_vertical = std::make_unique<CheckboxWidget>(c_apply_vertical_scaling_.get());
-    rows.push_back({ w_vertical.get() });
-    widgets_.push_back(std::move(w_vertical));
+    if (c_apply_vertical_scaling_) {
+        auto w_vertical = std::make_unique<CheckboxWidget>(c_apply_vertical_scaling_.get());
+        rows.push_back({ w_vertical.get() });
+        widgets_.push_back(std::move(w_vertical));
+    }
 
     auto w_tillable = std::make_unique<CheckboxWidget>(c_tillable_.get());
     rows.push_back({ w_tillable.get() });
@@ -145,6 +158,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     }
 
     bool changed = false;
+    bool rebuild_needed = false;
     bool scale_changed = false;
     bool z_changed = false;
     bool tile_changed = false;
@@ -193,6 +207,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         info_->set_tillable(c_tillable_->value());
         changed = true;
         tile_changed = true;
+        rebuild_needed = true;
     }
 
     if (changed) {
@@ -202,6 +217,9 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
             if (z_changed) ui_->sync_target_z_threshold();
             if (tile_changed) ui_->sync_target_tiling_state();
         }
+    }
+    if (rebuild_needed) {
+        build();
     }
     return used || changed;
 }

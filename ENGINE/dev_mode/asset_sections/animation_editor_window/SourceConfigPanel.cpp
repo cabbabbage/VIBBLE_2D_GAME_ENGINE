@@ -220,20 +220,22 @@ bool SourceConfigPanel::handle_event(const SDL_Event& e) {
         for (size_t i = 0; i < frame_buttons_.size(); ++i) {
             auto& button = frame_buttons_[i];
             if (button && button->handle_event(e)) {
-                switch (i) {
-                    case 0:
-                        import_from_gif();
-                        break;
-                    case 1:
-                        import_from_folder();
-                        break;
-                    case 2:
-                        import_from_png_sequence();
-                        break;
-                    default:
-                        break;
-                }
                 consumed = true;
+                if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                    switch (i) {
+                        case 0:
+                            import_from_gif();
+                            break;
+                        case 1:
+                            import_from_folder();
+                            break;
+                        case 2:
+                            import_from_png_sequence();
+                            break;
+                        default:
+                            break;
+                    }
+                }
                 break;
             }
         }

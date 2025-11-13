@@ -14,6 +14,7 @@
 #include <sstream>
 
 #include "core/AssetsManager.hpp"
+#include "dev_mode/dm_icons.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/shared/formatting.hpp"
@@ -247,8 +248,10 @@ public:
 private:
     void update_button_text() {
         if (!button_) return;
-        const char* indicator = expanded_ ? "[-]" : "[+]";
-        button_->set_text(std::string(indicator) + " " + label_);
+        const std::string indicator = expanded_
+            ? std::string(DMIcons::CollapseExpanded())
+            : std::string(DMIcons::CollapseCollapsed());
+        button_->set_text(indicator + " " + label_);
         const DMButtonStyle* style = expanded_ ? &DMStyles::HeaderButton() : &DMStyles::FooterToggleButton();
         button_->set_style(style);
     }
@@ -566,6 +569,7 @@ void CameraUIPanel::update(const Input& input, int screen_w, int screen_h) {
         return;
     }
     apply_settings_if_needed();
+    enforce_depth_effects_choice();
 }
 
 bool CameraUIPanel::handle_event(const SDL_Event& e) {
@@ -632,13 +636,6 @@ void CameraUIPanel::build_ui() {
     effects_checkbox_ = std::make_unique<DMCheckbox>("Depth Effects", true);
     effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
     effects_widget_->set_tooltip("Enable parallax, foreshortening, and distance-based scaling.");
-
-    load_button_ = std::make_unique<DMButton>("Load", &DMStyles::AccentButton(), 120, DMButton::height());
-    reset_button_ = std::make_unique<DMButton>("Reset", &DMStyles::WarnButton(), 120, DMButton::height());
-    load_widget_ = std::make_unique<ButtonWidget>(load_button_.get(), [this]() { reload_from_json(); });
-    reset_widget_ = std::make_unique<ButtonWidget>(reset_button_.get(), [this]() { reset_to_defaults(); });
-    load_widget_->set_tooltip("Reload the current settings from disk.");
-    reset_widget_->set_tooltip("Restore the built-in camera defaults.");
 
     camera::RealismSettings defaults;
 
@@ -754,11 +751,6 @@ void CameraUIPanel::rebuild_rows() {
     if (effects_widget_) rows.push_back({ effects_widget_.get() });
     if (controls_spacer_) rows.push_back({ controls_spacer_.get() });
 
-    Row action_row;
-    if (load_widget_) action_row.push_back(load_widget_.get());
-    if (reset_widget_) action_row.push_back(reset_widget_.get());
-    if (!action_row.empty()) rows.push_back(action_row);
-
     if (visibility_section_header_) rows.push_back({ visibility_section_header_.get() });
     if (visibility_section_expanded_) {
         if (render_distance_slider_) rows.push_back({ render_distance_slider_.get() });
@@ -795,41 +787,6 @@ void CameraUIPanel::rebuild_rows() {
     set_rows(rows);
 }
 
-void CameraUIPanel::reset_to_defaults() {
-    camera::RealismSettings defaults;
-    if (effects_checkbox_) effects_checkbox_->set_value(true);
-
-    if (render_distance_slider_) render_distance_slider_->set_value(defaults.render_distance);
-    if (min_render_size_slider_) min_render_size_slider_->set_value(defaults.min_visible_screen_ratio);
-    if (tripod_distance_slider_) tripod_distance_slider_->set_value(defaults.tripod_distance_y);
-    if (height_zoom1_slider_) height_zoom1_slider_->set_value(defaults.height_at_zoom1);
-    if (parallax_strength_slider_) parallax_strength_slider_->set_value(defaults.parallax_strength);
-    if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(defaults.foreshorten_strength);
-    if (distance_strength_slider_) distance_strength_slider_->set_value(defaults.distance_scale_strength);
-    if (render_quality_slider_) render_quality_slider_->set_value(defaults.render_quality_percent);
-    if (smoothing_checkbox_) smoothing_checkbox_->set_value(defaults.smooth_motion_zoom);
-    if (smoothing_method_dropdown_) smoothing_method_dropdown_->set_selected(method_to_index(defaults.motion_smoothing_method));
-    if (motion_tau_slider_) motion_tau_slider_->set_value(defaults.motion_smoothing_tau);
-    if (motion_stiffness_slider_) motion_stiffness_slider_->set_value(defaults.motion_smoothing_spring_frequency);
-    if (motion_max_step_slider_) motion_max_step_slider_->set_value(defaults.motion_smoothing_max_step);
-    if (motion_snap_slider_) motion_snap_slider_->set_value(defaults.motion_smoothing_snap_threshold);
-    const float default_parallax_value = (defaults.parallax_smoothing.method == TransformSmoothingMethod::Lerp)
-        ? tau_from_rate(defaults.parallax_smoothing.lerp_rate)
-        : defaults.parallax_smoothing.spring_frequency;
-    if (parallax_smoothing_slider_) parallax_smoothing_slider_->set_value(default_parallax_value);
-    if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(defaults.scale_variant_hysteresis_margin);
-    if (min_zoom_multiplier_slider_) min_zoom_multiplier_slider_->set_value(defaults.min_zoom_multiplier);
-    if (max_zoom_multiplier_slider_) max_zoom_multiplier_slider_->set_value(defaults.max_zoom_multiplier);
-    apply_settings_if_needed();
-}
-
-void CameraUIPanel::reload_from_json() {
-    if (!assets_) return;
-    assets_->reload_camera_settings();
-    suppress_apply_once_ = true;
-    sync_from_camera();
-}
-
 void CameraUIPanel::apply_settings_if_needed() {
     if (!assets_) return;
     camera::RealismSettings settings = read_settings_from_ui();
@@ -862,6 +819,25 @@ void CameraUIPanel::apply_settings_if_needed() {
         apply_settings_to_camera(settings, effects_enabled);
 
         assets_->on_camera_settings_changed();
+    }
+}
+
+void CameraUIPanel::enforce_depth_effects_choice() {
+    if (!assets_ || !effects_checkbox_) return;
+    camera& cam = assets_->getView();
+    const bool desired = effects_checkbox_->value();
+    bool state_changed = false;
+    if (cam.realism_enabled() != desired) {
+        cam.set_realism_enabled(desired);
+        state_changed = true;
+    }
+    if (cam.parallax_enabled() != desired) {
+        cam.set_parallax_enabled(desired);
+        state_changed = true;
+    }
+    if (state_changed) {
+        assets_->apply_camera_runtime_settings();
+        last_realism_enabled_ = desired;
     }
 }
 

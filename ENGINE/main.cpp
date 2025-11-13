@@ -487,33 +487,6 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
     layer["rooms"] = nlohmann::json::array({spawn_spec});
     map_info["map_layers"] = nlohmann::json::array({layer});
 
-    // Lighting defaults (map + runtime reactive shadows)
-    nlohmann::json default_light = nlohmann::json::object({
-        {"radius", 1800},
-        {"intensity", 220},
-        {"update_interval", 4},
-        {"mult", 0.2},
-        {"fall_off", 50},
-        {"base_color", nlohmann::json::array({255, 255, 255, 255})},
-        {"map_color", nlohmann::json::array({69, 101, 74, 255})},
-        {"keys", nlohmann::json::array({
-            nlohmann::json::array({0.0, nlohmann::json::array({255, 255, 255, 255})}),
-            nlohmann::json::array({0.5, nlohmann::json::array({245, 240, 228, 255})})
-        })},
-        {"reactive_shadows", nlohmann::json::object({
-            {"virtual_light_map", nlohmann::json::object({
-                {"horizontal_falloff", 2.0},
-                {"vertical_falloff", 2.0},
-                {"max_offset_x", 96.0},
-                {"max_offset_y", 64.0},
-                {"max_scale_percent", 120},
-                {"min_scale_percent", 70},
-                {"parallax_percent", 4.0},
-                {"shadow_scale", 1.2}
-            })}
-        })}
-    });
-
     map_info["map_assets_data"] = nlohmann::json::object({
         {"spawn_groups", nlohmann::json::array({ make_batch_spawn_group("map_assets", "batch_map_assets") })}
     });
@@ -521,7 +494,6 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
         {"inherits_map_assets", false},
         {"spawn_groups", nlohmann::json::array({ make_batch_spawn_group("map_boundary", "batch_map_boundary") })}
     });
-    map_info["map_light_data"] = default_light;
     map_info["reactive_shadows"] = nlohmann::json::object({
         {"frame_blend_falloff_frames", 15},
         {"opacity_sensitivity_percent", 100.0},

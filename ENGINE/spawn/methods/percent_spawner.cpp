@@ -79,7 +79,8 @@ void PercentSpawner::spawn(const SpawnInfo& item, const Area* area, SpawnContext
         }
 
         if (ctx.checks_enabled()) {
-            ctx.checker().register_asset(result, enforce_spacing, true);
+            const bool track_spacing = ctx.track_spacing_for(result->info, enforce_spacing);
+            ctx.checker().register_asset(result, enforce_spacing, track_spacing);
         }
 
         if (snapped && ctx.occupancy()) {

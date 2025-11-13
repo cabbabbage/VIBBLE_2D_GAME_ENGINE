@@ -274,52 +274,52 @@ void Assets::hydrate_map_info_sections() {
 
     ensure_object("map_assets_data");
     ensure_object("map_boundary_data");
-    ensure_object("map_light_data");
     ensure_object("rooms_data");
     ensure_object("trails_data");
 
     ensure_map_grid_settings(map_info_json_);
     map_grid_settings_ = MapGridSettings::from_json(&map_info_json_["map_grid_settings"]);
 
-    {
-        nlohmann::json& L = map_info_json_["map_light_data"];
-        if (!L.is_object()) {
-            map_info_json_["map_light_data"] = nlohmann::json::object();
-        }
-        nlohmann::json& D = map_info_json_["map_light_data"];
-        if (!D.contains("radius"))    D["radius"] = 0;
-        if (!D.contains("intensity")) D["intensity"] = 255;
-        if (!D.contains("update_interval")) D["update_interval"] = 10;
-        if (!D.contains("mult"))            D["mult"] = 0.0;
-        if (!D.contains("fall_off"))        D["fall_off"] = 100;
-        utils::color::RangedColor base_range{{255,255},{255,255},{255,255},{255,255}};
-        if (auto parsed = utils::color::ranged_color_from_json(D.value("base_color", nlohmann::json{}))) {
-            base_range = *parsed;
-        }
-        D["base_color"] = utils::color::ranged_color_to_json(base_range);
-
-        if (!D.contains("keys") || !D["keys"].is_array() || D["keys"].empty()) {
-
-            D["keys"] = nlohmann::json::array();
-            D["keys"].push_back(nlohmann::json::array({ 0.0, D["base_color"] }));
+    auto light_it = map_info_json_.find("map_light_data");
+    if (light_it != map_info_json_.end()) {
+        if (!light_it->is_object()) {
+            std::cerr << "[Assets] map_info.map_light_data expected to be an object. Removing invalid value.\n";
+            map_info_json_.erase(light_it);
         } else {
-            auto& keys = D["keys"];
-            for (auto& entry : keys) {
-                if (entry.is_array() && entry.size() >= 2) {
-                    if (auto parsed = utils::color::ranged_color_from_json(entry[1])) {
-                        entry[1] = utils::color::ranged_color_to_json(*parsed);
+            nlohmann::json& D = *light_it;
+            if (!D.contains("radius"))    D["radius"] = 0;
+            if (!D.contains("intensity")) D["intensity"] = 255;
+            if (!D.contains("update_interval")) D["update_interval"] = 10;
+            if (!D.contains("mult"))            D["mult"] = 0.0;
+            if (!D.contains("fall_off"))        D["fall_off"] = 100;
+            utils::color::RangedColor base_range{{255,255},{255,255},{255,255},{255,255}};
+            if (auto parsed = utils::color::ranged_color_from_json(D.value("base_color", nlohmann::json{}))) {
+                base_range = *parsed;
+            }
+            D["base_color"] = utils::color::ranged_color_to_json(base_range);
+
+            if (!D.contains("keys") || !D["keys"].is_array() || D["keys"].empty()) {
+                D["keys"] = nlohmann::json::array();
+                D["keys"].push_back(nlohmann::json::array({ 0.0, D["base_color"] }));
+            } else {
+                auto& keys = D["keys"];
+                for (auto& entry : keys) {
+                    if (entry.is_array() && entry.size() >= 2) {
+                        if (auto parsed = utils::color::ranged_color_from_json(entry[1])) {
+                            entry[1] = utils::color::ranged_color_to_json(*parsed);
+                        }
                     }
                 }
             }
+            utils::color::RangedColor default_map_color{{0, 0}, {0, 0}, {0, 0}, {255, 255}};
+            utils::color::RangedColor map_color =
+                utils::color::ranged_color_from_json(D.value("map_color", nlohmann::json{}))
+                    .value_or(default_map_color);
+            map_color = utils::color::clamp_ranged_color(map_color);
+            D["map_color"] = utils::color::ranged_color_to_json(map_color);
+            D.erase("min_opacity");
+            D.erase("max_opacity");
         }
-        utils::color::RangedColor default_map_color{{0, 0}, {0, 0}, {0, 0}, {255, 255}};
-        utils::color::RangedColor map_color =
-            utils::color::ranged_color_from_json(D.value("map_color", nlohmann::json{}))
-                .value_or(default_map_color);
-        map_color = utils::color::clamp_ranged_color(map_color);
-        D["map_color"] = utils::color::ranged_color_to_json(map_color);
-        D.erase("min_opacity");
-        D.erase("max_opacity");
     }
 }
 

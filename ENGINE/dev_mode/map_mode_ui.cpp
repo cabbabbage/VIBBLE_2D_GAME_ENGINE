@@ -1,7 +1,6 @@
 #include "map_mode_ui.hpp"
 
 #include "MapLightPanel.hpp"
-#include "MapLightPreviewPanel.hpp"
 #include "map_layers_preview_panel.hpp"
 #include "DockableCollapsible.hpp"
 #include "FloatingPanelLayoutManager.hpp"
@@ -37,7 +36,6 @@ namespace {
 constexpr int kDefaultPanelX = 48;
 constexpr int kDefaultPanelY = 48;
 constexpr const char* kButtonIdLights = "lights";
-constexpr const char* kButtonIdLightMap = "light_map";
 
 std::string trim_copy(const std::string& input) {
     auto is_space = [](unsigned char ch) { return std::isspace(ch) != 0; };
@@ -121,7 +119,6 @@ void MapModeUI::set_screen_dimensions(int w, int h) {
     screen_w_ = w;
     screen_h_ = h;
     light_panel_centered_ = false;
-    preview_panel_centered_ = false;
     ensure_panels();
     sliding_area_bounds_ = sanitize_sliding_area(sliding_area_bounds_);
     apply_sliding_area_bounds();
@@ -223,7 +220,6 @@ void MapModeUI::apply_sliding_area_bounds() {
     SDL_Rect right_bounds = room_config_bounds();
 
     if (light_panel_) light_panel_->set_work_area(work_area);
-    if (preview_panel_) preview_panel_->set_work_area(work_area);
     if (layers_preview_panel_) layers_preview_panel_->set_work_area(work_area);
 
     if (layers_panel_) {
@@ -410,12 +406,6 @@ bool MapModeUI::pointer_inside_floating_panel(int x, int y) const {
             }
             continue;
         }
-        if (auto* preview = dynamic_cast<MapLightPreviewPanel*>(panel)) {
-            if (preview->is_visible() && preview->is_point_inside(p.x, p.y)) {
-                return true;
-            }
-            continue;
-        }
         if (auto* layers_preview = dynamic_cast<MapLayersPreviewPanel*>(panel)) {
             if (layers_preview->is_visible() && layers_preview->is_point_inside(p.x, p.y)) {
                 return true;
@@ -450,7 +440,6 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
         if (!panel) continue;
 
         MapLightPanel* lights = dynamic_cast<MapLightPanel*>(panel);
-        MapLightPreviewPanel* preview = dynamic_cast<MapLightPreviewPanel*>(panel);
         MapLayersPreviewPanel* layers_preview = dynamic_cast<MapLayersPreviewPanel*>(panel);
 
         auto handle_and_check = [&](auto* concrete) -> bool {
@@ -468,8 +457,6 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
         bool handled_special = false;
         if (lights) {
             handled_special = handle_and_check(lights);
-        } else if (preview) {
-            handled_special = handle_and_check(preview);
         } else if (layers_preview) {
             handled_special = handle_and_check(layers_preview);
         } else {
@@ -490,9 +477,8 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
         }
 
         const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) ||
-                            (preview && preview->is_visible() && preview->is_point_inside(p.x, p.y)) ||
                             (layers_preview && layers_preview->is_visible() && layers_preview->is_point_inside(p.x, p.y)) ||
-                            (!lights && !preview && !layers_preview && panel->is_visible() && panel->is_point_inside(p.x, p.y));
+                            (!lights && !layers_preview && panel->is_visible() && panel->is_point_inside(p.x, p.y));
 
         if ((pointer_event || wheel_event) && inside) {
             if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -527,6 +513,7 @@ void MapModeUI::ensure_panels() {
         track_floating_panel(light_panel_.get());
     }
     if (light_panel_) {
+        light_panel_->set_assets(assets_);
         light_panel_->set_map_color_sample_callback(
             [this](const utils::color::RangedColor& current,
                    std::function<void(SDL_Color)> on_sample,
@@ -539,15 +526,6 @@ void MapModeUI::ensure_panels() {
             }
         });
     }
-    if (!preview_panel_) {
-        preview_panel_ = std::make_unique<MapLightPreviewPanel>(assets_, kDefaultPanelX + 520, kDefaultPanelY);
-        preview_panel_->close();
-        track_floating_panel(preview_panel_.get());
-    }
-    if (preview_panel_) {
-        preview_panel_->set_assets(assets_);
-    }
-
     if (!layers_controller_) {
         layers_controller_ = std::make_shared<MapLayersController>();
     }
@@ -818,10 +796,8 @@ void MapModeUI::sync_footer_button_states() {
     if (header_mode_ == HeaderMode::Map) {
         const bool lights_visible = light_panel_ && light_panel_->is_visible();
         const bool lighting_controls_visible = lights_visible;
-        const bool light_map_visible = preview_panel_ && preview_panel_->is_visible();
         const bool layers_visible = layers_panel_ && layers_panel_->is_visible();
         footer_bar_->set_button_active_state(kButtonIdLights, lighting_controls_visible);
-        footer_bar_->set_button_active_state(kButtonIdLightMap, light_map_visible);
         footer_bar_->set_button_active_state("layers", layers_visible);
         for (const auto& config : map_mode_buttons_) {
             footer_bar_->set_button_active_state(config.id, config.active);
@@ -887,15 +863,6 @@ void MapModeUI::sync_panel_map_info() {
         }
         light_panel_->set_map_info(map_info_, callback);
     }
-    if (preview_panel_) {
-        preview_panel_->set_assets(assets_);
-        LightSaveCallback callback = light_save_callback_;
-        if (!callback) {
-            callback = [this]() { return save_map_info_to_disk(); };
-        }
-        preview_panel_->set_map_info(map_info_, callback);
-    }
-
     if (layers_panel_) {
         if (layers_controller_) {
             layers_controller_->set_manifest_store(manifest_store_, map_id_);
@@ -934,12 +901,6 @@ void MapModeUI::update(const Input& input) {
             }
             continue;
         }
-        if (auto* preview = dynamic_cast<MapLightPreviewPanel*>(panel)) {
-            if (preview->is_visible()) {
-                preview->update(input, screen_w_, screen_h_);
-            }
-            continue;
-        }
         if (auto* layers_preview = dynamic_cast<MapLayersPreviewPanel*>(panel)) {
             if (layers_preview->is_visible()) {
                 layers_preview->update(input, screen_w_, screen_h_);
@@ -961,11 +922,8 @@ void MapModeUI::update(const Input& input) {
     }
 
     const bool lights_visible = light_panel_ && light_panel_->is_visible();
-    const bool light_map_visible = preview_panel_ && preview_panel_->is_visible();
-    if (lights_visible != last_lights_visible_ ||
-        light_map_visible != last_preview_visible_) {
+    if (lights_visible != last_lights_visible_) {
         last_lights_visible_ = lights_visible;
-        last_preview_visible_ = light_map_visible;
         sync_footer_button_states();
     }
 
@@ -1051,12 +1009,6 @@ void MapModeUI::render(SDL_Renderer* renderer) const {
         if (auto* lights = dynamic_cast<MapLightPanel*>(panel)) {
             if (lights->is_visible()) {
                 lights->render(renderer);
-            }
-            continue;
-        }
-        if (auto* preview = dynamic_cast<MapLightPreviewPanel*>(panel)) {
-            if (preview->is_visible()) {
-                preview->render(renderer);
             }
             continue;
         }
@@ -1171,48 +1123,6 @@ void MapModeUI::toggle_light_panel() {
     open_light_panel();
 }
 
-void MapModeUI::open_light_map_panel() {
-    ensure_panels();
-    if (!ensure_panel_unlocked(preview_panel_.get(), "Light Map")) {
-        sync_footer_button_states();
-        return;
-    }
-    if (!preview_panel_centered_) {
-        ensure_light_and_shading_positions();
-    }
-    if (preview_panel_) {
-        preview_panel_->open();
-        bring_panel_to_front(preview_panel_.get());
-    }
-    sync_footer_button_states();
-}
-
-void MapModeUI::close_light_map_panel() {
-    ensure_panels();
-    if (preview_panel_) {
-        preview_panel_->close();
-    }
-    preview_panel_centered_ = false;
-    sync_footer_button_states();
-}
-
-void MapModeUI::toggle_light_map_panel() {
-    ensure_panels();
-    if (!ensure_panel_unlocked(preview_panel_.get(), "Light Map")) {
-        sync_footer_button_states();
-        return;
-    }
-    if (preview_panel_ && preview_panel_->is_visible()) {
-        preview_panel_->close();
-        preview_panel_centered_ = false;
-        sync_footer_button_states();
-        return;
-    }
-    open_light_map_panel();
-}
-
-
-
 void MapModeUI::toggle_layers_panel() {
     ensure_panels();
     if (!ensure_panel_unlocked(layers_panel_.get(), "Layers")) {
@@ -1230,13 +1140,9 @@ void MapModeUI::close_all_panels() {
     if (light_panel_) {
         light_panel_->close();
     }
-    if (preview_panel_) {
-        preview_panel_->close();
-    }
     if (layers_preview_panel_) {
         layers_preview_panel_->close();
     }
-    preview_panel_centered_ = false;
     set_active_panel(PanelType::None);
     close_room_configuration(false);
 }
@@ -1244,12 +1150,6 @@ void MapModeUI::close_all_panels() {
 bool MapModeUI::is_light_panel_visible() const {
     return light_panel_ && light_panel_->is_visible();
 }
-
-bool MapModeUI::is_light_map_panel_visible() const {
-    return preview_panel_ && preview_panel_->is_visible();
-}
-
-
 
 void MapModeUI::ensure_light_and_shading_positions() {
     ensure_panels();
@@ -1281,7 +1181,6 @@ void MapModeUI::ensure_light_and_shading_positions() {
 };
 
     add_panel(light_panel_.get(), light_panel_centered_);
-    add_panel(preview_panel_.get(), preview_panel_centered_);
 
     if (panels.empty()) {
         return;
@@ -1482,13 +1381,6 @@ void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
         }
         light_panel_->set_map_info(map_info_, callback);
     }
-    if (preview_panel_) {
-        LightSaveCallback callback = light_save_callback_;
-        if (!callback) {
-            callback = [this]() { return save_map_info_to_disk(); };
-        }
-        preview_panel_->set_map_info(map_info_, callback);
-    }
     if (layers_preview_panel_) {
         LightSaveCallback callback = light_save_callback_;
         if (!callback) {
@@ -1530,10 +1422,6 @@ bool MapModeUI::is_any_panel_visible() const {
         if (!panel) continue;
         if (auto* lights = dynamic_cast<MapLightPanel*>(panel)) {
             if (lights->is_visible()) return true;
-            continue;
-        }
-        if (auto* preview = dynamic_cast<MapLightPreviewPanel*>(panel)) {
-            if (preview->is_visible()) return true;
             continue;
         }
         if (auto* layers_preview = dynamic_cast<MapLayersPreviewPanel*>(panel)) {

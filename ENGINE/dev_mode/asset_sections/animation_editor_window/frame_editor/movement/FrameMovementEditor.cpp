@@ -343,15 +343,33 @@ void FrameMovementEditor::load_frames_from_document() {
         primary.primary = true;
         primary.frames = parse_movement_frames(movement);
 
-        // If this animation sources another animation but does NOT inherit movement,
-        // ensure the editor shows a frame entry per source frame (for editing current anim).
-        int desired_frames = 0;
-        try {
-            if (payload.contains("number_of_frames")) {
-                int nf = payload["number_of_frames"].get<int>();
-                if (nf > 0) desired_frames = nf;
+        // Determine how many frame slots the navigator should expose so that every art frame
+        // remains selectable even when the movement payload is sparse.
+        const auto extract_declared_frames = [](const nlohmann::json& object) -> int {
+            if (!object.is_object()) {
+                return 0;
             }
-        } catch (...) { desired_frames = std::max(0, desired_frames); }
+            auto it = object.find("number_of_frames");
+            if (it == object.end()) {
+                return 0;
+            }
+            const nlohmann::json& value = *it;
+            try {
+                if (value.is_number_integer()) {
+                    return std::max(value.get<int>(), 0);
+                }
+                if (value.is_number()) {
+                    return std::max(static_cast<int>(value.get<double>()), 0);
+                }
+                if (value.is_string()) {
+                    return std::max(std::stoi(value.get<std::string>()), 0);
+                }
+            } catch (...) {
+            }
+            return 0;
+        };
+
+        const int declared_frame_count = extract_declared_frames(payload);
 
         bool derived = false;
         bool inherit_movement = true;
@@ -367,43 +385,68 @@ void FrameMovementEditor::load_frames_from_document() {
             } catch (...) { derived_source_id.clear(); }
         }
 
-        if (derived && !inherit_movement) {
-            // Use PreviewProvider to get the effective frame count for this derived animation.
-            // PreviewProvider resolves the source chain and applies derived modifiers consistently
-            // with the thumbnails shown in the frame list.
-            if (preview_provider_) {
-                desired_frames = preview_provider_->get_frame_count(animation_id_);
+        const bool match_source_exactly = derived && !inherit_movement;
+        const int preview_frame_count = (preview_provider_ && !animation_id_.empty())
+                                            ? preview_provider_->get_frame_count(animation_id_)
+                                            : 0;
+        const auto source_payload_frame_count = [&](const std::string& source_id) -> int {
+            if (source_id.empty() || !document_) {
+                return 0;
             }
-            if (desired_frames <= 0 && document_ && !derived_source_id.empty()) {
-                // Fallback: read frame count from the source animation's payload
-                auto src_payload_dump = document_->animation_payload(derived_source_id);
-                if (src_payload_dump.has_value()) {
-                    nlohmann::json src_payload = nlohmann::json::parse(*src_payload_dump, nullptr, false);
-                    if (src_payload.is_object()) {
-                        try {
-                            desired_frames = src_payload.value("number_of_frames", desired_frames);
-                        } catch (...) {
-                            // leave desired_frames as-is
-                        }
-                    }
-                }
+            auto src_payload_dump = document_->animation_payload(source_id);
+            if (!src_payload_dump.has_value()) {
+                return 0;
             }
-            if (desired_frames <= 0) desired_frames = 1;
-            // Expand or trim to match desired frame count.
-            if (static_cast<int>(primary.frames.size()) < desired_frames) {
-                const int to_add = desired_frames - static_cast<int>(primary.frames.size());
-                for (int i = 0; i < to_add; ++i) {
-                    primary.frames.push_back(MovementFrame{});
-                }
-            } else if (static_cast<int>(primary.frames.size()) > desired_frames) {
-                primary.frames.resize(desired_frames);
+            nlohmann::json src_payload = nlohmann::json::parse(*src_payload_dump, nullptr, false);
+            if (!src_payload.is_object()) {
+                return 0;
             }
-            if (!primary.frames.empty()) {
-                primary.frames.front().dx = 0.0f;
-                primary.frames.front().dy = 0.0f;
+            return extract_declared_frames(src_payload);
+        };
+
+        int target_frame_slots = 0;
+        if (match_source_exactly) {
+            if (preview_frame_count > 0) {
+                target_frame_slots = preview_frame_count;
+            } else {
+                target_frame_slots = source_payload_frame_count(derived_source_id);
             }
-            sanitize_frames(primary.frames);
+            if (target_frame_slots <= 0) {
+                target_frame_slots = declared_frame_count;
+            }
+        } else {
+            target_frame_slots = declared_frame_count;
+            if (preview_frame_count > 0) {
+                target_frame_slots = std::max(target_frame_slots, preview_frame_count);
+            }
+            if (target_frame_slots <= 0) {
+                target_frame_slots = preview_frame_count;
+            }
         }
+        if (target_frame_slots <= 0) {
+            target_frame_slots = static_cast<int>(primary.frames.size());
+        }
+        if (target_frame_slots <= 0) {
+            target_frame_slots = 1;
+        }
+
+        const auto ensure_frame_slots = [&](std::vector<MovementFrame>& frames) {
+            if (target_frame_slots <= 0) {
+                sanitize_frames(frames);
+                return;
+            }
+            if (static_cast<int>(frames.size()) < target_frame_slots) {
+                frames.reserve(target_frame_slots);
+                while (static_cast<int>(frames.size()) < target_frame_slots) {
+                    frames.push_back(MovementFrame{});
+                }
+            } else if (match_source_exactly && static_cast<int>(frames.size()) > target_frame_slots) {
+                frames.resize(target_frame_slots);
+            }
+            sanitize_frames(frames);
+        };
+
+        ensure_frame_slots(primary.frames);
         variants_.push_back(std::move(primary));
 
         if (payload.contains("movement_variants")) {
@@ -425,6 +468,7 @@ void FrameMovementEditor::load_frames_from_document() {
                     }
                     ++generated_index;
                     variant.frames = parse_movement_frames(movement_payload);
+                    ensure_frame_slots(variant.frames);
                     variants_.push_back(std::move(variant));
                 }
             }

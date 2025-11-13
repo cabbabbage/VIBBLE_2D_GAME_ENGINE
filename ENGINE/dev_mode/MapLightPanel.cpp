@@ -10,13 +10,16 @@
 #include <utility>
 #include <SDL_ttf.h>
 
+#include "core/AssetsManager.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "dev_mode/dm_icons.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "color_range_widget.hpp"
 #include "utils/input.hpp"
+#include "utils/map_grid_settings.hpp"
 #include "utils/ranged_color.hpp"
+#include "util/grid.hpp"
 
 using nlohmann::json;
 
@@ -757,6 +760,7 @@ float MapLightPanel::wrap_angle(float a) {
 MapLightPanel::MapLightPanel(int x, int y)
 : DockableCollapsible("Map Lighting", true, x, y) {
     set_expanded(true);
+    chunk_resolution_value_ = MapGridSettings::defaults().r_chunk;
     build_ui();
     update_save_status(true);
 }
@@ -768,6 +772,7 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     on_save_ = std::move(on_save);
     editing_light_ = json::object();
     map_color_ = kDefaultMapColor;
+    chunk_resolution_value_ = MapGridSettings::defaults().r_chunk;
     suppress_map_color_callback_ = false;
     orbit_key_pairs_.clear();
     focused_pair_index_ = -1;
@@ -779,6 +784,10 @@ void MapLightPanel::set_map_info(json* map_info, SaveCallback on_save) {
     update_save_status(true);
     load_update_map_light_setting();
     sync_ui_from_json();
+}
+
+void MapLightPanel::set_assets(Assets* assets) {
+    assets_ = assets;
 }
 
 void MapLightPanel::set_update_map_light_callback(std::function<void(bool)> cb) {
@@ -819,6 +828,7 @@ void MapLightPanel::build_ui() {
     orbit_x_        = std::make_unique<DMSlider>("Orbit X Radius",  0, 20000, 0);
     orbit_y_        = std::make_unique<DMSlider>("Orbit Y Radius",  0, 20000, 0);
     update_interval_= std::make_unique<DMSlider>("Update Interval", 1,   120, 10);
+    chunk_resolution_ = std::make_unique<DMSlider>("Chunk Resolution (2^r px)", 0, vibble::grid::kMaxResolution, chunk_resolution_value_);
 
     if (update_interval_) {
         update_interval_->set_defer_commit_until_unfocus(true);
@@ -831,6 +841,17 @@ void MapLightPanel::build_ui() {
     if (orbit_y_) {
         orbit_y_->set_defer_commit_until_unfocus(true);
         orbit_y_->set_enabled(false);
+    }
+    if (chunk_resolution_) {
+        chunk_resolution_->set_defer_commit_until_unfocus(false);
+        chunk_resolution_->set_value_formatter([](int value,
+                                                  std::array<char, dev_mode::kSliderFormatBufferSize>& buffer)
+                                                   -> std::string_view {
+            const int clamped = std::max(0, std::min(value, vibble::grid::kMaxResolution));
+            const int size_px = 1 << clamped;
+            std::snprintf(buffer.data(), buffer.size(), "r=%d (%d px)", clamped, size_px);
+            return buffer.data();
+        });
     }
 
     rebuild_rows();
@@ -878,6 +899,9 @@ void MapLightPanel::rebuild_rows() {
     load_update_map_light_setting();
     if (update_map_light_checkbox_) {
         rows.push_back({ add_widget(std::make_unique<CheckboxWidget>(update_map_light_checkbox_.get())) });
+    }
+    if (chunk_resolution_) {
+        rows.push_back({ add_widget(std::make_unique<SliderWidget>(chunk_resolution_.get())) });
     }
 
     rows.push_back({ add_widget(std::make_unique<SectionToggleWidget>(orbit_section_btn_.get(), [this]() { toggle_orbit_section(); })) });
@@ -1048,6 +1072,55 @@ nlohmann::json& MapLightPanel::ensure_light() {
     return L;
 }
 
+void MapLightPanel::sync_chunk_slider_from_json() {
+    int chunk_value = chunk_resolution_value_;
+    if (map_info_ && map_info_->is_object()) {
+        auto grid_it = map_info_->find("map_grid_settings");
+        if (grid_it != map_info_->end() && grid_it->is_object()) {
+            MapGridSettings grid_settings = MapGridSettings::from_json(&(*grid_it));
+            chunk_value = grid_settings.r_chunk;
+        }
+    }
+    chunk_value = clamp_int(chunk_value, 0, vibble::grid::kMaxResolution);
+    chunk_resolution_value_ = chunk_value;
+    if (chunk_resolution_) {
+        chunk_resolution_->set_value(chunk_value);
+    }
+}
+
+void MapLightPanel::persist_chunk_resolution() {
+    if (!map_info_) {
+        return;
+    }
+    if (!map_info_->is_object()) {
+        *map_info_ = json::object();
+    }
+    nlohmann::json& grid_section = (*map_info_)["map_grid_settings"];
+    if (!grid_section.is_object()) {
+        grid_section = json::object();
+    }
+    MapGridSettings grid_settings = MapGridSettings::from_json(&grid_section);
+    const int slider_value = chunk_resolution_ ? chunk_resolution_->value() : chunk_resolution_value_;
+    const int previous_value = chunk_resolution_value_;
+    grid_settings.r_chunk = clamp_int(slider_value, 0, vibble::grid::kMaxResolution);
+    grid_settings.resolution = grid_settings.r_chunk;
+    grid_settings.clamp();
+    chunk_resolution_value_ = grid_settings.r_chunk;
+    grid_settings.apply_to_json(grid_section);
+    if (chunk_resolution_ && chunk_resolution_->value() != grid_settings.r_chunk) {
+        chunk_resolution_->set_value(grid_settings.r_chunk);
+    }
+    const bool chunk_changed = (chunk_resolution_value_ != previous_value);
+    if (chunk_changed && assets_) {
+        assets_->apply_map_grid_settings(grid_settings);
+        assets_->force_shaded_assets_rerender();
+    }
+    if (chunk_changed && !update_map_light_enabled_ && on_save_) {
+        bool ok = on_save_();
+        update_save_status(ok);
+    }
+}
+
 void MapLightPanel::sync_ui_from_json() {
     json& L = ensure_light();
 
@@ -1071,6 +1144,7 @@ void MapLightPanel::sync_ui_from_json() {
     map_color_ = utils::color::ranged_color_from_json(L.value("map_color", nlohmann::json{})).value_or(kDefaultMapColor);
     map_color_ = utils::color::clamp_ranged_color(map_color_);
     set_map_color_widget_value(map_color_);
+    sync_chunk_slider_from_json();
 
     needs_sync_to_json_ = false;
 }
@@ -1086,6 +1160,7 @@ void MapLightPanel::sync_json_from_ui() {
     ensure_keys_array();
     write_orbit_pairs_to_json();
     write_map_color_to_json();
+    persist_chunk_resolution();
 
     if (update_map_light_enabled_) {
         if (commit_light_changes()) {

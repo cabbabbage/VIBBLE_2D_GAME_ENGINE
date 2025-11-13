@@ -7,6 +7,7 @@
 #include <limits>
 #include <random>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include <nlohmann/json.hpp>
@@ -17,6 +18,7 @@
 #include "spawn/asset_spawn_planner.hpp"
 #include "spawn/check.hpp"
 #include "spawn/spawn_context.hpp"
+#include "spawn/spacing_util.hpp"
 #include "util/grid.hpp"
 #include "util/grid_occupancy.hpp"
 #include "utils/area.hpp"
@@ -125,6 +127,16 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
     }
     if (!spawn_info) {
         return;
+    }
+
+    std::unordered_set<std::string> spacing_names;
+    if (spawn_info->check_min_spacing) {
+        for (const auto& cand : spawn_info->candidates) {
+            if (!cand.info || cand.info->name.empty()) {
+                continue;
+            }
+            spacing_names.insert(cand.info->name);
+        }
     }
 
     std::size_t total_existing = 0;
@@ -252,6 +264,7 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
     context.set_map_grid_settings(grid_settings_);
     context.set_spawn_resolution(resolution);
     context.set_trail_areas(trail_areas);
+    context.set_spacing_filter(std::move(spacing_names));
 
     for (const auto& cell : cells) {
         auto* vertex = cell.vertex;
