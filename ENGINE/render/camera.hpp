@@ -23,10 +23,6 @@ class camera {
         Exponential = 4
     };
     struct RealismSettings {
-        float render_distance = 800.0f;
-        // Screen-space offset to bias the render radius vertically.
-        // Positive values move the render range downward on screen.
-        float render_radius_y_offset_px = 0.0f;
         float parallax_strength = 12.0f;
         float foreshorten_strength = 0.35f;
         float distance_scale_strength = 0.3f;
@@ -43,19 +39,22 @@ class camera {
         float scale_variant_hysteresis_margin = 0.05f;
         float min_zoom_multiplier = 0.7f;
         float max_zoom_multiplier = 1.3f;
-        // Perspective Colors (UI-only; not used in render yet)
-        float distance_saturation_factor_min = 0.0f;
-        float distance_saturation_factor_max = 0.0f;
-        float primary_color_boost_min = 0.0f;
-        float primary_color_boost_max = 0.0f;
-        float ground_brightness_factor = 0.0f;
+        // Depth cue color adjustments
+        float saturation_background    = 0.0f;
+        float saturation_foreground    = 0.0f;
+        float primary_boost_background = 0.0f;
+        float primary_boost_foreground = 0.0f;
+        float foreground_brightness    = 0.0f;
         float background_brightness = 0.0f;
         // Perspective Blur (Aperture Blur)
         float max_foreground_blur = 0.0f;
         float max_background_blur = 0.0f;
         float blur_foreground_screen_y = 1080.0f;
         float blur_background_screen_y = 0.0f;
-        BlurFalloffMethod blur_falloff_method = BlurFalloffMethod::Linear;
+        BlurFalloffMethod blur_falloff_method        = BlurFalloffMethod::Linear;
+        BlurFalloffMethod brightness_falloff_method  = BlurFalloffMethod::Linear;
+        BlurFalloffMethod saturation_falloff_method  = BlurFalloffMethod::Linear;
+        BlurFalloffMethod primary_boost_falloff_method = BlurFalloffMethod::Linear;
         TransformSmoothingParams parallax_smoothing{
             TransformSmoothingMethod::CriticallyDampedSpring,
             0.0f,
@@ -126,8 +125,6 @@ class camera {
     void apply_camera_settings(const nlohmann::json& data);
     nlohmann::json camera_settings_to_json() const;
 
-    int get_render_distance_world_margin() const;
-    int get_render_radius_world_y_offset() const;
 
     Area     get_camera_area() const { return current_view_; }
 

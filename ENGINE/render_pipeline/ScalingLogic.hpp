@@ -25,6 +25,18 @@ namespace detail {
         static float cap = 1.0f;
         return cap;
     }
+    inline std::once_flag& scale_hint_once() {
+        static std::once_flag flag;
+        return flag;
+    }
+}
+
+inline void EnsureBestScaleHint() {
+#if SDL_VERSION_ATLEAST(2,0,12)
+    std::call_once(detail::scale_hint_once(), []() {
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+    });
+#endif
 }
 
 struct ScaleSelection {
@@ -613,10 +625,7 @@ inline SDL_Texture* CreateScaledTexture(SDL_Renderer* renderer,
     SDL_SetTextureScaleMode(scaled, SDL_ScaleModeBest);
 #endif
 
-    // Ensure the highest quality sampling for the downscale pass
-#if SDL_VERSION_ATLEAST(2,0,12)
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
-#endif
+    EnsureBestScaleHint();
 
     SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
     SDL_SetRenderTarget(renderer, scaled);

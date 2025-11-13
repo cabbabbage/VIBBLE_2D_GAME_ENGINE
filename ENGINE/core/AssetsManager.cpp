@@ -93,6 +93,47 @@ int halved_render_quality_percent(int percent) {
     return std::max(kMinRenderQuality, align_render_quality_percent(halved));
 }
 
+struct AssetWorldBounds {
+    float left = 0.0f;
+    float right = 0.0f;
+    float top = 0.0f;
+    float bottom = 0.0f;
+};
+
+bool compute_asset_world_bounds(const Asset* asset,
+                                float camera_scale,
+                                AssetWorldBounds& bounds) {
+    if (!asset || !asset->info) {
+        return false;
+    }
+
+    if (const auto& tiling = asset->tiling_info(); tiling && tiling->is_valid()) {
+        bounds.left   = static_cast<float>(tiling->coverage.x);
+        bounds.top    = static_cast<float>(tiling->coverage.y);
+        bounds.right  = bounds.left + static_cast<float>(tiling->coverage.w);
+        bounds.bottom = bounds.top + static_cast<float>(tiling->coverage.h);
+        return true;
+    }
+
+    const int base_w = std::max(1, asset->info->original_canvas_width);
+    const int base_h = std::max(1, asset->info->original_canvas_height);
+    float scale_factor = 1.0f;
+    if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+        scale_factor = asset->info->scale_factor;
+    }
+
+    const float width  = static_cast<float>(base_w) * scale_factor * camera_scale;
+    const float height = static_cast<float>(base_h) * scale_factor * camera_scale;
+    const float half_w = width * 0.5f;
+    const float bottom = static_cast<float>(asset->pos.y);
+
+    bounds.left   = static_cast<float>(asset->pos.x) - half_w;
+    bounds.right  = static_cast<float>(asset->pos.x) + half_w;
+    bounds.bottom = bottom;
+    bounds.top    = bottom - height;
+    return true;
+}
+
 }
 
 Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
@@ -796,15 +837,10 @@ void Assets::update(const Input& input)
     const bool camera_refresh_needed = room_changed || player_moved || zoom_animation_active;
     camera_.update_zoom(current_room_, finder_, player, camera_refresh_needed, last_frame_dt_seconds_);
 
-    const Area view = camera_.get_camera_area();
-    auto [minx, miny, maxx, maxy] = view.get_bounds();
-    SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
-    // Apply vertical offset to render radius selection without moving the focus point.
-    const int render_radius_y_world_offset = camera_.get_render_radius_world_y_offset();
-    if (render_radius_y_world_offset != 0) {
-        cam_rect.y += render_radius_y_world_offset;
-    }
-    world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
+    update_max_asset_dimensions();
+    const SDL_Rect screen_rect = screen_world_rect();
+    const SDL_Rect expanded_rect = expanded_world_rect(screen_rect);
+    world_grid_.update_active_chunks(expanded_rect, 0);
     world_grid_.update_parallax(camera_, last_frame_dt_seconds_);
 
     update_active_assets(camera_.get_screen_center());
@@ -815,7 +851,7 @@ void Assets::update(const Input& input)
 
     AudioEngine& audio_engine = AudioEngine::instance();
     const float effect_max_distance =
-        static_cast<float>(std::max(1, camera_.get_render_distance_world_margin()));
+        static_cast<float>(audio_effect_max_distance_world());
     if (!last_audio_effect_max_distance_.has_value() ||
         *last_audio_effect_max_distance_ != effect_max_distance) {
         audio_engine.set_effect_max_distance(effect_max_distance);
@@ -1122,8 +1158,8 @@ void Assets::addAsset(const std::string& name, SDL_Point g) {
 
     register_pending_static_assets();
 
+    invalidate_max_asset_dimensions();
     initialize_active_assets(camera_.get_screen_center());
-    rebuild_active_assets_if_needed();
     update_filtered_active_assets();
 
     std::cout << "[Assets::addAsset] Active assets=" << active_assets.size() << "\n";
@@ -1190,8 +1226,8 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
 
     register_pending_static_assets();
 
+    invalidate_max_asset_dimensions();
     initialize_active_assets(camera_.get_screen_center());
-    rebuild_active_assets_if_needed();
     update_filtered_active_assets();
 
     std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size() << "\n";
@@ -1290,43 +1326,84 @@ void Assets::register_pending_static_assets() {
 }
 
 void Assets::initialize_active_assets(SDL_Point center) {
-    const int radius = active_search_radius();
-    active_asset_list_ = std::make_unique<AssetList>(
-        all,
-        center,
-        radius,
-        std::vector<std::string>{},
-        std::vector<std::string>{},
-        std::vector<std::string>{},
-        SortMode::ZIndexAsc);
     active_assets_dirty_.store(true, std::memory_order_release);
     mark_non_player_update_buffer_dirty();
+    (void)center;
+    rebuild_active_assets_if_needed();
 }
 
 void Assets::update_active_assets(SDL_Point center) {
-    if (!active_asset_list_) {
-        initialize_active_assets(center);
-        return;
-    }
-
-    active_asset_list_->set_center(center);
-    active_asset_list_->set_search_radius(active_search_radius());
-    active_asset_list_->update();
     active_assets_dirty_.store(true, std::memory_order_release);
     mark_non_player_update_buffer_dirty();
+    (void)center;
 }
 
 bool Assets::rebuild_active_assets_if_needed() {
-    if (!active_asset_list_) {
-        initialize_active_assets(camera_.get_screen_center());
-    }
-
-    if (!active_asset_list_ || !active_assets_dirty_.load(std::memory_order_acquire)) {
+    if (!active_assets_dirty_.load(std::memory_order_acquire)) {
         return false;
     }
 
-    std::vector<Asset*> new_active_assets;
-    active_asset_list_->full_list(new_active_assets);
+    update_max_asset_dimensions();
+    const SDL_Rect screen_rect   = screen_world_rect();
+    const SDL_Rect expanded_rect = expanded_world_rect(screen_rect);
+    auto rects_intersect = [](const SDL_Rect& a, const SDL_Rect& b) {
+        const int ax2 = a.x + a.w;
+        const int ay2 = a.y + a.h;
+        const int bx2 = b.x + b.w;
+        const int by2 = b.y + b.h;
+        return !(ax2 <= b.x || bx2 <= a.x || ay2 <= b.y || by2 <= a.y);
+    };
+
+    auto& new_active_assets = visible_candidate_buffer_;
+    new_active_assets.clear();
+    new_active_assets.reserve(active_assets.size() + 32);
+
+    const float screen_top = static_cast<float>(screen_rect.y);
+    auto consider_asset = [&](Asset* asset) {
+        if (!asset) {
+            return;
+        }
+        if (static_cast<float>(asset->pos.y) < screen_top) {
+            return;
+        }
+        if (is_asset_visible_on_screen(asset, screen_rect)) {
+            new_active_assets.push_back(asset);
+        }
+    };
+
+    const auto& chunks = world_grid_.active_chunks();
+    if (chunks.empty()) {
+        for (Asset* asset : all) {
+            consider_asset(asset);
+        }
+    } else {
+        for (const world::Chunk* chunk : chunks) {
+            if (!chunk) {
+                continue;
+            }
+            if (!rects_intersect(chunk->world_bounds, expanded_rect)) {
+                continue;
+            }
+            for (Asset* asset : chunk->assets) {
+                consider_asset(asset);
+            }
+        }
+    }
+
+    std::sort(new_active_assets.begin(),
+              new_active_assets.end(),
+              [](const Asset* lhs, const Asset* rhs) {
+                  if (lhs == rhs) {
+                      return false;
+                  }
+                  if (!lhs || !rhs) {
+                      return rhs != nullptr;
+                  }
+                  if (lhs->z_index == rhs->z_index) {
+                      return lhs < rhs;
+                  }
+                  return lhs->z_index < rhs->z_index;
+              });
 
     std::vector<Asset*> new_light_assets;
     std::vector<Asset*> new_static_lights;
@@ -1377,10 +1454,11 @@ bool Assets::rebuild_active_assets_if_needed() {
         scratch_moving_light_lookup_.clear();
     }
 
-    active_assets                = std::move(new_active_assets);
-    active_light_assets_         = std::move(new_light_assets);
-    active_static_light_assets_  = std::move(new_static_lights);
-    active_moving_light_assets_  = std::move(new_moving_lights);
+    active_assets.swap(new_active_assets);
+    new_active_assets.clear();
+    active_light_assets_        = std::move(new_light_assets);
+    active_static_light_assets_ = std::move(new_static_lights);
+    active_moving_light_assets_ = std::move(new_moving_lights);
     active_assets_dirty_.store(false, std::memory_order_release);
     mark_non_player_update_buffer_dirty();
     rebuild_non_player_update_buffer_if_needed();
@@ -1425,8 +1503,121 @@ void Assets::rebuild_non_player_update_buffer_if_needed() {
     non_player_update_buffer_dirty_.store(false, std::memory_order_release);
 }
 
-int Assets::active_search_radius() const {
-    return std::max(1, camera_.get_render_distance_world_margin());
+void Assets::invalidate_max_asset_dimensions() {
+    max_asset_dimensions_dirty_ = true;
+}
+
+void Assets::update_max_asset_dimensions() {
+    const float camera_scale = std::max(0.0001f, camera_.get_scale());
+    bool zoom_changed = cached_zoom_level_ <= 0.0f;
+    if (!zoom_changed && cached_zoom_level_ > 0.0f) {
+        const float delta = std::fabs(camera_scale - cached_zoom_level_) / std::max(cached_zoom_level_, 0.0001f);
+        zoom_changed = delta > 0.05f;
+    }
+    if (!max_asset_dimensions_dirty_ && !zoom_changed) {
+        return;
+    }
+
+    cached_zoom_level_ = camera_scale;
+    max_asset_dimensions_dirty_ = false;
+
+    float max_height = 0.0f;
+    float max_width  = 0.0f;
+    for (Asset* asset : all) {
+        if (!asset || !asset->info) {
+            continue;
+        }
+        if (asset->info->tillable) {
+            continue;
+        }
+        float scale_factor = 1.0f;
+        if (std::isfinite(asset->info->scale_factor) && asset->info->scale_factor > 0.0f) {
+            scale_factor = asset->info->scale_factor;
+        }
+        const float width =
+            static_cast<float>(std::max(1, asset->info->original_canvas_width)) * scale_factor * camera_scale;
+        const float height =
+            static_cast<float>(std::max(1, asset->info->original_canvas_height)) * scale_factor * camera_scale;
+        max_width  = std::max(max_width, width);
+        max_height = std::max(max_height, height);
+    }
+
+    if (max_width <= 0.0f) {
+        max_width = static_cast<float>(screen_width);
+    }
+    if (max_height <= 0.0f) {
+        max_height = static_cast<float>(screen_height);
+    }
+
+    max_asset_width_world_  = max_width;
+    max_asset_height_world_ = max_height;
+}
+
+SDL_Rect Assets::screen_world_rect() const {
+    const Area view = camera_.get_camera_area();
+    auto [minx, miny, maxx, maxy] = view.get_bounds();
+    SDL_Rect rect{
+        minx,
+        miny,
+        std::max(0, maxx - minx),
+        std::max(0, maxy - miny)
+    };
+    return rect;
+}
+
+SDL_Rect Assets::expanded_world_rect(const SDL_Rect& screen_rect) const {
+    const float horizontal_padding = std::max(0.0f, max_asset_width_world_ * 1.5f);
+    const float bottom_padding     = std::max(0.0f, max_asset_height_world_);
+
+    const float left_f   = static_cast<float>(screen_rect.x) - horizontal_padding;
+    const float right_f  = static_cast<float>(screen_rect.x + screen_rect.w) + horizontal_padding;
+    const int   top      = screen_rect.y;
+    const float bottom_f = static_cast<float>(screen_rect.y + screen_rect.h) + bottom_padding;
+
+    const int left   = static_cast<int>(std::floor(left_f));
+    const int right  = static_cast<int>(std::ceil(right_f));
+    const int bottom = static_cast<int>(std::ceil(bottom_f));
+
+    SDL_Rect expanded{
+        left,
+        top,
+        std::max(0, right - left),
+        std::max(0, bottom - top)
+    };
+    return expanded;
+}
+
+int Assets::audio_effect_max_distance_world() const {
+    const_cast<Assets*>(this)->update_max_asset_dimensions();
+    const float horizontal_padding = std::max(0.0f, max_asset_width_world_ * 1.5f);
+    const float bottom_padding     = std::max(0.0f, max_asset_height_world_);
+    const float radius             = std::max(horizontal_padding, bottom_padding);
+    return std::max(1, static_cast<int>(std::ceil(radius)));
+}
+
+bool Assets::is_asset_visible_on_screen(const Asset* asset) const {
+    return is_asset_visible_on_screen(asset, screen_world_rect());
+}
+
+bool Assets::is_asset_visible_on_screen(const Asset* asset, const SDL_Rect& screen_rect) const {
+    const float camera_scale = std::max(0.0001f, camera_.get_scale());
+    AssetWorldBounds bounds;
+    if (!compute_asset_world_bounds(asset, camera_scale, bounds)) {
+        return false;
+    }
+
+    const float screen_left   = static_cast<float>(screen_rect.x);
+    const float screen_top    = static_cast<float>(screen_rect.y);
+    const float screen_right  = static_cast<float>(screen_rect.x + screen_rect.w);
+    const float screen_bottom = static_cast<float>(screen_rect.y + screen_rect.h);
+
+    if (bounds.right < screen_left || bounds.left > screen_right) {
+        return false;
+    }
+    if (bounds.bottom < screen_top || bounds.top > screen_bottom) {
+        return false;
+    }
+    return true;
 }
 
 void Assets::schedule_removal(Asset* a) {
@@ -1507,7 +1698,8 @@ void Assets::process_removals() {
         dev_controls_->set_active_assets(filtered_active_assets);
     }
 
-    initialize_active_assets(camera_.get_screen_center());
+    invalidate_max_asset_dimensions();
+    mark_active_assets_dirty();
     rebuild_active_assets_if_needed();
     update_filtered_active_assets();
 }
@@ -1795,10 +1987,9 @@ void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persi
     }
 
     if (chunk_changed) {
-        const Area view = camera_.get_camera_area();
-        auto [minx, miny, maxx, maxy] = view.get_bounds();
-        SDL_Rect cam_rect{minx, miny, std::max(0, maxx - minx), std::max(0, maxy - miny)};
-        world_grid_.update_active_chunks(cam_rect, camera_.get_render_distance_world_margin());
+        update_max_asset_dimensions();
+        const SDL_Rect expanded_rect = expanded_world_rect(screen_world_rect());
+        world_grid_.update_active_chunks(expanded_rect, 0);
         force_shaded_assets_rerender();
     }
 }

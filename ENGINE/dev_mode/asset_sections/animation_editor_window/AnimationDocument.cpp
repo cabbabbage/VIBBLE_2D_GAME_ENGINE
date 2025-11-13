@@ -308,6 +308,10 @@ void AnimationDocument::load_from_manifest(const nlohmann::json& asset_json,
     load_from_json_object(base_data_);
 }
 
+void AnimationDocument::set_on_saved_callback(std::function<void()> callback) {
+    on_saved_callback_ = std::move(callback);
+}
+
 void AnimationDocument::load_from_json_object(const nlohmann::json& root) {
     animations_.clear();
     start_animation_.reset();
@@ -423,6 +427,9 @@ void AnimationDocument::save_to_file() const {
         base_data_ = root;
     }
     dirty_ = false;
+    if (on_saved_callback_) {
+        on_saved_callback_();
+    }
 }
 
 bool AnimationDocument::consume_dirty_flag() const {

@@ -32,6 +32,9 @@ struct StageContext {
     int           height      = 0;
     SDL_Texture*  reusable_final = nullptr;
     SDL_Texture*  final_texture = nullptr;
+    SDL_Texture*  stage_destination = nullptr;
+    SDL_BlendMode stage_blend       = SDL_BLENDMODE_BLEND;
+    bool          stage_drew_to_destination = false;
     SDL_Rect      screen_rect{ 0, 0, 0, 0 };
     SDL_FPoint    screen_center{ 0.0f, 0.0f }; // Reserved for future reactive shadow alignment.
     float         reference_screen_height = 1.0f;

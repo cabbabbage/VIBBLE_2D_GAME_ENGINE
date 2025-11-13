@@ -510,8 +510,6 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
     map_info["rooms_data"] = nlohmann::json::object();
     map_info["rooms_data"]["spawn"] = std::move(spawn_room);
     map_info["camera_settings"] = nlohmann::json::object({
-        {"render_distance", 1600.0},
-        {"render_radius_y_offset_px", 0.0},
         {"render_quality_percent", 80},
         {"smooth_motion_zoom", true},
         {"min_zoom_multiplier", 0.75},

@@ -5,6 +5,8 @@
 #include "world/chunk.hpp"
 #include "render/camera.hpp"
 #include "render/asset_light_renderer.hpp"
+#include "render/depth_cue_utils.hpp"
+#include "dev_mode/depth_cue_settings.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/log.hpp"
@@ -28,6 +30,11 @@
 static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
 namespace {
+using depth_cue::DepthSample;
+using depth_cue::DepthSide;
+using depth_cue::evaluate_depth_curve;
+using depth_cue::kDepthCueDeadzonePx;
+using depth_cue::nearly_equal;
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
 
 constexpr const char* kEnableChunkLightingEnv  = "VIBBLE_ENABLE_CHUNK_LIGHTING";
@@ -67,6 +74,226 @@ bool chunk_lighting_suspended_flag() {
 SDL_BlendMode darkness_cutout_blend_mode() {
     static SDL_BlendMode cached = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
     return cached;
+}
+
+struct GaussianTap {
+    SDL_FPoint offset{0.0f, 0.0f};
+    float      weight = 0.0f;
+};
+
+void build_gaussian_kernel(float radius_px, std::vector<GaussianTap>& taps) {
+    taps.clear();
+    if (radius_px <= 0.0f) {
+        return;
+    }
+
+    constexpr int   kMaxKernelRadius = 4;
+    const int       kernel_radius    = std::clamp(static_cast<int>(std::ceil(radius_px / 8.0f)), 1, kMaxKernelRadius);
+    const float     sigma            = std::max(radius_px * 0.35f, 0.75f);
+    const float     step             = std::max(radius_px / static_cast<float>(kernel_radius), 0.5f);
+    float           weight_sum       = 0.0f;
+
+    for (int y = -kernel_radius; y <= kernel_radius; ++y) {
+        for (int x = -kernel_radius; x <= kernel_radius; ++x) {
+            if (x == 0 && y == 0) {
+                continue; // center sample handled by main sprite pass
+            }
+            SDL_FPoint offset{
+                step * static_cast<float>(x),
+                step * static_cast<float>(y)
+            };
+            const float dist2  = offset.x * offset.x + offset.y * offset.y;
+            const float weight = std::exp(-dist2 / (2.0f * sigma * sigma));
+            taps.push_back(GaussianTap{offset, weight});
+            weight_sum += weight;
+        }
+    }
+
+    if (weight_sum <= 0.0f) {
+        taps.clear();
+        return;
+    }
+
+    const float inv_weight_sum = 1.0f / weight_sum;
+    for (auto& tap : taps) {
+        tap.weight *= inv_weight_sum;
+    }
+}
+
+struct Hsv {
+    float h = 0.0f;
+    float s = 0.0f;
+    float v = 0.0f;
+};
+
+struct Rgb {
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+};
+
+Hsv rgb_to_hsv(float r, float g, float b) {
+    Hsv out{};
+    const float maxc = std::max({ r, g, b });
+    const float minc = std::min({ r, g, b });
+    const float delta = maxc - minc;
+    out.v = maxc;
+    out.s = (maxc <= 0.0f) ? 0.0f : (delta / maxc);
+    if (delta <= 0.0f) {
+        out.h = 0.0f;
+        return out;
+    }
+    if (nearly_equal(maxc, r)) {
+        out.h = (g - b) / delta;
+        if (g < b) {
+            out.h += 6.0f;
+        }
+    } else if (nearly_equal(maxc, g)) {
+        out.h = ((b - r) / delta) + 2.0f;
+    } else {
+        out.h = ((r - g) / delta) + 4.0f;
+    }
+    out.h /= 6.0f;
+    if (out.h < 0.0f) {
+        out.h += 1.0f;
+    }
+    out.h = std::fmod(out.h, 1.0f);
+    return out;
+}
+
+Rgb hsv_to_rgb(float h, float s, float v) {
+    const float c = v * s;
+    const float hp = h * 6.0f;
+    const float x = c * (1.0f - std::fabs(std::fmod(hp, 2.0f) - 1.0f));
+    float r1 = 0.0f;
+    float g1 = 0.0f;
+    float b1 = 0.0f;
+    if (hp >= 0.0f && hp < 1.0f) {
+        r1 = c; g1 = x; b1 = 0.0f;
+    } else if (hp >= 1.0f && hp < 2.0f) {
+        r1 = x; g1 = c; b1 = 0.0f;
+    } else if (hp >= 2.0f && hp < 3.0f) {
+        r1 = 0.0f; g1 = c; b1 = x;
+    } else if (hp >= 3.0f && hp < 4.0f) {
+        r1 = 0.0f; g1 = x; b1 = c;
+    } else if (hp >= 4.0f && hp < 5.0f) {
+        r1 = x; g1 = 0.0f; b1 = c;
+    } else {
+        r1 = c; g1 = 0.0f; b1 = x;
+    }
+    const float m = v - c;
+    return Rgb{ r1 + m, g1 + m, b1 + m };
+}
+
+SDL_Texture* build_depth_color_adjusted_texture(SDL_Renderer* renderer,
+                                                SDL_Texture* source,
+                                                float saturation_percent,
+                                                float primary_percent) {
+    if (!renderer || !source) {
+        return nullptr;
+    }
+    saturation_percent = std::clamp(saturation_percent, -50.0f, 50.0f);
+    primary_percent    = std::clamp(primary_percent, -50.0f, 50.0f);
+    const float sat_offset     = saturation_percent / 100.0f;
+    const float primary_offset = primary_percent / 100.0f;
+    constexpr float kEffectEpsilon = 0.0001f;
+    if (std::fabs(sat_offset) <= kEffectEpsilon && std::fabs(primary_offset) <= kEffectEpsilon) {
+        return nullptr;
+    }
+    int tex_w = 0;
+    int tex_h = 0;
+    Uint32 format = 0;
+    int access = 0;
+    if (SDL_QueryTexture(source, &format, &access, &tex_w, &tex_h) != 0) {
+        return nullptr;
+    }
+    if (tex_w <= 0 || tex_h <= 0) {
+        return nullptr;
+    }
+    SDL_Texture* readable = source;
+    SDL_Texture* temp_target = nullptr;
+    SDL_Texture* prev_target = nullptr;
+    SDL_BlendMode saved_blend = SDL_BLENDMODE_NONE;
+    if (access != SDL_TEXTUREACCESS_TARGET) {
+        temp_target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
+        if (!temp_target) {
+            return nullptr;
+        }
+        prev_target = SDL_GetRenderTarget(renderer);
+        SDL_SetRenderTarget(renderer, temp_target);
+        SDL_GetTextureBlendMode(source, &saved_blend);
+        SDL_SetTextureBlendMode(source, SDL_BLENDMODE_NONE);
+        SDL_RenderCopy(renderer, source, nullptr, nullptr);
+        SDL_SetTextureBlendMode(source, saved_blend);
+        SDL_SetRenderTarget(renderer, prev_target);
+        readable = temp_target;
+    }
+    std::vector<Uint32> pixels(static_cast<std::size_t>(tex_w) * tex_h);
+    prev_target = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, readable);
+    SDL_Rect read_rect{ 0, 0, tex_w, tex_h };
+    if (SDL_RenderReadPixels(renderer, &read_rect, SDL_PIXELFORMAT_RGBA8888, pixels.data(), tex_w * static_cast<int>(sizeof(Uint32))) != 0) {
+        SDL_SetRenderTarget(renderer, prev_target);
+        if (temp_target) SDL_DestroyTexture(temp_target);
+        return nullptr;
+    }
+    SDL_SetRenderTarget(renderer, prev_target);
+    if (temp_target) {
+        SDL_DestroyTexture(temp_target);
+    }
+
+    const bool sat_needed = std::fabs(sat_offset) > kEffectEpsilon;
+    const bool primary_needed = std::fabs(primary_offset) > kEffectEpsilon;
+
+    for (Uint32& pixel : pixels) {
+        Uint8* c = reinterpret_cast<Uint8*>(&pixel);
+        if (c[3] == 0) {
+            continue;
+        }
+        float r = static_cast<float>(c[0]) / 255.0f;
+        float g = static_cast<float>(c[1]) / 255.0f;
+        float b = static_cast<float>(c[2]) / 255.0f;
+        if (sat_needed) {
+            Hsv hsv = rgb_to_hsv(r, g, b);
+            hsv.s = std::clamp(hsv.s + sat_offset, 0.0f, 1.0f);
+            Rgb rgb = hsv_to_rgb(hsv.h, hsv.s, hsv.v);
+            r = rgb.r;
+            g = rgb.g;
+            b = rgb.b;
+        }
+        if (primary_needed) {
+            if (r >= g && r >= b) {
+                r = std::clamp(r + primary_offset, 0.0f, 1.0f);
+                const float bleed = primary_offset * 0.2f;
+                g = std::clamp(g + bleed, 0.0f, 1.0f);
+                b = std::clamp(b + bleed, 0.0f, 1.0f);
+            } else if (g >= r && g >= b) {
+                g = std::clamp(g + primary_offset, 0.0f, 1.0f);
+                const float bleed = primary_offset * 0.2f;
+                r = std::clamp(r + bleed, 0.0f, 1.0f);
+                b = std::clamp(b + bleed, 0.0f, 1.0f);
+            } else {
+                b = std::clamp(b + primary_offset, 0.0f, 1.0f);
+                const float bleed = primary_offset * 0.2f;
+                r = std::clamp(r + bleed, 0.0f, 1.0f);
+                g = std::clamp(g + bleed, 0.0f, 1.0f);
+            }
+        }
+        c[0] = static_cast<Uint8>(std::clamp(r, 0.0f, 1.0f) * 255.0f + 0.5f);
+        c[1] = static_cast<Uint8>(std::clamp(g, 0.0f, 1.0f) * 255.0f + 0.5f);
+        c[2] = static_cast<Uint8>(std::clamp(b, 0.0f, 1.0f) * 255.0f + 0.5f);
+    }
+
+    SDL_Texture* result = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, tex_w, tex_h);
+    if (!result) {
+        return nullptr;
+    }
+    if (SDL_UpdateTexture(result, nullptr, pixels.data(), tex_w * static_cast<int>(sizeof(Uint32))) != 0) {
+        SDL_DestroyTexture(result);
+        return nullptr;
+    }
+    SDL_SetTextureBlendMode(result, SDL_BLENDMODE_BLEND);
+    return result;
 }
 
 }
@@ -431,6 +658,7 @@ void SceneRenderer::render(){
         const camera::RealismSettings cam_settings = camera_state
             ? camera_state->realism_settings()
             : camera::RealismSettings{};
+        const bool depthcue_setting_enabled = devmode::camera_prefs::load_depthcue_enabled();
         const int effective_quality_percent = assets_
                                                   ? assets_->effective_render_quality_percent() : cam_settings.render_quality_percent;
         const float quality_percent =
@@ -472,7 +700,7 @@ void SceneRenderer::render(){
 
         const float blur_foreground_max_px = std::max(0.0f, cam_settings.max_foreground_blur);
         const float blur_background_max_px = std::max(0.0f, cam_settings.max_background_blur);
-        const bool blur_depth_enabled = camera_state && camera_state->realism_enabled() &&
+        const bool blur_depth_enabled = depthcue_setting_enabled && camera_state && camera_state->realism_enabled() &&
             (blur_foreground_max_px > 0.0f || blur_background_max_px > 0.0f);
 
         float center_screen_y = static_cast<float>(screen_height_) * 0.5f;
@@ -487,6 +715,38 @@ void SceneRenderer::render(){
         }
         const float fg_span_screen = std::max(0.0f, fg_plane_screen_y - center_screen_y);
         const float bg_span_screen = std::max(0.0f, center_screen_y - bg_plane_screen_y);
+        auto depth_sample_for = [&](float screen_y) -> DepthSample {
+            DepthSample sample;
+            if (!std::isfinite(screen_y)) {
+                return sample;
+            }
+            if (std::fabs(screen_y - center_screen_y) <= kDepthCueDeadzonePx) {
+                return sample;
+            }
+            if (screen_y > center_screen_y) {
+                sample.side = DepthSide::Foreground;
+                sample.t = (screen_y >= fg_plane_screen_y || fg_span_screen <= 0.0f)
+                    ? 1.0f
+                    : std::clamp((screen_y - center_screen_y) / fg_span_screen, 0.0f, 1.0f);
+            } else if (screen_y < center_screen_y) {
+                sample.side = DepthSide::Background;
+                sample.t = (screen_y <= bg_plane_screen_y || bg_span_screen <= 0.0f)
+                    ? 1.0f
+                    : std::clamp((center_screen_y - screen_y) / bg_span_screen, 0.0f, 1.0f);
+            }
+            return sample;
+        };
+        auto sample_blur_effect = [&](const DepthSample& sample,
+                                      float foreground_value,
+                                      float background_value) -> float {
+            if (sample.is_foreground() && foreground_value > 0.0f) {
+                return evaluate_depth_curve(cam_settings.blur_falloff_method, sample.t) * foreground_value;
+            }
+            if (sample.is_background() && background_value > 0.0f) {
+                return evaluate_depth_curve(cam_settings.blur_falloff_method, sample.t) * background_value;
+            }
+            return 0.0f;
+        };
 
         const auto& active = assets_->getActive();
         texture_commands_.clear();
@@ -521,8 +781,16 @@ void SceneRenderer::render(){
             cmd.alpha = std::clamp(cmd.alpha, 0.0f, 1.0f);
 
             // Compute perspective blur radius per asset
-            cmd.depth_blur_px = 0.0f;
-            if (blur_depth_enabled) {
+            cmd.depth_blur_px       = 0.0f;
+            // Compute depth cue adjustments per asset (percent)
+            cmd.depth_brightness    = 0.0f;
+            cmd.depth_saturation    = 0.0f;
+            cmd.depth_primary_boost = 0.0f;
+
+            const bool is_texture_asset = asset && asset->info && asset->info->type == asset_types::texture;
+            const bool depthcue_allowed = depthcue_setting_enabled && !is_texture_asset && camera_state;
+            if (depthcue_allowed) {
+                // Compute screen position once for both blur and brightness calculations
                 float wx = asset ? asset->smoothed_translation_x() : 0.0f;
                 float wy = asset ? asset->smoothed_translation_y() : 0.0f;
                 if (assets_ && assets_->is_dev_mode() && asset) {
@@ -531,55 +799,34 @@ void SceneRenderer::render(){
                 }
                 SDL_FPoint screen_pos = camera_state->map_to_screen_f(SDL_FPoint{ wx, wy });
                 const float screen_y = screen_pos.y;
-                float t = 0.0f;
-                float max_blur = 0.0f;
-                constexpr float kCenterDeadzoneScreen = 1.5f;
-                if (!std::isfinite(screen_y) || std::fabs(screen_y - center_screen_y) <= kCenterDeadzoneScreen) {
-                    t = 0.0f;
-                    max_blur = 0.0f;
-                } else if (screen_y > center_screen_y && blur_foreground_max_px > 0.0f) {
-                    max_blur = blur_foreground_max_px;
-                    if (screen_y >= fg_plane_screen_y || fg_span_screen <= 0.0f) {
-                        t = 1.0f;
-                    } else {
-                        t = std::clamp((screen_y - center_screen_y) / fg_span_screen, 0.0f, 1.0f);
-                    }
-                } else if (screen_y < center_screen_y && blur_background_max_px > 0.0f) {
-                    max_blur = blur_background_max_px;
-                    if (screen_y <= bg_plane_screen_y || bg_span_screen <= 0.0f) {
-                        t = 1.0f;
-                    } else {
-                        t = std::clamp((center_screen_y - screen_y) / bg_span_screen, 0.0f, 1.0f);
-                    }
-                }
-                if (t > 0.0f && max_blur > 0.0f) {
-                    // Shape with selected falloff
-                    auto shape = [&](float x) -> float {
-                        x = std::clamp(x, 0.0f, 1.0f);
-                        switch (cam_settings.blur_falloff_method) {
-                            case camera::BlurFalloffMethod::Quadratic:
-                                return x * x;
-                            case camera::BlurFalloffMethod::Cubic:
-                                return x * x * x;
-                            case camera::BlurFalloffMethod::Logarithmic: {
-                                const float k = 4.0f; // gentle log curve
-                                float num = std::log1p(k * x);
-                                float den = std::log1p(k);
-                                return den > 0.0f ? (num / den) : x;
-                            }
-                            case camera::BlurFalloffMethod::Exponential: {
-                                const float k = 3.0f; // steeper rise
-                                float num = std::exp(k * x) - 1.0f;
-                                float den = std::exp(k) - 1.0f;
-                                return den > 0.0f ? (num / den) : x;
-                            }
-                            case camera::BlurFalloffMethod::Linear:
-                            default:
-                                return x;
-                        }
-                    };
-                    const float shaped = shape(t);
-                    cmd.depth_blur_px = std::clamp(shaped * max_blur, 0.0f, 50.0f);
+                const DepthSample depth_sample = depth_sample_for(screen_y);
+                const float brightness_value = depth_cue::sample_signed_effect(
+                    depth_sample,
+                    cam_settings.foreground_brightness,
+                    cam_settings.background_brightness,
+                    cam_settings.brightness_falloff_method);
+                cmd.depth_brightness = std::clamp(brightness_value, -50.0f, 50.0f);
+
+                const float saturation_value = depth_cue::sample_signed_effect(
+                    depth_sample,
+                    cam_settings.saturation_foreground,
+                    cam_settings.saturation_background,
+                    cam_settings.saturation_falloff_method);
+                cmd.depth_saturation = std::clamp(saturation_value, -50.0f, 50.0f);
+
+                const float primary_value = depth_cue::sample_signed_effect(
+                    depth_sample,
+                    cam_settings.primary_boost_foreground,
+                    cam_settings.primary_boost_background,
+                    cam_settings.primary_boost_falloff_method);
+                cmd.depth_primary_boost = std::clamp(primary_value, -50.0f, 50.0f);
+
+                if (blur_depth_enabled) {
+                    const float blur_value = sample_blur_effect(
+                        depth_sample,
+                        blur_foreground_max_px,
+                        blur_background_max_px);
+                    cmd.depth_blur_px = std::clamp(blur_value, 0.0f, 50.0f);
                 }
             }
 
@@ -795,18 +1042,40 @@ void SceneRenderer::render(){
                     has_front_light = light_overlay_visibility > 0.0f && overlay_source->has_front_lights;
                 }
             }
-            if (!cmd.source_texture) {
+            SDL_Texture* tex = cmd.source_texture;
+            SDL_Texture* tinted_tex = nullptr;
+            if (tex && (std::fabs(cmd.depth_saturation) > 0.01f || std::fabs(cmd.depth_primary_boost) > 0.01f)) {
+                tinted_tex = build_depth_color_adjusted_texture(
+                    renderer_,
+                    tex,
+                    cmd.depth_saturation,
+                    cmd.depth_primary_boost);
+                if (tinted_tex) {
+                    tex = tinted_tex;
+                }
+            }
+            if (!tex) {
                 if (overlay_source && has_front_light) {
                     pending_front_lights.push_back(overlay_source);
+                }
+                if (tinted_tex) {
+                    SDL_DestroyTexture(tinted_tex);
                 }
                 continue;
             }
 
-            SDL_Texture* tex = cmd.source_texture;
-
             // Compute base alpha
             const Uint8 base_alpha_mod = static_cast<Uint8>(
                 std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
+            // Derive brightness application parameters
+            const float brightness_pct = cmd.depth_brightness; // [-50..50]
+            const float brightness_frac = std::clamp(brightness_pct / 100.0f, -0.5f, 0.5f);
+            const bool  darken_active = brightness_frac < 0.0f;
+            const bool  lighten_active = brightness_frac > 0.0f;
+            const Uint8 darken_mod = static_cast<Uint8>(
+                std::clamp(std::lround(255.0f * (1.0f + std::min(0.0f, brightness_frac))), 0L, 255L));
+            const Uint8 lighten_alpha_mod = static_cast<Uint8>(
+                std::clamp(std::lround(static_cast<double>(base_alpha_mod) * std::max(0.0f, brightness_frac)), 0L, 255L));
 
             // --------------------
             // 1) OUTLINE PASS (only if highlighted/selected)
@@ -853,56 +1122,46 @@ void SceneRenderer::render(){
             bool drew_blur = false;
             const float blur_px = std::clamp(cmd.depth_blur_px, 0.0f, 50.0f);
             if (tex && blur_px > 0.0f) {
-                // Soft blur via spiral disk sampling (no harsh ring artifacts)
-                // Sample density scales with radius
-                int samples = 12 + static_cast<int>(std::lround(blur_px * 0.8f));
-                samples = std::clamp(samples, 12, 64);
+                static thread_local std::vector<GaussianTap> gaussian_kernel;
+                build_gaussian_kernel(blur_px, gaussian_kernel);
+                if (!gaussian_kernel.empty()) {
+                    const Uint8 base_alpha_mod = static_cast<Uint8>(
+                        std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
 
-                // Base alpha for this sprite
-                const Uint8 base_alpha_mod = static_cast<Uint8>(
-                    std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
+                    const float blur_mix = std::clamp(0.45f + (blur_px / 80.0f), 0.45f, 0.9f);
 
-                // Blend settings
-                SDL_SetTextureColorMod(tex, 255, 255, 255);
-                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+                    if (darken_active) {
+                        SDL_SetTextureColorMod(tex, darken_mod, darken_mod, darken_mod);
+                    } else {
+                        SDL_SetTextureColorMod(tex, 255, 255, 255);
+                    }
+                    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
 
-                // Weight each sample with w = 1 - r^2 (gaussian‑ish interior emphasis)
-                // With r^2 = (i+0.5)/N, sum(w) = N/2 exactly. Use that to normalize.
-                constexpr float kGolden = 2.39996323f; // golden angle in radians
-                const float blur_mix = 0.65f;          // overall blur contribution (kept conservative)
-                const float inv_samples = samples > 0 ? (1.0f / static_cast<float>(samples)) : 1.0f;
+                    for (const GaussianTap& tap : gaussian_kernel) {
+                        const float sample_alpha_f = std::clamp(blur_mix * tap.weight * cmd.alpha, 0.0f, 1.0f);
+                        const Uint8 sample_alpha   = static_cast<Uint8>(
+                            std::clamp(std::lround(sample_alpha_f * 255.0f), 0L, 255L));
 
-                for (int i = 0; i < samples; ++i) {
-                    const float r2 = (static_cast<float>(i) + 0.5f) * inv_samples; // in (0,1)
-                    const float r  = std::sqrt(std::clamp(r2, 0.0f, 1.0f));
-                    const float a  = kGolden * static_cast<float>(i);
-                    const float w  = 1.0f - r2; // interior slightly stronger than rim
+                        SDL_SetTextureAlphaMod(tex, sample_alpha);
 
-                    // Normalize alpha per sample: total weight = N/2 => factor 2/N
-                    const float weight_norm = (2.0f * w) * inv_samples;
-                    const float sample_alpha_f = std::clamp(blur_mix * weight_norm, 0.0f, 1.0f);
-                    const Uint8 sample_alpha = static_cast<Uint8>(
-                        std::clamp(std::lround(sample_alpha_f * static_cast<float>(base_alpha_mod)), 0L, 255L));
+                        SDL_FRect orect = cmd.dst;
+                        orect.x += tap.offset.x;
+                        orect.y += tap.offset.y;
+                        SDL_RenderCopyExF(
+                            renderer_,
+                            tex,
+                            nullptr,
+                            &orect,
+                            cmd.rotation_degrees,
+                            cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
+                            cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
+                        );
+                    }
 
-                    SDL_SetTextureAlphaMod(tex, sample_alpha);
-
-                    SDL_FRect orect = cmd.dst;
-                    orect.x += std::cos(a) * (r * blur_px);
-                    orect.y += std::sin(a) * (r * blur_px);
-                    SDL_RenderCopyExF(
-                        renderer_,
-                        tex,
-                        nullptr,
-                        &orect,
-                        cmd.rotation_degrees,
-                        cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
-                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
-                    );
+                    SDL_SetTextureAlphaMod(tex, 255);
+                    SDL_SetTextureColorMod(tex, 255, 255, 255);
+                    drew_blur = true;
                 }
-
-                // Restore alpha for next pass
-                SDL_SetTextureAlphaMod(tex, 255);
-                drew_blur = true;
             }
 
             // --------------------
@@ -1059,18 +1318,40 @@ void SceneRenderer::render(){
 
             if (!drew_grid_sliced) {
                 // Fallback: draw normally as a rect
-                SDL_SetTextureColorMod(tex, 255, 255, 255);
+                if (darken_active) {
+                    SDL_SetTextureColorMod(tex, darken_mod, darken_mod, darken_mod);
+                } else {
+                    SDL_SetTextureColorMod(tex, 255, 255, 255);
+                }
                 SDL_SetTextureAlphaMod(tex, base_alpha_mod);
                 SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
                 SDL_RenderCopyExF(
                     renderer_,
-                    cmd.source_texture,
+                    tex,
                     nullptr,
                     &cmd.dst,
                     cmd.rotation_degrees,
                     cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
                     cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
                 );
+                // Optional brighten overlay using additive blend (does not affect alpha)
+                if (lighten_active && lighten_alpha_mod > 0) {
+                    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
+                    SDL_SetTextureColorMod(tex, 255, 255, 255);
+                    SDL_SetTextureAlphaMod(tex, lighten_alpha_mod);
+                    SDL_RenderCopyExF(
+                        renderer_,
+                        tex,
+                        nullptr,
+                        &cmd.dst,
+                        cmd.rotation_degrees,
+                        cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
+                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
+                    );
+                    // Restore blend and alpha
+                    SDL_SetTextureAlphaMod(tex, base_alpha_mod);
+                    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+                }
             }
 
             // Cleanup any scaling-temp texture state
@@ -1082,6 +1363,9 @@ void SceneRenderer::render(){
 
             if (overlay_source && has_front_light) {
                 pending_front_lights.push_back(overlay_source);
+            }
+            if (tinted_tex) {
+                SDL_DestroyTexture(tinted_tex);
             }
         }
 

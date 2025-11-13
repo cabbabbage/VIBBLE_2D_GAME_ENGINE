@@ -2253,6 +2253,9 @@ void DMDropdown::set_selected(int idx) {
         hovered_option_index_ = -1;
         if (active_ == this) active_ = nullptr;
     }
+    if (changed && on_selection_changed_) {
+        on_selection_changed_(index_);
+    }
 }
 
 bool DMDropdown::handle_event(const SDL_Event& e) {
@@ -2626,6 +2629,9 @@ bool DMDropdown::commit_pending_selection() {
     index_ = target;
     pending_index_ = target;
     has_pending_index_ = false;
+    if (changed && on_selection_changed_) {
+        on_selection_changed_(index_);
+    }
     return changed;
 }
 

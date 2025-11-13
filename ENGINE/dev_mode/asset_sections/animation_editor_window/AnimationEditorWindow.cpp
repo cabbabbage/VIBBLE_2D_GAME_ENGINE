@@ -386,6 +386,7 @@ namespace animation_editor {
 
 AnimationEditorWindow::AnimationEditorWindow() {
     document_ = std::make_shared<AnimationDocument>();
+    document_->set_on_saved_callback([this]() { this->handle_document_saved(); });
     preview_provider_ = std::make_shared<PreviewProvider>();
     preview_provider_->set_document(document_);
     cropping_service_ = std::make_shared<CroppingService>();
@@ -406,7 +407,11 @@ AnimationEditorWindow::AnimationEditorWindow() {
     layout_dirty_ = true;
 }
 
-AnimationEditorWindow::~AnimationEditorWindow() = default;
+AnimationEditorWindow::~AnimationEditorWindow() {
+    if (document_) {
+        document_->set_on_saved_callback(nullptr);
+    }
+}
 
 void AnimationEditorWindow::set_visible(bool visible, bool process_close) {
     if (!visible && visible_ && process_close) {
@@ -451,6 +456,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
 
     if (!document_) {
         document_ = std::make_shared<AnimationDocument>();
+        document_->set_on_saved_callback([this]() { this->handle_document_saved(); });
     }
 
     if (!info) {
@@ -1113,6 +1119,12 @@ void AnimationEditorWindow::set_on_animation_properties_changed(std::function<vo
     on_animation_properties_changed_ = std::move(callback);
 }
 
+void AnimationEditorWindow::handle_document_saved() {
+    if (on_document_saved_) {
+        on_document_saved_();
+    }
+}
+
 void AnimationEditorWindow::ensure_layout() const {
     if (layout_dirty_) {
         const_cast<AnimationEditorWindow*>(this)->layout_children();
@@ -1356,9 +1368,6 @@ void AnimationEditorWindow::process_auto_save() {
     document_->save_to_file();
     if (using_manifest_store_) {
         set_status_message("Animations auto-saved.", 180);
-    }
-    if (on_document_saved_) {
-        on_document_saved_();
     }
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;

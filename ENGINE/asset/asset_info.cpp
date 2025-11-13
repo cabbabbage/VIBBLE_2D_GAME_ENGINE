@@ -46,7 +46,7 @@ std::vector<std::string> parse_string_array(const nlohmann::json& json_value) {
     return values;
 }
 
-constexpr int kLightTextureCacheVersion = 1;
+constexpr int kLightTextureCacheVersion = 2;
 
 std::string light_signature(const LightSource& light) {
     std::ostringstream oss;
@@ -81,6 +81,7 @@ SDL_Surface* build_light_surface(const LightSource& light) {
 
     auto* pixels = static_cast<std::uint32_t*>(surface->pixels);
     const int stride = surface->pitch / 4;
+    SDL_PixelFormat* format = surface->format;
     const float center = static_cast<float>(diameter) * 0.5f;
     const float fade_exponent = compute_light_fade_exponent(light);
     const float radius_f = static_cast<float>(radius);
@@ -96,7 +97,7 @@ SDL_Surface* build_light_surface(const LightSource& light) {
             const float alpha_ratio = std::pow(base, fade_exponent);
             const auto alpha = static_cast<std::uint8_t>(std::clamp(
                 std::lround(alpha_ratio * 255.0f), 0L, 255L));
-            pixels[y * stride + x] = (static_cast<std::uint32_t>(alpha) << 24) | 0x00FFFFFFu;
+            pixels[y * stride + x] = SDL_MapRGBA(format, 255, 255, 255, alpha);
         }
     }
 

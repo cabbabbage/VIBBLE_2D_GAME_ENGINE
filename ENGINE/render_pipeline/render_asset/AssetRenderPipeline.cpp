@@ -187,7 +187,7 @@ AssetRenderPipeline::AssetRenderPipeline(SDL_Renderer* renderer, const SceneLigh
     using render_pipeline::shading::RenderShadowMask;
 
     stages_.push_back(StageEntry{ std::make_unique<RenderAsset>(), SDL_BLENDMODE_BLEND, false, false });
-    stages_.push_back(StageEntry{ std::make_unique<RenderCastShadow>(), SDL_BLENDMODE_BLEND, false, true });
+    stages_.push_back(StageEntry{ std::make_unique<RenderCastShadow>(), SDL_BLENDMODE_BLEND, true, true });
     stages_.push_back(StageEntry{ std::make_unique<RenderShadowMask>(), SDL_BLENDMODE_BLEND, true, false });
 }
 
@@ -296,7 +296,10 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         return nullptr;
     }
 
-    context.final_texture = final_texture;
+    context.final_texture     = final_texture;
+    context.stage_destination = final_texture;
+    context.stage_blend       = SDL_BLENDMODE_BLEND;
+    context.stage_drew_to_destination = false;
 
     std::vector<SDL_Texture*> intermediates;
     intermediates.reserve(stages_.size());
@@ -309,9 +312,15 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         if (low_quality_mode_ && entry.skip_in_low_quality) {
             continue;
         }
-        context.final_texture = final_texture;
+        context.final_texture     = final_texture;
+        context.stage_destination = final_texture;
+        context.stage_blend       = entry.blend;
+        context.stage_drew_to_destination = false;
         SDL_Texture* stage_texture = entry.stage->run(renderer_, asset, context);
-        if (!stage_texture) {
+        if (context.stage_drew_to_destination) {
+            continue;
+        }
+        if (!stage_texture || stage_texture == final_texture) {
             continue;
         }
 

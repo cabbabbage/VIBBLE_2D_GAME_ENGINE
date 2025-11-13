@@ -9,7 +9,9 @@
 #include <utility>
 
 RenderAsset::RenderAsset(SDL_Renderer* renderer)
-: renderer_(renderer) {}
+: renderer_(renderer) {
+        render_pipeline::EnsureBestScaleHint();
+}
 
 namespace {
 
@@ -63,10 +65,6 @@ bool rerender_scaled_texture(SDL_Renderer* renderer,
                 return false;
         }
 
-        // Force highest quality filtering when re-rendering the scaled texture
-#if SDL_VERSION_ATLEAST(2,0,12)
-        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
-#endif
         SDL_Rect dst{0, 0, dst_w, dst_h};
         const int copy_result = SDL_RenderCopy(renderer, source, nullptr, &dst);
 
@@ -207,6 +205,37 @@ SDL_Texture* RenderAsset::texture_for_scale(Asset* asset,
 
                 return entry.texture ? &entry : nullptr;
         };
+
+        auto warm_scale_variants = [&]() {
+                const std::size_t variant_count = std::min(scale_steps.size(), asset->downscale_cache_.size());
+                if (variant_count <= 1) {
+                        asset->downscale_cache_ready_revision_ = asset->final_texture_revision_;
+                        return;
+                }
+
+                if (asset->downscale_cache_ready_revision_ == asset->final_texture_revision_) {
+                        return;
+                }
+
+                bool all_ready = true;
+                for (std::size_t idx = 1; idx < variant_count; ++idx) {
+                        const float step = scale_steps[idx];
+                        if (!std::isfinite(step) || step <= 0.0f) {
+                                continue;
+                        }
+
+                        Asset::DownscaleCacheEntry* entry = ensure_downscale_entry(static_cast<int>(idx), step);
+                        if (!entry || !entry->texture) {
+                                all_ready = false;
+                        }
+                }
+
+                if (all_ready) {
+                        asset->downscale_cache_ready_revision_ = asset->final_texture_revision_;
+                }
+        };
+
+        warm_scale_variants();
 
         if (selection.preload_index > 0 && static_cast<std::size_t>(selection.preload_index) < scale_steps.size()) {
                 ensure_downscale_entry(selection.preload_index, scale_steps[selection.preload_index]);

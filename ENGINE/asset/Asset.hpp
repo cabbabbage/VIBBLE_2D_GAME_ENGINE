@@ -39,6 +39,28 @@ class Asset {
         int          height  = 0;
     };
 
+    struct MaskRenderMetadata {
+        struct TextureDefaults {
+            SDL_Texture* texture = nullptr;
+            Uint8        r = 255;
+            Uint8        g = 255;
+            Uint8        b = 255;
+            Uint8        a = 255;
+            SDL_BlendMode blend = SDL_BLENDMODE_BLEND;
+            bool         initialized = false;
+            void reset();
+        };
+
+        SDL_Texture* last_mask_texture = nullptr;
+        int          mask_w            = 0;
+        int          mask_h            = 0;
+        bool         has_dimensions    = false;
+        TextureDefaults mask_defaults;
+        TextureDefaults base_defaults;
+
+        void reset();
+    };
+
     struct TilingInfo {
         bool      enabled      = false;
         SDL_Point grid_origin{0, 0};
@@ -149,6 +171,10 @@ class Asset {
     RenderTextureCache& shadow_mask_cache() const;
     RenderTextureCache& motion_blur_cache();
     RenderTextureCache& motion_blur_cache() const;
+    RenderTextureCache& cast_shadow_cache();
+    RenderTextureCache& cast_shadow_cache() const;
+    MaskRenderMetadata& mask_render_metadata();
+    MaskRenderMetadata& mask_render_metadata() const;
 
     float smoothed_translation_x() const;
     float smoothed_translation_y() const;
@@ -233,6 +259,7 @@ private:
     void refresh_cached_dimensions();
 
     std::vector<DownscaleCacheEntry> downscale_cache_{};
+    std::uint64_t downscale_cache_ready_revision_ = 0;
 
     SDL_Texture* last_scaled_texture_      = nullptr;
     SDL_Texture* last_scaled_source_       = nullptr;
@@ -253,10 +280,13 @@ private:
                               const TransformSmoothingParams& scale,
                               const TransformSmoothingParams& alpha);
     void clear_render_caches();
+    void reset_mask_render_metadata();
     static void destroy_render_cache(RenderTextureCache& cache);
 
     mutable RenderTextureCache shadow_mask_cache_{};
     mutable RenderTextureCache motion_blur_cache_{};
+    mutable RenderTextureCache cast_shadow_cache_{};
+    mutable MaskRenderMetadata mask_render_metadata_{};
 
     void reset_scale_variant_state();
 

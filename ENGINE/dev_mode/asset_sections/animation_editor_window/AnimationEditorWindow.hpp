@@ -61,6 +61,7 @@ class AnimationEditorWindow {
     void on_live_frame_editor_closed(const std::string& animation_id);
 
   private:
+    void handle_document_saved();
     void layout_children();
     void ensure_layout() const;
     void configure_list_panel();

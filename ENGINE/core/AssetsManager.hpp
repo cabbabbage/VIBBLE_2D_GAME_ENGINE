@@ -1,7 +1,6 @@
 #pragma once
 
 #include "render/camera.hpp"
-#include "asset_list.hpp"
 #include "asset/asset_library.hpp"
 #include <SDL.h>
 #include <atomic>
@@ -76,6 +75,7 @@ public:
 
     const std::vector<Asset*>& getActive() const;
     const std::vector<Asset*>& getFilteredActiveAssets() const;
+    const std::vector<Asset*>& getActiveRaw() const { return active_assets; }
     const std::vector<Asset*>& getActiveLightAssets() const { return active_light_assets_; }
     const std::vector<Asset*>& getActiveLitAssets() const { return active_light_assets_; }
     const std::vector<Asset*>& getActiveStaticLightAssets() const { return active_static_light_assets_; }
@@ -265,12 +265,16 @@ private:
     std::string map_id_;
     std::string map_path_;
     nlohmann::json map_info_json_;
-    std::unique_ptr<AssetList> active_asset_list_;
     std::atomic<bool> active_assets_dirty_{true};
     MapGridSettings map_grid_settings_{};
     std::unique_ptr<devmode::core::ManifestStore> manifest_store_fallback_;
     std::unique_ptr<LightMapManager> light_map_manager_;
     std::optional<float> last_audio_effect_max_distance_{};
+    float max_asset_height_world_ = 0.0f;
+    float max_asset_width_world_  = 0.0f;
+    float cached_zoom_level_      = 0.0f;
+    bool  max_asset_dimensions_dirty_ = true;
+    std::vector<Asset*> visible_candidate_buffer_;
 
     struct GridMovementCommand {
         Asset* asset = nullptr;
@@ -307,7 +311,13 @@ private:
     bool rebuild_active_assets_if_needed();
     void rebuild_non_player_update_buffer_if_needed();
     void update_active_assets(SDL_Point center);
-    int active_search_radius() const;
+    bool is_asset_visible_on_screen(const Asset* asset) const;
+    bool is_asset_visible_on_screen(const Asset* asset, const SDL_Rect& screen_rect) const;
+    void update_max_asset_dimensions();
+    void invalidate_max_asset_dimensions();
+    SDL_Rect screen_world_rect() const;
+    SDL_Rect expanded_world_rect(const SDL_Rect& screen_rect) const;
+    int audio_effect_max_distance_world() const;
     void mark_non_player_update_buffer_dirty() {
         non_player_update_buffer_dirty_.store(true, std::memory_order_release);
     }

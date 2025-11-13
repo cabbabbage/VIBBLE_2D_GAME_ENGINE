@@ -36,6 +36,8 @@ class AnimationDocument {
     const std::filesystem::path& info_path() const { return info_path_; }
     const std::filesystem::path& asset_root() const { return asset_root_; }
 
+    void set_on_saved_callback(std::function<void()> callback);
+
     // Returns the base scale percentage for the asset (default 100.0)
     double scale_percentage() const;
 
@@ -55,6 +57,7 @@ class AnimationDocument {
     mutable bool dirty_ = false;
     mutable nlohmann::json base_data_;
     std::function<void(const nlohmann::json&)> persist_callback_;
+    std::function<void()> on_saved_callback_;
 };
 
 }

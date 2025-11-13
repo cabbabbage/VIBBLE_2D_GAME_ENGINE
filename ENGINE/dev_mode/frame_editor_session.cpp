@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <array>
 #include <sstream>
 #include <utility>
 #include <iomanip>
@@ -39,9 +40,12 @@ namespace {
 constexpr int kDirectoryPanelMinWidth = 700;
 constexpr int kMovementTotalsFieldWidth = 140;
 constexpr int kSmoothCheckboxMinWidth = 110;
+constexpr int kCurveCheckboxMinWidth = 110;
 constexpr int kChildrenFieldWidth = 132;
 constexpr int kShowAnimCheckboxMinWidth = 150;
 constexpr int kChildVisibilityCheckboxMinWidth = 140;
+constexpr int kShowChildCheckboxMinWidth = 140;
+constexpr int kChildDropdownMinWidth = 220;
 constexpr int kNavTitleHeight = 22;
 constexpr int kNavSpacing = 8;
 // Extra vertical gap between frame thumbnails and the horizontal slider
@@ -103,6 +107,62 @@ SDL_Point measure_label_size(const std::string& text) {
     }
     TTF_CloseFont(font);
     return size;
+}
+
+constexpr int kCurveArcSamples = 32;
+
+float point_distance(SDL_FPoint a, SDL_FPoint b) {
+    const float dx = b.x - a.x;
+    const float dy = b.y - a.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+SDL_FPoint quadratic_bezier_point(const SDL_FPoint& p0,
+                                  const SDL_FPoint& p1,
+                                  const SDL_FPoint& p2,
+                                  float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    const float inv = 1.0f - t;
+    const float w0 = inv * inv;
+    const float w1 = 2.0f * inv * t;
+    const float w2 = t * t;
+    return SDL_FPoint{
+        w0 * p0.x + w1 * p1.x + w2 * p2.x,
+        w0 * p0.y + w1 * p1.y + w2 * p2.y
+    };
+}
+
+SDL_FPoint sample_quadratic_by_arclen(const SDL_FPoint& p0,
+                                       const SDL_FPoint& p1,
+                                       const SDL_FPoint& p2,
+                                       float ratio) {
+    ratio = std::clamp(ratio, 0.0f, 1.0f);
+    std::array<float, kCurveArcSamples + 1> arc_lengths{};
+    arc_lengths[0] = 0.0f;
+    SDL_FPoint prev = p0;
+    for (int i = 1; i <= kCurveArcSamples; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(kCurveArcSamples);
+        SDL_FPoint curr = quadratic_bezier_point(p0, p1, p2, t);
+        arc_lengths[i] = arc_lengths[i - 1] + point_distance(prev, curr);
+        prev = curr;
+    }
+    const float total_length = arc_lengths[kCurveArcSamples];
+    if (total_length <= 0.001f) {
+        return quadratic_bezier_point(p0, p1, p2, ratio);
+    }
+    const float target = total_length * ratio;
+    for (int i = 1; i <= kCurveArcSamples; ++i) {
+        if (arc_lengths[i] >= target) {
+            const float prev_len = arc_lengths[i - 1];
+            const float seg_len = arc_lengths[i] - prev_len;
+            const float local = seg_len > 0.0f ? (target - prev_len) / seg_len : 0.0f;
+            const float t0 = static_cast<float>(i - 1) / static_cast<float>(kCurveArcSamples);
+            const float t1 = static_cast<float>(i) / static_cast<float>(kCurveArcSamples);
+            const float t = t0 + (t1 - t0) * std::clamp(local, 0.0f, 1.0f);
+            return quadratic_bezier_point(p0, p1, p2, t);
+        }
+    }
+    return p2;
 }
 
 } // namespace
@@ -190,12 +250,18 @@ void FrameEditorSession::begin(Assets* assets,
     target_->current_animation = animation_id_;
     update_asset_preview_frame();
 
-    // Show animation initially; ensure asset visible
+    // Show animation/children initially; ensure asset visible
     show_animation_ = true;
+    show_child_ = true;
     smooth_enabled_ = false;
+    curve_enabled_ = false;
     target_->set_hidden(false);
     scroll_offset_ = 0;
     dragging_scrollbar_thumb_ = false;
+    child_dropdown_options_cache_.clear();
+    last_applied_show_asset_state_ = show_animation_;
+    child_hidden_cache_.clear();
+    cache_child_hidden_states();
 
     ensure_widgets();
     // Initialize panel positions relative to the asset for better UX
@@ -271,8 +337,11 @@ void FrameEditorSession::end() {
         pan_zoom_.cancel(cam);
     }
     if (target_) {
+        apply_child_hidden_state(true);
         target_->set_hidden(prev_asset_hidden_);
     }
+    child_hidden_cache_.clear();
+    last_applied_show_asset_state_ = true;
     // Reopen animation editor window
     if (host_) {
         host_->on_live_frame_editor_closed(animation_id_);
@@ -307,8 +376,23 @@ void FrameEditorSession::update(const Input& input) {
     if (cb_show_anim_) {
         cb_show_anim_->set_value(show_animation_);
     }
+    if (cb_show_child_) {
+        cb_show_child_->set_value(show_child_);
+    }
+    if (dd_child_select_) {
+        int desired = child_assets_.empty() ? 0 : std::clamp(selected_child_index_, 0, static_cast<int>(child_assets_.size()) - 1);
+        if (dd_child_select_->selected() != desired) {
+            dd_child_select_->set_selected(desired);
+        }
+    }
     if (cb_smooth_) {
         cb_smooth_->set_value(smooth_enabled_);
+    }
+    if (!smooth_enabled_) {
+        curve_enabled_ = false;
+    }
+    if (cb_curve_) {
+        cb_curve_->set_value(smooth_enabled_ ? curve_enabled_ : false);
     }
     int total_dx = 0, total_dy = 0;
     for (size_t i = 1; i < frames_.size(); ++i) {
@@ -361,7 +445,10 @@ void FrameEditorSession::update(const Input& input) {
         }
     }
     // Ensure asset hidden state follows checkbox
-    if (target_) target_->set_hidden(!show_animation_);
+    if (target_) {
+        target_->set_hidden(!show_animation_);
+    }
+    sync_child_asset_visibility();
 }
 
 bool FrameEditorSession::handle_event(const SDL_Event& e) {
@@ -489,6 +576,10 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 const SDL_Rect& r = cb_smooth_->rect();
                 if (SDL_PointInRect(&p, &r)) over_interactive = true;
             }
+            if (!over_interactive && smooth_enabled_ && cb_curve_) {
+                const SDL_Rect& r = cb_curve_->rect();
+                if (SDL_PointInRect(&p, &r)) over_interactive = true;
+            }
             if (!over_interactive && cb_show_anim_) {
                 const SDL_Rect& r = cb_show_anim_->rect();
                 if (SDL_PointInRect(&p, &r)) over_interactive = true;
@@ -557,17 +648,20 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             bool current = cb_smooth_->value();
             if (current != smooth_enabled_) {
                 smooth_enabled_ = current;
+                if (!smooth_enabled_) {
+                    curve_enabled_ = false;
+                    if (cb_curve_) {
+                        cb_curve_->set_value(false);
+                    }
+                }
             }
             return true;
         }
 
-        // Checkbox toggle
-        if (cb_show_anim_ && cb_show_anim_->handle_event(e)) {
-            bool current = cb_show_anim_->value();
-            if (current != last_show_anim_value_) {
-                last_show_anim_value_ = current;
-                show_animation_ = current;
-                if (target_) target_->set_hidden(!show_animation_);
+        if (smooth_enabled_ && cb_curve_ && cb_curve_->handle_event(e)) {
+            bool current = cb_curve_->value();
+            if (current != curve_enabled_) {
+                curve_enabled_ = current;
             }
             return true;
         }
@@ -610,7 +704,39 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         if (consumed_tb) return true;
     }
 
+    if (cb_show_anim_ && cb_show_anim_->handle_event(e)) {
+        bool current = cb_show_anim_->value();
+        if (current != last_show_anim_value_) {
+            last_show_anim_value_ = current;
+            show_animation_ = current;
+            if (target_) target_->set_hidden(!show_animation_);
+        }
+        return true;
+    }
+
     if (mode_ == Mode::Children) {
+        if (dd_child_select_ && dd_child_select_->handle_event(e)) {
+            int current = dd_child_select_->selected();
+            if (child_assets_.empty()) {
+                current = 0;
+            } else {
+                current = std::clamp(current, 0, static_cast<int>(child_assets_.size()) - 1);
+            }
+            if (current != selected_child_index_) {
+                select_child(current);
+            }
+            return true;
+        }
+
+        if (cb_show_child_ && cb_show_child_->handle_event(e)) {
+            bool current = cb_show_child_->value();
+            if (current != last_show_child_value_) {
+                last_show_child_value_ = current;
+                show_child_ = current;
+            }
+            return true;
+        }
+
         bool consumed_child = false;
         if (tb_child_dx_) consumed_child = tb_child_dx_->handle_event(e) || consumed_child;
         if (tb_child_dy_) consumed_child = tb_child_dy_->handle_event(e) || consumed_child;
@@ -671,10 +797,6 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     // Navigation
     if (handle_button(btn_prev_, [this]() { this->select_frame(std::max(0, this->selected_index_ - 1)); })) return true;
     if (handle_button(btn_next_, [this]() { this->select_frame(this->selected_index_ + 1); })) return true;
-    if (mode_ == Mode::Children) {
-        if (handle_button(btn_child_prev_, [this]() { this->select_child(this->selected_child_index_ - 1); })) return true;
-        if (handle_button(btn_child_next_, [this]() { this->select_child(this->selected_child_index_ + 1); })) return true;
-    }
 
     // Thumbnails (skip if we were dragging)
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
@@ -720,6 +842,31 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             persist_changes();
         }
         return true;
+    }
+
+    if (mode_ == Mode::Children &&
+        e.type == SDL_KEYDOWN &&
+        (e.key.keysym.sym == SDLK_LEFT || e.key.keysym.sym == SDLK_RIGHT)) {
+        if (dd_child_select_ && dd_child_select_->focused()) {
+            return true;
+        }
+        auto child_textbox_editing = [&]() {
+            return (tb_child_dx_ && tb_child_dx_->is_editing()) ||
+                   (tb_child_dy_ && tb_child_dy_->is_editing()) ||
+                   (tb_child_deg_ && tb_child_deg_->is_editing());
+        };
+        if (child_textbox_editing()) {
+            return true;
+        }
+        if (auto* child = current_child_frame()) {
+            float delta = (e.key.keysym.mod & KMOD_SHIFT) ? 5.0f : 1.0f;
+            if (e.key.keysym.sym == SDLK_LEFT) {
+                delta = -delta;
+            }
+            child->degree += delta;
+            persist_changes();
+            return true;
+        }
     }
 
     // Swallow pointer events inside our panels to prevent world/editor input from seeing them
@@ -784,7 +931,8 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         SDL_RenderDrawRect(renderer, &dot);
     }
 
-    if (mode_ == Mode::Children && !child_assets_.empty() && selected_index_ < static_cast<int>(frames_.size())) {
+    if (mode_ == Mode::Children && show_child_ && !child_assets_.empty() &&
+        selected_index_ < static_cast<int>(frames_.size())) {
         const auto& frame = frames_[selected_index_];
         for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size(); ++i) {
             const auto& child = frame.children[i];
@@ -820,13 +968,15 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (mode_ == Mode::Movement && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         if (cb_smooth_) cb_smooth_->render(renderer);
+        if (smooth_enabled_ && cb_curve_) cb_curve_->render(renderer);
         if (cb_show_anim_) cb_show_anim_->render(renderer);
         if (tb_total_dx_) tb_total_dx_->render(renderer);
         if (tb_total_dy_) tb_total_dy_->render(renderer);
     } else if (mode_ == Mode::Children && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-        if (btn_child_prev_) btn_child_prev_->render(renderer);
-        if (btn_child_next_) btn_child_next_->render(renderer);
+        if (dd_child_select_) dd_child_select_->render(renderer);
+        if (cb_show_anim_) cb_show_anim_->render(renderer);
+        if (cb_show_child_) cb_show_child_->render(renderer);
         if (tb_child_dx_) tb_child_dx_->render(renderer);
         if (tb_child_dy_) tb_child_dy_->render(renderer);
         if (tb_child_deg_) tb_child_deg_->render(renderer);
@@ -904,6 +1054,8 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, 255);
         SDL_RenderDrawRect(renderer, &scrollbar_thumb_);
     }
+
+    DMDropdown::render_active_options(renderer);
 }
 
 void FrameEditorSession::set_grid_overlay_enabled_transient(bool enabled) {
@@ -923,16 +1075,32 @@ void FrameEditorSession::ensure_widgets() const {
     if (!btn_prev_) btn_prev_ = std::make_unique<DMButton>("<", &header, 40, 40);
     if (!btn_next_) btn_next_ = std::make_unique<DMButton>(">", &header, 40, 40);
     if (!cb_smooth_) cb_smooth_ = std::make_unique<DMCheckbox>("Smooth", smooth_enabled_);
-    if (!cb_show_anim_) cb_show_anim_ = std::make_unique<DMCheckbox>("Show Animation", show_animation_);
+    if (!cb_curve_) cb_curve_ = std::make_unique<DMCheckbox>("Curve", curve_enabled_);
+    const bool want_parent_label = (mode_ == Mode::Children);
+    if (!cb_show_anim_ || cb_show_anim_targets_parent_label_ != want_parent_label) {
+        const bool current = cb_show_anim_ ? cb_show_anim_->value() : show_animation_;
+        cb_show_anim_ = std::make_unique<DMCheckbox>(want_parent_label ? "Show Parent" : "Show Animation", current);
+        cb_show_anim_targets_parent_label_ = want_parent_label;
+    }
+    if (!cb_show_child_) cb_show_child_ = std::make_unique<DMCheckbox>("Show Child", show_child_);
     if (!tb_total_dx_) tb_total_dx_ = std::make_unique<DMTextBox>("Total dX", "0");
     if (!tb_total_dy_) tb_total_dy_ = std::make_unique<DMTextBox>("Total dY", "0");
-    if (!btn_child_prev_) btn_child_prev_ = std::make_unique<DMButton>("< Child", &header, 96, bh);
-    if (!btn_child_next_) btn_child_next_ = std::make_unique<DMButton>("Child >", &header, 96, bh);
     if (!tb_child_dx_) tb_child_dx_ = std::make_unique<DMTextBox>("Child dX", "0");
     if (!tb_child_dy_) tb_child_dy_ = std::make_unique<DMTextBox>("Child dY", "0");
     if (!tb_child_deg_) tb_child_deg_ = std::make_unique<DMTextBox>("Rotation", "0");
     if (!cb_child_visible_) cb_child_visible_ = std::make_unique<DMCheckbox>("Visible", true);
+    if (!dd_child_select_ || child_dropdown_options_cache_ != child_assets_) {
+        child_dropdown_options_cache_ = child_assets_;
+        int dropdown_index = selected_child_index_;
+        if (child_assets_.empty()) {
+            dropdown_index = 0;
+        } else {
+            dropdown_index = std::clamp(dropdown_index, 0, static_cast<int>(child_assets_.size()) - 1);
+        }
+        dd_child_select_ = std::make_unique<DMDropdown>("Child", child_dropdown_options_cache_, dropdown_index);
+    }
     last_show_anim_value_ = show_animation_;
+    last_show_child_value_ = show_child_;
     last_totals_dx_text_ = tb_total_dx_->value();
     last_totals_dy_text_ = tb_total_dy_->value();
 }
@@ -1029,6 +1197,13 @@ void FrameEditorSession::rebuild_layout() const {
                 const int x = reserve(w);
                 cb_smooth_->set_rect(SDL_Rect{ x, y, w, h });
             }
+            if (smooth_enabled_ && cb_curve_) {
+                const int w = std::max(metrics.curve_checkbox_width, DMCheckbox::height());
+                const int h = DMCheckbox::height();
+                const int y = row_top + (metrics.row_height - h) / 2;
+                const int x = reserve(w);
+                cb_curve_->set_rect(SDL_Rect{ x, y, w, h });
+            }
             if (cb_show_anim_) {
                 const int w = std::max(metrics.show_checkbox_width, DMCheckbox::height());
                 const int h = DMCheckbox::height();
@@ -1057,60 +1232,78 @@ void FrameEditorSession::rebuild_layout() const {
             toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
         } else {
             toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, metrics.width, metrics.height };
-            const int top = toolbox_rect_.y + metrics.padding;
-            int tx = toolbox_rect_.x + metrics.padding;
-            int row_y = top;
-            bool first_row_item = true;
-            auto reserve = [&](int w) -> int {
-                if (!first_row_item) {
-                    tx += metrics.gap;
+            const int content_width = std::max(0, toolbox_rect_.w - metrics.padding * 2);
+            int row_cursor = toolbox_rect_.y + metrics.padding;
+            bool have_previous_row = false;
+            auto allocate_row = [&](int row_height) -> int {
+                if (row_height <= 0) return -1;
+                if (have_previous_row) {
+                    row_cursor += metrics.gap;
                 }
-                first_row_item = false;
-                int x = tx;
-                tx += w;
-                return x;
+                have_previous_row = true;
+                int top = row_cursor;
+                row_cursor += row_height;
+                return top;
             };
 
-            // Row 1: navigation between children
-            if (btn_child_prev_ || btn_child_next_) {
-                if (btn_child_prev_) {
-                    const int w = btn_child_prev_->rect().w;
-                    const int h = DMButton::height();
-                    const int y = row_y + (metrics.nav_row_height - h) / 2;
-                    const int x = reserve(w);
-                    btn_child_prev_->set_rect(SDL_Rect{ x, y, w, h });
+            const int row_left = toolbox_rect_.x + metrics.padding;
+
+            if (dd_child_select_ && metrics.dropdown_row_height > 0) {
+                const int row_top = allocate_row(metrics.dropdown_row_height);
+                if (row_top >= 0) {
+                    dd_child_select_->set_rect(SDL_Rect{
+                        row_left,
+                        row_top,
+                        content_width,
+                        metrics.dropdown_row_height
+                    });
                 }
-                if (btn_child_next_) {
-                    const int w = btn_child_next_->rect().w;
-                    const int h = DMButton::height();
-                    const int y = row_y + (metrics.nav_row_height - h) / 2;
-                    const int x = reserve(w);
-                    btn_child_next_->set_rect(SDL_Rect{ x, y, w, h });
-                }
-                row_y += metrics.nav_row_height + metrics.gap;
-                tx = toolbox_rect_.x + metrics.padding;
-                first_row_item = true;
             }
 
-            // Row 2: editable child transforms + visibility
-            if (tb_child_dx_ || tb_child_dy_ || tb_child_deg_ || cb_child_visible_) {
-                auto place_textbox = [&](DMTextBox* tb, int height) {
-                    if (!tb) return;
-                    const int w = metrics.textbox_width;
-                    const int h = height > 0 ? height : tb->height_for_width(w);
-                    const int y = row_y + (metrics.form_row_height - h) / 2;
-                    const int x = reserve(w);
-                    tb->set_rect(SDL_Rect{ x, y, w, h });
-                };
-                place_textbox(tb_child_dx_.get(), metrics.child_dx_height);
-                place_textbox(tb_child_dy_.get(), metrics.child_dy_height);
-                place_textbox(tb_child_deg_.get(), metrics.child_rotation_height);
-                if (cb_child_visible_) {
-                    const int w = std::max(metrics.checkbox_width, DMCheckbox::height());
-                    const int h = DMCheckbox::height();
-                    const int y = row_y + (metrics.form_row_height - h) / 2;
-                    const int x = reserve(w);
-                    cb_child_visible_->set_rect(SDL_Rect{ x, y, w, h });
+            if (metrics.toggle_row_height > 0 && (cb_show_anim_ || cb_show_child_)) {
+                const int row_top = allocate_row(metrics.toggle_row_height);
+                if (row_top >= 0) {
+                    int tx = row_left;
+                    auto place_checkbox = [&](DMCheckbox* cb, int width) {
+                        if (!cb || width <= 0) return;
+                        const int h = DMCheckbox::height();
+                        const int y = row_top + (metrics.toggle_row_height - h) / 2;
+                        cb->set_rect(SDL_Rect{ tx, y, width, h });
+                        tx += width + metrics.gap;
+                    };
+                    place_checkbox(cb_show_anim_.get(), metrics.show_parent_checkbox_width);
+                    place_checkbox(cb_show_child_.get(), metrics.show_child_checkbox_width);
+                }
+            }
+
+            if (metrics.form_row_height > 0 &&
+                (tb_child_dx_ || tb_child_dy_ || tb_child_deg_ || cb_child_visible_)) {
+                const int row_top = allocate_row(metrics.form_row_height);
+                if (row_top >= 0) {
+                    int tx = row_left;
+                    auto reserve = [&](int w) -> int {
+                        int x = tx;
+                        tx += w + metrics.gap;
+                        return x;
+                    };
+                    auto place_textbox = [&](DMTextBox* tb, int height) {
+                        if (!tb) return;
+                        const int w = metrics.textbox_width;
+                        const int h = height > 0 ? height : tb->height_for_width(w);
+                        const int y = row_top + (metrics.form_row_height - h) / 2;
+                        const int x = reserve(w);
+                        tb->set_rect(SDL_Rect{ x, y, w, h });
+                    };
+                    place_textbox(tb_child_dx_.get(), metrics.child_dx_height);
+                    place_textbox(tb_child_dy_.get(), metrics.child_dy_height);
+                    place_textbox(tb_child_deg_.get(), metrics.child_rotation_height);
+                    if (cb_child_visible_) {
+                        const int w = std::max(metrics.child_visible_checkbox_width, DMCheckbox::height());
+                        const int h = DMCheckbox::height();
+                        const int y = row_top + (metrics.form_row_height - h) / 2;
+                        const int x = reserve(w);
+                        cb_child_visible_->set_rect(SDL_Rect{ x, y, w, h });
+                    }
                 }
             }
         }
@@ -1229,11 +1422,14 @@ FrameEditorSession::MovementToolboxMetrics FrameEditorSession::build_movement_to
     metrics.gap = DMSpacing::small_gap();
     metrics.totals_width = kMovementTotalsFieldWidth;
     metrics.smooth_checkbox_width = cb_smooth_ ? std::max(kSmoothCheckboxMinWidth, cb_smooth_->preferred_width()) : 0;
+    const bool curve_visible = smooth_enabled_ && cb_curve_;
+    metrics.curve_checkbox_width = curve_visible ? std::max(kCurveCheckboxMinWidth, cb_curve_->preferred_width()) : 0;
     metrics.show_checkbox_width = cb_show_anim_ ? std::max(kShowAnimCheckboxMinWidth, cb_show_anim_->preferred_width()) : 0;
     metrics.total_dx_height = tb_total_dx_ ? tb_total_dx_->height_for_width(metrics.totals_width) : 0;
     metrics.total_dy_height = tb_total_dy_ ? tb_total_dy_->height_for_width(metrics.totals_width) : 0;
     int max_row_height = 0;
     if (cb_smooth_) max_row_height = std::max(max_row_height, DMCheckbox::height());
+    if (curve_visible) max_row_height = std::max(max_row_height, DMCheckbox::height());
     if (cb_show_anim_) max_row_height = std::max(max_row_height, DMCheckbox::height());
     if (tb_total_dx_) max_row_height = std::max(max_row_height, metrics.total_dx_height);
     if (tb_total_dy_) max_row_height = std::max(max_row_height, metrics.total_dy_height);
@@ -1248,6 +1444,7 @@ FrameEditorSession::MovementToolboxMetrics FrameEditorSession::build_movement_to
         row_width += w;
     };
     if (cb_smooth_ && metrics.smooth_checkbox_width > 0) append(metrics.smooth_checkbox_width);
+    if (curve_visible && metrics.curve_checkbox_width > 0) append(metrics.curve_checkbox_width);
     if (cb_show_anim_ && metrics.show_checkbox_width > 0) append(metrics.show_checkbox_width);
     if (tb_total_dx_) append(metrics.totals_width);
     if (tb_total_dy_) append(metrics.totals_width);
@@ -1271,25 +1468,34 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     const int max_textbox_height = std::max(
         metrics.child_dx_height,
         std::max(metrics.child_dy_height, metrics.child_rotation_height));
-    metrics.nav_row_height = DMButton::height();
     const int checkbox_height = DMCheckbox::height();
-    metrics.checkbox_width = cb_child_visible_
-                                 ? std::max(kChildVisibilityCheckboxMinWidth, cb_child_visible_->preferred_width())
-                                 : 0;
+    metrics.child_visible_checkbox_width = cb_child_visible_
+                                               ? std::max(kChildVisibilityCheckboxMinWidth, cb_child_visible_->preferred_width())
+                                               : 0;
+    metrics.show_parent_checkbox_width = cb_show_anim_
+                                             ? std::max(kShowAnimCheckboxMinWidth, cb_show_anim_->preferred_width())
+                                             : 0;
+    metrics.show_child_checkbox_width = cb_show_child_
+                                            ? std::max(kShowChildCheckboxMinWidth, cb_show_child_->preferred_width())
+                                            : 0;
     int form_content_height = max_textbox_height;
     if (cb_child_visible_) {
         form_content_height = std::max(form_content_height, checkbox_height);
     }
     metrics.form_row_height = form_content_height > 0 ? form_content_height : checkbox_height;
 
-    int nav_row_width = 0;
-    auto append_nav = [&](int w) {
+    int dropdown_row_width = dd_child_select_
+        ? std::max(kChildDropdownMinWidth, dd_child_select_->rect().w)
+        : 0;
+
+    int toggle_row_width = 0;
+    auto append_toggle = [&](int w) {
         if (w <= 0) return;
-        if (nav_row_width > 0) nav_row_width += metrics.gap;
-        nav_row_width += w;
+        if (toggle_row_width > 0) toggle_row_width += metrics.gap;
+        toggle_row_width += w;
     };
-    if (btn_child_prev_) append_nav(btn_child_prev_->rect().w);
-    if (btn_child_next_) append_nav(btn_child_next_->rect().w);
+    append_toggle(metrics.show_parent_checkbox_width);
+    append_toggle(metrics.show_child_checkbox_width);
 
     int form_row_width = 0;
     auto append_form = [&](int w) {
@@ -1300,26 +1506,42 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     if (tb_child_dx_) append_form(metrics.textbox_width);
     if (tb_child_dy_) append_form(metrics.textbox_width);
     if (tb_child_deg_) append_form(metrics.textbox_width);
-    if (cb_child_visible_ && metrics.checkbox_width > 0) append_form(metrics.checkbox_width);
-
-    const bool has_nav_row = nav_row_width > 0;
-    const bool has_form_row = form_row_width > 0;
-    if (!has_nav_row && !has_form_row) {
+    if (cb_child_visible_ && metrics.child_visible_checkbox_width > 0) append_form(metrics.child_visible_checkbox_width);
+    if (form_row_width == 0) {
         metrics.form_row_height = 0;
+    }
+
+    metrics.toggle_row_height = toggle_row_width > 0 ? checkbox_height : 0;
+
+    int content_width = std::max({dropdown_row_width, toggle_row_width, form_row_width});
+    if (dd_child_select_) {
+        const int dropdown_width = std::max(content_width, std::max(kChildDropdownMinWidth, dropdown_row_width));
+        metrics.dropdown_row_height = dd_child_select_->preferred_height(std::max(dropdown_width, kChildDropdownMinWidth));
+        content_width = std::max(content_width, dropdown_width);
+    } else {
+        metrics.dropdown_row_height = 0;
+    }
+
+    if (content_width <= 0) {
+        metrics.width = 0;
+        metrics.height = 0;
         return metrics;
     }
-    const int content_width = std::max(nav_row_width, form_row_width);
+
     metrics.width = content_width + metrics.padding * 2;
     metrics.height = metrics.padding * 2;
-    if (has_nav_row) {
-        metrics.height += metrics.nav_row_height;
-    }
-    if (has_form_row) {
-        if (has_nav_row) {
+    bool added_row = false;
+    auto add_row = [&](int row_height) {
+        if (row_height <= 0) return;
+        if (added_row) {
             metrics.height += metrics.gap;
         }
-        metrics.height += metrics.form_row_height;
-    }
+        metrics.height += row_height;
+        added_row = true;
+    };
+    add_row(metrics.dropdown_row_height);
+    add_row(metrics.toggle_row_height);
+    add_row(metrics.form_row_height);
     return metrics;
 }
 
@@ -1369,42 +1591,12 @@ void FrameEditorSession::redistribute_frames_after_adjustment(int adjusted_index
         return;
     }
 
-    std::vector<SDL_FPoint> redistributed = rel_positions_;
-    const SDL_FPoint start = redistributed.front();
-    const SDL_FPoint end   = redistributed.back();
-    const float steps = static_cast<float>(last_index);
-    if (steps <= 0.0f) {
-        persist_changes();
-        return;
-    }
-    // Evenly space points. If the adjusted point is not the last, distribute points on
-    // either side independently so connecting segments to the anchor match their sides.
-    if (adjusted_index >= 1 && adjusted_index < last_index) {
-        // Before anchor: j in [1, adjusted_index-1]
-        const SDL_FPoint anchor = redistributed[adjusted_index];
-        const float pre_steps = static_cast<float>(adjusted_index);
-        const SDL_FPoint pre_delta{ anchor.x - start.x, anchor.y - start.y };
-        for (int j = 1; j < adjusted_index; ++j) {
-            const float t = pre_steps > 0.0f ? (static_cast<float>(j) / pre_steps) : 0.0f;
-            SDL_FPoint new_pos{ start.x + pre_delta.x * t, start.y + pre_delta.y * t };
-            redistributed[j] = new_pos;
-        }
-        // After anchor: j in [adjusted_index+1, last_index-1]
-        const float post_steps = static_cast<float>(last_index - adjusted_index);
-        const SDL_FPoint post_delta{ end.x - anchor.x, end.y - anchor.y };
-        for (int j = adjusted_index + 1; j < last_index; ++j) {
-            const float u = post_steps > 0.0f ? (static_cast<float>(j - adjusted_index) / post_steps) : 0.0f;
-            SDL_FPoint new_pos{ anchor.x + post_delta.x * u, anchor.y + post_delta.y * u };
-            redistributed[j] = new_pos;
-        }
+    const std::vector<SDL_FPoint> original_positions = rel_positions_;
+    std::vector<SDL_FPoint> redistributed = original_positions;
+    if (curve_enabled_) {
+        apply_curved_smoothing(adjusted_index, original_positions, redistributed, last_index);
     } else {
-        // Adjusted is last: smooth all points before last along start->end line
-        const SDL_FPoint delta{ end.x - start.x, end.y - start.y };
-        for (int j = 1; j < last_index; ++j) {
-            const float t = static_cast<float>(j) / steps;
-            SDL_FPoint new_pos{ start.x + delta.x * t, start.y + delta.y * t };
-            redistributed[j] = new_pos;
-        }
+        apply_linear_smoothing(adjusted_index, redistributed, last_index);
     }
 
     // Rebuild frame deltas from redistributed absolute positions
@@ -1418,6 +1610,100 @@ void FrameEditorSession::redistribute_frames_after_adjustment(int adjusted_index
     }
     rebuild_rel_positions();
     persist_changes();
+}
+
+void FrameEditorSession::apply_linear_smoothing(int adjusted_index,
+                                                std::vector<SDL_FPoint>& redistributed,
+                                                int last_index) const {
+    if (redistributed.empty()) return;
+    if (adjusted_index <= 0) return;
+    const SDL_FPoint start = redistributed.front();
+    const SDL_FPoint end = redistributed.back();
+    const float steps = static_cast<float>(last_index);
+    if (steps <= 0.0f) {
+        return;
+    }
+    if (adjusted_index >= 1 && adjusted_index < last_index) {
+        const SDL_FPoint anchor = redistributed[adjusted_index];
+        const float pre_steps = static_cast<float>(adjusted_index);
+        const SDL_FPoint pre_delta{ anchor.x - start.x, anchor.y - start.y };
+        for (int j = 1; j < adjusted_index; ++j) {
+            const float t = pre_steps > 0.0f ? (static_cast<float>(j) / pre_steps) : 0.0f;
+            SDL_FPoint new_pos{ start.x + pre_delta.x * t, start.y + pre_delta.y * t };
+            redistributed[j] = new_pos;
+        }
+        const float post_steps = static_cast<float>(last_index - adjusted_index);
+        const SDL_FPoint post_delta{ end.x - anchor.x, end.y - anchor.y };
+        for (int j = adjusted_index + 1; j < last_index; ++j) {
+            const float u = post_steps > 0.0f ? (static_cast<float>(j - adjusted_index) / post_steps) : 0.0f;
+            SDL_FPoint new_pos{ anchor.x + post_delta.x * u, anchor.y + post_delta.y * u };
+            redistributed[j] = new_pos;
+        }
+    } else {
+        const SDL_FPoint delta{ end.x - start.x, end.y - start.y };
+        for (int j = 1; j < last_index; ++j) {
+            const float t = static_cast<float>(j) / steps;
+            SDL_FPoint new_pos{ start.x + delta.x * t, start.y + delta.y * t };
+            redistributed[j] = new_pos;
+        }
+    }
+}
+
+void FrameEditorSession::apply_curved_smoothing(int adjusted_index,
+                                                const std::vector<SDL_FPoint>& original,
+                                                std::vector<SDL_FPoint>& redistributed,
+                                                int last_index) const {
+    if (redistributed.size() < 2) return;
+    if (original.size() != redistributed.size()) return;
+    if (adjusted_index <= 0) return;
+
+    auto clamp_control = [](const SDL_FPoint& p0, const SDL_FPoint& p2, SDL_FPoint& control) {
+        SDL_FPoint midpoint{ (p0.x + p2.x) * 0.5f, (p0.y + p2.y) * 0.5f };
+        float dx = control.x - midpoint.x;
+        float dy = control.y - midpoint.y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        const float span = std::sqrt((p2.x - p0.x) * (p2.x - p0.x) + (p2.y - p0.y) * (p2.y - p0.y));
+        const float max_offset = std::clamp(span * 0.45f, 0.0f, 160.0f);
+        if (dist > max_offset && dist > 0.0f) {
+            const float scale = max_offset / dist;
+            control.x = midpoint.x + dx * scale;
+            control.y = midpoint.y + dy * scale;
+            dist = max_offset;
+        }
+        if (dist < 1.0f && span > 0.0f) {
+            const float nx = -(p2.y - p0.y) / span;
+            const float ny = (p2.x - p0.x) / span;
+            const float offset = std::min(span * 0.2f, 40.0f);
+            control.x = midpoint.x + nx * offset;
+            control.y = midpoint.y + ny * offset;
+        }
+    };
+
+    auto place_half = [&](int first_idx, int second_idx) {
+        const int segment_count = second_idx - first_idx;
+        if (segment_count <= 1) return;
+        SDL_FPoint p0 = redistributed[first_idx];
+        SDL_FPoint p2 = redistributed[second_idx];
+        SDL_FPoint control{ (p0.x + p2.x) * 0.5f, (p0.y + p2.y) * 0.5f };
+        const int interior_count = segment_count - 1;
+        if (interior_count > 0) {
+            int mid_index = first_idx + (segment_count / 2);
+            mid_index = std::clamp(mid_index, first_idx + 1, second_idx - 1);
+            if (mid_index >= 0 && mid_index < static_cast<int>(original.size())) {
+                control = original[mid_index];
+            }
+        }
+        clamp_control(p0, p2, control);
+        for (int j = first_idx + 1; j < second_idx; ++j) {
+            const float ratio = static_cast<float>(j - first_idx) / static_cast<float>(segment_count);
+            redistributed[j] = sample_quadratic_by_arclen(p0, control, p2, ratio);
+        }
+    };
+
+    place_half(0, std::min(adjusted_index, last_index));
+    if (adjusted_index < last_index) {
+        place_half(adjusted_index, last_index);
+    }
 }
 
 void FrameEditorSession::rebuild_rel_positions() {
@@ -1490,16 +1776,70 @@ const FrameEditorSession::ChildFrame* FrameEditorSession::current_child_frame() 
     return &frame.children[selected_child_index_];
 }
 
+void FrameEditorSession::sync_child_asset_visibility() {
+    if (!target_) return;
+    if (show_animation_ != last_applied_show_asset_state_) {
+        if (!show_animation_) {
+            cache_child_hidden_states();
+            apply_child_hidden_state(false);
+        } else {
+            apply_child_hidden_state(true);
+            cache_child_hidden_states();
+        }
+        last_applied_show_asset_state_ = show_animation_;
+    } else {
+        if (show_animation_) {
+            cache_child_hidden_states();
+        } else {
+            apply_child_hidden_state(false);
+        }
+    }
+}
+
+void FrameEditorSession::cache_child_hidden_states() {
+    if (!target_) return;
+    std::function<void(Asset*)> recurse = [&](Asset* parent) {
+        if (!parent) return;
+        for (Asset* child : parent->asset_children) {
+            if (!child) continue;
+            child_hidden_cache_[child] = child->is_hidden();
+            recurse(child);
+        }
+    };
+    recurse(target_);
+}
+
+void FrameEditorSession::apply_child_hidden_state(bool show_children) {
+    if (!target_) return;
+    std::function<void(Asset*)> recurse = [&](Asset* parent) {
+        if (!parent) return;
+        for (Asset* child : parent->asset_children) {
+            if (!child) continue;
+            if (show_children) {
+                auto it = child_hidden_cache_.find(child);
+                const bool desired = (it != child_hidden_cache_.end()) ? it->second : child->is_hidden();
+                child->set_hidden(desired);
+            } else {
+                child_hidden_cache_.try_emplace(child, child->is_hidden());
+                child->set_hidden(true);
+            }
+            recurse(child);
+        }
+    };
+    recurse(target_);
+}
+
 void FrameEditorSession::select_child(int index) {
-    if (child_assets_.empty()) {
-        selected_child_index_ = 0;
+    int clamped = child_assets_.empty()
+        ? 0
+        : std::clamp(index, 0, static_cast<int>(child_assets_.size()) - 1);
+    if (clamped == selected_child_index_) {
         return;
     }
-    index = std::clamp(index, 0, static_cast<int>(child_assets_.size()) - 1);
-    if (index == selected_child_index_) {
-        return;
+    selected_child_index_ = clamped;
+    if (dd_child_select_) {
+        dd_child_select_->set_selected(clamped);
     }
-    selected_child_index_ = index;
 }
 
 void FrameEditorSession::persist_changes() {

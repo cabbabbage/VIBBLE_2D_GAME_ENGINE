@@ -4,14 +4,14 @@
             "current_room": true,
             "filters_expanded": false,
             "initialized": true,
-            "map_assets": true,
+            "map_assets": false,
             "methods": {
                 "center": true,
                 "childrandom": true,
                 "edge": true,
                 "exact": true,
                 "exact_position": false,
-                "percent": true,
+                "percent": false,
                 "perimeter": true,
                 "random": true
             },
@@ -37,6 +37,9 @@
         }
     },
     "dev_ui": {
+        "camera": {
+            "depthcue_enabled": true
+        },
         "lighting": {
             "map_panel": {
                 "reactive": {

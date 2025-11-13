@@ -14,6 +14,7 @@
 #include <sstream>
 
 #include "core/AssetsManager.hpp"
+#include "dev_mode/depth_cue_settings.hpp"
 #include "dev_mode/dm_icons.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/font_cache.hpp"
@@ -521,6 +522,7 @@ private:
 CameraUIPanel::CameraUIPanel(Assets* assets, int x, int y)
     : DockableCollapsible("Camera Settings", true, x, y),
       assets_(assets) {
+    last_depthcue_enabled_ = devmode::camera_prefs::load_depthcue_enabled();
     set_expanded(true);
     set_visible(false);
     set_padding(16);
@@ -638,8 +640,6 @@ void CameraUIPanel::sync_from_camera() {
     last_realism_enabled_ = effects_enabled;
     if (effects_checkbox_) effects_checkbox_->set_value(effects_enabled);
 
-    if (render_distance_slider_) render_distance_slider_->set_value(last_settings_.render_distance);
-    if (render_radius_y_offset_slider_) render_radius_y_offset_slider_->set_value(last_settings_.render_radius_y_offset_px);
     if (min_render_size_slider_) min_render_size_slider_->set_value(last_settings_.min_visible_screen_ratio);
     if (tripod_distance_slider_) tripod_distance_slider_->set_value(last_settings_.tripod_distance_y);
     if (height_zoom1_slider_) height_zoom1_slider_->set_value(last_settings_.height_at_zoom1);
@@ -663,11 +663,11 @@ void CameraUIPanel::sync_from_camera() {
     if (min_zoom_multiplier_slider_) min_zoom_multiplier_slider_->set_value(last_settings_.min_zoom_multiplier);
     if (max_zoom_multiplier_slider_) max_zoom_multiplier_slider_->set_value(last_settings_.max_zoom_multiplier);
     // Perspective Colors
-    if (distance_saturation_factor_min_slider_) distance_saturation_factor_min_slider_->set_value(last_settings_.distance_saturation_factor_min);
-    if (distance_saturation_factor_max_slider_) distance_saturation_factor_max_slider_->set_value(last_settings_.distance_saturation_factor_max);
-    if (primary_color_boost_min_slider_)       primary_color_boost_min_slider_->set_value(last_settings_.primary_color_boost_min);
-    if (primary_color_boost_max_slider_)       primary_color_boost_max_slider_->set_value(last_settings_.primary_color_boost_max);
-    if (ground_brightness_factor_slider_)      ground_brightness_factor_slider_->set_value(last_settings_.ground_brightness_factor);
+    if (saturation_background_slider_) saturation_background_slider_->set_value(last_settings_.saturation_background);
+    if (saturation_foreground_slider_) saturation_foreground_slider_->set_value(last_settings_.saturation_foreground);
+    if (primary_boost_background_slider_) primary_boost_background_slider_->set_value(last_settings_.primary_boost_background);
+    if (primary_boost_foreground_slider_) primary_boost_foreground_slider_->set_value(last_settings_.primary_boost_foreground);
+    if (foreground_brightness_slider_)    foreground_brightness_slider_->set_value(last_settings_.foreground_brightness);
     if (background_brightness_slider_)         background_brightness_slider_->set_value(last_settings_.background_brightness);
     // Perspective Blur
     if (max_foreground_blur_slider_)           max_foreground_blur_slider_->set_value(last_settings_.max_foreground_blur);
@@ -675,6 +675,9 @@ void CameraUIPanel::sync_from_camera() {
     if (background_blur_plane_slider_)         background_blur_plane_slider_->set_value(last_settings_.blur_background_screen_y);
     if (foreground_blur_plane_slider_)         foreground_blur_plane_slider_->set_value(last_settings_.blur_foreground_screen_y);
     if (blur_falloff_dropdown_)                blur_falloff_dropdown_->set_selected(static_cast<int>(last_settings_.blur_falloff_method));
+    if (brightness_interp_dropdown_)           brightness_interp_dropdown_->set_selected(static_cast<int>(last_settings_.brightness_falloff_method));
+    if (saturation_interp_dropdown_)           saturation_interp_dropdown_->set_selected(static_cast<int>(last_settings_.saturation_falloff_method));
+    if (primary_interp_dropdown_)              primary_interp_dropdown_->set_selected(static_cast<int>(last_settings_.primary_boost_falloff_method));
     if (depthcue_checkbox_)                    depthcue_checkbox_->set_value(last_depthcue_enabled_);
 }
 
@@ -715,12 +718,6 @@ void CameraUIPanel::build_ui() {
     configure_section(zoom_section_header_,       "Zoom Range",               &zoom_section_expanded_);
     configure_section(smoothing_section_header_,  "Motion & Smoothing",       &smoothing_section_expanded_);
 
-    render_distance_slider_ = std::make_unique<FloatSliderWidget>("Render Buffer (px)", 0.0f, 4000.0f, 10.0f, defaults.render_distance, 0);
-    render_distance_slider_->set_tooltip("Keeps this many extra pixels alive outside the viewport so objects never snap in.");
-    render_distance_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-    render_radius_y_offset_slider_ = std::make_unique<FloatSliderWidget>("Render Radius Y Offset (px)", -1000.0f, 1000.0f, 10.0f, defaults.render_radius_y_offset_px, 0);
-    render_radius_y_offset_slider_->set_tooltip("Offsets the render range vertically without moving the camera focus. Positive = down.");
-    render_radius_y_offset_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min On-Screen Size", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
     min_render_size_slider_->set_tooltip("Cull sprites once their height drops below this fraction of the screen (0.01 = 1%).");
     min_render_size_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
@@ -743,45 +740,57 @@ void CameraUIPanel::build_ui() {
     render_quality_slider_->set_tooltip("Trade fidelity for speed; lowers the number of sprites drawn each frame.");
     render_quality_slider_->set_on_value_changed([this](int) { on_control_value_changed(); });
 
-    // Perspective Colors sliders (UI-only; default 0, range as specified)
-    distance_saturation_factor_min_slider_ = std::make_unique<FloatSliderWidget>(
-        "Distance Saturation Factor Min", -50.0f, 0.0f, 1.0f, defaults.distance_saturation_factor_min, 0);
-    distance_saturation_factor_min_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    // Saturation sliders
+    saturation_background_slider_ = std::make_unique<FloatSliderWidget>(
+        "Saturation Background", -50.0f, 0.0f, 1.0f, defaults.saturation_background, 0);
+    saturation_background_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    distance_saturation_factor_max_slider_ = std::make_unique<FloatSliderWidget>(
-        "Distance Saturation Factor Max", 0.0f, 50.0f, 1.0f, defaults.distance_saturation_factor_max, 0);
-    distance_saturation_factor_max_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    saturation_foreground_slider_ = std::make_unique<FloatSliderWidget>(
+        "Saturation Foreground", 0.0f, 50.0f, 1.0f, defaults.saturation_foreground, 0);
+    saturation_foreground_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    primary_color_boost_min_slider_ = std::make_unique<FloatSliderWidget>(
-        "Primary Color Boost Min", -50.0f, 0.0f, 1.0f, defaults.primary_color_boost_min, 0);
-    primary_color_boost_min_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-
-    primary_color_boost_max_slider_ = std::make_unique<FloatSliderWidget>(
-        "Primary Color Boost Max", 0.0f, 50.0f, 1.0f, defaults.primary_color_boost_max, 0);
-    primary_color_boost_max_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-
-    // Primary color interpolation dropdown (UI-only)
+    // Saturation interpolation dropdown
     {
         std::vector<std::string> options{ "Linear", "Quadratic", "Cubic", "Logarithmic", "Exponential" };
-        color_primary_interp_dropdown_ = std::make_unique<DMDropdown>("Primary Color Interpolation", options, 0);
-        color_primary_interp_widget_   = std::make_unique<DropdownWidget>(color_primary_interp_dropdown_.get());
-        color_primary_interp_widget_->set_tooltip("Interpolation/falloff shape for primary color across range.");
+        saturation_interp_dropdown_ = std::make_unique<DMDropdown>("Saturation Interpolation", options, 0);
+        saturation_interp_widget_   = std::make_unique<DropdownWidget>(saturation_interp_dropdown_.get());
+        saturation_interp_widget_->set_tooltip("Curve used for saturation between center and depth planes.");
+        saturation_interp_dropdown_->set_on_selection_changed([this](int) { on_control_value_changed(); });
     }
 
-    ground_brightness_factor_slider_ = std::make_unique<FloatSliderWidget>(
-        "Ground Brightness Factor", -50.0f, 50.0f, 1.0f, defaults.ground_brightness_factor, 0);
-    ground_brightness_factor_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    // Primary boost sliders
+    primary_boost_background_slider_ = std::make_unique<FloatSliderWidget>(
+        "Primary Boost Background", -50.0f, 0.0f, 1.0f, defaults.primary_boost_background, 0);
+    primary_boost_background_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+
+    primary_boost_foreground_slider_ = std::make_unique<FloatSliderWidget>(
+        "Primary Boost Foreground", 0.0f, 50.0f, 1.0f, defaults.primary_boost_foreground, 0);
+    primary_boost_foreground_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+
+    // Primary boost interpolation dropdown
+    {
+        std::vector<std::string> options{ "Linear", "Quadratic", "Cubic", "Logarithmic", "Exponential" };
+        primary_interp_dropdown_ = std::make_unique<DMDropdown>("Primary Boost Interpolation", options, 0);
+        primary_interp_widget_   = std::make_unique<DropdownWidget>(primary_interp_dropdown_.get());
+        primary_interp_widget_->set_tooltip("Curve controlling how primary boost ramps with depth.");
+        primary_interp_dropdown_->set_on_selection_changed([this](int) { on_control_value_changed(); });
+    }
+
+    // Brightness sliders
+    foreground_brightness_slider_ = std::make_unique<FloatSliderWidget>(
+        "Foreground Brightness", -50.0f, 50.0f, 1.0f, defaults.foreground_brightness, 0);
+    foreground_brightness_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     background_brightness_slider_ = std::make_unique<FloatSliderWidget>(
         "Background Brightness", -50.0f, 50.0f, 1.0f, defaults.background_brightness, 0);
     background_brightness_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    // Brightness interpolation dropdown (UI-only)
     {
         std::vector<std::string> options{ "Linear", "Quadratic", "Cubic", "Logarithmic", "Exponential" };
-        color_brightness_interp_dropdown_ = std::make_unique<DMDropdown>("Brightness Interpolation", options, 0);
-        color_brightness_interp_widget_   = std::make_unique<DropdownWidget>(color_brightness_interp_dropdown_.get());
-        color_brightness_interp_widget_->set_tooltip("Interpolation/falloff shape for brightness across range.");
+        brightness_interp_dropdown_ = std::make_unique<DMDropdown>("Brightness Interpolation", options, 0);
+        brightness_interp_widget_   = std::make_unique<DropdownWidget>(brightness_interp_dropdown_.get());
+        brightness_interp_widget_->set_tooltip("Curve applied when mapping depth to brightness adjustments.");
+        brightness_interp_dropdown_->set_on_selection_changed([this](int) { on_control_value_changed(); });
     }
 
     // Perspective Blur (Aperture Blur)
@@ -796,13 +805,13 @@ void CameraUIPanel::build_ui() {
     background_blur_plane_slider_ = std::make_unique<FloatSliderWidget>(
         "Background Y position", 0.0f, 4000.0f, 1.0f, defaults.blur_background_screen_y, 0);
     background_blur_plane_slider_->set_tooltip(
-        "Screen Y coordinate treated as the background blur plane (top of focus stack).");
+        "Screen Y for the background depth plane (used by blur and brightness).");
     background_blur_plane_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     foreground_blur_plane_slider_ = std::make_unique<FloatSliderWidget>(
         "Foreground Y position", 0.0f, 4000.0f, 1.0f, defaults.blur_foreground_screen_y, 0);
     foreground_blur_plane_slider_->set_tooltip(
-        "Screen Y coordinate treated as the foreground blur plane (bottom of focus stack).");
+        "Screen Y for the foreground depth plane (used by blur and brightness).");
     foreground_blur_plane_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     // Blur interpolation dropdown (UI-only)
@@ -811,10 +820,11 @@ void CameraUIPanel::build_ui() {
         blur_falloff_dropdown_ = std::make_unique<DMDropdown>("Blur Interpolation", options, 0);
         blur_falloff_widget_   = std::make_unique<DropdownWidget>(blur_falloff_dropdown_.get());
         blur_falloff_widget_->set_tooltip("Interpolation/falloff shape for aperture blur between min/max.");
+        blur_falloff_dropdown_->set_on_selection_changed([this](int) { on_control_value_changed(); });
     }
 
     // DepthCue enable toggle
-    depthcue_checkbox_ = std::make_unique<DMCheckbox>("Enable DepthCue", true);
+    depthcue_checkbox_ = std::make_unique<DMCheckbox>("Enable DepthCue", last_depthcue_enabled_);
     depthcue_widget_   = std::make_unique<CheckboxWidget>(depthcue_checkbox_.get());
     depthcue_widget_->set_tooltip("Toggle depth cue effects (color adjustments + aperture blur).\nDoes not affect core depth/perspective behaviors.");
 
@@ -829,6 +839,14 @@ void CameraUIPanel::build_ui() {
         method_to_index(defaults.motion_smoothing_method));
     smoothing_method_widget_ = std::make_unique<DropdownWidget>(smoothing_method_dropdown_.get());
     smoothing_method_widget_->set_tooltip("Pick between a simple lerp or a spring-like response for smoothing.");
+    if (smoothing_method_dropdown_) {
+        smoothing_method_dropdown_->set_on_selection_changed([this](int) {
+            // Rebuild visible rows to reflect method-specific widgets
+            rebuild_rows();
+            // Apply updated method immediately
+            on_control_value_changed();
+        });
+    }
 
     motion_tau_slider_ = std::make_unique<FloatSliderWidget>("Lerp Response (s)", 0.0f, 1.0f, 0.01f, defaults.motion_smoothing_tau, 3);
     motion_tau_slider_->set_tooltip("When using lerp smoothing, this is how long it takes to settle (smaller reacts faster).");
@@ -891,8 +909,6 @@ void CameraUIPanel::rebuild_rows() {
 
     if (visibility_section_header_) rows.push_back({ visibility_section_header_.get() });
     if (visibility_section_expanded_) {
-        if (render_distance_slider_) rows.push_back({ render_distance_slider_.get() });
-        if (render_radius_y_offset_slider_) rows.push_back({ render_radius_y_offset_slider_.get() });
         if (min_render_size_slider_) rows.push_back({ min_render_size_slider_.get() });
         if (render_quality_slider_) rows.push_back({ render_quality_slider_.get() });
     }
@@ -909,20 +925,23 @@ void CameraUIPanel::rebuild_rows() {
     if (depthcue_section_header_) rows.push_back({ depthcue_section_header_.get() });
     if (depthcue_section_expanded_) {
         if (depthcue_widget_) rows.push_back({ depthcue_widget_.get() });
-        if (distance_saturation_factor_min_slider_) rows.push_back({ distance_saturation_factor_min_slider_.get() });
-        if (distance_saturation_factor_max_slider_) rows.push_back({ distance_saturation_factor_max_slider_.get() });
-        if (primary_color_boost_min_slider_) rows.push_back({ primary_color_boost_min_slider_.get() });
-        if (primary_color_boost_max_slider_) rows.push_back({ primary_color_boost_max_slider_.get() });
-        if (color_primary_interp_widget_) rows.push_back({ color_primary_interp_widget_.get() });
-        if (ground_brightness_factor_slider_) rows.push_back({ ground_brightness_factor_slider_.get() });
-        if (background_brightness_slider_) rows.push_back({ background_brightness_slider_.get() });
-        if (color_brightness_interp_widget_) rows.push_back({ color_brightness_interp_widget_.get() });
-
+        if (foreground_blur_plane_slider_) rows.push_back({ foreground_blur_plane_slider_.get() });
+        if (background_blur_plane_slider_) rows.push_back({ background_blur_plane_slider_.get() });
         if (max_foreground_blur_slider_) rows.push_back({ max_foreground_blur_slider_.get() });
         if (max_background_blur_slider_) rows.push_back({ max_background_blur_slider_.get() });
-        if (background_blur_plane_slider_) rows.push_back({ background_blur_plane_slider_.get() });
-        if (foreground_blur_plane_slider_) rows.push_back({ foreground_blur_plane_slider_.get() });
         if (blur_falloff_widget_) rows.push_back({ blur_falloff_widget_.get() });
+
+        if (foreground_brightness_slider_) rows.push_back({ foreground_brightness_slider_.get() });
+        if (background_brightness_slider_) rows.push_back({ background_brightness_slider_.get() });
+        if (brightness_interp_widget_) rows.push_back({ brightness_interp_widget_.get() });
+
+        if (saturation_background_slider_) rows.push_back({ saturation_background_slider_.get() });
+        if (saturation_foreground_slider_) rows.push_back({ saturation_foreground_slider_.get() });
+        if (saturation_interp_widget_) rows.push_back({ saturation_interp_widget_.get() });
+
+        if (primary_boost_background_slider_) rows.push_back({ primary_boost_background_slider_.get() });
+        if (primary_boost_foreground_slider_) rows.push_back({ primary_boost_foreground_slider_.get() });
+        if (primary_interp_widget_) rows.push_back({ primary_interp_widget_.get() });
     }
 
     if (zoom_section_header_) rows.push_back({ zoom_section_header_.get() });
@@ -935,8 +954,16 @@ void CameraUIPanel::rebuild_rows() {
     if (smoothing_section_expanded_) {
         if (smoothing_widget_) rows.push_back({ smoothing_widget_.get() });
         if (smoothing_method_widget_) rows.push_back({ smoothing_method_widget_.get() });
-        if (motion_tau_slider_) rows.push_back({ motion_tau_slider_.get() });
-        if (motion_stiffness_slider_) rows.push_back({ motion_stiffness_slider_.get() });
+        // Show only the controls relevant to the selected smoothing method
+        TransformSmoothingMethod ui_method = last_settings_.motion_smoothing_method;
+        if (smoothing_method_dropdown_) {
+            ui_method = method_from_index(smoothing_method_dropdown_->selected());
+        }
+        if (ui_method == TransformSmoothingMethod::Lerp) {
+            if (motion_tau_slider_) rows.push_back({ motion_tau_slider_.get() });
+        } else {
+            if (motion_stiffness_slider_) rows.push_back({ motion_stiffness_slider_.get() });
+        }
         if (motion_max_step_slider_) rows.push_back({ motion_max_step_slider_.get() });
         if (motion_snap_slider_) rows.push_back({ motion_snap_slider_.get() });
         if (parallax_smoothing_slider_) rows.push_back({ parallax_smoothing_slider_.get() });
@@ -957,7 +984,7 @@ void CameraUIPanel::apply_settings_if_needed() {
 
     bool changed = (effects_enabled != last_realism_enabled_) || (depthcue_enabled != last_depthcue_enabled_);
     const camera::RealismSettings& prev = last_settings_;
-    changed = changed || differs(settings.render_distance, prev.render_distance) || differs(settings.render_radius_y_offset_px, prev.render_radius_y_offset_px) || differs(settings.tripod_distance_y, prev.tripod_distance_y) || differs(settings.height_at_zoom1, prev.height_at_zoom1) || differs(settings.parallax_strength, prev.parallax_strength) || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength) || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
+    changed = changed || differs(settings.tripod_distance_y, prev.tripod_distance_y) || differs(settings.height_at_zoom1, prev.height_at_zoom1) || differs(settings.parallax_strength, prev.parallax_strength) || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength) || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
     if (render_quality_slider_) {
         changed = changed || settings.render_quality_percent != prev.render_quality_percent;
     }
@@ -975,17 +1002,20 @@ void CameraUIPanel::apply_settings_if_needed() {
         differs(settings.parallax_smoothing.spring_frequency, prev.parallax_smoothing.spring_frequency);
 
     // UI-only fields should still trigger persistence
-    changed = changed || differs(settings.distance_saturation_factor_min, prev.distance_saturation_factor_min);
-    changed = changed || differs(settings.distance_saturation_factor_max, prev.distance_saturation_factor_max);
-    changed = changed || differs(settings.primary_color_boost_min, prev.primary_color_boost_min);
-    changed = changed || differs(settings.primary_color_boost_max, prev.primary_color_boost_max);
-    changed = changed || differs(settings.ground_brightness_factor, prev.ground_brightness_factor);
+    changed = changed || differs(settings.saturation_background, prev.saturation_background);
+    changed = changed || differs(settings.saturation_foreground, prev.saturation_foreground);
+    changed = changed || differs(settings.primary_boost_background, prev.primary_boost_background);
+    changed = changed || differs(settings.primary_boost_foreground, prev.primary_boost_foreground);
+    changed = changed || differs(settings.foreground_brightness, prev.foreground_brightness);
     changed = changed || differs(settings.background_brightness, prev.background_brightness);
     changed = changed || differs(settings.max_foreground_blur, prev.max_foreground_blur);
     changed = changed || differs(settings.max_background_blur, prev.max_background_blur);
     changed = changed || differs(settings.blur_foreground_screen_y, prev.blur_foreground_screen_y);
     changed = changed || differs(settings.blur_background_screen_y, prev.blur_background_screen_y);
     changed = changed || static_cast<int>(settings.blur_falloff_method) != static_cast<int>(prev.blur_falloff_method);
+    changed = changed || static_cast<int>(settings.brightness_falloff_method) != static_cast<int>(prev.brightness_falloff_method);
+    changed = changed || static_cast<int>(settings.saturation_falloff_method) != static_cast<int>(prev.saturation_falloff_method);
+    changed = changed || static_cast<int>(settings.primary_boost_falloff_method) != static_cast<int>(prev.primary_boost_falloff_method);
 
     if (changed) {
         apply_settings_to_camera(settings, effects_enabled, depthcue_enabled);
@@ -1022,6 +1052,12 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
     if (!depthcue_enabled) {
         effective.max_foreground_blur = 0.0f;
         effective.max_background_blur = 0.0f;
+        effective.foreground_brightness = 0.0f;
+        effective.background_brightness = 0.0f;
+        effective.saturation_foreground = 0.0f;
+        effective.saturation_background = 0.0f;
+        effective.primary_boost_foreground = 0.0f;
+        effective.primary_boost_background = 0.0f;
     }
     cam.set_realism_settings(effective);
     cam.set_realism_enabled(effects_enabled);
@@ -1031,13 +1067,14 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
     }
     last_settings_ = settings;
     last_realism_enabled_ = effects_enabled;
+    if (depthcue_enabled != last_depthcue_enabled_) {
+        devmode::camera_prefs::save_depthcue_enabled(depthcue_enabled);
+    }
     last_depthcue_enabled_ = depthcue_enabled;
 }
 
 camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     camera::RealismSettings settings = last_settings_;
-    if (render_distance_slider_) settings.render_distance = std::max(0.0f, render_distance_slider_->value());
-    if (render_radius_y_offset_slider_) settings.render_radius_y_offset_px = std::clamp(render_radius_y_offset_slider_->value(), -4000.0f, 4000.0f);
     if (min_render_size_slider_) settings.min_visible_screen_ratio = std::clamp(min_render_size_slider_->value(), 0.0f, 0.5f);
     if (tripod_distance_slider_) settings.tripod_distance_y = std::clamp(tripod_distance_slider_->value(), -2000.0f, 2000.0f);
     if (height_zoom1_slider_) settings.height_at_zoom1 = std::max(0.0f, height_zoom1_slider_->value());
@@ -1079,21 +1116,26 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         settings.max_zoom_multiplier = std::max(0.1f, max_zoom_multiplier_slider_->value());
     }
     // Perspective Colors
-    if (distance_saturation_factor_min_slider_) settings.distance_saturation_factor_min = std::clamp(distance_saturation_factor_min_slider_->value(), -50.0f, 50.0f);
-    if (distance_saturation_factor_max_slider_) settings.distance_saturation_factor_max = std::clamp(distance_saturation_factor_max_slider_->value(), -50.0f, 50.0f);
-    if (primary_color_boost_min_slider_) settings.primary_color_boost_min = std::clamp(primary_color_boost_min_slider_->value(), -50.0f, 50.0f);
-    if (primary_color_boost_max_slider_) settings.primary_color_boost_max = std::clamp(primary_color_boost_max_slider_->value(), -50.0f, 50.0f);
-    if (ground_brightness_factor_slider_) settings.ground_brightness_factor = std::clamp(ground_brightness_factor_slider_->value(), -50.0f, 50.0f);
+    if (saturation_background_slider_) settings.saturation_background = std::clamp(saturation_background_slider_->value(), -50.0f, 50.0f);
+    if (saturation_foreground_slider_) settings.saturation_foreground = std::clamp(saturation_foreground_slider_->value(), -50.0f, 50.0f);
+    if (primary_boost_background_slider_) settings.primary_boost_background = std::clamp(primary_boost_background_slider_->value(), -50.0f, 50.0f);
+    if (primary_boost_foreground_slider_) settings.primary_boost_foreground = std::clamp(primary_boost_foreground_slider_->value(), -50.0f, 50.0f);
+    if (foreground_brightness_slider_) settings.foreground_brightness = std::clamp(foreground_brightness_slider_->value(), -50.0f, 50.0f);
     if (background_brightness_slider_) settings.background_brightness = std::clamp(background_brightness_slider_->value(), -50.0f, 50.0f);
     // Perspective Blur
     if (max_foreground_blur_slider_) settings.max_foreground_blur = std::clamp(max_foreground_blur_slider_->value(), 0.0f, 50.0f);
     if (max_background_blur_slider_) settings.max_background_blur = std::clamp(max_background_blur_slider_->value(), 0.0f, 50.0f);
     if (background_blur_plane_slider_) settings.blur_background_screen_y = std::clamp(background_blur_plane_slider_->value(), 0.0f, 4000.0f);
     if (foreground_blur_plane_slider_) settings.blur_foreground_screen_y = std::clamp(foreground_blur_plane_slider_->value(), 0.0f, 4000.0f);
-    if (blur_falloff_dropdown_) {
-        int sel = blur_falloff_dropdown_->selected();
-        if (sel < 0) sel = 0; if (sel > 4) sel = 4;
-        settings.blur_falloff_method = static_cast<camera::BlurFalloffMethod>(sel);
-    }
+    auto clamp_curve_selection = [](DMDropdown* dropdown) -> camera::BlurFalloffMethod {
+        if (!dropdown) return camera::BlurFalloffMethod::Linear;
+        int sel = dropdown->selected();
+        sel = std::clamp(sel, 0, 4);
+        return static_cast<camera::BlurFalloffMethod>(sel);
+    };
+    settings.blur_falloff_method        = clamp_curve_selection(blur_falloff_dropdown_.get());
+    settings.brightness_falloff_method  = clamp_curve_selection(brightness_interp_dropdown_.get());
+    settings.saturation_falloff_method  = clamp_curve_selection(saturation_interp_dropdown_.get());
+    settings.primary_boost_falloff_method = clamp_curve_selection(primary_interp_dropdown_.get());
     return settings;
 }

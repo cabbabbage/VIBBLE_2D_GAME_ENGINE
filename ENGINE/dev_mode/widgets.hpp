@@ -317,6 +317,7 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     int selected() const { return index_; }
     void set_selected(int idx);
+    void set_on_selection_changed(std::function<void(int)> cb) { on_selection_changed_ = std::move(cb); }
     bool focused() const { return focused_; }
     int pending_index() const { return has_pending_index_ ? pending_index_ : index_; }
     void set_tooltip_state(DMWidgetTooltipState* state);
@@ -355,6 +356,7 @@ private:
     int hovered_option_index_ = -1;
     static DMDropdown* active_;
     DMWidgetTooltipState* tooltip_state_ = nullptr;
+    std::function<void(int)> on_selection_changed_{};
 };
 
 class Widget {

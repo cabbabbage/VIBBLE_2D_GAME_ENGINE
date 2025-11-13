@@ -529,11 +529,6 @@ void Asset::update_neighbor_lists(bool force_update) {
         return;
     }
 
-    AssetList* active = assets_->active_asset_list_.get();
-    if (!active) {
-        return;
-    }
-
     auto base_filter = [this](const Asset* candidate) {
         if (!candidate || candidate == this || !candidate->info) {
             return false;
@@ -567,58 +562,45 @@ void Asset::update_neighbor_lists(bool force_update) {
         return !candidate->info->passable;
 };
 
-    const bool rebuild_neighbors = force_update || !neighbors;
-
-    if (!rebuild_neighbors && !force_update) {
-        if (neighbor_lists_initialized_ && last_neighbor_origin_.x == pos.x && last_neighbor_origin_.y == pos.y) {
-
-            return;
-        }
+    const auto& candidates = assets_->getActiveRaw();
+    if (candidates.empty()) {
+        neighbors.reset();
+        impassable_naighbors = nullptr;
+        neighbor_lists_initialized_ = false;
+        return;
     }
 
-    if (rebuild_neighbors) {
-        neighbors = std::make_unique<AssetList>(
-            *active,
+    const bool needs_rebuild = force_update || !neighbors || !neighbor_lists_initialized_ ||
+                               last_neighbor_origin_.x != pos.x || last_neighbor_origin_.y != pos.y;
+    if (!needs_rebuild) {
+        return;
+    }
+
+    neighbors = std::make_unique<AssetList>(
+        candidates,
+        this,
+        info->NeighborSearchRadius,
+        std::vector<std::string>{},
+        std::vector<std::string>{},
+        std::vector<std::string>{},
+        SortMode::ZIndexAsc,
+        base_filter);
+
+    if (neighbors) {
+        auto imp_child = std::make_unique<AssetList>(
+            *neighbors,
             this,
             info->NeighborSearchRadius,
             std::vector<std::string>{},
             std::vector<std::string>{},
             std::vector<std::string>{},
             SortMode::ZIndexAsc,
-            base_filter);
-
-        if (neighbors) {
-            auto imp_child = std::make_unique<AssetList>(
-                *neighbors,
-                this,
-                info->NeighborSearchRadius,
-                std::vector<std::string>{},
-                std::vector<std::string>{},
-                std::vector<std::string>{},
-                SortMode::ZIndexAsc,
-                impassable_filter,
-                true );
-            impassable_naighbors = imp_child.get();
-            neighbors->add_child(std::move(imp_child));
-        }
-    } else if (neighbors) {
-        neighbors->set_center(this);
-        neighbors->set_search_radius(info->NeighborSearchRadius);
-        neighbors->update();
-        if (!impassable_naighbors) {
-            auto imp_child = std::make_unique<AssetList>(
-                *neighbors,
-                this,
-                info->NeighborSearchRadius,
-                std::vector<std::string>{},
-                std::vector<std::string>{},
-                std::vector<std::string>{},
-                SortMode::ZIndexAsc,
-                impassable_filter,
-                true );
-            impassable_naighbors = imp_child.get();
-            neighbors->add_child(std::move(imp_child));
-        }
+            impassable_filter,
+            true );
+        impassable_naighbors = imp_child.get();
+        neighbors->add_child(std::move(imp_child));
+    } else {
+        impassable_naighbors = nullptr;
     }
 
     last_neighbor_origin_ = pos;
@@ -758,6 +740,25 @@ void Asset::deactivate() {
         }
 }
 
+void Asset::MaskRenderMetadata::TextureDefaults::reset() {
+        texture     = nullptr;
+        r           = 255;
+        g           = 255;
+        b           = 255;
+        a           = 255;
+        blend       = SDL_BLENDMODE_BLEND;
+        initialized = false;
+}
+
+void Asset::MaskRenderMetadata::reset() {
+        last_mask_texture = nullptr;
+        mask_w            = 0;
+        mask_h            = 0;
+        has_dimensions    = false;
+        mask_defaults.reset();
+        base_defaults.reset();
+}
+
 void Asset::destroy_render_cache(RenderTextureCache& cache) {
         if (cache.texture) {
                 SDL_DestroyTexture(cache.texture);
@@ -770,7 +771,13 @@ void Asset::destroy_render_cache(RenderTextureCache& cache) {
 void Asset::clear_render_caches() {
         destroy_render_cache(shadow_mask_cache_);
         destroy_render_cache(motion_blur_cache_);
+        destroy_render_cache(cast_shadow_cache_);
+        reset_mask_render_metadata();
         render_pipeline::shading::ClearShadowStateFor(this);
+}
+
+void Asset::reset_mask_render_metadata() {
+        mask_render_metadata_.reset();
 }
 
 void Asset::invalidate_downscale_cache() {
@@ -783,6 +790,7 @@ void Asset::invalidate_downscale_cache() {
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = {};
         reset_scale_variant_state();
+        downscale_cache_ready_revision_ = 0;
 }
 
 void Asset::clear_downscale_cache() {
@@ -813,6 +821,7 @@ void Asset::clear_downscale_cache() {
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = {};
         reset_scale_variant_state();
+        downscale_cache_ready_revision_ = 0;
 }
 
 void Asset::reset_scale_variant_state() {
@@ -861,6 +870,9 @@ void Asset::on_scale_factor_changed() {
         shadow_mask_cache_.height = 0;
         motion_blur_cache_.width  = 0;
         motion_blur_cache_.height = 0;
+        cast_shadow_cache_.width  = 0;
+        cast_shadow_cache_.height = 0;
+        reset_mask_render_metadata();
 
         float scale_target = 1.0f;
         if (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) {
@@ -877,6 +889,9 @@ void Asset::on_scale_factor_changed() {
                                 asset_child->on_scale_factor_changed();
                         }
                 }
+        }
+        if (assets_) {
+                assets_->invalidate_max_asset_dimensions();
         }
 }
 
@@ -999,6 +1014,10 @@ Asset::RenderTextureCache& Asset::shadow_mask_cache() { return shadow_mask_cache
 Asset::RenderTextureCache& Asset::shadow_mask_cache() const { return shadow_mask_cache_; }
 Asset::RenderTextureCache& Asset::motion_blur_cache() { return motion_blur_cache_; }
 Asset::RenderTextureCache& Asset::motion_blur_cache() const { return motion_blur_cache_; }
+Asset::RenderTextureCache& Asset::cast_shadow_cache() { return cast_shadow_cache_; }
+Asset::RenderTextureCache& Asset::cast_shadow_cache() const { return cast_shadow_cache_; }
+Asset::MaskRenderMetadata& Asset::mask_render_metadata() { return mask_render_metadata_; }
+Asset::MaskRenderMetadata& Asset::mask_render_metadata() const { return mask_render_metadata_; }
 
 void Asset::Delete() {
         dead = true;

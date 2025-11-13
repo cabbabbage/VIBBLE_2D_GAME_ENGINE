@@ -72,6 +72,9 @@ private:
         bool         has_custom_pivot    = false;
         SDL_FPoint   rotation_pivot      { 0.0f, 0.0f };
         float        depth_blur_px       = 0.0f; // perspective blur radius in pixels
+        float        depth_brightness    = 0.0f; // depth cue brightness offset (percent, -50..50)
+        float        depth_saturation    = 0.0f; // saturation delta (percent, -50..50)
+        float        depth_primary_boost = 0.0f; // primary color boost (percent, -50..50)
     };
 
     bool ensure_darkness_overlay();

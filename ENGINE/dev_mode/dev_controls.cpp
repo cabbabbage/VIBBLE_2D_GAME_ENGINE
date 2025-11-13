@@ -1778,20 +1778,40 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             }
             DrawLabelText(renderer, text, DMSpacing::panel_padding(), text_y, style);
         };
-        auto make_blur_label = [](const char* prefix, float amount) {
-            char buffer[64];
-            std::snprintf(buffer, sizeof(buffer), "%s blur %.1fpx", prefix, amount);
+        auto make_depthcue_label = [](const char* prefix, float blur_amount, float bright_amount, float sat_amount, float primary_amount) {
+            char buffer[160];
+            std::snprintf(buffer, sizeof(buffer), "%s Blur: %.1f  |  %s Bright: %.0f  |  %s Sat: %.1f  |  %s Primary: %.1f",
+                          prefix,
+                          blur_amount,
+                          prefix,
+                          bright_amount,
+                          prefix,
+                          sat_amount,
+                          prefix,
+                          primary_amount);
             return std::string(buffer);
         };
 
         draw_line(bg_line, bg_color);
-        draw_label(bg_line, bg_color, make_blur_label("BG", settings.max_background_blur));
+        {
+            const float bg_blur     = settings.max_background_blur;
+            const float bg_bright   = settings.background_brightness;
+            const float bg_sat      = settings.saturation_background;
+            const float bg_primary  = settings.primary_boost_background;
+            draw_label(bg_line, bg_color, make_depthcue_label("BG", bg_blur, bg_bright, bg_sat, bg_primary));
+        }
 
         draw_line(center_y, center_color);
-        draw_label(center_y, center_color, "blur 0");
+        draw_label(center_y, center_color, "Blur: 0, Bright: 0, Sat: 0, Primary: 0");
 
         draw_line(fg_line, fg_color);
-        draw_label(fg_line, fg_color, make_blur_label("FG", settings.max_foreground_blur));
+        {
+            const float fg_blur     = settings.max_foreground_blur;
+            const float fg_bright   = settings.foreground_brightness;
+            const float fg_sat      = settings.saturation_foreground;
+            const float fg_primary  = settings.primary_boost_foreground;
+            draw_label(fg_line, fg_color, make_depthcue_label("FG", fg_blur, fg_bright, fg_sat, fg_primary));
+        }
 
         SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);

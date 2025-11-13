@@ -182,9 +182,9 @@ void camera::set_screen_center(SDL_Point p) {
     screen_center_ = p;
 
     const double distance = std::hypot(dx, dy);
-    // Use screen-relative render distance (in pixels) converted to world units for teleport threshold.
+    // Use screen dimensions (in pixels) converted to world units for teleport threshold.
     // This keeps the behavior consistent regardless of zoom level.
-    const double px_margin = std::max(0.0, static_cast<double>(settings_.render_distance));
+    const double px_margin = static_cast<double>(std::max(screen_width_, screen_height_));
     const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
     const double teleport_threshold = std::max(200.0, px_margin * scale_for_world * 0.25);
     if (distance > teleport_threshold) {
@@ -655,8 +655,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
 
-    try_read_float("render_distance", settings_.render_distance);
-    try_read_float("render_radius_y_offset_px", settings_.render_radius_y_offset_px);
     try_read_float("parallax_strength", settings_.parallax_strength);
     try_read_float("foreshorten_strength", settings_.foreshorten_strength);
     try_read_float("distance_scale_strength", settings_.distance_scale_strength);
@@ -724,29 +722,60 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     try_read_float("max_zoom_multiplier", settings_.max_zoom_multiplier);
 
     // Perspective Colors (UI-only)
-    try_read_float("distance_saturation_factor_min", settings_.distance_saturation_factor_min);
-    try_read_float("distance_saturation_factor_max", settings_.distance_saturation_factor_max);
-    try_read_float("primary_color_boost_min", settings_.primary_color_boost_min);
-    try_read_float("primary_color_boost_max", settings_.primary_color_boost_max);
-    try_read_float("ground_brightness_factor", settings_.ground_brightness_factor);
+    const bool sat_bg_custom = try_read_float("saturation_background", settings_.saturation_background);
+    const bool sat_fg_custom = try_read_float("saturation_foreground", settings_.saturation_foreground);
+    if (!sat_bg_custom) {
+        try_read_float("distance_saturation_factor_min", settings_.saturation_background);
+    }
+    if (!sat_fg_custom) {
+        try_read_float("distance_saturation_factor_max", settings_.saturation_foreground);
+    }
+
+    const bool prim_bg_custom = try_read_float("primary_boost_background", settings_.primary_boost_background);
+    const bool prim_fg_custom = try_read_float("primary_boost_foreground", settings_.primary_boost_foreground);
+    if (!prim_bg_custom) {
+        try_read_float("primary_color_boost_min", settings_.primary_boost_background);
+    }
+    if (!prim_fg_custom) {
+        try_read_float("primary_color_boost_max", settings_.primary_boost_foreground);
+    }
+
+    const bool fg_bright_custom = try_read_float("foreground_brightness", settings_.foreground_brightness);
+    if (!fg_bright_custom) {
+        try_read_float("ground_brightness_factor", settings_.foreground_brightness);
+    }
     try_read_float("background_brightness", settings_.background_brightness);
+    auto clamp_depth_adjust = [](float value) {
+        return std::clamp(value, -50.0f, 50.0f);
+    };
+    settings_.saturation_background    = clamp_depth_adjust(settings_.saturation_background);
+    settings_.saturation_foreground    = clamp_depth_adjust(settings_.saturation_foreground);
+    settings_.primary_boost_background = clamp_depth_adjust(settings_.primary_boost_background);
+    settings_.primary_boost_foreground = clamp_depth_adjust(settings_.primary_boost_foreground);
+    settings_.foreground_brightness    = clamp_depth_adjust(settings_.foreground_brightness);
+    settings_.background_brightness    = clamp_depth_adjust(settings_.background_brightness);
 
     // Perspective Blur (Aperture Blur)
     try_read_float("max_foreground_blur", settings_.max_foreground_blur);
     try_read_float("max_background_blur", settings_.max_background_blur);
     try_read_float("blur_foreground_screen_y", settings_.blur_foreground_screen_y);
     try_read_float("blur_background_screen_y", settings_.blur_background_screen_y);
-    {
-        auto it = data.find("blur_falloff_method");
-        if (it != data.end()) {
-            if (it->is_number_integer()) {
-                int raw = it->get<int>();
-                if (raw < 0) raw = 0;
-                if (raw > 4) raw = 4;
-                settings_.blur_falloff_method = static_cast<BlurFalloffMethod>(raw);
-            }
-        }
+    auto try_read_curve = [&](const char* key, BlurFalloffMethod& target) -> bool {
+        auto it = data.find(key);
+        if (it == data.end() || !it->is_number_integer()) return false;
+        int raw = it->get<int>();
+        raw = std::clamp(raw, 0, 4);
+        target = static_cast<BlurFalloffMethod>(raw);
+        return true;
+    };
+    if (!try_read_curve("blur_falloff_method", settings_.blur_falloff_method)) {
+        settings_.blur_falloff_method = BlurFalloffMethod::Linear;
     }
+    if (!try_read_curve("brightness_falloff_method", settings_.brightness_falloff_method)) {
+        settings_.brightness_falloff_method = settings_.blur_falloff_method;
+    }
+    try_read_curve("saturation_falloff_method", settings_.saturation_falloff_method);
+    try_read_curve("primary_boost_falloff_method", settings_.primary_boost_falloff_method);
 
     settings_.max_foreground_blur = std::max(0.0f, settings_.max_foreground_blur);
     settings_.max_background_blur = std::max(0.0f, settings_.max_background_blur);
@@ -760,17 +789,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     } else {
         settings_.blur_background_screen_y = std::clamp(settings_.blur_background_screen_y, 0.0f, 4000.0f);
     }
-
-    if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
-        settings_.render_distance = 800.0f;
-    }
-
-    if (!std::isfinite(settings_.render_radius_y_offset_px)) {
-        settings_.render_radius_y_offset_px = 0.0f;
-    } else {
-        settings_.render_radius_y_offset_px = std::clamp(settings_.render_radius_y_offset_px, -4000.0f, 4000.0f);
-    }
-
     settings_.parallax_strength = std::isfinite(settings_.parallax_strength) ? std::max(0.0f, settings_.parallax_strength) : 0.0f;
 
     settings_.foreshorten_strength = std::isfinite(settings_.foreshorten_strength) ? std::max(0.0f, settings_.foreshorten_strength) : 0.0f;
@@ -848,8 +866,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 nlohmann::json camera::camera_settings_to_json() const {
     nlohmann::json j = nlohmann::json::object();
     j["realism_enabled"]       = realism_enabled_;
-    j["render_distance"]       = settings_.render_distance;
-    j["render_radius_y_offset_px"] = settings_.render_radius_y_offset_px;
     j["parallax_strength"]     = settings_.parallax_strength;
     j["foreshorten_strength"]  = settings_.foreshorten_strength;
     j["distance_scale_strength"] = settings_.distance_scale_strength;
@@ -873,11 +889,11 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["parallax_smoothing_snap_threshold"] = settings_.parallax_smoothing.snap_threshold;
 
     // Perspective Colors (UI-only)
-    j["distance_saturation_factor_min"] = settings_.distance_saturation_factor_min;
-    j["distance_saturation_factor_max"] = settings_.distance_saturation_factor_max;
-    j["primary_color_boost_min"] = settings_.primary_color_boost_min;
-    j["primary_color_boost_max"] = settings_.primary_color_boost_max;
-    j["ground_brightness_factor"] = settings_.ground_brightness_factor;
+    j["saturation_background"] = settings_.saturation_background;
+    j["saturation_foreground"] = settings_.saturation_foreground;
+    j["primary_boost_background"] = settings_.primary_boost_background;
+    j["primary_boost_foreground"] = settings_.primary_boost_foreground;
+    j["foreground_brightness"] = settings_.foreground_brightness;
     j["background_brightness"] = settings_.background_brightness;
 
     // Perspective Blur (Aperture Blur)
@@ -886,27 +902,14 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["blur_foreground_screen_y"] = settings_.blur_foreground_screen_y;
     j["blur_background_screen_y"] = settings_.blur_background_screen_y;
     j["blur_falloff_method"] = static_cast<int>(settings_.blur_falloff_method);
+    j["brightness_falloff_method"] = static_cast<int>(settings_.brightness_falloff_method);
+    j["saturation_falloff_method"] = static_cast<int>(settings_.saturation_falloff_method);
+    j["primary_boost_falloff_method"] = static_cast<int>(settings_.primary_boost_falloff_method);
     return j;
 }
 
 TransformSmoothingParams camera::motion_smoothing_params() const {
     return motion_params_from_settings(settings_);
-}
-
-int camera::get_render_distance_world_margin() const {
-    // Interpret render_distance as a screen-space margin in pixels and
-    // convert it to world units using the current smoothed scale.
-    const double px_margin = std::max(0.0, static_cast<double>(settings_.render_distance));
-    const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
-    const double world_margin = px_margin * scale_for_world;
-    return static_cast<int>(std::lround(world_margin));
-}
-
-int camera::get_render_radius_world_y_offset() const {
-    const double px_offset = static_cast<double>(settings_.render_radius_y_offset_px);
-    const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
-    const double world_offset = px_offset * scale_for_world;
-    return static_cast<int>(std::lround(world_offset));
 }
 
 SDL_FPoint camera::get_view_center_f() const {
