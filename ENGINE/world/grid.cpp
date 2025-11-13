@@ -181,7 +181,9 @@ void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
     int i_max = floor_div(inclusive_right - origin_.x, step);
     int j_max = floor_div(inclusive_bottom - origin_.y, step);
 
-    constexpr int kBorderRadiusChunks = 2;
+    // Expand the prefetch border around the camera by doubling the
+    // candidate chunk radius so we consider a wider area for visibility.
+    constexpr int kBorderRadiusChunks = 4;
     i_min -= kBorderRadiusChunks;
     j_min -= kBorderRadiusChunks;
     i_max += kBorderRadiusChunks;

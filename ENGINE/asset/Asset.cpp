@@ -190,6 +190,7 @@ Asset::Asset(const Asset& o)
         scale_smoothing_          = o.scale_smoothing_;
         alpha_smoothing_          = o.alpha_smoothing_;
         animation_children_       = o.animation_children_;
+        finalized_                = o.finalized_;
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -246,11 +247,15 @@ Asset& Asset::operator=(const Asset& o) {
         scale_smoothing_          = o.scale_smoothing_;
         alpha_smoothing_          = o.alpha_smoothing_;
         animation_children_       = o.animation_children_;
+        finalized_                = o.finalized_;
         base_bounds_local_        = o.base_bounds_local_;
         return *this;
 }
 
 void Asset::finalize_setup() {
+        if (finalized_) {
+                return;
+        }
         if (!info) return;
         if (current_animation.empty() ||
         info->animations[current_animation].frames.empty())
@@ -302,6 +307,7 @@ void Asset::finalize_setup() {
         }
         NeighborSearchRadius = info->NeighborSearchRadius;
         refresh_cached_dimensions();
+        finalized_ = true;
 }
 
 SDL_Texture* Asset::get_current_frame() const {
@@ -897,6 +903,27 @@ void Asset::recompute_local_bounds_square() {
                 expand_rect(-half_w, -height, half_w, 0.0f, has_rect, min_x, max_x, min_y, max_y);
         };
 
+        auto include_centered_rect = [&](float center_x, float center_y, float width, float height) {
+                if (!std::isfinite(center_x) || !std::isfinite(center_y) || !std::isfinite(width) || !std::isfinite(height)) {
+                        return false;
+                }
+                if (width <= 0.0f || height <= 0.0f) {
+                        return false;
+                }
+                const float half_w = 0.5f * width;
+                const float half_h = 0.5f * height;
+                expand_rect(center_x - half_w,
+                            center_y - half_h,
+                            center_x + half_w,
+                            center_y + half_h,
+                            has_rect,
+                            min_x,
+                            max_x,
+                            min_y,
+                            max_y);
+                return true;
+        };
+
         if (info) {
                 for (const auto& entry : info->animations) {
                         const Animation& animation = entry.second;
@@ -917,21 +944,50 @@ void Asset::recompute_local_bounds_square() {
                 }
 
                 for (const auto& light : info->light_sources) {
-                        if (light.radius <= 0) {
-                                continue;
-                        }
-                        const float radius = static_cast<float>(light.radius);
                         const float offset_x = static_cast<float>(light.offset_x);
                         const float offset_y = static_cast<float>(light.offset_y);
-                        expand_rect(offset_x - radius,
-                                    offset_y - radius,
-                                    offset_x + radius,
-                                    offset_y + radius,
-                                    has_rect,
-                                    min_x,
-                                    max_x,
-                                    min_y,
-                                    max_y);
+
+                        auto include_light_texture = [&](int tex_w, int tex_h) {
+                                if (tex_w <= 0 || tex_h <= 0) {
+                                        return false;
+                                }
+                                const float width_f  = static_cast<float>(tex_w);
+                                const float height_f = static_cast<float>(tex_h);
+                                return include_centered_rect(offset_x, offset_y, width_f, height_f);
+                        };
+
+                        bool texture_accounted_for = false;
+                        int tex_w = light.cached_w;
+                        int tex_h = light.cached_h;
+                        if (tex_w <= 0 || tex_h <= 0) {
+                                if (light.texture) {
+                                        int queried_w = 0;
+                                        int queried_h = 0;
+                                        if (SDL_QueryTexture(light.texture, nullptr, nullptr, &queried_w, &queried_h) == 0) {
+                                                tex_w = queried_w;
+                                                tex_h = queried_h;
+                                        }
+                                }
+                        }
+                        if (tex_w > 0 && tex_h > 0) {
+                                texture_accounted_for = include_light_texture(tex_w, tex_h);
+                        }
+
+                        const float radius = static_cast<float>(light.radius);
+                        if (radius > 0.0f && std::isfinite(radius)) {
+                                expand_rect(offset_x - radius,
+                                            offset_y - radius,
+                                            offset_x + radius,
+                                            offset_y + radius,
+                                            has_rect,
+                                            min_x,
+                                            max_x,
+                                            min_y,
+                                            max_y);
+                        } else if (!texture_accounted_for) {
+                                // No usable radius or texture to expand from; skip.
+                                continue;
+                        }
                 }
         }
 

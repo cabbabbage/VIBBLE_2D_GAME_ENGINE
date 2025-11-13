@@ -27,6 +27,8 @@ public:
         std::vector<SDL_Texture*> mask_textures;
         std::vector<int> mask_widths;
         std::vector<int> mask_heights;
+        std::vector<SDL_Texture*> depthcue_foreground_textures;
+        std::vector<SDL_Texture*> depthcue_background_textures;
 
         void resize(std::size_t variant_count) {
             textures.assign(variant_count, nullptr);
@@ -35,6 +37,8 @@ public:
             mask_textures.assign(variant_count, nullptr);
             mask_widths.assign(variant_count, 0);
             mask_heights.assign(variant_count, 0);
+            depthcue_foreground_textures.assign(variant_count, nullptr);
+            depthcue_background_textures.assign(variant_count, nullptr);
         }
 };
     struct AudioClip {
@@ -62,6 +66,10 @@ public:
     void clear_texture_cache();
     SDL_Texture* frame_variant(std::size_t frame_index, std::size_t variant_index) const;
     SDL_Texture* mask_variant(std::size_t frame_index, std::size_t variant_index) const;
+    SDL_Texture* depthcue_foreground_variant(std::size_t frame_index, std::size_t variant_index) const;
+    SDL_Texture* depthcue_background_variant(std::size_t frame_index, std::size_t variant_index) const;
+    SDL_Texture* depthcue_foreground_texture(const AnimationFrame* frame) const;
+    SDL_Texture* depthcue_background_texture(const AnimationFrame* frame) const;
     void adopt_prebuilt_frames(std::vector<FrameCache> caches, std::vector<SDL_Texture*> base_frames, std::vector<SDL_Texture*> base_masks, std::vector<float> variant_steps);
     struct Source {
         std::string kind;

@@ -10,6 +10,7 @@
 
 #include "dev_mode/SlidingWindowContainer.hpp"
 #include "dev_mode/asset_info_sections.hpp"
+#include "utils/ranged_color.hpp"
 
 class AssetInfo;
 class Input;
@@ -65,6 +66,11 @@ class AssetInfoUI {
     void notify_spawn_group_entry_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
     void regenerate_shadow_masks();
+    // Begin an interactive color sampling flow from the world view
+    void begin_color_sampling(const utils::color::RangedColor& current,
+                              std::function<void(SDL_Color)> on_sample,
+                              std::function<void()> on_cancel);
+    void cancel_color_sampling(bool silent);
 
   private:
     void rebuild_default_sections();
@@ -81,6 +87,7 @@ class AssetInfoUI {
     bool apply_to_assets_with_info(const std::function<void(Asset*)>& fn);
     void on_animation_document_saved();
     void refresh_loaded_asset_instances();
+    void complete_color_sampling(SDL_Color color);
 
   private:
     bool visible_ = false;
@@ -152,4 +159,14 @@ class AssetInfoUI {
     bool light_drag_active_ = false;
     int  light_drag_index_ = -1;
     int  hovered_light_index_ = -1;
+
+    // Color sampling state (used by lighting color picker)
+    bool color_sampling_active_ = false;
+    bool color_sampling_preview_valid_ = false;
+    SDL_Color color_sampling_preview_{255,255,255,255};
+    SDL_Point color_sampling_cursor_{0,0};
+    std::function<void(SDL_Color)> color_sampling_apply_{};
+    std::function<void()> color_sampling_cancel_{};
+    SDL_Cursor* color_sampling_prev_cursor_ = nullptr;
+    SDL_Cursor* color_sampling_cursor_handle_ = nullptr;
 };

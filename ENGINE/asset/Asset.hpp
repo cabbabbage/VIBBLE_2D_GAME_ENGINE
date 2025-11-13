@@ -40,6 +40,7 @@ class Asset {
         int          height  = 0;
     };
 
+
     struct MaskRenderMetadata {
         struct TextureDefaults {
             SDL_Texture* texture = nullptr;
@@ -111,6 +112,7 @@ class Asset {
     Asset& operator=(Asset&&) noexcept = default;
     ~Asset();
     void finalize_setup();
+    bool is_finalized() const { return finalized_; }
     void on_scale_factor_changed();
 
     void update();
@@ -120,6 +122,8 @@ class Asset {
     bool is_current_animation_locked_in_progress() const;
     bool is_current_animation_last_frame() const;
     bool is_current_animation_looping() const;
+    const AnimationFrame* current_animation_frame() const { return current_frame; }
+    std::uint64_t final_texture_revision() const { return final_texture_revision_; }
     void add_child(Asset* asset_child);
 
     struct ScaleUsageStats {
@@ -309,6 +313,9 @@ private:
     TransformSmoothingState alpha_smoothing_{};
 
     std::uint64_t final_texture_revision_ = 0;
+
+    // Tracks whether finalize_setup() has already run for this asset
+    bool finalized_ = false;
 
 };
 

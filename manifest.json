@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T08:42:04Z",
+        "generated_at": "2025-11-13T20:53:02Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -78,7 +78,7 @@
           0.05454545095562935
         ],
         "revision": 4329668871805815559,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T08:42:04Z",
+        "generated_at": "2025-11-13T20:53:02Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -131,7 +131,7 @@
           0.05000000074505806
         ],
         "revision": 15640563384705236170,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T08:42:04Z",
+        "generated_at": "2025-11-13T20:53:02Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -184,7 +184,7 @@
           0.05000000074505806
         ],
         "revision": 17324624370779397839,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -492,7 +492,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T08:42:04Z",
+        "generated_at": "2025-11-13T20:53:02Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -506,7 +506,7 @@
           0.1090909019112587
         ],
         "revision": 8110939535182362100,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -690,7 +690,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-13T08:42:04Z",
+        "generated_at": "2025-11-13T20:53:02Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -704,7 +704,7 @@
           0.38181817531585693
         ],
         "revision": 11688286490698651680,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -850,17 +850,13 @@
         }
       },
       "camera_settings": {
-        "background_brightness": 0.0,
-        "blur_background_screen_y": 0.0,
-        "blur_falloff_method": 2,
-        "blur_foreground_screen_y": 975.0,
-        "brightness_falloff_method": 4,
+        "background_plane_screen_y": 0.0,
+        "background_texture_max_opacity": 0,
         "distance_scale_strength": 0.3499999940395355,
-        "foreground_brightness": 0.0,
+        "foreground_plane_screen_y": 877.0,
+        "foreground_texture_max_opacity": 0,
         "foreshorten_strength": 0.23999999463558197,
         "height_at_zoom1": 357.0,
-        "max_background_blur": 12.0,
-        "max_foreground_blur": 18.0,
         "max_zoom_multiplier": 2.999999761581421,
         "min_visible_screen_ratio": 0.0010000000474974513,
         "min_zoom_multiplier": 0.35999998450279236,
@@ -875,16 +871,11 @@
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 0.0,
         "parallax_strength": 34.75,
-        "primary_boost_background": 33.0,
-        "primary_boost_falloff_method": 1,
-        "primary_boost_foreground": -19.0,
         "realism_enabled": true,
         "render_quality_percent": 10,
-        "saturation_background": 0.0,
-        "saturation_falloff_method": 3,
-        "saturation_foreground": 0.0,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
+        "texture_opacity_falloff_method": 2,
         "tripod_distance_y": -1720.0
       },
       "content_root": "MAPS/FORREST",

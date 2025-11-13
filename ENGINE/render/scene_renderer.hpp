@@ -13,7 +13,6 @@
 #include "render/camera.hpp"
 #include "render/asset_light.hpp"
 #include "render/grid_tile_renderer.hpp"
-#include "render/depth_cue_effects.hpp"
 
 class Assets;
 class Asset;
@@ -72,10 +71,10 @@ private:
         float        rotation_degrees    = 0.0f;
         bool         has_custom_pivot    = false;
         SDL_FPoint   rotation_pivot      { 0.0f, 0.0f };
-        float        depth_blur_px       = 0.0f; // perspective blur radius in pixels
-        float        depth_brightness    = 0.0f; // depth cue brightness offset (percent, -50..50)
-        float        depth_saturation    = 0.0f; // saturation delta (percent, -50..50)
-        float        depth_primary_boost = 0.0f; // primary color boost (percent, -50..50)
+        SDL_Texture* depthcue_foreground_texture = nullptr;
+        SDL_Texture* depthcue_background_texture = nullptr;
+        Uint8        depthcue_foreground_alpha   = 0;
+        Uint8        depthcue_background_alpha   = 0;
     };
 
     bool ensure_darkness_overlay();
@@ -116,7 +115,6 @@ private:
     // after initialization to avoid stalls when transitioning from the loading screen.
     // Configurable via constructor constants in .cpp; defaults to a small number of frames.
     std::uint32_t depthcue_warmup_frames_ = 8; // frames to skip depth-cue effects after init
-    DepthCueEffects depth_cue_effects_;
 
     // Full-scene post-processing targets
     SDL_Texture* scene_composite_tex_ = nullptr;   // Draws full scene here first

@@ -721,52 +721,30 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     try_read_float("min_zoom_multiplier", settings_.min_zoom_multiplier);
     try_read_float("max_zoom_multiplier", settings_.max_zoom_multiplier);
 
-    // Perspective Colors (UI-only)
-    const bool sat_bg_custom = try_read_float("saturation_background", settings_.saturation_background);
-    const bool sat_fg_custom = try_read_float("saturation_foreground", settings_.saturation_foreground);
-    if (!sat_bg_custom) {
-        try_read_float("distance_saturation_factor_min", settings_.saturation_background);
-    }
-    if (!sat_fg_custom) {
-        try_read_float("distance_saturation_factor_max", settings_.saturation_foreground);
-    }
-
-    const bool prim_bg_custom = try_read_float("primary_boost_background", settings_.primary_boost_background);
-    const bool prim_fg_custom = try_read_float("primary_boost_foreground", settings_.primary_boost_foreground);
-    if (!prim_bg_custom) {
-        try_read_float("primary_color_boost_min", settings_.primary_boost_background);
-    }
-    if (!prim_fg_custom) {
-        try_read_float("primary_color_boost_max", settings_.primary_boost_foreground);
-    }
-
-    // Prefer new contrast keys; fall back to legacy brightness keys
-    bool used_fg_contrast = false;
-    if (try_read_float("foreground_contrast", settings_.foreground_brightness)) {
-        used_fg_contrast = true;
-    }
-    const bool fg_bright_custom = used_fg_contrast || try_read_float("foreground_brightness", settings_.foreground_brightness);
-    if (!fg_bright_custom) {
-        try_read_float("ground_brightness_factor", settings_.foreground_brightness);
-    }
-    if (!try_read_float("background_contrast", settings_.background_brightness)) {
-        try_read_float("background_brightness", settings_.background_brightness);
-    }
-    auto clamp_depth_adjust = [](float value) {
-        return std::clamp(value, -50.0f, 50.0f);
+    // Depth cue texture blending
+    auto try_read_opacity = [&](const char* key, int& target) -> bool {
+        auto it = data.find(key);
+        if (it == data.end()) return false;
+        if (it->is_number_integer()) {
+            target = it->get<int>();
+        } else if (it->is_number_float()) {
+            target = static_cast<int>(std::lround(it->get<double>()));
+        } else {
+            return false;
+        }
+        target = std::clamp(target, 0, 255);
+        return true;
     };
-    settings_.saturation_background    = clamp_depth_adjust(settings_.saturation_background);
-    settings_.saturation_foreground    = clamp_depth_adjust(settings_.saturation_foreground);
-    settings_.primary_boost_background = clamp_depth_adjust(settings_.primary_boost_background);
-    settings_.primary_boost_foreground = clamp_depth_adjust(settings_.primary_boost_foreground);
-    settings_.foreground_brightness    = clamp_depth_adjust(settings_.foreground_brightness);
-    settings_.background_brightness    = clamp_depth_adjust(settings_.background_brightness);
+    try_read_opacity("foreground_texture_max_opacity", settings_.foreground_texture_max_opacity);
+    try_read_opacity("background_texture_max_opacity", settings_.background_texture_max_opacity);
 
-    // Perspective Blur (Aperture Blur)
-    try_read_float("max_foreground_blur", settings_.max_foreground_blur);
-    try_read_float("max_background_blur", settings_.max_background_blur);
-    try_read_float("blur_foreground_screen_y", settings_.blur_foreground_screen_y);
-    try_read_float("blur_background_screen_y", settings_.blur_background_screen_y);
+    if (!try_read_float("foreground_plane_screen_y", settings_.foreground_plane_screen_y)) {
+        try_read_float("blur_foreground_screen_y", settings_.foreground_plane_screen_y);
+    }
+    if (!try_read_float("background_plane_screen_y", settings_.background_plane_screen_y)) {
+        try_read_float("blur_background_screen_y", settings_.background_plane_screen_y);
+    }
+
     auto try_read_curve = [&](const char* key, BlurFalloffMethod& target) -> bool {
         auto it = data.find(key);
         if (it == data.end() || !it->is_number_integer()) return false;
@@ -775,28 +753,23 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         target = static_cast<BlurFalloffMethod>(raw);
         return true;
     };
-    if (!try_read_curve("blur_falloff_method", settings_.blur_falloff_method)) {
-        settings_.blur_falloff_method = BlurFalloffMethod::Linear;
-    }
-    if (!try_read_curve("contrast_falloff_method", settings_.brightness_falloff_method)) {
-        if (!try_read_curve("brightness_falloff_method", settings_.brightness_falloff_method)) {
-            settings_.brightness_falloff_method = settings_.blur_falloff_method;
+    if (!try_read_curve("texture_opacity_falloff_method", settings_.texture_opacity_falloff_method)) {
+        if (!try_read_curve("blur_falloff_method", settings_.texture_opacity_falloff_method)) {
+            settings_.texture_opacity_falloff_method = BlurFalloffMethod::Linear;
         }
     }
-    try_read_curve("saturation_falloff_method", settings_.saturation_falloff_method);
-    try_read_curve("primary_boost_falloff_method", settings_.primary_boost_falloff_method);
 
-    settings_.max_foreground_blur = std::max(0.0f, settings_.max_foreground_blur);
-    settings_.max_background_blur = std::max(0.0f, settings_.max_background_blur);
-    if (!std::isfinite(settings_.blur_foreground_screen_y)) {
-        settings_.blur_foreground_screen_y = 1080.0f;
+    settings_.foreground_texture_max_opacity = std::clamp(settings_.foreground_texture_max_opacity, 0, 255);
+    settings_.background_texture_max_opacity = std::clamp(settings_.background_texture_max_opacity, 0, 255);
+    if (!std::isfinite(settings_.foreground_plane_screen_y)) {
+        settings_.foreground_plane_screen_y = 1080.0f;
     } else {
-        settings_.blur_foreground_screen_y = std::clamp(settings_.blur_foreground_screen_y, 0.0f, 4000.0f);
+        settings_.foreground_plane_screen_y = std::clamp(settings_.foreground_plane_screen_y, 0.0f, 4000.0f);
     }
-    if (!std::isfinite(settings_.blur_background_screen_y)) {
-        settings_.blur_background_screen_y = 0.0f;
+    if (!std::isfinite(settings_.background_plane_screen_y)) {
+        settings_.background_plane_screen_y = 0.0f;
     } else {
-        settings_.blur_background_screen_y = std::clamp(settings_.blur_background_screen_y, 0.0f, 4000.0f);
+        settings_.background_plane_screen_y = std::clamp(settings_.background_plane_screen_y, 0.0f, 4000.0f);
     }
     settings_.parallax_strength = std::isfinite(settings_.parallax_strength) ? std::max(0.0f, settings_.parallax_strength) : 0.0f;
 
@@ -897,27 +870,12 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["parallax_smoothing_max_step"] = settings_.parallax_smoothing.max_step;
     j["parallax_smoothing_snap_threshold"] = settings_.parallax_smoothing.snap_threshold;
 
-    // Perspective Colors (UI-only)
-    j["saturation_background"] = settings_.saturation_background;
-    j["saturation_foreground"] = settings_.saturation_foreground;
-    j["primary_boost_background"] = settings_.primary_boost_background;
-    j["primary_boost_foreground"] = settings_.primary_boost_foreground;
-    // Write new contrast keys, plus legacy brightness for compatibility
-    j["foreground_contrast"]  = settings_.foreground_brightness;
-    j["background_contrast"]  = settings_.background_brightness;
-    j["foreground_brightness"] = settings_.foreground_brightness; // legacy
-    j["background_brightness"] = settings_.background_brightness; // legacy
-
-    // Perspective Blur (Aperture Blur)
-    j["max_foreground_blur"] = settings_.max_foreground_blur;
-    j["max_background_blur"] = settings_.max_background_blur;
-    j["blur_foreground_screen_y"] = settings_.blur_foreground_screen_y;
-    j["blur_background_screen_y"] = settings_.blur_background_screen_y;
-    j["blur_falloff_method"] = static_cast<int>(settings_.blur_falloff_method);
-    j["contrast_falloff_method"]   = static_cast<int>(settings_.brightness_falloff_method);
-    j["brightness_falloff_method"] = static_cast<int>(settings_.brightness_falloff_method); // legacy
-    j["saturation_falloff_method"] = static_cast<int>(settings_.saturation_falloff_method);
-    j["primary_boost_falloff_method"] = static_cast<int>(settings_.primary_boost_falloff_method);
+    // Depth cue texture blending
+    j["foreground_texture_max_opacity"] = settings_.foreground_texture_max_opacity;
+    j["background_texture_max_opacity"] = settings_.background_texture_max_opacity;
+    j["foreground_plane_screen_y"] = settings_.foreground_plane_screen_y;
+    j["background_plane_screen_y"] = settings_.background_plane_screen_y;
+    j["texture_opacity_falloff_method"] = static_cast<int>(settings_.texture_opacity_falloff_method);
     return j;
 }
 

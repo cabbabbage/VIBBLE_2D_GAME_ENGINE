@@ -39,22 +39,12 @@ class camera {
         float scale_variant_hysteresis_margin = 0.05f;
         float min_zoom_multiplier = 0.7f;
         float max_zoom_multiplier = 1.3f;
-        // Depth cue color adjustments
-        float saturation_background    = 0.0f;
-        float saturation_foreground    = 0.0f;
-        float primary_boost_background = 0.0f;
-        float primary_boost_foreground = 0.0f;
-        float foreground_brightness    = 0.0f;
-        float background_brightness = 0.0f;
-        // Perspective Blur (Aperture Blur)
-        float max_foreground_blur = 0.0f;
-        float max_background_blur = 0.0f;
-        float blur_foreground_screen_y = 1080.0f;
-        float blur_background_screen_y = 0.0f;
-        BlurFalloffMethod blur_falloff_method        = BlurFalloffMethod::Linear;
-        BlurFalloffMethod brightness_falloff_method  = BlurFalloffMethod::Linear;
-        BlurFalloffMethod saturation_falloff_method  = BlurFalloffMethod::Linear;
-        BlurFalloffMethod primary_boost_falloff_method = BlurFalloffMethod::Linear;
+        // Depth cue texture blending
+        int   foreground_texture_max_opacity = 0;
+        int   background_texture_max_opacity = 0;
+        float foreground_plane_screen_y      = 1080.0f;
+        float background_plane_screen_y      = 0.0f;
+        BlurFalloffMethod texture_opacity_falloff_method = BlurFalloffMethod::Linear;
         TransformSmoothingParams parallax_smoothing{
             TransformSmoothingMethod::CriticallyDampedSpring,
             0.0f,

@@ -56,7 +56,15 @@ void InitializeAssets::initialize(Assets& assets,
                 set_assets_owner_recursive(raw, &assets);
                 assets.owned_assets.push_back(std::move(asset));
                 assets.all.push_back(raw);
-                raw->finalize_setup();
+                // Assets should already be finalized by AssetLoader::finalizeAssets().
+                // Guard to avoid double-initialization; finalize only if somehow not finalized.
+                if (!raw->is_finalized()) {
+                    if (kAssetLoggingEnabled) {
+                        std::cerr << "[InitializeAssets] Asset '" << (raw->info ? raw->info->name : std::string{"<null>"})
+                                  << "' not finalized by loader; finalizing now.\n";
+                    }
+                    raw->finalize_setup();
+                }
                 // Initialize tiling for tileable assets on load
                 try {
                     if (raw->info && raw->info->tillable) {

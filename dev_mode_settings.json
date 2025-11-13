@@ -38,11 +38,9 @@
     },
     "dev_ui": {
         "camera": {
-            "depthcue_blur_enabled": true,
-            "depthcue_brightness_enabled": false,
-            "depthcue_enabled": true,
-            "depthcue_primary_enabled": true,
-            "depthcue_saturation_enabled": false
+            "background_texture_max_opacity": 0.0,
+            "depthcue_enabled": false,
+            "foreground_texture_max_opacity": 0.0
         },
         "lighting": {
             "map_panel": {

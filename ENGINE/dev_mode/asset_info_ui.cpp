@@ -321,6 +321,11 @@ AssetInfoUI::~AssetInfoUI() {
         assets_->set_force_high_quality_rendering(false);
     }
     forcing_high_quality_rendering_ = false;
+    cancel_color_sampling(true);
+    if (color_sampling_cursor_handle_) {
+        SDL_FreeCursor(color_sampling_cursor_handle_);
+        color_sampling_cursor_handle_ = nullptr;
+    }
 }
 
 void AssetInfoUI::set_assets(Assets* a) {
@@ -525,6 +530,49 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
 }
 
 bool AssetInfoUI::handle_event(const SDL_Event& e) {
+    // If we're actively sampling a color, intercept inputs until completion/cancel
+    if (color_sampling_active_) {
+        const bool pointer_event =
+            (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
+        if (pointer_event) {
+            color_sampling_cursor_.x = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
+            color_sampling_cursor_.y = (e.type == SDL_MOUSEMOTION) ? e.motion.y : e.button.y;
+        }
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            if (last_renderer_) {
+                SDL_Rect sample_rect{ color_sampling_cursor_.x, color_sampling_cursor_.y, 1, 1 };
+                Uint32 pixel = 0;
+                if (SDL_RenderReadPixels(last_renderer_, &sample_rect, SDL_PIXELFORMAT_ARGB8888, &pixel, sizeof(pixel)) == 0) {
+                    Uint8 r = 0, g = 0, b = 0, a = 0;
+                    if (SDL_PixelFormat* fmt = SDL_AllocFormat(SDL_PIXELFORMAT_ARGB8888)) {
+                        SDL_GetRGBA(pixel, fmt, &r, &g, &b, &a);
+                        SDL_FreeFormat(fmt);
+                        complete_color_sampling(SDL_Color{r, g, b, a});
+                        return true;
+                    }
+                }
+            }
+            // If we failed to read pixels, cancel silently
+            cancel_color_sampling(true);
+            return true;
+        }
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            cancel_color_sampling(false);
+            return true;
+        }
+        // Swallow other inputs while sampling
+        switch (e.type) {
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+            case SDL_MOUSEMOTION:
+            case SDL_MOUSEWHEEL:
+            case SDL_KEYDOWN:
+            case SDL_TEXTINPUT:
+                return true;
+            default:
+                break;
+        }
+    }
     // Give active dropdown overlays global priority so option clicks are reliable
     if (auto* active_dd = DMDropdown::active_dropdown()) {
         if (active_dd->handle_event(e)) {
@@ -864,6 +912,7 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     if (!visible_) return;
 
     layout_widgets(screen_w, screen_h);
+    last_renderer_ = r;
 
     if (animation_editor_window_ && animation_editor_window_->is_visible()) {
         animation_editor_window_->render(r);
@@ -874,7 +923,6 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
             if (asset_selector_ && asset_selector_->visible()) {
                 asset_selector_->render(r);
             }
-            last_renderer_ = r;
             return;
         }
     }
@@ -888,6 +936,48 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         asset_selector_->render(r);
 
     DMDropdown::render_active_options(r);
+
+    // Color sampling preview overlay
+    if (color_sampling_active_ && r) {
+        SDL_Rect sample_rect{ color_sampling_cursor_.x, color_sampling_cursor_.y, 1, 1 };
+        Uint32 pixel = 0;
+        if (SDL_RenderReadPixels(r, &sample_rect, SDL_PIXELFORMAT_ARGB8888, &pixel, sizeof(pixel)) == 0) {
+            Uint8 rr = 0, gg = 0, bb = 0, aa = 0;
+            if (SDL_PixelFormat* fmt = SDL_AllocFormat(SDL_PIXELFORMAT_ARGB8888)) {
+                SDL_GetRGBA(pixel, fmt, &rr, &gg, &bb, &aa);
+                SDL_FreeFormat(fmt);
+                const_cast<AssetInfoUI*>(this)->color_sampling_preview_ = SDL_Color{rr, gg, bb, aa};
+                const_cast<AssetInfoUI*>(this)->color_sampling_preview_valid_ = true;
+            } else {
+                const_cast<AssetInfoUI*>(this)->color_sampling_preview_valid_ = false;
+            }
+        } else {
+            const_cast<AssetInfoUI*>(this)->color_sampling_preview_valid_ = false;
+        }
+
+        const int preview_size = 48;
+        SDL_Rect preview_rect{ color_sampling_cursor_.x + 18,
+                               color_sampling_cursor_.y + 18,
+                               preview_size,
+                               preview_size };
+        SDL_Rect inner_rect{ preview_rect.x + 4,
+                             preview_rect.y + 4,
+                             std::max(0, preview_rect.w - 8), std::max(0, preview_rect.h - 8) };
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_Color border = DMStyles::Border();
+        SDL_Color bg = dm_draw::DarkenColor(DMStyles::PanelBG(), 0.1f);
+        SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, 220);
+        SDL_RenderFillRect(r, &preview_rect);
+        SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+        SDL_RenderDrawRect(r, &preview_rect);
+        if (color_sampling_preview_valid_) {
+            SDL_Color fill = color_sampling_preview_;
+            SDL_SetRenderDrawColor(r, fill.r, fill.g, fill.b, fill.a);
+            SDL_RenderFillRect(r, &inner_rect);
+            SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+            SDL_RenderDrawRect(r, &inner_rect);
+        }
+    }
 
     // Duplicate asset popup: reuse AssetLibraryUI input style
     if (showing_duplicate_popup_) {
@@ -1232,6 +1322,60 @@ void AssetInfoUI::sync_target_z_threshold() {
 
     if (!updated_any && target_valid && current_target) {
         (void)sync_asset(current_target);
+    }
+}
+
+void AssetInfoUI::begin_color_sampling(const utils::color::RangedColor&,
+                                       std::function<void(SDL_Color)> on_sample,
+                                       std::function<void()> on_cancel) {
+    if (!on_sample) {
+        if (on_cancel) {
+            on_cancel();
+        }
+        return;
+    }
+    cancel_color_sampling(true);
+    color_sampling_active_ = true;
+    color_sampling_preview_valid_ = false;
+    color_sampling_apply_ = std::move(on_sample);
+    color_sampling_cancel_ = std::move(on_cancel);
+    int mx = 0;
+    int my = 0;
+    SDL_GetMouseState(&mx, &my);
+    color_sampling_cursor_.x = mx;
+    color_sampling_cursor_.y = my;
+    if (!color_sampling_cursor_handle_) {
+        color_sampling_cursor_handle_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
+    }
+    color_sampling_prev_cursor_ = SDL_GetCursor();
+    if (color_sampling_cursor_handle_) {
+        SDL_SetCursor(color_sampling_cursor_handle_);
+    }
+}
+
+void AssetInfoUI::cancel_color_sampling(bool silent) {
+    if (!color_sampling_active_) {
+        return;
+    }
+    color_sampling_active_ = false;
+    color_sampling_preview_valid_ = false;
+    if (color_sampling_prev_cursor_) {
+        SDL_SetCursor(color_sampling_prev_cursor_);
+        color_sampling_prev_cursor_ = nullptr;
+    }
+    auto cancel_cb = std::move(color_sampling_cancel_);
+    color_sampling_apply_ = nullptr;
+    color_sampling_cancel_ = nullptr;
+    if (!silent && cancel_cb) {
+        cancel_cb();
+    }
+}
+
+void AssetInfoUI::complete_color_sampling(SDL_Color color) {
+    auto apply_cb = std::move(color_sampling_apply_);
+    cancel_color_sampling(true);
+    if (apply_cb) {
+        apply_cb(color);
     }
 }
 
@@ -1629,6 +1773,8 @@ void AssetInfoUI::open_for_room_area(Room* room, const std::string& area_name) {
 
     // Spawn group configuration is now embedded in the Area Tool panel (AreaOverlayEditor).
 
+    container_.reset_scroll();
+    container_.request_layout();
     open();
 }
 
@@ -1703,6 +1849,9 @@ void AssetInfoUI::rebuild_default_sections() {
         this->notify_spawn_group_removed(spawn_id);
     });
     sections_.push_back(std::move(spawns));
+
+    container_.reset_scroll();
+    container_.request_layout();
 }
 
 bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& fn) {

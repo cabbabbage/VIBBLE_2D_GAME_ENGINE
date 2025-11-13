@@ -464,6 +464,16 @@ private:
         widget->set_on_value_changed([this, widget](const DMColorRangeWidget::RangedColor& value) {
             this->handle_color_widget_changed(widget, value);
         });
+        widget->set_on_sample_requested(
+            [this](const DMColorRangeWidget::RangedColor& current,
+                   std::function<void(SDL_Color)> on_sample,
+                   std::function<void()> on_cancel) {
+                if (ui_) {
+                    ui_->begin_color_sampling(current, std::move(on_sample), std::move(on_cancel));
+                } else if (on_cancel) {
+                    on_cancel();
+                }
+            });
     }
 
     void handle_color_widget_changed(DMColorRangeWidget* widget,

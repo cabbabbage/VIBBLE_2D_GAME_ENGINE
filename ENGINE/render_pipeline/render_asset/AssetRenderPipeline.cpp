@@ -1,6 +1,7 @@
 #include "render_pipeline/render_asset/AssetRenderPipeline.hpp"
 
 #include "asset/Asset.hpp"
+#include "asset/asset_types.hpp"
 #include "render/camera.hpp"
 #include "render/global_light_source.hpp"
 #include "render_pipeline/render_asset/IRenderStage.hpp"
@@ -9,6 +10,7 @@
 #include "world/grid.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace {
@@ -21,8 +23,9 @@ float compute_asset_screen_height(Asset& asset, float inv_scale) {
     if ((cached_w <= 0 || cached_h <= 0)) {
         if (SDL_Texture* final = asset.get_final_texture()) {
             SDL_QueryTexture(final, nullptr, nullptr, &cached_w, &cached_h);
-        }
-    }
+}
+
+}
     if ((cached_w <= 0 || cached_h <= 0)) {
         if (SDL_Texture* frame = asset.get_current_frame()) {
             SDL_QueryTexture(frame, nullptr, nullptr, &cached_w, &cached_h);
@@ -357,7 +360,11 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
 }
 
 SDL_Texture* AssetRenderPipeline::regenerateFinalTexture(Asset* asset) {
-    return asset ? run(*asset) : nullptr;
+    if (!asset) {
+        return nullptr;
+    }
+    SDL_Texture* tex = run(*asset);
+    return tex;
 }
 
 SDL_Texture* AssetRenderPipeline::texture_for_scale(Asset* asset,

@@ -5,7 +5,6 @@
 #include "world/chunk.hpp"
 #include "render/camera.hpp"
 #include "render/asset_light_renderer.hpp"
-#include "render/depth_cue_utils.hpp"
 #include "dev_mode/depth_cue_settings.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
@@ -30,13 +29,82 @@
 static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
 namespace {
-using depth_cue::DepthSample;
-using depth_cue::DepthSide;
-using depth_cue::evaluate_depth_curve;
-using depth_cue::kDepthCueDeadzonePx;
-using depth_cue::nearly_equal;
-using DepthCueRow = DepthCueEffects::Row;
 constexpr std::string_view kUpdateMapLightSettingKey = "dev_ui.lighting.map_panel.update_map_light";
+
+constexpr float kDepthCueDeadzonePx = 1.5f;
+
+enum class DepthCuePlane {
+    None = 0,
+    Foreground,
+    Background
+};
+
+struct DepthCueSample {
+    DepthCuePlane plane = DepthCuePlane::None;
+    float         t     = 0.0f;
+};
+
+float evaluate_depth_curve(camera::BlurFalloffMethod method, float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    switch (method) {
+        case camera::BlurFalloffMethod::Quadratic:
+            return t * t;
+        case camera::BlurFalloffMethod::Cubic:
+            return t * t * t;
+        case camera::BlurFalloffMethod::Logarithmic: {
+            const float k = 4.0f;
+            const float num = std::log1p(k * t);
+            const float den = std::log1p(k);
+            return (den > 0.0f) ? (num / den) : t;
+        }
+        case camera::BlurFalloffMethod::Exponential: {
+            const float k = 3.0f;
+            const float num = std::exp(k * t) - 1.0f;
+            const float den = std::exp(k) - 1.0f;
+            return (den > 0.0f) ? (num / den) : t;
+        }
+        case camera::BlurFalloffMethod::Linear:
+        default:
+            return t;
+    }
+}
+
+DepthCueSample make_depthcue_sample(float screen_y,
+                                    float center_screen_y,
+                                    float fg_plane_screen_y,
+                                    float bg_plane_screen_y,
+                                    float fg_span_screen,
+                                    float bg_span_screen) {
+    DepthCueSample sample;
+    if (!std::isfinite(screen_y)) {
+        return sample;
+    }
+    if (std::fabs(screen_y - center_screen_y) <= kDepthCueDeadzonePx) {
+        return sample;
+    }
+    if (screen_y > center_screen_y) {
+        sample.plane = DepthCuePlane::Foreground;
+        sample.t = (screen_y >= fg_plane_screen_y || fg_span_screen <= 0.0f)
+            ? 1.0f
+            : std::clamp((screen_y - center_screen_y) / fg_span_screen, 0.0f, 1.0f);
+    } else if (screen_y < center_screen_y) {
+        sample.plane = DepthCuePlane::Background;
+        sample.t = (screen_y <= bg_plane_screen_y || bg_span_screen <= 0.0f)
+            ? 1.0f
+            : std::clamp((center_screen_y - screen_y) / bg_span_screen, 0.0f, 1.0f);
+    }
+    return sample;
+}
+
+float compute_depthcue_opacity(const DepthCueSample& sample,
+                               int max_opacity,
+                               camera::BlurFalloffMethod method) {
+    if (sample.plane == DepthCuePlane::None || max_opacity <= 0) {
+        return 0.0f;
+    }
+    const float curve = evaluate_depth_curve(method, sample.t);
+    return curve * static_cast<float>(std::clamp(max_opacity, 0, 255)) / 255.0f;
+}
 
 constexpr const char* kEnableChunkLightingEnv  = "VIBBLE_ENABLE_CHUNK_LIGHTING";
 constexpr const char* kDisableChunkLightingEnv = "VIBBLE_DISABLE_CHUNK_LIGHTING";
@@ -90,65 +158,6 @@ static inline bool intersects_padded(const SDL_FRect& a,
     const float bx1 = b.x + b.w;
     const float by1 = b.y + b.h;
     return !(ax1 <= bx0 || bx1 <= ax0 || ay1 <= by0 || by1 <= ay0);
-}
-
-struct GaussianTap {
-    SDL_FPoint offset{0.0f, 0.0f};
-    float      weight = 0.0f;
-};
-
-void build_gaussian_kernel(float radius_px, std::vector<GaussianTap>& taps) {
-    taps.clear();
-    if (radius_px <= 0.0f) {
-        return;
-    }
-
-    constexpr int   kMaxKernelRadius = 4;
-    const int       kernel_radius    = std::clamp(static_cast<int>(std::ceil(radius_px / 8.0f)), 1, kMaxKernelRadius);
-    const float     sigma            = std::max(radius_px * 0.35f, 0.75f);
-    const float     step             = std::max(radius_px / static_cast<float>(kernel_radius), 0.5f);
-    float           weight_sum       = 0.0f;
-
-    for (int y = -kernel_radius; y <= kernel_radius; ++y) {
-        for (int x = -kernel_radius; x <= kernel_radius; ++x) {
-            if (x == 0 && y == 0) {
-                continue; // center sample handled by main sprite pass
-            }
-            SDL_FPoint offset{
-                step * static_cast<float>(x),
-                step * static_cast<float>(y)
-            };
-            const float dist2  = offset.x * offset.x + offset.y * offset.y;
-            const float weight = std::exp(-dist2 / (2.0f * sigma * sigma));
-            taps.push_back(GaussianTap{offset, weight});
-            weight_sum += weight;
-        }
-    }
-
-    if (weight_sum <= 0.0f) {
-        taps.clear();
-        return;
-    }
-
-    const float inv_weight_sum = 1.0f / weight_sum;
-    for (auto& tap : taps) {
-        tap.weight *= inv_weight_sum;
-    }
-}
-
-// Cache Gaussian kernels keyed by quantized blur radius (integer pixels).
-// Avoids rebuilding the kernel every draw call.
-const std::vector<GaussianTap>& get_cached_gaussian_kernel(float radius_px) {
-    static thread_local std::unordered_map<int, std::vector<GaussianTap>> s_kernel_cache;
-    const int key = std::clamp(static_cast<int>(std::round(std::max(0.0f, radius_px))), 0, 64);
-    auto it = s_kernel_cache.find(key);
-    if (it != s_kernel_cache.end()) {
-        return it->second;
-    }
-    std::vector<GaussianTap> built;
-    build_gaussian_kernel(static_cast<float>(key), built);
-    auto [ins_it, _] = s_kernel_cache.emplace(key, std::move(built));
-    return ins_it->second;
 }
 
 // Ensure reusable render-target textures exist and match the screen size
@@ -205,7 +214,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                                    assets->player,
                                    nullptr,
                                    &assets->world_grid() }),
-  depth_cue_effects_(renderer),
   update_map_light_enabled_(devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true))
 {
     // Allow override of warmup frames via env var (optional): VIBBLE_DEPTHCUE_WARMUP_FRAMES
@@ -240,7 +248,6 @@ SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
 }
 
 SceneRenderer::~SceneRenderer() {
-    depth_cue_effects_.clear_cache();
     destroy_darkness_overlay();
     if (scene_composite_tex_) { SDL_DestroyTexture(scene_composite_tex_); scene_composite_tex_ = nullptr; }
     if (postprocess_tex_)     { SDL_DestroyTexture(postprocess_tex_);     postprocess_tex_     = nullptr; }
@@ -508,7 +515,6 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
 void SceneRenderer::render(){
     ++frame_counter_;
     // Opportunistically prune tinted texture cache to prevent stale growth
-    depth_cue_effects_.prune_tinted_cache(frame_counter_);
 
 
     if (light_map_ && !chunk_lighting_suspended_){
@@ -525,7 +531,6 @@ void SceneRenderer::render(){
         static_cast<float>(SDL_GetTicks64() % 1000000ULL) * 0.001f;
 
     // Apply depth-cue per-asset only; disable full-screen post
-    const bool use_scene_depthcue_post = false;
     SDL_SetRenderTarget(renderer_, nullptr);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     const SDL_Color clear_color = light_map_only_mode_ ? SDL_Color{0,0,0,255} : map_clear_color_;
@@ -603,15 +608,14 @@ void SceneRenderer::render(){
             tile_renderer_->render(renderer_, assets_->getView(), assets_->world_grid());
         }
 
-        const float blur_foreground_max_px = std::max(0.0f, cam_settings.max_foreground_blur);
-        const float blur_background_max_px = std::max(0.0f, cam_settings.max_background_blur);
+        const int fg_max_opacity = std::clamp(cam_settings.foreground_texture_max_opacity, 0, 255);
+        const int bg_max_opacity = std::clamp(cam_settings.background_texture_max_opacity, 0, 255);
         const bool cold_start = frame_counter_ <= static_cast<std::uint64_t>(depthcue_warmup_frames_);
-        const bool blur_depth_enabled = depthcue_setting_enabled && camera_state && camera_state->realism_enabled() &&
-            (blur_foreground_max_px > 0.0f || blur_background_max_px > 0.0f) && !cold_start;
+        const bool depthcue_values_active = (fg_max_opacity > 0 || bg_max_opacity > 0);
 
         float center_screen_y = static_cast<float>(screen_height_) * 0.5f;
-        float fg_plane_screen_y = std::clamp(cam_settings.blur_foreground_screen_y, 0.0f, static_cast<float>(screen_height_));
-        float bg_plane_screen_y = std::clamp(cam_settings.blur_background_screen_y, 0.0f, static_cast<float>(screen_height_));
+        float fg_plane_screen_y = std::clamp(cam_settings.foreground_plane_screen_y, 0.0f, static_cast<float>(screen_height_));
+        float bg_plane_screen_y = std::clamp(cam_settings.background_plane_screen_y, 0.0f, static_cast<float>(screen_height_));
         if (camera_state) {
             SDL_FPoint center_world_f = camera_state->get_view_center_f();
             SDL_FPoint center_screen_f = camera_state->map_to_screen_f(center_world_f);
@@ -621,37 +625,13 @@ void SceneRenderer::render(){
         }
         const float fg_span_screen = std::max(0.0f, fg_plane_screen_y - center_screen_y);
         const float bg_span_screen = std::max(0.0f, center_screen_y - bg_plane_screen_y);
-        auto depth_sample_for = [&](float screen_y) -> DepthSample {
-            DepthSample sample;
-            if (!std::isfinite(screen_y)) {
-                return sample;
-            }
-            if (std::fabs(screen_y - center_screen_y) <= kDepthCueDeadzonePx) {
-                return sample;
-            }
-            if (screen_y > center_screen_y) {
-                sample.side = DepthSide::Foreground;
-                sample.t = (screen_y >= fg_plane_screen_y || fg_span_screen <= 0.0f)
-                    ? 1.0f
-                    : std::clamp((screen_y - center_screen_y) / fg_span_screen, 0.0f, 1.0f);
-            } else if (screen_y < center_screen_y) {
-                sample.side = DepthSide::Background;
-                sample.t = (screen_y <= bg_plane_screen_y || bg_span_screen <= 0.0f)
-                    ? 1.0f
-                    : std::clamp((center_screen_y - screen_y) / bg_span_screen, 0.0f, 1.0f);
-            }
-            return sample;
-        };
-        auto sample_blur_effect = [&](const DepthSample& sample,
-                                      float foreground_value,
-                                      float background_value) -> float {
-            if (sample.is_foreground() && foreground_value > 0.0f) {
-                return evaluate_depth_curve(cam_settings.blur_falloff_method, sample.t) * foreground_value;
-            }
-            if (sample.is_background() && background_value > 0.0f) {
-                return evaluate_depth_curve(cam_settings.blur_falloff_method, sample.t) * background_value;
-            }
-            return 0.0f;
+        auto depth_sample_for = [&](float screen_y) -> DepthCueSample {
+            return make_depthcue_sample(screen_y,
+                                        center_screen_y,
+                                        fg_plane_screen_y,
+                                        bg_plane_screen_y,
+                                        fg_span_screen,
+                                        bg_span_screen);
         };
 
         const auto& active = assets_->getActive();
@@ -690,12 +670,10 @@ void SceneRenderer::render(){
             }
             cmd.alpha = std::clamp(cmd.alpha, 0.0f, 1.0f);
 
-            // Compute perspective blur radius per asset
-            cmd.depth_blur_px       = 0.0f;
-            // Compute depth cue adjustments per asset (percent)
-            cmd.depth_brightness    = 0.0f;
-            cmd.depth_saturation    = 0.0f;
-            cmd.depth_primary_boost = 0.0f;
+            cmd.depthcue_foreground_texture = nullptr;
+            cmd.depthcue_background_texture = nullptr;
+            cmd.depthcue_foreground_alpha   = 0;
+            cmd.depthcue_background_alpha   = 0;
 
             const bool is_texture_asset = asset && asset->info && asset->info->type == asset_types::texture;
             bool is_chunk_tiled = false;
@@ -704,9 +682,10 @@ void SceneRenderer::render(){
                 is_chunk_tiled = (tiling_opt && tiling_opt->is_valid());
             }
             const bool is_tillable_asset = asset && asset->info && asset->info->tillable;
-            const bool depthcue_allowed = depthcue_setting_enabled && !is_texture_asset && !is_chunk_tiled && !is_tillable_asset && camera_state && !cold_start;
-            if (depthcue_allowed && !use_scene_depthcue_post) {
-                // Compute screen position once for both blur and brightness calculations
+            const bool depthcue_allowed = depthcue_setting_enabled && depthcue_values_active &&
+                !is_texture_asset && !is_chunk_tiled && !is_tillable_asset &&
+                camera_state && camera_state->realism_enabled() && !cold_start;
+            if (depthcue_allowed) {
                 float wx = asset ? asset->smoothed_translation_x() : 0.0f;
                 float wy = asset ? asset->smoothed_translation_y() : 0.0f;
                 if (assets_ && assets_->is_dev_mode() && asset) {
@@ -715,32 +694,44 @@ void SceneRenderer::render(){
                 }
                 SDL_FPoint screen_pos = camera_state->map_to_screen_f(SDL_FPoint{ wx, wy });
                 const float screen_y = screen_pos.y;
-                const DepthSample depth_sample = depth_sample_for(screen_y);
-                const float brightness_value = depth_cue::sample_signed_effect(
-                    depth_sample,
-                    cam_settings.foreground_brightness,
-                    cam_settings.background_brightness,
-                    cam_settings.brightness_falloff_method);
-                cmd.depth_brightness = std::clamp(brightness_value, -50.0f, 50.0f);
-
-                // Combined saturation setting:
-                // Positive -> treat as primary boost; Negative -> reduce HSV saturation.
-                const float combined_value = depth_cue::sample_signed_effect(
-                    depth_sample,
-                    cam_settings.saturation_foreground,
-                    cam_settings.saturation_background,
-                    cam_settings.saturation_falloff_method);
-                const float clamped_combined = std::clamp(combined_value, -50.0f, 50.0f);
-                cmd.depth_saturation    = std::min(0.0f, clamped_combined);
-                cmd.depth_primary_boost = std::max(0.0f, clamped_combined);
-
-                if (blur_depth_enabled) {
-                    const float blur_value = sample_blur_effect(
-                        depth_sample,
-                        blur_foreground_max_px,
-                        blur_background_max_px);
-                    cmd.depth_blur_px = std::clamp(blur_value, 0.0f, 50.0f);
+                const AnimationFrame* frame_ptr = asset ? asset->current_animation_frame() : nullptr;
+                const Animation* current_anim = nullptr;
+                if (asset && asset->info) {
+                    auto anim_it = asset->info->animations.find(asset->current_animation);
+                    if (anim_it != asset->info->animations.end()) {
+                        current_anim = &anim_it->second;
+                    }
                 }
+                SDL_Texture* fg_overlay = nullptr;
+                SDL_Texture* bg_overlay = nullptr;
+                if (current_anim && frame_ptr) {
+                    fg_overlay = current_anim->depthcue_foreground_texture(frame_ptr);
+                    bg_overlay = current_anim->depthcue_background_texture(frame_ptr);
+                }
+                const DepthCueSample depth_sample = depth_sample_for(screen_y);
+                if (depth_sample.plane != DepthCuePlane::None) {
+                    if (depth_sample.plane == DepthCuePlane::Foreground && fg_overlay && fg_max_opacity > 0) {
+                        const float normalized = compute_depthcue_opacity(
+                            depth_sample,
+                            fg_max_opacity,
+                            cam_settings.texture_opacity_falloff_method);
+                        const int alpha_value = static_cast<int>(std::round(normalized * 255.0f));
+                        cmd.depthcue_foreground_alpha = static_cast<Uint8>(std::clamp(alpha_value, 0, 255));
+                        if (cmd.depthcue_foreground_alpha > 0) {
+                            cmd.depthcue_foreground_texture = fg_overlay;
+                        }
+                    } else if (depth_sample.plane == DepthCuePlane::Background && bg_overlay && bg_max_opacity > 0) {
+                        const float normalized = compute_depthcue_opacity(
+                            depth_sample,
+                            bg_max_opacity,
+                            cam_settings.texture_opacity_falloff_method);
+                        const int alpha_value = static_cast<int>(std::round(normalized * 255.0f));
+                        cmd.depthcue_background_alpha = static_cast<Uint8>(std::clamp(alpha_value, 0, 255));
+                        if (cmd.depthcue_background_alpha > 0) {
+                            cmd.depthcue_background_texture = bg_overlay;
+                        }
+                }
+            }
             }
 
             auto& target_commands = (asset->info->type == asset_types::texture) ? texture_commands_ : remaining_commands_;
@@ -974,175 +965,6 @@ void SceneRenderer::render(){
                 }
             }
             SDL_Texture* tex = cmd.source_texture;
-            SDL_Texture* tinted_tex = nullptr;
-            const bool has_depthcue_effect = (std::fabs(cmd.depth_saturation) > 0.01f ||
-                                              std::fabs(cmd.depth_primary_boost) > 0.01f ||
-                                              std::fabs(cmd.depth_brightness) > 0.01f ||
-                                              cmd.depth_blur_px > 0.0f);
-            const bool composite_for_depthcue = (!use_scene_depthcue_post) && has_depthcue_effect;
-
-            // When depth-cue is active for this asset, composite (back lights + base + front lights)
-            // into an offscreen texture, then apply color/blur to the merged result.
-            if (composite_for_depthcue && tex && cmd.dst.w > 0.0f && cmd.dst.h > 0.0f) {
-                const int comp_w = std::max(1, static_cast<int>(std::lround(cmd.dst.w)));
-                const int comp_h = std::max(1, static_cast<int>(std::lround(cmd.dst.h)));
-                SDL_Texture* composite = SDL_CreateTexture(
-                    renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, comp_w, comp_h);
-                if (composite) {
-                    SDL_SetTextureBlendMode(composite, SDL_BLENDMODE_BLEND);
-                    SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
-                    SDL_SetRenderTarget(renderer_, composite);
-                    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-                    SDL_RenderClear(renderer_);
-
-                    // 1) Behind lights into composite (local coordinates)
-                    if (overlay_source && overlay_source->has_back_lights && light_overlay_visibility > 0.0f) {
-                        runtime_lighting::AssetLight local_src = *overlay_source;
-                        local_src.asset_rect = SDL_Rect{ 0, 0, comp_w, comp_h };
-                        AssetLightRenderer light_renderer(renderer_,
-                                                          local_src,
-                                                          darkness_overlay_vertices_,
-                                                          darkness_overlay_indices_,
-                                                          light_overlay_visibility,
-                                                          frame_flicker_time_seconds);
-                        light_renderer.draw_behind();
-                    }
-
-                    // 2) Outline pass (if highlighted/selected)
-                    if (cmd.highlighted || cmd.selected) {
-                        const int outline_px = 3;
-                        const SDL_FPoint OFFS[] = {
-                            {  0, -1 }, {  0,  1 }, { -1,  0 }, {  1,  0 },
-                            { -1, -1 }, {  1, -1 }, { -1,  1 }, {  1,  1 },
-                            {  0, -2 }, {  0,  2 }, { -2,  0 }, {  2,  0 }
-                        };
-                        Uint8 r = cmd.highlighted ? 255 : 0;
-                        Uint8 g = cmd.highlighted ? 220 : 220;
-                        Uint8 b = cmd.highlighted ? 0   : 255;
-                        Uint8 a = 200;
-                        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_ADD);
-                        SDL_SetTextureColorMod(tex, r, g, b);
-                        SDL_SetTextureAlphaMod(tex, a);
-                        for (const SDL_FPoint& o : OFFS) {
-                            SDL_FRect orect{ 0.0f, 0.0f, cmd.dst.w, cmd.dst.h };
-                            orect.x += o.x * outline_px;
-                            orect.y += o.y * outline_px;
-                            SDL_RenderCopyExF(
-                                renderer_, tex, nullptr, &orect,
-                                cmd.rotation_degrees,
-                                cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
-                                cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-                        }
-                        SDL_SetTextureColorMod(tex, 255, 255, 255);
-                        SDL_SetTextureAlphaMod(tex, 255);
-                        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-                    }
-
-                    // 3) Base sprite into composite (respect asset alpha)
-                    const Uint8 base_alpha_mod = static_cast<Uint8>(
-                        std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
-                    SDL_SetTextureAlphaMod(tex, base_alpha_mod);
-                    SDL_SetTextureColorMod(tex, 255, 255, 255);
-                    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-                    SDL_FRect local_dst{ 0.0f, 0.0f, cmd.dst.w, cmd.dst.h };
-                    SDL_RenderCopyExF(
-                        renderer_, tex, nullptr, &local_dst,
-                        cmd.rotation_degrees,
-                        cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
-                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-                    SDL_SetTextureAlphaMod(tex, 255);
-
-                    // 4) Front lights into composite (local coordinates)
-                    if (overlay_source && overlay_source->has_front_lights && light_overlay_visibility > 0.0f) {
-                        runtime_lighting::AssetLight local_src = *overlay_source;
-                        local_src.asset_rect = SDL_Rect{ 0, 0, comp_w, comp_h };
-                        AssetLightRenderer light_renderer(renderer_,
-                                                          local_src,
-                                                          darkness_overlay_vertices_,
-                                                          darkness_overlay_indices_,
-                                                          light_overlay_visibility,
-                                                          frame_flicker_time_seconds);
-                        light_renderer.draw_in_front();
-                    }
-
-                    SDL_SetRenderTarget(renderer_, prev_target);
-
-                    // Apply color adjustments to the merged composite, if needed
-                    SDL_Texture* final_merged = composite;
-                    if (std::fabs(cmd.depth_saturation) > 0.01f ||
-                        std::fabs(cmd.depth_primary_boost) > 0.01f ||
-                        std::fabs(cmd.depth_brightness) > 0.01f) {
-                        SDL_Texture* colored = depth_cue_effects_.build_color_texture(
-                            composite,
-                            cmd.depth_saturation,
-                            cmd.depth_primary_boost,
-                            cmd.depth_brightness);
-                        if (colored) {
-                            final_merged = colored;
-                        }
-                    }
-
-                    // Optional blur: build a blended texture that preserves coverage
-                    SDL_Texture* texture_to_draw = final_merged;
-                    const float blur_px = std::clamp(cmd.depth_blur_px, 0.0f, 50.0f);
-                    if (blur_px > 0.0f) {
-                        const float blur_mix = std::clamp(0.45f + (blur_px / 80.0f), 0.45f, 0.9f);
-                        std::vector<DepthCueRow> rows(static_cast<size_t>(std::max(0, comp_h)));
-                        for (int y = 0; y < comp_h; ++y) {
-                            rows[static_cast<size_t>(y)].blur_radius_px = blur_px;
-                            rows[static_cast<size_t>(y)].blur_mix       = blur_mix;
-                        }
-                        SDL_Texture* blended = depth_cue_effects_.apply_variable_blur(
-                            texture_to_draw, comp_w, comp_h, rows, nullptr);
-                        if (blended) {
-                            texture_to_draw = blended;
-                        }
-                    }
-
-                    // Draw merged (and possibly blurred) sprite to scene
-                    SDL_SetTextureColorMod(texture_to_draw, 255, 255, 255);
-                    SDL_SetTextureAlphaMod(texture_to_draw, 255);
-                    SDL_SetTextureBlendMode(texture_to_draw, SDL_BLENDMODE_BLEND);
-                    SDL_RenderCopyExF(
-                        renderer_, texture_to_draw, nullptr, &cmd.dst,
-                        cmd.rotation_degrees,
-                        cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
-                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-
-                    // Cleanup temporary textures
-                    if (texture_to_draw != final_merged && texture_to_draw) {
-                        SDL_DestroyTexture(texture_to_draw);
-                    }
-                    if (final_merged != composite && final_merged) {
-                        SDL_DestroyTexture(final_merged);
-                    }
-                    if (composite) {
-                        SDL_DestroyTexture(composite);
-                    }
-
-                    // Do not queue front lights for a second draw; already merged
-                    // Continue to next command
-                    continue;
-                }
-                // If composite allocation failed, fall back to normal path below
-            }
-
-            // Non-composited path (no depth-cue effects or allocation failure):
-            const bool needs_color_adjust = !use_scene_depthcue_post && tex &&
-                (std::fabs(cmd.depth_saturation) > 0.01f ||
-                 std::fabs(cmd.depth_primary_boost) > 0.01f ||
-                 std::fabs(cmd.depth_brightness) > 0.01f);
-            if (needs_color_adjust) {
-                tinted_tex = depth_cue_effects_.get_or_build_tinted_texture(
-                    tex,
-                    cmd.depth_saturation,
-                    cmd.depth_primary_boost,
-                    cmd.depth_brightness,
-                    frame_counter_);
-                if (tinted_tex) {
-                    tex = tinted_tex;
-                }
-            }
 
             // Draw behind-lights directly in non-composited path
             if (overlay_source && overlay_source->has_back_lights && light_overlay_visibility > 0.0f) {
@@ -1165,8 +987,6 @@ void SceneRenderer::render(){
             // Compute base alpha
             const Uint8 base_alpha_mod = static_cast<Uint8>(
                 std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
-            const float blur_px = std::clamp(cmd.depth_blur_px, 0.0f, 50.0f);
-            const bool blur_allowed = !use_scene_depthcue_post && tex && blur_px > 0.0f;
 
             // --------------------
             // 1) OUTLINE PASS (only if highlighted/selected)
@@ -1211,7 +1031,6 @@ void SceneRenderer::render(){
             //    Always draw base pass so blur never reduces opacity
             // --------------------
             bool drew_grid_sliced = false;
-            if (!blur_allowed) {
             if (assets_ && cmd.asset && tex) {
                 // Only apply when not already handled by loader-composed grid tiles
                 const auto& tiling_opt = cmd.asset->tiling_info();
@@ -1374,107 +1193,34 @@ void SceneRenderer::render(){
                     cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
                 );
             }
-
-            }
-            // --------------------
-            // 3) GAUSSIAN BLUR OVERLAY (last effect)
-            // --------------------
-            if (blur_allowed) {
-                // Render scaled sprite into an offscreen target, then apply coverage-preserving blur
-                const int out_w = std::max(1, static_cast<int>(std::lround(cmd.dst.w)));
-                const int out_h = std::max(1, static_cast<int>(std::lround(cmd.dst.h)));
-                SDL_Texture* offscreen = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, out_w, out_h);
-                if (offscreen) {
-                    SDL_SetTextureBlendMode(offscreen, SDL_BLENDMODE_BLEND);
-                    SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
-                    SDL_SetRenderTarget(renderer_, offscreen);
-                    // Clear fully transparent
-                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
-                    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-                    SDL_RenderClear(renderer_);
-                    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-
-                    // Draw the base sprite into offscreen at local coords
-                    SDL_SetTextureColorMod(tex, 255, 255, 255);
-                    SDL_SetTextureAlphaMod(tex, base_alpha_mod);
-                    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-                    SDL_FRect local_dst{ 0.0f, 0.0f, cmd.dst.w, cmd.dst.h };
-                    SDL_RenderCopyExF(
-                        renderer_,
-                        tex,
-                        nullptr,
-                        &local_dst,
-                        cmd.rotation_degrees,
-                        cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
-                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-                    SDL_SetTextureAlphaMod(tex, 255);
-
-                    SDL_SetRenderTarget(renderer_, prev_target);
-
-                    // Build constant-blur rows and apply premultiplied blur with alpha preservation
-                    const float blur_mix = std::clamp(0.45f + (blur_px / 80.0f), 0.45f, 0.9f);
-                    std::vector<DepthCueRow> rows(static_cast<size_t>(out_h));
-                    for (int y = 0; y < out_h; ++y) {
-                        rows[static_cast<size_t>(y)].blur_radius_px = blur_px;
-                        rows[static_cast<size_t>(y)].blur_mix       = blur_mix;
-                    }
-                    SDL_Texture* blended = depth_cue_effects_.apply_variable_blur(offscreen, out_w, out_h, rows, nullptr);
-
-                    // Present to screen
-                    SDL_Texture* to_present = blended ? blended : offscreen;
-                    SDL_SetTextureColorMod(to_present, 255, 255, 255);
-                    SDL_SetTextureAlphaMod(to_present, 255);
-                    SDL_SetTextureBlendMode(to_present, SDL_BLENDMODE_BLEND);
-                    SDL_RenderCopyExF(
-                        renderer_,
-                        to_present,
-                        nullptr,
-                        &cmd.dst,
-                        cmd.rotation_degrees,
-                        cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
-                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-
-                    if (blended) { SDL_DestroyTexture(blended); }
-                    if (offscreen) { SDL_DestroyTexture(offscreen); }
-                } else {
-                    // Fallback: draw existing Gaussian kernel overlay method
-                    const std::vector<GaussianTap>& gaussian_kernel = get_cached_gaussian_kernel(blur_px);
-                    if (!gaussian_kernel.empty()) {
-                        const float blur_mix = std::clamp(0.45f + (blur_px / 80.0f), 0.45f, 0.9f);
-                        SDL_SetTextureColorMod(tex, 255, 255, 255);
-                        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-                        for (const GaussianTap& tap : gaussian_kernel) {
-                            const float sample_alpha_f = std::clamp(blur_mix * tap.weight * cmd.alpha, 0.0f, 1.0f);
-                            const Uint8 sample_alpha = static_cast<Uint8>(
-                                std::clamp(std::lround(sample_alpha_f * 255.0f), 0L, 255L));
-                            SDL_SetTextureAlphaMod(tex, sample_alpha);
-                            SDL_FRect orect = cmd.dst;
-                            orect.x += tap.offset.x;
-                            orect.y += tap.offset.y;
-                            SDL_RenderCopyExF(
-                                renderer_,
-                                tex,
-                                nullptr,
-                                &orect,
-                                cmd.rotation_degrees,
-                                cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
-                                cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
-                            );
-                        }
-                        SDL_SetTextureAlphaMod(tex, 255);
-                        SDL_SetTextureColorMod(tex, 255, 255, 255);
-                    }
+            auto draw_depthcue_overlay = [&](SDL_Texture* overlay_tex, Uint8 overlay_alpha) {
+                if (!overlay_tex || overlay_alpha == 0) {
+                    return;
                 }
-            }
+                SDL_SetTextureBlendMode(overlay_tex, SDL_BLENDMODE_BLEND);
+                SDL_SetTextureColorMod(overlay_tex, 255, 255, 255);
+                SDL_SetTextureAlphaMod(overlay_tex, overlay_alpha);
+                SDL_RenderCopyExF(
+                    renderer_,
+                    overlay_tex,
+                    nullptr,
+                    &cmd.dst,
+                    cmd.rotation_degrees,
+                    cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
+                    cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
+                );
+                SDL_SetTextureAlphaMod(overlay_tex, 255);
+            };
+            draw_depthcue_overlay(cmd.depthcue_background_texture, cmd.depthcue_background_alpha);
+            draw_depthcue_overlay(cmd.depthcue_foreground_texture, cmd.depthcue_foreground_alpha);
 
-            // Cleanup any scaling-temp texture state
             if (cmd.uses_scaled_texture && cmd.final_texture) {
                 SDL_SetTextureColorMod(cmd.final_texture, 255, 255, 255);
                 SDL_SetTextureAlphaMod(cmd.final_texture, 255);
                 SDL_SetTextureBlendMode(cmd.final_texture, SDL_BLENDMODE_BLEND);
             }
 
-            if (overlay_source && has_front_light && !composite_for_depthcue) {
+            if (overlay_source && has_front_light) {
                 pending_front_lights.push_back(overlay_source);
             }
             // Tinted textures are cached and owned by the renderer cache; do not destroy here.
@@ -1521,82 +1267,6 @@ void SceneRenderer::render(){
                 ++it;
             }
         }
-    }
-
-    // If drawing full scene, apply post depth-cue passes and present
-    if (use_scene_depthcue_post) {
-        SDL_SetRenderTarget(renderer_, nullptr);
-        // Always start from a fresh back buffer so transparent pixels in the composite
-        // texture cannot blend with whatever was presented last frame.
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
-        SDL_SetRenderDrawColor(renderer_, map_clear_color_.r, map_clear_color_.g, map_clear_color_.b, 255);
-        SDL_RenderClear(renderer_);
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-
-        // Compute per-row parameters for the frame
-        std::vector<DepthCueRow> rows;
-        const camera* camera_state2 = assets_ ? &assets_->getView() : nullptr;
-        const camera::RealismSettings cam_settings2 = camera_state2 ? camera_state2->realism_settings() : camera::RealismSettings{};
-        float center_screen_y2 = static_cast<float>(screen_height_) * 0.5f;
-        if (camera_state2) {
-            SDL_FPoint center_world_f = camera_state2->get_view_center_f();
-            SDL_FPoint center_screen_f = camera_state2->map_to_screen_f(center_world_f);
-            if (std::isfinite(center_screen_f.y)) {
-                center_screen_y2 = std::clamp(center_screen_f.y, 0.0f, static_cast<float>(screen_height_));
-            }
-        }
-        const float fg_plane_screen_y2 = std::clamp(cam_settings2.blur_foreground_screen_y, 0.0f, static_cast<float>(screen_height_));
-        const float bg_plane_screen_y2 = std::clamp(cam_settings2.blur_background_screen_y, 0.0f, static_cast<float>(screen_height_));
-
-        const bool depthcue_enabled = devmode::camera_prefs::load_depthcue_enabled() && camera_state2 && camera_state2->realism_enabled();
-        const bool cold_start = frame_counter_ <= static_cast<std::uint64_t>(depthcue_warmup_frames_);
-
-        SDL_Texture* final_tex = scene_composite_tex_;
-        if (depthcue_enabled && !cold_start) {
-            // Color adjustments pass (single RGB↔HSV pass for all effects)
-            // Primary boost is merged into saturation; only two toggles remain relevant here.
-            const bool color_effects_enabled = devmode::camera_prefs::load_depthcue_brightness_enabled() || devmode::camera_prefs::load_depthcue_saturation_enabled();
-            if (color_effects_enabled) {
-                depth_cue_effects_.compute_rows(screen_height_, center_screen_y2, fg_plane_screen_y2, bg_plane_screen_y2,
-                                                cam_settings2, /*compute_blur*/ false, rows);
-                SDL_Texture* color_tex = depth_cue_effects_.apply_color_pass(scene_composite_tex_, screen_width_, screen_height_, rows, postprocess_tex_);
-                if (color_tex) { final_tex = color_tex; }
-            }
-
-            // Blur last (variable per-row radius)
-            const bool blur_enabled = devmode::camera_prefs::load_depthcue_blur_enabled() && (cam_settings2.max_foreground_blur > 0.0f || cam_settings2.max_background_blur > 0.0f);
-            if (blur_enabled) {
-                depth_cue_effects_.compute_rows(screen_height_, center_screen_y2, fg_plane_screen_y2, bg_plane_screen_y2,
-                                                cam_settings2, /*compute_blur*/ true, rows);
-                SDL_Texture* blurred = depth_cue_effects_.apply_variable_blur(final_tex, screen_width_, screen_height_, rows, blur_tex_);
-                if (blurred) { final_tex = blurred; }
-            }
-        }
-
-        // Present the final texture
-        SDL_Rect dst{0, 0, screen_width_, screen_height_};
-        SDL_BlendMode previous_texture_blend = SDL_BLENDMODE_BLEND;
-        if (final_tex && SDL_GetTextureBlendMode(final_tex, &previous_texture_blend) != 0) {
-            previous_texture_blend = SDL_BLENDMODE_BLEND;
-        }
-        if (final_tex) {
-            SDL_SetTextureBlendMode(final_tex, SDL_BLENDMODE_NONE);
-        }
-        SDL_RenderCopy(renderer_, final_tex, nullptr, &dst);
-        if (final_tex) {
-            SDL_SetTextureBlendMode(final_tex, previous_texture_blend);
-        }
-
-        // Debug/preview overlays should draw on top, after post-processing
-        if (chunk_preview_enabled_ && light_map_) {
-            SDL_Rect screen_view{0, 0, screen_width_, screen_height_};
-            light_map_->render_chunk_preview(renderer_, screen_view);
-        }
-        if (assets_) {
-            assets_->render_overlays(renderer_);
-        }
-
-        SDL_RenderPresent(renderer_);
     } else {
         // Light-map only mode: keep original behavior
         SDL_SetRenderTarget(renderer_, nullptr);
@@ -1718,3 +1388,5 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, flo
     SDL_Rect screen_dst{0, 0, screen_width_, screen_height_};
     SDL_RenderCopy(renderer_, darkness_overlay_texture_, nullptr, &screen_dst);
 }
+
+

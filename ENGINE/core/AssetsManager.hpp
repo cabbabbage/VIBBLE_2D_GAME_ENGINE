@@ -201,7 +201,8 @@ private:
     void write_camera_settings_to_json();
     void schedule_removal(Asset* a);
     // Legacy chunk tiling removed; tiles are built at load and rendered separately.
-    void process_removals();
+    // Returns true if any assets were removed.
+    bool process_removals();
     void addAsset(const std::string& name, SDL_Point g);
     void update_filtered_active_assets();
     void ensure_dev_controls();
@@ -321,6 +322,10 @@ private:
     void invalidate_max_asset_dimensions();
     SDL_Rect screen_world_rect() const;
     int audio_effect_max_distance_world() const;
+    // Update per-asset camera-relative audio metrics and tick the audio engine.
+    // Reads current camera focus via camera_.get_screen_center() so audio
+    // stays consistent across dev/runtime mode toggles.
+    void update_audio_camera_metrics();
     void mark_non_player_update_buffer_dirty() {
         non_player_update_buffer_dirty_.store(true, std::memory_order_release);
     }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <string_view>
 
 #include "dev_mode/dev_ui_settings.hpp"
@@ -7,10 +9,8 @@
 namespace devmode::camera_prefs {
 
 inline constexpr std::string_view kDepthCueEnabledSettingKey = "dev_ui.camera.depthcue_enabled";
-inline constexpr std::string_view kDepthCueBlurEnabledSettingKey = "dev_ui.camera.depthcue_blur_enabled";
-inline constexpr std::string_view kDepthCueBrightnessEnabledSettingKey = "dev_ui.camera.depthcue_brightness_enabled";
-inline constexpr std::string_view kDepthCueSaturationEnabledSettingKey = "dev_ui.camera.depthcue_saturation_enabled";
-inline constexpr std::string_view kDepthCuePrimaryEnabledSettingKey = "dev_ui.camera.depthcue_primary_enabled";
+inline constexpr std::string_view kForegroundTextureOpacitySettingKey = "dev_ui.camera.foreground_texture_max_opacity";
+inline constexpr std::string_view kBackgroundTextureOpacitySettingKey = "dev_ui.camera.background_texture_max_opacity";
 
 inline bool load_depthcue_enabled() {
     return devmode::ui_settings::load_bool(kDepthCueEnabledSettingKey, false);
@@ -20,41 +20,26 @@ inline void save_depthcue_enabled(bool enabled) {
     devmode::ui_settings::save_bool(kDepthCueEnabledSettingKey, enabled);
 }
 
-inline bool load_depthcue_blur_enabled() {
-    // Blur enabled by default
-    return devmode::ui_settings::load_bool(kDepthCueBlurEnabledSettingKey, true);
+inline int load_foreground_texture_max_opacity() {
+    const double stored = devmode::ui_settings::load_number(kForegroundTextureOpacitySettingKey, 0.0);
+    const double clamped = std::clamp(stored, 0.0, 255.0);
+    return static_cast<int>(std::round(clamped));
 }
 
-inline void save_depthcue_blur_enabled(bool enabled) {
-    devmode::ui_settings::save_bool(kDepthCueBlurEnabledSettingKey, enabled);
+inline void save_foreground_texture_max_opacity(int value) {
+    const double clamped = std::clamp(static_cast<double>(value), 0.0, 255.0);
+    devmode::ui_settings::save_number(kForegroundTextureOpacitySettingKey, clamped);
 }
 
-inline bool load_depthcue_brightness_enabled() {
-    // Brightness adjustments enabled by default
-    return devmode::ui_settings::load_bool(kDepthCueBrightnessEnabledSettingKey, true);
+inline int load_background_texture_max_opacity() {
+    const double stored = devmode::ui_settings::load_number(kBackgroundTextureOpacitySettingKey, 0.0);
+    const double clamped = std::clamp(stored, 0.0, 255.0);
+    return static_cast<int>(std::round(clamped));
 }
 
-inline void save_depthcue_brightness_enabled(bool enabled) {
-    devmode::ui_settings::save_bool(kDepthCueBrightnessEnabledSettingKey, enabled);
-}
-
-inline bool load_depthcue_saturation_enabled() {
-    // Saturation adjustments enabled by default
-    return devmode::ui_settings::load_bool(kDepthCueSaturationEnabledSettingKey, true);
-}
-
-inline void save_depthcue_saturation_enabled(bool enabled) {
-    devmode::ui_settings::save_bool(kDepthCueSaturationEnabledSettingKey, enabled);
-}
-
-// Primary boost has been merged into the saturation effect.
-// Alias the primary toggle to the saturation toggle for backwards compatibility.
-inline bool load_depthcue_primary_enabled() {
-    return load_depthcue_saturation_enabled();
-}
-
-inline void save_depthcue_primary_enabled(bool enabled) {
-    save_depthcue_saturation_enabled(enabled);
+inline void save_background_texture_max_opacity(int value) {
+    const double clamped = std::clamp(static_cast<double>(value), 0.0, 255.0);
+    devmode::ui_settings::save_number(kBackgroundTextureOpacitySettingKey, clamped);
 }
 
 }  // namespace devmode::camera_prefs

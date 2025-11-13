@@ -70,50 +70,18 @@ private:
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;
-    // Perspective Colors sliders
-    std::unique_ptr<FloatSliderWidget> saturation_background_slider_;
-    std::unique_ptr<FloatSliderWidget> saturation_foreground_slider_;
-    std::unique_ptr<FloatSliderWidget> primary_boost_background_slider_;
-    std::unique_ptr<FloatSliderWidget> primary_boost_foreground_slider_;
-    std::unique_ptr<FloatSliderWidget> foreground_brightness_slider_;
-    std::unique_ptr<FloatSliderWidget> background_brightness_slider_;
-    // Perspective Blur sliders
-    std::unique_ptr<FloatSliderWidget> max_foreground_blur_slider_;
-    std::unique_ptr<FloatSliderWidget> max_background_blur_slider_;
-    std::unique_ptr<FloatSliderWidget> foreground_blur_plane_slider_;
-    std::unique_ptr<FloatSliderWidget> background_blur_plane_slider_;
-    // Interpolation dropdowns (UI-only for now)
-    std::unique_ptr<DMDropdown> blur_falloff_dropdown_;
-    std::unique_ptr<DropdownWidget> blur_falloff_widget_;
-    std::unique_ptr<DMDropdown> brightness_interp_dropdown_;
-    std::unique_ptr<DropdownWidget> brightness_interp_widget_;
-    std::unique_ptr<DMDropdown> saturation_interp_dropdown_;
-    std::unique_ptr<DropdownWidget> saturation_interp_widget_;
-    std::unique_ptr<DMDropdown> primary_interp_dropdown_;
-    std::unique_ptr<DropdownWidget> primary_interp_widget_;
+    // Depth cue texture sliders
+    std::unique_ptr<FloatSliderWidget> foreground_plane_slider_;
+    std::unique_ptr<FloatSliderWidget> background_plane_slider_;
+    std::unique_ptr<FloatSliderWidget> foreground_texture_opacity_slider_;
+    std::unique_ptr<FloatSliderWidget> background_texture_opacity_slider_;
+    // Interpolation dropdown
+    std::unique_ptr<DMDropdown> texture_opacity_interp_dropdown_;
+    std::unique_ptr<DropdownWidget> texture_opacity_interp_widget_;
 
     // DepthCue section enable/disable
     std::unique_ptr<DMCheckbox> depthcue_checkbox_;
     std::unique_ptr<CheckboxWidget> depthcue_widget_;
-    // Per-effect enable/disable checkboxes
-    std::unique_ptr<DMCheckbox> depthcue_blur_checkbox_;
-    std::unique_ptr<CheckboxWidget> depthcue_blur_widget_;
-    std::unique_ptr<DMCheckbox> depthcue_brightness_checkbox_;
-    std::unique_ptr<CheckboxWidget> depthcue_brightness_widget_;
-    std::unique_ptr<DMCheckbox> depthcue_saturation_checkbox_;
-    std::unique_ptr<CheckboxWidget> depthcue_saturation_widget_;
-    std::unique_ptr<DMCheckbox> depthcue_primary_checkbox_;
-    std::unique_ptr<CheckboxWidget> depthcue_primary_widget_;
-    // DepthCue grouping labels and spacers
-    std::unique_ptr<Widget> depthcue_header_planes_;
-    std::unique_ptr<Widget> depthcue_header_blur_;
-    std::unique_ptr<Widget> depthcue_header_brightness_;
-    std::unique_ptr<Widget> depthcue_header_saturation_;
-    std::unique_ptr<Widget> depthcue_header_primary_;
-    std::unique_ptr<Widget> depthcue_gap1_;
-    std::unique_ptr<Widget> depthcue_gap2_;
-    std::unique_ptr<Widget> depthcue_gap3_;
-    std::unique_ptr<Widget> depthcue_gap4_;
     std::unique_ptr<DiscreteSliderWidget> render_quality_slider_;
     std::unique_ptr<DMCheckbox> smoothing_checkbox_;
     std::unique_ptr<CheckboxWidget> smoothing_widget_;
@@ -135,10 +103,6 @@ private:
     bool smoothing_section_expanded_ = false;
 
     bool last_depthcue_enabled_ = false;
-    bool last_depthcue_blur_enabled_ = true;
-    bool last_depthcue_brightness_enabled_ = true;
-    bool last_depthcue_saturation_enabled_ = true;
-    bool last_depthcue_primary_enabled_ = true;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }

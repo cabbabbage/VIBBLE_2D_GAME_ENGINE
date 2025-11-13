@@ -670,7 +670,13 @@ void Assets::notify_rooms_changed() {
 
 void Assets::refresh_active_asset_lists() {
     rebuild_active_assets_if_needed();
+    // Keep dev tools behavior by delegating to the helper
+    update_audio_camera_metrics();
+    update_filtered_active_assets();
+}
 
+void Assets::update_audio_camera_metrics() {
+    // Read current camera focus so audio stays consistent when dev mode toggles
     SDL_Point camera_focus = camera_.get_screen_center();
     auto update_audio_metrics = [&](Asset* asset) {
         if (!asset) return;
@@ -678,7 +684,8 @@ void Assets::refresh_active_asset_lists() {
         const float dy = static_cast<float>(asset->pos.y - camera_focus.y);
         asset->distance_from_camera = std::sqrt(dx * dx + dy * dy);
         asset->angle_from_camera = std::atan2(dy, dx);
-};
+    };
+
     if (player) {
         update_audio_metrics(player);
     }
@@ -686,8 +693,8 @@ void Assets::refresh_active_asset_lists() {
         update_audio_metrics(asset);
     }
 
+    // Tick audio engine so positional audio tracks the player in runtime mode
     AudioEngine::instance().update();
-    update_filtered_active_assets();
 }
 
 void Assets::refresh_filtered_active_assets() {
@@ -822,6 +829,17 @@ void Assets::update(const Input& input)
         quick_task_popup_->update();
     }
 
+    // Flush any queued removals early in the frame so grid residency,
+    // lighting caches, and selections stay in sync before other work.
+    if (process_removals()) {
+        mark_active_assets_dirty();
+        rebuild_active_assets_if_needed();
+        update_filtered_active_assets();
+        if (dev_controls_ && dev_controls_->is_enabled()) {
+            dev_controls_->set_active_assets(filtered_active_assets);
+        }
+    }
+
     Room* detected_room = finder_ ? finder_->getCurrentRoom() : nullptr;
     Room* active_room = detected_room;
     if (dev_controls_ && dev_controls_->is_enabled()) {
@@ -836,6 +854,7 @@ void Assets::update(const Input& input)
     int start_py = player ? player->pos.y : 0;
 
     if (!dev_mode) {
+        // Update player first and capture any movement
         if (player) player->update();
     }
 
@@ -854,8 +873,48 @@ void Assets::update(const Input& input)
         last_player_pos_valid_ = true;
 
         player_moved = moved_during_update || moved_since_last_frame;
+        if (!dev_mode && moved_during_update) {
+            // Queue player movement for batched grid update
+            movement_commands_buffer_.push_back(GridMovementCommand{
+                player,
+                SDL_Point{start_px, start_py},
+                SDL_Point{player->pos.x, player->pos.y}
+            });
+        }
     } else {
         last_player_pos_valid_ = false;
+    }
+
+    // Update non-player assets and accumulate movement commands
+    if (!dev_mode) {
+        // Ensure we have a current buffer of non-player assets to update
+        rebuild_non_player_update_buffer_if_needed();
+
+        for (Asset* asset : non_player_update_buffer_) {
+            if (!asset) continue;
+            SDL_Point previous_pos{asset->pos.x, asset->pos.y};
+            asset->update();
+            if (previous_pos.x != asset->pos.x || previous_pos.y != asset->pos.y) {
+                movement_commands_buffer_.push_back(GridMovementCommand{
+                    asset,
+                    previous_pos,
+                    SDL_Point{asset->pos.x, asset->pos.y}
+                });
+            }
+        }
+    }
+
+    // Apply any batched grid movement commands so chunk membership is accurate
+    if (!movement_commands_buffer_.empty()) {
+        for (const GridMovementCommand& cmd : movement_commands_buffer_) {
+            if (!cmd.asset) continue;
+            world_grid_.move_asset(cmd.asset, cmd.previous, cmd.current);
+            cmd.asset->cache_grid_residency(SDL_Point{cmd.asset->pos.x, cmd.asset->pos.y});
+        }
+        movement_commands_buffer_.clear();
+        // Clear any auxiliary buffers related to grid updates/registration
+        moving_assets_for_grid_.clear();
+        grid_registration_buffer_.clear();
     }
 
     const bool zoom_animation_active = camera_.zooming_;
@@ -866,6 +925,12 @@ void Assets::update(const Input& input)
 
     // Clear last-cycle culled overlay info
     culled_debug_rects_.clear();
+
+    // Update the world grid using the current camera view before
+    // filling the visible candidate buffer so chunk queries are fresh,
+    // and parallax conversions are accurate for renderers/editors.
+    world_grid_.update_active_chunks(screen_world_rect(), 0);
+    world_grid_.update_parallax(camera_, last_frame_dt_seconds_);
 
     auto& new_active_assets = visible_candidate_buffer_;
     new_active_assets.clear();
@@ -1007,7 +1072,37 @@ void Assets::update(const Input& input)
     active_assets_dirty_.store(false, std::memory_order_release);
     mark_non_player_update_buffer_dirty();
     rebuild_non_player_update_buffer_if_needed();
-    return;
+
+    // Update per-asset camera-relative audio metrics and audio engine each frame
+    update_audio_camera_metrics();
+
+    // Keep dev-mode filtered lists in sync with the freshly rebuilt visibility
+    // state so overlays/highlights render correctly.
+    update_filtered_active_assets();
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        dev_controls_->set_active_assets(filtered_active_assets);
+        sync_dev_controls_current_room(current_room_);
+        dev_controls_->update(input);
+    }
+
+    // Apply pending static registrations/removals before querying the grid.
+    register_pending_static_assets();
+    if (process_removals()) {
+        mark_active_assets_dirty();
+        rebuild_active_assets_if_needed();
+        update_filtered_active_assets();
+        if (dev_controls_ && dev_controls_->is_enabled()) {
+            dev_controls_->set_active_assets(filtered_active_assets);
+        }
+    }
+
+    // World grid was refreshed earlier, prior to building visibility.
+
+    if (!suppress_render_ && scene) {
+        scene->render();
+    }
+
+    render_overlays(renderer());
 }
 
 void Assets::rebuild_non_player_update_buffer_if_needed() {
@@ -1404,12 +1499,70 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
         return false;
     }
 
-    out_rect = SDL_FRect{
+    // Base sprite bounds in screen space
+    SDL_FRect sprite_rect{
         top_left_screen.x,
         top_left_screen.y,
         width,
         height
     };
+
+    // Expand to include owned light sources so visibility/culling accounts for
+    // both the asset pixels and any emitted light textures.
+    // Treat layers as a single combined asset boundary.
+    SDL_FRect combined = sprite_rect;
+
+    if (asset->info && !asset->info->light_sources.empty()) {
+        const int   base_w_px = std::max(1, asset->info->original_canvas_width);
+        const int   base_h_px = std::max(1, asset->info->original_canvas_height);
+        const float sx        = combined.w / static_cast<float>(base_w_px);
+        const float sy        = combined.h / static_cast<float>(base_h_px);
+
+        // Bottom-center anchor in screen space (matches light renderer anchor)
+        const float base_center_x = combined.x + combined.w * 0.5f;
+        const float base_center_y = combined.y + combined.h;
+
+        auto expand_to_include = [&](const SDL_FRect& r) {
+            const float left   = std::min(combined.x, r.x);
+            const float top    = std::min(combined.y, r.y);
+            const float right  = std::max(combined.x + combined.w, r.x + r.w);
+            const float bottom = std::max(combined.y + combined.h, r.y + r.h);
+            combined.x = left;
+            combined.y = top;
+            combined.w = std::max(0.0f, right - left);
+            combined.h = std::max(0.0f, bottom - top);
+        };
+
+        for (const auto& light : asset->info->light_sources) {
+            const int raw_radius = light.radius;
+            if (raw_radius <= 0) {
+                continue;
+            }
+
+            // Apply horizontal flip to offset when the asset is flipped
+            const float off_x = static_cast<float>(asset->flipped ? -light.offset_x : light.offset_x);
+            const float off_y = static_cast<float>(light.offset_y);
+
+            // Screen-space center of the light relative to the asset
+            const float cx = base_center_x + off_x * sx;
+            const float cy = base_center_y + off_y * sy;
+
+            // Scale radius according to current on-screen asset scaling
+            const float rx = std::max(1.0f, static_cast<float>(raw_radius) * sx);
+            const float ry = std::max(1.0f, static_cast<float>(raw_radius) * sy);
+
+            SDL_FRect light_rect{
+                cx - rx,
+                cy - ry,
+                rx * 2.0f,
+                ry * 2.0f
+            };
+
+            expand_to_include(light_rect);
+        }
+    }
+
+    out_rect = combined;
     return true;
 }
 
@@ -1421,18 +1574,18 @@ void Assets::schedule_removal(Asset* a) {
     removal_queue.push_back(a);
 }
 
-void Assets::process_removals() {
+bool Assets::process_removals() {
     std::vector<Asset*> pending_removals;
     {
         std::lock_guard<std::mutex> lock(removal_queue_mutex_);
         if (removal_queue.empty()) {
-            return;
+            return false;
         }
         pending_removals.swap(removal_queue);
     }
 
     if (pending_removals.empty()) {
-        return;
+        return false;
     }
 
     for (Asset* asset : pending_removals) {
@@ -1488,19 +1641,11 @@ void Assets::process_removals() {
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
-        dev_controls_->set_active_assets(filtered_active_assets);
     }
 
     invalidate_max_asset_dimensions();
-    mark_active_assets_dirty();
-    rebuild_active_assets_if_needed();
-    update_filtered_active_assets();
-
-    // Render the current scene after updating state and visibility lists.
-    // This ensures we present the first frame immediately after assets are spawned.
-    if (!suppress_render_ && scene) {
-        scene->render();
-    }
+    
+    return true;
 }
 
 void Assets::render_overlays(SDL_Renderer* renderer) {

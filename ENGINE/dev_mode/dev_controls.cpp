@@ -1743,8 +1743,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             }
             return std::clamp(value, 0.0f, static_cast<float>(screen_h_));
         };
-        const float bg_line = clamp_line(settings.blur_background_screen_y);
-        const float fg_line = clamp_line(settings.blur_foreground_screen_y);
+        const float bg_line = clamp_line(settings.background_plane_screen_y);
+        const float fg_line = clamp_line(settings.foreground_plane_screen_y);
 
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
         SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
@@ -1778,35 +1778,27 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             }
             DrawLabelText(renderer, text, DMSpacing::panel_padding(), text_y, style);
         };
-        auto make_depthcue_label = [](const char* prefix, float blur_amount, float bright_amount, float sat_amount) {
+        auto make_depthcue_label = [](const char* prefix, int opacity_max) {
             char buffer[160];
-            std::snprintf(buffer, sizeof(buffer), "%s Blur: %.1f  |  %s Contrast: %.0f  |  %s Sat (Combined): %.1f",
+            std::snprintf(buffer, sizeof(buffer), "%s Max Opacity: %d / 255",
                           prefix,
-                          blur_amount,
-                          prefix,
-                          bright_amount,
-                          prefix,
-                          sat_amount);
+                          opacity_max);
             return std::string(buffer);
         };
 
         draw_line(bg_line, bg_color);
         {
-            const float bg_blur     = settings.max_background_blur;
-            const float bg_bright   = settings.background_brightness;
-            const float bg_sat      = settings.saturation_background;
-            draw_label(bg_line, bg_color, make_depthcue_label("BG", bg_blur, bg_bright, bg_sat));
+            const int bg_opacity = settings.background_texture_max_opacity;
+            draw_label(bg_line, bg_color, make_depthcue_label("BG", bg_opacity));
         }
 
         draw_line(center_y, center_color);
-        draw_label(center_y, center_color, "Blur: 0, Contrast: 0, Sat (Combined): 0");
+        draw_label(center_y, center_color, "Base Layer");
 
         draw_line(fg_line, fg_color);
         {
-            const float fg_blur     = settings.max_foreground_blur;
-            const float fg_bright   = settings.foreground_brightness;
-            const float fg_sat      = settings.saturation_foreground;
-            draw_label(fg_line, fg_color, make_depthcue_label("FG", fg_blur, fg_bright, fg_sat));
+            const int fg_opacity = settings.foreground_texture_max_opacity;
+            draw_label(fg_line, fg_color, make_depthcue_label("FG", fg_opacity));
         }
 
         SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
