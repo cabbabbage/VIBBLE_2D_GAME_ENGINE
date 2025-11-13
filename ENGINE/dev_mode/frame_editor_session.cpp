@@ -239,6 +239,8 @@ void FrameEditorSession::begin(Assets* assets,
             frames_.resize(desired_frames);
         }
     }
+    // After padding/resizing, ensure newly added frames receive child placeholders.
+    sync_child_frames();
     // Always keep the first frame zeroed
     frames_.front().dx = 0.0f;
     frames_.front().dy = 0.0f;
@@ -342,6 +344,81 @@ void FrameEditorSession::end() {
     }
     child_hidden_cache_.clear();
     last_applied_show_asset_state_ = true;
+    // On exit, commit any pending changes once and rebuild assets
+    if (pending_save_) {
+        pending_save_ = false;
+        if (document_) {
+            document_->save_to_file();
+        }
+        if (assets_ && target_ && target_->info) {
+            auto info = target_->info;
+            if (info) {
+                if (!info->name.empty()) {
+                    AnimationLoader::clear_asset_cache(info->name);
+                }
+                const bool ok = info->reload_animations_from_disk();
+                SDL_Renderer* renderer = assets_->renderer();
+                if (renderer) {
+                    info->loadAnimations(renderer);
+                }
+                // Refresh all instances of this info in world once
+                auto refresh_assets_for_info = [&](const std::shared_ptr<AssetInfo>& candidate) -> bool {
+                    if (!candidate || !assets_) return false;
+                    bool refreshed = false;
+                    std::unordered_set<Asset*> visited;
+                    auto refresh_asset = [&](Asset* asset) {
+                        if (!asset || asset->info.get() != candidate.get()) return;
+                        if (!visited.insert(asset).second) return;
+                        asset->clear_render_caches();
+                        asset->clear_downscale_cache();
+                        asset->set_final_texture(nullptr);
+                        asset->current_frame = nullptr;
+                        asset->set_frame_progress(0.0f);
+                        asset->static_frame = false;
+                        std::string desired = asset->current_animation.empty() ? std::string{"default"} : asset->current_animation;
+                        if (asset->anim_) {
+                            asset->anim_->move(SDL_Point{0, 0}, desired);
+                        } else if (asset->info) {
+                            auto it = asset->info->animations.find(desired);
+                            if (it == asset->info->animations.end()) {
+                                it = asset->info->animations.find("default");
+                            }
+                            if (it == asset->info->animations.end() && !asset->info->animations.empty()) {
+                                it = asset->info->animations.begin();
+                            }
+                            if (it != asset->info->animations.end()) {
+                                auto& anim = it->second;
+                                asset->current_animation = it->first;
+                                asset->current_frame = anim.get_first_frame();
+                                asset->static_frame = anim.is_static() || anim.locked;
+                            } else {
+                                asset->current_animation.clear();
+                                asset->current_frame = nullptr;
+                            }
+                        }
+                        asset->refresh_cached_dimensions();
+                        refreshed = true;
+                    };
+                    for (Asset* a : assets_->all) refresh_asset(a);
+                    for (const auto& owned : assets_->owned_assets) refresh_asset(owned.get());
+                    return refreshed;
+                };
+                bool refreshed_any = refresh_assets_for_info(info);
+                if (!refreshed_any) {
+                    for (auto& [lib_name, lib_info] : assets_->library().all()) {
+                        if (refresh_assets_for_info(lib_info)) {
+                            refreshed_any = true;
+                        }
+                    }
+                }
+                if (refreshed_any) {
+                    assets_->mark_active_assets_dirty();
+                }
+                update_asset_preview_frame();
+            }
+        }
+    }
+
     // Reopen animation editor window
     if (host_) {
         host_->on_live_frame_editor_closed(animation_id_);
@@ -643,7 +720,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     if (handle_button(btn_hit_geometry_, [this]() { this->mode_ = Mode::HitGeometry; })) return true;
 
     // Movement tool panel widgets
-    if (mode_ == Mode::Movement) {
+    if (mode_ == Mode::Movement || mode_ == Mode::Children) {
         if (cb_smooth_ && cb_smooth_->handle_event(e)) {
             bool current = cb_smooth_->value();
             if (current != smooth_enabled_) {
@@ -702,6 +779,10 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             }
         }
         if (consumed_tb) return true;
+        // If we are in Children mode, do not fall-through; movement controls handled above
+        if (mode_ == Mode::Movement) {
+            // continue to other handlers below
+        }
     }
 
     if (cb_show_anim_ && cb_show_anim_->handle_event(e)) {
@@ -710,6 +791,8 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             last_show_anim_value_ = current;
             show_animation_ = current;
             if (target_) target_->set_hidden(!show_animation_);
+            // Child visibility depends on both show_animation_ and show_child_
+            sync_child_asset_visibility();
         }
         return true;
     }
@@ -733,6 +816,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             if (current != last_show_child_value_) {
                 last_show_child_value_ = current;
                 show_child_ = current;
+                sync_child_asset_visibility();
             }
             return true;
         }
@@ -934,6 +1018,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (mode_ == Mode::Children && show_child_ && !child_assets_.empty() &&
         selected_index_ < static_cast<int>(frames_.size())) {
         const auto& frame = frames_[selected_index_];
+        // Draw markers and names
         for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size(); ++i) {
             const auto& child = frame.children[i];
             SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{
@@ -950,6 +1035,24 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, 255);
             SDL_RenderDrawRect(renderer, &marker);
             render_label(renderer, child_assets_[i], marker.x + marker.w + 4, marker.y - 4);
+        }
+        // Overlay actual child textures at edited positions
+        const auto& attachments = target_->animation_children();
+        for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size() && i < attachments.size(); ++i) {
+            const auto& child = frame.children[i];
+            if (!child.visible) continue;
+            const auto& slot = attachments[i];
+            if (!slot.animation || !slot.current_frame) continue;
+            SDL_Texture* tex = slot.animation->get_frame(slot.current_frame);
+            if (!tex) continue;
+            int tw = 0, th = 0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            if (tw <= 0 || th <= 0) continue;
+            SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ child.dx + anchor_world.x, child.dy + anchor_world.y });
+            SDL_Rect dst{ static_cast<int>(std::lround(screen.x - tw * 0.5f)), static_cast<int>(std::lround(screen.y - th)), tw, th };
+            SDL_Point pivot{ tw / 2, th }; // bottom-middle pivot
+            // Apply rotation around bottom-middle if any
+            const double angle = static_cast<double>(child.degree);
+            SDL_RenderCopyEx(renderer, tex, nullptr, &dst, angle, &pivot, target_->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
         }
     }
 
@@ -974,6 +1077,11 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         if (tb_total_dy_) tb_total_dy_->render(renderer);
     } else if (mode_ == Mode::Children && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+        // Movement controls row (shared)
+        if (cb_smooth_) cb_smooth_->render(renderer);
+        if (smooth_enabled_ && cb_curve_) cb_curve_->render(renderer);
+        if (tb_total_dx_) tb_total_dx_->render(renderer);
+        if (tb_total_dy_) tb_total_dy_->render(renderer);
         if (dd_child_select_) dd_child_select_->render(renderer);
         if (cb_show_anim_) cb_show_anim_->render(renderer);
         if (cb_show_child_) cb_show_child_->render(renderer);
@@ -1260,6 +1368,44 @@ void FrameEditorSession::rebuild_layout() const {
                 }
             }
 
+            // Movement controls row (Smooth/Curve + Totals)
+            if (metrics.movement_row_height > 0 && (cb_smooth_ || tb_total_dx_ || tb_total_dy_)) {
+                const int row_top = allocate_row(metrics.movement_row_height);
+                if (row_top >= 0) {
+                    int tx = row_left;
+                    auto reserve = [&](int w) -> int {
+                        if (w <= 0) return tx;
+                        int x = tx; tx += w + metrics.gap; return x;
+                    };
+                    if (cb_smooth_) {
+                        const int w = std::max(metrics.smooth_checkbox_width, DMCheckbox::height());
+                        const int h = DMCheckbox::height();
+                        const int y = row_top + (metrics.movement_row_height - h) / 2;
+                        const int x = reserve(w);
+                        cb_smooth_->set_rect(SDL_Rect{ x, y, w, h });
+                    }
+                    if (smooth_enabled_ && cb_curve_) {
+                        const int w = std::max(metrics.curve_checkbox_width, DMCheckbox::height());
+                        const int h = DMCheckbox::height();
+                        const int y = row_top + (metrics.movement_row_height - h) / 2;
+                        const int x = reserve(w);
+                        cb_curve_->set_rect(SDL_Rect{ x, y, w, h });
+                    }
+                    if (tb_total_dx_) {
+                        const int field_height = metrics.total_dx_height > 0 ? metrics.total_dx_height : tb_total_dx_->height_for_width(metrics.totals_width);
+                        const int y = row_top + (metrics.movement_row_height - field_height) / 2;
+                        const int x = reserve(metrics.totals_width);
+                        tb_total_dx_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
+                    }
+                    if (tb_total_dy_) {
+                        const int field_height = metrics.total_dy_height > 0 ? metrics.total_dy_height : tb_total_dy_->height_for_width(metrics.totals_width);
+                        const int y = row_top + (metrics.movement_row_height - field_height) / 2;
+                        const int x = reserve(metrics.totals_width);
+                        tb_total_dy_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
+                    }
+                }
+            }
+
             if (metrics.toggle_row_height > 0 && (cb_show_anim_ || cb_show_child_)) {
                 const int row_top = allocate_row(metrics.toggle_row_height);
                 if (row_top >= 0) {
@@ -1462,6 +1608,19 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     metrics.padding = DMSpacing::small_gap();
     metrics.gap = DMSpacing::small_gap();
     metrics.textbox_width = kChildrenFieldWidth;
+    // Movement controls row (Smooth/Curve + Totals) mirrors movement metrics except show_anim checkbox
+    metrics.totals_width = kMovementTotalsFieldWidth;
+    metrics.smooth_checkbox_width = cb_smooth_ ? std::max(kSmoothCheckboxMinWidth, cb_smooth_->preferred_width()) : 0;
+    const bool curve_visible = smooth_enabled_ && cb_curve_;
+    metrics.curve_checkbox_width = curve_visible ? std::max(kCurveCheckboxMinWidth, cb_curve_->preferred_width()) : 0;
+    metrics.total_dx_height = tb_total_dx_ ? tb_total_dx_->height_for_width(metrics.totals_width) : 0;
+    metrics.total_dy_height = tb_total_dy_ ? tb_total_dy_->height_for_width(metrics.totals_width) : 0;
+    int movement_row_height = 0;
+    if (cb_smooth_) movement_row_height = std::max(movement_row_height, DMCheckbox::height());
+    if (curve_visible) movement_row_height = std::max(movement_row_height, DMCheckbox::height());
+    if (tb_total_dx_) movement_row_height = std::max(movement_row_height, metrics.total_dx_height);
+    if (tb_total_dy_) movement_row_height = std::max(movement_row_height, metrics.total_dy_height);
+    metrics.movement_row_height = movement_row_height;
     metrics.child_dx_height = tb_child_dx_ ? tb_child_dx_->height_for_width(metrics.textbox_width) : 0;
     metrics.child_dy_height = tb_child_dy_ ? tb_child_dy_->height_for_width(metrics.textbox_width) : 0;
     metrics.child_rotation_height = tb_child_deg_ ? tb_child_deg_->height_for_width(metrics.textbox_width) : 0;
@@ -1503,6 +1662,18 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
         if (form_row_width > 0) form_row_width += metrics.gap;
         form_row_width += w;
     };
+    // Movement row width
+    int movement_row_width = 0;
+    auto append_movement = [&](int w) {
+        if (w <= 0) return;
+        if (movement_row_width > 0) movement_row_width += metrics.gap;
+        movement_row_width += w;
+    };
+    if (cb_smooth_ && metrics.smooth_checkbox_width > 0) append_movement(metrics.smooth_checkbox_width);
+    if (curve_visible && metrics.curve_checkbox_width > 0) append_movement(metrics.curve_checkbox_width);
+    if (tb_total_dx_) append_movement(metrics.totals_width);
+    if (tb_total_dy_) append_movement(metrics.totals_width);
+
     if (tb_child_dx_) append_form(metrics.textbox_width);
     if (tb_child_dy_) append_form(metrics.textbox_width);
     if (tb_child_deg_) append_form(metrics.textbox_width);
@@ -1513,7 +1684,7 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
 
     metrics.toggle_row_height = toggle_row_width > 0 ? checkbox_height : 0;
 
-    int content_width = std::max({dropdown_row_width, toggle_row_width, form_row_width});
+    int content_width = std::max({dropdown_row_width, movement_row_width, toggle_row_width, form_row_width});
     if (dd_child_select_) {
         const int dropdown_width = std::max(content_width, std::max(kChildDropdownMinWidth, dropdown_row_width));
         metrics.dropdown_row_height = dd_child_select_->preferred_height(std::max(dropdown_width, kChildDropdownMinWidth));
@@ -1540,6 +1711,7 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
         added_row = true;
     };
     add_row(metrics.dropdown_row_height);
+    add_row(metrics.movement_row_height);
     add_row(metrics.toggle_row_height);
     add_row(metrics.form_row_height);
     return metrics;
@@ -1732,6 +1904,7 @@ void FrameEditorSession::sync_child_frames() {
         std::vector<ChildFrame> normalized(child_assets_.size());
         for (std::size_t i = 0; i < normalized.size(); ++i) {
             normalized[i].child_index = static_cast<int>(i);
+            normalized[i].visible = true; // default to visible when synthesizing
         }
         for (const auto& existing : frame.children) {
             if (existing.child_index < 0 ||
@@ -1778,17 +1951,18 @@ const FrameEditorSession::ChildFrame* FrameEditorSession::current_child_frame() 
 
 void FrameEditorSession::sync_child_asset_visibility() {
     if (!target_) return;
-    if (show_animation_ != last_applied_show_asset_state_) {
-        if (!show_animation_) {
+    const bool desired_show = show_animation_ && show_child_;
+    if (desired_show != last_applied_show_asset_state_) {
+        if (!desired_show) {
             cache_child_hidden_states();
             apply_child_hidden_state(false);
         } else {
             apply_child_hidden_state(true);
             cache_child_hidden_states();
         }
-        last_applied_show_asset_state_ = show_animation_;
+        last_applied_show_asset_state_ = desired_show;
     } else {
-        if (show_animation_) {
+        if (desired_show) {
             cache_child_hidden_states();
         } else {
             apply_child_hidden_state(false);
@@ -1894,119 +2068,15 @@ void FrameEditorSession::persist_changes() {
     }
     payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
     document_->replace_animation_payload(animation_id_, payload.dump());
-    // Persist immediately because the AnimationEditorWindow may be hidden during in-world sessions
-    document_->save_to_file();
+    // Defer saving/rebuilding; commit once when Back is pressed
+    pending_save_ = true;
 
     if (!assets_ || !target_ || !target_->info) {
         return;
     }
 
-    auto info = target_->info;
-    if (!info) {
-        return;
-    }
-
-    if (!info->name.empty()) {
-        if (!AnimationLoader::clear_asset_cache(info->name)) {
-            std::cerr << "[FrameEditorSession] Failed to clear cache for " << info->name << " after edit\n";
-        }
-    }
-
-    const bool manifest_reloaded = info->reload_animations_from_disk();
-    if (!manifest_reloaded) {
-        std::cerr << "[FrameEditorSession] Unable to reload manifest entry for " << info->name << " after edit; using in-memory data\n";
-    }
-
-    SDL_Renderer* renderer = assets_->renderer();
-    info->loadAnimations(renderer);
-
-    auto refresh_assets_for_info = [&](const std::shared_ptr<AssetInfo>& candidate) -> bool {
-        if (!candidate || !assets_) {
-            return false;
-        }
-
-        bool refreshed = false;
-        std::unordered_set<Asset*> visited;
-        auto refresh_asset = [&](Asset* asset) {
-            if (!asset || asset->info.get() != candidate.get()) {
-                return;
-            }
-            if (!visited.insert(asset).second) {
-                return;
-            }
-
-            asset->clear_render_caches();
-            asset->clear_downscale_cache();
-            asset->set_final_texture(nullptr);
-            asset->current_frame = nullptr;
-            asset->set_frame_progress(0.0f);
-            asset->static_frame = false;
-
-            std::string desired = asset->current_animation.empty() ? std::string{"default"} : asset->current_animation;
-            if (asset->anim_) {
-                asset->anim_->move(SDL_Point{0, 0}, desired);
-            } else if (asset->info) {
-                auto it = asset->info->animations.find(desired);
-                if (it == asset->info->animations.end()) {
-                    it = asset->info->animations.find("default");
-                }
-                if (it == asset->info->animations.end() && !asset->info->animations.empty()) {
-                    it = asset->info->animations.begin();
-                }
-                if (it != asset->info->animations.end()) {
-                    auto& anim = it->second;
-                    asset->current_animation = it->first;
-                    asset->current_frame = anim.get_first_frame();
-                    asset->static_frame = anim.is_static() || anim.locked;
-                } else {
-                    asset->current_animation.clear();
-                    asset->current_frame = nullptr;
-                }
-            }
-
-            asset->refresh_cached_dimensions();
-            refreshed = true;
-        };
-
-        for (Asset* asset : assets_->all) {
-            refresh_asset(asset);
-        }
-        for (const auto& owned : assets_->owned_assets) {
-            refresh_asset(owned.get());
-        }
-        refresh_asset(target_);
-        return refreshed;
-    };
-
-    bool refreshed_any = refresh_assets_for_info(info);
-
-    if (!info->name.empty()) {
-        for (auto& [lib_name, lib_info] : assets_->library().all()) {
-            if (!lib_info || lib_name == info->name) {
-                continue;
-            }
-
-            bool needs_refresh = false;
-            for (const auto& [anim_id, anim_data] : lib_info->animations) {
-                if (anim_data.source.kind == "animation" && anim_data.source.path == info->name) {
-                    needs_refresh = true;
-                    break;
-                }
-            }
-
-            if (!needs_refresh) {
-                continue;
-            }
-
-            if (refresh_assets_for_info(lib_info)) {
-                refreshed_any = true;
-            }
-        }
-    }
-
-    if (refreshed_any) {
-        assets_->mark_active_assets_dirty();
-    }
+    // No rebuild here; keep world state live. World preview is handled by overlay.
+    return;
 }
 
 void FrameEditorSession::select_frame(int index) {
@@ -2104,6 +2174,7 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
                     if (child_entry.size() > 3 && child_entry[3].is_number()) {
                         child.degree = static_cast<float>(child_entry[3].get<double>());
                     }
+                    // Default visibility to true when boolean is absent; only override if provided.
                     if (child_entry.size() > 4) {
                         if (child_entry[4].is_boolean()) {
                             child.visible = child_entry[4].get<bool>();
@@ -2126,8 +2197,16 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
                         child.child_index = child_entry.value("child_index", -1);
                         child.dx = static_cast<float>(child_entry.value("dx", 0.0));
                         child.dy = static_cast<float>(child_entry.value("dy", 0.0));
-                        child.degree = static_cast<float>(child_entry.value("degree", 0.0));
-                        child.visible = child_entry.value("visible", false);
+                        // Accept both "degree" and legacy "rotation" keys.
+                        if (child_entry.contains("degree") && child_entry["degree"].is_number()) {
+                            child.degree = static_cast<float>(child_entry["degree"].get<double>());
+                        } else if (child_entry.contains("rotation") && child_entry["rotation"].is_number()) {
+                            child.degree = static_cast<float>(child_entry["rotation"].get<double>());
+                        } else {
+                            child.degree = 0.0f;
+                        }
+                        // Default visibility to true when missing.
+                        child.visible = child_entry.value("visible", true);
                     } else if (child_entry.is_array()) {
                         try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
                         if (child_entry.size() > 1 && child_entry[1].is_number()) {
@@ -2139,6 +2218,7 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
                         if (child_entry.size() > 3 && child_entry[3].is_number()) {
                             child.degree = static_cast<float>(child_entry[3].get<double>());
                         }
+                        // Default visibility to true when boolean is absent; only override if provided.
                         if (child_entry.size() > 4) {
                             if (child_entry[4].is_boolean()) {
                                 child.visible = child_entry[4].get<bool>();

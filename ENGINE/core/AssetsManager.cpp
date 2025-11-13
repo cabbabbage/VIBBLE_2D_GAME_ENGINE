@@ -207,6 +207,12 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
         }
     }
     camera_.set_screen_center(intro_center);
+    if (player) {
+        last_known_player_pos_ = SDL_Point{player->pos.x, player->pos.y};
+        last_player_pos_valid_ = true;
+    } else {
+        last_player_pos_valid_ = false;
+    }
 
     double intro_zoom = camera_.default_zoom_for_room(intro_room);
     if (!std::isfinite(intro_zoom) || intro_zoom <= 0.0) {
@@ -837,7 +843,19 @@ void Assets::update(const Input& input)
     if (player) {
         dx = player->pos.x - start_px;
         dy = player->pos.y - start_py;
-        player_moved = (dx != 0 || dy != 0);
+        const bool moved_during_update = (dx != 0 || dy != 0);
+        SDL_Point current_player_pos{player->pos.x, player->pos.y};
+        const bool moved_since_last_frame =
+            !last_player_pos_valid_ ||
+            current_player_pos.x != last_known_player_pos_.x ||
+            current_player_pos.y != last_known_player_pos_.y;
+
+        last_known_player_pos_ = current_player_pos;
+        last_player_pos_valid_ = true;
+
+        player_moved = moved_during_update || moved_since_last_frame;
+    } else {
+        last_player_pos_valid_ = false;
     }
 
     const bool zoom_animation_active = camera_.zooming_;
@@ -845,548 +863,6 @@ void Assets::update(const Input& input)
     camera_.update_zoom(current_room_, finder_, player, camera_refresh_needed, last_frame_dt_seconds_);
 
     update_max_asset_dimensions();
-    const SDL_Rect screen_rect = screen_world_rect();
-    const SDL_Rect expanded_rect = expanded_world_rect(screen_rect);
-    world_grid_.update_active_chunks(expanded_rect, 0);
-    world_grid_.update_parallax(camera_, last_frame_dt_seconds_);
-
-    update_active_assets(camera_.get_screen_center());
-    const bool rebuilt_active_assets = rebuild_active_assets_if_needed();
-    if (rebuilt_active_assets) {
-        update_filtered_active_assets();
-    }
-
-    AudioEngine& audio_engine = AudioEngine::instance();
-    const float effect_max_distance =
-        static_cast<float>(audio_effect_max_distance_world());
-    if (!last_audio_effect_max_distance_.has_value() ||
-        *last_audio_effect_max_distance_ != effect_max_distance) {
-        audio_engine.set_effect_max_distance(effect_max_distance);
-        last_audio_effect_max_distance_ = effect_max_distance;
-        std::cout << "[Assets] Audio effect max distance updated to " << effect_max_distance << "\n";
-    }
-    if (!dev_mode) {
-        rebuild_non_player_update_buffer_if_needed();
-
-        const std::size_t task_count = non_player_update_buffer_.size();
-        if (task_count == 1) {
-            non_player_update_buffer_.front()->update();
-        } else if (task_count > 1) {
-#if defined(__cpp_lib_execution)
-            const unsigned hardware_threads = std::max(1u, std::thread::hardware_concurrency());
-            const bool can_parallelize = hardware_threads > 1 && task_count >= kNonPlayerParallelThreshold;
-            if (can_parallelize) {
-                std::for_each(std::execution::par_unseq,
-                              non_player_update_buffer_.begin(),
-                              non_player_update_buffer_.end(),
-                              [](Asset* asset) {
-                                  if (asset) {
-                                      asset->update();
-                                  }
-                              });
-            } else
-#endif
-            {
-                for (Asset* asset : non_player_update_buffer_) {
-                    if (asset) {
-                        asset->update();
-                    }
-                }
-            }
-        }
-    }
-
-    register_pending_static_assets();
-
-    if (!moving_assets_for_grid_.empty()) {
-        movement_commands_buffer_.clear();
-        movement_commands_buffer_.reserve(moving_assets_for_grid_.size());
-        grid_registration_buffer_.clear();
-        if (grid_registration_buffer_.capacity() < 4) {
-            grid_registration_buffer_.reserve(4);
-        }
-
-#if defined(__cpp_lib_execution)
-        if (moving_assets_for_grid_.size() > 1) {
-            std::mutex movement_commands_mutex;
-            std::mutex registration_mutex;
-            std::for_each(std::execution::par_unseq,
-                          moving_assets_for_grid_.begin(),
-                          moving_assets_for_grid_.end(),
-                          [&](Asset* asset) {
-                              if (!asset) {
-                                  return;
-                              }
-                              SDL_Point curr{asset->pos.x, asset->pos.y};
-                              if (!asset->has_grid_residency_cache()) {
-                                  std::lock_guard<std::mutex> reg_lock(registration_mutex);
-                                  grid_registration_buffer_.push_back(asset);
-                                  return;
-                              }
-                              const SDL_Point prev = asset->grid_residency_cache();
-                              if (prev.x == curr.x && prev.y == curr.y) {
-                                  return;
-                              }
-                              GridMovementCommand command{asset, prev, curr};
-                              std::lock_guard<std::mutex> lock(movement_commands_mutex);
-                              movement_commands_buffer_.push_back(command);
-                          });
-        } else
-#endif
-        {
-            for (Asset* asset : moving_assets_for_grid_) {
-                if (!asset) {
-                    continue;
-                }
-                SDL_Point curr{asset->pos.x, asset->pos.y};
-                if (!asset->has_grid_residency_cache()) {
-                    grid_registration_buffer_.push_back(asset);
-                    continue;
-                }
-                const SDL_Point prev = asset->grid_residency_cache();
-                if (prev.x == curr.x && prev.y == curr.y) {
-                    continue;
-                }
-                movement_commands_buffer_.push_back(GridMovementCommand{asset, prev, curr});
-            }
-        }
-
-        if (!grid_registration_buffer_.empty()) {
-            std::sort(grid_registration_buffer_.begin(), grid_registration_buffer_.end());
-            grid_registration_buffer_.erase(
-                std::unique(grid_registration_buffer_.begin(), grid_registration_buffer_.end()),
-                grid_registration_buffer_.end());
-            for (Asset* asset : grid_registration_buffer_) {
-                if (!asset || asset->has_grid_residency_cache()) {
-                    continue;
-                }
-                SDL_Point curr{asset->pos.x, asset->pos.y};
-                world_grid_.register_asset(asset);
-                asset->cache_grid_residency(curr);
-            }
-        }
-
-        for (const GridMovementCommand& command : movement_commands_buffer_) {
-            if (!command.asset) {
-                continue;
-            }
-            world_grid_.move_asset(command.asset, command.previous, command.current);
-            command.asset->cache_grid_residency(command.current);
-        }
-    }
-
-    if (dev_controls_ && dev_controls_->is_enabled()) {
-        dev_controls_->set_player(player);
-        dev_controls_->set_active_assets(filtered_active_assets);
-        sync_dev_controls_current_room(current_room_);
-        dev_controls_->set_screen_dimensions(screen_width, screen_height);
-        dev_controls_->set_rooms(&rooms_, rooms_generation_);
-        dev_controls_->update(input);
-        dev_controls_->update_ui(input);
-    }
-
-    if (scene && !suppress_render_) scene->render();
-
-    process_removals();
-}
-
-void Assets::set_dev_mode(bool mode) {
-    const bool changed = (dev_mode != mode);
-    dev_mode = mode;
-
-    force_high_quality_rendering_ = false;
-    update_scene_render_quality();
-
-    if (dev_mode) {
-        if (SDL_Renderer* renderer_ptr = renderer()) {
-            library_.ensureAllAnimationsLoaded(renderer_ptr);
-        } else {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[Assets] Dev mode asset cache skipped: renderer unavailable.");
-        }
-        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
-        if (changed) {
-        dev_mode_trace("[Assets] Dev Mode enabled: using low-quality rendering for responsiveness.");
-        std::cout << "[Assets] Dev Mode enabled: using low-quality rendering for responsiveness.\n";
-    }
-        dev_mode_trace("[Assets] Enabling Dev Controls");
-        std::cout << "[Assets] Enabling Dev Controls\n";
-        ensure_dev_controls();
-        if (dev_controls_) {
-            dev_mode_trace("[Assets] Dev Controls acquired, toggling on");
-            std::cout << "[Assets] Dev Controls acquired, toggling on\n";
-            dev_controls_->set_enabled(true);
-            dev_controls_->set_player(player);
-            dev_controls_->set_active_assets(filtered_active_assets);
-            sync_dev_controls_current_room(current_room_, true);
-            dev_controls_->set_screen_dimensions(screen_width, screen_height);
-            dev_controls_->set_rooms(&rooms_, rooms_generation_);
-            dev_controls_->set_input(input);
-            dev_controls_->set_map_info(&map_info_json_, [this]() { return on_map_light_changed(); });
-            dev_controls_->set_map_context(&map_info_json_, map_path_);
-            dev_controls_->resolve_current_room(current_room_);
-        }
-        refresh_filtered_active_assets();
-        dev_mode_trace("[Assets] Dev Controls enabled");
-        std::cout << "[Assets] Dev Controls enabled\n";
-    } else {
-        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
-        if (changed) {
-            std::cout << "[Assets] Dev Mode disabled: restoring high render quality.\n";
-        }
-        if (dev_controls_) {
-            dev_mode_trace("[Assets] Disabling Dev Controls");
-            std::cout << "[Assets] Disabling Dev Controls\n";
-            dev_controls_->set_enabled(false);
-            dev_controls_->clear_selection();
-            reset_dev_controls_current_room_cache();
-        }
-        update_filtered_active_assets();
-    }
-}
-
-void Assets::set_force_high_quality_rendering(bool enable) {
-    if (force_high_quality_rendering_ == enable) {
-        return;
-    }
-    force_high_quality_rendering_ = enable;
-    update_scene_render_quality();
-}
-
-void Assets::set_render_dark_mask_enabled(bool enabled) {
-    if (render_dark_mask_enabled_ == enabled) {
-        return;
-    }
-    render_dark_mask_enabled_ = enabled;
-    if (scene) {
-        scene->set_dark_mask_enabled(enabled);
-    }
-}
-
-void Assets::update_scene_render_quality() {
-    apply_camera_runtime_settings();
-}
-
-void Assets::set_render_suppressed(bool suppressed) {
-    suppress_render_ = suppressed;
-}
-
-const std::vector<Asset*>& Assets::getActive() const {
-    if (dev_controls_ && dev_controls_->is_enabled()) {
-        return filtered_active_assets;
-    }
-    return active_assets;
-}
-
-const std::vector<Asset*>& Assets::getFilteredActiveAssets() const {
-    if (dev_controls_ && dev_controls_->is_enabled()) {
-        return filtered_active_assets;
-    }
-    return active_assets;
-}
-
-const std::vector<Asset*>& Assets::get_selected_assets() const {
-    static std::vector<Asset*> empty;
-    return (dev_controls_ && dev_controls_->is_enabled())
-               ? dev_controls_->get_selected_assets() : empty;
-}
-
-const std::vector<Asset*>& Assets::get_highlighted_assets() const {
-    static std::vector<Asset*> empty;
-    return (dev_controls_ && dev_controls_->is_enabled())
-               ? dev_controls_->get_highlighted_assets() : empty;
-}
-
-Asset* Assets::get_hovered_asset() const {
-    return (dev_controls_ && dev_controls_->is_enabled())
-               ? dev_controls_->get_hovered_asset() : nullptr;
-}
-
-nlohmann::json Assets::save_current_room(std::string ) {
-
-    return nlohmann::json::object();
-}
-
-void Assets::addAsset(const std::string& name, SDL_Point g) {
-    std::cout << "\n[Assets::addAsset] Request to create asset '" << name
-              << "' at grid (" << g.x << ", " << g.y << ")\n";
-
-    auto info = library_.get(name);
-    if (!info) {
-        std::cerr << "[Assets::addAsset][Error] No asset info found for '" << name << "'\n";
-        return;
-    }
-    std::cout << "[Assets::addAsset] Retrieved AssetInfo '" << info->name
-              << "' at " << info << "\n";
-
-    Area spawn_area(name, SDL_Point{g.x, g.y}, 1, 1, "Point", 1, 1, 1);
-    std::cout << "[Assets::addAsset] Created Area '" << spawn_area.get_name() << "' at (" << g.x << ", " << g.y << ")\n";
-
-    size_t prev_size = owned_assets.size();
-
-    owned_assets.emplace_back(
-        std::make_unique<Asset>(info, spawn_area, SDL_Point{g.x, g.y}, 0, nullptr));
-
-    if (owned_assets.size() <= prev_size) {
-        std::cerr << "[Assets::addAsset][Error] owned_assets did not grow!\n";
-        return;
-    }
-
-    Asset* newAsset = owned_assets.back().get();
-    if (!newAsset) {
-        std::cerr << "[Assets::addAsset][Error] Asset allocation failed for '" << name << "'\n";
-        return;
-    }
-    std::cout << "[Assets::addAsset][Debug] New Asset allocated at " << newAsset
-              << " (info=" << (newAsset->info ? newAsset->info->name : "<null>") << ")\n";
-
-    all.push_back(newAsset);
-    std::cout << "[Assets::addAsset] all.size() now = " << all.size() << "\n";
-
-    try {
-        set_camera_recursive(newAsset, &camera_);
-        set_assets_owner_recursive(newAsset, this);
-        std::cout << "[Assets::addAsset] View set successfully\n";
-        newAsset->finalize_setup();
-        std::cout << "[Assets::addAsset] Finalize setup successful\n";
-        // If this asset is tileable, compute and set tiling now
-        if (newAsset->info && newAsset->info->tillable) {
-            auto t = compute_tiling_for_asset(newAsset);
-            if (t && t->is_valid()) {
-                newAsset->set_tiling_info(*t);
-            } else {
-                newAsset->set_tiling_info(std::nullopt);
-            }
-        } else {
-            newAsset->set_tiling_info(std::nullopt);
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "[Assets::addAsset][Exception] " << e.what() << "\n";
-    }
-
-    register_pending_static_assets();
-
-    invalidate_max_asset_dimensions();
-    initialize_active_assets(camera_.get_screen_center());
-    if (!world_grid_.active_chunks().empty()) {
-        // Immediate rebuild requested; grid is ready.
-        refresh_active_asset_lists();
-    } else {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "[Assets::addAsset] Immediate rebuild requested before grid initialized; skipping until update().");
-    }
-
-    std::cout << "[Assets::addAsset] Active assets=" << active_assets.size() << "\n";
-
-    std::cout << "[Assets::addAsset] Successfully added asset '" << name
-              << "' at (" << g.x << ", " << g.y << ")\n";
-}
-
-Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
-    std::cout << "\n[Assets::spawn_asset] Request to spawn asset '" << name
-              << "' at world (" << world_pos.x << ", " << world_pos.y << ")\n";
-
-    auto info = library_.get(name);
-    if (!info) {
-        std::cerr << "[Assets::spawn_asset][Error] No asset info found for '" << name << "'\n";
-        return nullptr;
-    }
-    std::cout << "[Assets::spawn_asset] Retrieved AssetInfo '" << info->name
-              << "' at " << info << "\n";
-
-    Area spawn_area(name, SDL_Point{world_pos.x, world_pos.y}, 1, 1, "Point", 1, 1, 1);
-    std::cout << "[Assets::spawn_asset] Created Area '" << spawn_area.get_name() << "' at (" << world_pos.x << ", " << world_pos.y << ")\n";
-
-    size_t prev_size = owned_assets.size();
-    owned_assets.emplace_back( std::make_unique<Asset>(info, spawn_area, world_pos, 0, nullptr));
-
-    if (owned_assets.size() <= prev_size) {
-        std::cerr << "[Assets::spawn_asset][Error] owned_assets did not grow!\n";
-        return nullptr;
-    }
-
-    Asset* newAsset = owned_assets.back().get();
-    if (!newAsset) {
-        std::cerr << "[Assets::spawn_asset][Error] Asset allocation failed for '" << name << "'\n";
-        return nullptr;
-    }
-
-    std::cout << "[Assets::spawn_asset][Debug] New Asset allocated at " << newAsset
-              << " (info=" << (newAsset->info ? newAsset->info->name : "<null>") << ")\n";
-
-    all.push_back(newAsset);
-    std::cout << "[Assets::spawn_asset] all.size() now = " << all.size() << "\n";
-
-    try {
-        set_camera_recursive(newAsset, &camera_);
-        set_assets_owner_recursive(newAsset, this);
-        std::cout << "[Assets::spawn_asset] View set successfully\n";
-        newAsset->finalize_setup();
-        std::cout << "[Assets::spawn_asset] Finalize setup successful\n";
-        // If this asset is tileable, compute and set tiling now
-        if (newAsset->info && newAsset->info->tillable) {
-            auto t = compute_tiling_for_asset(newAsset);
-            if (t && t->is_valid()) {
-                newAsset->set_tiling_info(*t);
-            } else {
-                newAsset->set_tiling_info(std::nullopt);
-            }
-        } else {
-            newAsset->set_tiling_info(std::nullopt);
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "[Assets::spawn_asset][Exception] " << e.what() << "\n";
-    }
-
-    register_pending_static_assets();
-
-    invalidate_max_asset_dimensions();
-    initialize_active_assets(camera_.get_screen_center());
-    if (!world_grid_.active_chunks().empty()) {
-        // Immediate rebuild requested; grid is ready.
-        refresh_active_asset_lists();
-    } else {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "[Assets::spawn_asset] Immediate rebuild requested before grid initialized; skipping until update().");
-    }
-
-    std::cout << "[Assets::spawn_asset] Active assets=" << active_assets.size() << "\n";
-
-    std::cout << "[Assets::spawn_asset] Successfully spawned asset '" << name
-              << "' at (" << world_pos.x << ", " << world_pos.y << ")\n";
-
-    return newAsset;
-}
-
-void Assets::mark_active_assets_dirty() {
-    active_assets_dirty_.store(true, std::memory_order_release);
-    mark_non_player_update_buffer_dirty();
-}
-
-void Assets::notify_light_map_asset_moved(const Asset* asset) {
-    if (!asset || !asset->info || asset->info->light_sources.empty()) {
-        return;
-    }
-    if (!asset->info->moving_asset) {
-        return;
-    }
-    if (LightMap* map = light_map()) {
-        map->mark_asset_lights_dirty(asset);
-    }
-}
-
-void Assets::notify_light_map_static_assets_changed() {
-    if (LightMap* map = light_map()) {
-        map->mark_static_cache_dirty();
-    }
-}
-
-void Assets::track_asset_for_grid(Asset* asset) {
-    if (!asset || !asset->info) {
-        return;
-    }
-
-    if (asset->info->moving_asset) {
-        if (std::find(moving_assets_for_grid_.begin(), moving_assets_for_grid_.end(), asset) == moving_assets_for_grid_.end()) {
-            moving_assets_for_grid_.push_back(asset);
-        }
-        if (!asset->has_grid_residency_cache()) {
-            SDL_Point curr{asset->pos.x, asset->pos.y};
-            world_grid_.register_asset(asset);
-            asset->cache_grid_residency(curr);
-        }
-        return;
-    }
-
-    if (asset->has_grid_residency_cache()) {
-        return;
-    }
-
-    if (std::find(pending_static_grid_registration_.begin(),
-                  pending_static_grid_registration_.end(),
-                  asset) == pending_static_grid_registration_.end()) {
-        pending_static_grid_registration_.push_back(asset);
-    }
-}
-
-void Assets::untrack_asset_for_grid(Asset* asset) {
-    if (!asset) {
-        return;
-    }
-
-    auto erase_ptr = [asset](auto& vec) {
-        vec.erase(std::remove(vec.begin(), vec.end(), asset), vec.end());
-    };
-
-    erase_ptr(moving_assets_for_grid_);
-    erase_ptr(pending_static_grid_registration_);
-}
-
-void Assets::register_pending_static_assets() {
-    if (pending_static_grid_registration_.empty()) {
-        return;
-    }
-
-    std::vector<Asset*> still_pending;
-    still_pending.reserve(pending_static_grid_registration_.size());
-    for (Asset* asset : pending_static_grid_registration_) {
-        if (!asset) {
-            continue;
-        }
-        if (!asset->has_grid_residency_cache()) {
-            SDL_Point curr{asset->pos.x, asset->pos.y};
-            world_grid_.register_asset(asset);
-            asset->cache_grid_residency(curr);
-        }
-        if (asset && !asset->has_grid_residency_cache()) {
-            still_pending.push_back(asset);
-        }
-    }
-    pending_static_grid_registration_.swap(still_pending);
-}
-
-void Assets::initialize_active_assets(SDL_Point center) {
-    active_assets_dirty_.store(true, std::memory_order_release);
-    mark_non_player_update_buffer_dirty();
-    (void)center;
-    // Defer rebuild here; it will occur lazily on update when
-    // the world grid has populated active chunks.
-}
-
-void Assets::update_active_assets(SDL_Point center) {
-    active_assets_dirty_.store(true, std::memory_order_release);
-    mark_non_player_update_buffer_dirty();
-    (void)center;
-}
-
-bool Assets::rebuild_active_assets_if_needed() {
-    // Guard against early rebuild requests before the grid is ready.
-    if (pending_initial_rebuild_) {
-        const auto& chunks = world_grid_.active_chunks();
-        if (chunks.empty()) {
-            if (!logged_initial_rebuild_warning_) {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                            "[Assets] Active-asset rebuild requested before grid initialized; deferring until first update populates chunks.");
-                logged_initial_rebuild_warning_ = true;
-            }
-            return false;
-        }
-        // Grid has active chunks; allow the first rebuild to proceed.
-        pending_initial_rebuild_ = false;
-    }
-    if (!active_assets_dirty_.load(std::memory_order_acquire)) {
-        return false;
-    }
-
-    update_max_asset_dimensions();
-    const SDL_Rect screen_rect   = screen_world_rect();
-    const SDL_Rect expanded_rect = expanded_world_rect(screen_rect);
-    auto rects_intersect = [](const SDL_Rect& a, const SDL_Rect& b) {
-        const int ax2 = a.x + a.w;
-        const int ay2 = a.y + a.h;
-        const int bx2 = b.x + b.w;
-        const int by2 = b.y + b.h;
-        return !(ax2 <= b.x || bx2 <= a.x || ay2 <= b.y || by2 <= a.y);
-    };
 
     // Clear last-cycle culled overlay info
     culled_debug_rects_.clear();
@@ -1395,129 +871,52 @@ bool Assets::rebuild_active_assets_if_needed() {
     new_active_assets.clear();
     new_active_assets.reserve(active_assets.size() + 32);
 
-    const float screen_top = static_cast<float>(screen_rect.y);
+    SDL_Rect screen_pixels{0, 0, screen_width, screen_height};
+    const auto intersects_screen = [&](const SDL_FRect& rect) {
+        if (screen_pixels.w <= 0 || screen_pixels.h <= 0) {
+            return false;
+        }
+        const float rect_right = rect.x + rect.w;
+        const float rect_bottom = rect.y + rect.h;
+        const float screen_left = static_cast<float>(screen_pixels.x);
+        const float screen_top = static_cast<float>(screen_pixels.y);
+        const float screen_right = static_cast<float>(screen_pixels.x + screen_pixels.w);
+        const float screen_bottom = static_cast<float>(screen_pixels.y + screen_pixels.h);
+        return !(rect_right <= screen_left ||
+                 screen_right <= rect.x ||
+                 rect_bottom <= screen_top ||
+                 screen_bottom <= rect.y);
+    };
 
-    // Derive a minimum on-screen size (in px) using the existing camera realism knob.
-    const camera::RealismSettings cam_settings = camera_.realism_settings();
-    float min_ratio = cam_settings.min_visible_screen_ratio;
-    if (!std::isfinite(min_ratio) || min_ratio < 0.0f) {
-        min_ratio = 0.015f;
-    }
-    min_ratio = std::clamp(min_ratio, 0.0f, 0.5f);
-    const int min_w_px = static_cast<int>(std::lround(static_cast<double>(screen_width)  * static_cast<double>(min_ratio)));
-    const int min_h_px = static_cast<int>(std::lround(static_cast<double>(screen_height) * static_cast<double>(min_ratio)));
-    const int min_size_px = std::min(min_w_px, min_h_px);
+    auto push_debug_rect = [&](const SDL_FRect& rect) {
+        SDL_Rect debug{
+            static_cast<int>(std::floor(rect.x)),
+            static_cast<int>(std::floor(rect.y)),
+            static_cast<int>(std::ceil(rect.w)),
+            static_cast<int>(std::ceil(rect.h))
+        };
+        if (debug.w < 0) {
+            debug.w = 0;
+        }
+        if (debug.h < 0) {
+            debug.h = 0;
+        }
+        culled_debug_rects_.push_back(debug);
+    };
 
-    // Convert pixel threshold to world units to match is_asset_visible_on_screen bounds.
-    // Asset world bounds are computed in world units (using camera scale),
-    // so compare like with like to avoid location-dependent culling.
-    const float camera_scale_for_world = std::max(0.0001f, camera_.get_scale());
-    const int   min_size_world = static_cast<int>(std::lround(static_cast<float>(min_size_px) * camera_scale_for_world));
     auto consider_asset = [&](Asset* asset) {
-        if (!asset) {
+        if (!asset || !asset->info) {
             return;
         }
-        if (static_cast<float>(asset->pos.y) < screen_top) {
+        SDL_FRect screen_bounds{};
+        if (!asset_bounds_in_screen_space(asset, screen_bounds)) {
             return;
         }
-        // Use expanded rect for mild hysteresis near screen edges and apply min-size filter
-        // Note: pass threshold in world units so the comparison matches asset bounds units.
-        bool visible = is_asset_visible_on_screen(asset, expanded_rect, min_size_world);
-
-        // Cheap alpha visibility probe for simple texture assets: sample a few points in
-        // the relevant mask region and ensure there is at least one non-zero alpha pixel.
-        if (visible && asset && asset->info) {
-            try {
-                if (asset_types::canonicalize(asset->info->type) == asset_types::texture) {
-                    const float camera_scale = std::max(0.0001f, camera_.get_scale());
-                    AssetWorldBounds bnds;
-                    if (compute_asset_world_bounds(asset, camera_scale, bnds)) {
-                        const int ax = static_cast<int>(std::floor(bnds.left));
-                        const int ay = static_cast<int>(std::floor(bnds.top));
-                        const int aw = std::max(0, static_cast<int>(std::ceil(bnds.right  - bnds.left)));
-                        const int ah = std::max(0, static_cast<int>(std::ceil(bnds.bottom - bnds.top)));
-                        SDL_Rect asset_rect{ ax, ay, aw, ah };
-                        SDL_Rect inter{};
-                        if (SDL_IntersectRect(&asset_rect, &expanded_rect, &inter) && inter.w > 0 && inter.h > 0) {
-                            SDL_Texture* mask_tex = asset->get_current_mask_texture(0);
-                            if (scene && scene->get_renderer() && mask_tex) {
-                                SDL_Renderer* rdr = scene->get_renderer();
-                                int tex_w = 0, tex_h = 0, access = 0; Uint32 fmt = 0;
-                                if (SDL_QueryTexture(mask_tex, &fmt, &access, &tex_w, &tex_h) == 0 && tex_w > 0 && tex_h > 0) {
-                                    // Map world-intersection rect to mask texture space
-                                    const float awf = std::max(1.0f, static_cast<float>(aw));
-                                    const float ahf = std::max(1.0f, static_cast<float>(ah));
-                                    const float u0 = (static_cast<float>(inter.x - ax) / awf) * static_cast<float>(tex_w);
-                                    const float v0 = (static_cast<float>(inter.y - ay) / ahf) * static_cast<float>(tex_h);
-                                    const float u1 = (static_cast<float>((inter.x - ax) + inter.w) / awf) * static_cast<float>(tex_w);
-                                    const float v1 = (static_cast<float>((inter.y - ay) + inter.h) / ahf) * static_cast<float>(tex_h);
-                                    const int su0 = std::clamp(static_cast<int>(std::floor(std::min(u0, u1))), 0, std::max(0, tex_w - 1));
-                                    const int sv0 = std::clamp(static_cast<int>(std::floor(std::min(v0, v1))), 0, std::max(0, tex_h - 1));
-                                    const int su1 = std::clamp(static_cast<int>(std::ceil (std::max(u0, u1))),  0, tex_w);
-                                    const int sv1 = std::clamp(static_cast<int>(std::ceil (std::max(v0, v1))),  0, tex_h);
-                                    const int rw  = std::max(0, su1 - su0);
-                                    const int rh  = std::max(0, sv1 - sv0);
-                                    if (rw > 0 && rh > 0) {
-                                        SDL_Texture* readable = mask_tex;
-                                        SDL_Texture* temp     = nullptr;
-                                        if (access != SDL_TEXTUREACCESS_TARGET) {
-                                            temp = SDL_CreateTexture(rdr, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
-                                            if (temp) {
-                                                SDL_Texture* prev = SDL_GetRenderTarget(rdr);
-                                                SDL_SetRenderTarget(rdr, temp);
-                                                SDL_RenderCopy(rdr, mask_tex, nullptr, nullptr);
-                                                SDL_SetRenderTarget(rdr, prev);
-                                                readable = temp;
-                                            }
-                                        }
-                                        SDL_Texture* prev = SDL_GetRenderTarget(rdr);
-                                        SDL_SetRenderTarget(rdr, readable);
-                                        auto read_alpha_at = [&](int px, int py) -> Uint8 {
-                                            Uint32 pixel = 0;
-                                            SDL_Rect r{ px, py, 1, 1 };
-                                            if (SDL_RenderReadPixels(rdr, &r, SDL_PIXELFORMAT_RGBA8888, &pixel, static_cast<int>(sizeof(Uint32))) != 0) {
-                                                return 255; // fail-open to avoid over-cull
-                                            }
-                                            Uint8 a = static_cast<Uint8>((pixel >> 24) & 0xFF);
-                                            return a;
-                                        };
-                                        const int sx0 = su0;
-                                        const int sy0 = sv0;
-                                        const int sx1 = std::max(su0, su1 - 1);
-                                        const int sy1 = std::max(sv0, sv1 - 1);
-                                        const int cx  = su0 + std::max(0, rw / 2);
-                                        const int cy  = sv0 + std::max(0, rh / 2);
-                                        bool any = false;
-                                        // 2x2 corners + center sample
-                                        if (read_alpha_at(sx0, sy0) > 0) any = true;
-                                        else if (read_alpha_at(sx1, sy0) > 0) any = true;
-                                        else if (read_alpha_at(sx0, sy1) > 0) any = true;
-                                        else if (read_alpha_at(sx1, sy1) > 0) any = true;
-                                        else if (read_alpha_at(cx,  cy)  > 0) any = true;
-                                        SDL_SetRenderTarget(rdr, prev);
-                                        if (temp) SDL_DestroyTexture(temp);
-                                        if (!any) {
-                                            visible = false;
-                                            if (culled_debug_logged_.insert(asset).second) {
-                                                dev_mode_trace(std::string{"[Assets] Culled (no visible pixels) asset: "} + (asset->info ? asset->info->name : std::string{"<unnamed>"}));
-                                            }
-                                            // record debug overlay rect in world coords
-                                            culled_debug_rects_.push_back(inter);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (...) {
-                // Fail-open; keep asset visible if probe has issues
-            }
+        if (!intersects_screen(screen_bounds)) {
+            push_debug_rect(screen_bounds);
+            return;
         }
-
-        if (visible) {
-            new_active_assets.push_back(asset);
-        }
+        new_active_assets.push_back(asset);
     };
 
     const auto& chunks = world_grid_.active_chunks();
@@ -1528,9 +927,6 @@ bool Assets::rebuild_active_assets_if_needed() {
     } else {
         for (const world::Chunk* chunk : chunks) {
             if (!chunk) {
-                continue;
-            }
-            if (!rects_intersect(chunk->world_bounds, expanded_rect)) {
                 continue;
             }
             for (Asset* asset : chunk->assets) {
@@ -1611,7 +1007,7 @@ bool Assets::rebuild_active_assets_if_needed() {
     active_assets_dirty_.store(false, std::memory_order_release);
     mark_non_player_update_buffer_dirty();
     rebuild_non_player_update_buffer_if_needed();
-    return true;
+    return;
 }
 
 void Assets::rebuild_non_player_update_buffer_if_needed() {
@@ -1714,28 +1110,6 @@ SDL_Rect Assets::screen_world_rect() const {
     return rect;
 }
 
-SDL_Rect Assets::expanded_world_rect(const SDL_Rect& screen_rect) const {
-    const float horizontal_padding = std::max(0.0f, max_asset_width_world_ * 1.5f);
-    const float bottom_padding     = std::max(0.0f, max_asset_height_world_);
-
-    const float left_f   = static_cast<float>(screen_rect.x) - horizontal_padding;
-    const float right_f  = static_cast<float>(screen_rect.x + screen_rect.w) + horizontal_padding;
-    const int   top      = screen_rect.y;
-    const float bottom_f = static_cast<float>(screen_rect.y + screen_rect.h) + bottom_padding;
-
-    const int left   = static_cast<int>(std::floor(left_f));
-    const int right  = static_cast<int>(std::ceil(right_f));
-    const int bottom = static_cast<int>(std::ceil(bottom_f));
-
-    SDL_Rect expanded{
-        left,
-        top,
-        std::max(0, right - left),
-        std::max(0, bottom - top)
-    };
-    return expanded;
-}
-
 int Assets::audio_effect_max_distance_world() const {
     const_cast<Assets*>(this)->update_max_asset_dimensions();
     const float horizontal_padding = std::max(0.0f, max_asset_width_world_ * 1.5f);
@@ -1744,40 +1118,298 @@ int Assets::audio_effect_max_distance_world() const {
     return std::max(1, static_cast<int>(std::ceil(radius)));
 }
 
-bool Assets::is_asset_visible_on_screen(const Asset* asset) const {
-    return is_asset_visible_on_screen(asset, screen_world_rect(), 0);
+// Enable/disable developer mode. In dev mode we may lower
+// effective render quality (unless forced high quality is set)
+// and ensure DevControls are available.
+void Assets::set_dev_mode(bool mode) {
+    if (dev_mode == mode) {
+        return;
+    }
+    dev_mode = mode;
+
+    // Ensure dev controls are constructed lazily
+    if (dev_mode) {
+        ensure_dev_controls();
+        if (dev_controls_) {
+            dev_controls_->set_enabled(true);
+        }
+        show_dev_notice("Dev Mode enabled (Ctrl+D to toggle)", 2000);
+    } else {
+        if (dev_controls_) {
+            dev_controls_->set_enabled(false);
+        }
+        show_dev_notice("Dev Mode disabled", 1500);
+    }
+
+    // Update renderer quality caps based on mode change
+    apply_camera_runtime_settings();
 }
 
-bool Assets::is_asset_visible_on_screen(const Asset* asset, const SDL_Rect& screen_rect, int min_size_px) const {
-    const float camera_scale = std::max(0.0001f, camera_.get_scale());
-    AssetWorldBounds bounds;
-    if (!compute_asset_world_bounds(asset, camera_scale, bounds)) {
-        return false;
+// Force high quality rendering (disables quality halving in dev mode).
+void Assets::set_force_high_quality_rendering(bool enable) {
+    if (force_high_quality_rendering_ == enable) {
+        return;
     }
+    force_high_quality_rendering_ = enable;
+    apply_camera_runtime_settings();
+}
 
-    const float screen_left   = static_cast<float>(screen_rect.x);
-    const float screen_top    = static_cast<float>(screen_rect.y);
-    const float screen_right  = static_cast<float>(screen_rect.x + screen_rect.w);
-    const float screen_bottom = static_cast<float>(screen_rect.y + screen_rect.h);
-
-    if (bounds.right < screen_left || bounds.left > screen_right) {
-        return false;
+// Toggle the dark mask (dynamic darkness overlay)
+void Assets::set_render_dark_mask_enabled(bool enabled) {
+    if (render_dark_mask_enabled_ == enabled) {
+        return;
     }
-    if (bounds.bottom < screen_top || bounds.top > screen_bottom) {
-        return false;
+    render_dark_mask_enabled_ = enabled;
+    if (scene) {
+        scene->set_dark_mask_enabled(enabled);
     }
+}
 
-    if (min_size_px > 0) {
-        const float w = std::max(0.0f, bounds.right - bounds.left);
-        const float h = std::max(0.0f, bounds.bottom - bounds.top);
-        // Cull only when the projected sprite is tiny in both dimensions.
-        if (w < static_cast<float>(min_size_px) && h < static_cast<float>(min_size_px)) {
-            if (asset && culled_debug_logged_.insert(asset).second) {
-                dev_mode_trace(std::string{"[Assets] Culled (min-size) asset: "} + (asset->info ? asset->info->name : std::string{"<unnamed>"}));
-            }
-            return false;
+// Temporarily suppress heavy rendering work (e.g., during menus or smooth camera transitions).
+void Assets::set_render_suppressed(bool suppressed) {
+    if (suppress_render_ == suppressed) {
+        return;
+    }
+    suppress_render_ = suppressed;
+
+    if (scene) {
+        if (suppressed) {
+            // Reduce load while suppressed
+            scene->set_low_quality_rendering(true);
+            scene->set_update_map_light_enabled(false);
+        } else {
+            // Restore lighting updates and quality policy
+            scene->set_update_map_light_enabled(true);
+            apply_camera_runtime_settings();
         }
     }
+}
+
+// Accessors used by UI/engine code
+const std::vector<Asset*>& Assets::getActive() const {
+    return active_assets;
+}
+
+const std::vector<Asset*>& Assets::getFilteredActiveAssets() const {
+    return filtered_active_assets;
+}
+
+void Assets::initialize_active_assets(SDL_Point /*center*/) {
+    // Seed the active lists conservatively with all assets; subsequent
+    // updates will refine visibility, ordering, and lighting state.
+    active_assets.clear();
+    active_assets.reserve(all.size());
+    for (Asset* a : all) {
+        if (a) {
+            active_assets.push_back(a);
+        }
+    }
+
+    // Build light asset subsets
+    std::vector<Asset*> new_light_assets;
+    std::vector<Asset*> new_static_lights;
+    std::vector<Asset*> new_moving_lights;
+    new_light_assets.reserve(active_assets.size());
+    new_static_lights.reserve(active_assets.size());
+    new_moving_lights.reserve(active_assets.size());
+    for (Asset* asset : active_assets) {
+        if (!asset || !asset->info) {
+            continue;
+        }
+        if (asset->info->light_sources.empty()) {
+            continue;
+        }
+        new_light_assets.push_back(asset);
+        if (asset->info->moving_asset) {
+            new_moving_lights.push_back(asset);
+        } else {
+            new_static_lights.push_back(asset);
+        }
+    }
+
+    active_light_assets_        = std::move(new_light_assets);
+    active_static_light_assets_ = std::move(new_static_lights);
+    active_moving_light_assets_ = std::move(new_moving_lights);
+    active_assets_dirty_.store(false, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
+}
+
+void Assets::mark_active_assets_dirty() {
+    active_assets_dirty_.store(true, std::memory_order_release);
+}
+
+Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
+    // Lookup metadata
+    std::shared_ptr<AssetInfo> info = library_.get(name);
+    if (!info) {
+        return nullptr;
+    }
+
+    // Determine owning room label (if available)
+    std::string owning_room = map_id_;
+    if (current_room_) {
+        owning_room = current_room_->room_name;
+    }
+
+    // Build a minimal area carrying the owning room name; geometry not required here
+    Area spawn_area(owning_room, /*resolution*/ 0);
+
+    // Choose a basic depth; prefer info->z_threshold if it exists
+    int depth = 0;
+    try {
+        depth = info->z_threshold;
+    } catch (...) {
+        depth = 0;
+    }
+
+    // Create and wire the asset
+    auto uptr = std::make_unique<Asset>(info, spawn_area, world_pos, depth, nullptr, std::string{}, std::string{}, map_grid_settings_.spacing());
+    Asset* raw = uptr.get();
+    if (!raw) {
+        return nullptr;
+    }
+    raw->set_assets(this);
+    raw->set_camera(&camera_);
+    raw->finalize_setup();
+
+    // Register with grid and containers
+    world_grid_.register_asset(raw);
+    owned_assets.emplace_back(std::move(uptr));
+    all.push_back(raw);
+
+    // Invalidate caches and mark dirty so next cycle rebuilds active lists
+    invalidate_max_asset_dimensions();
+    mark_active_assets_dirty();
+    mark_non_player_update_buffer_dirty();
+
+    // Return the raw pointer for immediate usage by caller
+    return raw;
+}
+
+const std::vector<Asset*>& Assets::get_selected_assets() const {
+    static std::vector<Asset*> empty;
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        return dev_controls_->get_selected_assets();
+    }
+    return empty;
+}
+
+const std::vector<Asset*>& Assets::get_highlighted_assets() const {
+    static std::vector<Asset*> empty;
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        return dev_controls_->get_highlighted_assets();
+    }
+    return empty;
+}
+
+Asset* Assets::get_hovered_asset() const {
+    if (dev_controls_ && dev_controls_->is_enabled()) {
+        return dev_controls_->get_hovered_asset();
+    }
+    return nullptr;
+}
+
+void Assets::notify_light_map_asset_moved(const Asset* /*asset*/) {
+    // Minimal implementation: leave as no-op. The light map will be
+    // refreshed on next frame via SceneRenderer.
+}
+
+void Assets::notify_light_map_static_assets_changed() {
+    // Minimal implementation: leave as no-op.
+}
+
+void Assets::track_asset_for_grid(Asset* asset) {
+    if (!asset) {
+        return;
+    }
+    world_grid_.register_asset(asset);
+}
+
+void Assets::untrack_asset_for_grid(Asset* asset) {
+    if (!asset) {
+        return;
+    }
+    world_grid_.unregister_asset(asset);
+}
+
+void Assets::register_pending_static_assets() {
+    if (pending_static_grid_registration_.empty()) {
+        return;
+    }
+    for (Asset* asset : pending_static_grid_registration_) {
+        if (asset) {
+            world_grid_.register_asset(asset);
+        }
+    }
+    pending_static_grid_registration_.clear();
+}
+
+bool Assets::rebuild_active_assets_if_needed() {
+    const bool dirty = active_assets_dirty_.load(std::memory_order_acquire) || pending_initial_rebuild_;
+    if (!dirty) {
+        return false;
+    }
+    pending_initial_rebuild_ = false;
+    active_assets_dirty_.store(false, std::memory_order_release);
+    initialize_active_assets(camera_.get_screen_center());
+    return true;
+}
+
+bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rect) const {
+    if (!asset || !asset->info) {
+        return false;
+    }
+    const Asset::BoundsSquare& base = asset->base_bounds_local();
+    if (!base.valid()) {
+        return false;
+    }
+
+    float world_x = asset->smoothed_translation_x();
+    float world_y = asset->smoothed_translation_y();
+    if (dev_mode) {
+        world_x = static_cast<float>(asset->pos.x);
+        world_y = static_cast<float>(asset->pos.y);
+    }
+
+    float asset_scale = asset->smoothed_scale();
+    if (!std::isfinite(asset_scale) || asset_scale <= 0.0f) {
+        asset_scale = 1.0f;
+    }
+
+    float local_center_x = base.center_x;
+    if (asset->flipped) {
+        local_center_x = -local_center_x;
+    }
+    const float local_center_y = base.center_y;
+    const float scaled_half    = base.half_size * asset_scale;
+
+    const float world_center_x = world_x + local_center_x * asset_scale;
+    const float world_center_y = world_y + local_center_y * asset_scale;
+
+    const float left_world   = world_center_x - scaled_half;
+    const float right_world  = world_center_x + scaled_half;
+    const float top_world    = world_center_y - scaled_half;
+    const float bottom_world = world_center_y + scaled_half;
+
+    SDL_FPoint top_left_screen = camera_.map_to_screen_f(SDL_FPoint{left_world, top_world});
+    SDL_FPoint bottom_right_screen = camera_.map_to_screen_f(SDL_FPoint{right_world, bottom_world});
+
+    const float width  = bottom_right_screen.x - top_left_screen.x;
+    const float height = bottom_right_screen.y - top_left_screen.y;
+    if (!(width > 0.0f) || !(height > 0.0f)) {
+        return false;
+    }
+    if (!std::isfinite(top_left_screen.x) || !std::isfinite(top_left_screen.y) ||
+        !std::isfinite(width) || !std::isfinite(height)) {
+        return false;
+    }
+
+    out_rect = SDL_FRect{
+        top_left_screen.x,
+        top_left_screen.y,
+        width,
+        height
+    };
     return true;
 }
 
@@ -1863,6 +1495,12 @@ void Assets::process_removals() {
     mark_active_assets_dirty();
     rebuild_active_assets_if_needed();
     update_filtered_active_assets();
+
+    // Render the current scene after updating state and visibility lists.
+    // This ensures we present the first frame immediately after assets are spawned.
+    if (!suppress_render_ && scene) {
+        scene->render();
+    }
 }
 
 void Assets::render_overlays(SDL_Renderer* renderer) {
@@ -2161,8 +1799,7 @@ void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persi
 
     if (chunk_changed) {
         update_max_asset_dimensions();
-        const SDL_Rect expanded_rect = expanded_world_rect(screen_world_rect());
-        world_grid_.update_active_chunks(expanded_rect, 0);
+        world_grid_.update_active_chunks(screen_world_rect(), 0);
         force_shaded_assets_rerender();
     }
 }

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <mutex>
+#include <cmath>
 
 #include "utils/area.hpp"
 #include "asset_info.hpp"
@@ -85,6 +86,14 @@ class Asset {
         bool visible = false;
         int cached_w = 0;
         int cached_h = 0;
+    };
+
+    struct BoundsSquare {
+        float center_x = 0.0f;
+        float center_y = 0.0f;
+        float half_size = 0.0f;
+
+        bool valid() const { return std::isfinite(half_size) && half_size > 0.0f; }
     };
 
     Area get_area(const std::string& name) const;
@@ -180,6 +189,7 @@ class Asset {
     float smoothed_translation_y() const;
     float smoothed_scale() const;
     float smoothed_alpha() const;
+    const BoundsSquare& base_bounds_local() const { return base_bounds_local_; }
     Asset* parent = nullptr;
     std::shared_ptr<AssetInfo> info;
     std::string current_animation;
@@ -257,9 +267,12 @@ private:
     void clear_downscale_cache();
     void invalidate_downscale_cache();
     void refresh_cached_dimensions();
+    void recompute_local_bounds_square();
 
     std::vector<DownscaleCacheEntry> downscale_cache_{};
     std::uint64_t downscale_cache_ready_revision_ = 0;
+
+    BoundsSquare base_bounds_local_{};
 
     SDL_Texture* last_scaled_texture_      = nullptr;
     SDL_Texture* last_scaled_source_       = nullptr;

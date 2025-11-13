@@ -740,11 +740,18 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         try_read_float("primary_color_boost_max", settings_.primary_boost_foreground);
     }
 
-    const bool fg_bright_custom = try_read_float("foreground_brightness", settings_.foreground_brightness);
+    // Prefer new contrast keys; fall back to legacy brightness keys
+    bool used_fg_contrast = false;
+    if (try_read_float("foreground_contrast", settings_.foreground_brightness)) {
+        used_fg_contrast = true;
+    }
+    const bool fg_bright_custom = used_fg_contrast || try_read_float("foreground_brightness", settings_.foreground_brightness);
     if (!fg_bright_custom) {
         try_read_float("ground_brightness_factor", settings_.foreground_brightness);
     }
-    try_read_float("background_brightness", settings_.background_brightness);
+    if (!try_read_float("background_contrast", settings_.background_brightness)) {
+        try_read_float("background_brightness", settings_.background_brightness);
+    }
     auto clamp_depth_adjust = [](float value) {
         return std::clamp(value, -50.0f, 50.0f);
     };
@@ -771,8 +778,10 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     if (!try_read_curve("blur_falloff_method", settings_.blur_falloff_method)) {
         settings_.blur_falloff_method = BlurFalloffMethod::Linear;
     }
-    if (!try_read_curve("brightness_falloff_method", settings_.brightness_falloff_method)) {
-        settings_.brightness_falloff_method = settings_.blur_falloff_method;
+    if (!try_read_curve("contrast_falloff_method", settings_.brightness_falloff_method)) {
+        if (!try_read_curve("brightness_falloff_method", settings_.brightness_falloff_method)) {
+            settings_.brightness_falloff_method = settings_.blur_falloff_method;
+        }
     }
     try_read_curve("saturation_falloff_method", settings_.saturation_falloff_method);
     try_read_curve("primary_boost_falloff_method", settings_.primary_boost_falloff_method);
@@ -893,8 +902,11 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["saturation_foreground"] = settings_.saturation_foreground;
     j["primary_boost_background"] = settings_.primary_boost_background;
     j["primary_boost_foreground"] = settings_.primary_boost_foreground;
-    j["foreground_brightness"] = settings_.foreground_brightness;
-    j["background_brightness"] = settings_.background_brightness;
+    // Write new contrast keys, plus legacy brightness for compatibility
+    j["foreground_contrast"]  = settings_.foreground_brightness;
+    j["background_contrast"]  = settings_.background_brightness;
+    j["foreground_brightness"] = settings_.foreground_brightness; // legacy
+    j["background_brightness"] = settings_.background_brightness; // legacy
 
     // Perspective Blur (Aperture Blur)
     j["max_foreground_blur"] = settings_.max_foreground_blur;
@@ -902,7 +914,8 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["blur_foreground_screen_y"] = settings_.blur_foreground_screen_y;
     j["blur_background_screen_y"] = settings_.blur_background_screen_y;
     j["blur_falloff_method"] = static_cast<int>(settings_.blur_falloff_method);
-    j["brightness_falloff_method"] = static_cast<int>(settings_.brightness_falloff_method);
+    j["contrast_falloff_method"]   = static_cast<int>(settings_.brightness_falloff_method);
+    j["brightness_falloff_method"] = static_cast<int>(settings_.brightness_falloff_method); // legacy
     j["saturation_falloff_method"] = static_cast<int>(settings_.saturation_falloff_method);
     j["primary_boost_falloff_method"] = static_cast<int>(settings_.primary_boost_falloff_method);
     return j;

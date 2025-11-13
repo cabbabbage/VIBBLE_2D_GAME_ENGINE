@@ -113,6 +113,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
         alpha_smoothing_.reset(hidden ? 0.0f : 1.0f);
 
         clear_downscale_cache();
+        recompute_local_bounds_square();
 }
 
 Asset::~Asset() {
@@ -176,6 +177,7 @@ Asset::Asset(const Asset& o)
 , last_scale_usage_()
 , final_texture_revision_(o.final_texture_revision_)
 , scale_variant_state_(o.scale_variant_state_)
+, base_bounds_local_(o.base_bounds_local_)
 {
         clear_downscale_cache();
         clear_render_caches();
@@ -244,6 +246,7 @@ Asset& Asset::operator=(const Asset& o) {
         scale_smoothing_          = o.scale_smoothing_;
         alpha_smoothing_          = o.alpha_smoothing_;
         animation_children_       = o.animation_children_;
+        base_bounds_local_        = o.base_bounds_local_;
         return *this;
 }
 
@@ -858,6 +861,103 @@ void Asset::refresh_cached_dimensions() {
 
         cached_w = (width > 0) ? width : 0;
         cached_h = (height > 0) ? height : 0;
+}
+
+void Asset::recompute_local_bounds_square() {
+        auto expand_rect = [&](float left, float top, float right, float bottom, bool& initialized, float& min_x, float& max_x, float& min_y, float& max_y) {
+                if (!std::isfinite(left) || !std::isfinite(right) || !std::isfinite(top) || !std::isfinite(bottom)) {
+                        return;
+                }
+                if (!initialized) {
+                        min_x = left;
+                        max_x = right;
+                        min_y = top;
+                        max_y = bottom;
+                        initialized = true;
+                        return;
+                }
+                min_x = std::min(min_x, left);
+                max_x = std::max(max_x, right);
+                min_y = std::min(min_y, top);
+                max_y = std::max(max_y, bottom);
+        };
+
+        float min_x = 0.0f;
+        float max_x = 0.0f;
+        float min_y = 0.0f;
+        float max_y = 0.0f;
+        bool has_rect = false;
+
+        auto include_frame = [&](int frame_w, int frame_h) {
+                if (frame_w <= 0 || frame_h <= 0) {
+                        return;
+                }
+                const float half_w = 0.5f * static_cast<float>(frame_w);
+                const float height = static_cast<float>(frame_h);
+                expand_rect(-half_w, -height, half_w, 0.0f, has_rect, min_x, max_x, min_y, max_y);
+        };
+
+        if (info) {
+                for (const auto& entry : info->animations) {
+                        const Animation& animation = entry.second;
+                        if (animation.frames.empty()) {
+                                continue;
+                        }
+                        for (SDL_Texture* tex : animation.frames) {
+                                if (!tex) {
+                                        continue;
+                                }
+                                int frame_w = 0;
+                                int frame_h = 0;
+                                if (SDL_QueryTexture(tex, nullptr, nullptr, &frame_w, &frame_h) != 0) {
+                                        continue;
+                                }
+                                include_frame(frame_w, frame_h);
+                        }
+                }
+
+                for (const auto& light : info->light_sources) {
+                        if (light.radius <= 0) {
+                                continue;
+                        }
+                        const float radius = static_cast<float>(light.radius);
+                        const float offset_x = static_cast<float>(light.offset_x);
+                        const float offset_y = static_cast<float>(light.offset_y);
+                        expand_rect(offset_x - radius,
+                                    offset_y - radius,
+                                    offset_x + radius,
+                                    offset_y + radius,
+                                    has_rect,
+                                    min_x,
+                                    max_x,
+                                    min_y,
+                                    max_y);
+                }
+        }
+
+        if (!has_rect && info) {
+                include_frame(std::max(0, info->original_canvas_width),
+                              std::max(0, info->original_canvas_height));
+        }
+
+        if (!has_rect) {
+                expand_rect(-0.5f, -0.5f, 0.5f, 0.5f, has_rect, min_x, max_x, min_y, max_y);
+        }
+
+        if (!has_rect) {
+                base_bounds_local_ = BoundsSquare{};
+                return;
+        }
+
+        const float width  = std::max(0.0f, max_x - min_x);
+        const float height = std::max(0.0f, max_y - min_y);
+        const float size   = std::max(width, height);
+
+        BoundsSquare computed{};
+        computed.center_x = min_x + width * 0.5f;
+        computed.center_y = min_y + height * 0.5f;
+        computed.half_size = (size > 0.0f && std::isfinite(size)) ? size * 0.5f : 0.5f;
+        base_bounds_local_ = computed;
 }
 
 void Asset::on_scale_factor_changed() {

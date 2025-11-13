@@ -52,7 +52,7 @@ public:
     void set_grid_overlay_enabled_transient(bool enabled);
 
 private:
-    struct ChildFrame { int child_index = -1; float dx = 0.0f; float dy = 0.0f; float degree = 0.0f; bool visible = false; };
+    struct ChildFrame { int child_index = -1; float dx = 0.0f; float dy = 0.0f; float degree = 0.0f; bool visible = true; };
     struct MovementFrame { float dx = 0.0f; float dy = 0.0f; bool resort_z = false; std::vector<ChildFrame> children; };
 
     // State wiring
@@ -147,6 +147,9 @@ private:
     std::unordered_map<Asset*, bool> child_hidden_cache_;
     mutable std::vector<std::string> child_dropdown_options_cache_;
 
+    // Defer persistence/rebuild until Back is pressed
+    bool pending_save_ = false;
+
 private:
     void ensure_widgets() const;
     void rebuild_layout() const;
@@ -205,7 +208,10 @@ private:
         int gap = 0;
         int width = 0;
         int height = 0;
+        // Dropdown row
         int dropdown_row_height = 0;
+        // Movement controls row (Smooth/Curve + Totals) shared with Movement mode
+        int movement_row_height = 0;
         int toggle_row_height = 0;
         int form_row_height = 0;
         int textbox_width = 0;
@@ -215,6 +221,12 @@ private:
         int child_visible_checkbox_width = 0;
         int show_parent_checkbox_width = 0;
         int show_child_checkbox_width = 0;
+        // Movement control widths mirrored from Movement metrics
+        int smooth_checkbox_width = 0;
+        int curve_checkbox_width = 0;
+        int totals_width = 0;
+        int total_dx_height = 0;
+        int total_dy_height = 0;
     };
 
     DirectoryPanelMetrics build_directory_panel_metrics() const;

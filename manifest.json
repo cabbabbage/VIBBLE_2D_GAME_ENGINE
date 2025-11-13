@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T05:55:12Z",
+        "generated_at": "2025-11-13T08:39:08Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T05:57:59Z",
+        "generated_at": "2025-11-13T08:39:08Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T05:57:59Z",
+        "generated_at": "2025-11-13T08:39:08Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -222,23 +222,6 @@
       "asset_name": "Tree_1",
       "asset_type": "boundary",
       "neighbor_search_distance": 500,
-      "scaling_profile": {
-        "generated_at": "2025-11-13T05:57:59Z",
-        "max_scale": 0.5,
-        "min_scale": 0.5,
-        "recommended_percentages": [
-          100,
-          50,
-          50
-        ],
-        "recommended_steps": [
-          1.0,
-          0.5,
-          0.5
-        ],
-        "revision": 18248404512122959510,
-        "screen_aspect": 1.7777777777777777
-      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -509,7 +492,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T05:57:59Z",
+        "generated_at": "2025-11-13T08:39:08Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -580,6 +563,222 @@
       "asset_type": "object",
       "start": "default"
     },
+    "lantern": {
+      "animations": {
+        "default": {
+          "flipped_source": false,
+          "fps": 24,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_factor": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/lantern",
+      "asset_name": "lantern",
+      "asset_type": "Object",
+      "can_invert": true,
+      "has_shading": false,
+      "lighting_info": [
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "flicker_smoothness": 20,
+          "flicker_speed": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 255,
+          "offset_x": 143,
+          "offset_y": -732,
+          "radius": 54,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "flicker_smoothness": 20,
+          "flicker_speed": 20,
+          "has_light_source": true,
+          "in_front": false,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 254,
+          "offset_x": 135,
+          "offset_y": -714,
+          "radius": 216,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "flicker_smoothness": 20,
+          "flicker_speed": 20,
+          "has_light_source": true,
+          "in_front": false,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 255,
+          "offset_x": 132,
+          "offset_y": -729,
+          "radius": 1926,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        },
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "flicker_smoothness": 20,
+          "flicker_speed": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 90,
+          "offset_x": 132,
+          "offset_y": -735,
+          "radius": 802,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        }
+      ],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-13T08:39:08Z",
+        "max_scale": 0.38181817531585693,
+        "min_scale": 0.38181817531585693,
+        "recommended_percentages": [
+          100,
+          38,
+          38
+        ],
+        "recommended_steps": [
+          1.0,
+          0.38181817531585693,
+          0.38181817531585693
+        ],
+        "revision": 11688286490698651680,
+        "screen_aspect": 1.7777777777777777
+      },
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "size_settings": {
+        "scale_percentage": 42.0
+      },
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tillable": false,
+      "update_radius": 0
+    },
+    "spawn_light": {
+      "animations": {},
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/spawn_light",
+      "asset_name": "spawn_light",
+      "asset_type": "Object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 20,
+          "flicker_smoothness": 20,
+          "flicker_speed": 20,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 255,
+          "offset_x": 0,
+          "offset_y": 0,
+          "radius": 64,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        }
+      ],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "spawn_groups": [],
+      "start": "SRC/assets/spawn_light",
+      "tags": [],
+      "tillable": false,
+      "update_radius": 0
+    },
     "trail": {
       "animations": {
         "default": {
@@ -621,23 +820,6 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
-      "scaling_profile": {
-        "generated_at": "2025-11-13T05:57:59Z",
-        "max_scale": 0.9090908765792847,
-        "min_scale": 0.9090908765792847,
-        "recommended_percentages": [
-          100,
-          91,
-          91
-        ],
-        "recommended_steps": [
-          1.0,
-          0.9090908765792847,
-          0.9090908765792847
-        ],
-        "revision": 10642336998275347472,
-        "screen_aspect": 1.7777777777777777
-      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -668,19 +850,19 @@
         }
       },
       "camera_settings": {
-        "background_brightness": 50.0,
+        "background_brightness": 0.0,
         "blur_background_screen_y": 0.0,
-        "blur_falloff_method": 3,
-        "blur_foreground_screen_y": 1103.0,
-        "brightness_falloff_method": 1,
+        "blur_falloff_method": 2,
+        "blur_foreground_screen_y": 975.0,
+        "brightness_falloff_method": 4,
         "distance_scale_strength": 0.3499999940395355,
-        "foreground_brightness": -40.0,
+        "foreground_brightness": 0.0,
         "foreshorten_strength": 0.23999999463558197,
         "height_at_zoom1": 357.0,
-        "max_background_blur": 50.0,
-        "max_foreground_blur": 26.0,
+        "max_background_blur": 12.0,
+        "max_foreground_blur": 18.0,
         "max_zoom_multiplier": 2.999999761581421,
-        "min_visible_screen_ratio": 0.007000000216066837,
+        "min_visible_screen_ratio": 0.0010000000474974513,
         "min_zoom_multiplier": 0.35999998450279236,
         "motion_smoothing_max_step": 8000.0,
         "motion_smoothing_method": 1,
@@ -693,14 +875,14 @@
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 0.0,
         "parallax_strength": 34.75,
-        "primary_boost_background": 0.0,
+        "primary_boost_background": 33.0,
         "primary_boost_falloff_method": 1,
-        "primary_boost_foreground": 45.0,
-        "realism_enabled": false,
+        "primary_boost_foreground": -19.0,
+        "realism_enabled": true,
         "render_quality_percent": 10,
-        "saturation_background": -33.0,
-        "saturation_falloff_method": 0,
-        "saturation_foreground": 8.0,
+        "saturation_background": 0.0,
+        "saturation_falloff_method": 3,
+        "saturation_foreground": 0.0,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
         "tripod_distance_y": -1720.0
@@ -775,11 +957,11 @@
         ]
       },
       "map_grid_settings": {
-        "chunk_size": 16,
+        "chunk_size": 1024,
         "jitter": 0,
-        "r_chunk": 4,
-        "resolution": 4,
-        "spacing": 16
+        "r_chunk": 10,
+        "resolution": 10,
+        "spacing": 1024
       },
       "map_layers": [
         {
@@ -1007,9 +1189,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
             36,
-            119,
+            205,
+            242,
             255
           ],
           "edge_smoothness": 43,
@@ -1030,9 +1212,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            242,
-            241,
-            36,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 68,
@@ -1090,22 +1272,22 @@
                 }
               ],
               "display_name": "Vibble",
-              "dx": -259,
-              "dy": -325,
+              "dx": -1353,
+              "dy": 459,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
               "locked": false,
               "max_number": 1,
               "min_number": 1,
-              "origional_height": 99984,
-              "origional_width": 100000,
+              "origional_height": 4184,
+              "origional_width": 4248,
               "position": "Exact",
               "priority": 1,
-              "resolution": 4,
+              "resolution": 10,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-6729f3448d43"
+              "spawn_id": "spn-c5bf286223ce"
             },
             {
               "candidates": [
@@ -1115,26 +1297,55 @@
                 },
                 {
                   "chance": 100,
-                  "name": "trail"
+                  "name": "lantern"
                 }
               ],
-              "display_name": "trail",
-              "dx": 247,
-              "dy": 136,
+              "display_name": "lantern",
+              "dx": -114,
+              "dy": -232,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
               "locked": false,
               "max_number": 1,
               "min_number": 1,
-              "origional_height": 16000,
-              "origional_width": 16000,
+              "origional_height": 4200,
+              "origional_width": 4224,
               "position": "Exact",
               "priority": 2,
-              "resolution": 4,
+              "resolution": 10,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-0419044dd14f"
+              "spawn_id": "spn-b03088c2c2fe"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "lantern"
+                }
+              ],
+              "display_name": "lantern",
+              "dx": -771,
+              "dy": 1013,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 4192,
+              "origional_width": 4224,
+              "position": "Exact",
+              "priority": 3,
+              "resolution": 10,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-6aa953215735"
             }
           ]
         }

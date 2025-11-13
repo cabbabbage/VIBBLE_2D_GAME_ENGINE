@@ -316,22 +316,19 @@ private:
     bool rebuild_active_assets_if_needed();
     void rebuild_non_player_update_buffer_if_needed();
     void update_active_assets(SDL_Point center);
-    bool is_asset_visible_on_screen(const Asset* asset) const;
-    // Optional minimum on-screen size in pixels (per-dimension). If > 0, assets whose
-    // projected width AND height are both smaller than the threshold are treated as invisible.
-    bool is_asset_visible_on_screen(const Asset* asset, const SDL_Rect& screen_rect, int min_size_px = 0) const;
+    bool asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rect) const;
     void update_max_asset_dimensions();
     void invalidate_max_asset_dimensions();
     SDL_Rect screen_world_rect() const;
-    SDL_Rect expanded_world_rect(const SDL_Rect& screen_rect) const;
     int audio_effect_max_distance_world() const;
     void mark_non_player_update_buffer_dirty() {
         non_player_update_buffer_dirty_.store(true, std::memory_order_release);
     }
 
 private:
-    // Debug-only: track culled assets we’ve already logged to avoid spamming
-    mutable std::unordered_set<const Asset*> culled_debug_logged_;
+    SDL_Point last_known_player_pos_{0, 0};
+    bool      last_player_pos_valid_ = false;
+
     // Debug overlay: rectangles culled this rebuild
     std::vector<SDL_Rect> culled_debug_rects_;
 };

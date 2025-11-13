@@ -13,6 +13,7 @@
 #include "render/camera.hpp"
 #include "render/asset_light.hpp"
 #include "render/grid_tile_renderer.hpp"
+#include "render/depth_cue_effects.hpp"
 
 class Assets;
 class Asset;
@@ -115,21 +116,7 @@ private:
     // after initialization to avoid stalls when transitioning from the loading screen.
     // Configurable via constructor constants in .cpp; defaults to a small number of frames.
     std::uint32_t depthcue_warmup_frames_ = 8; // frames to skip depth-cue effects after init
-
-    // Tinted texture cache: keyed by (source SDL_Texture*, sat%, primary%).
-    // Prevents repeated CPU-side pixel reads for the same adjustments.
-    struct TintedTextureEntry {
-        SDL_Texture* texture = nullptr;
-        std::uint64_t last_used_frame = 0; // for simple LRU pruning
-    };
-    // Key is source texture pointer; inner key packs (sat, primary) into uint32.
-    std::unordered_map<SDL_Texture*, std::unordered_map<std::uint32_t, TintedTextureEntry>> tinted_texture_cache_;
-    // Prune tinted cache entries not used for a while to prevent unbounded growth.
-    void prune_tinted_texture_cache(std::uint64_t current_frame);
-    // Look up or build a tinted texture for given source and parameters.
-    SDL_Texture* get_or_build_tinted_texture(SDL_Texture* source,
-                                             float saturation_percent,
-                                             float primary_percent);
+    DepthCueEffects depth_cue_effects_;
 
     // Full-scene post-processing targets
     SDL_Texture* scene_composite_tex_ = nullptr;   // Draws full scene here first

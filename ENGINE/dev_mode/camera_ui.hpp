@@ -95,6 +95,15 @@ private:
     // DepthCue section enable/disable
     std::unique_ptr<DMCheckbox> depthcue_checkbox_;
     std::unique_ptr<CheckboxWidget> depthcue_widget_;
+    // Per-effect enable/disable checkboxes
+    std::unique_ptr<DMCheckbox> depthcue_blur_checkbox_;
+    std::unique_ptr<CheckboxWidget> depthcue_blur_widget_;
+    std::unique_ptr<DMCheckbox> depthcue_brightness_checkbox_;
+    std::unique_ptr<CheckboxWidget> depthcue_brightness_widget_;
+    std::unique_ptr<DMCheckbox> depthcue_saturation_checkbox_;
+    std::unique_ptr<CheckboxWidget> depthcue_saturation_widget_;
+    std::unique_ptr<DMCheckbox> depthcue_primary_checkbox_;
+    std::unique_ptr<CheckboxWidget> depthcue_primary_widget_;
     // DepthCue grouping labels and spacers
     std::unique_ptr<Widget> depthcue_header_planes_;
     std::unique_ptr<Widget> depthcue_header_blur_;
@@ -126,6 +135,10 @@ private:
     bool smoothing_section_expanded_ = false;
 
     bool last_depthcue_enabled_ = false;
+    bool last_depthcue_blur_enabled_ = true;
+    bool last_depthcue_brightness_enabled_ = true;
+    bool last_depthcue_saturation_enabled_ = true;
+    bool last_depthcue_primary_enabled_ = true;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }

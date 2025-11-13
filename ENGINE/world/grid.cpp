@@ -165,11 +165,36 @@ void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
 
     chunks_.clear_active();
     const int step = 1 << r_chunk_;
+    if (step <= 0) {
+        last_expanded_camera_ = expanded;
+        last_margin_px_ = margin_px;
+        last_chunk_resolution_ = r_chunk_;
+        has_cached_camera_rect_ = true;
+        return;
+    }
 
-    const int i_min = floor_div(expanded.x - origin_.x, step);
-    const int j_min = floor_div(expanded.y - origin_.y, step);
-    const int i_max = floor_div((expanded.x + expanded.w) - origin_.x, step);
-    const int j_max = floor_div((expanded.y + expanded.h) - origin_.y, step);
+    const int inclusive_right  = (expanded.w > 0) ? (expanded.x + expanded.w - 1) : expanded.x;
+    const int inclusive_bottom = (expanded.h > 0) ? (expanded.y + expanded.h - 1) : expanded.y;
+
+    int i_min = floor_div(expanded.x - origin_.x, step);
+    int j_min = floor_div(expanded.y - origin_.y, step);
+    int i_max = floor_div(inclusive_right - origin_.x, step);
+    int j_max = floor_div(inclusive_bottom - origin_.y, step);
+
+    constexpr int kBorderRadiusChunks = 2;
+    i_min -= kBorderRadiusChunks;
+    j_min -= kBorderRadiusChunks;
+    i_max += kBorderRadiusChunks;
+    j_max += kBorderRadiusChunks;
+
+    if (i_min > i_max || j_min > j_max) {
+        last_expanded_camera_ = expanded;
+        last_margin_px_ = margin_px;
+        last_chunk_resolution_ = r_chunk_;
+        has_cached_camera_rect_ = true;
+        return;
+    }
+
     for (int j = j_min; j <= j_max; ++j) {
         for (int i = i_min; i <= i_max; ++i) {
             Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_);
