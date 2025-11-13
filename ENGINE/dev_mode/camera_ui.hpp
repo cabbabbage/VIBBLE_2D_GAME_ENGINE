@@ -58,6 +58,8 @@ private:
     std::unique_ptr<Widget> controls_spacer_;
     std::unique_ptr<SectionToggleWidget> visibility_section_header_;
     std::unique_ptr<SectionToggleWidget> depth_section_header_;
+    std::unique_ptr<SectionToggleWidget> colors_section_header_;
+    std::unique_ptr<SectionToggleWidget> blur_section_header_;
     std::unique_ptr<SectionToggleWidget> zoom_section_header_;
     std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
@@ -68,6 +70,23 @@ private:
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;
+    // Perspective Colors sliders
+    std::unique_ptr<FloatSliderWidget> distance_saturation_factor_min_slider_;
+    std::unique_ptr<FloatSliderWidget> distance_saturation_factor_max_slider_;
+    std::unique_ptr<FloatSliderWidget> primary_color_boost_min_slider_;
+    std::unique_ptr<FloatSliderWidget> primary_color_boost_max_slider_;
+    std::unique_ptr<FloatSliderWidget> ground_brightness_factor_slider_;
+    std::unique_ptr<FloatSliderWidget> background_brightness_slider_;
+    // Perspective Blur sliders
+    std::unique_ptr<FloatSliderWidget> max_foreground_blur_slider_;
+    std::unique_ptr<FloatSliderWidget> max_background_blur_slider_;
+    // Interpolation dropdowns (UI-only for now)
+    std::unique_ptr<DMDropdown> blur_falloff_dropdown_;
+    std::unique_ptr<DropdownWidget> blur_falloff_widget_;
+    std::unique_ptr<DMDropdown> color_primary_interp_dropdown_;
+    std::unique_ptr<DropdownWidget> color_primary_interp_widget_;
+    std::unique_ptr<DMDropdown> color_brightness_interp_dropdown_;
+    std::unique_ptr<DropdownWidget> color_brightness_interp_widget_;
     std::unique_ptr<DiscreteSliderWidget> render_quality_slider_;
     std::unique_ptr<DMCheckbox> smoothing_checkbox_;
     std::unique_ptr<CheckboxWidget> smoothing_widget_;
@@ -84,6 +103,8 @@ private:
 
     bool visibility_section_expanded_ = true;
     bool depth_section_expanded_ = true;
+    bool colors_section_expanded_ = false;
+    bool blur_section_expanded_ = false;
     bool zoom_section_expanded_ = false;
     bool smoothing_section_expanded_ = false;
 

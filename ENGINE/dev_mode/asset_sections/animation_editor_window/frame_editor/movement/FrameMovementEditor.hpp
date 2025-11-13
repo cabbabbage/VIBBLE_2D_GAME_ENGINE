@@ -119,6 +119,13 @@ class FrameMovementEditor {
     CloseCallback close_callback_;
     std::vector<MovementFrame> frames_;
     std::vector<SDL_Rect> frame_item_rects_;
+    // Horizontal scrolling state for frame navigator
+    int hscroll_offset_px_ = 0;               // current horizontal scroll offset in pixels
+    int hscroll_content_px_ = 0;              // total content width in pixels
+    SDL_Rect hscroll_track_rect_{0,0,0,0};    // scrollbar track rect (visible when content overflows)
+    SDL_Rect hscroll_knob_rect_{0,0,0,0};     // scrollbar knob rect
+    bool hscroll_dragging_ = false;           // dragging the knob
+    int  hscroll_drag_dx_ = 0;                // drag offset within knob
     int selected_index_ = 0;
     int active_variant_index_ = 0;
     bool dirty_ = false;

@@ -739,6 +739,9 @@ void AnimationEditorWindow::select_animation(const std::optional<std::string>& a
         if (list_panel_) {
             list_panel_->set_selected_animation_id(selected_animation_id_);
         }
+        if (inspector_panel_ && selected_animation_id_) {
+            inspector_panel_->set_animation_id(*selected_animation_id_);
+        }
         return;
     }
 

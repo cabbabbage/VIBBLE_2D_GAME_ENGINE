@@ -21,7 +21,7 @@ class MainMenu {
         nlohmann::json data;
 };
 
-    MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h, const nlohmann::json& maps, std::optional<std::filesystem::path> sky_background = std::nullopt);
+    MainMenu(SDL_Renderer* renderer, int screen_w, int screen_h, const nlohmann::json& maps);
     ~MainMenu();
     void buildButtons();
     std::optional<Selection> handle_event(const SDL_Event& e);
@@ -56,7 +56,7 @@ class MainMenu {
 };
 
     SDL_Texture* background_tex_ = nullptr;
-    std::filesystem::path sky_background_path_;
+    std::filesystem::path background_image_path_;
     std::vector<MenuEntry> buttons_;
     const nlohmann::json* maps_json_ = nullptr;
     std::unordered_map<std::string, const nlohmann::json*> map_lookup_;

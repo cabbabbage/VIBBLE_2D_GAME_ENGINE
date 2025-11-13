@@ -20,13 +20,11 @@ namespace fs = std::filesystem;
 MainMenu::MainMenu(SDL_Renderer* renderer,
                    int screen_w,
                    int screen_h,
-                   const nlohmann::json& maps,
-                   std::optional<fs::path> sky_background)
+                   const nlohmann::json& maps)
 : renderer_(renderer),
   screen_w_(screen_w),
   screen_h_(screen_h),
-  maps_json_(&maps),
-  sky_background_path_(sky_background ? fs::absolute(*sky_background) : fs::path{})
+  maps_json_(&maps)
 {
         if (TTF_WasInit() == 0 && TTF_Init() < 0) {
                 std::cerr << "TTF_Init failed: " << TTF_GetError() << "\n";
@@ -38,25 +36,32 @@ MainMenu::MainMenu(SDL_Renderer* renderer,
                 std::cerr << "[MainMenu] Failed to determine project root: " << ex.what() << "\n";
                 manifest_root_ = fs::current_path();
         }
-        if (!sky_background_path_.empty()) {
+        auto try_load_background = [&](const fs::path& candidate) -> bool {
+                if (candidate.empty()) return false;
                 try {
-                        if (fs::exists(sky_background_path_)) {
-                                background_tex_ = loadTexture(sky_background_path_);
-                                if (!background_tex_) {
-                                        std::cerr << "[MainMenu] Failed to load sky background texture: "
-                                                  << sky_background_path_ << "\n";
-                                }
+                        if (!fs::exists(candidate)) {
+                                return false;
                         }
+                        SDL_Texture* tex = loadTexture(candidate);
+                        if (tex) {
+                                background_tex_ = tex;
+                                background_image_path_ = fs::absolute(candidate);
+                                return true;
+                        }
+                        std::cerr << "[MainMenu] Failed to load menu background texture: "
+                                  << candidate << "\n";
                 } catch (const std::exception& ex) {
-                        std::cerr << "[MainMenu] Error accessing sky background at '"
-                                  << sky_background_path_ << "': " << ex.what() << "\n";
+                        std::cerr << "[MainMenu] Error accessing menu background at '"
+                                  << candidate << "': " << ex.what() << "\n";
                 }
-        }
-        if (!background_tex_) {
+                return false;
+        };
+
+        if (!try_load_background(pick_loading_image())) {
                 const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
                 if (fs::exists(bg_folder) && fs::is_directory(bg_folder)) {
-                        const fs::path first = firstImageIn(bg_folder);
-                        if (!first.empty()) background_tex_ = loadTexture(first);
+                        const fs::path fallback = firstImageIn(bg_folder);
+                        try_load_background(fallback);
                 }
         }
         buildButtons();
@@ -149,17 +154,15 @@ void MainMenu::showLoadingScreen() {
 	SDL_SetRenderTarget(renderer_, nullptr);
         SDL_Texture* bg = background_tex_;
         bool temp_bg = false;
-        if (!bg) {
-                if (!sky_background_path_.empty()) {
-                        try {
-                                if (fs::exists(sky_background_path_)) {
-                                        bg = loadTexture(sky_background_path_);
-                                        temp_bg = (bg != nullptr);
-                                }
-                        } catch (const std::exception& ex) {
-                                std::cerr << "[MainMenu] Error loading cached sky background for loading screen: "
-                                          << ex.what() << "\n";
+        if (!bg && !background_image_path_.empty()) {
+                try {
+                        if (fs::exists(background_image_path_)) {
+                                bg = loadTexture(background_image_path_);
+                                temp_bg = (bg != nullptr);
                         }
+                } catch (const std::exception& ex) {
+                        std::cerr << "[MainMenu] Error loading menu background for loading screen: "
+                                  << ex.what() << "\n";
                 }
         }
         if (!bg) {

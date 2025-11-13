@@ -33,6 +33,9 @@ constexpr int kFrameListBaseSize = 56;
 constexpr int kFrameListMinSize = 36;
 constexpr int kFrameThumbnailPadding = 6;
 constexpr int kFrameListTitleHeight = 22;
+// Frame navigator horizontal scrollbar
+constexpr int kFrameListScrollbarHeight = 14;
+constexpr int kScrollbarMinKnobWidth   = 32;
 
 int clamp_index(int index, int max_value) {
     if (max_value <= 0) return 0;
@@ -809,6 +812,7 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
     const DMButtonStyle& list_style = DMStyles::ListButton();
     const DMButtonStyle& accent_style = DMStyles::AccentButton();
     SDL_Color text_color = DMStyles::Label().color;
+    SDL_Color index_text_color = DMStyles::AccentButton().text;
 
     for (size_t i = 0; i < frame_item_rects_.size(); ++i) {
         const SDL_Rect& item = frame_item_rects_[i];
@@ -824,7 +828,6 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
         dm_draw::DrawBeveledRect(renderer, item, radius, bevel, fill_color, fill_color, fill_color, false, 0.0f, 0.0f);
         dm_draw::DrawRoundedOutline(renderer, item, radius, 1, list_style.border);
 
-        bool rendered_texture = false;
         if (preview_provider_ && !animation_id_.empty()) {
             SDL_Texture* texture = preview_provider_->get_frame_texture(renderer, animation_id_, static_cast<int>(i));
             if (texture) {
@@ -835,36 +838,43 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
                     const int max_h = std::max(1, item.h - kFrameThumbnailPadding * 2);
                     float scale = std::min(static_cast<float>(max_w) / static_cast<float>(tex_w),
                                             static_cast<float>(max_h) / static_cast<float>(tex_h));
-                    if (scale <= 0.0f) {
-                        scale = 1.0f;
-                    }
-                    if (scale > 1.0f) {
-                        scale = 1.0f;
-                    }
+                    if (scale <= 0.0f) scale = 1.0f;
+                    if (scale > 1.0f)  scale = 1.0f;
                     int draw_w = std::max(1, static_cast<int>(std::round(tex_w * scale)));
                     int draw_h = std::max(1, static_cast<int>(std::round(tex_h * scale)));
                     SDL_Rect dst{item.x + (item.w - draw_w) / 2, item.y + (item.h - draw_h) / 2, draw_w, draw_h};
                     SDL_RenderCopy(renderer, texture, nullptr, &dst);
-                    rendered_texture = true;
                 }
             }
         }
 
-        if (!rendered_texture) {
-            render_tab_text(renderer, std::to_string(i + 1), item, text_color);
-        } else {
-            const int badge_padding = 4;
-            const int badge_height = 18;
-            const int badge_width = 28;
-            SDL_Rect badge{item.x + item.w - badge_width - badge_padding,
-                           item.y + item.h - badge_height - badge_padding, badge_width, badge_height};
-            SDL_Color badge_bg = DMStyles::PanelBG();
-            badge_bg.a = 215;
-            const int badge_radius = std::min(DMStyles::CornerRadius(), std::min(badge.w, badge.h) / 2);
-            dm_draw::DrawBeveledRect(renderer, badge, badge_radius, 1, badge_bg, badge_bg, badge_bg, false, 0.0f, 0.0f);
-            dm_draw::DrawRoundedOutline(renderer, badge, badge_radius, 1, list_style.border);
-            render_tab_text(renderer, std::to_string(i + 1), badge, text_color);
-        }
+        // Always draw a small corner badge with the frame index
+        const int badge_padding = 4;
+        const int badge_height = 18;
+        const int badge_width = 28;
+        SDL_Rect badge{item.x + item.w - badge_width - badge_padding,
+                       item.y + item.h - badge_height - badge_padding, badge_width, badge_height};
+        SDL_Color badge_bg = DMStyles::PanelBG();
+        badge_bg.a = 215;
+        const int badge_radius = std::min(DMStyles::CornerRadius(), std::min(badge.w, badge.h) / 2);
+        dm_draw::DrawBeveledRect(renderer, badge, badge_radius, 1, badge_bg, badge_bg, badge_bg, false, 0.0f, 0.0f);
+        dm_draw::DrawRoundedOutline(renderer, badge, badge_radius, 1, list_style.border);
+        render_tab_text(renderer, std::to_string(i + 1), badge, index_text_color);
+    }
+
+    // Draw horizontal scrollbar if needed
+    if (hscroll_track_rect_.w > 0 && hscroll_track_rect_.h > 0) {
+        SDL_Color track_bg = DMStyles::PanelBG();
+        track_bg.a = 220;
+        const int track_radius = std::min(DMStyles::CornerRadius(), std::min(hscroll_track_rect_.w, hscroll_track_rect_.h) / 2);
+        dm_draw::DrawBeveledRect(renderer, hscroll_track_rect_, track_radius, 1, track_bg, track_bg, track_bg, false, 0.0f, 0.0f);
+        dm_draw::DrawRoundedOutline(renderer, hscroll_track_rect_, track_radius, 1, list_style.border);
+
+        SDL_Color knob_bg = accent_style.bg;
+        SDL_Color knob_border = list_style.border;
+        const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(hscroll_knob_rect_.w, hscroll_knob_rect_.h) / 2);
+        dm_draw::DrawBeveledRect(renderer, hscroll_knob_rect_, knob_radius, 1, knob_bg, knob_bg, knob_bg, false, 0.0f, 0.0f);
+        dm_draw::DrawRoundedOutline(renderer, hscroll_knob_rect_, knob_radius, 1, knob_border);
     }
 }
 
@@ -943,6 +953,28 @@ bool FrameMovementEditor::handle_variant_header_event(const SDL_Event& e) {
             }
             return handled;
         }
+        case SDL_MOUSEWHEEL: {
+            int mx = 0, my = 0;
+            SDL_GetMouseState(&mx, &my);
+            SDL_Point p{mx, my};
+            if (SDL_PointInRect(&p, &frame_list_rect_) && hscroll_content_px_ > 0) {
+                const int viewport_width = std::max(0, frame_list_rect_.w - kPanelPadding * 2);
+                const int step_px = std::max(8, viewport_width / 6);
+                int delta = 0;
+                if (e.wheel.x != 0) {
+                    delta = -e.wheel.x * step_px;
+                } else if (e.wheel.y != 0) {
+                    delta = -e.wheel.y * step_px;
+                }
+                if (delta != 0) {
+                    const int max_offset = std::max(0, hscroll_content_px_ - viewport_width);
+                    hscroll_offset_px_ = std::clamp(hscroll_offset_px_ + delta, 0, max_offset);
+                    layout_frame_list();
+                    return true;
+                }
+            }
+            break;
+        }
         default:
             break;
     }
@@ -966,6 +998,23 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
 
     switch (e.type) {
         case SDL_MOUSEMOTION: {
+            // Handle scrollbar dragging without affecting selection
+            if (hscroll_dragging_ && hscroll_track_rect_.w > 0) {
+                const int track_x = hscroll_track_rect_.x;
+                const int track_w = hscroll_track_rect_.w;
+                const int knob_w  = hscroll_knob_rect_.w;
+                const int max_offset = std::max(0, hscroll_content_px_ - track_w);
+                int desired_knob_x = e.motion.x - hscroll_drag_dx_;
+                if (desired_knob_x < track_x) desired_knob_x = track_x;
+                if (desired_knob_x > track_x + track_w - knob_w) desired_knob_x = track_x + track_w - knob_w;
+                if (track_w - knob_w > 0) {
+                    hscroll_offset_px_ = ((desired_knob_x - track_x) * max_offset) / (track_w - knob_w);
+                } else {
+                    hscroll_offset_px_ = 0;
+                }
+                layout_frame_list();
+                return true;
+            }
             SDL_Point p{e.motion.x, e.motion.y};
             hovered_frame_index_ = index_at_point(p);
             return SDL_PointInRect(&p, &frame_list_rect_) != 0;
@@ -975,6 +1024,28 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
                 break;
             }
             SDL_Point p{e.button.x, e.button.y};
+            // Scrollbar interactions first
+            if (hscroll_track_rect_.w > 0 && SDL_PointInRect(&p, &hscroll_knob_rect_)) {
+                hscroll_dragging_ = true;
+                hscroll_drag_dx_ = p.x - hscroll_knob_rect_.x;
+                return true;
+            }
+            if (hscroll_track_rect_.w > 0 && SDL_PointInRect(&p, &hscroll_track_rect_) && !SDL_PointInRect(&p, &hscroll_knob_rect_)) {
+                const int track_x = hscroll_track_rect_.x;
+                const int track_w = hscroll_track_rect_.w;
+                const int knob_w  = hscroll_knob_rect_.w;
+                const int max_offset = std::max(0, hscroll_content_px_ - track_w);
+                int desired_knob_x = p.x - knob_w / 2;
+                if (desired_knob_x < track_x) desired_knob_x = track_x;
+                if (desired_knob_x > track_x + track_w - knob_w) desired_knob_x = track_x + track_w - knob_w;
+                if (track_w - knob_w > 0) {
+                    hscroll_offset_px_ = ((desired_knob_x - track_x) * max_offset) / (track_w - knob_w);
+                } else {
+                    hscroll_offset_px_ = 0;
+                }
+                layout_frame_list();
+                return true;
+            }
             int index = index_at_point(p);
             if (index >= 0) {
                 selected_index_ = clamp_index(index, static_cast<int>(frames_.size()));
@@ -988,6 +1059,10 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
                 break;
             }
             SDL_Point p{e.button.x, e.button.y};
+            if (hscroll_dragging_) {
+                hscroll_dragging_ = false;
+                return true;
+            }
             if (index_at_point(p) >= 0) {
                 return true;
             }
@@ -1014,42 +1089,69 @@ void FrameMovementEditor::layout_frame_list() {
     hovered_frame_index_ = -1;
 
     if (frame_list_rect_.w <= 0 || frame_list_rect_.h <= 0 || frames_.empty()) {
+        hscroll_content_px_ = 0;
+        hscroll_track_rect_ = SDL_Rect{0,0,0,0};
+        hscroll_knob_rect_  = SDL_Rect{0,0,0,0};
         return;
     }
 
     const int padding = kPanelPadding;
     const int spacing = kPanelPadding;
-    const int available_width = std::max(0, frame_list_rect_.w - padding * 2);
-    const int available_height = std::max(0, frame_list_rect_.h - padding * 2 - kFrameListTitleHeight);
-    if (available_width <= 0 || available_height <= 0) {
+    const int viewport_width = std::max(0, frame_list_rect_.w - padding * 2);
+    int available_height = std::max(0, frame_list_rect_.h - padding * 2 - kFrameListTitleHeight);
+    if (viewport_width <= 0 || available_height <= 0) {
         return;
     }
 
-    int columns = std::max(1, std::min(static_cast<int>(frames_.size()), available_width / (kFrameListMinSize + spacing)));
-    if (columns == 0) columns = 1;
-    int rows = std::max(1, static_cast<int>((frames_.size() + columns - 1) / columns));
+    // Single-row layout with horizontal scrolling when needed
+    int item_height = std::max(kFrameListMinSize, std::min(kFrameListBaseSize, available_height));
+    int item_width  = std::max(kFrameListMinSize, std::min(kFrameListBaseSize, item_height));
 
-    int item_width = std::max(kFrameListMinSize,
-                              std::min(kFrameListBaseSize, (available_width - spacing * (columns - 1)) / columns));
-    int item_height = std::max(kFrameListMinSize,
-                               std::min(kFrameListBaseSize, (available_height - spacing * (rows - 1)) / rows));
+    const int count = static_cast<int>(frames_.size());
+    const int content_width = (count > 0) ? (count * item_width + (count - 1) * spacing) : 0;
+    hscroll_content_px_ = content_width;
 
-    int used_width = columns * item_width + (columns - 1) * spacing;
-    int used_height = rows * item_height + (rows - 1) * spacing;
+    // If content overflows horizontally, reserve space for a scrollbar
+    const bool need_scroll = content_width > viewport_width;
+    if (need_scroll) {
+        available_height = std::max(0, available_height - (kFrameListScrollbarHeight + spacing));
+        item_height = std::max(kFrameListMinSize, std::min(item_height, available_height));
+        item_width  = std::max(kFrameListMinSize, std::min(item_width,  item_height));
+    }
 
-    int start_x = frame_list_rect_.x + padding + std::max(0, (available_width - used_width) / 2);
-    // Leave space for the title above the grid
-    int start_y = frame_list_rect_.y + padding + kFrameListTitleHeight + std::max(0, (available_height - used_height) / 2);
+    // Clamp scroll offset
+    const int max_offset = std::max(0, content_width - viewport_width);
+    if (hscroll_offset_px_ < 0) hscroll_offset_px_ = 0;
+    if (hscroll_offset_px_ > max_offset) hscroll_offset_px_ = max_offset;
+
+    // Layout items left-aligned, applying scroll offset
+    const int start_x = frame_list_rect_.x + padding - hscroll_offset_px_;
+    const int start_y = frame_list_rect_.y + padding + kFrameListTitleHeight + std::max(0, (available_height - item_height) / 2);
 
     frame_item_rects_.reserve(frames_.size());
-    int index = 0;
-    for (int row = 0; row < rows && index < static_cast<int>(frames_.size()); ++row) {
-        for (int col = 0; col < columns && index < static_cast<int>(frames_.size()); ++col) {
-            SDL_Rect item{start_x + col * (item_width + spacing), start_y + row * (item_height + spacing), item_width,
-                          item_height};
-            frame_item_rects_.push_back(item);
-            ++index;
+    for (int i = 0; i < count; ++i) {
+        int x = start_x + i * (item_width + spacing);
+        SDL_Rect item{x, start_y, item_width, item_height};
+        frame_item_rects_.push_back(item);
+    }
+
+    // Build scrollbar rects when needed
+    if (need_scroll) {
+        hscroll_track_rect_ = SDL_Rect{ frame_list_rect_.x + padding,
+                                        frame_list_rect_.y + frame_list_rect_.h - padding - kFrameListScrollbarHeight,
+                                        viewport_width,
+                                        kFrameListScrollbarHeight };
+        int knob_w = std::max(kScrollbarMinKnobWidth, (viewport_width * viewport_width) / content_width);
+        if (knob_w > viewport_width) knob_w = viewport_width;
+        int knob_x = hscroll_track_rect_.x;
+        if (max_offset > 0) {
+            knob_x = hscroll_track_rect_.x + (hscroll_offset_px_ * (viewport_width - knob_w)) / max_offset;
         }
+        hscroll_knob_rect_ = SDL_Rect{ knob_x, hscroll_track_rect_.y, knob_w, hscroll_track_rect_.h };
+    } else {
+        hscroll_track_rect_ = SDL_Rect{0,0,0,0};
+        hscroll_knob_rect_  = SDL_Rect{0,0,0,0};
+        hscroll_offset_px_  = 0;
     }
 }
 

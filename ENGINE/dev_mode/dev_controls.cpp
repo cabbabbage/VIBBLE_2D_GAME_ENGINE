@@ -2584,9 +2584,6 @@ void DevControls::apply_camera_area_render_flag() {
     }
 
     cam_ptr->set_render_areas_enabled(false);
-
-    const bool area_mode = (mode_ == Mode::RoomEditor);
-    cam_ptr->set_realism_enabled(!area_mode);
 }
 
 void DevControls::set_mode(Mode new_mode) {

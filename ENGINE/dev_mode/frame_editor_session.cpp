@@ -36,7 +36,7 @@ using animation_editor::PreviewProvider;
 
 namespace {
 
-constexpr int kDirectoryPanelMinWidth = 640;
+constexpr int kDirectoryPanelMinWidth = 700;
 constexpr int kMovementTotalsFieldWidth = 140;
 constexpr int kChildrenFieldWidth = 132;
 constexpr int kShowAnimCheckboxMinWidth = 150;
@@ -142,38 +142,23 @@ void FrameEditorSession::begin(Assets* assets,
     if (frames_.empty()) {
         frames_.push_back(clamp_frame(MovementFrame{}));
     }
-    // For derived animations that do NOT inherit movement, expand/trim movement frames
-    // to match the effective preview frame count so thumbnails and navigation reflect
-    // the true number of frames.
+    // Ensure movement frames always match the visual preview frame count so navigation
+    // thumbnails reflect every frame regardless of animation source.
     {
-        int desired_frames = 0;
-        bool derived = false;
-        bool inherit_movement = true;
-        if (document_) {
-            auto payload_dump = document_->animation_payload(animation_id_);
-            if (payload_dump.has_value()) {
-                nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
-                if (payload.is_object() && payload.contains("source") && payload["source"].is_object()) {
-                    const auto& src = payload["source"];
-                    std::string kind = src.value("kind", std::string{"folder"});
-                    derived = (kind == std::string{"animation"});
-                    inherit_movement = payload.value("inherit_source_movement", true);
-                }
-            }
+        int desired_frames = static_cast<int>(frames_.size());
+        if (preview_) {
+            desired_frames = preview_->get_frame_count(animation_id_);
         }
-        if (derived && !inherit_movement) {
-            if (preview_) {
-                desired_frames = preview_->get_frame_count(animation_id_);
+        if (desired_frames <= 0) {
+            desired_frames = std::max(1, static_cast<int>(frames_.size()));
+        }
+        if (static_cast<int>(frames_.size()) < desired_frames) {
+            const int to_add = desired_frames - static_cast<int>(frames_.size());
+            for (int i = 0; i < to_add; ++i) {
+                frames_.push_back(clamp_frame(MovementFrame{}));
             }
-            if (desired_frames <= 0) desired_frames = 1;
-            if (static_cast<int>(frames_.size()) < desired_frames) {
-                const int to_add = desired_frames - static_cast<int>(frames_.size());
-                for (int i = 0; i < to_add; ++i) {
-                    frames_.push_back(clamp_frame(MovementFrame{}));
-                }
-            } else if (static_cast<int>(frames_.size()) > desired_frames) {
-                frames_.resize(desired_frames);
-            }
+        } else if (static_cast<int>(frames_.size()) > desired_frames) {
+            frames_.resize(desired_frames);
         }
     }
     // Always keep the first frame zeroed
@@ -833,20 +818,61 @@ void FrameEditorSession::rebuild_layout() const {
     DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
     directory_rect_ = SDL_Rect{ dir_pos_.x, dir_pos_.y, dir_metrics.width, dir_metrics.height };
     const int dir_padding = DMSpacing::small_gap();
-    int x = directory_rect_.x + dir_padding;
+    const int button_gap = DMSpacing::small_gap();
+    auto button_width = [](const std::unique_ptr<DMButton>& btn) -> int {
+        if (!btn) return 0;
+        int w = btn->rect().w;
+        if (w <= 0) {
+            w = btn->preferred_width();
+        }
+        return w;
+    };
+    int total_button_width = 0;
+    auto accumulate_width = [&](const std::unique_ptr<DMButton>& btn) {
+        int w = button_width(btn);
+        if (w <= 0) return;
+        if (total_button_width > 0) {
+            total_button_width += button_gap;
+        }
+        total_button_width += w;
+    };
+    accumulate_width(btn_back_);
+    accumulate_width(btn_movement_);
+    accumulate_width(btn_children_);
+    accumulate_width(btn_attack_geometry_);
+    accumulate_width(btn_hit_geometry_);
     int y = directory_rect_.y + dir_metrics.top_padding;
-    if (btn_back_) { btn_back_->set_rect(SDL_Rect{ x, y, btn_back_->rect().w, DMButton::height() }); x += btn_back_->rect().w + DMSpacing::small_gap(); }
-    if (btn_movement_) { btn_movement_->set_style(mode_==Mode::Movement? &DMStyles::AccentButton() : &DMStyles::HeaderButton()); btn_movement_->set_rect(SDL_Rect{ x, y, btn_movement_->rect().w, DMButton::height() }); x += btn_movement_->rect().w + DMSpacing::small_gap(); }
-    if (btn_children_) { btn_children_->set_style(mode_==Mode::Children? &DMStyles::AccentButton() : &DMStyles::HeaderButton()); btn_children_->set_rect(SDL_Rect{ x, y, btn_children_->rect().w, DMButton::height() }); x += btn_children_->rect().w + DMSpacing::small_gap(); }
-    if (btn_attack_geometry_) {
-        btn_attack_geometry_->set_style(mode_==Mode::AttackGeometry? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
-        btn_attack_geometry_->set_rect(SDL_Rect{ x, y, btn_attack_geometry_->rect().w, DMButton::height() });
-        x += btn_attack_geometry_->rect().w + DMSpacing::small_gap();
+    int x = directory_rect_.x + dir_padding;
+    if (total_button_width > 0) {
+        const int centered_offset = (directory_rect_.w - total_button_width) / 2;
+        x = directory_rect_.x + std::max(dir_padding, centered_offset);
     }
-    if (btn_hit_geometry_) {
-        btn_hit_geometry_->set_style(mode_==Mode::HitGeometry? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
-        btn_hit_geometry_->set_rect(SDL_Rect{ x, y, btn_hit_geometry_->rect().w, DMButton::height() });
-    }
+    bool first_button = true;
+    auto place_button = [&](std::unique_ptr<DMButton>& btn, auto&& prepare) {
+        if (!btn) return;
+        int w = button_width(btn);
+        if (w <= 0) return;
+        if (!first_button) {
+            x += button_gap;
+        }
+        first_button = false;
+        prepare(btn.get());
+        btn->set_rect(SDL_Rect{ x, y, w, DMButton::height() });
+        x += w;
+    };
+    place_button(btn_back_, [](DMButton*) {});
+    place_button(btn_movement_, [&](DMButton* btn) {
+        btn->set_style(mode_ == Mode::Movement ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+    });
+    place_button(btn_children_, [&](DMButton* btn) {
+        btn->set_style(mode_ == Mode::Children ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+    });
+    place_button(btn_attack_geometry_, [&](DMButton* btn) {
+        btn->set_style(mode_ == Mode::AttackGeometry ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+    });
+    place_button(btn_hit_geometry_, [&](DMButton* btn) {
+        btn->set_style(mode_ == Mode::HitGeometry ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+    });
 
     // Toolbox panel placement
     if (mode_ == Mode::Movement) {
@@ -1005,8 +1031,10 @@ FrameEditorSession::DirectoryPanelMetrics FrameEditorSession::build_directory_pa
     DirectoryPanelMetrics metrics;
     const int padding = DMSpacing::small_gap();
     const int drag_padding = DMSpacing::small_gap();
-    metrics.top_padding = padding + drag_padding;
-    const int bottom_padding = padding;
+    const int vertical_padding = DMSpacing::small_gap();
+    const int button_gap = DMSpacing::small_gap();
+    metrics.top_padding = padding + drag_padding + vertical_padding;
+    const int bottom_padding = padding + vertical_padding;
     metrics.height = metrics.top_padding + DMButton::height() + bottom_padding;
 
     int row_width = 0;
@@ -1015,7 +1043,7 @@ FrameEditorSession::DirectoryPanelMetrics FrameEditorSession::build_directory_pa
         int w = std::max(btn->rect().w, btn->preferred_width());
         if (w <= 0) return;
         if (row_width > 0) {
-            row_width += padding;
+            row_width += button_gap;
         }
         row_width += w;
     };

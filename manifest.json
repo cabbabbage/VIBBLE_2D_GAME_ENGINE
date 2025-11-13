@@ -63,7 +63,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T00:44:38Z",
+        "generated_at": "2025-11-13T01:29:40Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -116,7 +116,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T00:44:38Z",
+        "generated_at": "2025-11-13T01:29:40Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -169,7 +169,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T00:44:38Z",
+        "generated_at": "2025-11-13T01:29:40Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -216,10 +216,13 @@
           "speed_factor": 1.0
         }
       },
+      "anti_tags": [],
       "asset_directory": "SRC/assets/Tree_1",
       "asset_name": "Tree_1",
+      "asset_type": "boundary",
+      "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T00:44:38Z",
+        "generated_at": "2025-11-13T01:24:26Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.9090908765792847,
         "recommended_percentages": [
@@ -235,7 +238,23 @@
         "revision": 17746232452603320394,
         "screen_aspect": 1.7777777777777777
       },
-      "start": "default"
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "size_settings": {
+        "scale_percentage": 80.0
+      },
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tillable": false
     },
     "Tree_2": {
       "animations": {
@@ -267,10 +286,28 @@
           "speed_factor": 1.0
         }
       },
+      "anti_tags": [],
       "asset_directory": "SRC/assets/Tree_2",
       "asset_name": "Tree_2",
-      "asset_type": "object",
-      "start": "default"
+      "asset_type": "boundary",
+      "neighbor_search_distance": 500,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "size_settings": {
+        "scale_percentage": 81.0
+      },
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tillable": false
     },
     "Tree_3": {
       "animations": {
@@ -471,7 +508,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T00:44:38Z",
+        "generated_at": "2025-11-13T01:29:40Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -584,7 +621,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-13T00:44:38Z",
+        "generated_at": "2025-11-13T01:29:40Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.9090908765792847,
         "recommended_percentages": [
@@ -630,9 +667,16 @@
         }
       },
       "camera_settings": {
+        "background_brightness": 0.0,
+        "blur_falloff_method": 0,
+        "distance_saturation_factor_max": 0.0,
+        "distance_saturation_factor_min": 0.0,
         "distance_scale_strength": 0.14999999105930328,
         "foreshorten_strength": 0.38999998569488525,
+        "ground_brightness_factor": 0.0,
         "height_at_zoom1": 306.0,
+        "max_background_blur": 0.0,
+        "max_foreground_blur": 0.0,
         "max_zoom_multiplier": 2.999999761581421,
         "min_visible_screen_ratio": 0.006000000052154064,
         "min_zoom_multiplier": 0.35999998450279236,
@@ -647,8 +691,10 @@
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 0.0,
         "parallax_strength": 90.5,
-        "realism_enabled": false,
-        "render_distance": 380.0,
+        "primary_color_boost_max": 0.0,
+        "primary_color_boost_min": 0.0,
+        "realism_enabled": true,
+        "render_distance": 1240.0,
         "render_quality_percent": 10,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
@@ -697,11 +743,22 @@
               {
                 "chance": 0,
                 "name": "null"
+              },
+              {
+                "chance": 5,
+                "name": "Tree_1"
+              },
+              {
+                "chance": 7.25,
+                "name": "Tree_2"
               }
             ],
             "display_name": "batch_map_boundary",
             "enforce_spacing": false,
-            "grid_resolution": 7,
+            "explicit_flip": false,
+            "force_flipped": false,
+            "grid_resolution": 8,
+            "locked": false,
             "max_number": 100,
             "min_number": 100,
             "position": "Random",
@@ -732,6 +789,22 @@
               "max_instances": 1,
               "min_instances": 1,
               "name": "spawn",
+              "required_children": []
+            }
+          ]
+        },
+        {
+          "bounding_extent": 3000.0,
+          "level": 1,
+          "max_rooms": 1,
+          "min_rooms": 0,
+          "name": "layer_1",
+          "ring_radius": 12920.0,
+          "rooms": [
+            {
+              "max_instances": 1,
+              "min_instances": 0,
+              "name": "fountain",
               "required_children": []
             }
           ]
@@ -926,12 +999,35 @@
         }
       },
       "rooms_data": {
+        "fountain": {
+          "curvyness": 2,
+          "display_color": [
+            242,
+            138,
+            36,
+            255
+          ],
+          "edge_smoothness": 43,
+          "geometry": "Circle",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 6000,
+          "max_radius": 3000,
+          "max_width": 6000,
+          "min_height": 4000,
+          "min_radius": 2000,
+          "min_width": 4000,
+          "name": "fountain",
+          "radius": 3000,
+          "spawn_groups": []
+        },
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            37,
-            242,
             36,
+            137,
+            242,
             255
           ],
           "edge_smoothness": 101,

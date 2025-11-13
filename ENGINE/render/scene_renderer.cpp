@@ -471,6 +471,27 @@ void SceneRenderer::render(){
         }
 
         const auto& active = assets_->getActive();
+        // Precompute foreground/background distance ranges (world-space dy from camera focus)
+        float fg_max_dy = 0.0f; // positive dy
+        float bg_max_abs_dy = 0.0f; // magnitude of negative dy
+        if (camera_state) {
+            const camera::RealismSettings& camset = camera_state->realism_settings();
+            const SDL_Point cam_center_world = camera_state->get_screen_center();
+            const float base_y = static_cast<float>(cam_center_world.y) - camset.tripod_distance_y;
+            for (Asset* a : active) {
+                if (!a || !a->info) continue;
+                float wy = a->smoothed_translation_y();
+                if (assets_ && assets_->is_dev_mode()) {
+                    wy = static_cast<float>(a->pos.y);
+                }
+                const float dy = wy - base_y;
+                if (dy > 0.0f) {
+                    fg_max_dy = std::max(fg_max_dy, dy);
+                } else if (dy < 0.0f) {
+                    bg_max_abs_dy = std::max(bg_max_abs_dy, std::abs(dy));
+                }
+            }
+        }
         texture_commands_.clear();
         texture_commands_.reserve(active.size());
         remaining_commands_.clear();
@@ -501,6 +522,61 @@ void SceneRenderer::render(){
                 cmd.alpha = 1.0f;
             }
             cmd.alpha = std::clamp(cmd.alpha, 0.0f, 1.0f);
+
+            // Compute perspective blur radius per asset
+            cmd.depth_blur_px = 0.0f;
+            if (camera_state && camera_state->realism_enabled()) {
+                const camera::RealismSettings& camset = camera_state->realism_settings();
+                float max_fg = std::max(0.0f, camset.max_foreground_blur);
+                float max_bg = std::max(0.0f, camset.max_background_blur);
+                if ((max_fg > 0.0f || max_bg > 0.0f) && (fg_max_dy > 0.0f || bg_max_abs_dy > 0.0f)) {
+                    const SDL_Point cam_center_world = camera_state->get_screen_center();
+                    const float base_y = static_cast<float>(cam_center_world.y) - camset.tripod_distance_y;
+                    float wy = asset ? asset->smoothed_translation_y() : 0.0f;
+                    if (assets_ && assets_->is_dev_mode()) {
+                        wy = asset ? static_cast<float>(asset->pos.y) : 0.0f;
+                    }
+                    const float dy = wy - base_y;
+                    float t = 0.0f;
+                    float max_blur = 0.0f;
+                    if (dy > 0.0f && fg_max_dy > 0.0f) {
+                        t = std::clamp(dy / fg_max_dy, 0.0f, 1.0f);
+                        max_blur = max_fg;
+                    } else if (dy < 0.0f && bg_max_abs_dy > 0.0f) {
+                        t = std::clamp(std::abs(dy) / bg_max_abs_dy, 0.0f, 1.0f);
+                        max_blur = max_bg;
+                    }
+                    if (t > 0.0f && max_blur > 0.0f) {
+                        // Shape with selected falloff
+                        auto shape = [&](float x) -> float {
+                            x = std::clamp(x, 0.0f, 1.0f);
+                            switch (camset.blur_falloff_method) {
+                            case camera::BlurFalloffMethod::Quadratic:
+                                return x * x;
+                            case camera::BlurFalloffMethod::Cubic:
+                                return x * x * x;
+                            case camera::BlurFalloffMethod::Logarithmic: {
+                                const float k = 4.0f; // gentle log curve
+                                float num = std::log1p(k * x);
+                                float den = std::log1p(k);
+                                return den > 0.0f ? (num / den) : x;
+                            }
+                            case camera::BlurFalloffMethod::Exponential: {
+                                const float k = 3.0f; // steeper rise
+                                float num = std::exp(k * x) - 1.0f;
+                                float den = std::exp(k) - 1.0f;
+                                return den > 0.0f ? (num / den) : x;
+                            }
+                            case camera::BlurFalloffMethod::Linear:
+                            default:
+                                return x;
+                            }
+                        };
+                        const float shaped = shape(t);
+                        cmd.depth_blur_px = std::clamp(shaped * max_blur, 0.0f, 50.0f);
+                    }
+                }
+            }
 
             auto& target_commands = (asset->info->type == asset_types::texture) ? texture_commands_ : remaining_commands_;
             target_commands.push_back(std::move(cmd));
@@ -766,10 +842,52 @@ void SceneRenderer::render(){
             }
 
             // --------------------
-            // 2) BASE SPRITE PASS (grid-sliced trapezoids when large relative to grid)
+            // 2) PERSPECTIVE BLUR (if any)
+            // --------------------
+            bool drew_blur = false;
+            const float blur_px = std::clamp(cmd.depth_blur_px, 0.0f, 50.0f);
+            if (tex && blur_px > 0.0f) {
+                // Draw multiple offset copies to approximate a blur
+                // Sample count scales modestly with radius
+                int samples = 8 + static_cast<int>(std::lround(blur_px * 0.6f));
+                samples = std::clamp(samples, 8, 28);
+                const float step = 6.2831853f / static_cast<float>(samples);
+                const Uint8 base_alpha_mod = static_cast<Uint8>(
+                    std::clamp(std::lround(cmd.alpha * 255.0f), 0L, 255L));
+                // Distribute alpha over samples (slightly higher to compensate overlap)
+                const float per_alpha = std::clamp(1.2f / static_cast<float>(samples), 0.0f, 1.0f);
+                const Uint8 per_alpha_mod = static_cast<Uint8>(
+                    std::clamp(std::lround(per_alpha * static_cast<float>(base_alpha_mod)), 0L, 255L));
+
+                SDL_SetTextureColorMod(tex, 255, 255, 255);
+                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+                SDL_SetTextureAlphaMod(tex, per_alpha_mod);
+                for (int i = 0; i < samples; ++i) {
+                    const float a = step * static_cast<float>(i);
+                    SDL_FRect orect = cmd.dst;
+                    orect.x += std::cos(a) * blur_px;
+                    orect.y += std::sin(a) * blur_px;
+                    SDL_RenderCopyExF(
+                        renderer_,
+                        tex,
+                        nullptr,
+                        &orect,
+                        cmd.rotation_degrees,
+                        cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
+                        cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
+                    );
+                }
+                // Restore alpha for next pass
+                SDL_SetTextureAlphaMod(tex, 255);
+                drew_blur = true;
+            }
+
+            // --------------------
+            // 3) BASE SPRITE PASS (grid-sliced trapezoids when large relative to grid)
+            //     Skip base pass if we drew blur (blurred-only look for DoF)
             // --------------------
             bool drew_grid_sliced = false;
-            if (assets_ && cmd.asset && tex) {
+            if (!drew_blur && assets_ && cmd.asset && tex) {
                 // Only apply when not already handled by loader-composed grid tiles
                 const auto& tiling_opt = cmd.asset->tiling_info();
                 const bool allow_grid_sliced = (cmd.asset->info && cmd.asset->info->tillable);
@@ -916,7 +1034,7 @@ void SceneRenderer::render(){
                 }
             }
 
-            if (!drew_grid_sliced) {
+            if (!drew_blur && !drew_grid_sliced) {
                 // Fallback: draw normally as a rect
                 SDL_SetTextureColorMod(tex, 255, 255, 255);
                 SDL_SetTextureAlphaMod(tex, base_alpha_mod);

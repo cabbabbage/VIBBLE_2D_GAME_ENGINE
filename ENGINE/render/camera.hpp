@@ -15,6 +15,13 @@ class CurrentRoomFinder;
 class camera {
 
         public:
+    enum class BlurFalloffMethod : int {
+        Linear = 0,
+        Quadratic = 1,
+        Cubic = 2,
+        Logarithmic = 3,
+        Exponential = 4
+    };
     struct RealismSettings {
         float render_distance = 800.0f;
         float parallax_strength = 12.0f;
@@ -33,6 +40,17 @@ class camera {
         float scale_variant_hysteresis_margin = 0.05f;
         float min_zoom_multiplier = 0.7f;
         float max_zoom_multiplier = 1.3f;
+        // Perspective Colors (UI-only; not used in render yet)
+        float distance_saturation_factor_min = 0.0f;
+        float distance_saturation_factor_max = 0.0f;
+        float primary_color_boost_min = 0.0f;
+        float primary_color_boost_max = 0.0f;
+        float ground_brightness_factor = 0.0f;
+        float background_brightness = 0.0f;
+        // Perspective Blur (Aperture Blur) (UI-only; not used in render yet)
+        float max_foreground_blur = 0.0f;
+        float max_background_blur = 0.0f;
+        BlurFalloffMethod blur_falloff_method = BlurFalloffMethod::Linear;
         TransformSmoothingParams parallax_smoothing{
             TransformSmoothingMethod::CriticallyDampedSpring,
             0.0f,

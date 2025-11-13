@@ -71,6 +71,7 @@ private:
         float        rotation_degrees    = 0.0f;
         bool         has_custom_pivot    = false;
         SDL_FPoint   rotation_pivot      { 0.0f, 0.0f };
+        float        depth_blur_px       = 0.0f; // perspective blur radius in pixels
     };
 
     bool ensure_darkness_overlay();

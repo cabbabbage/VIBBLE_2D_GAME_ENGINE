@@ -722,6 +722,29 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     try_read_float("min_zoom_multiplier", settings_.min_zoom_multiplier);
     try_read_float("max_zoom_multiplier", settings_.max_zoom_multiplier);
 
+    // Perspective Colors (UI-only)
+    try_read_float("distance_saturation_factor_min", settings_.distance_saturation_factor_min);
+    try_read_float("distance_saturation_factor_max", settings_.distance_saturation_factor_max);
+    try_read_float("primary_color_boost_min", settings_.primary_color_boost_min);
+    try_read_float("primary_color_boost_max", settings_.primary_color_boost_max);
+    try_read_float("ground_brightness_factor", settings_.ground_brightness_factor);
+    try_read_float("background_brightness", settings_.background_brightness);
+
+    // Perspective Blur (Aperture Blur)
+    try_read_float("max_foreground_blur", settings_.max_foreground_blur);
+    try_read_float("max_background_blur", settings_.max_background_blur);
+    {
+        auto it = data.find("blur_falloff_method");
+        if (it != data.end()) {
+            if (it->is_number_integer()) {
+                int raw = it->get<int>();
+                if (raw < 0) raw = 0;
+                if (raw > 4) raw = 4;
+                settings_.blur_falloff_method = static_cast<BlurFalloffMethod>(raw);
+            }
+        }
+    }
+
     if (!std::isfinite(settings_.render_distance) || settings_.render_distance < 0.0f) {
         settings_.render_distance = 800.0f;
     }
@@ -825,6 +848,19 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["parallax_smoothing_spring_frequency"] = settings_.parallax_smoothing.spring_frequency;
     j["parallax_smoothing_max_step"] = settings_.parallax_smoothing.max_step;
     j["parallax_smoothing_snap_threshold"] = settings_.parallax_smoothing.snap_threshold;
+
+    // Perspective Colors (UI-only)
+    j["distance_saturation_factor_min"] = settings_.distance_saturation_factor_min;
+    j["distance_saturation_factor_max"] = settings_.distance_saturation_factor_max;
+    j["primary_color_boost_min"] = settings_.primary_color_boost_min;
+    j["primary_color_boost_max"] = settings_.primary_color_boost_max;
+    j["ground_brightness_factor"] = settings_.ground_brightness_factor;
+    j["background_brightness"] = settings_.background_brightness;
+
+    // Perspective Blur (Aperture Blur)
+    j["max_foreground_blur"] = settings_.max_foreground_blur;
+    j["max_background_blur"] = settings_.max_background_blur;
+    j["blur_falloff_method"] = static_cast<int>(settings_.blur_falloff_method);
     return j;
 }
 

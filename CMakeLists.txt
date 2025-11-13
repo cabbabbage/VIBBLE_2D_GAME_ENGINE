@@ -85,7 +85,6 @@ find_package(SDL2 CONFIG REQUIRED)
 find_package(SDL2_image CONFIG REQUIRED)
 find_package(SDL2_mixer CONFIG REQUIRED)
 find_package(SDL2_ttf CONFIG REQUIRED)
-find_package(CURL REQUIRED)
 
 # Try glad via package config first (vcpkg provides this)
 find_package(glad CONFIG QUIET)
@@ -159,7 +158,6 @@ target_link_libraries(engine
         SDL2_image::SDL2_image
         SDL2_mixer::SDL2_mixer
         SDL2_ttf::SDL2_ttf
-        CURL::libcurl
         ${GLAD_TARGET}
         OpenGL::GL
 )

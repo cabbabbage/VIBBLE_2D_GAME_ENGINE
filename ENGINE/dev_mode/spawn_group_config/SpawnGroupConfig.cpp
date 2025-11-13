@@ -1156,6 +1156,10 @@ struct SpawnGroupConfig::Entry {
                 if (!priority_row.empty()) rows.push_back(priority_row);
             }
 
+            if (lock_widget_) {
+                rows.push_back({lock_widget_.get()});
+            }
+
             // Header row for section toggles: Candidates (left) and Advanced Options (right)
             if (candidates_toggle_widget_ || advanced_toggle_widget_) {
                 DockableCollapsible::Row toggles_row;
@@ -1205,9 +1209,6 @@ struct SpawnGroupConfig::Entry {
 
             // Advanced Options section content (collapsible)
             if (advanced_expanded_) {
-                if (lock_widget_) {
-                    rows.push_back({ lock_widget_.get() });
-                }
                 if (show_resolve_geometry_widget_ && resolve_geometry_widget_) {
                     rows.push_back({resolve_geometry_widget_.get()});
                 }
