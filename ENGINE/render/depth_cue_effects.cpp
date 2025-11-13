@@ -248,84 +248,147 @@ SDL_Texture* DepthCueEffects::apply_variable_blur(SDL_Texture* source,
         SDL_SetRenderTarget(renderer_, prev);
     }
 
-    std::vector<Uint32> tmp(static_cast<std::size_t>(width) * height);
+    // Fast separable triangular blur (two box blurs) ignoring transparency.
+    // We approximate a Gaussian by convolving two variable-radius box filters per axis.
+
+    // Horizontal pass 1 (radius r1 per row)
+    std::vector<Uint32> h1(static_cast<std::size_t>(width) * height);
     for (int y = 0; y < height; ++y) {
-        const int R = static_cast<int>(std::round(std::max(0.0f, rows[static_cast<std::size_t>(y)].blur_radius_px)));
-        if (R <= 0) {
-            std::memcpy(&tmp[static_cast<std::size_t>(y) * width],
-                        &src[static_cast<std::size_t>(y) * width],
-                        sizeof(Uint32) * static_cast<std::size_t>(width));
+        const float r_in = std::max(0.0f, rows[static_cast<std::size_t>(y)].blur_radius_px);
+        const int R = static_cast<int>(std::round(r_in));
+        const int r1 = R > 0 ? (R / 2) : 0;
+        const Uint32* line = &src[static_cast<std::size_t>(y) * width];
+        Uint32* out = &h1[static_cast<std::size_t>(y) * width];
+        if (r1 <= 0) {
+            std::memcpy(out, line, sizeof(Uint32) * static_cast<std::size_t>(width));
             continue;
         }
-        std::vector<int> prpa(width + 1, 0), pgpa(width + 1, 0), pbpa(width + 1, 0), pa(width + 1, 0);
-        const Uint32* line = &src[static_cast<std::size_t>(y) * width];
+        std::vector<int> pr(width + 1, 0), pg(width + 1, 0), pb(width + 1, 0);
         for (int x = 0; x < width; ++x) {
             const Uint8* c = reinterpret_cast<const Uint8*>(&line[x]);
-            const int r = c[0];
-            const int g = c[1];
-            const int b = c[2];
-            const int a = c[3];
-            prpa[x + 1] = prpa[x] + r * a;
-            pgpa[x + 1] = pgpa[x] + g * a;
-            pbpa[x + 1] = pbpa[x] + b * a;
-            pa[x + 1]   = pa[x]   + a;
+            pr[x + 1] = pr[x] + c[0];
+            pg[x + 1] = pg[x] + c[1];
+            pb[x + 1] = pb[x] + c[2];
         }
-        Uint32* out = &tmp[static_cast<std::size_t>(y) * width];
         for (int x = 0; x < width; ++x) {
-            const int x0 = std::max(0, x - R);
-            const int x1 = std::min(width - 1, x + R);
+            const int x0 = std::max(0, x - r1);
+            const int x1 = std::min(width - 1, x + r1);
             const int n  = (x1 - x0 + 1);
-            const int srpa = prpa[x1 + 1] - prpa[x0];
-            const int sgpa = pgpa[x1 + 1] - pgpa[x0];
-            const int sbpa = pbpa[x1 + 1] - pbpa[x0];
-            const int sa   = pa[x1 + 1]   - pa[x0];
             Uint8* d = reinterpret_cast<Uint8*>(&out[x]);
-            if (sa > 0) {
-                d[0] = clamp_to_u8((srpa + (127 * n)) / (255 * n));
-                d[1] = clamp_to_u8((sgpa + (127 * n)) / (255 * n));
-                d[2] = clamp_to_u8((sbpa + (127 * n)) / (255 * n));
-                d[3] = clamp_to_u8((sa + n / 2) / n);
-            } else {
-                d[0] = d[1] = d[2] = d[3] = 0;
+            const int sr = pr[x1 + 1] - pr[x0];
+            const int sg = pg[x1 + 1] - pg[x0];
+            const int sb = pb[x1 + 1] - pb[x0];
+            d[0] = clamp_to_u8((sr + n / 2) / n);
+            d[1] = clamp_to_u8((sg + n / 2) / n);
+            d[2] = clamp_to_u8((sb + n / 2) / n);
+            d[3] = reinterpret_cast<const Uint8*>(&line[x])[3];
+        }
+    }
+
+    // Horizontal pass 2 (radius r2 per row)
+    std::vector<Uint32> h2(static_cast<std::size_t>(width) * height);
+    for (int y = 0; y < height; ++y) {
+        const float r_in = std::max(0.0f, rows[static_cast<std::size_t>(y)].blur_radius_px);
+        const int R = static_cast<int>(std::round(r_in));
+        const int r1 = R > 0 ? (R / 2) : 0;
+        const int r2 = std::max(0, R - r1);
+        const Uint32* line = &h1[static_cast<std::size_t>(y) * width];
+        Uint32* out = &h2[static_cast<std::size_t>(y) * width];
+        if (r2 <= 0) {
+            std::memcpy(out, line, sizeof(Uint32) * static_cast<std::size_t>(width));
+            continue;
+        }
+        std::vector<int> pr(width + 1, 0), pg(width + 1, 0), pb(width + 1, 0);
+        for (int x = 0; x < width; ++x) {
+            const Uint8* c = reinterpret_cast<const Uint8*>(&line[x]);
+            pr[x + 1] = pr[x] + c[0];
+            pg[x + 1] = pg[x] + c[1];
+            pb[x + 1] = pb[x] + c[2];
+        }
+        for (int x = 0; x < width; ++x) {
+            const int x0 = std::max(0, x - r2);
+            const int x1 = std::min(width - 1, x + r2);
+            const int n  = (x1 - x0 + 1);
+            Uint8* d = reinterpret_cast<Uint8*>(&out[x]);
+            const int sr = pr[x1 + 1] - pr[x0];
+            const int sg = pg[x1 + 1] - pg[x0];
+            const int sb = pb[x1 + 1] - pb[x0];
+            d[0] = clamp_to_u8((sr + n / 2) / n);
+            d[1] = clamp_to_u8((sg + n / 2) / n);
+            d[2] = clamp_to_u8((sb + n / 2) / n);
+            d[3] = reinterpret_cast<const Uint8*>(&line[x])[3];
+        }
+    }
+
+    // Vertical pass 1 (radius r1(y) per destination row)
+    std::vector<Uint32> v1(static_cast<std::size_t>(width) * height);
+    {
+        std::vector<int> pr(height + 1), pg(height + 1), pb(height + 1);
+        for (int x = 0; x < width; ++x) {
+            pr[0] = pg[0] = pb[0] = 0;
+            for (int y = 0; y < height; ++y) {
+                const Uint8* c = reinterpret_cast<const Uint8*>(&h2[static_cast<std::size_t>(y) * width + x]);
+                pr[y + 1] = pr[y] + c[0];
+                pg[y + 1] = pg[y] + c[1];
+                pb[y + 1] = pb[y] + c[2];
+            }
+            for (int y = 0; y < height; ++y) {
+                const float r_in = std::max(0.0f, rows[static_cast<std::size_t>(y)].blur_radius_px);
+                const int R = static_cast<int>(std::round(r_in));
+                const int r1 = R > 0 ? (R / 2) : 0;
+                Uint8* d = reinterpret_cast<Uint8*>(&v1[static_cast<std::size_t>(y) * width + x]);
+                if (r1 <= 0) {
+                    const Uint8* s = reinterpret_cast<const Uint8*>(&h2[static_cast<std::size_t>(y) * width + x]);
+                    d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = s[3];
+                    continue;
+                }
+                const int y0 = std::max(0, y - r1);
+                const int y1 = std::min(height - 1, y + r1);
+                const int n  = (y1 - y0 + 1);
+                const int sr = pr[y1 + 1] - pr[y0];
+                const int sg = pg[y1 + 1] - pg[y0];
+                const int sb = pb[y1 + 1] - pb[y0];
+                d[0] = clamp_to_u8((sr + n / 2) / n);
+                d[1] = clamp_to_u8((sg + n / 2) / n);
+                d[2] = clamp_to_u8((sb + n / 2) / n);
+                d[3] = reinterpret_cast<const Uint8*>(&h2[static_cast<std::size_t>(y) * width + x])[3];
             }
         }
     }
 
+    // Vertical pass 2 (radius r2(y) per destination row)
     std::vector<Uint32> blurred(static_cast<std::size_t>(width) * height);
-    std::vector<int> pr(width > 0 ? height + 1 : 0),
-                     pg(width > 0 ? height + 1 : 0),
-                     pb(width > 0 ? height + 1 : 0),
-                     pa(height + 1);
-    for (int x = 0; x < width; ++x) {
-        pr[0] = pg[0] = pb[0] = pa[0] = 0;
-        for (int y = 0; y < height; ++y) {
-            const Uint8* c = reinterpret_cast<const Uint8*>(&tmp[static_cast<std::size_t>(y) * width + x]);
-            pr[y + 1] = pr[y] + c[0];
-            pg[y + 1] = pg[y] + c[1];
-            pb[y + 1] = pb[y] + c[2];
-            pa[y + 1] = pa[y] + c[3];
-        }
-        for (int y = 0; y < height; ++y) {
-            const int R = static_cast<int>(std::round(std::max(0.0f, rows[static_cast<std::size_t>(y)].blur_radius_px)));
-            if (R <= 0) {
-                blurred[static_cast<std::size_t>(y) * width + x] = src[static_cast<std::size_t>(y) * width + x];
-                continue;
+    {
+        std::vector<int> pr(height + 1), pg(height + 1), pb(height + 1);
+        for (int x = 0; x < width; ++x) {
+            pr[0] = pg[0] = pb[0] = 0;
+            for (int y = 0; y < height; ++y) {
+                const Uint8* c = reinterpret_cast<const Uint8*>(&v1[static_cast<std::size_t>(y) * width + x]);
+                pr[y + 1] = pr[y] + c[0];
+                pg[y + 1] = pg[y] + c[1];
+                pb[y + 1] = pb[y] + c[2];
             }
-            const int y0 = std::max(0, y - R);
-            const int y1 = std::min(height - 1, y + R);
-            const int n  = (y1 - y0 + 1);
-            const int srp = pr[y1 + 1] - pr[y0];
-            const int sgp = pg[y1 + 1] - pg[y0];
-            const int sbp = pb[y1 + 1] - pb[y0];
-            const int sa  = pa[y1 + 1] - pa[y0];
-            Uint8* d = reinterpret_cast<Uint8*>(&blurred[static_cast<std::size_t>(y) * width + x]);
-            if (sa > 0) {
-                d[0] = clamp_to_u8((srp * 255 + sa / 2) / sa);
-                d[1] = clamp_to_u8((sgp * 255 + sa / 2) / sa);
-                d[2] = clamp_to_u8((sbp * 255 + sa / 2) / sa);
-                d[3] = clamp_to_u8((sa + n / 2) / n);
-            } else {
-                d[0] = d[1] = d[2] = d[3] = 0;
+            for (int y = 0; y < height; ++y) {
+                const float r_in = std::max(0.0f, rows[static_cast<std::size_t>(y)].blur_radius_px);
+                const int R = static_cast<int>(std::round(r_in));
+                const int r1 = R > 0 ? (R / 2) : 0;
+                const int r2 = std::max(0, R - r1);
+                Uint8* d = reinterpret_cast<Uint8*>(&blurred[static_cast<std::size_t>(y) * width + x]);
+                if (r2 <= 0) {
+                    const Uint8* s = reinterpret_cast<const Uint8*>(&v1[static_cast<std::size_t>(y) * width + x]);
+                    d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = s[3];
+                    continue;
+                }
+                const int y0 = std::max(0, y - r2);
+                const int y1 = std::min(height - 1, y + r2);
+                const int n  = (y1 - y0 + 1);
+                const int sr = pr[y1 + 1] - pr[y0];
+                const int sg = pg[y1 + 1] - pg[y0];
+                const int sb = pb[y1 + 1] - pb[y0];
+                d[0] = clamp_to_u8((sr + n / 2) / n);
+                d[1] = clamp_to_u8((sg + n / 2) / n);
+                d[2] = clamp_to_u8((sb + n / 2) / n);
+                d[3] = reinterpret_cast<const Uint8*>(&v1[static_cast<std::size_t>(y) * width + x])[3];
             }
         }
     }
