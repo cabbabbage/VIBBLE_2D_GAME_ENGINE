@@ -1,0 +1,9 @@
+#include "ENGINE/asset/Asset.hpp"
+
+struct {
+    int damage_amt_per_frame = 1;
+    bool damage_active = true;
+    int damage_time_in_frames = 1;
+    
+    Asset* self = nullptr;
+};
