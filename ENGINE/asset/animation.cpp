@@ -1,10 +1,13 @@
 #include "animation.hpp"
 #include "asset/asset_info.hpp"
+#include "asset/asset_types.hpp"
 #include "utils/cache_manager.hpp"
 #include "utils/generate_faded_mask.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/loading_status_notifier.hpp"
 #include "utils/log.hpp"
+#include "render/image_effect_settings.hpp"
+#include "utils/image_effects.hpp"
 #include <SDL_image.h>
 #include <SDL_mixer.h>
 #include <algorithm>
@@ -236,12 +239,13 @@ SDL_Texture* create_depthcue_texture(SDL_Renderer* renderer,
                                      SDL_Texture* source,
                                      int width,
                                      int height,
-                                     bool foreground) {
-        if (!renderer || !source || width <= 0 || height <= 0) {
-                return nullptr;
-        }
-        SDL_Texture* target = SDL_CreateTexture(renderer,
-                                                SDL_PIXELFORMAT_RGBA8888,
+                                     bool foreground,
+                                     const camera_effects::ImageEffectSettings& effects) {
+    if (!renderer || !source || width <= 0 || height <= 0) {
+        return nullptr;
+    }
+    SDL_Texture* target = SDL_CreateTexture(renderer,
+                                            SDL_PIXELFORMAT_RGBA8888,
                                                 SDL_TEXTUREACCESS_TARGET,
                                                 width,
                                                 height);
@@ -299,15 +303,42 @@ SDL_Texture* create_depthcue_texture(SDL_Renderer* renderer,
                                     SDL_Color{150, 205, 255, 255},
                                     210);
                 SDL_SetRenderDrawColor(renderer, 10, 20, 40, 35);
-                SDL_RenderFillRect(renderer, nullptr);
-        }
+        SDL_RenderFillRect(renderer, nullptr);
+    }
 
-        SDL_SetRenderDrawBlendMode(renderer, prev_draw_mode);
-        SDL_SetTextureColorMod(source, prev_r, prev_g, prev_b);
-        SDL_SetTextureAlphaMod(source, prev_a);
-        SDL_SetTextureBlendMode(source, prev_tex_blend);
-        SDL_SetRenderTarget(renderer, prev_target);
-        return target;
+    SDL_SetRenderDrawBlendMode(renderer, prev_draw_mode);
+    SDL_SetTextureColorMod(source, prev_r, prev_g, prev_b);
+    SDL_SetTextureAlphaMod(source, prev_a);
+    SDL_SetTextureBlendMode(source, prev_tex_blend);
+    SDL_SetRenderTarget(renderer, prev_target);
+    image_effects::ApplyImageEffectsToTexture(renderer, target, width, height, effects);
+    return target;
+}
+
+SDL_Surface* capture_texture_surface(SDL_Renderer* renderer,
+                                     SDL_Texture* texture,
+                                     int width,
+                                     int height) {
+        if (!renderer || !texture || width <= 0 || height <= 0) {
+                return nullptr;
+        }
+        SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA8888);
+        if (!surface) {
+                return nullptr;
+        }
+        SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
+        if (SDL_SetRenderTarget(renderer, texture) != 0) {
+                SDL_FreeSurface(surface);
+                SDL_SetRenderTarget(renderer, previous_target);
+                return nullptr;
+        }
+        if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, surface->pixels, surface->pitch) != 0) {
+                SDL_FreeSurface(surface);
+                SDL_SetRenderTarget(renderer, previous_target);
+                return nullptr;
+        }
+        SDL_SetRenderTarget(renderer, previous_target);
+        return surface;
 }
 
 void rebuild_depthcue_textures(SDL_Renderer* renderer,
@@ -315,22 +346,24 @@ void rebuild_depthcue_textures(SDL_Renderer* renderer,
                                int width,
                                int height,
                                SDL_Texture*& foreground_slot,
-                               SDL_Texture*& background_slot) {
-        if (foreground_slot) {
-                SDL_DestroyTexture(foreground_slot);
-                foreground_slot = nullptr;
-        }
-        if (background_slot) {
+                               SDL_Texture*& background_slot,
+                               const camera_effects::ImageEffectSettings& foreground_effects,
+                               const camera_effects::ImageEffectSettings& background_effects) {
+    if (foreground_slot) {
+        SDL_DestroyTexture(foreground_slot);
+        foreground_slot = nullptr;
+    }
+    if (background_slot) {
                 SDL_DestroyTexture(background_slot);
                 background_slot = nullptr;
         }
         if (!renderer || !source || width <= 0 || height <= 0) {
-                return;
-        }
-        SDL_Texture* fg = create_depthcue_texture(renderer, source, width, height, true);
-        SDL_Texture* bg = create_depthcue_texture(renderer, source, width, height, false);
-        foreground_slot = fg;
-        background_slot = bg;
+        return;
+    }
+    SDL_Texture* fg = create_depthcue_texture(renderer, source, width, height, true, foreground_effects);
+    SDL_Texture* bg = create_depthcue_texture(renderer, source, width, height, false, background_effects);
+    foreground_slot = fg;
+    background_slot = bg;
 }
 
 std::shared_ptr<Mix_Chunk> load_audio_clip(const std::string& path) {
@@ -532,6 +565,11 @@ void Animation::load(const std::string& trigger,
         const double safe_scale = sanitize_scale_factor(scale_factor);
         clear_texture_cache();
         const bool prefer_cached = !scaling_refresh_pending;
+        camera_effects::image_effects::GlobalState effect_state = camera_effects::image_effects::current_state();
+        const std::uint64_t fg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.foreground);
+        const std::uint64_t bg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.background);
+        const bool supports_depthcue_cache = (renderer && info.type != asset_types::texture);
+        bool depthcue_hash_mismatch = false;
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                   << " profile steps (pre-normalize): " << format_steps(variant_steps_) << ", prefer_cached=" << (prefer_cached ? "true" : "false") << ", scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false") << "\n";
         variant_steps_ = info.scale_variants;
@@ -813,7 +851,9 @@ void Animation::load(const std::string& trigger,
                                                                           tex_w,
                                                                           tex_h,
                                                                           cache_entry.depthcue_foreground_textures[variant_idx],
-                                                                          cache_entry.depthcue_background_textures[variant_idx]);
+                                                                          cache_entry.depthcue_background_textures[variant_idx],
+                                                                          effect_state.foreground,
+                                                                          effect_state.background);
                                                 if (variant_idx == 0) {
                                                         base_ok = true;
                                                 }
@@ -966,7 +1006,9 @@ void Animation::load(const std::string& trigger,
                                                                                   tex_w,
                                                                                   tex_h,
                                                                                   cache_entry.depthcue_foreground_textures[variant_idx],
-                                                                                  cache_entry.depthcue_background_textures[variant_idx]);
+                                                                                  cache_entry.depthcue_background_textures[variant_idx],
+                                                                                  effect_state.foreground,
+                                                                                  effect_state.background);
 
                                                         SDL_Texture* src_mask = nullptr;
                                                         if (variant_idx < cache_entry.mask_textures.size()) {
@@ -1059,6 +1101,13 @@ void Animation::load(const std::string& trigger,
                                   << meta.value("scale_profile_revision", static_cast<std::uint64_t>(0)) << ") expecting revision " << expected_revision << "\n";
                         const bool meta_has_masks = meta.value("has_masks", false);
                         bool meta_ok = ( meta.value("cache_version", 0) == kAnimationCacheVersion && meta.value("frame_count", -1) == expected_frames && meta.value("original_width", -1) == orig_w && meta.value("original_height", -1) == orig_h && (meta_has_masks == info.is_shaded));
+                        if (supports_depthcue_cache) {
+                                const std::uint64_t stored_fg_hash = meta.value("depthcue_foreground_hash", 0ull);
+                                const std::uint64_t stored_bg_hash = meta.value("depthcue_background_hash", 0ull);
+                                if (stored_fg_hash != fg_effect_hash || stored_bg_hash != bg_effect_hash) {
+                                        depthcue_hash_mismatch = true;
+                                }
+                        }
                         if (meta_ok) {
                                 if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
                                         const auto& stored = meta["scale_steps"];
@@ -1157,11 +1206,31 @@ void Animation::load(const std::string& trigger,
                                 list.clear();
                         }
 };
+                auto release_surface_list = [](std::vector<SDL_Surface*>& list) {
+                        for (SDL_Surface* surf : list) {
+                                if (surf) {
+                                        SDL_FreeSurface(surf);
+                                }
+                        }
+                        list.clear();
+                };
                 const std::string mask_cache_folder = cache_folder + "/masks";
+                const std::string foreground_cache_folder = cache_folder + "/foreground";
+                const std::string background_cache_folder = cache_folder + "/background";
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
                 GenerateFadedMask::MaskVariants mask_surfaces;
                 bool masks_loaded_from_cache = false;
                 std::vector<bool> rebuild_variant(variant_count, false);
+                std::vector<std::vector<SDL_Surface*>> depthcue_foreground_surfaces;
+                std::vector<std::vector<SDL_Surface*>> depthcue_background_surfaces;
+                std::vector<bool> depthcue_foreground_needs_generation;
+                std::vector<bool> depthcue_background_needs_generation;
+                if (supports_depthcue_cache) {
+                        depthcue_foreground_surfaces.resize(variant_count);
+                        depthcue_background_surfaces.resize(variant_count);
+                        depthcue_foreground_needs_generation.assign(variant_count, true);
+                        depthcue_background_needs_generation.assign(variant_count, true);
+                }
 
                 if (!metadata_valid) {
                         std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
@@ -1196,6 +1265,10 @@ void Animation::load(const std::string& trigger,
 
                 cleanup_variant_directories(cache_folder);
                 cleanup_variant_directories(mask_cache_folder);
+                if (supports_depthcue_cache) {
+                        cleanup_variant_directories(foreground_cache_folder);
+                        cleanup_variant_directories(background_cache_folder);
+                }
 
                 const bool attempt_cache_load = metadata_valid && prefer_cached;
                 if (attempt_cache_load) {
@@ -1314,6 +1387,10 @@ void Animation::load(const std::string& trigger,
                         new_meta["scale_steps"] = std::move(step_arr);
                         new_meta["scale_profile_revision"] = expected_revision;
                         new_meta["has_masks"] = info.is_shaded;
+                        if (supports_depthcue_cache) {
+                                new_meta["depthcue_foreground_hash"] = fg_effect_hash;
+                                new_meta["depthcue_background_hash"] = bg_effect_hash;
+                        }
                         const auto generated_signature = compute_source_signature(src_folder, expected_frames);
                         if (generated_signature.success) {
                                 new_meta["source_signature"] = generated_signature.value;
@@ -1337,6 +1414,124 @@ void Animation::load(const std::string& trigger,
                 }
 
                 const bool cached_variants_loaded = (!need_generation && attempt_cache_load);
+
+                if (supports_depthcue_cache) {
+                        auto load_depthcue_cache = [&](const std::string& folder,
+                                                       std::vector<std::vector<SDL_Surface*>>& target,
+                                                       std::vector<bool>& rebuild_flags) {
+                                for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                                        std::vector<SDL_Surface*> loaded;
+                                        const std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(folder, variant_steps_, idx);
+                                        if (cache.load_surface_sequence(variant_path, expected_frames, loaded) &&
+                                            loaded.size() == static_cast<std::size_t>(expected_frames)) {
+                                                target[idx] = std::move(loaded);
+                                                rebuild_flags[idx] = false;
+                                        } else {
+                                                for (SDL_Surface* surf : loaded) {
+                                                        if (surf) {
+                                                                SDL_FreeSurface(surf);
+                                                        }
+                                                }
+                                                rebuild_flags[idx] = true;
+                                        }
+                                }
+                        };
+
+                        if (depthcue_hash_mismatch) {
+                                std::fill(depthcue_foreground_needs_generation.begin(),
+                                          depthcue_foreground_needs_generation.end(),
+                                          true);
+                                std::fill(depthcue_background_needs_generation.begin(),
+                                          depthcue_background_needs_generation.end(),
+                                          true);
+                                std::error_code ec;
+                                fs::remove_all(foreground_cache_folder, ec);
+                                ec.clear();
+                                fs::remove_all(background_cache_folder, ec);
+                        } else if (cached_variants_loaded) {
+                                load_depthcue_cache(foreground_cache_folder,
+                                                    depthcue_foreground_surfaces,
+                                                    depthcue_foreground_needs_generation);
+                                load_depthcue_cache(background_cache_folder,
+                                                    depthcue_background_surfaces,
+                                                    depthcue_background_needs_generation);
+                        } else {
+                                std::fill(depthcue_foreground_needs_generation.begin(),
+                                          depthcue_foreground_needs_generation.end(),
+                                          true);
+                                std::fill(depthcue_background_needs_generation.begin(),
+                                          depthcue_background_needs_generation.end(),
+                                          true);
+                        }
+                }
+
+                auto use_cached_depthcue_texture = [&](std::vector<std::vector<SDL_Surface*>>& storage,
+                                                       std::vector<bool>& rebuild_flags,
+                                                       std::size_t variant_index,
+                                                       std::size_t frame_index,
+                                                       SDL_Texture*& slot) -> bool {
+                        if (!supports_depthcue_cache || !renderer) {
+                                return false;
+                        }
+                        if (variant_index >= storage.size() || rebuild_flags[variant_index]) {
+                                return false;
+                        }
+                        const std::size_t expected_count = static_cast<std::size_t>(expected_frames);
+                        if (storage[variant_index].size() != expected_count || frame_index >= storage[variant_index].size()) {
+                                rebuild_flags[variant_index] = true;
+                                release_surface_list(storage[variant_index]);
+                                return false;
+                        }
+                        SDL_Surface* surf = storage[variant_index][frame_index];
+                        if (!surf) {
+                                rebuild_flags[variant_index] = true;
+                                release_surface_list(storage[variant_index]);
+                                return false;
+                        }
+                        SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
+                        if (!tex) {
+                                rebuild_flags[variant_index] = true;
+                                release_surface_list(storage[variant_index]);
+                                return false;
+                        }
+                        apply_scale_mode(tex, info);
+                        slot = tex;
+                        return true;
+                };
+
+                auto capture_depthcue_texture = [&](std::vector<std::vector<SDL_Surface*>>& storage,
+                                                    std::vector<bool>& rebuild_flags,
+                                                    std::size_t variant_index,
+                                                    std::size_t frame_index,
+                                                    SDL_Texture* texture,
+                                                    int tex_w,
+                                                    int tex_h) {
+                        if (!supports_depthcue_cache || !renderer) {
+                                return;
+                        }
+                        if (!texture || tex_w <= 0 || tex_h <= 0) {
+                                return;
+                        }
+                        if (variant_index >= storage.size() || !rebuild_flags[variant_index]) {
+                                return;
+                        }
+                        const std::size_t expected_count = static_cast<std::size_t>(expected_frames);
+                        if (storage[variant_index].size() != expected_count) {
+                                release_surface_list(storage[variant_index]);
+                                storage[variant_index].assign(expected_count, nullptr);
+                        }
+                        if (frame_index >= storage[variant_index].size()) {
+                                return;
+                        }
+                        SDL_Surface* captured = capture_texture_surface(renderer, texture, tex_w, tex_h);
+                        if (!captured) {
+                                return;
+                        }
+                        if (storage[variant_index][frame_index]) {
+                                SDL_FreeSurface(storage[variant_index][frame_index]);
+                        }
+                        storage[variant_index][frame_index] = captured;
+                };
 
                 if (info.is_shaded) {
                         bool announced_generation = false;
@@ -1414,12 +1609,44 @@ void Animation::load(const std::string& trigger,
                                 cache_entry.textures[variant_idx] = tex_variant;
                                 cache_entry.widths[variant_idx]   = tex_w;
                                 cache_entry.heights[variant_idx]  = tex_h;
-                                rebuild_depthcue_textures(renderer,
-                                                          tex_variant,
-                                                          tex_w,
-                                                          tex_h,
-                                                          cache_entry.depthcue_foreground_textures[variant_idx],
-                                                          cache_entry.depthcue_background_textures[variant_idx]);
+                                bool depthcue_from_cache = false;
+                                if (tex_variant && renderer) {
+                                        bool fg_ready = use_cached_depthcue_texture(depthcue_foreground_surfaces,
+                                                                                    depthcue_foreground_needs_generation,
+                                                                                    variant_idx,
+                                                                                    frame_idx,
+                                                                                    cache_entry.depthcue_foreground_textures[variant_idx]);
+                                        bool bg_ready = use_cached_depthcue_texture(depthcue_background_surfaces,
+                                                                                    depthcue_background_needs_generation,
+                                                                                    variant_idx,
+                                                                                    frame_idx,
+                                                                                    cache_entry.depthcue_background_textures[variant_idx]);
+                                        depthcue_from_cache = fg_ready && bg_ready;
+                                }
+                                if (!depthcue_from_cache) {
+                                        rebuild_depthcue_textures(renderer,
+                                                                  tex_variant,
+                                                                  tex_w,
+                                                                  tex_h,
+                                                                  cache_entry.depthcue_foreground_textures[variant_idx],
+                                                                  cache_entry.depthcue_background_textures[variant_idx],
+                                                                  effect_state.foreground,
+                                                                  effect_state.background);
+                                        capture_depthcue_texture(depthcue_foreground_surfaces,
+                                                                depthcue_foreground_needs_generation,
+                                                                variant_idx,
+                                                                frame_idx,
+                                                                cache_entry.depthcue_foreground_textures[variant_idx],
+                                                                tex_w,
+                                                                tex_h);
+                                        capture_depthcue_texture(depthcue_background_surfaces,
+                                                                depthcue_background_needs_generation,
+                                                                variant_idx,
+                                                                frame_idx,
+                                                                cache_entry.depthcue_background_textures[variant_idx],
+                                                                tex_w,
+                                                                tex_h);
+                                }
 
                                 SDL_Surface* mask_surface = (variant_idx < mask_surfaces.size() && frame_idx < mask_surfaces[variant_idx].size()) ? mask_surfaces[variant_idx][frame_idx] : nullptr;
                                 SDL_Texture* mask_variant = nullptr;
@@ -1454,6 +1681,40 @@ void Animation::load(const std::string& trigger,
 
                 free_surface_lists(variant_surfaces);
                 free_surface_lists(mask_surfaces);
+                if (supports_depthcue_cache) {
+                        auto persist_depthcue_cache = [&](const std::string& folder,
+                                                           std::vector<std::vector<SDL_Surface*>>& storage,
+                                                           std::vector<bool>& rebuild_flags) {
+                                for (std::size_t idx = 0; idx < storage.size(); ++idx) {
+                                        if (!rebuild_flags[idx]) {
+                                                continue;
+                                        }
+                                        if (storage[idx].size() != static_cast<std::size_t>(expected_frames)) {
+                                                continue;
+                                        }
+                                        bool complete = true;
+                                        for (SDL_Surface* surf : storage[idx]) {
+                                                if (!surf) {
+                                                        complete = false;
+                                                        break;
+                                                }
+                                        }
+                                        if (!complete) {
+                                                continue;
+                                        }
+                                        const std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(folder, variant_steps_, idx);
+                                        cache.save_surface_sequence(variant_path, storage[idx]);
+                                }
+                        };
+                        persist_depthcue_cache(foreground_cache_folder,
+                                               depthcue_foreground_surfaces,
+                                               depthcue_foreground_needs_generation);
+                        persist_depthcue_cache(background_cache_folder,
+                                               depthcue_background_surfaces,
+                                               depthcue_background_needs_generation);
+                        free_surface_lists(depthcue_foreground_surfaces);
+                        free_surface_lists(depthcue_background_surfaces);
+                }
                 if ((flipped_source || flip_vertical_source) && renderer && !frame_cache_.empty()) {
                         SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
                         if (flipped_source) {
@@ -1502,7 +1763,9 @@ void Animation::load(const std::string& trigger,
                                                                   tex_w,
                                                                   tex_h,
                                                                   cache_entry.depthcue_foreground_textures[variant_idx],
-                                                                  cache_entry.depthcue_background_textures[variant_idx]);
+                                                                  cache_entry.depthcue_background_textures[variant_idx],
+                                                                  effect_state.foreground,
+                                                                  effect_state.background);
                                         SDL_Texture* src_mask = nullptr;
                                         if (variant_idx < cache_entry.mask_textures.size()) {
                                                 src_mask = cache_entry.mask_textures[variant_idx];

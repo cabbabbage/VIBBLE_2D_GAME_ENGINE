@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdint>
 #include <nlohmann/json.hpp>
+#include "render/image_effect_settings.hpp"
 #include "utils/area.hpp"
 #include "utils/transform_smoothing.hpp"
 
@@ -45,6 +46,8 @@ class camera {
         float foreground_plane_screen_y      = 1080.0f;
         float background_plane_screen_y      = 0.0f;
         BlurFalloffMethod texture_opacity_falloff_method = BlurFalloffMethod::Linear;
+        camera_effects::ImageEffectSettings foreground_effects{};
+        camera_effects::ImageEffectSettings background_effects{};
         TransformSmoothingParams parallax_smoothing{
             TransformSmoothingMethod::CriticallyDampedSpring,
             0.0f,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include "DockableCollapsible.hpp"
 #include "render/camera.hpp"
@@ -8,6 +9,7 @@ class Assets;
 class DMCheckbox;
 class DMButton;
 class Widget;
+class ButtonWidget;
 class CheckboxWidget;
 class DMDropdown;
 class DropdownWidget;
@@ -22,6 +24,7 @@ public:
     ~CameraUIPanel() override;
 
     void set_assets(Assets* assets);
+    void set_image_effects_panel_callback(std::function<void()> cb);
 
     void open();
     void close();
@@ -78,6 +81,8 @@ private:
     // Interpolation dropdown
     std::unique_ptr<DMDropdown> texture_opacity_interp_dropdown_;
     std::unique_ptr<DropdownWidget> texture_opacity_interp_widget_;
+    std::unique_ptr<DMButton> image_effect_button_;
+    std::unique_ptr<ButtonWidget> image_effect_widget_;
 
     // DepthCue section enable/disable
     std::unique_ptr<DMCheckbox> depthcue_checkbox_;
@@ -103,6 +108,7 @@ private:
     bool smoothing_section_expanded_ = false;
 
     bool last_depthcue_enabled_ = false;
+    std::function<void()> open_image_effects_cb_;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }

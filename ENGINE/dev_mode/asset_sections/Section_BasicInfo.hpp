@@ -69,7 +69,15 @@ inline int Section_BasicInfo::find_index(const std::vector<std::string>& opts, c
 inline void Section_BasicInfo::build() {
     widgets_.clear();
     DockableCollapsible::Rows rows;
-    if (!info_) { set_rows(rows); return; }
+    if (!info_) {
+        auto placeholder = std::make_unique<ReadOnlyTextBoxWidget>(
+            "",
+            "No asset selected. Select an asset from the library or scene to view and edit its information.");
+        rows.push_back({ placeholder.get() });
+        widgets_.push_back(std::move(placeholder));
+        set_rows(rows);
+        return;
+    }
 
     type_options_ = asset_types::all_as_strings();
     // Prevent selecting area type unless it's already an area; and prevent changing area to anything else

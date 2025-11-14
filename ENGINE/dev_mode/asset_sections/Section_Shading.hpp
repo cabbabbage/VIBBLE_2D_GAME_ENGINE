@@ -31,6 +31,11 @@ public:
         Rows rows;
 
         if (!info_) {
+            auto placeholder = std::make_unique<ReadOnlyTextBoxWidget>(
+                "",
+                "No asset selected. Select an asset from the library or scene to view and edit its information.");
+            rows.push_back({ placeholder.get() });
+            widgets_.push_back(std::move(placeholder));
             set_rows(rows);
             return;
         }

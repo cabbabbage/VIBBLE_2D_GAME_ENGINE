@@ -451,6 +451,57 @@ private:
     bool full_row_ = false;
 };
 
+class ReadOnlyTextBoxWidget : public Widget {
+public:
+    ReadOnlyTextBoxWidget(const std::string& label,
+                          const std::string& value,
+                          bool full_row = true)
+        : box_(std::make_unique<DMTextBox>(label, value)),
+          full_row_(full_row) {}
+
+    void set_value(const std::string& value) {
+        if (box_) {
+            box_->set_value(value);
+        }
+    }
+
+    void set_rect(const SDL_Rect& r) override {
+        if (box_) {
+            box_->set_rect(r);
+        } else {
+            rect_cache_ = r;
+        }
+    }
+
+    const SDL_Rect& rect() const override {
+        if (box_) {
+            return box_->rect();
+        }
+        return rect_cache_;
+    }
+
+    int height_for_width(int w) const override {
+        return box_ ? box_->preferred_height(w) : DMTextBox::height();
+    }
+
+    bool handle_event(const SDL_Event&) override {
+        return false;
+    }
+
+    void render(SDL_Renderer* r) const override {
+        if (box_) {
+            box_->render(r);
+        }
+    }
+
+    bool wants_full_row() const override { return full_row_; }
+
+private:
+    std::unique_ptr<DMTextBox> box_;
+    mutable SDL_Rect rect_cache_{0, 0, 0, DMTextBox::height()};
+    bool full_row_ = true;
+};
+
 class CheckboxWidget : public Widget {
 public:
     explicit CheckboxWidget(DMCheckbox* c) : c_(c) {

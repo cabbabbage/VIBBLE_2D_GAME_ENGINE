@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T20:53:02Z",
+        "generated_at": "2025-11-14T23:54:00Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -78,7 +78,7 @@
           0.05454545095562935
         ],
         "revision": 4329668871805815559,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T20:53:02Z",
+        "generated_at": "2025-11-14T23:54:00Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -131,7 +131,7 @@
           0.05000000074505806
         ],
         "revision": 15640563384705236170,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T20:53:02Z",
+        "generated_at": "2025-11-14T23:54:00Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -184,7 +184,7 @@
           0.05000000074505806
         ],
         "revision": 17324624370779397839,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -492,7 +492,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-13T20:53:02Z",
+        "generated_at": "2025-11-14T23:54:00Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -506,7 +506,7 @@
           0.1090909019112587
         ],
         "revision": 8110939535182362100,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -690,7 +690,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-13T20:53:02Z",
+        "generated_at": "2025-11-14T23:54:00Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -704,7 +704,7 @@
           0.38181817531585693
         ],
         "revision": 11688286490698651680,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -850,11 +850,27 @@
         }
       },
       "camera_settings": {
+        "background_effects": {
+          "blur": 0.0,
+          "brightness": 0.0,
+          "contrast": 0.0,
+          "hue": 0.0,
+          "rgb_boost": 0.0,
+          "saturation": 0.0
+        },
         "background_plane_screen_y": 0.0,
-        "background_texture_max_opacity": 0,
+        "background_texture_max_opacity": 255,
         "distance_scale_strength": 0.3499999940395355,
-        "foreground_plane_screen_y": 877.0,
-        "foreground_texture_max_opacity": 0,
+        "foreground_effects": {
+          "blur": 0.36000001430511475,
+          "brightness": -0.020000040531158447,
+          "contrast": 0.5799999237060547,
+          "hue": 0.0,
+          "rgb_boost": 0.3399999141693115,
+          "saturation": -0.5800000429153442
+        },
+        "foreground_plane_screen_y": 879.0,
+        "foreground_texture_max_opacity": 255,
         "foreshorten_strength": 0.23999999463558197,
         "height_at_zoom1": 357.0,
         "max_zoom_multiplier": 2.999999761581421,
@@ -1180,9 +1196,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            36,
-            205,
             242,
+            36,
+            119,
             255
           ],
           "edge_smoothness": 43,
@@ -1203,9 +1219,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            242,
+            241,
+            36,
             255
           ],
           "edge_smoothness": 68,

@@ -62,6 +62,19 @@ namespace {
 
 using vibble::strings::to_lower_copy;
 
+void configure_panel_for_container(DockableCollapsible* panel) {
+    if (!panel) {
+        return;
+    }
+
+    // Embedded panels should behave like regular sections inside the
+    // SlidingWindowContainer instead of independent floating windows.
+    panel->set_floatable(false);
+    panel->set_close_button_enabled(false);
+    panel->set_show_header(true);
+    panel->force_pointer_ready();
+}
+
 std::string resolve_asset_manifest_key(devmode::core::ManifestStore* store, const std::string& selection) {
     if (!store) return {};
 
@@ -475,7 +488,7 @@ void AssetInfoUI::open()  {
     visible_ = true;
     container_.open();
     apply_camera_override(true);
-    for (auto& s : sections_) s->set_expanded(false);
+    for (auto& s : sections_) s->set_expanded(true);
 }
 void AssetInfoUI::close() {
     if (!visible_) return;
@@ -659,8 +672,6 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
             return true;
         }
     }
-
-    if (!area_mode_ && !info_) return false;
 
     // World overlay: click-and-drag light crosshairs when Lighting section is open
     auto clear_light_hover = [&]() {
@@ -881,7 +892,7 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
         }
     }
 
-    if (!visible_ || (!area_mode_ && !info_)) return;
+    if (!visible_) return;
 
     if (info_ && asset_selector_ && asset_selector_->visible()) {
         asset_selector_->update(input);
@@ -918,21 +929,12 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         animation_editor_window_->render(r);
     }
 
-    if (!info_) {
-        if (!area_mode_) {
-            if (asset_selector_ && asset_selector_->visible()) {
-                asset_selector_->render(r);
-            }
-            return;
-        }
-    }
-
     container_.render(r, screen_w, screen_h);
     if (lighting_section_) {
         lighting_section_->render_overlays(r);
     }
 
-    if (info_ && asset_selector_ && asset_selector_->visible())
+    if (asset_selector_ && asset_selector_->visible())
         asset_selector_->render(r);
 
     DMDropdown::render_active_options(r);
@@ -1733,7 +1735,9 @@ void AssetInfoUI::open_for_room_area(Room* room, const std::string& area_name) {
         }
     };
 
-    auto area_settings = std::make_unique<Section_AreaSettings>(); area_settings->set_ctx(this, area_room_, area_name_);
+    auto area_settings = std::make_unique<Section_AreaSettings>();
+    area_settings->set_ctx(this, area_room_, area_name_);
+    configure_panel_for_container(area_settings.get());
     sections_.push_back(std::move(area_settings));
 
     // Area Tags section
@@ -1753,7 +1757,9 @@ void AssetInfoUI::open_for_room_area(Room* room, const std::string& area_name) {
         }
     };
 
-    auto area_tags = std::make_unique<Section_AreaTags>(); area_tags->set_ctx(area_room_, area_name_);
+    auto area_tags = std::make_unique<Section_AreaTags>();
+    area_tags->set_ctx(area_room_, area_name_);
+    configure_panel_for_container(area_tags.get());
     sections_.push_back(std::move(area_tags));
 
     // Area Spacing section
@@ -1768,7 +1774,9 @@ void AssetInfoUI::open_for_room_area(Room* room, const std::string& area_name) {
         void update(const Input& input, int w, int h) override { DockableCollapsible::update(input,w,h); if (!room) return; nlohmann::json& root = room->assets_data(); if (!root.contains("areas") || !root["areas"].is_array()) return; for (auto& entry : root["areas"]) { if (!entry.is_object()) continue; if (entry.value("name", std::string{}) != name) continue; entry["min_same_type_distance"] = min_same ? min_same->value() : 0; entry["min_distance_all"] = min_all ? min_all->value() : 0; room->save_assets_json(); break; } }
     };
 
-    auto area_spacing = std::make_unique<Section_AreaSpacing>(); area_spacing->set_ctx(area_room_, area_name_);
+    auto area_spacing = std::make_unique<Section_AreaSpacing>();
+    area_spacing->set_ctx(area_room_, area_name_);
+    configure_panel_for_container(area_spacing.get());
     sections_.push_back(std::move(area_spacing));
 
     // Spawn group configuration is now embedded in the Area Tool panel (AreaOverlayEditor).
@@ -1787,9 +1795,35 @@ void AssetInfoUI::clear_area_context() {
 
 void AssetInfoUI::rebuild_default_sections() {
     sections_.clear();
+    basic_info_section_ = nullptr;
+    lighting_section_ = nullptr;
+    shading_section_ = nullptr;
+    spawn_groups_section_ = nullptr;
+    area_settings_section_ = nullptr;
+    area_spawns_section_ = nullptr;
+
+    auto adopt_section = [](auto* section) {
+        configure_panel_for_container(section);
+    };
+
+    auto finalize_section = [this](DockableCollapsible* section) {
+        if (!section) {
+            return;
+        }
+        section->set_info(info_);
+        section->reset_scroll();
+        section->set_expanded(true);
+        try {
+            section->build();
+        } catch (const std::exception& ex) {
+            SDL_Log("AssetInfoUI: failed to build section during initialization: %s", ex.what());
+        } catch (...) {
+            SDL_Log("AssetInfoUI: failed to build section during initialization due to unknown error.");
+        }
+    };
 
     // Zone Asset quick tools section
-    auto add_zone_tools = [this]() {
+    auto add_zone_tools = [this, &adopt_section, &finalize_section]() {
         if (!info_) return;
         std::string t = info_->type;
         std::transform(t.begin(), t.end(), t.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
@@ -1810,6 +1844,8 @@ void AssetInfoUI::rebuild_default_sections() {
         };
         auto zone = std::make_unique<Section_ZoneTools>();
         zone->set_ui(this);
+        adopt_section(zone.get());
+        finalize_section(zone.get());
         sections_.push_back(std::move(zone));
     };
 
@@ -1818,24 +1854,34 @@ void AssetInfoUI::rebuild_default_sections() {
     auto basic = std::make_unique<Section_BasicInfo>();
     basic_info_section_ = basic.get();
     basic_info_section_->set_ui(this);
+    adopt_section(basic_info_section_);
+    finalize_section(basic_info_section_);
     sections_.push_back(std::move(basic));
 
     auto tags = std::make_unique<Section_Tags>();
     tags->set_ui(this);
+    adopt_section(tags.get());
+    finalize_section(tags.get());
     sections_.push_back(std::move(tags));
 
     auto lighting = std::make_unique<Section_Lighting>();
     lighting->set_ui(this);
     lighting_section_ = lighting.get();
+    adopt_section(lighting_section_);
+    finalize_section(lighting_section_);
     sections_.push_back(std::move(lighting));
 
     auto shading = std::make_unique<Section_Shading>();
     shading->set_ui(this);
     shading_section_ = shading.get();
+    adopt_section(shading_section_);
+    finalize_section(shading_section_);
     sections_.push_back(std::move(shading));
 
     auto spacing = std::make_unique<Section_Spacing>();
     spacing->set_ui(this);
+    adopt_section(spacing.get());
+    finalize_section(spacing.get());
     sections_.push_back(std::move(spacing));
 
     auto spawns = std::make_unique<Section_SpawnGroups>();
@@ -1848,6 +1894,8 @@ void AssetInfoUI::rebuild_default_sections() {
     spawns->set_spawn_group_removed_listener([this](const std::string& spawn_id) {
         this->notify_spawn_group_removed(spawn_id);
     });
+    adopt_section(spawn_groups_section_);
+    finalize_section(spawn_groups_section_);
     sections_.push_back(std::move(spawns));
 
     container_.reset_scroll();

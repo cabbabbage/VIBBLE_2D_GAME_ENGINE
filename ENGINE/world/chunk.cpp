@@ -15,7 +15,7 @@
 #include "render/global_light_source.hpp"
 #include "world/grid.hpp"
 
-namespace {
+namespace chunk_detail {
 
 float clamp01(float value) {
     return std::clamp(value, 0.0f, 1.0f);
@@ -32,7 +32,7 @@ float blend_light_components(float static_strength, float dynamic_strength, floa
     return clamp01(blended);
 }
 
-}  // namespace
+}  // namespace chunk_detail
 
 namespace world {
 
@@ -98,7 +98,7 @@ void LightMap::update(SDL_Renderer*, std::uint32_t) {
     const auto weights = resolve_sampling_weights(0.0f, 1.0f);
 
     const Global_Light_Source* map_light = assets_->map_light_source();
-    const float map_alpha = map_light ? clamp01(static_cast<float>(map_light->get_current_color().a) / 255.0f) : 1.0f;
+    const float map_alpha = map_light ? chunk_detail::clamp01(static_cast<float>(map_light->get_current_color().a) / 255.0f) : 1.0f;
 
     for (world::Chunk* chunk : grid.active_chunks()) {
         if (!chunk) {
@@ -106,13 +106,13 @@ void LightMap::update(SDL_Renderer*, std::uint32_t) {
         }
         auto& lighting = chunk->lighting;
         if (lighting.has_runtime_average) {
-            lighting.dynamic_strength         = clamp01(lighting.runtime_average_strength);
+            lighting.dynamic_strength         = chunk_detail::clamp01(lighting.runtime_average_strength);
             lighting.runtime_average_strength = lighting.dynamic_strength;
             lighting.has_runtime_average      = false;
         }
-        lighting.static_strength  = clamp01(lighting.static_strength);
-        lighting.dynamic_strength = clamp01(lighting.dynamic_strength) * map_alpha;
-        lighting.current_strength = blend_light_components(lighting.static_strength,
+        lighting.static_strength  = chunk_detail::clamp01(lighting.static_strength);
+        lighting.dynamic_strength = chunk_detail::clamp01(lighting.dynamic_strength) * map_alpha;
+        lighting.current_strength = chunk_detail::blend_light_components(lighting.static_strength,
                                                            lighting.dynamic_strength,
                                                            weights.first,
                                                            weights.second);
@@ -130,22 +130,22 @@ LightMap::SampledBrightness LightMap::sample_lighting(int world_x,
 
     world::Chunk* chunk = ensure_chunk_from_world(SDL_Point{world_x, world_y});
     if (!chunk) {
-        result.blended = blend_light_components(result.static_component,
-                                                result.dynamic_component,
-                                                weights.first,
-                                                weights.second);
+        result.blended = chunk_detail::blend_light_components(result.static_component,
+                                                              result.dynamic_component,
+                                                              weights.first,
+                                                              weights.second);
         return result;
     }
 
     const auto& lighting = chunk->lighting;
-    result.static_component  = clamp01(lighting.static_strength);
-    result.dynamic_component = clamp01(lighting.dynamic_strength);
+    result.static_component  = chunk_detail::clamp01(lighting.static_strength);
+    result.dynamic_component = chunk_detail::clamp01(lighting.dynamic_strength);
     result.has_color         = lighting.runtime_average_color.a > 0 && lighting.dynamic_strength < 1.0f;
     result.color             = lighting.runtime_average_color;
-    result.blended           = blend_light_components(result.static_component,
-                                                      result.dynamic_component,
-                                                      weights.first,
-                                                      weights.second);
+    result.blended           = chunk_detail::blend_light_components(result.static_component,
+                                                                    result.dynamic_component,
+                                                                    weights.first,
+                                                                    weights.second);
     return result;
 }
 
@@ -268,8 +268,8 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
             continue;
         }
 
-        const float brightness = clamp01(chunk->lighting.current_strength);
-        const float alpha = clamp01(1.0f - brightness) * clamp01(alpha_multiplier);
+        const float brightness = chunk_detail::clamp01(chunk->lighting.current_strength);
+        const float alpha = chunk_detail::clamp01(1.0f - brightness) * chunk_detail::clamp01(alpha_multiplier);
         const Uint8 shade = static_cast<Uint8>(std::lround(alpha * 255.0f));
 
         SDL_Color mod = color_mod;

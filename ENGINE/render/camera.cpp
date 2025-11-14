@@ -156,6 +156,8 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
 
 void camera::set_realism_settings(const RealismSettings& settings) {
     settings_ = settings;
+    camera_effects::ClampImageEffectSettings(settings_.foreground_effects);
+    camera_effects::ClampImageEffectSettings(settings_.background_effects);
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
     TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
     center_smoothing_x_.set_params(motion_params);
@@ -686,6 +688,43 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_bool("smooth_motion_zoom", settings_.smooth_motion_zoom);
 
+    auto read_effect_settings = [&](const char* key, camera_effects::ImageEffectSettings& target) {
+        auto it = data.find(key);
+        if (it == data.end() || !it->is_object()) {
+            return;
+        }
+        const nlohmann::json& obj = *it;
+        auto read_value = [&](const char* field, float& out) -> bool {
+            auto fit = obj.find(field);
+            if (fit == obj.end()) {
+                return false;
+            }
+            if (fit->is_number_float()) {
+                out = static_cast<float>(fit->get<double>());
+            } else if (fit->is_number_integer()) {
+                out = static_cast<float>(fit->get<int>());
+            } else {
+                return false;
+            }
+            return true;
+        };
+        read_value("rgb_boost", target.rgb_boost);
+        read_value("contrast", target.contrast);
+        read_value("brightness", target.brightness);
+        read_value("blur", target.blur);
+        const bool has_sat_r = read_value("saturation_red", target.saturation_red);
+        const bool has_sat_g = read_value("saturation_green", target.saturation_green);
+        const bool has_sat_b = read_value("saturation_blue", target.saturation_blue);
+        if (!has_sat_r && !has_sat_g && !has_sat_b) {
+            float legacy = 0.0f;
+            if (read_value("saturation", legacy)) {
+                target.saturation_red = target.saturation_green = target.saturation_blue = legacy;
+            }
+        }
+        read_value("hue", target.hue);
+        camera_effects::ClampImageEffectSettings(target);
+    };
+
     auto try_read_smoothing_method = [&](const char* key, TransformSmoothingMethod& target) {
         auto it = data.find(key);
         if (it == data.end()) return;
@@ -793,6 +832,9 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         settings_.min_visible_screen_ratio = std::clamp(settings_.min_visible_screen_ratio, 0.0f, 0.5f);
     }
 
+    read_effect_settings("foreground_effects", settings_.foreground_effects);
+    read_effect_settings("background_effects", settings_.background_effects);
+
     auto align_quality = [](int percent) {
         constexpr int kOptions[] = {100, 75, 50, 25, 10};
         int best = kOptions[0];
@@ -876,6 +918,21 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["foreground_plane_screen_y"] = settings_.foreground_plane_screen_y;
     j["background_plane_screen_y"] = settings_.background_plane_screen_y;
     j["texture_opacity_falloff_method"] = static_cast<int>(settings_.texture_opacity_falloff_method);
+    auto encode_effects = [](const camera_effects::ImageEffectSettings& effects) {
+        nlohmann::json node = nlohmann::json::object();
+        node["rgb_boost"]  = effects.rgb_boost;
+        node["contrast"]   = effects.contrast;
+        node["brightness"] = effects.brightness;
+        node["blur"]             = effects.blur;
+        node["saturation_red"]   = effects.saturation_red;
+        node["saturation_green"] = effects.saturation_green;
+        node["saturation_blue"]  = effects.saturation_blue;
+        node["saturation"]       = (effects.saturation_red + effects.saturation_green + effects.saturation_blue) / 3.0f;
+        node["hue"]              = effects.hue;
+        return node;
+    };
+    j["foreground_effects"] = encode_effects(settings_.foreground_effects);
+    j["background_effects"] = encode_effects(settings_.background_effects);
     return j;
 }
 

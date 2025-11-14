@@ -26,7 +26,22 @@ public:
     void build() override {
         rows_.clear();
         highlighted_row_index_ = -1;
-        if (!info_) return;
+
+        DockableCollapsible::Rows rows;
+        if (!info_) {
+            if (!empty_state_widget_) {
+                empty_state_widget_ = std::make_unique<ReadOnlyTextBoxWidget>(
+                    "",
+                    "No asset selected. Select an asset from the library or scene to view and edit its information.");
+            }
+            rows.push_back({ empty_state_widget_.get() });
+            set_rows(rows);
+            b_add_.reset();
+            apply_btn_.reset();
+            return;
+        }
+
+        set_rows(rows);
 
         for (const auto& ls : info_->light_sources) {
             rows_.push_back(create_row_from_light(ls, false));
@@ -40,6 +55,10 @@ public:
     }
 
     void layout_custom_content(int , int ) const override {
+        if (!info_) {
+            return;
+        }
+
         int x = rect_.x + DMSpacing::panel_padding();
         int y = rect_.y + DMSpacing::panel_padding() + DMButton::height() + DMSpacing::header_gap();
         int maxw = rect_.w - 2 * DMSpacing::panel_padding();
@@ -301,6 +320,10 @@ public:
     }
 
     void render_content(SDL_Renderer* r) const override {
+        if (!info_) {
+            return;
+        }
+
         for (const auto& rrow : rows_) {
             if (rrow.highlighted && rrow.container_rect.w > 0 && rrow.container_rect.h > 0) {
                 SDL_Rect highlight_rect = rrow.container_rect;
@@ -514,6 +537,7 @@ private:
     std::unique_ptr<DMButton> b_add_;
     std::unique_ptr<DMButton> apply_btn_;
     AssetInfoUI* ui_ = nullptr;
+    std::unique_ptr<ReadOnlyTextBoxWidget> empty_state_widget_;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "asset_info"; }

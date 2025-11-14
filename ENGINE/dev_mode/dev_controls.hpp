@@ -28,6 +28,7 @@ class RoomEditor;
 class MapEditor;
 class MapModeUI;
 class CameraUIPanel;
+class ForegroundBackgroundEffectPanel;
 class RegenerateRoomPopup;
 // Legacy chooser removed
 namespace animation_editor {
@@ -169,6 +170,8 @@ private:
     void toggle_map_light_panel();
     void toggle_camera_panel();
     void close_camera_panel();
+    void toggle_image_effect_panel();
+    void close_image_effect_panel();
     void toggle_map_assets_modal();
     void toggle_boundary_assets_modal();
     void open_map_assets_modal();
@@ -235,9 +238,11 @@ private:
     std::function<void()> map_grid_regen_cb_;
     std::unique_ptr<MapModeUI> map_mode_ui_;
     std::unique_ptr<CameraUIPanel> camera_panel_;
+    std::unique_ptr<ForegroundBackgroundEffectPanel> image_effect_panel_;
     std::unique_ptr<RegenerateRoomPopup> regenerate_popup_;
     std::string map_path_;
     bool pointer_over_camera_panel_ = false;
+    bool pointer_over_image_effect_panel_ = false;
     bool modal_headers_hidden_ = false;
     bool sliding_headers_hidden_ = false;
     mutable std::unordered_map<Asset*, bool> filter_hidden_assets_;

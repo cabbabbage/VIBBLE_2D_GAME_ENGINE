@@ -33,6 +33,17 @@ void Section_SpawnGroups::build() {
     rebuild_requested_ = false;
 
     DockableCollapsible::Rows rows;
+    if (!info_) {
+        if (!empty_state_widget_) {
+            empty_state_widget_ = std::make_unique<ReadOnlyTextBoxWidget>(
+                "",
+                "No asset selected. Select an asset from the library or scene to view and edit its information.");
+        }
+        rows.push_back({ empty_state_widget_.get() });
+        set_rows(rows);
+        rebuilding_ = false;
+        return;
+    }
     if (!list_) list_ = std::make_unique<SpawnGroupConfig>();
     if (list_) {
         list_->set_default_resolution(MapGridSettings::defaults().resolution);

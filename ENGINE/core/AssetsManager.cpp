@@ -11,6 +11,7 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
+#include "render/image_effect_settings.hpp"
 #include "world/chunk.hpp"
 #include "render/light_map_manager.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
@@ -429,7 +430,13 @@ void Assets::apply_camera_runtime_settings() {
         const bool low_quality = (effective_percent < 100) && !force_high_quality_rendering_;
         scene->set_low_quality_rendering(low_quality);
     }
-    update_motion_smoothing_settings(camera_.realism_settings());
+    const camera::RealismSettings& settings = camera_.realism_settings();
+    update_motion_smoothing_settings(settings);
+    camera_effects::image_effects::GlobalState effects_state{
+        settings.foreground_effects,
+        settings.background_effects
+    };
+    camera_effects::image_effects::set_global_state(effects_state);
 }
 
 TransformSmoothingParams Assets::sanitize_smoothing(const TransformSmoothingParams& params) {

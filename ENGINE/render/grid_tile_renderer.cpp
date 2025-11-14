@@ -10,14 +10,14 @@
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
 
-namespace {
+namespace grid_tile_renderer_detail {
 constexpr float kParallaxEqualityEpsilon = 0.001f;
 
 inline bool nearly_equal(float a, float b, float eps) {
     return std::fabs(a - b) <= eps;
 }
 
-}  // namespace
+}  // namespace grid_tile_renderer_detail
 
 void GridTileRenderer::render(SDL_Renderer* renderer) {
     if (!renderer || !assets_) return;
@@ -51,9 +51,9 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const camera& cam, const w
             const float offset_bl = grid.parallax_offset(world_bl);
 
             const bool uniform_parallax =
-                nearly_equal(offset_tl, offset_tr, kParallaxEqualityEpsilon) &&
-                nearly_equal(offset_tl, offset_br, kParallaxEqualityEpsilon) &&
-                nearly_equal(offset_tl, offset_bl, kParallaxEqualityEpsilon);
+                grid_tile_renderer_detail::nearly_equal(offset_tl, offset_tr, grid_tile_renderer_detail::kParallaxEqualityEpsilon) &&
+                grid_tile_renderer_detail::nearly_equal(offset_tl, offset_br, grid_tile_renderer_detail::kParallaxEqualityEpsilon) &&
+                grid_tile_renderer_detail::nearly_equal(offset_tl, offset_bl, grid_tile_renderer_detail::kParallaxEqualityEpsilon);
 
             if (uniform_parallax) {
                 SDL_FPoint screen_tl = cam.map_to_screen(world_tl);

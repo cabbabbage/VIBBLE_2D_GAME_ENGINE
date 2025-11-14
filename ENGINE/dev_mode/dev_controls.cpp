@@ -17,6 +17,7 @@
 #include "FloatingPanelLayoutManager.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
+#include "dev_mode/foreground_background_effect_panel.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 #include "dev_mode/area_overlay_editor.hpp"
@@ -587,6 +588,13 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     if (camera_panel_) {
         camera_panel_->close();
     }
+    image_effect_panel_ = std::make_unique<ForegroundBackgroundEffectPanel>(assets_, 96, 160);
+    if (image_effect_panel_) {
+        image_effect_panel_->close();
+    }
+    if (camera_panel_) {
+        camera_panel_->set_image_effects_panel_callback([this]() { this->toggle_image_effect_panel(); });
+    }
     if (map_editor_) {
         map_editor_->set_ui_blocker([this](int x, int y) { return is_pointer_over_dev_ui(x, y); });
     }
@@ -776,6 +784,7 @@ void DevControls::set_screen_dimensions(int width, int height) {
 
     SDL_Rect bounds{0, 0, screen_w_, screen_h_};
     if (camera_panel_) camera_panel_->set_work_area(bounds);
+    if (image_effect_panel_) image_effect_panel_->set_work_area(bounds);
     if (trail_suite_) trail_suite_->set_screen_dimensions(width, height);
 
     asset_filter_.set_screen_dimensions(width, height);
@@ -883,6 +892,9 @@ bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
     if (camera_panel_ && camera_panel_->is_visible() && camera_panel_->is_point_inside(x, y)) {
         return true;
     }
+    if (image_effect_panel_ && image_effect_panel_->is_visible() && image_effect_panel_->is_point_inside(x, y)) {
+        return true;
+    }
     if (room_editor_ && room_editor_->is_room_ui_blocking_point(x, y)) {
         return true;
     }
@@ -959,6 +971,7 @@ void DevControls::set_enabled(bool enabled) {
         if (room_editor_) room_editor_->set_enabled(true, true);
         if (map_editor_) map_editor_->set_enabled(false);
         if (camera_panel_) camera_panel_->set_assets(assets_);
+        if (image_effect_panel_) image_effect_panel_->set_assets(assets_);
         set_current_room(target);
         if (map_mode_ui_) {
             map_mode_ui_->set_map_mode_active(false);
@@ -1037,6 +1050,8 @@ void DevControls::update(const Input& input) {
     // No keyboard shortcuts for grid header fields in this scope
     pointer_over_camera_panel_ =
         camera_panel_ && camera_panel_->is_visible() && camera_panel_->is_point_inside(input.getX(), input.getY());
+    pointer_over_image_effect_panel_ =
+        image_effect_panel_ && image_effect_panel_->is_visible() && image_effect_panel_->is_point_inside(input.getX(), input.getY());
     if (mode_ == Mode::MapEditor) {
         if (map_mode_ui_ && input.wasScancodePressed(SDL_SCANCODE_F8)) {
             map_mode_ui_->toggle_layers_panel();
@@ -1050,7 +1065,7 @@ void DevControls::update(const Input& input) {
         // highlight/select assets by skipping RoomEditor update and clearing highlights.
         const bool frame_editing = frame_editor_session_ && frame_editor_session_->is_active();
         if (!frame_editing) {
-            if (!pointer_over_camera_panel_) {
+            if (!pointer_over_camera_panel_ && !pointer_over_image_effect_panel_) {
                 room_editor_->update(input);
             }
             // Update Area Tool overlay/editor if active
@@ -1064,6 +1079,9 @@ void DevControls::update(const Input& input) {
 
     if (camera_panel_) {
         camera_panel_->update(input, screen_w_, screen_h_);
+    }
+    if (image_effect_panel_) {
+        image_effect_panel_->update(input, screen_w_, screen_h_);
     }
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->update(input);
@@ -1367,9 +1385,35 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             break;
         }
     }
+    bool pointer_event_inside_image_effect_panel = false;
+    if (image_effect_panel_ && image_effect_panel_->is_visible()) {
+        switch (event.type) {
+        case SDL_MOUSEMOTION:
+            pointer_event_inside_image_effect_panel = image_effect_panel_->is_point_inside(event.motion.x, event.motion.y);
+            break;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            pointer_event_inside_image_effect_panel = image_effect_panel_->is_point_inside(event.button.x, event.button.y);
+            break;
+        case SDL_MOUSEWHEEL: {
+            int mx = 0;
+            int my = 0;
+            SDL_GetMouseState(&mx, &my);
+            pointer_event_inside_image_effect_panel = image_effect_panel_->is_point_inside(mx, my);
+            break;
+        }
+        default:
+            break;
+        }
+    }
 
     if (camera_panel_ && camera_panel_->is_visible()) {
         if (consume(camera_panel_->handle_event(event))) {
+            return;
+        }
+    }
+    if (image_effect_panel_ && image_effect_panel_->is_visible()) {
+        if (consume(image_effect_panel_->handle_event(event))) {
             return;
         }
     }
@@ -1388,6 +1432,11 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         block_for_camera = true;
     }
     if (block_for_camera) {
+        consume(true);
+        return;
+    }
+    if (pointer_event_inside_image_effect_panel ||
+        ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT) && pointer_over_image_effect_panel_)) {
         consume(true);
         return;
     }
@@ -1852,6 +1901,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
     }
+    if (image_effect_panel_ && image_effect_panel_->is_visible()) {
+        image_effect_panel_->render(renderer);
+    }
     if (regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->render(renderer);
     }
@@ -2091,6 +2143,7 @@ void DevControls::configure_header_button_sets() {
                 return;
             }
             camera_panel_->set_assets(assets_);
+            if (image_effect_panel_) image_effect_panel_->set_assets(assets_);
             if (camera_panel_->is_visible() != active) {
                 toggle_camera_panel();
             } else {
@@ -2337,6 +2390,9 @@ void DevControls::close_all_floating_panels() {
     }
     if (camera_panel_) {
         camera_panel_->close();
+    }
+    if (image_effect_panel_) {
+        image_effect_panel_->close();
     }
     if (map_mode_ui_) {
         map_mode_ui_->close_all_panels();
@@ -3148,6 +3204,7 @@ void DevControls::toggle_camera_panel() {
         return;
     }
     camera_panel_->set_assets(assets_);
+    if (image_effect_panel_) image_effect_panel_->set_assets(assets_);
     if (camera_panel_->is_visible()) {
         camera_panel_->close();
     } else {
@@ -3164,6 +3221,31 @@ void DevControls::toggle_camera_panel() {
 void DevControls::close_camera_panel() {
     if (camera_panel_) {
         camera_panel_->close();
+    }
+}
+
+void DevControls::toggle_image_effect_panel() {
+    if (!image_effect_panel_) {
+        image_effect_panel_ = std::make_unique<ForegroundBackgroundEffectPanel>(assets_, 96, 160);
+        image_effect_panel_->close();
+    }
+    image_effect_panel_->set_assets(assets_);
+    if (image_effect_panel_->is_visible()) {
+        image_effect_panel_->close();
+    } else {
+        if (is_modal_blocking_panels()) {
+            pulse_modal_header();
+            sync_header_button_states();
+            return;
+        }
+        image_effect_panel_->open();
+    }
+    sync_header_button_states();
+}
+
+void DevControls::close_image_effect_panel() {
+    if (image_effect_panel_) {
+        image_effect_panel_->close();
     }
 }
 

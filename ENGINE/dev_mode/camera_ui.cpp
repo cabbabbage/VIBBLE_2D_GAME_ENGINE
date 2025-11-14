@@ -563,6 +563,10 @@ void CameraUIPanel::set_assets(Assets* assets) {
     sync_from_camera();
 }
 
+void CameraUIPanel::set_image_effects_panel_callback(std::function<void()> cb) {
+    open_image_effects_cb_ = std::move(cb);
+}
+
 void CameraUIPanel::open() {
     set_visible(true);
     suppress_apply_once_ = true;
@@ -793,6 +797,16 @@ void CameraUIPanel::build_ui() {
         texture_opacity_interp_dropdown_->set_on_selection_changed([this](int) { on_control_value_changed(); });
     }
 
+    image_effect_button_ = std::make_unique<DMButton>("Configure Image Effects", &DMStyles::AccentButton(), DockableCollapsible::kDefaultFloatingContentWidth, DMButton::height());
+    image_effect_widget_ = std::make_unique<ButtonWidget>(image_effect_button_.get(), [this]() {
+        if (open_image_effects_cb_) {
+            open_image_effects_cb_();
+        }
+    });
+    if (image_effect_widget_) {
+        image_effect_widget_->set_tooltip("Open the global image effect editor to regenerate depth cue textures.");
+    }
+
     // Depth Cue enable toggle
     depthcue_checkbox_ = std::make_unique<DMCheckbox>("Enable Depth Cue", last_depthcue_enabled_);
     depthcue_widget_   = std::make_unique<CheckboxWidget>(depthcue_checkbox_.get());
@@ -900,6 +914,7 @@ void CameraUIPanel::rebuild_rows() {
         if (foreground_texture_opacity_slider_) rows.push_back({ foreground_texture_opacity_slider_.get() });
         if (background_texture_opacity_slider_) rows.push_back({ background_texture_opacity_slider_.get() });
         if (texture_opacity_interp_widget_) rows.push_back({ texture_opacity_interp_widget_.get() });
+        if (image_effect_widget_) rows.push_back({ image_effect_widget_.get() });
     }
 
     if (zoom_section_header_) rows.push_back({ zoom_section_header_.get() });

@@ -13,6 +13,7 @@ class AssetInfoUI;
 class Input;
 class DMButton;
 class ButtonWidget;
+class ReadOnlyTextBoxWidget;
 namespace devmode::core {
 class ManifestStore;
 }
@@ -63,6 +64,7 @@ private:
 
     std::unique_ptr<DMButton> add_btn_;
     std::unique_ptr<ButtonWidget> add_btn_w_;
+    std::unique_ptr<ReadOnlyTextBoxWidget> empty_state_widget_;
 
     int screen_w_ = 1920;
     int screen_h_ = 1080;

@@ -20,7 +20,15 @@ class Section_Spacing : public DockableCollapsible {
     void build() override {
       widgets_.clear();
       DockableCollapsible::Rows rows;
-      if (!info_) { set_rows(rows); return; }
+      if (!info_) {
+        auto placeholder = std::make_unique<ReadOnlyTextBoxWidget>(
+            "",
+            "No asset selected. Select an asset from the library or scene to view and edit its information.");
+        rows.push_back({ placeholder.get() });
+        widgets_.push_back(std::move(placeholder));
+        set_rows(rows);
+        return;
+      }
       s_min_same_ = std::make_unique<DMSlider>( "Min Distance From Same Type", 0, 2000, std::max(0, info_->min_same_type_distance));
       s_min_all_  = std::make_unique<DMSlider>( "Min Distance From All Assets", 0, 2000, std::max(0, info_->min_distance_all));
       int neighbor_distance = info_->NeighborSearchRadius > 0 ? info_->NeighborSearchRadius : 500;
