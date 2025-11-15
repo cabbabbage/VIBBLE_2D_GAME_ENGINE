@@ -474,63 +474,79 @@ float AssetLightRenderer::compute_flicker_multiplier(const LightSource& light) c
         return 1.0f;
     }
 
-    auto mix = [](std::uint32_t seed, int value) {
-        seed ^= static_cast<std::uint32_t>(value) + 0x9e3779b9u + (seed << 6) + (seed >> 2);
+    // Lightweight hash combiner (deterministic per-light)
+    auto mix = [](std::uint32_t seed, std::uint32_t value) {
+        seed ^= value + 0x9e3779b9u + (seed << 6) + (seed >> 2);
         return seed;
     };
 
-    std::uint32_t hash = 0x811C9DC5u;
-    hash = mix(hash, light.offset_x);
-    hash = mix(hash, light.offset_y);
-    hash = mix(hash, light.radius);
-    hash = mix(hash, light.intensity);
-    hash = mix(hash, light.fall_off);
-    hash = mix(hash, static_cast<int>(reinterpret_cast<std::uintptr_t>(light.texture) & 0xFFFFu));
-
-    const float phase  = static_cast<float>(hash & 0xFFFFu) / 65535.0f * kTwoPi;
-    const float wobble = static_cast<float>((hash >> 16) & 0xFFu) / 255.0f;
-    const float slow_speed =
-        (0.6f + 3.4f * speed_setting) * (0.7f + 0.3f * (1.0f - smooth_setting));
-    const float fast_speed =
-        slow_speed * (0.6f + 0.8f * (1.0f - smooth_setting)) + 0.35f * (1.0f + wobble);
-
-    const float time_a = flicker_time_seconds_ * slow_speed + phase;
-    const float time_b =
-        flicker_time_seconds_ * fast_speed + phase * 0.61f + wobble * (kTwoPi * 0.75f);
-
-    float smooth_component = 0.7f * std::sin(time_a) + 0.3f * std::sin(time_b);
-
-    auto random_value = [&](int idx) {
-        const std::uint32_t jitter_hash = mix(hash, idx);
-        return static_cast<float>(jitter_hash & 0xFFFFu) / 32767.5f - 1.0f;
+    auto to_rand = [](std::uint32_t h) {
+        return static_cast<float>(h & 0xFFFFu) / 32767.5f - 1.0f; // [-1, 1]
     };
 
-    const float jitter_rate = (90.0f + 260.0f * speed_setting);
-    const float jitter_time =
-        flicker_time_seconds_ * jitter_rate + phase * 0.37f + wobble * (kTwoPi * 0.8f);
-    const int jitter_index = static_cast<int>(std::floor(jitter_time));
-    const float jitter_frac = jitter_time - static_cast<float>(jitter_index);
+    // 1D value-noise with smootherstep interpolation
+    auto value_noise_1d = [&](float t, std::uint32_t seed) {
+        if (!(std::isfinite(t))) return 0.0f;
+        const int   i   = static_cast<int>(std::floor(t));
+        const float f   = t - static_cast<float>(i);
+        const float f2  = f * f;
+        const float f3  = f2 * f;
+        const float u   = f3 * (f * (f * 6.0f - 15.0f) + 10.0f); // smootherstep
+        const float a   = to_rand(mix(seed, static_cast<std::uint32_t>(i)));
+        const float b   = to_rand(mix(seed, static_cast<std::uint32_t>(i + 1)));
+        return a + (b - a) * u;
+    };
 
-    const float rand_a = random_value(jitter_index);
-    const float rand_b = random_value(jitter_index + 1);
+    // Per-light seed
+    std::uint32_t base = 0x811C9DC5u;
+    base = mix(base, static_cast<std::uint32_t>(light.offset_x));
+    base = mix(base, static_cast<std::uint32_t>(light.offset_y));
+    base = mix(base, static_cast<std::uint32_t>(light.radius));
+    base = mix(base, static_cast<std::uint32_t>(light.intensity));
+    base = mix(base, static_cast<std::uint32_t>(light.fall_off));
+    base = mix(base, static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(light.texture) & 0xFFFFu));
 
-    float interpolation = 0.0f;
-    if (smooth_setting > 0.0f) {
-        const float eased =
-            std::pow(std::clamp(jitter_frac, 0.0f, 1.0f), 0.35f + 0.65f * smooth_setting);
-        interpolation = std::clamp(eased, 0.0f, 1.0f);
+    // Base rate in samples/sec; increases with speed setting
+    const float base_rate = 0.4f + 6.0f * speed_setting;
+
+    // Octave frequencies (incommensurate multipliers) and per-octave seeds
+    const float f0 = base_rate * 1.00f;
+    const float f1 = base_rate * 2.17f;
+    const float f2 = base_rate * 3.73f;
+    const std::uint32_t s0 = mix(base, 0xA1B2C3D4u);
+    const std::uint32_t s1 = mix(base, 0xBEEF1234u);
+    const std::uint32_t s2 = mix(base, 0xDEADBEEFu);
+
+    // Smoothness reduces high-frequency contribution
+    float w0 = 0.6f + 0.3f * smooth_setting;          // 0.6 .. 0.9
+    float w1 = 0.3f * (1.0f - 0.5f * smooth_setting); // 0.15 .. 0.3
+    float w2 = 0.1f * (1.0f - smooth_setting);        // 0.0 .. 0.1
+    float wsum = std::max(1e-6f, w0 + w1 + w2);
+    w0 /= wsum; w1 /= wsum; w2 /= wsum;
+
+    const float t = flicker_time_seconds_;
+    float n0 = value_noise_1d(t * f0, s0);
+    float n1 = value_noise_1d(t * f1, s1);
+    float n2 = value_noise_1d(t * f2, s2);
+    float noise = w0 * n0 + w1 * n1 + w2 * n2;
+
+    // Optional micro-jitter when smoothness is low
+    if (smooth_setting < 0.5f) {
+        const float jitter_rate = 70.0f + 260.0f * speed_setting;
+        const float jt = t * jitter_rate + static_cast<float>((base >> 8) & 0xFFu) * 0.013f;
+        const int   ji = static_cast<int>(std::floor(jt));
+        const float jf = jt - static_cast<float>(ji);
+        const float u  = jf * jf * (3.0f - 2.0f * jf); // smoothstep
+        const float ja = to_rand(mix(base, static_cast<std::uint32_t>(ji)));
+        const float jb = to_rand(mix(base, static_cast<std::uint32_t>(ji + 1)));
+        const float j  = ja + (jb - ja) * u;
+        const float jitter_amp = (0.1f + 0.15f * speed_setting) * (1.0f - smooth_setting);
+        noise = std::clamp(noise * (1.0f - jitter_amp) + j * jitter_amp, -1.0f, 1.0f);
     }
 
-    const float jitter_component =
-        (smooth_setting <= 0.0f) ? rand_a : (rand_a + (rand_b - rand_a) * interpolation);
-
-    const float random_mix = 1.0f - smooth_setting;
-    const float smooth_mix = 0.35f + 0.65f * smooth_setting;
-    float noise            = smooth_component * smooth_mix + jitter_component * random_mix;
-    noise                  = std::clamp(noise, -1.0f, 1.0f);
-
-    const float amplitude   = 0.12f + 0.45f * speed_setting;
-    const float multiplier  = 1.0f + noise * amplitude;
+    // Map noise to brightness multiplier
+    const float amplitude  = 0.12f + 0.45f * speed_setting;
+    const float multiplier = 1.0f + std::clamp(noise, -1.0f, 1.0f) * amplitude;
     return std::clamp(multiplier, 0.2f, 1.0f + amplitude);
 }
 

@@ -225,10 +225,10 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
         }
     }
 
-    // If the animation is locked or frozen, do not advance frames.
-    // This keeps base, foreground, and background textures aligned to the frozen frame.
-    if (anim.locked || anim.is_frozen()) {
-        self_->static_frame = anim.is_frozen() || anim.locked;
+    // If the animation is locked, frozen, or the asset is flagged static, do not advance frames.
+    // This keeps base, foreground, and background textures aligned to the frozen/static frame.
+    if (self_->static_frame || anim.locked || anim.is_frozen()) {
+        self_->static_frame = self_->static_frame || anim.is_frozen() || anim.locked;
         update_child_attachments(anim, 0.0f);
         return true;
     }
@@ -291,7 +291,7 @@ void AnimationRuntime::switch_to(const std::string& anim_id, std::size_t path_in
     AnimationFrame* new_frame = anim.get_first_frame(path_index);
     self_->current_animation = it->first;
     self_->current_frame     = new_frame;
-self_->static_frame      = anim.is_frozen() || anim.locked;
+    self_->static_frame      = anim.is_frozen() || anim.locked;
     self_->frame_progress    = 0.0f;
     active_paths_[self_->current_animation] = path_index;
 }

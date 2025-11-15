@@ -330,6 +330,10 @@ void FrameEditorSession::begin(Assets* assets,
     if (!assets || !asset || !document || animation_id.empty()) {
         return;
     }
+    // Only allow sessions for assets owned by the engine context to avoid dangling pointers.
+    if (!assets->contains_asset(asset)) {
+        return;
+    }
     assets_ = assets;
     target_ = asset;
     document_ = std::move(document);
@@ -493,14 +497,17 @@ void FrameEditorSession::begin(Assets* assets,
 void FrameEditorSession::end() {
     if (!active_) return;
     // Restore camera and overlay state
-    if (assets_) {
+    const bool has_assets = (assets_ != nullptr);
+    const bool target_still_alive = has_assets && assets_->contains_asset(target_);
+    if (has_assets) {
         camera& cam = assets_->getView();
         cam.set_realism_enabled(prev_realism_enabled_);
         cam.set_parallax_enabled(prev_parallax_enabled_);
         // Cancel any transient pan/zoom override
         pan_zoom_.cancel(cam);
     }
-    if (target_) {
+    // If the target asset has been deleted externally, do not dereference it.
+    if (target_ && target_still_alive) {
         apply_child_hidden_state(true);
         target_->set_hidden(prev_asset_hidden_);
     }
@@ -514,7 +521,7 @@ void FrameEditorSession::end() {
         if (document_) {
             document_->save_to_file();
         }
-        if (assets_ && target_ && target_->info) {
+        if (assets_ && target_ && target_still_alive && target_->info) {
             auto info = target_->info;
             if (info) {
                 if (!info->name.empty()) {
@@ -602,6 +609,11 @@ asset->static_frame = anim.is_frozen() || anim.locked;
 
 void FrameEditorSession::update(const Input& input) {
     if (!active_) return;
+    // Validate that the target asset is still alive; if not, end the session safely.
+    if (!assets_ || !target_ || !assets_->contains_asset(target_)) {
+        end();
+        return;
+    }
     // Enable mouse wheel zoom and allow panning while editing
     if (assets_) {
         camera& cam = assets_->getView();
@@ -718,6 +730,11 @@ void FrameEditorSession::update(const Input& input) {
 
 bool FrameEditorSession::handle_event(const SDL_Event& e) {
     if (!active_) return false;
+    // Bail out gracefully if the target asset was deleted while editing.
+    if (!assets_ || !target_ || !assets_->contains_asset(target_)) {
+        end();
+        return true; // consume to prevent other systems from touching stale state
+    }
     ensure_widgets();
     rebuild_layout();
 
@@ -1459,6 +1476,8 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
 
 void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (!active_ || !renderer || !assets_ || !target_) return;
+    // If the asset was destroyed since the session began, skip rendering.
+    if (!assets_->contains_asset(target_)) return;
 
     // Compute anchor
     const camera& cam = assets_->getView();

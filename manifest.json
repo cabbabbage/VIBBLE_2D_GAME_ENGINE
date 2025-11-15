@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:52:45Z",
+        "generated_at": "2025-11-15T10:04:26Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:52:45Z",
+        "generated_at": "2025-11-15T10:04:26Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:52:45Z",
+        "generated_at": "2025-11-15T10:04:26Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -641,7 +641,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:52:45Z",
+        "generated_at": "2025-11-15T10:04:26Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -839,7 +839,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:52:45Z",
+        "generated_at": "2025-11-15T10:04:26Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
