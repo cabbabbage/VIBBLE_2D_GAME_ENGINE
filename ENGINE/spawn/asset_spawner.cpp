@@ -252,6 +252,12 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
 
                 if (queue_item.name == "batch_map_assets") {
 
+                        int batch_resolution = queue_item.grid_resolution > 0 ? queue_item.grid_resolution : resolution;
+                        Check batch_checker(false);
+                        batch_checker.begin_session(grid_service, batch_resolution);
+                        vibble::grid::Occupancy batch_occupancy(area, batch_resolution, grid_service);
+                        SpawnContext batch_ctx(rng_, batch_checker, exclusion_zones, asset_info_library_, all_, asset_library_, grid_service, &batch_occupancy);
+
                         std::vector<double> base_weights;
                         base_weights.reserve(queue_item.candidates.size());
                         double total_weight = 0.0;
@@ -265,16 +271,17 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                 std::fill(base_weights.begin(), base_weights.end(), 1.0);
                         }
 
-                        auto vertices = occupancy.vertices_in_area(area);
+                        auto vertices = batch_occupancy.vertices_in_area(area);
                         if (vertices.empty()) {
+                                batch_checker.reset_session();
                                 continue;
                         }
-                        std::shuffle(vertices.begin(), vertices.end(), ctx.rng());
+                        std::shuffle(vertices.begin(), vertices.end(), batch_ctx.rng());
 
                         for (auto* vertex : vertices) {
                                 if (!vertex) continue;
                                 SDL_Point spawn_pos{ vertex->world.x, vertex->world.y };
-                                spawn_pos = apply_map_grid_jitter(map_grid_settings_, spawn_pos, ctx.rng(), area);
+                                spawn_pos = apply_map_grid_jitter(map_grid_settings_, spawn_pos, batch_ctx.rng(), area);
                                 bool placed = false;
                                 std::vector<double> attempt_weights = base_weights;
                                 const size_t max_candidate_attempts = queue_item.candidates.size();
@@ -283,7 +290,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                         double total_weight = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0.0);
                                         if (total_weight <= 0.0) break;
                                         std::discrete_distribution<size_t> dist(attempt_weights.begin(), attempt_weights.end());
-                                        size_t idx = dist(ctx.rng());
+                                        size_t idx = dist(batch_ctx.rng());
                                         if (idx >= queue_item.candidates.size()) break;
                                         if (attempt_weights[idx] <= 0.0) {
                                                 attempt_weights[idx] = 0.0;
@@ -292,14 +299,14 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                         const SpawnCandidate& candidate = queue_item.candidates[idx];
 
                                         if (candidate.is_null || !candidate.info) {
-                                                occupancy.set_occupied(vertex, true);
+                                                batch_occupancy.set_occupied(vertex, true);
                                                 placed = true;
                                                 break;
                                         }
-                                        if (ctx.checker().check(candidate.info,
+                                        if (batch_ctx.checker().check(candidate.info,
                                                                 spawn_pos,
-                                                                ctx.exclusion_zones(),
-                                                                ctx.all_assets(),
+                                                                batch_ctx.exclusion_zones(),
+                                                                batch_ctx.all_assets(),
                                                                 true,
                                                                 enforce_spacing,
                                                                 false,
@@ -308,26 +315,27 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                                 attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
-                                        auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
+                                        auto* result = batch_ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
                                         if (!result) {
                                                 attempt_weights[idx] = 0.0;
                                                 continue;
                                         }
-                                        const bool track_spacing = ctx.track_spacing_for(result->info, enforce_spacing);
-                                        ctx.checker().register_asset(result, enforce_spacing, track_spacing);
-                                        occupancy.set_occupied(vertex, true);
+                                        const bool track_spacing = batch_ctx.track_spacing_for(result->info, enforce_spacing);
+                                        batch_ctx.checker().register_asset(result, enforce_spacing, track_spacing);
+                                        batch_occupancy.set_occupied(vertex, true);
                                         // Collect zone assets for secondary pass
                                         if (candidate.info && candidate.info->type == std::string("zone_asset")) {
-                                                const Area* region_area = ctx.clip_area() ? ctx.clip_area() : &area;
+                                                const Area* region_area = batch_ctx.clip_area() ? batch_ctx.clip_area() : &area;
                                                 zone_spawns.push_back(ZoneSpawnRecord{ result, region_area, queue_item.adjust_geometry_to_room });
                                         }
                                         placed = true;
                                         break;
                                 }
                                 if (!placed) {
-                                        occupancy.set_occupied(vertex, true);
+                                        batch_occupancy.set_occupied(vertex, true);
                                 }
                         }
+                        batch_checker.reset_session();
                         continue;
                 }
                 if (pos == "Exact" || pos == "Exact Position") {
