@@ -184,6 +184,8 @@ add_executable(engine_tests
     TESTS/test_scene_renderer_prereqs.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/core/manifest/manifest_loader.cpp
+    ENGINE/render/image_effect_settings.cpp
+    ENGINE/render/scene_renderer.cpp
     ENGINE/utils/log.cpp
 )
 
