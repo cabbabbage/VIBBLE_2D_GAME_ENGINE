@@ -1124,7 +1124,6 @@ void Animation::load(const std::string& trigger,
                 fs::path src_folder      = resolve_source_folder(dir_path, source.path);
                 std::string cache_folder = root_cache + "/" + trigger;
                 std::string meta_file    = cache_folder + "/metadata.json";
-                const bool supports_depthcue_cache = (renderer != nullptr);
                 int expected_frames = 0;
                 int orig_w = 0, orig_h = 0;
                 while (true) {
