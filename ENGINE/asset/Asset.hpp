@@ -183,8 +183,6 @@ class Asset {
     SDL_Point grid_residency_cache() const;
     RenderTextureCache& shadow_mask_cache();
     RenderTextureCache& shadow_mask_cache() const;
-    RenderTextureCache& motion_blur_cache();
-    RenderTextureCache& motion_blur_cache() const;
     RenderTextureCache& cast_shadow_cache();
     RenderTextureCache& cast_shadow_cache() const;
     MaskRenderMetadata& mask_render_metadata();
@@ -302,7 +300,6 @@ private:
     static void destroy_render_cache(RenderTextureCache& cache);
 
     mutable RenderTextureCache shadow_mask_cache_{};
-    mutable RenderTextureCache motion_blur_cache_{};
     mutable RenderTextureCache cast_shadow_cache_{};
     mutable MaskRenderMetadata mask_render_metadata_{};
 

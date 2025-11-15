@@ -678,6 +678,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
 
     std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
     std::vector<std::vector<SDL_Surface*>> mask_surfaces(variant_count);
+    // Foreground/background overlay surfaces are not generated at runtime.
     std::vector<std::vector<SDL_Surface*>> foreground_surfaces(variant_count);
     std::vector<std::vector<SDL_Surface*>> background_surfaces(variant_count);
 
@@ -711,36 +712,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
         }
     }
 
-    camera_effects::image_effects::GlobalState effect_state = resolve_effect_state();
-    const std::uint64_t fg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.foreground);
-    const std::uint64_t bg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.background);
-
-    auto build_overlay_stack = [&](const camera_effects::ImageEffectSettings& effects,
-                                   std::vector<std::vector<SDL_Surface*>>& storage,
-                                   const char* label) {
-        for (std::size_t idx = 0; idx < variant_count; ++idx) {
-            storage[idx].resize(1);
-            SDL_Surface* base = variant_surfaces[idx].empty() ? nullptr : variant_surfaces[idx][0];
-            if (!base) {
-                cleanup_surfaces();
-                throw std::runtime_error(std::string("Missing base surface while building ") + label + " overlays");
-            }
-            SDL_Surface* copy = duplicate_surface(base);
-            if (!copy) {
-                cleanup_surfaces();
-                throw std::runtime_error(std::string("Failed to duplicate surface for ") + label + " overlay");
-            }
-            if (!image_effects::ApplyImageEffectsToSurface(copy, effects)) {
-                SDL_FreeSurface(copy);
-                cleanup_surfaces();
-                throw std::runtime_error(std::string("Failed to apply image effects for ") + label + " overlay");
-            }
-            storage[idx][0] = copy;
-        }
-    };
-
-    build_overlay_stack(effect_state.foreground, foreground_surfaces, "foreground");
-    build_overlay_stack(effect_state.background, background_surfaces, "background");
+    // Do not generate foreground/background overlay stacks at runtime.
 
     const std::vector<int> percent_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps);
     const std::string cache_root_str = cache_root.string();
@@ -760,8 +732,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
         const std::string background_folder = (scale_root / "background").string();
 
         save_stack(normal_folder, variant_surfaces[idx], "normal");
-        save_stack(foreground_folder, foreground_surfaces[idx], "foreground");
-        save_stack(background_folder, background_surfaces[idx], "background");
+        // Skip saving overlay layers at runtime.
     }
 
     nlohmann::json metadata;
@@ -776,8 +747,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     metadata["scale_steps"] = std::move(steps_json);
     metadata["scale_profile_revision"] = static_cast<std::uint64_t>(0);
     metadata["has_masks"] = (base_mask_surface != nullptr);
-    metadata["foreground_effect_hash"] = fg_effect_hash;
-    metadata["background_effect_hash"] = bg_effect_hash;
+    // Skip recording foreground/background effect hashes for runtime-merged assets.
     metadata["source_signature"] = compute_surface_signature(variant_surfaces);
     CacheManager::save_metadata((cache_root / "metadata.json").string(), metadata);
 
@@ -828,10 +798,8 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
             masks.push_back(mask_texture);
         }
 
-        SDL_Surface* fg_surface = foreground_surfaces[idx].empty() ? nullptr : foreground_surfaces[idx][0];
-        SDL_Surface* bg_surface = background_surfaces[idx].empty() ? nullptr : background_surfaces[idx][0];
-        caches[0].foreground_textures[idx] = surface_to_texture_checked(fg_surface, "foreground overlay", true);
-        caches[0].background_textures[idx] = surface_to_texture_checked(bg_surface, "background overlay", true);
+        caches[0].foreground_textures[idx] = nullptr;
+        caches[0].background_textures[idx] = nullptr;
     }
 
     cleanup_surfaces();

@@ -1505,7 +1505,7 @@ void Animation::load(const std::string& trigger,
                 const bool cached_variants_loaded = (!need_generation && attempt_cache_load);
 
                 if (supports_depthcue_cache) {
-                        const bool overlay_cache_eligible = metadata_valid && !effect_hash_mismatch;
+                        const bool overlay_cache_eligible = true; // Always attempt to load precomputed overlays
 
                         // Attempt to load cached foreground/background surfaces for each variant.
                         for (std::size_t idx = 0; idx < variant_count; ++idx) {
@@ -1714,45 +1714,7 @@ void Animation::load(const std::string& trigger,
                                         cache_entry.widths[variant_idx]   = tex_w;
                                         cache_entry.heights[variant_idx]  = tex_h;
 
-                                        auto flip_overlay_texture = [&](SDL_Texture*& overlay_tex) {
-                                                if (!overlay_tex) {
-                                                        return;
-                                                }
-                                                Uint32 overlay_fmt   = SDL_PIXELFORMAT_RGBA8888;
-                                                int    overlay_access = 0;
-                                                int    overlay_w      = tex_w;
-                                                int    overlay_h      = tex_h;
-                                                if (SDL_QueryTexture(overlay_tex, &overlay_fmt, &overlay_access, &overlay_w, &overlay_h) != 0 ||
-                                                    overlay_w <= 0 || overlay_h <= 0) {
-                                                        SDL_DestroyTexture(overlay_tex);
-                                                        overlay_tex = nullptr;
-                                                        return;
-                                                }
-                                                SDL_Texture* overlay_dst = SDL_CreateTexture(renderer, overlay_fmt, SDL_TEXTUREACCESS_TARGET, overlay_w, overlay_h);
-                                                if (!overlay_dst) {
-                                                        SDL_DestroyTexture(overlay_tex);
-                                                        overlay_tex = nullptr;
-                                                        return;
-                                                }
-                                                SDL_SetTextureBlendMode(overlay_dst, SDL_BLENDMODE_BLEND);
-                                                apply_scale_mode(overlay_dst, info);
-                                                SDL_Texture* prev_target_overlay = SDL_GetRenderTarget(renderer);
-                                                SDL_SetRenderTarget(renderer, overlay_dst);
-                                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                SDL_RenderClear(renderer);
-                                                SDL_Rect overlay_rect{0, 0, overlay_w, overlay_h};
-                                                SDL_RenderCopyEx(renderer, overlay_tex, nullptr, &overlay_rect, 0.0, nullptr, flip_flags);
-                                                SDL_SetRenderTarget(renderer, prev_target_overlay);
-                                                SDL_DestroyTexture(overlay_tex);
-                                                overlay_tex = overlay_dst;
-                                        };
-
-                                        if (variant_idx < cache_entry.foreground_textures.size()) {
-                                                flip_overlay_texture(cache_entry.foreground_textures[variant_idx]);
-                                        }
-                                        if (variant_idx < cache_entry.background_textures.size()) {
-                                                flip_overlay_texture(cache_entry.background_textures[variant_idx]);
-                                        }
+                                        // Do not mutate or generate overlay textures at runtime; draw-time flipping is used.
                                         SDL_Texture* src_mask = nullptr;
                                         if (variant_idx < cache_entry.mask_textures.size()) {
                                                 src_mask = cache_entry.mask_textures[variant_idx];

@@ -779,7 +779,6 @@ void Asset::destroy_render_cache(RenderTextureCache& cache) {
 
 void Asset::clear_render_caches() {
         destroy_render_cache(shadow_mask_cache_);
-        destroy_render_cache(motion_blur_cache_);
         destroy_render_cache(cast_shadow_cache_);
         reset_mask_render_metadata();
         render_pipeline::shading::ClearShadowStateFor(this);
@@ -1024,8 +1023,6 @@ void Asset::on_scale_factor_changed() {
 
         shadow_mask_cache_.width  = 0;
         shadow_mask_cache_.height = 0;
-        motion_blur_cache_.width  = 0;
-        motion_blur_cache_.height = 0;
         cast_shadow_cache_.width  = 0;
         cast_shadow_cache_.height = 0;
         reset_mask_render_metadata();
@@ -1168,8 +1165,6 @@ float Asset::smoothed_alpha() const {
 
 Asset::RenderTextureCache& Asset::shadow_mask_cache() { return shadow_mask_cache_; }
 Asset::RenderTextureCache& Asset::shadow_mask_cache() const { return shadow_mask_cache_; }
-Asset::RenderTextureCache& Asset::motion_blur_cache() { return motion_blur_cache_; }
-Asset::RenderTextureCache& Asset::motion_blur_cache() const { return motion_blur_cache_; }
 Asset::RenderTextureCache& Asset::cast_shadow_cache() { return cast_shadow_cache_; }
 Asset::RenderTextureCache& Asset::cast_shadow_cache() const { return cast_shadow_cache_; }
 Asset::MaskRenderMetadata& Asset::mask_render_metadata() { return mask_render_metadata_; }

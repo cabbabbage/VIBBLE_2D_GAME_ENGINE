@@ -15,8 +15,6 @@
 
 namespace {
 
-constexpr float MOTION_BLUR_STRENGTH = 0.45f; // fallback when settings unavailable
-
 float compute_asset_screen_height(Asset& asset, float inv_scale) {
     int cached_w = asset.cached_w;
     int cached_h = asset.cached_h;
@@ -226,62 +224,7 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         SDL_GetRendererOutputSize(renderer_, &context.screen_width_px, &context.screen_height_px);
     }
 
-    SDL_Texture* previous_final       = context.reusable_final;
-    SDL_Texture* previous_final_copy  = nullptr;
-    float  clamped_blur_strength = std::clamp(MOTION_BLUR_STRENGTH, 0.0f, 1.0f); // TODO(#reactive-shadows): expose tuning knobs again.
-    const bool   apply_motion_blur     = previous_final && clamped_blur_strength > 0.0f && !low_quality_mode_;
-    if (apply_motion_blur) {
-        int    prev_w      = 0;
-        int    prev_h      = 0;
-        Uint32 prev_format = SDL_PIXELFORMAT_UNKNOWN;
-        if (SDL_QueryTexture(previous_final, &prev_format, nullptr, &prev_w, &prev_h) == 0 && prev_w == width && prev_h == height) {
-            if (prev_format == SDL_PIXELFORMAT_UNKNOWN) {
-                if (base_format == SDL_PIXELFORMAT_UNKNOWN) {
-                    SDL_QueryTexture(base_frame, &base_format, nullptr, nullptr, nullptr);
-                }
-                prev_format = (base_format != SDL_PIXELFORMAT_UNKNOWN) ? base_format : SDL_PIXELFORMAT_RGBA8888;
-            }
-
-            Asset::RenderTextureCache& cache = asset.motion_blur_cache();
-            if (cache.texture) {
-                int tex_w = 0;
-                int tex_h = 0;
-                if (cache.width != prev_w || cache.height != prev_h) {
-                    if (SDL_QueryTexture(cache.texture, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w != prev_w || tex_h != prev_h) {
-                        SDL_DestroyTexture(cache.texture);
-                        cache.texture = nullptr;
-                        cache.width   = 0;
-                        cache.height  = 0;
-                    } else {
-                        cache.width  = tex_w;
-                        cache.height = tex_h;
-                    }
-                }
-            }
-
-            if (!cache.texture) {
-                cache.texture = SDL_CreateTexture(renderer_, prev_format, SDL_TEXTUREACCESS_TARGET, prev_w, prev_h);
-                if (cache.texture) {
-                    SDL_SetTextureBlendMode(cache.texture, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2,0,12)
-                    SDL_SetTextureScaleMode(cache.texture, SDL_ScaleModeBest);
-#endif
-                    cache.width  = prev_w;
-                    cache.height = prev_h;
-                }
-            }
-
-            if (cache.texture) {
-                SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
-                SDL_SetRenderTarget(renderer_, cache.texture);
-                SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-                SDL_RenderClear(renderer_);
-                SDL_RenderCopy(renderer_, previous_final, nullptr, nullptr);
-                SDL_SetRenderTarget(renderer_, prev_target);
-                previous_final_copy = cache.texture;
-            }
-        }
-    }
+    // Motion blur path removed: no previous-frame accumulation/blending.
 
     context.update_projection(asset);
 
@@ -338,16 +281,7 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
         }
     }
 
-    if (previous_final_copy && final_texture) {
-        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer_);
-        SDL_SetRenderTarget(renderer_, final_texture);
-        SDL_SetTextureBlendMode(previous_final_copy, SDL_BLENDMODE_BLEND);
-        const Uint8 blur_alpha = static_cast<Uint8>(std::lround(clamped_blur_strength * 255.0f));
-        SDL_SetTextureAlphaMod(previous_final_copy, blur_alpha);
-        SDL_RenderCopy(renderer_, previous_final_copy, nullptr, nullptr);
-        SDL_SetTextureAlphaMod(previous_final_copy, 255);
-        SDL_SetRenderTarget(renderer_, prev_target);
-    }
+    // Motion blur blending removed.
 
     for (SDL_Texture* tex : intermediates) {
         SDL_DestroyTexture(tex);
