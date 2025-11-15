@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:08:03Z",
+        "generated_at": "2025-11-15T11:15:54Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:08:03Z",
+        "generated_at": "2025-11-15T11:15:54Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:08:03Z",
+        "generated_at": "2025-11-15T11:15:54Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -583,7 +583,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:08:03Z",
+        "generated_at": "2025-11-15T11:15:54Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -713,7 +713,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:08:03Z",
+        "generated_at": "2025-11-15T11:15:54Z",
         "max_scale": 0.09090909361839294,
         "min_scale": 0.08658009022474289,
         "recommended_percentages": [
@@ -1159,7 +1159,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:08:03Z",
+        "generated_at": "2025-11-15T11:15:54Z",
         "max_scale": 0.11818180978298187,
         "min_scale": 0.11818180978298187,
         "recommended_percentages": [
@@ -1236,7 +1236,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:08:03Z",
+        "generated_at": "2025-11-15T11:15:54Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1314,7 +1314,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:08:03Z",
+        "generated_at": "2025-11-15T11:15:54Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1477,7 +1477,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:08:03Z",
+        "generated_at": "2025-11-15T11:15:54Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -1998,9 +1998,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            118,
             242,
             36,
-            188,
             255
           ],
           "edge_smoothness": 43,
@@ -2051,9 +2051,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            31,
-            32,
-            204,
+            122,
+            242,
+            36,
             255
           ],
           "edge_smoothness": 68,
@@ -2140,19 +2140,19 @@
                 }
               ],
               "display_name": "lantern",
-              "dx": -114,
-              "dy": -232,
+              "dx": -496,
+              "dy": -472,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
               "locked": false,
               "max_number": 1,
               "min_number": 1,
-              "origional_height": 4200,
-              "origional_width": 4224,
+              "origional_height": 4176,
+              "origional_width": 4144,
               "position": "Exact",
               "priority": 2,
-              "resolution": 10,
+              "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-b03088c2c2fe"
