@@ -478,56 +478,33 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
                         if (!vertex) continue;
                         SDL_Point spawn_pos = vertex->world;
 
-                        bool success = false;
-                        std::vector<double> attempt_weights = base_weights;
-                        const size_t max_candidate_attempts = queue_item.candidates.size();
                         const bool enforce_spacing = queue_item.check_min_spacing;
-                        for (size_t attempt = 0; attempt < max_candidate_attempts; ++attempt) {
-                                double total_weight = std::accumulate(attempt_weights.begin(), attempt_weights.end(), 0.0);
-                                if (total_weight <= 0.0) break;
-                                std::discrete_distribution<size_t> dist(attempt_weights.begin(), attempt_weights.end());
-                                size_t idx = dist(ctx.rng());
-                                if (idx >= queue_item.candidates.size()) break;
-                                if (attempt_weights[idx] <= 0.0) {
-                                        attempt_weights[idx] = 0.0;
-                                        continue;
-                                }
-                                const SpawnCandidate& candidate = queue_item.candidates[idx];
+                        const SpawnCandidate* candidate = queue_item.select_candidate(ctx.rng());
 
-                                if (candidate.is_null || !candidate.info) {
-                                        occupancy.set_occupied(vertex, true);
-                                        break;
-                                }
+                        if (!candidate || candidate->is_null) {
+                                occupancy.set_occupied(vertex, true);
+                                continue;
+                        }
 
-                                if (ctx.checker().check(candidate.info,
-                                                        spawn_pos,
-                                                        ctx.exclusion_zones(),
-                                                        ctx.all_assets(),
-                                                        true,
-                                                        enforce_spacing,
-                                                        true,
-                                                        false,
-                                                        5)) {
-                                        attempt_weights[idx] = 0.0;
-                                        continue;
-                                }
+                        if (ctx.checker().check(candidate->info,
+                                                spawn_pos,
+                                                ctx.exclusion_zones(),
+                                                ctx.all_assets(),
+                                                true,
+                                                enforce_spacing,
+                                                true,
+                                                false,
+                                                5)) {
+                                occupancy.set_occupied(vertex, true);
+                                continue;
+                        }
 
-                                auto* result = ctx.spawnAsset(candidate.name, candidate.info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
-                                if (!result) {
-                                        attempt_weights[idx] = 0.0;
-                                        continue;
-                                }
-
+                        auto* result = ctx.spawnAsset(candidate->name, candidate->info, area, spawn_pos, 0, nullptr, queue_item.spawn_id, queue_item.position);
+                        if (result) {
                                 ctx.checker().register_asset(result, enforce_spacing, false);
-
-                                occupancy.set_occupied(vertex, true);
-                                success = true;
-                                break;
                         }
 
-                        if (!success) {
-                                occupancy.set_occupied(vertex, true);
-                        }
+                        occupancy.set_occupied(vertex, true);
                 }
                 checker_.reset_session();
         }

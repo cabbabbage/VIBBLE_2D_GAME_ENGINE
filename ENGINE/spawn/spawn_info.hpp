@@ -26,6 +26,7 @@ struct SpawnInfo {
     int priority = 0;
     int quantity = 0;
     bool check_min_spacing = false;
+    int grid_resolution = 0;
 
     std::string link_area_name;
 

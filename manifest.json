@@ -64,20 +64,22 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T12:07:13Z",
-        "max_scale": 0.05454545095562935,
-        "min_scale": 0.05454545095562935,
+        "generated_at": "2025-11-15T12:41:29Z",
+        "max_scale": 0.06818182021379471,
+        "min_scale": 0.051948051899671555,
         "recommended_percentages": [
           100,
-          5,
+          7,
+          6,
           5
         ],
         "recommended_steps": [
           1.0,
-          0.05454545095562935,
-          0.05454545095562935
+          0.06818182021379471,
+          0.05951397120952606,
+          0.051948051899671555
         ],
-        "revision": 4329668871805815559,
+        "revision": 15216200396871486443,
         "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
@@ -117,7 +119,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T12:07:13Z",
+        "generated_at": "2025-11-15T12:41:29Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -170,7 +172,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T12:07:13Z",
+        "generated_at": "2025-11-15T12:41:29Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -583,7 +585,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T12:07:13Z",
+        "generated_at": "2025-11-15T12:41:29Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -713,22 +715,20 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T12:07:13Z",
-        "max_scale": 0.09090909361839294,
+        "generated_at": "2025-11-15T12:41:29Z",
+        "max_scale": 0.08658009022474289,
         "min_scale": 0.08658009022474289,
         "recommended_percentages": [
           100,
-          9,
           9,
           9
         ],
         "recommended_steps": [
           1.0,
-          0.09090909361839294,
-          0.08871819078922272,
+          0.08658009022474289,
           0.08658009022474289
         ],
-        "revision": 1599006862946947578,
+        "revision": 2971822716602099074,
         "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
@@ -1178,6 +1178,89 @@
           "speed_factor": 1.0
         },
         "left": {
+          "attack_geometry": [
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            }
+          ],
+          "children": [],
           "derived_modifiers": {
             "flipMovementX": false,
             "flipMovementY": false,
@@ -1186,6 +1269,88 @@
             "reverse": false
           },
           "flipped_source": false,
+          "hit_geometry": [
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            }
+          ],
           "inherit_source_movement": false,
           "loop": true,
           "movement": [
@@ -1194,68 +1359,68 @@
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ],
             [
-              0,
+              -9,
               0
             ]
           ],
           "movement_total": {
-            "dx": 0,
+            "dx": -135,
             "dy": 0
           },
           "number_of_frames": 16,
@@ -1324,7 +1489,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T12:07:13Z",
+        "generated_at": "2025-11-15T12:41:29Z",
         "max_scale": 0.11818180978298187,
         "min_scale": 0.11818180978298187,
         "recommended_percentages": [
@@ -1401,7 +1566,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T12:07:13Z",
+        "generated_at": "2025-11-15T12:41:29Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1479,7 +1644,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T12:07:13Z",
+        "generated_at": "2025-11-15T12:41:29Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1642,7 +1807,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T12:07:13Z",
+        "generated_at": "2025-11-15T12:41:29Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -1859,31 +2024,35 @@
           {
             "candidates": [
               {
-                "chance": 5,
+                "chance": 673,
                 "name": "null"
               },
               {
-                "chance": 1.3500000000000005,
+                "chance": 160,
                 "name": "Grass_1"
               },
               {
-                "chance": 1.3500000000000005,
+                "chance": 130.35,
                 "name": "Grass_2"
               },
               {
-                "chance": 2,
+                "chance": 136,
                 "name": "grass_3"
               },
               {
-                "chance": 2,
+                "chance": 92,
                 "name": "grass_4"
+              },
+              {
+                "chance": 1,
+                "name": "Candle"
               }
             ],
             "display_name": "batch_map_assets",
             "enforce_spacing": false,
             "explicit_flip": false,
             "force_flipped": false,
-            "grid_resolution": 7,
+            "grid_resolution": 10,
             "locked": false,
             "max_number": 100,
             "min_number": 53,
@@ -2163,9 +2332,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            36,
-            149,
             242,
+            36,
+            174,
             255
           ],
           "edge_smoothness": 43,
@@ -2216,9 +2385,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            242,
-            61,
-            242,
+            32,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 68,
@@ -2330,35 +2499,6 @@
                 },
                 {
                   "chance": 100,
-                  "name": "barrel"
-                }
-              ],
-              "display_name": "barrel",
-              "dx": -732,
-              "dy": -88,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 4208,
-              "origional_width": 4104,
-              "position": "Exact",
-              "priority": 3,
-              "resolution": 4,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-0130520bd2d5"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
                   "name": "bomb"
                 }
               ],
@@ -2374,7 +2514,7 @@
               "origional_height": 4208,
               "origional_width": 4152,
               "position": "Exact",
-              "priority": 4,
+              "priority": 3,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,

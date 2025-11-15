@@ -550,9 +550,21 @@ void FrameEditorSession::begin(Assets* assets,
 
 void FrameEditorSession::end() {
     if (!active_) return;
-    // Restore camera and overlay state
+    
+    // Save local copies of critical data before clearing
     const bool has_assets = (assets_ != nullptr);
-    const bool target_still_alive = has_assets && assets_->contains_asset(target_);
+    const bool target_still_alive = has_assets && target_ && assets_->contains_asset(target_);
+    std::shared_ptr<AssetInfo> info_to_reload;
+    std::string asset_name_for_cache;
+    
+    if (target_still_alive && target_->info) {
+        info_to_reload = target_->info;
+        if (info_to_reload) {
+            asset_name_for_cache = info_to_reload->name;
+        }
+    }
+    
+    // Restore camera and overlay state
     if (has_assets) {
         camera& cam = assets_->getView();
         cam.set_realism_enabled(prev_realism_enabled_);
@@ -560,96 +572,32 @@ void FrameEditorSession::end() {
         // Cancel any transient pan/zoom override
         pan_zoom_.cancel(cam);
     }
+    
     // If the target asset has been deleted externally, do not dereference it.
     if (target_ && target_still_alive) {
         apply_child_hidden_state(true);
         target_->set_hidden(prev_asset_hidden_);
     }
+    
     end_hitbox_drag(false);
     end_attack_drag(false);
     child_hidden_cache_.clear();
     last_applied_show_asset_state_ = true;
-    // On exit, commit any pending changes once and rebuild assets
-    if (pending_save_) {
+    
+    // Save document to disk if there are pending changes
+    if (pending_save_ && document_) {
         pending_save_ = false;
-        if (document_) {
-            document_->save_to_file();
-        }
-        if (assets_ && target_ && target_still_alive && target_->info) {
-            auto info = target_->info;
-            if (info) {
-                if (!info->name.empty()) {
-                    AnimationLoader::clear_asset_cache(info->name);
-                }
-                const bool ok = info->reload_animations_from_disk();
-                SDL_Renderer* renderer = assets_->renderer();
-                if (renderer) {
-                    info->loadAnimations(renderer);
-                }
-                // Refresh all instances of this info in world once
-                auto refresh_assets_for_info = [&](const std::shared_ptr<AssetInfo>& candidate) -> bool {
-                    if (!candidate || !assets_) return false;
-                    bool refreshed = false;
-                    std::unordered_set<Asset*> visited;
-                    auto refresh_asset = [&](Asset* asset) {
-                        if (!asset || asset->info.get() != candidate.get()) return;
-                        if (!visited.insert(asset).second) return;
-                        asset->clear_render_caches();
-                        asset->clear_downscale_cache();
-                        asset->set_final_texture(nullptr);
-                        asset->current_frame = nullptr;
-                        asset->set_frame_progress(0.0f);
-                        asset->static_frame = false;
-                        std::string desired = asset->current_animation.empty() ? std::string{"default"} : asset->current_animation;
-                        if (asset->anim_) {
-                            asset->anim_->move(SDL_Point{0, 0}, desired);
-                        } else if (asset->info) {
-                            auto it = asset->info->animations.find(desired);
-                            if (it == asset->info->animations.end()) {
-                                it = asset->info->animations.find("default");
-                            }
-                            if (it == asset->info->animations.end() && !asset->info->animations.empty()) {
-                                it = asset->info->animations.begin();
-                            }
-                            if (it != asset->info->animations.end()) {
-                                auto& anim = it->second;
-                                asset->current_animation = it->first;
-                                asset->current_frame = anim.get_first_frame();
-asset->static_frame = anim.is_frozen() || anim.locked;
-                            } else {
-                                asset->current_animation.clear();
-                                asset->current_frame = nullptr;
-                            }
-                        }
-                        asset->refresh_cached_dimensions();
-                        refreshed = true;
-                    };
-                    for (Asset* a : assets_->all) refresh_asset(a);
-                    for (const auto& owned : assets_->owned_assets) refresh_asset(owned.get());
-                    return refreshed;
-                };
-                bool refreshed_any = refresh_assets_for_info(info);
-                if (!refreshed_any) {
-                    for (auto& [lib_name, lib_info] : assets_->library().all()) {
-                        if (refresh_assets_for_info(lib_info)) {
-                            refreshed_any = true;
-                        }
-                    }
-                }
-                if (refreshed_any) {
-                    assets_->mark_active_assets_dirty();
-                }
-                update_asset_preview_frame();
-            }
-        }
+        document_->save_to_file();
     }
-
-    // Reopen animation editor window
+    
+    // Reopen animation editor window BEFORE clearing session data
     if (host_) {
         host_->on_live_frame_editor_closed(animation_id_);
     }
-    // Clear session
+    
+    // Clear session data
     active_ = false;
+    Assets* saved_assets = assets_;
     assets_ = nullptr;
     target_ = nullptr;
     document_.reset();
@@ -661,7 +609,28 @@ asset->static_frame = anim.is_frozen() || anim.locked;
     child_preview_slots_.clear();
     document_payload_cache_.clear();
     document_children_signature_.clear();
-    if (on_end_) { auto cb = std::move(on_end_); on_end_ = {}; cb(); }
+    
+    // Reload animations AFTER session is closed
+    if (info_to_reload && saved_assets) {
+        if (!asset_name_for_cache.empty()) {
+            AnimationLoader::clear_asset_cache(asset_name_for_cache);
+        }
+        const bool ok = info_to_reload->reload_animations_from_disk();
+        SDL_Renderer* renderer = saved_assets->renderer();
+        if (ok && renderer) {
+            info_to_reload->loadAnimations(renderer);
+        }
+        // Simple refresh without complex iteration
+        if (saved_assets) {
+            saved_assets->mark_active_assets_dirty();
+        }
+    }
+    
+    if (on_end_) { 
+        auto cb = std::move(on_end_); 
+        on_end_ = {}; 
+        cb(); 
+    }
 }
 
 void FrameEditorSession::update(const Input& input) {

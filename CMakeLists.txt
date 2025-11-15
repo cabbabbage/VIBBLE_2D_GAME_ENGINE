@@ -185,11 +185,15 @@ add_executable(engine_tests
     TESTS/test_animation_child_visibility.cpp
     TESTS/test_animation_child_runtime.cpp
     ENGINE/asset/animation.cpp
+    ENGINE/asset/surface_utils.cpp
     ENGINE/animation_update/child_attachment_controller.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/core/manifest/manifest_loader.cpp
     ENGINE/render/image_effect_settings.cpp
     ENGINE/utils/log.cpp
+    ENGINE/utils/cache_manager.cpp
+    ENGINE/utils/generate_faded_mask.cpp
+    ENGINE/utils/loading_status_notifier.cpp
   )
 
 target_include_directories(engine_tests

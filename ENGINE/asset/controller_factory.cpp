@@ -26,7 +26,7 @@ ControllerFactory::create_by_key(const std::string& key, Asset* self) const {
 
                         return std::make_unique<FrogController>(assets_, self);
 
-                if (key == "Bomb_controller")
+                if (key == "Bomb_controller" || self->info->name == "bomb")
                         return std::make_unique<BombController>(assets_, self);
         } catch (...) {
         }
