@@ -126,6 +126,45 @@ struct SourceSignatureResult {
 constexpr std::uint64_t kSignatureOffset = 1469598103934665603ull;
 constexpr std::uint64_t kSignaturePrime  = 1099511628211ull;
 
+struct VariantLayerPaths {
+        std::string scale_folder;
+        std::string normal_folder;
+        std::string foreground_folder;
+        std::string background_folder;
+};
+
+VariantLayerPaths build_variant_layer_paths(const std::string& cache_folder,
+                                            const std::vector<float>& steps,
+                                            std::size_t index) {
+        VariantLayerPaths paths;
+        paths.scale_folder     = render_pipeline::ScalingLogic::VariantFolder(cache_folder, steps, index);
+        const fs::path scale_root(paths.scale_folder);
+        paths.normal_folder     = (scale_root / "normal").string();
+        paths.foreground_folder = (scale_root / "foreground").string();
+        paths.background_folder = (scale_root / "background").string();
+        return paths;
+}
+
+SDL_Surface* duplicate_surface(SDL_Surface* surface) {
+        if (!surface) {
+                return nullptr;
+        }
+        SDL_Surface* copy = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888, 0);
+        if (!copy) {
+                SDL_Surface* fallback = SDL_CreateRGBSurfaceWithFormat(0, surface->w, surface->h, 32, SDL_PIXELFORMAT_RGBA8888);
+                if (!fallback) {
+                        return nullptr;
+                }
+                SDL_Rect rect{0, 0, surface->w, surface->h};
+                if (SDL_BlitSurface(surface, &rect, fallback, &rect) != 0) {
+                        SDL_FreeSurface(fallback);
+                        return nullptr;
+                }
+                copy = fallback;
+        }
+        return copy;
+}
+
 std::uint64_t mix_signature(std::uint64_t seed, std::uint64_t value) {
         seed ^= value;
         seed *= kSignaturePrime;
@@ -754,8 +793,7 @@ void Animation::load(const std::string& trigger,
         }
         const std::uint64_t fg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.foreground);
         const std::uint64_t bg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.background);
-        const bool supports_depthcue_cache = (renderer != nullptr);
-        bool depthcue_hash_mismatch = false;
+        bool effect_hash_mismatch = false;
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                   << " profile steps (pre-normalize): " << format_steps(variant_steps_) << ", prefer_cached=" << (prefer_cached ? "true" : "false") << ", scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false") << "\n";
         variant_steps_ = info.scale_variants;
@@ -915,6 +953,13 @@ void Animation::load(const std::string& trigger,
                                                         child_data.visible = child_entry[4].get<int>() != 0;
                                                 } else {
                                                         child_data.visible = false;
+                                                }
+                                        }
+                                        if (child_entry.size() >= 6) {
+                                                if (child_entry[5].is_boolean()) {
+                                                        child_data.render_in_front = child_entry[5].get<bool>();
+                                                } else if (child_entry[5].is_number_integer()) {
+                                                        child_data.render_in_front = child_entry[5].get<int>() != 0;
                                                 }
                                         }
                                         if (child_data.child_index < 0 ||
@@ -1259,6 +1304,10 @@ void Animation::load(const std::string& trigger,
                 fs::path src_folder      = resolve_source_folder(dir_path, source.path);
                 std::string cache_folder = root_cache + "/" + trigger;
                 std::string meta_file    = cache_folder + "/metadata.json";
+                const bool supports_depthcue_cache = (renderer != nullptr);
+                bool depthcue_hash_mismatch        = false;
+                const std::string foreground_cache_folder = cache_folder + "/foreground";
+                const std::string background_cache_folder = cache_folder + "/background";
                 int expected_frames = 0;
                 int orig_w = 0, orig_h = 0;
                 while (true) {
@@ -1288,10 +1337,34 @@ void Animation::load(const std::string& trigger,
                         const bool meta_has_masks = meta.value("has_masks", false);
                         bool meta_ok = ( meta.value("cache_version", 0) == kAnimationCacheVersion && meta.value("frame_count", -1) == expected_frames && meta.value("original_width", -1) == orig_w && meta.value("original_height", -1) == orig_h && (meta_has_masks == info.is_shaded));
                         if (supports_depthcue_cache) {
-                                const std::uint64_t stored_fg_hash = meta.value("depthcue_foreground_hash", 0ull);
-                                const std::uint64_t stored_bg_hash = meta.value("depthcue_background_hash", 0ull);
-                                if (stored_fg_hash != fg_effect_hash || stored_bg_hash != bg_effect_hash) {
+                                auto read_effect_hash = [&](const char* depthcue_key,
+                                                            const char* legacy_key,
+                                                            bool& found) -> std::uint64_t {
+                                        if (meta.contains(depthcue_key)) {
+                                                found = true;
+                                                return meta.value(depthcue_key, 0ull);
+                                        }
+                                        if (meta.contains(legacy_key)) {
+                                                found = true;
+                                                return meta.value(legacy_key, 0ull);
+                                        }
+                                        found = false;
+                                        return 0ull;
+                                };
+                                bool has_fg_hash = false;
+                                bool has_bg_hash = false;
+                                const std::uint64_t stored_fg_hash =
+                                        read_effect_hash("depthcue_foreground_hash", "foreground_effect_hash", has_fg_hash);
+                                const std::uint64_t stored_bg_hash =
+                                        read_effect_hash("depthcue_background_hash", "background_effect_hash", has_bg_hash);
+                                if (!has_fg_hash || !has_bg_hash) {
+                                        effect_hash_mismatch   = true;
                                         depthcue_hash_mismatch = true;
+                                        meta_ok                = false;
+                                } else if (stored_fg_hash != fg_effect_hash || stored_bg_hash != bg_effect_hash) {
+                                        effect_hash_mismatch   = true;
+                                        depthcue_hash_mismatch = true;
+                                        meta_ok                = false;
                                 }
                         }
                         if (meta_ok) {
@@ -1373,6 +1446,9 @@ void Animation::load(const std::string& trigger,
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " cache metadata missing -> rebuilding variants\n";
                 }
+                if (!metadata_valid && supports_depthcue_cache) {
+                        depthcue_hash_mismatch = true;
+                }
 
                 std::size_t variant_count = variant_steps_.size();
                 if (variant_count == 0) {
@@ -1401,28 +1477,36 @@ void Animation::load(const std::string& trigger,
                         list.clear();
                 };
                 const std::string mask_cache_folder = cache_folder + "/masks";
-                const std::string foreground_cache_folder = cache_folder + "/foreground";
-                const std::string background_cache_folder = cache_folder + "/background";
+                std::vector<VariantLayerPaths> variant_paths;
+                variant_paths.reserve(variant_count);
+                for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                        variant_paths.push_back(build_variant_layer_paths(cache_folder, variant_steps_, idx));
+                        const VariantLayerPaths& paths = variant_paths.back();
+                        std::error_code mkdir_ec;
+                        fs::create_directories(paths.normal_folder, mkdir_ec);
+                        mkdir_ec.clear();
+                        fs::create_directories(paths.foreground_folder, mkdir_ec);
+                        mkdir_ec.clear();
+                        fs::create_directories(paths.background_folder, mkdir_ec);
+                        mkdir_ec.clear();
+                        const std::string depthcue_fg_variant_folder =
+                                render_pipeline::ScalingLogic::VariantFolder(foreground_cache_folder, variant_steps_, idx);
+                        fs::create_directories(depthcue_fg_variant_folder, mkdir_ec);
+                        mkdir_ec.clear();
+                        const std::string depthcue_bg_variant_folder =
+                                render_pipeline::ScalingLogic::VariantFolder(background_cache_folder, variant_steps_, idx);
+                        fs::create_directories(depthcue_bg_variant_folder, mkdir_ec);
+                }
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
+                std::vector<std::vector<SDL_Surface*>> depthcue_foreground_surfaces(variant_count);
+                std::vector<std::vector<SDL_Surface*>> depthcue_background_surfaces(variant_count);
+                std::vector<bool> depthcue_foreground_needs_generation(variant_count, true);
+                std::vector<bool> depthcue_background_needs_generation(variant_count, true);
                 GenerateFadedMask::MaskVariants mask_surfaces;
                 bool masks_loaded_from_cache = false;
                 std::vector<bool> rebuild_variant(variant_count, false);
-                std::vector<std::vector<SDL_Surface*>> depthcue_foreground_surfaces;
-                std::vector<std::vector<SDL_Surface*>> depthcue_background_surfaces;
-                std::vector<bool> depthcue_foreground_needs_generation;
-                std::vector<bool> depthcue_background_needs_generation;
-                if (supports_depthcue_cache) {
-                        depthcue_foreground_surfaces.resize(variant_count);
-                        depthcue_background_surfaces.resize(variant_count);
-                        depthcue_foreground_needs_generation.assign(variant_count, true);
-                        depthcue_background_needs_generation.assign(variant_count, true);
-                        std::error_code mkdir_ec;
-                        fs::create_directories(foreground_cache_folder, mkdir_ec);
-                        mkdir_ec.clear();
-                        fs::create_directories(background_cache_folder, mkdir_ec);
-                }
 
-                if (!metadata_valid) {
+                if (!metadata_valid || effect_hash_mismatch) {
                         std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
                 }
 
@@ -1455,28 +1539,33 @@ void Animation::load(const std::string& trigger,
 
                 cleanup_variant_directories(cache_folder);
                 cleanup_variant_directories(mask_cache_folder);
-                if (supports_depthcue_cache) {
-                        cleanup_variant_directories(foreground_cache_folder);
-                        cleanup_variant_directories(background_cache_folder);
-                }
 
                 const bool attempt_cache_load = metadata_valid && prefer_cached;
                 if (attempt_cache_load) {
                         bool legacy_detected = false;
                         for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                std::string variant_path = render_pipeline::ScalingLogic::VariantFolder(cache_folder, variant_steps_, idx);
+                                const VariantLayerPaths& paths = variant_paths[idx];
                                 std::vector<SDL_Surface*> loaded;
-                                if (!cache.load_surface_sequence(variant_path, expected_frames, loaded)) {
+                                bool loaded_ok = cache.load_surface_sequence(paths.normal_folder, expected_frames, loaded);
+                                if (!loaded_ok) {
                                         cache_invalid_detected = true;
-                                        if (idx == 0 && cache.load_surface_sequence(cache_folder, expected_frames, loaded)) {
+                                        if (cache.load_surface_sequence(paths.scale_folder, expected_frames, loaded)) {
+                                                legacy_detected = true;
+                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " legacy cache layout detected at " << paths.scale_folder
+                                                          << " -> metadata refresh required\n";
+                                                loaded_ok = true;
+                                        } else if (idx == 0 && cache.load_surface_sequence(cache_folder, expected_frames, loaded)) {
                                                 legacy_detected = true;
                                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                                           << " legacy cache format detected for variant " << idx
                                                           << " -> metadata refresh required\n";
-                                        } else {
-                                                rebuild_variant[idx] = true;
-                                                continue;
+                                                loaded_ok = true;
                                         }
+                                }
+                                if (!loaded_ok) {
+                                        rebuild_variant[idx] = true;
+                                        continue;
                                 }
                                 variant_surfaces[idx] = std::move(loaded);
                         }

@@ -921,7 +921,11 @@ AssetLibraryUI::~AssetLibraryUI() = default;
 
 void AssetLibraryUI::toggle() {
     if (!floating_) return;
-    floating_->set_visible(!is_visible());
+    const bool should_show = !is_visible();
+    floating_->set_visible(should_show);
+    if (should_show) {
+        floating_->set_expanded(true);
+    }
 }
 
 bool AssetLibraryUI::is_visible() const { return floating_ && floating_->is_visible(); }

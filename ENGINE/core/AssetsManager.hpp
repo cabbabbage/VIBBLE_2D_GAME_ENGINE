@@ -21,7 +21,6 @@
 class Asset;
 class SceneRenderer;
 class LightMap;
-class LightMapManager;
 struct SDL_Renderer;
 class CurrentRoomFinder;
 class Room;
@@ -159,8 +158,6 @@ public:
     const Global_Light_Source* map_light_source() const;
     const LightMap* light_map() const;
     LightMap*       light_map();
-    LightMapManager*       light_map_manager();
-    const LightMapManager* light_map_manager() const;
     void force_shaded_assets_rerender();
     bool apply_lighting_grid_subdivide(int subdivisions);
     void set_map_light_panel_visible(bool visible);
@@ -270,7 +267,6 @@ private:
     std::atomic<bool> active_assets_dirty_{true};
     MapGridSettings map_grid_settings_{};
     std::unique_ptr<devmode::core::ManifestStore> manifest_store_fallback_;
-    std::unique_ptr<LightMapManager> light_map_manager_;
     std::optional<float> last_audio_effect_max_distance_{};
     float max_asset_height_world_ = 0.0f;
     float max_asset_width_world_  = 0.0f;

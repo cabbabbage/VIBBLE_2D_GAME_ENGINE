@@ -429,6 +429,7 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
         slot.visible = false;
         slot.rotation_degrees = 0.0f;
         slot.world_pos = self_->pos;
+        slot.render_in_front = true;
     }
     if (!frame) {
         return;
@@ -446,6 +447,7 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
         slot.world_pos.x = self_->pos.x + child_data.dx;
         slot.world_pos.y = self_->pos.y + child_data.dy;
         slot.rotation_degrees = child_data.degree;
+        slot.render_in_front = child_data.render_in_front;
     }
 }
 

@@ -30,6 +30,7 @@
 #include "asset_sections/animation_editor_window/frame_editor/movement/MovementCanvas.hpp" // for helper signatures
 #include "animation_update/animation_update.hpp" // bottom middle helper
 #include "util/grid.hpp"
+#include "world/grid.hpp"
 #include "asset_info_methods/animation_loader.hpp"
 
 using animation_editor::AnimationDocument;
@@ -50,6 +51,7 @@ constexpr int kNavTitleHeight = 22;
 constexpr int kNavSpacing = 8;
 // Extra vertical gap between frame thumbnails and the horizontal slider
 constexpr int kNavSliderGap = 12;
+constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
 int resolve_wheel_delta(const SDL_MouseWheelEvent& wheel) {
     int delta = wheel.y;
@@ -163,6 +165,151 @@ SDL_FPoint sample_quadratic_by_arclen(const SDL_FPoint& p0,
         }
     }
     return p2;
+}
+
+struct ChildPreviewContext {
+    float inv_scale = 1.0f;
+    int min_w = 1;
+    int min_h = 1;
+    float reference_screen_height = 1.0f;
+};
+
+ChildPreviewContext build_child_preview_context(Assets* assets, SDL_Renderer* renderer) {
+    ChildPreviewContext ctx{};
+    if (!assets) {
+        return ctx;
+    }
+    camera& cam = assets->getView();
+    float scale = cam.get_scale();
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        scale = 1.0f;
+    }
+    ctx.inv_scale = 1.0f / scale;
+
+    float min_ratio = cam.realism_settings().min_visible_screen_ratio;
+    if (!std::isfinite(min_ratio) || min_ratio < 0.0f) {
+        min_ratio = kDefaultMinVisibleScreenRatio;
+    }
+    min_ratio = std::clamp(min_ratio, 0.0f, 0.5f);
+
+    int screen_w = 0;
+    int screen_h = 0;
+    SDL_Renderer* query_renderer = renderer ? renderer : assets->renderer();
+    if (query_renderer && SDL_GetRendererOutputSize(query_renderer, &screen_w, &screen_h) != 0) {
+        screen_w = 0;
+        screen_h = 0;
+    }
+    if (screen_w <= 0) screen_w = 1920;
+    if (screen_h <= 0) screen_h = 1080;
+
+    ctx.min_w = std::max(1, static_cast<int>(std::lround(static_cast<double>(screen_w) * min_ratio)));
+    ctx.min_h = std::max(1, static_cast<int>(std::lround(static_cast<double>(screen_h) * min_ratio)));
+
+    float player_sh = 1.0f;
+    Asset* player = assets->player;
+    if (player) {
+        SDL_Texture* final_tex = player->get_final_texture();
+        SDL_Texture* frame_tex = player->get_current_frame();
+        int pw = player->cached_w;
+        int ph = player->cached_h;
+        if ((pw == 0 || ph == 0) && final_tex) {
+            SDL_QueryTexture(final_tex, nullptr, nullptr, &pw, &ph);
+        }
+        if ((pw == 0 || ph == 0) && frame_tex) {
+            SDL_QueryTexture(frame_tex, nullptr, nullptr, &pw, &ph);
+        }
+        if (pw != 0) player->cached_w = pw;
+        if (ph != 0) player->cached_h = ph;
+        const float pscale = (player->info && std::isfinite(player->info->scale_factor) && player->info->scale_factor >= 0.0f)
+                                 ? player->info->scale_factor
+                                 : 1.0f;
+        if (ph > 0) {
+            player_sh = static_cast<float>(ph) * pscale * ctx.inv_scale;
+        }
+    }
+    if (player_sh <= 0.0f) {
+        player_sh = 1.0f;
+    }
+    ctx.reference_screen_height = player_sh;
+    return ctx;
+}
+
+SDL_FRect child_preview_rect(Assets* assets,
+                             Asset* parent,
+                             SDL_FPoint child_world,
+                             int fw,
+                             int fh,
+                             const ChildPreviewContext& ctx) {
+    if (!assets || !parent || fw <= 0 || fh <= 0) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
+    float base_scale = parent->smoothed_scale();
+    if (!std::isfinite(base_scale) || base_scale <= 0.0f) {
+        base_scale = 1.0f;
+    }
+    const float scaled_fw = static_cast<float>(fw) * base_scale;
+    const float scaled_fh = static_cast<float>(fh) * base_scale;
+    const float base_sw = scaled_fw * ctx.inv_scale;
+    const float base_sh = scaled_fh * ctx.inv_scale;
+
+    camera& cam = assets->getView();
+    SDL_Point world_point{
+        static_cast<int>(std::lround(child_world.x)),
+        static_cast<int>(std::lround(child_world.y))
+    };
+    const camera::RenderSmoothingKey smoothing_key =
+        reinterpret_cast<camera::RenderSmoothingKey>(parent);
+    camera::RenderEffects ef = cam.compute_render_effects(
+        world_point,
+        base_sh,
+        ctx.reference_screen_height,
+        smoothing_key);
+    ef.screen_position = cam.map_to_screen_f(child_world);
+
+    float center_x = ef.screen_position.x;
+    if (assets->player != parent) {
+        world::Grid& grid = assets->world_grid();
+        center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
+    }
+
+    const bool apply_distance = parent->info && parent->info->apply_distance_scaling;
+    const bool apply_vertical = parent->info && parent->info->apply_vertical_scaling;
+    const float distance_scale = apply_distance ? ef.distance_scale : 1.0f;
+    const float vertical_scale = apply_vertical ? ef.vertical_scale : 1.0f;
+
+    float width = base_sw * distance_scale;
+    float height = (base_sh * distance_scale) * vertical_scale;
+
+    const float min_w_f = static_cast<float>(ctx.min_w);
+    const float min_h_f = static_cast<float>(ctx.min_h);
+    if (width < min_w_f && height < min_h_f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    bool enforced_min = false;
+    if (width < min_w_f) {
+        width = min_w_f;
+        enforced_min = true;
+    }
+    if (height < min_h_f) {
+        height = min_h_f;
+        enforced_min = true;
+    }
+
+    width = std::max(width, 1.0f);
+    height = std::max(height, 1.0f);
+
+    SDL_FRect rect{
+        center_x - width * 0.5f,
+        ef.screen_position.y - height,
+        width,
+        height
+    };
+    if (enforced_min) {
+        rect.w = static_cast<float>(std::max(1, static_cast<int>(std::lround(rect.w))));
+        rect.h = static_cast<float>(std::max(1, static_cast<int>(std::lround(rect.h))));
+    }
+    return rect;
 }
 
 } // namespace
@@ -514,11 +661,17 @@ void FrameEditorSession::update(const Input& input) {
                 cb_child_visible_->set_value(child->visible);
                 last_child_visible_value_ = child->visible;
             }
+            if (cb_child_render_front_) {
+                cb_child_render_front_->set_value(child->render_in_front);
+                last_child_front_value_ = child->render_in_front;
+            }
         } else {
             if (tb_child_dx_ && !tb_child_dx_->is_editing()) tb_child_dx_->set_value("0");
             if (tb_child_dy_ && !tb_child_dy_->is_editing()) tb_child_dy_->set_value("0");
             if (tb_child_deg_ && !tb_child_deg_->is_editing()) tb_child_deg_->set_value("0");
             if (cb_child_visible_) cb_child_visible_->set_value(false);
+            if (cb_child_render_front_) cb_child_render_front_->set_value(true);
+            last_child_front_value_ = cb_child_render_front_ ? cb_child_render_front_->value() : true;
         }
     }
     // Ensure asset hidden state follows checkbox
@@ -527,6 +680,7 @@ void FrameEditorSession::update(const Input& input) {
     }
     sync_child_asset_visibility();
 }
+
 
 bool FrameEditorSession::handle_event(const SDL_Event& e) {
     if (!active_) return false;
@@ -676,6 +830,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 guard_widget(tb_child_dy_.get());
                 guard_widget(tb_child_deg_.get());
                 guard_widget(cb_child_visible_.get());
+                guard_widget(cb_child_render_front_.get());
             }
             if (!over_interactive) {
                 dragging_toolbox_ = true;
@@ -834,6 +989,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         if (tb_child_dy_) consumed_child = tb_child_dy_->handle_event(e) || consumed_child;
         if (tb_child_deg_) consumed_child = tb_child_deg_->handle_event(e) || consumed_child;
         if (cb_child_visible_) consumed_child = cb_child_visible_->handle_event(e) || consumed_child;
+        if (cb_child_render_front_) consumed_child = cb_child_render_front_->handle_event(e) || consumed_child;
         if (consumed_child) {
             auto* child = current_child_frame();
             if (child) {
@@ -849,11 +1005,13 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                     return fallback;
                 };
                 bool changed = false;
+                bool child_offset_changed = false;
                 if (tb_child_dx_) {
                     float new_dx = parse_float(tb_child_dx_->value(), child->dx);
                     if (!std::isnan(new_dx) && child->dx != new_dx) {
                         child->dx = new_dx;
                         changed = true;
+                        child_offset_changed = true;
                     }
                 }
                 if (tb_child_dy_) {
@@ -861,6 +1019,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                     if (!std::isnan(new_dy) && child->dy != new_dy) {
                         child->dy = new_dy;
                         changed = true;
+                        child_offset_changed = true;
                     }
                 }
                 if (tb_child_deg_) {
@@ -877,9 +1036,23 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                         changed = true;
                     }
                 }
+                if (cb_child_render_front_) {
+                    bool front = cb_child_render_front_->value();
+                    if (child->render_in_front != front) {
+                        child->render_in_front = front;
+                        changed = true;
+                    }
+                }
                 if (changed) {
                     rebuild_rel_positions();
-                    persist_changes();
+                    const bool should_smooth_child = child_offset_changed &&
+                                                     smooth_enabled_ &&
+                                                     selected_index_ > 0;
+                    if (should_smooth_child) {
+                        smooth_child_offsets(selected_child_index_, selected_index_);
+                    } else {
+                        persist_changes();
+                    }
                 }
             }
             return true;
@@ -902,7 +1075,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Map interaction: left-click to set/adjust current frame
+    // Map interaction: left-click to edit current frame
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point sp{e.button.x, e.button.y};
         // If inside any of our panels, consume the event so it doesn't leak to dev controls/room editor
@@ -919,19 +1092,35 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         int snap_r = std::max(0, assets_->map_grid_settings().resolution);
         SDL_Point snapped = vibble::grid::snap_world_to_vertex(world_px, vibble::grid::clamp_resolution(snap_r));
         SDL_FPoint desired_rel{ static_cast<float>(snapped.x - anchor_world.x), static_cast<float>(snapped.y - anchor_world.y) };
-        // Compute current base rel positions
-        std::vector<SDL_FPoint> base = rel_positions_;
-        apply_frame_move_from_base(selected_index_, desired_rel, base);
-        rebuild_rel_positions();
-        const bool should_smooth = ((mode_ == Mode::Movement) || (mode_ == Mode::Children)) &&
-                                    smooth_enabled_ &&
-                                    selected_index_ > 0;
-        if (should_smooth) {
-            // Smooth on every adjustment, including when the adjusted point is the final one
-            // (then we smooth all the points before).
-            redistribute_frames_after_adjustment(selected_index_);
+
+        if (mode_ == Mode::Children) {
+            // In Children mode, clicks set the selected child's per-frame offset.
+            if (auto* child = current_child_frame()) {
+                child->dx = static_cast<float>(std::round(desired_rel.x));
+                child->dy = static_cast<float>(std::round(desired_rel.y));
+                const bool should_smooth_child = smooth_enabled_ && selected_index_ > 0;
+                if (should_smooth_child) {
+                    smooth_child_offsets(selected_child_index_, selected_index_);
+                } else {
+                    persist_changes();
+                }
+            }
         } else {
-            persist_changes();
+            // In Movement mode, clicks adjust the movement path for this frame.
+            // Compute current base rel positions
+            std::vector<SDL_FPoint> base = rel_positions_;
+            apply_frame_move_from_base(selected_index_, desired_rel, base);
+            rebuild_rel_positions();
+            const bool should_smooth = (mode_ == Mode::Movement) &&
+                                       smooth_enabled_ &&
+                                       selected_index_ > 0;
+            if (should_smooth) {
+                // Smooth on every adjustment, including when the adjusted point is the final one
+                // (then we smooth all the points before).
+                redistribute_frames_after_adjustment(selected_index_);
+            } else {
+                persist_changes();
+            }
         }
         return true;
     }
@@ -1026,6 +1215,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (mode_ == Mode::Children && show_child_ && !child_assets_.empty() &&
         selected_index_ < static_cast<int>(frames_.size())) {
         const auto& frame = frames_[selected_index_];
+        const ChildPreviewContext preview_ctx = build_child_preview_context(assets_, renderer);
         // Draw markers and names
         for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size(); ++i) {
             const auto& child = frame.children[i];
@@ -1055,12 +1245,17 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             if (!tex) continue;
             int tw = 0, th = 0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
             if (tw <= 0 || th <= 0) continue;
-            SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ child.dx + anchor_world.x, child.dy + anchor_world.y });
-            SDL_Rect dst{ static_cast<int>(std::lround(screen.x - tw * 0.5f)), static_cast<int>(std::lround(screen.y - th)), tw, th };
-            SDL_Point pivot{ tw / 2, th }; // bottom-middle pivot
+            SDL_FPoint child_world{
+                static_cast<float>(anchor_world.x) + child.dx,
+                static_cast<float>(anchor_world.y) + child.dy
+            };
+            SDL_FRect dst = child_preview_rect(assets_, target_, child_world, tw, th, preview_ctx);
+            if (dst.w <= 0.0f || dst.h <= 0.0f) continue;
+            SDL_FPoint pivot{ dst.w * 0.5f, dst.h }; // bottom-middle pivot
             // Apply rotation around bottom-middle if any
             const double angle = static_cast<double>(child.degree);
-            SDL_RenderCopyEx(renderer, tex, nullptr, &dst, angle, &pivot, target_->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+            SDL_RenderCopyExF(renderer, tex, nullptr, &dst, angle, &pivot,
+                              target_->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
         }
     }
 
@@ -1097,6 +1292,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         if (tb_child_dy_) tb_child_dy_->render(renderer);
         if (tb_child_deg_) tb_child_deg_->render(renderer);
         if (cb_child_visible_) cb_child_visible_->render(renderer);
+        if (cb_child_render_front_) cb_child_render_front_->render(renderer);
     }
 
     // Navigation panel
@@ -1205,6 +1401,7 @@ void FrameEditorSession::ensure_widgets() const {
     if (!tb_child_dy_) tb_child_dy_ = std::make_unique<DMTextBox>("Child dY", "0");
     if (!tb_child_deg_) tb_child_deg_ = std::make_unique<DMTextBox>("Rotation", "0");
     if (!cb_child_visible_) cb_child_visible_ = std::make_unique<DMCheckbox>("Visible", true);
+    if (!cb_child_render_front_) cb_child_render_front_ = std::make_unique<DMCheckbox>("Render In Front", true);
     if (!dd_child_select_ || child_dropdown_options_cache_ != child_assets_) {
         child_dropdown_options_cache_ = child_assets_;
         int dropdown_index = selected_child_index_;
@@ -1219,6 +1416,7 @@ void FrameEditorSession::ensure_widgets() const {
     last_show_child_value_ = show_child_;
     last_totals_dx_text_ = tb_total_dx_->value();
     last_totals_dy_text_ = tb_total_dy_->value();
+    last_child_front_value_ = cb_child_render_front_ ? cb_child_render_front_->value() : true;
 }
 
 void FrameEditorSession::rebuild_layout() const {
@@ -1431,7 +1629,7 @@ void FrameEditorSession::rebuild_layout() const {
             }
 
             if (metrics.form_row_height > 0 &&
-                (tb_child_dx_ || tb_child_dy_ || tb_child_deg_ || cb_child_visible_)) {
+                (tb_child_dx_ || tb_child_dy_ || tb_child_deg_ || cb_child_visible_ || cb_child_render_front_)) {
                 const int row_top = allocate_row(metrics.form_row_height);
                 if (row_top >= 0) {
                     int tx = row_left;
@@ -1451,13 +1649,16 @@ void FrameEditorSession::rebuild_layout() const {
                     place_textbox(tb_child_dx_.get(), metrics.child_dx_height);
                     place_textbox(tb_child_dy_.get(), metrics.child_dy_height);
                     place_textbox(tb_child_deg_.get(), metrics.child_rotation_height);
-                    if (cb_child_visible_) {
-                        const int w = std::max(metrics.child_visible_checkbox_width, DMCheckbox::height());
+                    auto place_checkbox = [&](DMCheckbox* cb, int width) {
+                        if (!cb || width <= 0) return;
+                        const int w = std::max(width, DMCheckbox::height());
                         const int h = DMCheckbox::height();
                         const int y = row_top + (metrics.form_row_height - h) / 2;
                         const int x = reserve(w);
-                        cb_child_visible_->set_rect(SDL_Rect{ x, y, w, h });
-                    }
+                        cb->set_rect(SDL_Rect{ x, y, w, h });
+                    };
+                    place_checkbox(cb_child_visible_.get(), metrics.child_visible_checkbox_width);
+                    place_checkbox(cb_child_render_front_.get(), metrics.child_render_checkbox_width);
                 }
             }
         }
@@ -1639,6 +1840,9 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     metrics.child_visible_checkbox_width = cb_child_visible_
                                                ? std::max(kChildVisibilityCheckboxMinWidth, cb_child_visible_->preferred_width())
                                                : 0;
+    metrics.child_render_checkbox_width = cb_child_render_front_
+                                              ? std::max(kChildVisibilityCheckboxMinWidth, cb_child_render_front_->preferred_width())
+                                              : 0;
     metrics.show_parent_checkbox_width = cb_show_anim_
                                              ? std::max(kShowAnimCheckboxMinWidth, cb_show_anim_->preferred_width())
                                              : 0;
@@ -1647,6 +1851,9 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
                                             : 0;
     int form_content_height = max_textbox_height;
     if (cb_child_visible_) {
+        form_content_height = std::max(form_content_height, checkbox_height);
+    }
+    if (cb_child_render_front_) {
         form_content_height = std::max(form_content_height, checkbox_height);
     }
     metrics.form_row_height = form_content_height > 0 ? form_content_height : checkbox_height;
@@ -1686,6 +1893,7 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     if (tb_child_dy_) append_form(metrics.textbox_width);
     if (tb_child_deg_) append_form(metrics.textbox_width);
     if (cb_child_visible_ && metrics.child_visible_checkbox_width > 0) append_form(metrics.child_visible_checkbox_width);
+    if (cb_child_render_front_ && metrics.child_render_checkbox_width > 0) append_form(metrics.child_render_checkbox_width);
     if (form_row_width == 0) {
         metrics.form_row_height = 0;
     }
@@ -1886,6 +2094,54 @@ void FrameEditorSession::apply_curved_smoothing(int adjusted_index,
     }
 }
 
+void FrameEditorSession::smooth_child_offsets(int child_index, int adjusted_index) {
+    if (frames_.size() < 3) {
+        persist_changes();
+        return;
+    }
+    if (child_index < 0 || adjusted_index <= 0) {
+        persist_changes();
+        return;
+    }
+    const std::size_t frame_count = frames_.size();
+    if (static_cast<std::size_t>(child_index) >= child_assets_.size()) {
+        persist_changes();
+        return;
+    }
+    const int last_index = static_cast<int>(frame_count) - 1;
+    if (adjusted_index >= static_cast<int>(frame_count)) {
+        persist_changes();
+        return;
+    }
+
+    std::vector<SDL_FPoint> original(frame_count);
+    for (std::size_t i = 0; i < frame_count; ++i) {
+        const auto& children = frames_[i].children;
+        if (static_cast<std::size_t>(child_index) >= children.size()) {
+            original[i] = SDL_FPoint{0.0f, 0.0f};
+            continue;
+        }
+        const auto& child = children[child_index];
+        original[i] = SDL_FPoint{ child.dx, child.dy };
+    }
+    std::vector<SDL_FPoint> redistributed = original;
+    if (curve_enabled_) {
+        apply_curved_smoothing(adjusted_index, original, redistributed, last_index);
+    } else {
+        apply_linear_smoothing(adjusted_index, redistributed, last_index);
+    }
+    for (std::size_t i = 0; i < frame_count; ++i) {
+        auto& children = frames_[i].children;
+        if (static_cast<std::size_t>(child_index) >= children.size()) {
+            continue;
+        }
+        auto& child = children[child_index];
+        child.dx = static_cast<float>(std::round(redistributed[i].x));
+        child.dy = static_cast<float>(std::round(redistributed[i].y));
+    }
+    persist_changes();
+}
+
 void FrameEditorSession::rebuild_rel_positions() {
     rel_positions_.clear();
     SDL_FPoint curr{0.0f, 0.0f};
@@ -1913,6 +2169,7 @@ void FrameEditorSession::sync_child_frames() {
         for (std::size_t i = 0; i < normalized.size(); ++i) {
             normalized[i].child_index = static_cast<int>(i);
             normalized[i].visible = true; // default to visible when synthesizing
+            normalized[i].render_in_front = true;
         }
         for (const auto& existing : frame.children) {
             if (existing.child_index < 0 ||
@@ -2058,6 +2315,7 @@ void FrameEditorSession::persist_changes() {
                     child_json.push_back(static_cast<int>(std::lround(child.dy)));
                     child_json.push_back(static_cast<double>(child.degree));
                     child_json.push_back(child.visible);
+                    child_json.push_back(child.render_in_front);
                     child_entries.push_back(std::move(child_json));
                 }
             }
@@ -2190,6 +2448,13 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
                             child.visible = child_entry[4].get<int>() != 0;
                         }
                     }
+                    if (child_entry.size() > 5) {
+                        if (child_entry[5].is_boolean()) {
+                            child.render_in_front = child_entry[5].get<bool>();
+                        } else if (child_entry[5].is_number_integer()) {
+                            child.render_in_front = child_entry[5].get<int>() != 0;
+                        }
+                    }
                     f.children.push_back(child);
                 }
             }
@@ -2213,8 +2478,9 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
                         } else {
                             child.degree = 0.0f;
                         }
-                        // Default visibility to true when missing.
+                        // Default visibility/front placement to true when missing.
                         child.visible = child_entry.value("visible", true);
+                        child.render_in_front = child_entry.value("render_in_front", true);
                     } else if (child_entry.is_array()) {
                         try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
                         if (child_entry.size() > 1 && child_entry[1].is_number()) {
@@ -2232,6 +2498,13 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
                                 child.visible = child_entry[4].get<bool>();
                             } else if (child_entry[4].is_number_integer()) {
                                 child.visible = child_entry[4].get<int>() != 0;
+                            }
+                        }
+                        if (child_entry.size() > 5) {
+                            if (child_entry[5].is_boolean()) {
+                                child.render_in_front = child_entry[5].get<bool>();
+                            } else if (child_entry[5].is_number_integer()) {
+                                child.render_in_front = child_entry[5].get<int>() != 0;
                             }
                         }
                     }

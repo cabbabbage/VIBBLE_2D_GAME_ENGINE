@@ -13,7 +13,6 @@ class Asset;
 class camera;
 class Global_Light_Source;
 class LightMap;
-class LightMapManager;
 namespace world { class Grid; }
 
 struct SceneLighting {

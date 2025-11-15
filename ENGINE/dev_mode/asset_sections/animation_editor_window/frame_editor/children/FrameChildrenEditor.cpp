@@ -345,6 +345,9 @@ void FrameChildrenEditor::reload_from_document() {
                         if (child_entry.size() > 4) {
                             child.visible = is_true(child_entry[4], true);
                         }
+                        if (child_entry.size() > 5) {
+                            child.render_in_front = is_true(child_entry[5], true);
+                        }
                         frame.children.push_back(child);
                     }
                 }
@@ -362,6 +365,7 @@ void FrameChildrenEditor::reload_from_document() {
                             child.dy = static_cast<float>(child_entry.value("dy", 0.0));
                             child.rotation = static_cast<float>(child_entry.value("rotation", 0.0));
                             child.visible = child_entry.value("visible", true);
+                            child.render_in_front = child_entry.value("render_in_front", true);
                         } else if (child_entry.is_array()) {
                             try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
                             if (child_entry.size() > 1 && child_entry[1].is_number()) {
@@ -375,6 +379,9 @@ void FrameChildrenEditor::reload_from_document() {
                             }
                             if (child_entry.size() > 4) {
                                 child.visible = is_true(child_entry[4], true);
+                            }
+                            if (child_entry.size() > 5) {
+                                child.render_in_front = is_true(child_entry[5], true);
                             }
                         }
                         frame.children.push_back(child);
@@ -414,6 +421,7 @@ void FrameChildrenEditor::ensure_child_vectors() {
         for (std::size_t i = 0; i < normalized.size(); ++i) {
             normalized[i].child_index = static_cast<int>(i);
             normalized[i].visible = true;
+            normalized[i].render_in_front = true;
         }
         for (const auto& existing : frame.children) {
             if (existing.child_index < 0 ||
@@ -534,6 +542,7 @@ void FrameChildrenEditor::persist_changes() {
                     child_json.push_back(static_cast<int>(std::lround(child.dy)));
                     child_json.push_back(static_cast<double>(child.rotation));
                     child_json.push_back(child.visible);
+                    child_json.push_back(child.render_in_front);
                     child_entries.push_back(std::move(child_json));
                 }
             }

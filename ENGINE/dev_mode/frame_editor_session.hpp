@@ -52,7 +52,14 @@ public:
     void set_grid_overlay_enabled_transient(bool enabled);
 
 private:
-    struct ChildFrame { int child_index = -1; float dx = 0.0f; float dy = 0.0f; float degree = 0.0f; bool visible = true; };
+    struct ChildFrame {
+        int child_index = -1;
+        float dx = 0.0f;
+        float dy = 0.0f;
+        float degree = 0.0f;
+        bool visible = true;
+        bool render_in_front = true;
+    };
     struct MovementFrame { float dx = 0.0f; float dy = 0.0f; bool resort_z = false; std::vector<ChildFrame> children; };
 
     // State wiring
@@ -102,6 +109,7 @@ private:
     mutable std::unique_ptr<class DMTextBox> tb_child_dy_;
     mutable std::unique_ptr<class DMTextBox> tb_child_deg_;
     mutable std::unique_ptr<class DMCheckbox> cb_child_visible_;
+    mutable std::unique_ptr<class DMCheckbox> cb_child_render_front_;
     // Editable totals fields
     mutable std::unique_ptr<class DMTextBox> tb_total_dx_;
     mutable std::unique_ptr<class DMTextBox> tb_total_dy_;
@@ -114,6 +122,7 @@ private:
     mutable std::string last_child_dy_text_{};
     mutable std::string last_child_deg_text_{};
     mutable bool last_child_visible_value_ = false;
+    mutable bool last_child_front_value_ = true;
     mutable bool cb_show_anim_targets_parent_label_ = false;
 
     // UI layout (computed each frame)
@@ -168,6 +177,7 @@ private:
                                 std::vector<SDL_FPoint>& redistributed,
                                 int last_index) const;
     void rebuild_rel_positions();
+    void smooth_child_offsets(int child_index, int adjusted_index);
     void persist_changes();
     void select_frame(int index);
     void select_child(int index);
@@ -219,6 +229,7 @@ private:
         int child_dy_height = 0;
         int child_rotation_height = 0;
         int child_visible_checkbox_width = 0;
+        int child_render_checkbox_width = 0;
         int show_parent_checkbox_width = 0;
         int show_child_checkbox_width = 0;
         // Movement control widths mirrored from Movement metrics

@@ -807,34 +807,23 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            if (sprite_visible && !is_chunk_tiled) {
-                const float hysteresis_margin = camera_state
-                    ? camera_state->realism_settings().scale_variant_hysteresis_margin
-                    : render_pipeline::ScalingLogic::kDefaultHysteresisMargin;
-                SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(
-                    a,
-                    final_tex,
-                    fw,
-                    fh,
-                    static_cast<int>(std::lround(dst.w)),
-                    static_cast<int>(std::lround(dst.h)),
-                    hysteresis_margin);
-                enqueue_command(a, final_tex, draw_tex, dst);
-            } else if (sprite_visible && has_light_sources) {
-                // Keep a command placeholder so the lighting system can still sample this asset.
-                enqueue_command(a, final_tex, nullptr, dst, /*suppress_sprite_draw=*/true);
-            }
-
-            if (sprite_visible && !a->animation_children().empty()) {
-                const auto& child_slots = a->animation_children();
-                for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
+            const auto& child_slots = a->animation_children();
+            std::vector<AssetRenderCommand> child_commands_back;
+            std::vector<AssetRenderCommand> child_commands_front;
+            if (sprite_visible && !child_slots.empty()) {
+                child_commands_back.reserve(child_slots.size());
+                child_commands_front.reserve(child_slots.size());
+                auto build_child_command = [&](std::size_t child_index, AssetRenderCommand& out_cmd) -> bool {
+                    if (child_index >= child_slots.size()) {
+                        return false;
+                    }
                     const auto& attachment = child_slots[child_index];
                     if (!attachment.visible || !attachment.animation || !attachment.current_frame) {
-                        continue;
+                        return false;
                     }
                     SDL_Texture* child_tex = attachment.animation->get_frame(attachment.current_frame);
                     if (!child_tex) {
-                        continue;
+                        return false;
                     }
                     int child_fw = attachment.cached_w;
                     int child_fh = attachment.cached_h;
@@ -856,11 +845,10 @@ void SceneRenderer::render(){
                         min_h,
                         player_sh);
                     if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
-                        continue;
+                        return false;
                     }
-                    // Cull child attachments fully off-screen
                     if (!intersects_padded(child_rect, screen_rect_f)) {
-                        continue;
+                        return false;
                     }
                     AssetRenderCommand child_cmd;
                     child_cmd.asset = a;
@@ -880,8 +868,46 @@ void SceneRenderer::render(){
                         child_cmd.has_custom_pivot = true;
                         child_cmd.rotation_pivot = SDL_FPoint{ child_rect.w * 0.5f, child_rect.h };
                     }
-                    remaining_commands_.push_back(std::move(child_cmd));
+                    out_cmd = std::move(child_cmd);
+                    return true;
+                };
+                for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
+                    AssetRenderCommand child_cmd;
+                    if (!build_child_command(child_index, child_cmd)) {
+                        continue;
+                    }
+                    if (child_slots[child_index].render_in_front) {
+                        child_commands_front.push_back(std::move(child_cmd));
+                    } else {
+                        child_commands_back.push_back(std::move(child_cmd));
+                    }
                 }
+            }
+
+            for (auto& cmd : child_commands_back) {
+                remaining_commands_.push_back(std::move(cmd));
+            }
+
+            if (sprite_visible && !is_chunk_tiled) {
+                const float hysteresis_margin = camera_state
+                    ? camera_state->realism_settings().scale_variant_hysteresis_margin
+                    : render_pipeline::ScalingLogic::kDefaultHysteresisMargin;
+                SDL_Texture* draw_tex = render_pipeline_.texture_for_scale(
+                    a,
+                    final_tex,
+                    fw,
+                    fh,
+                    static_cast<int>(std::lround(dst.w)),
+                    static_cast<int>(std::lround(dst.h)),
+                    hysteresis_margin);
+                enqueue_command(a, final_tex, draw_tex, dst);
+            } else if (sprite_visible && has_light_sources) {
+                // Keep a command placeholder so the lighting system can still sample this asset.
+                enqueue_command(a, final_tex, nullptr, dst, /*suppress_sprite_draw=*/true);
+            }
+
+            for (auto& cmd : child_commands_front) {
+                remaining_commands_.push_back(std::move(cmd));
             }
 
             if (has_light_sources && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
