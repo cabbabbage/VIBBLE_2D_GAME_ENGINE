@@ -13,6 +13,7 @@
 #include "utils/ranged_color.hpp"
 
 class AssetInfo;
+class DockableCollapsible;
 class Input;
 class Area;
 class Assets;
@@ -84,6 +85,11 @@ class AssetInfoUI {
     void on_animation_document_saved();
     void refresh_loaded_asset_instances();
     void complete_color_sampling(SDL_Color color);
+    void focus_section(DockableCollapsible* section);
+    void apply_section_focus_states();
+    void clear_section_focus();
+    DockableCollapsible* section_at_point(SDL_Point p) const;
+    bool handle_section_focus_event(const SDL_Event& e);
 
   private:
     bool visible_ = false;
@@ -91,13 +97,17 @@ class AssetInfoUI {
     mutable SDL_Renderer* last_renderer_ = nullptr;
     Assets* assets_ = nullptr;
 
-    std::vector<std::unique_ptr<class DockableCollapsible>> sections_;
+    std::vector<std::unique_ptr<DockableCollapsible>> sections_;
+    DockableCollapsible* focused_section_ = nullptr;
     class Section_BasicInfo* basic_info_section_ = nullptr;
+    mutable std::vector<SDL_Rect> section_bounds_;
 
     class Section_Lighting* lighting_section_ = nullptr;
     class Section_Shading* shading_section_ = nullptr;
     mutable class Asset* target_asset_ = nullptr;
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
+    int last_screen_w_ = 0;
+    int last_screen_h_ = 0;
 
     SlidingWindowContainer container_;
 

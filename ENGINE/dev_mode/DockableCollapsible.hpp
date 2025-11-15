@@ -86,6 +86,13 @@ public:
     void set_on_close(std::function<void()> cb) { on_close_ = std::move(cb); }
 
     void force_pointer_ready();
+    const std::string& title() const { return title_; }
+    int embedded_height(int width, int screen_h);
+    void render_embedded(SDL_Renderer* renderer, const SDL_Rect& bounds, int screen_w, int screen_h);
+    void set_embedded_focus_state(bool focused);
+    bool embedded_focus_state() const { return embedded_focus_state_; }
+    void set_embedded_interaction_enabled(bool enabled);
+    bool embedded_interaction_enabled() const { return embedded_interaction_enabled_; }
 
 protected:
     // Allows derived panels to designate an additional draggable area
@@ -186,4 +193,23 @@ protected:
     mutable bool layout_initialized_ = false;
 
     bool registered_with_layout_manager_ = false;
+    bool embedded_focus_state_ = false;
+    bool embedded_interaction_enabled_ = true;
+    bool rendering_embedded_ = false;
+
+    struct EmbeddedSnapshot {
+        SDL_Rect rect;
+        bool visible;
+        bool expanded;
+        bool floatable;
+        bool scroll_enabled;
+        int visible_height;
+        int available_height_override;
+        int last_screen_w;
+        int last_screen_h;
+    };
+
+    void capture_snapshot(EmbeddedSnapshot& out) const;
+    void apply_embedded_bounds(const SDL_Rect& bounds, int screen_w, int screen_h);
+    void restore_snapshot(const EmbeddedSnapshot& snapshot);
 };

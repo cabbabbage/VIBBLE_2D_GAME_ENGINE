@@ -498,7 +498,7 @@ void Assets::update_motion_smoothing_settings(const camera::RealismSettings& set
 
     auto params_equal = [](const TransformSmoothingParams& a, const TransformSmoothingParams& b) {
         constexpr float kEpsilon = 1e-4f;
-        auto close = [](float x, float y) {
+        auto close = [kEpsilon](float x, float y) {
             return std::fabs(x - y) <= kEpsilon;
         };
         return a.method == b.method &&
@@ -820,6 +820,12 @@ void Assets::update(const Input& input)
                   << (scene->chunk_preview_enabled() ? "enabled" : "disabled") << " (Ctrl+Q).\n";
     }
 
+    if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_B)) {
+        asset_boundary_box_display_enabled_ = !asset_boundary_box_display_enabled_;
+        std::cout << "[Assets] Asset boundary box display "
+                  << (asset_boundary_box_display_enabled_ ? "enabled" : "disabled") << " (Ctrl+B).\n";
+    }
+
     // Quick Task popup Ctrl+T hotkey
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_T) && quick_task_popup_) {
         if (quick_task_popup_->is_open()) {
@@ -942,18 +948,23 @@ void Assets::update(const Input& input)
     auto& new_active_assets = visible_candidate_buffer_;
     new_active_assets.clear();
     new_active_assets.reserve(active_assets.size() + 32);
+    const std::size_t estimated_candidates =
+        std::min<std::size_t>(all.size(), new_active_assets.capacity());
+    active_candidate_lookup_.clear();
+    active_candidate_lookup_.reserve(estimated_candidates);
 
     SDL_Rect screen_pixels{0, 0, screen_width, screen_height};
+    const bool screen_has_area = screen_pixels.w > 0 && screen_pixels.h > 0;
+    const float screen_left   = static_cast<float>(screen_pixels.x);
+    const float screen_top    = static_cast<float>(screen_pixels.y);
+    const float screen_right  = static_cast<float>(screen_pixels.x + screen_pixels.w);
+    const float screen_bottom = static_cast<float>(screen_pixels.y + screen_pixels.h);
     const auto intersects_screen = [&](const SDL_FRect& rect) {
-        if (screen_pixels.w <= 0 || screen_pixels.h <= 0) {
+        if (!screen_has_area) {
             return false;
         }
-        const float rect_right = rect.x + rect.w;
+        const float rect_right  = rect.x + rect.w;
         const float rect_bottom = rect.y + rect.h;
-        const float screen_left = static_cast<float>(screen_pixels.x);
-        const float screen_top = static_cast<float>(screen_pixels.y);
-        const float screen_right = static_cast<float>(screen_pixels.x + screen_pixels.w);
-        const float screen_bottom = static_cast<float>(screen_pixels.y + screen_pixels.h);
         return !(rect_right <= screen_left ||
                  screen_right <= rect.x ||
                  rect_bottom <= screen_top ||
@@ -976,6 +987,16 @@ void Assets::update(const Input& input)
         culled_debug_rects_.push_back(debug);
     };
 
+    auto push_active_asset = [&](Asset* asset) {
+        if (!asset) {
+            return;
+        }
+        if (!active_candidate_lookup_.insert(asset).second) {
+            return;
+        }
+        new_active_assets.push_back(asset);
+    };
+
     auto consider_asset = [&](Asset* asset) {
         if (!asset || !asset->info) {
             return;
@@ -988,7 +1009,7 @@ void Assets::update(const Input& input)
             push_debug_rect(screen_bounds);
             return;
         }
-        new_active_assets.push_back(asset);
+        push_active_asset(asset);
     };
 
     const auto& chunks = world_grid_.active_chunks();
@@ -1004,6 +1025,28 @@ void Assets::update(const Input& input)
             for (Asset* asset : chunk->assets) {
                 consider_asset(asset);
             }
+        }
+    }
+
+    // Fallback: assets whose expanded bounds intersect the screen might live in chunks that
+    // weren't activated (for example, lights with offsets/radii much larger than the sprite).
+    // Catch those by testing all remaining assets directly.
+    if (screen_has_area) {
+        for (Asset* asset : all) {
+            if (!asset) {
+                continue;
+            }
+            if (active_candidate_lookup_.find(asset) != active_candidate_lookup_.end()) {
+                continue;
+            }
+            SDL_FRect screen_bounds{};
+            if (!asset_bounds_in_screen_space(asset, screen_bounds)) {
+                continue;
+            }
+            if (!intersects_screen(screen_bounds)) {
+                continue;
+            }
+            push_active_asset(asset);
         }
     }
 
@@ -1679,6 +1722,37 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
             SDL_RenderDrawRect(renderer, &r);
         }
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
+    }
+
+    if (asset_boundary_box_display_enabled_) {
+        const std::vector<Asset*>& overlay_assets =
+            (dev_controls_ && dev_controls_->is_enabled()) ? filtered_active_assets : active_assets;
+        if (!overlay_assets.empty()) {
+            SDL_BlendMode previous_mode = SDL_BLENDMODE_NONE;
+            SDL_GetRenderDrawBlendMode(renderer, &previous_mode);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, 0, 255, 180, 200);
+            for (Asset* asset : overlay_assets) {
+                if (!asset) {
+                    continue;
+                }
+                SDL_FRect screen_rect;
+                if (!asset_bounds_in_screen_space(asset, screen_rect)) {
+                    continue;
+                }
+                SDL_Rect draw_rect{
+                    static_cast<int>(std::floor(screen_rect.x)),
+                    static_cast<int>(std::floor(screen_rect.y)),
+                    static_cast<int>(std::ceil(screen_rect.w)),
+                    static_cast<int>(std::ceil(screen_rect.h))
+                };
+                if (draw_rect.w <= 0 || draw_rect.h <= 0) {
+                    continue;
+                }
+                SDL_RenderDrawRect(renderer, &draw_rect);
+            }
+            SDL_SetRenderDrawBlendMode(renderer, previous_mode);
+        }
     }
 
     if (dev_notice_) {

@@ -252,6 +252,7 @@ private:
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
     bool render_dark_mask_enabled_ = true;
+    bool asset_boundary_box_display_enabled_ = false;
     world::Grid world_grid_{};
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
@@ -276,6 +277,7 @@ private:
     float cached_zoom_level_      = 0.0f;
     bool  max_asset_dimensions_dirty_ = true;
     std::vector<Asset*> visible_candidate_buffer_;
+    std::unordered_set<Asset*> active_candidate_lookup_;
 
     // Defer the first active-assets rebuild until the grid has
     // populated active chunks on the first update.

@@ -1,8 +1,10 @@
 #include "FrameChildrenEditor.hpp"
 
+#include <SDL_image.h>
 #include <SDL_ttf.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <nlohmann/json.hpp>
 
@@ -11,6 +13,8 @@
 #include "../movement/MovementCanvas.hpp"
 #include "../../../../dm_styles.hpp"
 #include "../../../../draw_utils.hpp"
+
+namespace fs = std::filesystem;
 
 namespace animation_editor {
 namespace {
@@ -47,6 +51,29 @@ bool is_true(const nlohmann::json& value, bool fallback) {
     return fallback;
 }
 
+bool has_numeric_stem(const fs::path& path) {
+    std::string stem = path.stem().string();
+    if (stem.empty()) return false;
+    for (char ch : stem) {
+        if (!std::isdigit(static_cast<unsigned char>(ch))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool iequals(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 FrameChildrenEditor::FrameChildrenEditor() = default;
@@ -57,6 +84,7 @@ void FrameChildrenEditor::set_document(std::shared_ptr<AnimationDocument> docume
     }
     document_ = std::move(document);
     payload_signature_.clear();
+    invalidate_child_caches();
     reload_from_document();
 }
 
@@ -66,6 +94,7 @@ void FrameChildrenEditor::set_animation_id(const std::string& animation_id) {
     }
     animation_id_ = animation_id;
     payload_signature_.clear();
+    invalidate_child_caches();
     reload_from_document();
 }
 
@@ -122,6 +151,49 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
     if (!frame) {
         return;
     }
+    float base_scale_pct = 100.0f;
+    if (document_) {
+        base_scale_pct = static_cast<float>(document_->scale_percentage());
+    }
+    if (!std::isfinite(base_scale_pct) || base_scale_pct <= 0.0f) {
+        base_scale_pct = 100.0f;
+    }
+    float pixels_per_unit = canvas_pixels_per_unit();
+    if (!std::isfinite(pixels_per_unit) || pixels_per_unit <= 0.0f) {
+        pixels_per_unit = 1.0f;
+    }
+    const float sprite_scale = (base_scale_pct / 100.0f) * pixels_per_unit;
+
+    if (sprite_scale > 0.0f) {
+        for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
+            const auto& child = frame->children[i];
+            if (!child.visible) {
+                continue;
+            }
+            int tex_w = 0;
+            int tex_h = 0;
+            SDL_Texture* texture = acquire_child_texture(renderer, child_ids_[i], &tex_w, &tex_h);
+            if (!texture || tex_w <= 0 || tex_h <= 0) {
+                continue;
+            }
+            SDL_FPoint screen = world_to_screen(SDL_FPoint{child.dx, child.dy});
+            const float dst_w = sprite_scale * static_cast<float>(tex_w);
+            const float dst_h = sprite_scale * static_cast<float>(tex_h);
+            if (!(std::isfinite(dst_w) && std::isfinite(dst_h)) || dst_w <= 0.0f || dst_h <= 0.0f) {
+                continue;
+            }
+            SDL_Rect dst{static_cast<int>(std::round(screen.x - dst_w * 0.5f)),
+                         static_cast<int>(std::round(screen.y - dst_h)),
+                         static_cast<int>(std::round(dst_w)),
+                         static_cast<int>(std::round(dst_h))};
+            if (dst.w <= 0 || dst.h <= 0) {
+                continue;
+            }
+            SDL_Point pivot{dst.w / 2, dst.h};
+            SDL_RenderCopyEx(renderer, texture, nullptr, &dst, child.rotation, &pivot, SDL_FLIP_NONE);
+        }
+    }
+
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
         const auto& child = frame->children[i];
         SDL_FPoint screen = world_to_screen(SDL_FPoint{child.dx, child.dy});
@@ -217,6 +289,7 @@ bool FrameChildrenEditor::handle_key_event(const SDL_Event& e) {
 }
 
 void FrameChildrenEditor::reload_from_document() {
+    std::vector<std::string> previous_children = child_ids_;
     frames_.clear();
     child_ids_.clear();
     selected_child_index_ = 0;
@@ -319,6 +392,10 @@ void FrameChildrenEditor::reload_from_document() {
     frames_.front().dy = 0.0f;
 
     ensure_child_vectors();
+    if (child_ids_ != previous_children) {
+        child_asset_dir_cache_.clear();
+        child_previews_.clear();
+    }
     selected_frame_index_ = std::clamp(selected_frame_index_, 0, static_cast<int>(frames_.size()) - 1);
 
     refresh_tools_panel();
@@ -486,6 +563,13 @@ void FrameChildrenEditor::persist_changes() {
     payload_signature_ = refreshed.has_value() ? *refreshed : std::string{};
 }
 
+void FrameChildrenEditor::invalidate_child_caches() {
+    child_previews_.clear();
+    child_asset_dir_cache_.clear();
+    cached_assets_root_.clear();
+    cached_assets_root_valid_ = false;
+}
+
 FrameChildrenEditor::MovementFrame* FrameChildrenEditor::current_frame() {
     if (frames_.empty()) {
         return nullptr;
@@ -575,6 +659,262 @@ int FrameChildrenEditor::hit_test_child(int x, int y) const {
         }
     }
     return -1;
+}
+
+float FrameChildrenEditor::canvas_pixels_per_unit() const {
+    if (!canvas_) {
+        return 1.0f;
+    }
+    SDL_FPoint origin = canvas_->world_to_screen(SDL_FPoint{0.0f, 0.0f});
+    SDL_FPoint offset_x = canvas_->world_to_screen(SDL_FPoint{1.0f, 0.0f});
+    float dx = std::fabs(offset_x.x - origin.x);
+    if (std::isfinite(dx) && dx > 0.001f) {
+        return dx;
+    }
+    SDL_FPoint offset_y = canvas_->world_to_screen(SDL_FPoint{0.0f, 1.0f});
+    float dy = std::fabs(offset_y.y - origin.y);
+    if (std::isfinite(dy) && dy > 0.001f) {
+        return dy;
+    }
+    return 1.0f;
+}
+
+std::filesystem::path FrameChildrenEditor::resolve_assets_root() const {
+    if (cached_assets_root_valid_) {
+        return cached_assets_root_;
+    }
+    cached_assets_root_valid_ = true;
+    cached_assets_root_.clear();
+    if (!document_) {
+        return cached_assets_root_;
+    }
+    fs::path root = document_->asset_root();
+    if (root.empty()) {
+        root = document_->info_path().parent_path();
+    }
+    if (root.empty()) {
+        return cached_assets_root_;
+    }
+    fs::path search = root;
+    while (!search.empty()) {
+        if (iequals(search.filename().string(), "assets")) {
+            cached_assets_root_ = search;
+            break;
+        }
+        search = search.parent_path();
+    }
+    if (cached_assets_root_.empty()) {
+        fs::path parent = root.parent_path();
+        if (parent.empty()) {
+            cached_assets_root_ = root;
+        } else {
+            cached_assets_root_ = parent;
+        }
+    }
+    return cached_assets_root_;
+}
+
+std::filesystem::path FrameChildrenEditor::resolve_child_asset_directory(const std::string& child_id) const {
+    if (child_id.empty() || child_id.front() == '#') {
+        return {};
+    }
+    auto it = child_asset_dir_cache_.find(child_id);
+    if (it != child_asset_dir_cache_.end()) {
+        return it->second;
+    }
+    fs::path child_path(child_id);
+    std::error_code ec;
+    if (child_path.is_absolute()) {
+        if (fs::exists(child_path, ec)) {
+            return child_asset_dir_cache_.emplace(child_id, child_path).first->second;
+        }
+        return child_asset_dir_cache_.emplace(child_id, fs::path{}).first->second;
+    }
+    auto try_match = [&](const fs::path& base) -> fs::path {
+        if (base.empty()) {
+            return {};
+        }
+        fs::path candidate = base / child_path;
+        if (fs::exists(candidate, ec)) {
+            return candidate;
+        }
+        if (!fs::is_directory(base, ec)) {
+            return {};
+        }
+        for (const auto& entry : fs::directory_iterator(base, ec)) {
+            if (ec) break;
+            if (!entry.is_directory(ec)) continue;
+            if (iequals(entry.path().filename().string(), child_id)) {
+                return entry.path();
+            }
+        }
+        return {};
+    };
+    fs::path resolved = try_match(resolve_assets_root());
+    if (resolved.empty() && document_) {
+        resolved = try_match(document_->asset_root().parent_path());
+        if (resolved.empty()) {
+            resolved = try_match(document_->asset_root());
+        }
+    }
+    return child_asset_dir_cache_.emplace(child_id, resolved).first->second;
+}
+
+std::filesystem::path FrameChildrenEditor::find_first_frame_in_folder(const std::filesystem::path& folder) const {
+    std::error_code ec;
+    if (folder.empty() || !fs::exists(folder, ec) || !fs::is_directory(folder, ec)) {
+        return {};
+    }
+    for (int i = 0; i < 32; ++i) {
+        fs::path candidate = folder / (std::to_string(i) + ".png");
+        if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
+            return candidate;
+        }
+    }
+    std::vector<fs::path> numbered;
+    fs::path fallback;
+    for (const auto& entry : fs::directory_iterator(folder, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file(ec)) continue;
+        fs::path path = entry.path();
+        std::string ext = path.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+        if (ext != ".png") {
+            continue;
+        }
+        if (fallback.empty()) {
+            fallback = path;
+        }
+        if (has_numeric_stem(path)) {
+            numbered.push_back(path);
+        }
+    }
+    if (!numbered.empty()) {
+        std::sort(numbered.begin(), numbered.end(), [](const fs::path& a, const fs::path& b) {
+            int lhs = 0;
+            int rhs = 0;
+            try {
+                lhs = std::stoi(a.stem().string());
+            } catch (...) {
+                lhs = 0;
+            }
+            try {
+                rhs = std::stoi(b.stem().string());
+            } catch (...) {
+                rhs = 0;
+            }
+            if (lhs == rhs) {
+                return a.filename().string() < b.filename().string();
+            }
+            return lhs < rhs;
+        });
+        return numbered.front();
+    }
+    return fallback;
+}
+
+std::filesystem::path FrameChildrenEditor::resolve_child_frame_path(const std::string& child_id) const {
+    if (child_id.empty() || child_id.front() == '#') {
+        return {};
+    }
+    fs::path asset_dir = resolve_child_asset_directory(child_id);
+    if (asset_dir.empty()) {
+        return {};
+    }
+    std::error_code ec;
+    if (!fs::exists(asset_dir, ec) || !fs::is_directory(asset_dir, ec)) {
+        return {};
+    }
+    fs::path default_dir = asset_dir / "default";
+    if (fs::exists(default_dir, ec) && fs::is_directory(default_dir, ec)) {
+        fs::path frame = find_first_frame_in_folder(default_dir);
+        if (!frame.empty()) {
+            return frame;
+        }
+    }
+    for (const auto& entry : fs::directory_iterator(asset_dir, ec)) {
+        if (ec) break;
+        if (!entry.is_directory(ec)) continue;
+        fs::path frame = find_first_frame_in_folder(entry.path());
+        if (!frame.empty()) {
+            return frame;
+        }
+    }
+    return find_first_frame_in_folder(asset_dir);
+}
+
+SDL_Texture* FrameChildrenEditor::acquire_child_texture(SDL_Renderer* renderer,
+                                                        const std::string& child_id,
+                                                        int* tex_w,
+                                                        int* tex_h) const {
+    if (tex_w) *tex_w = 0;
+    if (tex_h) *tex_h = 0;
+    if (!renderer || child_id.empty() || child_id.front() == '#') {
+        return nullptr;
+    }
+    fs::path frame_path = resolve_child_frame_path(child_id);
+    if (frame_path.empty()) {
+        child_previews_.erase(child_id);
+        return nullptr;
+    }
+    std::error_code ec;
+    bool has_timestamp = false;
+    fs::file_time_type timestamp{};
+    if (fs::exists(frame_path, ec) && fs::is_regular_file(frame_path, ec)) {
+        timestamp = fs::last_write_time(frame_path, ec);
+        has_timestamp = !ec;
+    }
+    auto it = child_previews_.find(child_id);
+    if (it != child_previews_.end()) {
+        const ChildPreviewTexture& cached = it->second;
+        bool renderer_matches = cached.renderer == renderer;
+        bool source_matches = cached.source_path == frame_path;
+        bool timestamp_matches = true;
+        if (has_timestamp && cached.has_timestamp && cached.last_write_time != timestamp) {
+            timestamp_matches = false;
+        } else if (has_timestamp != cached.has_timestamp) {
+            timestamp_matches = false;
+        }
+        if (renderer_matches && source_matches && timestamp_matches && cached.texture) {
+            if (tex_w) *tex_w = cached.width;
+            if (tex_h) *tex_h = cached.height;
+            return cached.texture.get();
+        }
+    }
+    SDL_Surface* surface = IMG_Load(frame_path.string().c_str());
+    if (!surface) {
+        child_previews_.erase(child_id);
+        return nullptr;
+    }
+    SDL_Surface* converted = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA32, 0);
+    SDL_FreeSurface(surface);
+    if (!converted) {
+        child_previews_.erase(child_id);
+        return nullptr;
+    }
+    SDL_Texture* raw = SDL_CreateTextureFromSurface(renderer, converted);
+    int width = converted->w;
+    int height = converted->h;
+    SDL_FreeSurface(converted);
+    if (!raw) {
+        child_previews_.erase(child_id);
+        return nullptr;
+    }
+    SDL_SetTextureBlendMode(raw, SDL_BLENDMODE_BLEND);
+    ChildPreviewTexture entry;
+    entry.renderer = renderer;
+    entry.texture.reset(raw, SDL_DestroyTexture);
+    entry.source_path = frame_path;
+    entry.last_write_time = timestamp;
+    entry.has_timestamp = has_timestamp;
+    entry.width = width;
+    entry.height = height;
+    child_previews_[child_id] = entry;
+    if (tex_w) *tex_w = width;
+    if (tex_h) *tex_h = height;
+    return child_previews_[child_id].texture.get();
 }
 
 }  // namespace animation_editor

@@ -111,4 +111,6 @@ private:
     std::vector<std::vector<AnimationFrame>> movement_paths_;
     std::vector<float> variant_steps_;
     std::vector<std::string> child_asset_names_;
+    void bind_textures_to_frame(AnimationFrame& frame) const;
+    void refresh_frame_texture_bindings();
 };

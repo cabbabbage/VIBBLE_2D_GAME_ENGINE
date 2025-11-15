@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json_fwd.hpp>
+
 struct SDL_Rect;
 union SDL_Event;
 struct SDL_Renderer;
@@ -15,6 +17,13 @@ struct SDL_Renderer;
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/widgets.hpp"
 #include "EditorUIPrimitives.hpp"
+#include "PreviewTimeline.hpp"
+#include "ChildrenPanel.hpp"
+#include "AudioPanel.hpp"
+#include "OnEndSelector.hpp"
+#include "MovementSummaryWidget.hpp"
+#include "PlaybackSettingsPanel.hpp"
+#include "SourceConfigPanel.hpp"
 
 namespace devmode::core {
 class ManifestStore;

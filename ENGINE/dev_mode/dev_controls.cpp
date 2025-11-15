@@ -1156,6 +1156,31 @@ void DevControls::update(const Input& input) {
         }
     }
 
+    // Update depth cue hover states
+    if (camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && enabled_) {
+        const camera& cam = assets_->getView();
+        const camera::RealismSettings& settings = cam.realism_settings();
+        auto clamp_line = [&](float value) -> float {
+            if (!std::isfinite(value)) {
+                return static_cast<float>(screen_h_) * 0.5f;
+            }
+            return std::clamp(value, 0.0f, static_cast<float>(screen_h_));
+        };
+        float fg_y = clamp_line(settings.foreground_plane_screen_y);
+        float bg_y = clamp_line(settings.background_plane_screen_y);
+        int mouse_y = input.getY();
+        const int hover_threshold = 5;
+        bool hovering_foreground = std::abs(mouse_y - fg_y) < hover_threshold;
+        bool hovering_background = std::abs(mouse_y - bg_y) < hover_threshold;
+        bool is_top_zone = mouse_y < static_cast<float>(screen_h_) * 0.1f;
+        bool is_bottom_zone = mouse_y > static_cast<float>(screen_h_) * 0.9f;
+        hover_depthcue_foreground_ = hovering_foreground || (is_bottom_zone && !hovering_background);
+        hover_depthcue_background_ = hovering_background || (is_top_zone && !hovering_foreground);
+    } else {
+        hover_depthcue_foreground_ = false;
+        hover_depthcue_background_ = false;
+    }
+
     sync_header_button_states();
     // Update in-world frame editor session
     if (frame_editor_session_ && frame_editor_session_->is_active()) {
@@ -1544,6 +1569,56 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
+    // Depth cue on-screen manipulation
+    if (depthcue_drag_state_ == DepthCueDragState::None) {
+        if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
+            camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && enabled_) {
+            auto clamp_line = [&](float value) -> float {
+                if (!std::isfinite(value)) {
+                    return static_cast<float>(screen_h_) * 0.5f;
+                }
+                return std::clamp(value, 0.0f, static_cast<float>(screen_h_));
+            };
+            if (hover_depthcue_foreground_) {
+                depthcue_drag_state_ = DepthCueDragState::Foreground;
+                const camera::RealismSettings& settings = assets_->getView().realism_settings();
+                depthcue_drag_start_y_ = clamp_line(settings.foreground_plane_screen_y);
+                depthcue_drag_mouse_start_ = event.button.y;
+                consume(true);
+                return;
+            } else if (hover_depthcue_background_) {
+                depthcue_drag_state_ = DepthCueDragState::Background;
+                const camera::RealismSettings& settings = assets_->getView().realism_settings();
+                depthcue_drag_start_y_ = clamp_line(settings.background_plane_screen_y);
+                depthcue_drag_mouse_start_ = event.button.y;
+                consume(true);
+                return;
+            }
+        }
+    } else {
+        if (event.type == SDL_MOUSEMOTION) {
+            int delta_y = event.motion.y - depthcue_drag_mouse_start_;
+            float new_y = depthcue_drag_start_y_ + delta_y;
+            if (assets_) {
+                camera& cam = assets_->getView();
+                camera::RealismSettings new_settings = cam.realism_settings();
+                if (depthcue_drag_state_ == DepthCueDragState::Foreground) {
+                    new_settings.foreground_plane_screen_y = new_y;
+                } else if (depthcue_drag_state_ == DepthCueDragState::Background) {
+                    new_settings.background_plane_screen_y = new_y;
+                }
+                cam.set_realism_settings(new_settings);
+                assets_->apply_camera_runtime_settings();
+            }
+        } else if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
+            depthcue_drag_state_ = DepthCueDragState::None;
+        }
+        if (depthcue_drag_state_ != DepthCueDragState::None) {
+            consume(true);
+            return;
+        }
+    }
+
     // Do not route to RoomEditor while the in-world Frame Editor is active
     if (!(frame_editor_session_ && frame_editor_session_->is_active()) && can_route_room_editor && room_editor_->handle_sdl_event(event)) {
         consume(true);
@@ -1799,9 +1874,10 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         DMLabelStyle base_label = DMStyles::Label();
         base_label.font_size = std::max(12, base_label.font_size - 2);
 
-        auto draw_line = [&](float y, const SDL_Color& color) {
+        auto draw_line = [&](float y, const SDL_Color& color, bool is_hover_or_drag = false) {
             const int yi = static_cast<int>(std::lround(y));
-            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+            SDL_Color actual_color = is_hover_or_drag ? SDL_Color{255, 255, 255, 220} : color;
+            SDL_SetRenderDrawColor(renderer, actual_color.r, actual_color.g, actual_color.b, actual_color.a);
             SDL_RenderDrawLine(renderer, 0, yi, screen_w_, yi);
         };
         auto draw_label = [&](float line_y, const SDL_Color& color, const std::string& text) {
@@ -1822,7 +1898,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             return std::string(buffer);
         };
 
-        draw_line(bg_line, bg_color);
+        draw_line(bg_line, bg_color, hover_depthcue_background_ || (depthcue_drag_state_ == DepthCueDragState::Background));
         {
             const int bg_opacity = settings.background_texture_max_opacity;
             draw_label(bg_line, bg_color, make_depthcue_label("BG", bg_opacity));
@@ -1831,7 +1907,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         draw_line(center_y, center_color);
         draw_label(center_y, center_color, "Base Layer");
 
-        draw_line(fg_line, fg_color);
+        draw_line(fg_line, fg_color, hover_depthcue_foreground_ || (depthcue_drag_state_ == DepthCueDragState::Foreground));
         {
             const int fg_opacity = settings.foreground_texture_max_opacity;
             draw_label(fg_line, fg_color, make_depthcue_label("FG", fg_opacity));
@@ -3218,6 +3294,7 @@ void DevControls::toggle_image_effect_panel() {
     }
     image_effect_panel_->set_assets(assets_);
     if (image_effect_panel_->is_visible()) {
+        image_effect_panel_->set_close_callback({});
         image_effect_panel_->close();
     } else {
         if (is_modal_blocking_panels()) {
@@ -3225,6 +3302,16 @@ void DevControls::toggle_image_effect_panel() {
             sync_header_button_states();
             return;
         }
+        // Close camera panel before opening effect panel
+        if (camera_panel_ && camera_panel_->is_visible()) {
+            camera_panel_->close();
+        }
+        // Set close callback to reopen camera panel
+        image_effect_panel_->set_close_callback([this]() {
+            if (camera_panel_) {
+                camera_panel_->open();
+            }
+        });
         image_effect_panel_->open();
     }
     sync_header_button_states();

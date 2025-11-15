@@ -7,6 +7,7 @@
 #include <cmath>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <unordered_set>
 
 namespace {
 

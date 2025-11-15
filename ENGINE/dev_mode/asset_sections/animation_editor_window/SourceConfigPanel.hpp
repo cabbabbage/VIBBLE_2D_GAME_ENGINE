@@ -15,6 +15,7 @@
 
 class DMButton;
 class DMDropdown;
+class DMCheckbox;
 
 namespace animation_editor {
 

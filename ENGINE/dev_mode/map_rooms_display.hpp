@@ -9,7 +9,8 @@
 
 #include <nlohmann/json_fwd.hpp>
 
-class SlidingWindowContainer;
+#include "SlidingWindowContainer.hpp"
+
 class Input;
 struct SDL_Renderer;
 class DMButton;

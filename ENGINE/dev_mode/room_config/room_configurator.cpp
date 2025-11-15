@@ -519,13 +519,19 @@ void RoomConfigurator::configure_container(SlidingWindowContainer& container) {
         return this->layout_content(ctx);
     });
     container.set_render_function([this](SDL_Renderer* renderer) {
-        for (auto* panel : ordered_base_panels_) {
+        for (size_t i = 0; i < ordered_base_panels_.size(); ++i) {
+            auto* panel = ordered_base_panels_[i];
             if (panel && panel->is_visible()) {
-                panel->render(renderer);
+                SDL_Rect bounds = (i < ordered_panel_bounds_.size()) ? ordered_panel_bounds_[i] : panel->rect();
+                panel->render_embedded(renderer, bounds, last_screen_w_, last_screen_h_);
             }
         }
-        for (const auto& cfg : spawn_group_configs_) {
-            if (cfg) cfg->render(renderer);
+        for (size_t i = 0; i < spawn_group_configs_.size(); ++i) {
+            const auto& cfg = spawn_group_configs_[i];
+            if (cfg && cfg->is_visible()) {
+                SDL_Rect bounds = (i < spawn_config_bounds_.size()) ? spawn_config_bounds_[i] : cfg->rect();
+                cfg->render_embedded(renderer, bounds, last_screen_w_, last_screen_h_);
+            }
         }
         if (add_spawn_widget_) {
             add_spawn_widget_->render(renderer);
@@ -536,26 +542,23 @@ void RoomConfigurator::configure_container(SlidingWindowContainer& container) {
             this->close();
             return true;
         }
-        bool used = false;
-        for (auto* panel : ordered_base_panels_) {
-            if (panel && panel->is_visible() && panel->handle_event(e)) {
-                used = true;
+        if (handle_panel_focus_event(e)) {
+            return true;
+        }
+        if (focused_panel_ && focused_panel_->is_visible()) {
+            if (focused_panel_->handle_event(e)) {
                 request_container_layout();
-                auto it = base_panel_keys_.find(panel);
+                auto it = base_panel_keys_.find(focused_panel_);
                 if (it != base_panel_keys_.end()) {
-                    set_base_panel_expanded(it->second, panel->is_expanded());
+                    set_base_panel_expanded(it->second, focused_panel_->is_expanded());
                 }
+                return true;
             }
         }
-        if (!used && add_spawn_widget_ && add_spawn_widget_->handle_event(e)) {
-            used = true;
+        if (add_spawn_widget_ && add_spawn_widget_->handle_event(e)) {
+            return true;
         }
-        for (auto& cfg : spawn_group_configs_) {
-            if (cfg && cfg->is_visible()) {
-                if (cfg->handle_event(e)) used = true;
-            }
-        }
-        return used;
+        return false;
     });
     container.set_update_function([this](const Input& input, int screen_w, int screen_h) {
         for (auto* panel : ordered_base_panels_) {
@@ -567,6 +570,7 @@ void RoomConfigurator::configure_container(SlidingWindowContainer& container) {
     });
     container.set_blocks_editor_interactions(blocks_editor_interactions_);
     container.set_scrollbar_visible(false);
+    container.set_content_clip_enabled(false);
     container.set_header_visible(show_header_);
     container.set_header_visibility_controller(header_visibility_controller_);
     if (!has_bounds_override_) {
@@ -642,6 +646,7 @@ void RoomConfigurator::ensure_base_panels() {
     auto ensure_panel = [&](std::unique_ptr<DockableCollapsible>& panel,
                             const std::string& key,
                             const std::string& title) {
+        const bool created = !panel;
         if (!panel) {
             panel = std::make_unique<DockableCollapsible>(title, false);
             panel->set_floatable(false);
@@ -651,9 +656,16 @@ void RoomConfigurator::ensure_base_panels() {
             panel->set_row_gap(DMSpacing::item_gap());
             panel->set_col_gap(DMSpacing::item_gap());
             panel->set_padding(DMSpacing::panel_padding());
+            panel->reset_scroll();
+            panel->set_visible(true);
             panel->force_pointer_ready();
+            panel->set_embedded_focus_state(false);
+            panel->set_embedded_interaction_enabled(false);
         }
         base_panel_keys_[panel.get()] = key;
+        if (created && !base_panel_expanded_state_.count(key)) {
+            base_panel_expanded_state_[key] = false;
+        }
         bool expanded = base_panel_expanded(key);
         if (panel->is_expanded() != expanded) {
             panel->set_expanded(expanded);
@@ -671,6 +683,9 @@ void RoomConfigurator::ensure_base_panels() {
 
 void RoomConfigurator::refresh_base_panel_rows() {
     ordered_base_panels_.clear();
+    ordered_panel_bounds_.clear();
+    spawn_config_bounds_.clear();
+    add_spawn_bounds_ = SDL_Rect{0,0,0,0};
 
     if (geometry_panel_) {
         DockableCollapsible::Rows rows;
@@ -728,6 +743,7 @@ void RoomConfigurator::refresh_base_panel_rows() {
             ordered_base_panels_.push_back(types_panel_.get());
         }
     }
+    apply_panel_focus_states();
 }
 
 void RoomConfigurator::request_container_layout() {
@@ -825,31 +841,163 @@ void RoomConfigurator::handle_spawn_group_entry_changed(const nlohmann::json& en
     }
 }
 
-int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext& ctx) const {
-    int y = ctx.content_top;
+void RoomConfigurator::apply_panel_focus_states() {
+    auto panel_is_active = [this](DockableCollapsible* candidate) -> bool {
+        if (!candidate) {
+            return false;
+        }
+        for (auto* panel : ordered_base_panels_) {
+            if (panel == candidate) {
+                return true;
+            }
+        }
+        for (const auto& cfg : spawn_group_configs_) {
+            if (cfg && cfg.get() == candidate) {
+                return true;
+            }
+        }
+        return false;
+    };
 
-    auto place_panel = [&](DockableCollapsible* panel) {
-        if (!panel || !panel->is_visible()) {
+    if (focused_panel_ && !panel_is_active(focused_panel_)) {
+        focused_panel_ = nullptr;
+    }
+
+    auto apply_state = [&](DockableCollapsible* panel) {
+        if (!panel) {
             return;
         }
-        int panel_height = std::max(1, cached_collapsible_height(panel));
-        SDL_Rect rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, panel_height};
-        panel->set_rect(rect);
-        y += panel_height + ctx.gap;
-};
+        const bool focused = (panel == focused_panel_);
+        panel->set_embedded_focus_state(focused);
+        panel->set_embedded_interaction_enabled(focused);
+    };
 
     for (auto* panel : ordered_base_panels_) {
-        place_panel(panel);
+        apply_state(panel);
+    }
+    for (const auto& cfg : spawn_group_configs_) {
+        apply_state(cfg.get());
+    }
+}
+
+void RoomConfigurator::focus_panel(DockableCollapsible* panel) {
+    auto is_active = [this](DockableCollapsible* candidate) -> bool {
+        if (!candidate) {
+            return false;
+        }
+        for (auto* base : ordered_base_panels_) {
+            if (base == candidate) {
+                return true;
+            }
+        }
+        for (const auto& cfg : spawn_group_configs_) {
+            if (cfg && cfg.get() == candidate) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    DockableCollapsible* resolved = (panel && is_active(panel)) ? panel : nullptr;
+    DockableCollapsible* previous = focused_panel_;
+    focused_panel_ = resolved;
+    apply_panel_focus_states();
+    if (focused_panel_) {
+        focused_panel_->force_pointer_ready();
+        if (!focused_panel_->is_expanded()) {
+            focused_panel_->set_expanded(true);
+        }
+    }
+    if (previous != focused_panel_) {
+        request_container_layout();
+    }
+}
+
+void RoomConfigurator::clear_panel_focus() {
+    focus_panel(nullptr);
+}
+
+DockableCollapsible* RoomConfigurator::panel_at_point(SDL_Point p) const {
+    for (size_t i = 0; i < ordered_base_panels_.size(); ++i) {
+        auto* panel = ordered_base_panels_[i];
+        if (!panel || !panel->is_visible()) {
+            continue;
+        }
+        SDL_Rect bounds = (i < ordered_panel_bounds_.size()) ? ordered_panel_bounds_[i] : panel->rect();
+        if (bounds.w <= 0 || bounds.h <= 0) {
+            continue;
+        }
+        if (SDL_PointInRect(&p, &bounds)) {
+            return panel;
+        }
+    }
+    for (size_t i = 0; i < spawn_group_configs_.size(); ++i) {
+        const auto& cfg = spawn_group_configs_[i];
+        if (!cfg || !cfg->is_visible()) {
+            continue;
+        }
+        SDL_Rect bounds = (i < spawn_config_bounds_.size()) ? spawn_config_bounds_[i] : cfg->rect();
+        if (bounds.w <= 0 || bounds.h <= 0) {
+            continue;
+        }
+        if (SDL_PointInRect(&p, &bounds)) {
+            return cfg.get();
+        }
+    }
+    return nullptr;
+}
+
+bool RoomConfigurator::handle_panel_focus_event(const SDL_Event& e) {
+    if (e.type != SDL_MOUSEBUTTONDOWN || e.button.button != SDL_BUTTON_LEFT) {
+        return false;
+    }
+    SDL_Point pointer{e.button.x, e.button.y};
+    DockableCollapsible* target = panel_at_point(pointer);
+    if (!target || target == focused_panel_) {
+        return false;
+    }
+    focus_panel(target);
+    return true;
+}
+
+int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext& ctx) const {
+    int y = ctx.content_top;
+    ordered_panel_bounds_.resize(ordered_base_panels_.size());
+    const int embed_screen_h = last_screen_h_ > 0 ? last_screen_h_ : std::max(1, ctx.content_width);
+    size_t panel_index = 0;
+    for (auto* panel : ordered_base_panels_) {
+        if (!panel || !panel->is_visible()) {
+            if (panel_index < ordered_panel_bounds_.size()) {
+                ordered_panel_bounds_[panel_index] = SDL_Rect{0,0,0,0};
+            }
+            ++panel_index;
+            continue;
+        }
+        int panel_height = panel->embedded_height(ctx.content_width, embed_screen_h);
+        SDL_Rect rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, panel_height};
+        panel->set_rect(rect);
+        if (panel_index < ordered_panel_bounds_.size()) {
+            ordered_panel_bounds_[panel_index] = rect;
+        }
+        y += panel_height + ctx.gap;
+        ++panel_index;
     }
 
     bool any_spawn_visible = false;
-    for (const auto& cfg : spawn_group_configs_) {
-        if (!cfg || !cfg->is_visible()) continue;
+    spawn_config_bounds_.resize(spawn_group_configs_.size());
+    for (size_t i = 0; i < spawn_group_configs_.size(); ++i) {
+        const auto& cfg = spawn_group_configs_[i];
+        if (!cfg || !cfg->is_visible()) {
+            spawn_config_bounds_[i] = SDL_Rect{0,0,0,0};
+            continue;
+        }
         if (!any_spawn_visible && y > ctx.content_top) {
             y += ctx.gap;
         }
-        int cfg_height = std::max(1, cached_collapsible_height(cfg.get()));
-        cfg->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, cfg_height});
+        int cfg_height = cfg->embedded_height(ctx.content_width, embed_screen_h);
+        SDL_Rect rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, cfg_height};
+        cfg->set_rect(rect);
+        spawn_config_bounds_[i] = rect;
         y += cfg_height + ctx.gap;
         any_spawn_visible = true;
     }
@@ -860,6 +1008,7 @@ int RoomConfigurator::layout_content(const SlidingWindowContainer::LayoutContext
         }
         SDL_Rect rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()};
         add_spawn_widget_->set_rect(rect);
+        add_spawn_bounds_ = rect;
         y += rect.h;
     }
 
@@ -879,6 +1028,7 @@ void RoomConfigurator::handle_container_closed() {
             panel->set_visible(false);
         }
     }
+    clear_panel_focus();
     external_room_json_ = nullptr;
     on_external_spawn_change_ = {};
     on_external_spawn_entry_change_ = {};
@@ -1069,6 +1219,7 @@ void RoomConfigurator::notify_spawn_groups_mutated() {
 }
 
 void RoomConfigurator::close() {
+    clear_panel_focus();
     if (!container_ || !container_->is_visible()) {
         for (auto& config : spawn_group_configs_) {
             if (config) config->set_visible(false);
@@ -1173,8 +1324,10 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
         config->set_header_button_style(&DMStyles::AccentButton());
         config->set_header_highlight_color(DMStyles::AccentButton().bg);
         config->force_pointer_ready();
+        config->set_embedded_focus_state(false);
+        config->set_embedded_interaction_enabled(false);
         if (created_new) {
-            config->set_expanded(true);
+            config->set_expanded(false);
         }
         if (force_collapse_sections) {
             config->set_expanded(false);
@@ -1355,6 +1508,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
     }
     (void)have_groups;
     request_container_layout();
+    apply_panel_focus_states();
 }
 
 void RoomConfigurator::rebuild_rows() {
@@ -1977,7 +2131,7 @@ bool RoomConfigurator::focus_spawn_group(const std::string& spawn_id) {
         return false;
     }
 
-    target->set_expanded(true);
+    focus_panel(target);
     target->request_open_spawn_group(spawn_id, 0, 0);
 
     prepare_for_event(last_screen_w_, last_screen_h_);

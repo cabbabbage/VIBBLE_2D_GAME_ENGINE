@@ -9,7 +9,7 @@
 #include <SDL_ttf.h>
 #include <functional>
 #include <memory>
-#include <nlohmann/json_fwd.hpp>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -24,6 +24,7 @@ class Assets;
 class AssetLibraryUI;
 class AssetInfoUI;
 class AreaOverlayEditor;
+class Area;
 class RoomConfigurator;
 class SpawnGroupConfig;
 class AssetInfo;

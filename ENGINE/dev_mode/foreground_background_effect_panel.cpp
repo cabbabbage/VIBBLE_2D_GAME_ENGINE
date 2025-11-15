@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
@@ -64,56 +65,43 @@ public:
     bool handle_event(const SDL_Event&) override { return false; }
     void render(SDL_Renderer* renderer) const override {
         if (!renderer) return;
+        // Draw background
         SDL_SetRenderDrawColor(renderer, 18, 20, 26, 255);
         SDL_RenderFillRect(renderer, &rect_);
         SDL_SetRenderDrawColor(renderer, 38, 42, 52, 255);
         SDL_RenderDrawRect(renderer, &rect_);
-        const int padding = 8;
-        const int inner_w = std::max(0, rect_.w - padding * 3);
-        const int slot_w = inner_w / 2;
-        SDL_Rect original_slot{
-            rect_.x + padding,
-            rect_.y + padding,
-            slot_w,
-            std::max(0, rect_.h - padding * 2)
-        };
-        SDL_Rect processed_slot{
-            original_slot.x + slot_w + padding,
-            original_slot.y,
-            slot_w,
-            original_slot.h
-        };
-        draw_slot(renderer, original_slot, base_texture_, base_w_, base_h_);
-        draw_slot(renderer, processed_slot, processed_texture_, processed_w_, processed_h_);
+        // Draw the single processed texture centered
+        if (processed_texture_) {
+            const int padding = 8;
+            SDL_Rect display_area{
+                rect_.x + padding,
+                rect_.y + padding,
+                std::max(0, rect_.w - padding * 2),
+                std::max(0, rect_.h - padding * 2)
+            };
+            draw_centered_texture(renderer, display_area, processed_texture_, processed_w_, processed_h_);
+        }
     }
     bool wants_full_row() const override { return true; }
 
-    void set_textures(SDL_Texture* original, int ow, int oh, SDL_Texture* processed, int pw, int ph) {
-        base_texture_ = original;
-        base_w_ = ow;
-        base_h_ = oh;
-        processed_texture_ = processed;
-        processed_w_ = pw;
-        processed_h_ = ph;
+    void set_texture(SDL_Texture* texture, int w, int h) {
+        processed_texture_ = texture;
+        processed_w_ = w;
+        processed_h_ = h;
     }
 
-    void clear_textures() {
-        base_texture_ = nullptr;
+    void clear_texture() {
         processed_texture_ = nullptr;
-        base_w_ = base_h_ = processed_w_ = processed_h_ = 0;
+        processed_w_ = processed_h_ = 0;
     }
 
 private:
-    static void draw_slot(SDL_Renderer* renderer, const SDL_Rect& slot, SDL_Texture* tex, int tex_w, int tex_h) {
-        SDL_SetRenderDrawColor(renderer, 24, 26, 34, 255);
-        SDL_RenderFillRect(renderer, &slot);
-        SDL_SetRenderDrawColor(renderer, 64, 70, 84, 255);
-        SDL_RenderDrawRect(renderer, &slot);
-        if (!tex || tex_w <= 0 || tex_h <= 0) {
+    static void draw_centered_texture(SDL_Renderer* renderer, const SDL_Rect& area, SDL_Texture* tex, int tex_w, int tex_h) {
+        if (!tex || tex_w <= 0 || tex_h <= 0 || area.w <= 0 || area.h <= 0) {
             return;
         }
-        float scale_w = static_cast<float>(slot.w) / static_cast<float>(tex_w);
-        float scale_h = static_cast<float>(slot.h) / static_cast<float>(tex_h);
+        float scale_w = static_cast<float>(area.w) / static_cast<float>(tex_w);
+        float scale_h = static_cast<float>(area.h) / static_cast<float>(tex_h);
         float scale = std::min(scale_w, scale_h);
         if (!std::isfinite(scale) || scale <= 0.0f) {
             scale = 1.0f;
@@ -121,8 +109,8 @@ private:
         const int draw_w = static_cast<int>(std::round(static_cast<float>(tex_w) * scale));
         const int draw_h = static_cast<int>(std::round(static_cast<float>(tex_h) * scale));
         SDL_Rect dst{
-            slot.x + (slot.w - draw_w) / 2,
-            slot.y + (slot.h - draw_h) / 2,
+            area.x + (area.w - draw_w) / 2,
+            area.y + (area.h - draw_h) / 2,
             draw_w,
             draw_h
         };
@@ -131,13 +119,80 @@ private:
 
     SDL_Rect rect_{0,0,0,200};
     int preferred_height_ = 200;
-    SDL_Texture* base_texture_ = nullptr;
     SDL_Texture* processed_texture_ = nullptr;
-    int base_w_ = 0;
-    int base_h_ = 0;
     int processed_w_ = 0;
     int processed_h_ = 0;
 };
+
+struct PreviewTextureSelection {
+    SDL_Texture* texture = nullptr;
+    int width = 0;
+    int height = 0;
+};
+
+bool query_texture_size(SDL_Texture* texture, int& width, int& height) {
+    width = 0;
+    height = 0;
+    if (!texture) {
+        return false;
+    }
+    if (SDL_QueryTexture(texture, nullptr, nullptr, &width, &height) != 0) {
+        width = 0;
+        height = 0;
+        return false;
+    }
+    return width > 0 && height > 0;
+}
+
+PreviewTextureSelection pick_smallest_cached_variant(Animation& animation) {
+    PreviewTextureSelection selection{};
+    if (animation.frames.empty()) {
+        return selection;
+    }
+
+    std::size_t frame_index = 0;
+    SDL_Texture* fallback = nullptr;
+    for (std::size_t idx = 0; idx < animation.frames.size(); ++idx) {
+        if (animation.frames[idx]) {
+            fallback = animation.frames[idx];
+            frame_index = idx;
+            break;
+        }
+    }
+
+    if (!fallback) {
+        return selection;
+    }
+
+    const std::size_t variant_count = animation.variant_count();
+    if (variant_count > 0) {
+        double best_area = std::numeric_limits<double>::max();
+        for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
+            SDL_Texture* candidate = animation.frame_variant(frame_index, variant_idx);
+            if (!candidate) {
+                continue;
+            }
+            int candidate_w = 0;
+            int candidate_h = 0;
+            if (!query_texture_size(candidate, candidate_w, candidate_h)) {
+                continue;
+            }
+            const double area = static_cast<double>(candidate_w) * static_cast<double>(candidate_h);
+            if (!selection.texture || area < best_area) {
+                best_area = area;
+                selection.texture = candidate;
+                selection.width = candidate_w;
+                selection.height = candidate_h;
+            }
+        }
+    }
+
+    if (!selection.texture && query_texture_size(fallback, selection.width, selection.height)) {
+        selection.texture = fallback;
+    }
+
+    return selection;
+}
 
 } // namespace
 
@@ -174,6 +229,9 @@ void ForegroundBackgroundEffectPanel::open() {
 
 void ForegroundBackgroundEffectPanel::close() {
     DockableCollapsible::close();
+    if (close_callback_) {
+        close_callback_();
+    }
 }
 
 bool ForegroundBackgroundEffectPanel::is_point_inside(int x, int y) const {
@@ -197,13 +255,26 @@ void ForegroundBackgroundEffectPanel::render(SDL_Renderer* renderer) const {
     DMDropdown::render_active_options(renderer);
 }
 
-void ForegroundBackgroundEffectPanel::build_ui() {
-    recreate_asset_dropdown();
-    fg_widgets_.label = std::make_unique<SectionLabelWidget>("Foreground Effects");
-    bg_widgets_.label = std::make_unique<SectionLabelWidget>("Background Effects");
-    fg_widgets_.preview = std::make_unique<ImagePreviewWidget>();
-    bg_widgets_.preview = std::make_unique<ImagePreviewWidget>();
+void ForegroundBackgroundEffectPanel::render_content(SDL_Renderer* renderer) const {
+    if (!renderer) return;
+    if (!preview_) return;
+    if (preview_rect_.w <= 0 || preview_rect_.h <= 0) return;
+    preview_->render(renderer);
+}
 
+void ForegroundBackgroundEffectPanel::build_ui() {
+    // Mode toggle buttons
+    fg_mode_button_ = std::make_unique<DMButton>("Foreground", &DMStyles::AccentButton(), 0, DMButton::height());
+    bg_mode_button_ = std::make_unique<DMButton>("Background", &DMStyles::HeaderButton(), 0, DMButton::height());
+    fg_mode_button_widget_ = std::make_unique<ButtonWidget>(fg_mode_button_.get(), [this]() { set_mode(EffectMode::Foreground); });
+    bg_mode_button_widget_ = std::make_unique<ButtonWidget>(bg_mode_button_.get(), [this]() { set_mode(EffectMode::Background); });
+
+    recreate_asset_dropdown();
+
+    // Single preview widget
+    preview_ = std::make_unique<ImagePreviewWidget>();
+
+    // Configure sliders (single set for current mode)
     auto configure_slider = [this](std::unique_ptr<FloatSliderWidget>& target,
                                    const std::string& label,
                                    float min,
@@ -214,26 +285,21 @@ void ForegroundBackgroundEffectPanel::build_ui() {
         target->set_on_value_changed([this](float) { on_slider_changed(); });
     };
 
-    configure_slider(fg_widgets_.rgb_boost, "RGB Boost", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(fg_widgets_.contrast, "Contrast", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(fg_widgets_.brightness, "Brightness", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(fg_widgets_.blur, "Blur / Sharpen", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(fg_widgets_.saturation_r, "Red Saturation", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(fg_widgets_.saturation_g, "Green Saturation", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(fg_widgets_.saturation_b, "Blue Saturation", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(fg_widgets_.hue, "Hue Shift (deg)", -180.0f, 180.0f, 1.0f, 0);
+    configure_slider(rgb_boost_, "RGB Boost", -1.0f, 1.0f, 0.02f, 2);
+    configure_slider(contrast_, "Contrast", -1.0f, 1.0f, 0.02f, 2);
+    configure_slider(brightness_, "Brightness", -1.0f, 1.0f, 0.02f, 2);
+    configure_slider(blur_, "Blur / Sharpen", -1.0f, 1.0f, 0.02f, 2);
+    configure_slider(saturation_r_, "Red Saturation", -1.0f, 1.0f, 0.02f, 2);
+    configure_slider(saturation_g_, "Green Saturation", -1.0f, 1.0f, 0.02f, 2);
+    configure_slider(saturation_b_, "Blue Saturation", -1.0f, 1.0f, 0.02f, 2);
+    configure_slider(hue_, "Hue Shift (deg)", -180.0f, 180.0f, 1.0f, 0);
 
-    configure_slider(bg_widgets_.rgb_boost, "RGB Boost", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(bg_widgets_.contrast, "Contrast", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(bg_widgets_.brightness, "Brightness", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(bg_widgets_.blur, "Blur / Sharpen", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(bg_widgets_.saturation_r, "Red Saturation", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(bg_widgets_.saturation_g, "Green Saturation", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(bg_widgets_.saturation_b, "Blue Saturation", -1.0f, 1.0f, 0.02f, 2);
-    configure_slider(bg_widgets_.hue, "Hue Shift (deg)", -180.0f, 180.0f, 1.0f, 0);
-
-    apply_button_ = std::make_unique<DMButton>("Create All with These Effects", &DMStyles::AccentButton(), 0, DMButton::height());
+    apply_button_ = std::make_unique<DMButton>("Create Effects", &DMStyles::AccentButton(), 0, DMButton::height());
     apply_button_widget_ = std::make_unique<ButtonWidget>(apply_button_.get(), [this]() { apply_and_regenerate(); });
+
+    restore_defaults_button_ = std::make_unique<DMButton>("Restore Defaults", &DMStyles::WarnButton(), 0, DMButton::height());
+    restore_defaults_button_widget_ = std::make_unique<ButtonWidget>(restore_defaults_button_.get(), [this]() { restore_defaults(); });
+    restore_defaults_button_widget_->set_tooltip("Reset all current mode settings to zero");
 
     rebuild_rows();
 }
@@ -241,23 +307,54 @@ void ForegroundBackgroundEffectPanel::build_ui() {
 void ForegroundBackgroundEffectPanel::rebuild_rows() {
     Rows rows;
     if (header_spacer_) rows.push_back({ header_spacer_.get() });
+
+    // Mode toggle buttons in header
+    if (fg_mode_button_widget_ && bg_mode_button_widget_) {
+        rows.push_back({ fg_mode_button_widget_.get(), bg_mode_button_widget_.get() });
+    }
+
     if (asset_dropdown_widget_) rows.push_back({ asset_dropdown_widget_.get() });
-    if (fg_widgets_.label) rows.push_back({ fg_widgets_.label.get() });
-    if (fg_widgets_.preview) rows.push_back({ fg_widgets_.preview.get() });
-    rows.push_back({ fg_widgets_.rgb_boost.get(), fg_widgets_.contrast.get() });
-    rows.push_back({ fg_widgets_.brightness.get(), fg_widgets_.blur.get() });
-    rows.push_back({ fg_widgets_.saturation_r.get(), fg_widgets_.saturation_g.get() });
-    rows.push_back({ fg_widgets_.saturation_b.get(), fg_widgets_.hue.get() });
 
-    if (bg_widgets_.label) rows.push_back({ bg_widgets_.label.get() });
-    if (bg_widgets_.preview) rows.push_back({ bg_widgets_.preview.get() });
-    rows.push_back({ bg_widgets_.rgb_boost.get(), bg_widgets_.contrast.get() });
-    rows.push_back({ bg_widgets_.brightness.get(), bg_widgets_.blur.get() });
-    rows.push_back({ bg_widgets_.saturation_r.get(), bg_widgets_.saturation_g.get() });
-    rows.push_back({ bg_widgets_.saturation_b.get(), bg_widgets_.hue.get() });
+    // Single set of sliders for current mode
+    rows.push_back({ rgb_boost_.get(), contrast_.get() });
+    rows.push_back({ brightness_.get(), blur_.get() });
+    rows.push_back({ saturation_r_.get(), saturation_g_.get() });
+    rows.push_back({ saturation_b_.get(), hue_.get() });
 
-    if (apply_button_widget_) rows.push_back({ apply_button_widget_.get() });
+    // Bottom action buttons row
+    if (apply_button_widget_ || restore_defaults_button_widget_) {
+        rows.push_back({ apply_button_widget_.get(), restore_defaults_button_widget_.get() });
+    }
     set_rows(rows);
+}
+
+void ForegroundBackgroundEffectPanel::layout_custom_content(int, int) const {
+    preview_rect_ = SDL_Rect{0, 0, 0, 0};
+    if (!preview_) {
+        return;
+    }
+
+    if (!is_visible() || !is_expanded() || body_viewport_h_ <= 0) {
+        preview_->set_rect(preview_rect_);
+        return;
+    }
+
+    const int preview_gap = DMSpacing::section_gap();
+    preview_rect_.x = body_viewport_.x + body_viewport_.w + preview_gap;
+    preview_rect_.y = body_viewport_.y;
+    preview_rect_.w = kPreviewPanelWidth;
+    preview_rect_.h = body_viewport_h_;
+
+    preview_->set_rect(preview_rect_);
+
+    body_viewport_.w = (preview_rect_.x + preview_rect_.w) - body_viewport_.x;
+
+    const int preview_right = preview_rect_.x + preview_rect_.w;
+    const int desired_panel_right = preview_right + padding_;
+    const int current_panel_right = rect_.x + rect_.w;
+    if (desired_panel_right > current_panel_right) {
+        rect_.w = desired_panel_right - rect_.x;
+    }
 }
 
 void ForegroundBackgroundEffectPanel::recreate_asset_dropdown() {
@@ -313,38 +410,74 @@ void ForegroundBackgroundEffectPanel::handle_asset_selection(int index) {
     preview_dirty_ = true;
 }
 
-void ForegroundBackgroundEffectPanel::update_section_from_settings(const camera_effects::ImageEffectSettings& settings,
-                                                                  SectionWidgets& widgets) {
-    if (widgets.rgb_boost) widgets.rgb_boost->set_value(settings.rgb_boost);
-    if (widgets.contrast) widgets.contrast->set_value(settings.contrast);
-    if (widgets.brightness) widgets.brightness->set_value(settings.brightness);
-    if (widgets.blur) widgets.blur->set_value(settings.blur);
-    if (widgets.saturation_r) widgets.saturation_r->set_value(settings.saturation_red);
-    if (widgets.saturation_g) widgets.saturation_g->set_value(settings.saturation_green);
-    if (widgets.saturation_b) widgets.saturation_b->set_value(settings.saturation_blue);
-    if (widgets.hue) widgets.hue->set_value(settings.hue);
+void ForegroundBackgroundEffectPanel::update_controls_from_settings(const camera_effects::ImageEffectSettings& settings) {
+    if (rgb_boost_) rgb_boost_->set_value(settings.rgb_boost);
+    if (contrast_) contrast_->set_value(settings.contrast);
+    if (brightness_) brightness_->set_value(settings.brightness);
+    if (blur_) blur_->set_value(settings.blur);
+    if (saturation_r_) saturation_r_->set_value(settings.saturation_red);
+    if (saturation_g_) saturation_g_->set_value(settings.saturation_green);
+    if (saturation_b_) saturation_b_->set_value(settings.saturation_blue);
+    if (hue_) hue_->set_value(settings.hue);
+    current_settings_ = settings;
 }
 
-camera_effects::ImageEffectSettings ForegroundBackgroundEffectPanel::read_section_settings(const SectionWidgets& widgets) const {
+camera_effects::ImageEffectSettings ForegroundBackgroundEffectPanel::read_current_settings() const {
     camera_effects::ImageEffectSettings settings{};
-    if (widgets.rgb_boost) settings.rgb_boost = widgets.rgb_boost->value();
-    if (widgets.contrast) settings.contrast = widgets.contrast->value();
-    if (widgets.brightness) settings.brightness = widgets.brightness->value();
-    if (widgets.blur) settings.blur = widgets.blur->value();
-    if (widgets.saturation_r) settings.saturation_red = widgets.saturation_r->value();
-    if (widgets.saturation_g) settings.saturation_green = widgets.saturation_g->value();
-    if (widgets.saturation_b) settings.saturation_blue = widgets.saturation_b->value();
-    if (widgets.hue) settings.hue = widgets.hue->value();
+    if (rgb_boost_) settings.rgb_boost = rgb_boost_->value();
+    if (contrast_) settings.contrast = contrast_->value();
+    if (brightness_) settings.brightness = brightness_->value();
+    if (blur_) settings.blur = blur_->value();
+    if (saturation_r_) settings.saturation_red = saturation_r_->value();
+    if (saturation_g_) settings.saturation_green = saturation_g_->value();
+    if (saturation_b_) settings.saturation_blue = saturation_b_->value();
+    if (hue_) settings.hue = hue_->value();
     camera_effects::ClampImageEffectSettings(settings);
     return settings;
 }
 
+void ForegroundBackgroundEffectPanel::save_current_mode_settings() {
+    current_settings_ = read_current_settings();
+    if (current_mode_ == EffectMode::Foreground) {
+        fg_settings_ = current_settings_;
+    } else {
+        bg_settings_ = current_settings_;
+    }
+}
+
+void ForegroundBackgroundEffectPanel::load_current_mode_settings() {
+    if (current_mode_ == EffectMode::Foreground) {
+        current_settings_ = fg_settings_;
+    } else {
+        current_settings_ = bg_settings_;
+    }
+    update_controls_from_settings(current_settings_);
+}
+
+void ForegroundBackgroundEffectPanel::set_mode(EffectMode mode) {
+    if (mode == current_mode_) return;
+
+    // Save current settings before switching
+    save_current_mode_settings();
+
+    // Switch mode
+    current_mode_ = mode;
+
+    // Update button styles
+    if (fg_mode_button_ && bg_mode_button_) {
+        fg_mode_button_->set_style(current_mode_ == EffectMode::Foreground ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+        bg_mode_button_->set_style(current_mode_ == EffectMode::Background ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+    }
+
+    // Load settings for new mode
+    load_current_mode_settings();
+
+    // Rebuild preview
+    preview_dirty_ = true;
+}
+
 void ForegroundBackgroundEffectPanel::on_slider_changed() {
-    fg_settings_ = read_section_settings(fg_widgets_);
-    bg_settings_ = read_section_settings(bg_widgets_);
-    has_unsaved_changes_ =
-        !camera_effects::ImageEffectSettingsEqual(fg_settings_, saved_fg_) ||
-        !camera_effects::ImageEffectSettingsEqual(bg_settings_, saved_bg_);
+    save_current_mode_settings();
     preview_dirty_ = true;
 }
 
@@ -354,8 +487,7 @@ void ForegroundBackgroundEffectPanel::refresh_from_camera() {
         bg_settings_ = camera_effects::ImageEffectSettings{};
         saved_fg_ = fg_settings_;
         saved_bg_ = bg_settings_;
-        update_section_from_settings(fg_settings_, fg_widgets_);
-        update_section_from_settings(bg_settings_, bg_widgets_);
+        load_current_mode_settings();
         return;
     }
     camera& cam = assets_->getView();
@@ -364,8 +496,7 @@ void ForegroundBackgroundEffectPanel::refresh_from_camera() {
     bg_settings_ = settings.background_effects;
     saved_fg_ = fg_settings_;
     saved_bg_ = bg_settings_;
-    update_section_from_settings(fg_settings_, fg_widgets_);
-    update_section_from_settings(bg_settings_, bg_widgets_);
+    load_current_mode_settings();
     has_unsaved_changes_ = false;
     preview_dirty_ = true;
 }
@@ -374,6 +505,9 @@ bool ForegroundBackgroundEffectPanel::ensure_preview_source() {
     if (!assets_) {
         return false;
     }
+    base_preview_texture_ = nullptr;
+    base_preview_w_ = base_preview_h_ = 0;
+
     SDL_Renderer* renderer = assets_->renderer();
     if (!renderer) {
         return false;
@@ -385,96 +519,111 @@ bool ForegroundBackgroundEffectPanel::ensure_preview_source() {
     if (!info) {
         return false;
     }
-    preview_info_ = info;
-    info->loadAnimations(renderer);
-    Animation* anim = nullptr;
-    if (!preview_animation_id_.empty()) {
-        auto it = info->animations.find(preview_animation_id_);
-        if (it != info->animations.end()) {
-            anim = &it->second;
-        }
+
+    const bool asset_changed = !preview_info_ || preview_info_.get() != info.get();
+    if (asset_changed) {
+        preview_animation_id_.clear();
     }
-    if (!anim && !info->animations.empty()) {
-        anim = &info->animations.begin()->second;
-        preview_animation_id_ = info->animations.begin()->first;
+    preview_info_ = info;
+
+    auto select_animation = [&]() -> Animation* {
+        if (!preview_animation_id_.empty()) {
+            auto it = info->animations.find(preview_animation_id_);
+            if (it != info->animations.end()) {
+                return &it->second;
+            }
+        }
+        if (!info->animations.empty()) {
+            preview_animation_id_ = info->animations.begin()->first;
+            return &info->animations.begin()->second;
+        }
+        return nullptr;
+    };
+
+    bool reloaded_asset = false;
+    if (asset_changed || info->animations.empty()) {
+        info->loadAnimations(renderer);
+        reloaded_asset = true;
+    }
+
+    Animation* anim = select_animation();
+    if (!anim && !reloaded_asset) {
+        info->loadAnimations(renderer);
+        reloaded_asset = true;
+        anim = select_animation();
     }
     if (!anim || anim->frames.empty()) {
-        base_preview_texture_ = nullptr;
         return false;
     }
-    base_preview_texture_ = anim->frames[0];
-    if (!base_preview_texture_) {
+
+    PreviewTextureSelection selection = pick_smallest_cached_variant(*anim);
+    if (!selection.texture && !reloaded_asset) {
+        info->loadAnimations(renderer);
+        reloaded_asset = true;
+        anim = select_animation();
+        if (anim) {
+            selection = pick_smallest_cached_variant(*anim);
+        }
+    }
+
+    if (!selection.texture) {
         return false;
     }
-    if (SDL_QueryTexture(base_preview_texture_, nullptr, nullptr, &base_preview_w_, &base_preview_h_) != 0) {
-        base_preview_w_ = base_preview_h_ = 0;
-        return false;
-    }
+
+    base_preview_texture_ = selection.texture;
+    base_preview_w_ = selection.width;
+    base_preview_h_ = selection.height;
     return true;
 }
 
 void ForegroundBackgroundEffectPanel::destroy_preview_textures() {
-    if (fg_preview_texture_) {
-        SDL_DestroyTexture(fg_preview_texture_);
-        fg_preview_texture_ = nullptr;
+    if (current_preview_texture_) {
+        SDL_DestroyTexture(current_preview_texture_);
+        current_preview_texture_ = nullptr;
     }
-    if (bg_preview_texture_) {
-        SDL_DestroyTexture(bg_preview_texture_);
-        bg_preview_texture_ = nullptr;
-    }
-    fg_preview_w_ = fg_preview_h_ = 0;
-    bg_preview_w_ = bg_preview_h_ = 0;
+    current_preview_w_ = current_preview_h_ = 0;
 }
 
 void ForegroundBackgroundEffectPanel::rebuild_previews() {
     preview_dirty_ = false;
+    if (auto* image_preview = dynamic_cast<ImagePreviewWidget*>(preview_.get())) {
+        image_preview->clear_texture();
+    }
     destroy_preview_textures();
+
     if (!ensure_preview_source()) {
-        if (auto* preview = dynamic_cast<ImagePreviewWidget*>(fg_widgets_.preview.get())) {
-            preview->clear_textures();
-        }
-        if (auto* preview = dynamic_cast<ImagePreviewWidget*>(bg_widgets_.preview.get())) {
-            preview->clear_textures();
-        }
         return;
     }
+
     SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
     if (!renderer) {
         return;
     }
-    if (base_preview_texture_) {
-        fg_preview_texture_ = image_effects::BakeImageEffectTexture(renderer,
-                                                                    base_preview_texture_,
-                                                                    base_preview_w_,
-                                                                    base_preview_h_,
-                                                                    fg_settings_);
-        bg_preview_texture_ = image_effects::BakeImageEffectTexture(renderer,
-                                                                    base_preview_texture_,
-                                                                    base_preview_w_,
-                                                                    base_preview_h_,
-                                                                    bg_settings_);
-        if (fg_preview_texture_) {
-            SDL_QueryTexture(fg_preview_texture_, nullptr, nullptr, &fg_preview_w_, &fg_preview_h_);
-        }
-        if (bg_preview_texture_) {
-            SDL_QueryTexture(bg_preview_texture_, nullptr, nullptr, &bg_preview_w_, &bg_preview_h_);
+
+    const bool has_adjustments = !camera_effects::ImageEffectSettingsIsIdentity(current_settings_);
+    if (has_adjustments && base_preview_texture_) {
+        // Create preview texture for current mode using shared processor
+        current_preview_texture_ = image_effects::ImageEffectProcessor::apply_effects(renderer,
+                                                                                        base_preview_texture_,
+                                                                                        base_preview_w_,
+                                                                                        base_preview_h_,
+                                                                                        current_settings_);
+        if (current_preview_texture_) {
+            SDL_QueryTexture(current_preview_texture_, nullptr, nullptr, &current_preview_w_, &current_preview_h_);
         }
     }
-    if (auto* preview = dynamic_cast<ImagePreviewWidget*>(fg_widgets_.preview.get())) {
-        preview->set_textures(base_preview_texture_,
-                              base_preview_w_,
-                              base_preview_h_,
-                              fg_preview_texture_ ? fg_preview_texture_ : base_preview_texture_,
-                              fg_preview_w_ ? fg_preview_w_ : base_preview_w_,
-                              fg_preview_h_ ? fg_preview_h_ : base_preview_h_);
-    }
-    if (auto* preview = dynamic_cast<ImagePreviewWidget*>(bg_widgets_.preview.get())) {
-        preview->set_textures(base_preview_texture_,
-                              base_preview_w_,
-                              base_preview_h_,
-                              bg_preview_texture_ ? bg_preview_texture_ : base_preview_texture_,
-                              bg_preview_w_ ? bg_preview_w_ : base_preview_w_,
-                              bg_preview_h_ ? bg_preview_h_ : base_preview_h_);
+
+    // Set texture on the single preview widget (show processed or original)
+    if (auto* image_preview = dynamic_cast<ImagePreviewWidget*>(preview_.get())) {
+        SDL_Texture* texture = base_preview_texture_;
+        int tex_w = base_preview_w_;
+        int tex_h = base_preview_h_;
+        if (has_adjustments && current_preview_texture_) {
+            texture = current_preview_texture_;
+            tex_w = current_preview_w_;
+            tex_h = current_preview_h_;
+        }
+        image_preview->set_texture(texture, tex_w, tex_h);
     }
 }
 
@@ -501,6 +650,19 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
     saved_fg_ = fg_settings_;
     saved_bg_ = bg_settings_;
     has_unsaved_changes_ = false;
+    preview_dirty_ = true;
+}
+
+void ForegroundBackgroundEffectPanel::restore_defaults() {
+    // Reset current mode settings to zero
+    camera_effects::ImageEffectSettings zero_settings{};
+    current_settings_ = zero_settings;
+    update_controls_from_settings(current_settings_);
+
+    // Save the reset settings to current mode storage
+    save_current_mode_settings();
+
+    // Rebuild preview to show reset appearance
     preview_dirty_ = true;
 }
 

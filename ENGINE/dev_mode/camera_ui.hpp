@@ -73,9 +73,7 @@ private:
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;
-    // Depth cue texture sliders
-    std::unique_ptr<FloatSliderWidget> foreground_plane_slider_;
-    std::unique_ptr<FloatSliderWidget> background_plane_slider_;
+
     std::unique_ptr<FloatSliderWidget> foreground_texture_opacity_slider_;
     std::unique_ptr<FloatSliderWidget> background_texture_opacity_slider_;
     // Interpolation dropdown

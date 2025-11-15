@@ -647,27 +647,35 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             }
         }
         // Toolbox panel drag: avoid interactive controls (buttons/checkbox/textboxes)
-        if (mode_ == Mode::Movement && SDL_PointInRect(&p, &toolbox_rect_)) {
+        const bool has_toolbox = toolbox_rect_.w > 0 && toolbox_rect_.h > 0;
+        if (has_toolbox && SDL_PointInRect(&p, &toolbox_rect_)) {
+            auto pointer_over_widget = [&](const auto* widget) -> bool {
+                if (!widget) return false;
+                const SDL_Rect& r = widget->rect();
+                if (r.w <= 0 || r.h <= 0) return false;
+                return SDL_PointInRect(&p, &r) != 0;
+            };
             bool over_interactive = false;
-            if (!over_interactive && cb_smooth_) {
-                const SDL_Rect& r = cb_smooth_->rect();
-                if (SDL_PointInRect(&p, &r)) over_interactive = true;
+            auto guard_widget = [&](const auto* widget) {
+                if (over_interactive) return;
+                if (pointer_over_widget(widget)) {
+                    over_interactive = true;
+                }
+            };
+            if (mode_ == Mode::Movement || mode_ == Mode::Children) {
+                guard_widget(cb_smooth_.get());
+                if (smooth_enabled_) guard_widget(cb_curve_.get());
+                guard_widget(cb_show_anim_.get());
+                guard_widget(tb_total_dx_.get());
+                guard_widget(tb_total_dy_.get());
             }
-            if (!over_interactive && smooth_enabled_ && cb_curve_) {
-                const SDL_Rect& r = cb_curve_->rect();
-                if (SDL_PointInRect(&p, &r)) over_interactive = true;
-            }
-            if (!over_interactive && cb_show_anim_) {
-                const SDL_Rect& r = cb_show_anim_->rect();
-                if (SDL_PointInRect(&p, &r)) over_interactive = true;
-            }
-            if (!over_interactive && tb_total_dx_) {
-                const SDL_Rect& r = tb_total_dx_->rect();
-                if (SDL_PointInRect(&p, &r)) over_interactive = true;
-            }
-            if (!over_interactive && tb_total_dy_) {
-                const SDL_Rect& r = tb_total_dy_->rect();
-                if (SDL_PointInRect(&p, &r)) over_interactive = true;
+            if (mode_ == Mode::Children) {
+                guard_widget(dd_child_select_.get());
+                guard_widget(cb_show_child_.get());
+                guard_widget(tb_child_dx_.get());
+                guard_widget(tb_child_dy_.get());
+                guard_widget(tb_child_deg_.get());
+                guard_widget(cb_child_visible_.get());
             }
             if (!over_interactive) {
                 dragging_toolbox_ = true;
@@ -915,9 +923,9 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         std::vector<SDL_FPoint> base = rel_positions_;
         apply_frame_move_from_base(selected_index_, desired_rel, base);
         rebuild_rel_positions();
-        const bool should_smooth = (mode_ == Mode::Movement) &&
-                                   smooth_enabled_ &&
-                                   selected_index_ > 0;
+        const bool should_smooth = ((mode_ == Mode::Movement) || (mode_ == Mode::Children)) &&
+                                    smooth_enabled_ &&
+                                    selected_index_ > 0;
         if (should_smooth) {
             // Smooth on every adjustment, including when the adjusted point is the final one
             // (then we smooth all the points before).

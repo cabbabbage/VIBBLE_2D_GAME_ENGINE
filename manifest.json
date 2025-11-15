@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T00:51:13Z",
+        "generated_at": "2025-11-15T04:40:55Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -78,7 +78,7 @@
           0.05454545095562935
         ],
         "revision": 4329668871805815559,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T00:51:13Z",
+        "generated_at": "2025-11-15T04:40:55Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -131,7 +131,7 @@
           0.05000000074505806
         ],
         "revision": 15640563384705236170,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T00:51:13Z",
+        "generated_at": "2025-11-15T04:40:55Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -184,7 +184,7 @@
           0.05000000074505806
         ],
         "revision": 17324624370779397839,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -492,7 +492,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T00:51:13Z",
+        "generated_at": "2025-11-15T04:40:55Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -506,7 +506,7 @@
           0.1090909019112587
         ],
         "revision": 8110939535182362100,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -596,7 +596,7 @@
       "anti_tags": [],
       "asset_directory": "SRC/assets/lantern",
       "asset_name": "lantern",
-      "asset_type": "Object",
+      "asset_type": "object",
       "can_invert": true,
       "has_shading": false,
       "lighting_info": [
@@ -656,10 +656,10 @@
             255,
             255
           ],
-          "light_intensity": 255,
+          "light_intensity": 254,
           "offset_x": 132,
           "offset_y": -729,
-          "radius": 1926,
+          "radius": 1927,
           "render_front_and_back_to_asset_alpha_mask": false,
           "render_to_dark_mask": true
         },
@@ -690,7 +690,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T00:51:13Z",
+        "generated_at": "2025-11-15T04:40:55Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -704,14 +704,14 @@
           0.38181817531585693
         ],
         "revision": 11688286490698651680,
-        "screen_aspect": 1.6
+        "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
       "shadow_mask_settings": {
         "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
+        "blur_scale": 0.9800000190734863,
         "expansion_ratio": 0.800000011920929,
         "falloff_exponent": 1.0499999523162842,
         "falloff_start": 0.0
@@ -723,7 +723,8 @@
       "start": "default",
       "tags": [],
       "tillable": false,
-      "update_radius": 0
+      "update_radius": 0,
+      "z_threshold": -1
     },
     "spawn_light": {
       "animations": {},
@@ -851,36 +852,36 @@
       },
       "camera_settings": {
         "background_effects": {
+          "blur": 0.6599999666213989,
+          "brightness": 0.019999980926513672,
+          "contrast": 0.0,
+          "hue": 0.0,
+          "rgb_boost": 0.15999996662139893,
+          "saturation": 0.19999992847442627,
+          "saturation_blue": 0.5999999046325684,
+          "saturation_green": 0.19999992847442627,
+          "saturation_red": -0.20000004768371582
+        },
+        "background_plane_screen_y": 158.0,
+        "background_texture_max_opacity": 255,
+        "distance_scale_strength": 0.3499999940395355,
+        "foreground_effects": {
           "blur": 0.0,
           "brightness": 0.0,
           "contrast": 0.0,
-          "hue": 0.0,
+          "hue": 75.0,
           "rgb_boost": 0.0,
           "saturation": 0.0,
           "saturation_blue": 0.0,
           "saturation_green": 0.0,
           "saturation_red": 0.0
         },
-        "background_plane_screen_y": 2611.0,
-        "background_texture_max_opacity": 0,
-        "distance_scale_strength": 0.3499999940395355,
-        "foreground_effects": {
-          "blur": 0.36000001430511475,
-          "brightness": -0.020000040531158447,
-          "contrast": 0.5799999237060547,
-          "hue": 0.0,
-          "rgb_boost": 0.3399999141693115,
-          "saturation": -0.5800000429153442,
-          "saturation_blue": -0.5800000429153442,
-          "saturation_green": -0.5800000429153442,
-          "saturation_red": -0.5800000429153442
-        },
-        "foreground_plane_screen_y": 867.0,
-        "foreground_texture_max_opacity": 0,
+        "foreground_plane_screen_y": 1037.0,
+        "foreground_texture_max_opacity": 255,
         "foreshorten_strength": 0.23999999463558197,
         "height_at_zoom1": 357.0,
         "max_zoom_multiplier": 2.999999761581421,
-        "min_visible_screen_ratio": 0.0010000000474974513,
+        "min_visible_screen_ratio": 0.007000000216066837,
         "min_zoom_multiplier": 0.35999998450279236,
         "motion_smoothing_max_step": 8000.0,
         "motion_smoothing_method": 1,
@@ -897,7 +898,7 @@
         "render_quality_percent": 10,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
-        "texture_opacity_falloff_method": 0,
+        "texture_opacity_falloff_method": 2,
         "tripod_distance_y": -1720.0
       },
       "content_root": "MAPS/FORREST",
@@ -1202,9 +1203,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            207,
             242,
             36,
-            178,
             255
           ],
           "edge_smoothness": 43,
@@ -1225,9 +1226,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            31,
-            32,
             204,
+            31,
+            31,
             255
           ],
           "edge_smoothness": 68,
@@ -1261,14 +1262,14 @@
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
-              "locked": false,
+              "locked": true,
               "max_number": 1,
               "min_number": 1,
               "origional_height": 4192,
               "origional_width": 4120,
               "position": "Exact",
               "priority": 0,
-              "resolution": 10,
+              "resolution": 12,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-c81e6b20bf1d"
@@ -1330,35 +1331,6 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-b03088c2c2fe"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "lantern"
-                }
-              ],
-              "display_name": "lantern",
-              "dx": -771,
-              "dy": 1013,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 4192,
-              "origional_width": 4224,
-              "position": "Exact",
-              "priority": 3,
-              "resolution": 10,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-6aa953215735"
             }
           ]
         }

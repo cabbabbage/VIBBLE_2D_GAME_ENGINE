@@ -7,11 +7,12 @@
 #include <string>
 #include <vector>
 
+#include "DockableCollapsible.hpp"
+
 class Assets;
 class Asset;
 class AssetInfo;
 class Input;
-class DockableCollapsible;
 class DMButton;
 class DMSlider;
 class DMTextBox;

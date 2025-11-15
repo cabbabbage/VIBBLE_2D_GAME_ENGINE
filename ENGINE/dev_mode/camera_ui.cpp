@@ -551,9 +551,7 @@ void CameraUIPanel::sync_from_camera() {
     if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(last_settings_.scale_variant_hysteresis_margin);
     if (min_zoom_multiplier_slider_) min_zoom_multiplier_slider_->set_value(last_settings_.min_zoom_multiplier);
     if (max_zoom_multiplier_slider_) max_zoom_multiplier_slider_->set_value(last_settings_.max_zoom_multiplier);
-    // Depth cue texture controls
-    if (foreground_plane_slider_) foreground_plane_slider_->set_value(last_settings_.foreground_plane_screen_y);
-    if (background_plane_slider_) background_plane_slider_->set_value(last_settings_.background_plane_screen_y);
+
     if (foreground_texture_opacity_slider_) {
         foreground_texture_opacity_slider_->set_value(static_cast<float>(last_settings_.foreground_texture_max_opacity));
     }
@@ -626,16 +624,7 @@ void CameraUIPanel::build_ui() {
     render_quality_slider_->set_tooltip("Trade fidelity for speed; lowers the number of sprites drawn each frame.");
     render_quality_slider_->set_on_value_changed([this](int) { on_control_value_changed(); });
 
-    // Depth cue planes and opacity sliders
-    foreground_plane_slider_ = std::make_unique<FloatSliderWidget>(
-        "Foreground Y", 0.0f, 4000.0f, 1.0f, defaults.foreground_plane_screen_y, 0);
-    foreground_plane_slider_->set_tooltip("Screen-space Y for the foreground depth plane.");
-    foreground_plane_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    background_plane_slider_ = std::make_unique<FloatSliderWidget>(
-        "Background Y", 0.0f, 4000.0f, 1.0f, defaults.background_plane_screen_y, 0);
-    background_plane_slider_->set_tooltip("Screen-space Y for the background depth plane.");
-    background_plane_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     const int stored_fg_opacity = devmode::camera_prefs::load_foreground_texture_max_opacity();
     const int stored_bg_opacity = devmode::camera_prefs::load_background_texture_max_opacity();
@@ -751,6 +740,7 @@ void CameraUIPanel::rebuild_rows() {
     if (header_spacer_) rows.push_back({ header_spacer_.get() });
     if (hero_banner_widget_) rows.push_back({ hero_banner_widget_.get() });
     if (effects_widget_) rows.push_back({ effects_widget_.get() });
+    if (depthcue_widget_) rows.push_back({ depthcue_widget_.get() });
     if (controls_spacer_) rows.push_back({ controls_spacer_.get() });
 
     if (visibility_section_header_) rows.push_back({ visibility_section_header_.get() });
@@ -770,9 +760,6 @@ void CameraUIPanel::rebuild_rows() {
 
     if (depthcue_section_header_) rows.push_back({ depthcue_section_header_.get() });
     if (depthcue_section_expanded_) {
-        if (depthcue_widget_) rows.push_back({ depthcue_widget_.get() });
-        if (foreground_plane_slider_) rows.push_back({ foreground_plane_slider_.get() });
-        if (background_plane_slider_) rows.push_back({ background_plane_slider_.get() });
         if (foreground_texture_opacity_slider_) rows.push_back({ foreground_texture_opacity_slider_.get() });
         if (background_texture_opacity_slider_) rows.push_back({ background_texture_opacity_slider_.get() });
         if (texture_opacity_interp_widget_) rows.push_back({ texture_opacity_interp_widget_.get() });
@@ -938,12 +925,6 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         settings.max_zoom_multiplier = std::max(0.1f, max_zoom_multiplier_slider_->value());
     }
     // Depth cue texture settings
-    if (foreground_plane_slider_) {
-        settings.foreground_plane_screen_y = std::clamp(foreground_plane_slider_->value(), 0.0f, 4000.0f);
-    }
-    if (background_plane_slider_) {
-        settings.background_plane_screen_y = std::clamp(background_plane_slider_->value(), 0.0f, 4000.0f);
-    }
     auto slider_to_opacity = [](const FloatSliderWidget* slider) -> int {
         if (!slider) return 0;
         const float clamped = std::clamp(slider->value(), 0.0f, 255.0f);

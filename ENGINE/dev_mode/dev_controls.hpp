@@ -286,4 +286,12 @@ private:
     // When true, Assets rendering is suppressed until the camera finishes
     // the pan/zoom transition triggered by Map→Room selection.
     bool render_suppression_in_progress_ = false;
+
+    // Depth cue on-screen manipulation
+    enum class DepthCueDragState { None, Foreground, Background };
+    DepthCueDragState depthcue_drag_state_ = DepthCueDragState::None;
+    float depthcue_drag_start_y_ = 0.0f;
+    int depthcue_drag_mouse_start_ = 0;
+    bool hover_depthcue_foreground_ = false;
+    bool hover_depthcue_background_ = false;
 };

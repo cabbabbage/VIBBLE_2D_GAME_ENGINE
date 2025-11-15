@@ -40,6 +40,7 @@ public:
     void set_header_navigation_button(const std::string& label, std::function<void()> on_click, const DMButtonStyle* style = nullptr);
     void clear_header_navigation_button();
     void set_header_navigation_alignment_right(bool align_right);
+    void set_content_clip_enabled(bool enabled);
 
     void request_layout();
 
@@ -98,6 +99,7 @@ private:
     SDL_Rect panel_override_{0, 0, 0, 0};
 
     bool scrollbar_visible_ = false;
+    bool content_clip_enabled_ = true;
 
     mutable SDL_Rect panel_{0,0,0,0};
     mutable SDL_Rect name_label_rect_{0,0,0,0};

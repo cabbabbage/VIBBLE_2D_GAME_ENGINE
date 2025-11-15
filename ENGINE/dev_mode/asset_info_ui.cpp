@@ -72,7 +72,12 @@ void configure_panel_for_container(DockableCollapsible* panel) {
     panel->set_floatable(false);
     panel->set_close_button_enabled(false);
     panel->set_show_header(true);
+    panel->set_scroll_enabled(false);
+    panel->reset_scroll();
+    panel->set_visible(true);
     panel->force_pointer_ready();
+    panel->set_embedded_focus_state(false);
+    panel->set_embedded_interaction_enabled(false);
 }
 
 std::string resolve_asset_manifest_key(devmode::core::ManifestStore* store, const std::string& selection) {
@@ -184,6 +189,9 @@ AssetInfoUI::AssetInfoUI() {
             if (animation_editor_window_->is_visible()) {
                 animation_editor_window_->set_visible(false);
             } else if (info_) {
+                if (animation_editor_rect_.w > 0 && animation_editor_rect_.h > 0) {
+                    animation_editor_window_->set_bounds(animation_editor_rect_);
+                }
                 animation_editor_window_->set_visible(true);
             }
         });
@@ -220,13 +228,22 @@ AssetInfoUI::AssetInfoUI() {
     container_.set_header_text_provider([this]() { return info_ ? info_->name : std::string(); });
 
     container_.set_scrollbar_visible(true);
+    container_.set_content_clip_enabled(false);
 
     container_.set_layout_function([this](const SlidingWindowContainer::LayoutContext& ctx) {
         int y = ctx.content_top;
-        for (auto& section : sections_) {
-            const int previous_height = section->height();
-            section->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, previous_height});
-            y += previous_height + ctx.gap;
+        section_bounds_.resize(sections_.size());
+        const int embed_screen_h = last_screen_h_ > 0 ? last_screen_h_ : std::max(1, ctx.content_width);
+        for (size_t i = 0; i < sections_.size(); ++i) {
+            auto& section = sections_[i];
+            if (!section) {
+                section_bounds_[i] = SDL_Rect{0,0,0,0};
+                continue;
+            }
+            int measured = section->embedded_height(ctx.content_width, embed_screen_h);
+            SDL_Rect rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, measured};
+            section_bounds_[i] = rect;
+            y += measured + ctx.gap;
         }
         if (configure_btn_widget_) {
             configure_btn_widget_->set_rect(SDL_Rect{ctx.content_x, y - ctx.scroll_value, ctx.content_width, DMButton::height()});
@@ -244,7 +261,12 @@ AssetInfoUI::AssetInfoUI() {
     });
 
     container_.set_render_function([this](SDL_Renderer* renderer) {
-        for (auto& section : sections_) section->render(renderer);
+        for (size_t i = 0; i < sections_.size(); ++i) {
+            auto& section = sections_[i];
+            if (!section) continue;
+            SDL_Rect bounds = (i < section_bounds_.size()) ? section_bounds_[i] : SDL_Rect{0,0,0,0};
+            section->render_embedded(renderer, bounds, last_screen_w_, last_screen_h_);
+        }
         if (configure_btn_) configure_btn_->render(renderer);
         if (duplicate_btn_) duplicate_btn_->render(renderer);
         if (delete_btn_) delete_btn_->render(renderer);
@@ -301,8 +323,11 @@ AssetInfoUI::AssetInfoUI() {
     });
 
     container_.set_event_function([this](const SDL_Event& e) {
-        for (auto& section : sections_) {
-            if (section->handle_event(e)) return true;
+        if (handle_section_focus_event(e)) {
+            return true;
+        }
+        if (focused_section_ && focused_section_->handle_event(e)) {
+            return true;
         }
         if (configure_btn_widget_ && configure_btn_widget_->handle_event(e)) {
             return true;
@@ -431,6 +456,7 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
             SDL_Log("AssetInfoUI: failed to build section while loading %s due to unknown error.", info_ ? info_->name.c_str() : "<null>");
         }
     }
+    container_.request_layout();
 }
 
 void AssetInfoUI::clear_info() {
@@ -473,19 +499,20 @@ void AssetInfoUI::clear_info() {
         }
     }
     target_asset_ = nullptr;
+    clear_section_focus();
 }
 
 void AssetInfoUI::open()  {
     visible_ = true;
     container_.open();
     apply_camera_override(true);
-    for (auto& s : sections_) s->set_expanded(true);
 }
 void AssetInfoUI::close() {
     if (!visible_) return;
     apply_camera_override(false);
     visible_ = false;
     container_.close();
+    clear_section_focus();
     sync_map_light_panel_visibility(false);
     if (assets_) {
         if (auto* gl = assets_->map_light_source()) {
@@ -526,11 +553,19 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     int editor_width = panel.x;
     int editor_y = panel.y;
     int editor_height = panel.h > 0 ? panel.h : std::max(0, screen_h - editor_y);
+    if (editor_width <= 0) {
+        // Fallback to the remaining space once the Asset Info panel width is known.
+        editor_width = std::max( screen_w - std::max(panel.w, std::max(screen_w / 3, 320)), screen_w / 3);
+    }
+    if (editor_height <= 0) {
+        editor_height = std::max(0, screen_h - editor_y);
+    }
     if (editor_width <= 0 || editor_height <= 0) {
         animation_editor_rect_ = SDL_Rect{0, 0, 0, 0};
     } else {
         animation_editor_rect_ = SDL_Rect{0, editor_y, editor_width, editor_height};
     }
+
 }
 
 bool AssetInfoUI::handle_event(const SDL_Event& e) {
@@ -776,14 +811,14 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
 
             if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
                 set_light_hover(hovered_idx);
-                if (hovered_idx >= 0) {
-                    light_drag_active_ = true;
-                    light_drag_index_ = hovered_idx;
-                    lighting_section_->open();
-                    lighting_section_->set_expanded(true);
-                    lighting_section_->expand_light_row(static_cast<std::size_t>(hovered_idx));
-                    return true;
-                }
+                    if (hovered_idx >= 0) {
+                        light_drag_active_ = true;
+                        light_drag_index_ = hovered_idx;
+                        lighting_section_->open();
+                        focus_section(lighting_section_);
+                        lighting_section_->expand_light_row(static_cast<std::size_t>(hovered_idx));
+                        return true;
+                    }
             } else if (e.type == SDL_MOUSEMOTION && light_drag_active_ && light_drag_index_ >= 0 &&
                        light_drag_index_ < static_cast<int>(info_->light_sources.size())) {
                 auto& L = info_->light_sources[light_drag_index_];
@@ -842,6 +877,8 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
 
 void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     validate_target_asset();
+    last_screen_w_ = screen_w;
+    last_screen_h_ = screen_h;
     layout_widgets(screen_w, screen_h);
 
     if (animation_editor_window_) {
@@ -916,13 +953,13 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
     layout_widgets(screen_w, screen_h);
     last_renderer_ = r;
 
-    if (animation_editor_window_ && animation_editor_window_->is_visible()) {
-        animation_editor_window_->render(r);
-    }
-
     container_.render(r, screen_w, screen_h);
     if (lighting_section_) {
         lighting_section_->render_overlays(r);
+    }
+
+    if (animation_editor_window_ && animation_editor_window_->is_visible()) {
+        animation_editor_window_->render(r);
     }
 
     if (asset_selector_ && asset_selector_->visible())
@@ -1372,6 +1409,78 @@ void AssetInfoUI::complete_color_sampling(SDL_Color color) {
     }
 }
 
+void AssetInfoUI::apply_section_focus_states() {
+    for (auto& section : sections_) {
+        if (!section) {
+            continue;
+        }
+        const bool focused = (section.get() == focused_section_);
+        section->set_embedded_focus_state(focused);
+        section->set_embedded_interaction_enabled(focused);
+    }
+}
+
+void AssetInfoUI::focus_section(DockableCollapsible* section) {
+    DockableCollapsible* resolved = nullptr;
+    if (section) {
+        for (auto& entry : sections_) {
+            if (entry.get() == section) {
+                resolved = section;
+                break;
+            }
+        }
+    }
+    DockableCollapsible* previous = focused_section_;
+    focused_section_ = resolved;
+    apply_section_focus_states();
+    if (focused_section_) {
+        focused_section_->force_pointer_ready();
+        if (!focused_section_->is_expanded()) {
+            focused_section_->set_expanded(true);
+        }
+    }
+    if (previous != focused_section_) {
+        container_.request_layout();
+    }
+}
+
+void AssetInfoUI::clear_section_focus() {
+    focus_section(nullptr);
+}
+
+DockableCollapsible* AssetInfoUI::section_at_point(SDL_Point p) const {
+    for (size_t i = 0; i < sections_.size(); ++i) {
+        auto* section = sections_[i].get();
+        if (!section) {
+            continue;
+        }
+        SDL_Rect bounds = (i < section_bounds_.size()) ? section_bounds_[i] : section->rect();
+        if (bounds.w <= 0 || bounds.h <= 0) {
+            continue;
+        }
+        if (SDL_PointInRect(&p, &bounds)) {
+            return section;
+        }
+    }
+    return nullptr;
+}
+
+bool AssetInfoUI::handle_section_focus_event(const SDL_Event& e) {
+    if (e.type != SDL_MOUSEBUTTONDOWN || e.button.button != SDL_BUTTON_LEFT) {
+        return false;
+    }
+    SDL_Point pointer{e.button.x, e.button.y};
+    DockableCollapsible* target = section_at_point(pointer);
+    if (!target) {
+        return false;
+    }
+    if (target == focused_section_) {
+        return false;
+    }
+    focus_section(target);
+    return true;
+}
+
 void AssetInfoUI::sync_target_tiling_state() {
     if (!info_) return;
     Asset* current_target = target_asset_;
@@ -1655,10 +1764,12 @@ void AssetInfoUI::open_area_editor(const std::string& name) {
 
 void AssetInfoUI::rebuild_default_sections() {
     sections_.clear();
+    section_bounds_.clear();
     basic_info_section_ = nullptr;
     lighting_section_ = nullptr;
     shading_section_ = nullptr;
     spawn_groups_section_ = nullptr;
+    focused_section_ = nullptr;
 
     auto adopt_section = [](auto* section) {
         configure_panel_for_container(section);
@@ -1670,7 +1781,7 @@ void AssetInfoUI::rebuild_default_sections() {
         }
         section->set_info(info_);
         section->reset_scroll();
-        section->set_expanded(true);
+        section->set_expanded(false);
         try {
             section->build();
         } catch (const std::exception& ex) {
@@ -1758,6 +1869,7 @@ void AssetInfoUI::rebuild_default_sections() {
 
     container_.reset_scroll();
     container_.request_layout();
+    clear_section_focus();
 }
 
 bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& fn) {

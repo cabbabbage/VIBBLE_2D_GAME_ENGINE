@@ -377,4 +377,18 @@ SDL_Texture* BakeImageEffectTexture(SDL_Renderer* renderer,
     return processed;
 }
 
+SDL_Texture* ImageEffectProcessor::apply_effects(SDL_Renderer* renderer,
+                                                 SDL_Texture* source_texture,
+                                                 int width, int height,
+                                                 const camera_effects::ImageEffectSettings& settings) {
+    return BakeImageEffectTexture(renderer, source_texture, width, height, settings);
+}
+
+bool ImageEffectProcessor::apply_effects_in_place(SDL_Renderer* renderer,
+                                                  SDL_Texture*& texture,
+                                                  int width, int height,
+                                                  const camera_effects::ImageEffectSettings& settings) {
+    return ApplyImageEffectsToTexture(renderer, texture, width, height, settings);
+}
+
 } // namespace image_effects

@@ -484,6 +484,9 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     path[0].is_last = true;
     path[0].next = nullptr;
     path[0].prev = nullptr;
+    path[0].base_texture = animation.frame_variant(0, 0);
+    path[0].depthcue_foreground_texture = animation.depthcue_foreground_variant(0, 0);
+    path[0].depthcue_background_texture = animation.depthcue_background_variant(0, 0);
 
     std::string merged_name = "runtime_merged";
     if (samples.front().asset && samples.front().asset->info && !samples.front().asset->info->name.empty()) {

@@ -183,7 +183,7 @@ void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
 
     // Expand the prefetch border around the camera by doubling the
     // candidate chunk radius so we consider a wider area for visibility.
-    constexpr int kBorderRadiusChunks = 4;
+    constexpr int kBorderRadiusChunks = 1;
     i_min -= kBorderRadiusChunks;
     j_min -= kBorderRadiusChunks;
     i_max += kBorderRadiusChunks;

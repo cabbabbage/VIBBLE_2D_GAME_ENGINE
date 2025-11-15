@@ -102,6 +102,13 @@ void SlidingWindowContainer::set_header_navigation_alignment_right(bool align_ri
     layout_dirty_ = true;
 }
 
+void SlidingWindowContainer::set_content_clip_enabled(bool enabled) {
+    if (content_clip_enabled_ == enabled) {
+        return;
+    }
+    content_clip_enabled_ = enabled;
+}
+
 void SlidingWindowContainer::request_layout() {
     layout_dirty_ = true;
 }
@@ -507,7 +514,7 @@ void SlidingWindowContainer::render(SDL_Renderer* renderer, int screen_w, int sc
     SDL_RenderSetClipRect(renderer, &panel_clip);
 
     SDL_Rect content_clip = content_clip_rect_;
-    if (content_clip.w > 0 && content_clip.h > 0) {
+    if (content_clip_enabled_ && content_clip.w > 0 && content_clip.h > 0) {
         SDL_Rect intersection;
         if (SDL_IntersectRect(&panel_clip, &content_clip, &intersection) == SDL_TRUE) {
             SDL_RenderSetClipRect(renderer, &intersection);

@@ -1,7 +1,9 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <SDL.h>
@@ -53,6 +55,7 @@ class FrameChildrenEditor {
     void apply_current_to_next();
     void set_child_visible(bool visible);
     void persist_changes();
+    void invalidate_child_caches();
     MovementFrame* current_frame();
     const MovementFrame* current_frame() const;
     ChildFrame* current_child();
@@ -61,6 +64,15 @@ class FrameChildrenEditor {
     SDL_FPoint screen_to_world(SDL_Point screen) const;
     SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
     int hit_test_child(int x, int y) const;
+    float canvas_pixels_per_unit() const;
+    std::filesystem::path resolve_assets_root() const;
+    std::filesystem::path resolve_child_asset_directory(const std::string& child_id) const;
+    std::filesystem::path resolve_child_frame_path(const std::string& child_id) const;
+    std::filesystem::path find_first_frame_in_folder(const std::filesystem::path& folder) const;
+    SDL_Texture* acquire_child_texture(SDL_Renderer* renderer,
+                                       const std::string& child_id,
+                                       int* tex_w,
+                                       int* tex_h) const;
 
   private:
     std::shared_ptr<AnimationDocument> document_;
@@ -77,6 +89,19 @@ class FrameChildrenEditor {
     SDL_FPoint drag_start_world_{0.0f, 0.0f};
     ChildFrame drag_snapshot_;
     std::string payload_signature_;
+    struct ChildPreviewTexture {
+        SDL_Renderer* renderer = nullptr;
+        std::shared_ptr<SDL_Texture> texture;
+        std::filesystem::path source_path;
+        std::filesystem::file_time_type last_write_time{};
+        bool has_timestamp = false;
+        int width = 0;
+        int height = 0;
+    };
+    mutable std::unordered_map<std::string, ChildPreviewTexture> child_previews_;
+    mutable std::unordered_map<std::string, std::filesystem::path> child_asset_dir_cache_;
+    mutable std::filesystem::path cached_assets_root_;
+    mutable bool cached_assets_root_valid_ = false;
 };
 
 }

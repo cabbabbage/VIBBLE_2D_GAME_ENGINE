@@ -10,7 +10,7 @@
                 "childrandom": true,
                 "edge": true,
                 "exact": true,
-                "exact_position": false,
+                "exact_position": true,
                 "percent": false,
                 "perimeter": true,
                 "random": true
@@ -18,12 +18,12 @@
             "render_dark_mask": false,
             "types": {
                 "area": false,
-                "boundary": true,
+                "boundary": false,
                 "enemy": true,
                 "npc": false,
                 "object": true,
                 "player": true,
-                "texture": true
+                "texture": false
             }
         },
         "grid": {
@@ -39,7 +39,7 @@
     "dev_ui": {
         "camera": {
             "background_texture_max_opacity": 255.0,
-            "depthcue_enabled": false,
+            "depthcue_enabled": true,
             "foreground_texture_max_opacity": 255.0
         },
         "lighting": {

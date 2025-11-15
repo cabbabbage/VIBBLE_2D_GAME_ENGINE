@@ -13,11 +13,17 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+class Asset;
+class Assets;
 class AssetInfo;
 class Input;
 class DMButton;
 
 namespace animation_editor {
+
+using ::Asset;
+using ::Assets;
+using ::AssetInfo;
 
 class AnimationDocument;
 class AnimationListPanel;
@@ -56,8 +62,8 @@ class AnimationEditorWindow {
     void set_on_animation_properties_changed(std::function<void(const std::string&, const nlohmann::json&)> callback);
 
     // Wiring to in-world frame editor session
-    void set_assets(class Assets* assets) { assets_ = assets; }
-    void set_target_asset(class Asset* asset) { target_asset_ = asset; }
+    void set_assets(Assets* assets) { assets_ = assets; }
+    void set_target_asset(Asset* asset) { target_asset_ = asset; }
     void on_live_frame_editor_closed(const std::string& animation_id);
 
   private:
@@ -80,7 +86,7 @@ class AnimationEditorWindow {
     bool handle_header_event(const SDL_Event& e);
     void set_status_message(const std::string& message, int frames = 300);
     void open_frame_editor(const std::string& animation_id);
-    class Asset* resolve_frame_editor_asset();
+    Asset* resolve_frame_editor_asset();
     void create_animation_via_prompt();
     void reload_document();
     void process_auto_save();
@@ -137,8 +143,8 @@ class AnimationEditorWindow {
     bool using_manifest_store_ = false;
 
     // For in-world frame editor session
-    class Assets* assets_ = nullptr;
-    class Asset* target_asset_ = nullptr;
+    Assets* assets_ = nullptr;
+    Asset* target_asset_ = nullptr;
 };
 
 }

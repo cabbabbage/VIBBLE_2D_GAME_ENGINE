@@ -789,6 +789,7 @@ void RoomEditor::set_current_room(Room* room) {
     }
 
     room_editor_trace("[RoomEditor] set_current_room complete");
+
 }
 
 void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {

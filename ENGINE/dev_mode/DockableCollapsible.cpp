@@ -536,6 +536,23 @@ void DockableCollapsible::force_pointer_ready() {
     block_pointer_for(0);
 }
 
+void DockableCollapsible::set_embedded_focus_state(bool focused) {
+    if (embedded_focus_state_ == focused) {
+        return;
+    }
+    embedded_focus_state_ = focused;
+}
+
+void DockableCollapsible::set_embedded_interaction_enabled(bool enabled) {
+    if (embedded_interaction_enabled_ == enabled) {
+        return;
+    }
+    embedded_interaction_enabled_ = enabled;
+    if (!embedded_interaction_enabled_) {
+        force_pointer_ready();
+    }
+}
+
 void DockableCollapsible::invalidate_layout(bool geometry_only) const {
     if (!geometry_only) {
         needs_layout_ = true;
@@ -576,6 +593,10 @@ void DockableCollapsible::update(const Input& input, int screen_w, int screen_h)
     }
 #endif
 
+    if (!embedded_interaction_enabled_) {
+        return;
+    }
+
     if (locked_) {
         log_locked_mutation("update");
         return;
@@ -602,7 +623,7 @@ void DockableCollapsible::update(const Input& input, int screen_w, int screen_h)
 }
 
 bool DockableCollapsible::handle_event(const SDL_Event& e) {
-    if (!visible_) return false;
+    if (!visible_ || !embedded_interaction_enabled_) return false;
 
     const bool pointer_event =
         (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
@@ -839,6 +860,17 @@ void DockableCollapsible::render(SDL_Renderer* r) const {
     const float highlight_intensity = DMStyles::HighlightIntensity();
     const float shadow_intensity = DMStyles::ShadowIntensity();
     dm_draw::DrawBeveledRect( r, rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, header_highlight, border_shadow, false, highlight_intensity, shadow_intensity);
+    if (rendering_embedded_ && embedded_focus_state_) {
+        SDL_Rect focus_rect = rect_;
+        focus_rect.x -= 2;
+        focus_rect.y -= 2;
+        focus_rect.w += 4;
+        focus_rect.h += 4;
+        focus_rect.w = std::max(0, focus_rect.w);
+        focus_rect.h = std::max(0, focus_rect.h);
+        const SDL_Color& focus_color = DMStyles::ButtonFocusOutline();
+        dm_draw::DrawRoundedFocusRing(r, focus_rect, DMStyles::CornerRadius(), 2, focus_color);
+    }
 
     if (header_btn_) header_btn_->render(r);
     if (lock_btn_) {
@@ -1300,7 +1332,6 @@ void DockableCollapsible::apply_lock_state(bool locked, bool allow_auto_collapse
     } else {
         update_header_button();
     }
-    update_lock_button();
 
     for (const auto& cb : on_lock_changed_) {
         if (cb) {
@@ -1314,4 +1345,66 @@ void DockableCollapsible::apply_lock_state(bool locked, bool allow_auto_collapse
             devmode::ui_settings::save_bool(key, locked_);
         }
     }
+}
+
+void DockableCollapsible::capture_snapshot(EmbeddedSnapshot& out) const {
+    out.rect = rect_;
+    out.visible = visible_;
+    out.expanded = expanded_;
+    out.floatable = floatable_;
+    out.scroll_enabled = scroll_enabled_;
+    out.visible_height = visible_height_;
+    out.available_height_override = available_height_override_;
+    out.last_screen_w = last_screen_w_;
+    out.last_screen_h = last_screen_h_;
+}
+
+void DockableCollapsible::apply_embedded_bounds(const SDL_Rect& bounds, int screen_w, int screen_h) {
+    rect_ = bounds;
+    floatable_ = false;
+    scroll_enabled_ = false;
+    visible_ = true;
+    available_height_override_ = -1;
+    needs_layout_ = true;
+    needs_geometry_ = true;
+    layout(screen_w > 0 ? screen_w : last_screen_w_, screen_h > 0 ? screen_h : last_screen_h_);
+}
+
+void DockableCollapsible::restore_snapshot(const EmbeddedSnapshot& snapshot) {
+    rect_ = snapshot.rect;
+    visible_ = snapshot.visible;
+    expanded_ = snapshot.expanded;
+    floatable_ = snapshot.floatable;
+    scroll_enabled_ = snapshot.scroll_enabled;
+    visible_height_ = snapshot.visible_height;
+    available_height_override_ = snapshot.available_height_override;
+    last_screen_w_ = snapshot.last_screen_w;
+    last_screen_h_ = snapshot.last_screen_h;
+    needs_layout_ = true;
+    needs_geometry_ = true;
+}
+
+int DockableCollapsible::embedded_height(int width, int screen_h) {
+    EmbeddedSnapshot snapshot;
+    capture_snapshot(snapshot);
+    SDL_Rect bounds = snapshot.rect;
+    bounds.w = width;
+    if (bounds.h <= 0) {
+        bounds.h = snapshot.rect.h;
+    }
+    apply_embedded_bounds(bounds, width, screen_h);
+    int measured = rect_.h;
+    restore_snapshot(snapshot);
+    return measured;
+}
+
+void DockableCollapsible::render_embedded(SDL_Renderer* renderer, const SDL_Rect& bounds, int screen_w, int screen_h) {
+    EmbeddedSnapshot snapshot;
+    capture_snapshot(snapshot);
+    apply_embedded_bounds(bounds, screen_w, screen_h);
+    bool previous_rendering_state = rendering_embedded_;
+    rendering_embedded_ = true;
+    render(renderer);
+    rendering_embedded_ = previous_rendering_state;
+    restore_snapshot(snapshot);
 }

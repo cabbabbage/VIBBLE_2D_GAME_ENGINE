@@ -130,6 +130,11 @@ private:
     void persist_spawn_group_changes();
     void handle_spawn_groups_mutated();
     void handle_spawn_group_entry_changed(const nlohmann::json& entry, const SpawnGroupConfig::ChangeSummary& summary);
+    void focus_panel(DockableCollapsible* panel);
+    void clear_panel_focus();
+    void apply_panel_focus_states();
+    DockableCollapsible* panel_at_point(SDL_Point p) const;
+    bool handle_panel_focus_event(const SDL_Event& e);
 
     std::unique_ptr<State> state_;
     std::unique_ptr<SlidingWindowContainer> default_container_;
@@ -189,6 +194,9 @@ private:
     std::unique_ptr<DockableCollapsible> tags_panel_;
     std::unique_ptr<DockableCollapsible> types_panel_;
     std::vector<DockableCollapsible*> ordered_base_panels_;
+    mutable std::vector<SDL_Rect> ordered_panel_bounds_;
+    mutable std::vector<SDL_Rect> spawn_config_bounds_;
+    mutable SDL_Rect add_spawn_bounds_{0,0,0,0};
 
     std::vector<std::unique_ptr<SpawnGroupConfig>> spawn_group_configs_;
     std::vector<std::string> spawn_group_config_ids_;
@@ -197,6 +205,7 @@ private:
     std::unordered_map<const DockableCollapsible*, int> collapsible_height_cache_;
     std::unordered_map<const DockableCollapsible*, std::string> base_panel_keys_;
     std::unordered_map<std::string, bool> base_panel_expanded_state_;
+    DockableCollapsible* focused_panel_ = nullptr;
 
     bool reset_expanded_state_pending_ = false;
 

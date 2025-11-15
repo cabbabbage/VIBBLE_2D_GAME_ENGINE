@@ -22,6 +22,8 @@ public:
     AnimationFrame* next = nullptr;
     bool is_last = false;
     bool is_first = false;
+    SDL_Texture* base_texture = nullptr;
+    SDL_Texture* depthcue_foreground_texture = nullptr;
+    SDL_Texture* depthcue_background_texture = nullptr;
     std::vector<AnimationChildFrameData> children;
 };
-

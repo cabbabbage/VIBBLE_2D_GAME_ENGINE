@@ -27,7 +27,7 @@ endif()
 
 # Speed-oriented flags
 if(MSVC)
-    add_compile_options(/MP /Zc:inline /Zc:__cplusplus /permissive- /FS /bigobj)
+    add_compile_options(/MP /Zc:inline /Zc:__cplusplus /permissive /FS /bigobj)
 else()
     add_compile_options(-pipe)
 endif()
@@ -54,7 +54,7 @@ list(REMOVE_DUPLICATES ENGINE_SRC)
 add_executable(engine ${ENGINE_SRC})
 
 # Unity build (jumbo) for faster compiles
-option(ENABLE_UNITY_BUILD "Enable unity/jumbo build for faster compiles" ON)
+option(ENABLE_UNITY_BUILD "Enable unity/jumbo build for faster compiles" OFF)
 if(ENABLE_UNITY_BUILD)
     set_target_properties(engine PROPERTIES UNITY_BUILD ON)
     set_target_properties(engine PROPERTIES UNITY_BUILD_BATCH_SIZE 16)

@@ -1,6 +1,7 @@
 #include "scene_renderer.hpp"
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
+#include "asset/animation_frame.hpp"
 #include "asset/asset_types.hpp"
 #include "world/chunk.hpp"
 #include "render/camera.hpp"
@@ -695,18 +696,22 @@ void SceneRenderer::render(){
                 SDL_FPoint screen_pos = camera_state->map_to_screen_f(SDL_FPoint{ wx, wy });
                 const float screen_y = screen_pos.y;
                 const AnimationFrame* frame_ptr = asset ? asset->current_animation_frame() : nullptr;
+                SDL_Texture* fg_overlay = frame_ptr ? frame_ptr->depthcue_foreground_texture : nullptr;
+                SDL_Texture* bg_overlay = frame_ptr ? frame_ptr->depthcue_background_texture : nullptr;
                 const Animation* current_anim = nullptr;
-                if (asset && asset->info) {
+                if ((!fg_overlay || !bg_overlay) && asset && asset->info) {
                     auto anim_it = asset->info->animations.find(asset->current_animation);
                     if (anim_it != asset->info->animations.end()) {
                         current_anim = &anim_it->second;
                     }
                 }
-                SDL_Texture* fg_overlay = nullptr;
-                SDL_Texture* bg_overlay = nullptr;
                 if (current_anim && frame_ptr) {
-                    fg_overlay = current_anim->depthcue_foreground_texture(frame_ptr);
-                    bg_overlay = current_anim->depthcue_background_texture(frame_ptr);
+                    if (!fg_overlay) {
+                        fg_overlay = current_anim->depthcue_foreground_texture(frame_ptr);
+                    }
+                    if (!bg_overlay) {
+                        bg_overlay = current_anim->depthcue_background_texture(frame_ptr);
+                    }
                 }
                 const DepthCueSample depth_sample = depth_sample_for(screen_y);
                 if (depth_sample.plane != DepthCuePlane::None) {
@@ -773,27 +778,36 @@ void SceneRenderer::render(){
                 a->cached_h = fh;
             }
 
+            auto cache_last_frame = [&]() {
+                if (a->current_frame) {
+                    last_rendered_frames_[a] = a->current_frame;
+                } else {
+                    last_rendered_frames_.erase(a);
+                }
+            };
+
             SDL_FRect dst = get_scaled_position_rect(a, fw, fh, inv_scale, min_w, min_h, player_sh);
             if (dst.w <= 0.0f || dst.h <= 0.0f) {
-                if (a->current_frame) {
-                    last_rendered_frames_[a] = a->current_frame;
-                } else {
-                    last_rendered_frames_.erase(a);
-                }
+                cache_last_frame();
                 continue;
             }
 
-            // Skip assets fully outside the viewport to avoid texture selection and draw work
-            if (!intersects_padded(dst, screen_rect_f)) {
-                if (a->current_frame) {
-                    last_rendered_frames_[a] = a->current_frame;
-                } else {
-                    last_rendered_frames_.erase(a);
-                }
+            SDL_FRect expanded_bounds{};
+            const bool has_expanded_bounds =
+                assets_ && assets_->asset_bounds_in_screen_space(a, expanded_bounds);
+            const SDL_FRect& cull_rect = has_expanded_bounds ? expanded_bounds : dst;
+            const bool sprite_visible  = intersects_padded(dst, screen_rect_f);
+            const bool bounds_visible  = intersects_padded(cull_rect, screen_rect_f);
+            if (!bounds_visible) {
+                cache_last_frame();
+                continue;
+            }
+            if (!sprite_visible && !has_light_sources) {
+                cache_last_frame();
                 continue;
             }
 
-            if (!is_chunk_tiled) {
+            if (sprite_visible && !is_chunk_tiled) {
                 const float hysteresis_margin = camera_state
                     ? camera_state->realism_settings().scale_variant_hysteresis_margin
                     : render_pipeline::ScalingLogic::kDefaultHysteresisMargin;
@@ -806,12 +820,12 @@ void SceneRenderer::render(){
                     static_cast<int>(std::lround(dst.h)),
                     hysteresis_margin);
                 enqueue_command(a, final_tex, draw_tex, dst);
-            } else if (has_light_sources) {
+            } else if (sprite_visible && has_light_sources) {
                 // Keep a command placeholder so the lighting system can still sample this asset.
                 enqueue_command(a, final_tex, nullptr, dst, /*suppress_sprite_draw=*/true);
             }
 
-            if (!a->animation_children().empty()) {
+            if (sprite_visible && !a->animation_children().empty()) {
                 const auto& child_slots = a->animation_children();
                 for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
                     const auto& attachment = child_slots[child_index];
@@ -871,15 +885,6 @@ void SceneRenderer::render(){
             }
 
             if (has_light_sources && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
-                // Skip creating overlay sources for off-screen assets
-                if (!intersects_padded(dst, screen_rect_f)) {
-                    if (a->current_frame) {
-                        last_rendered_frames_[a] = a->current_frame;
-                    } else {
-                        last_rendered_frames_.erase(a);
-                    }
-                    continue;
-                }
                 bool has_front_lights         = false;
                 bool has_back_lights          = false;
                 bool has_dark_mask_lights     = false;
@@ -1197,9 +1202,15 @@ void SceneRenderer::render(){
                 if (!overlay_tex || overlay_alpha == 0) {
                     return;
                 }
+                // Match the sprite's overall alpha so overlays fade alongside the base.
+                const Uint8 combined_alpha =
+                    static_cast<Uint8>((static_cast<int>(overlay_alpha) * base_alpha_mod) / 255);
+                if (combined_alpha == 0) {
+                    return;
+                }
                 SDL_SetTextureBlendMode(overlay_tex, SDL_BLENDMODE_BLEND);
                 SDL_SetTextureColorMod(overlay_tex, 255, 255, 255);
-                SDL_SetTextureAlphaMod(overlay_tex, overlay_alpha);
+                SDL_SetTextureAlphaMod(overlay_tex, combined_alpha);
                 SDL_RenderCopyExF(
                     renderer_,
                     overlay_tex,
@@ -1209,6 +1220,8 @@ void SceneRenderer::render(){
                     cmd.has_custom_pivot ? &cmd.rotation_pivot : nullptr,
                     cmd.flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE
                 );
+                // Restore defaults for shared textures so future draws use normal modulation.
+                SDL_SetTextureColorMod(overlay_tex, 255, 255, 255);
                 SDL_SetTextureAlphaMod(overlay_tex, 255);
             };
             draw_depthcue_overlay(cmd.depthcue_background_texture, cmd.depthcue_background_alpha);
