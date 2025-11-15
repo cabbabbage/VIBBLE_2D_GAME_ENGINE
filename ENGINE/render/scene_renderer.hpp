@@ -55,8 +55,8 @@ private:
                                       float reference_screen_height);
     bool initialize_static_light_chunks();
 
-private:
-    using LightOverlaySource = runtime_lighting::AssetLight;
+    private:
+        using LightOverlaySource = runtime_lighting::AssetLight;
 
     struct AssetRenderCommand {
         Asset*      asset               = nullptr;
@@ -77,9 +77,10 @@ private:
         Uint8        depthcue_background_alpha   = 0;
     };
 
-    bool ensure_darkness_overlay();
-    void destroy_darkness_overlay();
-    void render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds);
+        bool ensure_darkness_overlay();
+        void destroy_darkness_overlay();
+        void render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds);
+
 
     SDL_Renderer*  renderer_;
     Assets*        assets_;

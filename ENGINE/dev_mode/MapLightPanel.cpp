@@ -1624,6 +1624,7 @@ bool MapLightPanel::handle_event(const SDL_Event& e) {
 }
 
 void MapLightPanel::render(SDL_Renderer* r) const {
+    if (!r) return;
     if (!visible_) return;
     DockableCollapsible::render(r);
     if (orbit_key_widget_) {

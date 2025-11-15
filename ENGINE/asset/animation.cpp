@@ -35,6 +35,30 @@ namespace {
 void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info);
 #endif
 
+bool has_depthcue_effects(const camera_effects::ImageEffectSettings& settings) {
+        return !camera_effects::ImageEffectSettingsIsIdentity(settings);
+}
+
+void destroy_texture(SDL_Texture*& texture) {
+        if (texture) {
+                SDL_DestroyTexture(texture);
+                texture = nullptr;
+        }
+}
+
+void rebuild_depthcue_textures(SDL_Renderer*,
+                               SDL_Texture*,
+                               int,
+                               int,
+                               SDL_Texture*& /*fg_texture*/,
+                               SDL_Texture*& /*bg_texture*/,
+                               const camera_effects::ImageEffectSettings& /*fg_settings*/,
+                               const camera_effects::ImageEffectSettings& /*bg_settings*/,
+                               const AssetInfo& /*info*/) {
+        // Runtime generation of depth-cue overlays is disabled.
+        return;
+}
+
 fs::path project_root_path() {
 #ifdef PROJECT_ROOT
         return fs::path(PROJECT_ROOT);
@@ -622,6 +646,8 @@ void Animation::load(const std::string& trigger,
         }
         const std::uint64_t fg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.foreground);
         const std::uint64_t bg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.background);
+        const bool supports_depthcue_cache = renderer &&
+                (has_depthcue_effects(effect_state.foreground) || has_depthcue_effects(effect_state.background));
         bool effect_hash_mismatch = false;
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                   << " profile steps (pre-normalize): " << format_steps(variant_steps_) << ", prefer_cached=" << (prefer_cached ? "true" : "false") << ", scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false") << "\n";
@@ -906,14 +932,7 @@ void Animation::load(const std::string& trigger,
                                                 cache_entry.textures[variant_idx] = dst;
                                                 cache_entry.widths[variant_idx]   = tex_w;
                                                 cache_entry.heights[variant_idx]  = tex_h;
-                                                rebuild_depthcue_textures(renderer,
-                                                                          dst,
-                                                                          tex_w,
-                                                                          tex_h,
-                                                                          cache_entry.foreground_textures[variant_idx],
-                                                                          cache_entry.background_textures[variant_idx],
-                                                                          effect_state.foreground,
-                                                                          effect_state.background);
+                                                // Do not generate foreground/background overlays at runtime.
                                                 if (variant_idx == 0) {
                                                         base_ok = true;
                                                 }
@@ -1061,14 +1080,7 @@ void Animation::load(const std::string& trigger,
                                                         cache_entry.textures[variant_idx] = dst;
                                                         cache_entry.widths[variant_idx]   = tex_w;
                                                         cache_entry.heights[variant_idx]  = tex_h;
-                                                        rebuild_depthcue_textures(renderer,
-                                                                                  dst,
-                                                                                  tex_w,
-                                                                                  tex_h,
-                                                                                  cache_entry.foreground_textures[variant_idx],
-                                                                                  cache_entry.background_textures[variant_idx],
-                                                                                  effect_state.foreground,
-                                                                                  effect_state.background);
+                                                        // Do not generate foreground/background overlays at runtime.
 
                                                         SDL_Texture* src_mask = nullptr;
                                                         if (variant_idx < cache_entry.mask_textures.size()) {
@@ -1281,16 +1293,7 @@ void Animation::load(const std::string& trigger,
                 bool masks_loaded_from_cache = false;
                 std::vector<bool> rebuild_variant(variant_count, false);
 
-                if (supports_depthcue_cache && metadata_valid) {
-                        const bool overlay_hash_ok = overlay_hashes_match_and_cleanup(
-                                meta, variant_paths, fg_effect_hash, bg_effect_hash, info.name, trigger);
-                        if (!overlay_hash_ok) {
-                                effect_hash_mismatch = true;
-                                metadata_valid       = false;
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " metadata effect hash mismatch -> forcing rebuild\n";
-                        }
-                }
+                // Ignore foreground/background effect hash changes at runtime; do not clear or rebuild overlays.
 
                 if (!metadata_valid || effect_hash_mismatch) {
                         std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
@@ -1525,71 +1528,7 @@ void Animation::load(const std::string& trigger,
                                 }
                         }
 
-                        // Generate any missing foreground/background surfaces from the base variant surfaces.
-                        auto build_layer_for_variant =
-                                [&](std::size_t variant_index,
-                                    std::vector<std::vector<SDL_Surface*>>& storage,
-                                    std::vector<bool>& needs_generation_flags,
-                                    const camera_effects::ImageEffectSettings& effects,
-                                    const std::string& output_folder) {
-                                        const std::size_t expected_count = static_cast<std::size_t>(expected_frames);
-
-                                        if (!needs_generation_flags[variant_index]) {
-                                                // Verify that the loaded cache is complete; if not, regenerate.
-                                                if (storage[variant_index].size() == expected_count) {
-                                                        return;
-                                                }
-                                                for (SDL_Surface* surf : storage[variant_index]) {
-                                                        if (surf) SDL_FreeSurface(surf);
-                                                }
-                                                storage[variant_index].clear();
-                                        }
-
-                                        needs_generation_flags[variant_index] = true;
-                                        storage[variant_index].assign(expected_count, nullptr);
-
-                                        const std::vector<SDL_Surface*>& base_list = variant_surfaces[variant_index];
-                                        for (int frame = 0; frame < expected_frames; ++frame) {
-                                                SDL_Surface* base = (frame < static_cast<int>(base_list.size()))
-                                                        ? base_list[static_cast<std::size_t>(frame)]
-                                                        : nullptr;
-                                                if (!base) {
-                                                        continue;
-                                                }
-                                                SDL_Surface* copy = duplicate_surface(base);
-                                                if (!copy) {
-                                                        continue;
-                                                }
-                                                if (!image_effects::ApplyImageEffectsToSurface(copy, effects)) {
-                                                        SDL_FreeSurface(copy);
-                                                        continue;
-                                                }
-                                                storage[variant_index][static_cast<std::size_t>(frame)] = copy;
-                                        }
-
-                                        // Persist the generated layer surfaces so we can reload them quickly later.
-                                        cache.save_surface_sequence(output_folder, storage[variant_index]);
-                                        needs_generation_flags[variant_index] = false;
-                                };
-
-                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                const VariantLayerPaths& paths = variant_paths[idx];
-
-                                if (foreground_needs_generation[idx]) {
-                                        build_layer_for_variant(idx,
-                                                                foreground_surfaces,
-                                                                foreground_needs_generation,
-                                                                effect_state.foreground,
-                                                                paths.foreground_folder);
-                                }
-                                if (background_needs_generation[idx]) {
-                                        build_layer_for_variant(idx,
-                                                                background_surfaces,
-                                                                background_needs_generation,
-                                                                effect_state.background,
-                                                                paths.background_folder);
-                                }
-                        }
+                        // Do not generate any missing overlays at runtime.
                 }
 
                 if (info.is_shaded) {

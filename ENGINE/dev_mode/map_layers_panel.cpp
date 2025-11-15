@@ -554,6 +554,9 @@ bool MapLayersPanel::handle_event(const SDL_Event& e) {
 }
 
 void MapLayersPanel::render(SDL_Renderer* renderer) const {
+    if (!renderer) {
+        return;
+    }
     if (!is_visible()) {
         return;
     }

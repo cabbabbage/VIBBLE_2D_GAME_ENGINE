@@ -65,6 +65,9 @@ bool MapLayersPreviewPanel::handle_event(const SDL_Event& e) {
 }
 
 void MapLayersPreviewPanel::render(SDL_Renderer* renderer) const {
+    if (!renderer) {
+        return;
+    }
     DockableCollapsible::render(renderer);
 }
 

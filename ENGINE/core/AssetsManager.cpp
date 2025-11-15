@@ -1701,7 +1701,7 @@ bool Assets::process_removals() {
 }
 
 void Assets::render_overlays(SDL_Renderer* renderer) {
-    if (dev_controls_ && dev_controls_->is_enabled()) {
+    if (renderer && dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->render_overlays(renderer);
     }
 

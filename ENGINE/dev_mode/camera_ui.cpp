@@ -506,6 +506,7 @@ bool CameraUIPanel::handle_event(const SDL_Event& e) {
 }
 
 void CameraUIPanel::render(SDL_Renderer* renderer) const {
+    if (!renderer) return;
     if (!is_visible()) return;
     DockableCollapsible::render(renderer);
     // Ensure expanded dropdown options render above the panel

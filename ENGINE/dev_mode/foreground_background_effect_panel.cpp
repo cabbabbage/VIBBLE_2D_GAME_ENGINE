@@ -250,6 +250,7 @@ bool ForegroundBackgroundEffectPanel::handle_event(const SDL_Event& e) {
 }
 
 void ForegroundBackgroundEffectPanel::render(SDL_Renderer* renderer) const {
+    if (!renderer) return;
     if (!is_visible()) return;
     DockableCollapsible::render(renderer);
     DMDropdown::render_active_options(renderer);

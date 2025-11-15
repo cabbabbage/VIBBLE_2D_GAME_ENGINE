@@ -127,6 +127,7 @@ bool Section_SpawnGroups::handle_event(const SDL_Event& e) {
 }
 
 void Section_SpawnGroups::render(SDL_Renderer* r) const {
+    if (!r) return;
     DockableCollapsible::render(r);
     if (list_) list_->render(r);
 }

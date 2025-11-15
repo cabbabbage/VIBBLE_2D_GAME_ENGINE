@@ -1629,8 +1629,17 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
 void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (!enabled_) return;
 
+    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
+    // Hide the top dev header whenever modal/sliding UI or the Layers panel would obscure it.
+    const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_ || layers_panel_open;
+    asset_filter_.set_header_suppressed(hide_headers);
+
+    if (!renderer) {
+        return;
+    }
+
     // Render grid overlay if enabled (moved to beginning to render behind UI)
-    if (grid_overlay_enabled_ && assets_) {
+    if (renderer && grid_overlay_enabled_ && assets_) {
         const camera& cam = assets_->getView();
         world::Grid& grid = assets_->world_grid();
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
@@ -1707,9 +1716,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
     }
 
-    if (mode_ == Mode::MapEditor) {
+    if (renderer && mode_ == Mode::MapEditor) {
         if (map_editor_) map_editor_->render(renderer);
-    } else if (mode_ == Mode::RoomEditor && room_editor_) {
+    } else if (renderer && mode_ == Mode::RoomEditor && room_editor_) {
         room_editor_->render_overlays(renderer);
         // Render Area Tool overlay/editor if active
         if (asset_area_editor_ && asset_area_editor_->is_active()) {
@@ -1814,7 +1823,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
             SDL_SetRenderDrawBlendMode(renderer, prev_mode);
         }
-    } else if (mode_ == Mode::RoomEditor) {
+    } else if (renderer && mode_ == Mode::RoomEditor) {
 
         if (renderer && assets_) {
             // Legacy overlay and panel rendering removed in favor of asset-based Area editing.
@@ -1950,31 +1959,27 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
 
 
-    if (map_mode_ui_) map_mode_ui_->render(renderer);
-    if (map_assets_modal_ && map_assets_modal_->visible()) {
+    if (renderer && map_mode_ui_) map_mode_ui_->render(renderer);
+    if (renderer && map_assets_modal_ && map_assets_modal_->visible()) {
         map_assets_modal_->render(renderer);
     }
-    if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
+    if (renderer && boundary_assets_modal_ && boundary_assets_modal_->visible()) {
         boundary_assets_modal_->render(renderer);
     }
-    if (trail_suite_) trail_suite_->render(renderer);
+    if (renderer && trail_suite_) trail_suite_->render(renderer);
     if (frame_editor_session_ && frame_editor_session_->is_active()) {
         // Panels are rendered as part of render(); nothing to do here.
     }
-    if (camera_panel_ && camera_panel_->is_visible()) {
+    if (renderer && camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
     }
-    if (image_effect_panel_ && image_effect_panel_->is_visible()) {
+    if (renderer && image_effect_panel_ && image_effect_panel_->is_visible()) {
         image_effect_panel_->render(renderer);
     }
-    if (regenerate_popup_ && regenerate_popup_->visible()) {
+    if (renderer && regenerate_popup_ && regenerate_popup_->visible()) {
         regenerate_popup_->render(renderer);
     }
-    const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    // Hide the top dev header when the Layers panel is open so its close button isn't obscured
-    const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_ || layers_panel_open;
-    asset_filter_.set_header_suppressed(hide_headers);
-    if (!hide_headers && !is_modal_blocking_panels()) {
+    if (renderer && !hide_headers && !is_modal_blocking_panels()) {
         // Render header and expanded filters (extra Grid panel is rendered inside AssetFilterBar)
         asset_filter_.set_right_accessory_width(0);
         asset_filter_.render(renderer);

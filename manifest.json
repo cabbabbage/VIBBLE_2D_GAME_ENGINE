@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T06:57:57Z",
+        "generated_at": "2025-11-15T09:05:44Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -78,7 +78,7 @@
           0.05454545095562935
         ],
         "revision": 4329668871805815559,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T06:57:57Z",
+        "generated_at": "2025-11-15T09:05:44Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -131,7 +131,7 @@
           0.05000000074505806
         ],
         "revision": 15640563384705236170,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T06:57:57Z",
+        "generated_at": "2025-11-15T09:05:44Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -184,7 +184,7 @@
           0.05000000074505806
         ],
         "revision": 17324624370779397839,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -492,7 +492,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T06:57:57Z",
+        "generated_at": "2025-11-15T09:05:44Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -506,7 +506,7 @@
           0.1090909019112587
         ],
         "revision": 8110939535182362100,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -690,7 +690,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T06:57:57Z",
+        "generated_at": "2025-11-15T09:05:44Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -704,7 +704,7 @@
           0.38181817531585693
         ],
         "revision": 11688286490698651680,
-        "screen_aspect": 1.7777777777777777
+        "screen_aspect": 1.6
       },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -852,29 +852,29 @@
       },
       "camera_settings": {
         "background_effects": {
-          "blur": 0.6599999666213989,
-          "brightness": 0.019999980926513672,
-          "contrast": 0.0,
-          "hue": 0.0,
-          "rgb_boost": 0.15999996662139893,
-          "saturation": 0.19999992847442627,
-          "saturation_blue": 0.5999999046325684,
-          "saturation_green": 0.19999992847442627,
-          "saturation_red": -0.20000004768371582
-        },
-        "background_plane_screen_y": 158.0,
-        "background_texture_max_opacity": 255,
-        "distance_scale_strength": 0.3499999940395355,
-        "foreground_effects": {
-          "blur": 0.0,
+          "blur": 0.6200000047683716,
           "brightness": 0.0,
           "contrast": 0.0,
-          "hue": 75.0,
+          "hue": 23.0,
           "rgb_boost": 0.0,
-          "saturation": 0.0,
-          "saturation_blue": 0.0,
+          "saturation": 0.006666660308837891,
+          "saturation_blue": 0.019999980926513672,
           "saturation_green": 0.0,
           "saturation_red": 0.0
+        },
+        "background_plane_screen_y": 158.0,
+        "background_texture_max_opacity": 180,
+        "distance_scale_strength": 0.3499999940395355,
+        "foreground_effects": {
+          "blur": 0.5,
+          "brightness": 0.059999942779541016,
+          "contrast": 0.19999992847442627,
+          "hue": -33.0,
+          "rgb_boost": 0.0,
+          "saturation": 0.08000000566244125,
+          "saturation_blue": 0.0,
+          "saturation_green": 0.0,
+          "saturation_red": 0.24000000953674316
         },
         "foreground_plane_screen_y": 1037.0,
         "foreground_texture_max_opacity": 255,
@@ -1204,7 +1204,7 @@
           "curvyness": 2,
           "display_color": [
             36,
-            133,
+            120,
             242,
             255
           ],
@@ -1227,7 +1227,7 @@
           "curvyness": 2,
           "display_color": [
             242,
-            61,
+            36,
             242,
             255
           ],

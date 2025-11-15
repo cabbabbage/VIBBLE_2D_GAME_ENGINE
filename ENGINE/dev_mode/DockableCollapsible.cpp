@@ -851,6 +851,7 @@ bool DockableCollapsible::is_point_inside(int x, int y) const {
 }
 
 void DockableCollapsible::render(SDL_Renderer* r) const {
+    if (!r) return;
     if (!visible_) return;
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -1399,6 +1400,9 @@ int DockableCollapsible::embedded_height(int width, int screen_h) {
 }
 
 void DockableCollapsible::render_embedded(SDL_Renderer* renderer, const SDL_Rect& bounds, int screen_w, int screen_h) {
+    if (!renderer) {
+        return;
+    }
     EmbeddedSnapshot snapshot;
     capture_snapshot(snapshot);
     apply_embedded_bounds(bounds, screen_w, screen_h);

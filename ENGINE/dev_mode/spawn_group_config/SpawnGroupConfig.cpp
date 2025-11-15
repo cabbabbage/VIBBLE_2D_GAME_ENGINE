@@ -2186,12 +2186,13 @@ bool SpawnGroupConfig::handle_event(const SDL_Event& e) {
 }
 
 void SpawnGroupConfig::render(SDL_Renderer* r) const {
+    if (!r) return;
     DockableCollapsible::render(r);
 }
 
 void SpawnGroupConfig::render_content(SDL_Renderer* r) const {
-    DockableCollapsible::render_content(r);
     if (!r) return;
+    DockableCollapsible::render_content(r);
     if (!drag_state_.active) return;
     SDL_Rect source = drag_state_.source_rect;
     source.x = body_viewport_.x;
