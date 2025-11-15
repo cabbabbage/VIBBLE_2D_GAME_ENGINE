@@ -184,11 +184,9 @@ AssetRenderPipeline::AssetRenderPipeline(SDL_Renderer* renderer, const SceneLigh
 , lighting_(lighting)
 , render_asset_(renderer) {
     using render_pipeline::shading::RenderAsset;
-    using render_pipeline::shading::RenderCastShadow;
     using render_pipeline::shading::RenderShadowMask;
 
     stages_.push_back(StageEntry{ std::make_unique<RenderAsset>(), SDL_BLENDMODE_BLEND, false, false });
-    stages_.push_back(StageEntry{ std::make_unique<RenderCastShadow>(), SDL_BLENDMODE_BLEND, true, true });
     stages_.push_back(StageEntry{ std::make_unique<RenderShadowMask>(), SDL_BLENDMODE_BLEND, true, false });
 }
 
@@ -225,8 +223,6 @@ SDL_Texture* AssetRenderPipeline::run(Asset& asset) {
     }
 
     // Motion blur path removed: no previous-frame accumulation/blending.
-
-    context.update_projection(asset);
 
     if (stages_.empty() || !stages_[0].stage) {
         return nullptr;

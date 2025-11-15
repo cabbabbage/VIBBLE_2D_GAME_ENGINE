@@ -648,9 +648,115 @@ void SceneRenderer::render(){
         light_overlay_sources_.reserve(active.size());
 
         // Build and queue sprite draw commands
+        auto should_skip_asset = [&](Asset* asset) -> bool {
+            if (!asset || !asset->info) {
+                return true;
+            }
+
+            int approx_fw = asset->cached_w;
+            int approx_fh = asset->cached_h;
+            auto try_query_dimensions = [&](SDL_Texture* tex) {
+                if (!tex) {
+                    return;
+                }
+                int tw = 0;
+                int th = 0;
+                if (SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th) != 0) {
+                    return;
+                }
+                if (tw > 0 && th > 0) {
+                    approx_fw = tw;
+                    approx_fh = th;
+                }
+            };
+
+            if (approx_fw <= 0 || approx_fh <= 0) {
+                try_query_dimensions(asset->get_current_frame());
+            }
+            if (approx_fw <= 0 || approx_fh <= 0) {
+                try_query_dimensions(asset->get_final_texture());
+            }
+            if (approx_fw <= 0 || approx_fh <= 0) {
+                return false;
+            }
+
+            SDL_FRect dst = get_scaled_position_rect(asset,
+                                                     approx_fw,
+                                                     approx_fh,
+                                                     inv_scale,
+                                                     min_w,
+                                                     min_h,
+                                                     player_sh);
+            if (dst.w <= 0.0f || dst.h <= 0.0f) {
+                return true;
+            }
+
+            SDL_FRect expanded_bounds{};
+            const bool has_expanded_bounds =
+                assets_ && assets_->asset_bounds_in_screen_space(asset, expanded_bounds);
+            const SDL_FRect& cull_rect = has_expanded_bounds ? expanded_bounds : dst;
+            const bool sprite_visible  = intersects_padded(dst, screen_rect_f);
+            const bool bounds_visible  = intersects_padded(cull_rect, screen_rect_f);
+            const bool has_light_sources = asset->info && !asset->info->light_sources.empty();
+
+            bool any_child_visible = false;
+            if ((!bounds_visible || (!sprite_visible && !has_light_sources)) && asset->info) {
+                const auto& child_slots = asset->animation_children();
+                for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
+                    const auto& attachment = child_slots[child_index];
+                    if (!attachment.visible || !attachment.current_frame) {
+                        continue;
+                    }
+                    SDL_Texture* child_tex = attachment.current_frame->get_base_texture();
+                    if (!child_tex) {
+                        continue;
+                    }
+                    int child_fw = attachment.cached_w;
+                    int child_fh = attachment.cached_h;
+                    if (child_fw <= 0 || child_fh <= 0) {
+                        if (SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh) == 0 &&
+                            child_fw > 0 && child_fh > 0) {
+                            auto& mutable_slot = const_cast<Asset::AnimationChildAttachment&>(child_slots[child_index]);
+                            mutable_slot.cached_w = child_fw;
+                            mutable_slot.cached_h = child_fh;
+                        }
+                    }
+                    if (child_fw <= 0 || child_fh <= 0) {
+                        continue;
+                    }
+                    SDL_FRect child_rect = get_child_position_rect(asset,
+                                                                   attachment.world_pos,
+                                                                   child_fw,
+                                                                   child_fh,
+                                                                   inv_scale,
+                                                                   min_w,
+                                                                   min_h,
+                                                                   player_sh);
+                    if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
+                        continue;
+                    }
+                    if (intersects_padded(child_rect, screen_rect_f)) {
+                        any_child_visible = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!bounds_visible && !any_child_visible) {
+                return true;
+            }
+            if (!sprite_visible && !has_light_sources && !any_child_visible) {
+                return true;
+            }
+            return false;
+        };
 
         for (Asset* a : active) {
             if (!a || !a->info) {
+                continue;
+            }
+
+            if (should_skip_asset(a)) {
                 continue;
             }
 

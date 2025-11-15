@@ -68,7 +68,7 @@
         },
         "lock": {
             "asset_info": {
-                "basic": false,
+                "basic": true,
                 "lighting": false
             },
             "camera": {

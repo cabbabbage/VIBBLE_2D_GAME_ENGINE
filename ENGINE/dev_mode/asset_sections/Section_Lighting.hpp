@@ -399,7 +399,7 @@ private:
         }
         r.b_delete = std::make_unique<DMButton>("Delete", &DMStyles::DeleteButton(), 120, DMButton::height());
         r.s_intensity = std::make_unique<DMSlider>("Light Intensity", 0, 255, ls.intensity);
-        r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 2000, ls.radius);
+        r.s_radius    = std::make_unique<DMSlider>("Radius (px)", 0, 4000, ls.radius);
         r.s_falloff   = std::make_unique<DMSlider>("Falloff (%)", 0, 100, ls.fall_off);
         r.s_flicker_speed = std::make_unique<DMSlider>("Flicker Speed", 0, 100, ls.flicker_speed);
         r.s_flicker_smoothness =
@@ -461,8 +461,8 @@ private:
 
     void configure_row_sliders(Row& r) {
         auto configure_regen_slider = [](std::unique_ptr<DMSlider>& slider) {
-            if (slider) slider->set_defer_commit_until_unfocus(true);
-};
+            if (slider) slider->set_defer_commit_until_unfocus(false);
+        };
         configure_regen_slider(r.s_intensity);
         configure_regen_slider(r.s_radius);
         configure_regen_slider(r.s_falloff);

@@ -116,6 +116,8 @@ class AssetInfo {
     void set_scale_factor(float factor);
     void set_scale_percentage(float percent);
     void set_scale_filter(bool smooth);
+    void set_apply_distance_scaling(bool v);
+    void set_apply_vertical_scaling(bool v);
     void set_tags(const std::vector<std::string> &t);
     void add_tag(const std::string &tag);
     void remove_tag(const std::string &tag);

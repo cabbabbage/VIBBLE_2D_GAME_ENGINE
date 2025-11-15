@@ -983,6 +983,22 @@ void AssetInfo::set_scale_filter(bool smooth) {
         info_json_["size_settings"]["scale_filter"] = smooth ? "linear" : "nearest";
 }
 
+void AssetInfo::set_apply_distance_scaling(bool v) {
+        apply_distance_scaling = v;
+        if (!info_json_.is_object()) {
+                info_json_ = nlohmann::json::object();
+        }
+        info_json_["apply_distance_scaling"] = v;
+}
+
+void AssetInfo::set_apply_vertical_scaling(bool v) {
+        apply_vertical_scaling = v;
+        if (!info_json_.is_object()) {
+                info_json_ = nlohmann::json::object();
+        }
+        info_json_["apply_vertical_scaling"] = v;
+}
+
 void AssetInfo::set_tags(const std::vector<std::string> &t) {
         tags = t;
         rebuild_tag_cache();

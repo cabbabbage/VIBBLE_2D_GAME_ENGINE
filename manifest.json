@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:42:12Z",
+        "generated_at": "2025-11-15T11:08:03Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:42:12Z",
+        "generated_at": "2025-11-15T11:08:03Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:42:12Z",
+        "generated_at": "2025-11-15T11:08:03Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -463,38 +463,17 @@
             },
             {
               "explosion": null,
-              "melee": {
-                "center_x": 3.1372032165527344,
-                "center_y": 269.5638122558594,
-                "half_height": 159.35873413085938,
-                "half_width": 114.20491790771484,
-                "rotation": 0.0,
-                "type": "melee"
-              },
+              "melee": null,
               "projectile": null
             },
             {
               "explosion": null,
-              "melee": {
-                "center_x": 3.1372032165527344,
-                "center_y": 269.5638122558594,
-                "half_height": 159.35873413085938,
-                "half_width": 114.20491790771484,
-                "rotation": 0.0,
-                "type": "melee"
-              },
+              "melee": null,
               "projectile": null
             },
             {
               "explosion": null,
-              "melee": {
-                "center_x": 3.1372032165527344,
-                "center_y": 269.5638122558594,
-                "half_height": 159.35873413085938,
-                "half_width": 114.20491790771484,
-                "rotation": 0.0,
-                "type": "melee"
-              },
+              "melee": null,
               "projectile": null
             },
             {
@@ -604,7 +583,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:42:12Z",
+        "generated_at": "2025-11-15T11:08:03Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -726,7 +705,7 @@
       "asset_directory": "SRC/assets/barrel",
       "asset_name": "barrel",
       "asset_type": "object",
-      "can_invert": false,
+      "can_invert": true,
       "has_shading": false,
       "lighting_info": [],
       "min_distance_all": 0,
@@ -734,29 +713,485 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:42:12Z",
-        "max_scale": 0.9090908765792847,
-        "min_scale": 0.8658008575439453,
+        "generated_at": "2025-11-15T11:08:03Z",
+        "max_scale": 0.09090909361839294,
+        "min_scale": 0.08658009022474289,
         "recommended_percentages": [
           100,
-          91,
-          89,
-          87
+          9,
+          9,
+          9
         ],
         "recommended_steps": [
           1.0,
-          0.9090908765792847,
-          0.8871818780899048,
-          0.8658008575439453
+          0.09090909361839294,
+          0.08871819078922272,
+          0.08658009022474289
         ],
-        "revision": 16337722198357403922,
+        "revision": 1599006862946947578,
         "screen_aspect": 1.6
       },
-      "size_settings": {
-        "scale_percentage": 100.0
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
       },
+      "size_settings": {
+        "scale_percentage": 10.0
+      },
+      "spawn_groups": [],
       "start": "default",
       "tags": [],
+      "tillable": false,
+      "update_radius": 0
+    },
+    "bomb": {
+      "animations": {
+        "backward": {
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": true,
+          "inherit_source_movement": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 16,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "foward",
+            "path": ""
+          }
+        },
+        "default": {
+          "flipped_source": false,
+          "fps": 24,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_factor": 1.0
+        },
+        "explosion": {
+          "flipped_source": false,
+          "fps": 12,
+          "inherit_source_movement": false,
+          "locked": true,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 8,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "explosion"
+          },
+          "speed_factor": 1.0
+        },
+        "foward": {
+          "flipped_source": false,
+          "fps": 24,
+          "inherit_source_movement": false,
+          "locked": true,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 16,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "foward"
+          },
+          "speed_factor": 1.0
+        },
+        "left": {
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 16,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "foward",
+            "path": ""
+          }
+        },
+        "right": {
+          "derived_modifiers": {
+            "flipMovementX": true,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": false,
+          "inherit_source_movement": true,
+          "loop": true,
+          "number_of_frames": 16,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "left",
+            "path": ""
+          }
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/bomb",
+      "asset_name": "bomb",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [
+        {
+          "behind": true,
+          "falloff": 38,
+          "flare": 0,
+          "flicker": 14,
+          "flicker_smoothness": 20,
+          "flicker_speed": 14,
+          "has_light_source": true,
+          "in_front": false,
+          "light_color": [
+            137,
+            51,
+            51
+          ],
+          "light_intensity": 130,
+          "offset_x": 9,
+          "offset_y": -116,
+          "radius": 48,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": false
+        }
+      ],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-15T11:08:03Z",
+        "max_scale": 0.11818180978298187,
+        "min_scale": 0.11818180978298187,
+        "recommended_percentages": [
+          100,
+          12,
+          12
+        ],
+        "recommended_steps": [
+          1.0,
+          0.11818180978298187,
+          0.11818180978298187
+        ],
+        "revision": 13914579950487410362,
+        "screen_aspect": 1.6
+      },
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "size_settings": {
+        "scale_percentage": 13.0
+      },
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tillable": false,
       "update_radius": 0
     },
     "grass_3": {
@@ -801,7 +1236,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:42:12Z",
+        "generated_at": "2025-11-15T11:08:03Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -879,7 +1314,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:42:12Z",
+        "generated_at": "2025-11-15T11:08:03Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -996,11 +1431,11 @@
         },
         {
           "behind": false,
-          "falloff": 50,
+          "falloff": 0,
           "flare": 0,
-          "flicker": 20,
-          "flicker_smoothness": 20,
-          "flicker_speed": 20,
+          "flicker": 0,
+          "flicker_smoothness": 0,
+          "flicker_speed": 0,
           "has_light_source": true,
           "in_front": false,
           "light_color": [
@@ -1008,7 +1443,7 @@
             255,
             255
           ],
-          "light_intensity": 254,
+          "light_intensity": 184,
           "offset_x": 132,
           "offset_y": -729,
           "radius": 1927,
@@ -1017,11 +1452,11 @@
         },
         {
           "behind": false,
-          "falloff": 50,
+          "falloff": 49,
           "flare": 0,
-          "flicker": 20,
+          "flicker": 0,
           "flicker_smoothness": 20,
-          "flicker_speed": 20,
+          "flicker_speed": 0,
           "has_light_source": true,
           "in_front": true,
           "light_color": [
@@ -1032,7 +1467,7 @@
           "light_intensity": 90,
           "offset_x": 132,
           "offset_y": -735,
-          "radius": 802,
+          "radius": 797,
           "render_front_and_back_to_asset_alpha_mask": false,
           "render_to_dark_mask": true
         }
@@ -1042,7 +1477,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:42:12Z",
+        "generated_at": "2025-11-15T11:08:03Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -1563,9 +1998,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            75,
             242,
             36,
+            188,
             255
           ],
           "edge_smoothness": 43,
@@ -1616,9 +2051,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            36,
-            238,
-            242,
+            31,
+            32,
+            204,
             255
           ],
           "edge_smoothness": 68,
@@ -1750,6 +2185,35 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-0130520bd2d5"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "bomb"
+                }
+              ],
+              "display_name": "bomb",
+              "dx": -383,
+              "dy": -566,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 4208,
+              "origional_width": 4152,
+              "position": "Exact",
+              "priority": 4,
+              "resolution": 4,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-bd44cd31a417"
             }
           ]
         }

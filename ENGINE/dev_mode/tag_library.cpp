@@ -14,7 +14,11 @@ TagLibrary& TagLibrary::instance() {
 }
 
 TagLibrary::TagLibrary() {
+#ifdef PROJECT_ROOT
+    csv_path_ = std::filesystem::path(PROJECT_ROOT) / "ENGINE" / "tags.csv";
+#else
     csv_path_ = std::filesystem::path("ENGINE") / "tags.csv";
+#endif
 }
 
 const std::vector<std::string>& TagLibrary::tags() {

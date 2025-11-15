@@ -202,12 +202,12 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     }
 
     if (c_apply_distance_scaling_ && info_->apply_distance_scaling != c_apply_distance_scaling_->value()) {
-        info_->apply_distance_scaling = c_apply_distance_scaling_->value();
+        info_->set_apply_distance_scaling(c_apply_distance_scaling_->value());
         changed = true;
     }
 
     if (c_apply_vertical_scaling_ && info_->apply_vertical_scaling != c_apply_vertical_scaling_->value()) {
-        info_->apply_vertical_scaling = c_apply_vertical_scaling_->value();
+        info_->set_apply_vertical_scaling(c_apply_vertical_scaling_->value());
         changed = true;
     }
 

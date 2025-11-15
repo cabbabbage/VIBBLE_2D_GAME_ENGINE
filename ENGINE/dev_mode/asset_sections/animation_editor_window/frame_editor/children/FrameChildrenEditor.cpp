@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <fstream>
+#include <limits>
 #include <nlohmann/json.hpp>
 
 #include "../../AnimationDocument.hpp"
@@ -72,6 +74,14 @@ bool iequals(const std::string& a, const std::string& b) {
         }
     }
     return true;
+}
+
+std::string lowercase_copy(std::string value) {
+    std::transform(value.begin(),
+                   value.end(),
+                   value.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return value;
 }
 
 }  // namespace
@@ -151,47 +161,45 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
     if (!frame) {
         return;
     }
-    float base_scale_pct = 100.0f;
-    if (document_) {
-        base_scale_pct = static_cast<float>(document_->scale_percentage());
-    }
-    if (!std::isfinite(base_scale_pct) || base_scale_pct <= 0.0f) {
-        base_scale_pct = 100.0f;
-    }
     float pixels_per_unit = canvas_pixels_per_unit();
     if (!std::isfinite(pixels_per_unit) || pixels_per_unit <= 0.0f) {
         pixels_per_unit = 1.0f;
     }
-    const float sprite_scale = (base_scale_pct / 100.0f) * pixels_per_unit;
 
-    if (sprite_scale > 0.0f) {
-        for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
-            const auto& child = frame->children[i];
-            if (!child.visible) {
-                continue;
-            }
-            int tex_w = 0;
-            int tex_h = 0;
-            SDL_Texture* texture = acquire_child_texture(renderer, child_ids_[i], &tex_w, &tex_h);
-            if (!texture || tex_w <= 0 || tex_h <= 0) {
-                continue;
-            }
-            SDL_FPoint screen = world_to_screen(SDL_FPoint{child.dx, child.dy});
-            const float dst_w = sprite_scale * static_cast<float>(tex_w);
-            const float dst_h = sprite_scale * static_cast<float>(tex_h);
-            if (!(std::isfinite(dst_w) && std::isfinite(dst_h)) || dst_w <= 0.0f || dst_h <= 0.0f) {
-                continue;
-            }
-            SDL_Rect dst{static_cast<int>(std::round(screen.x - dst_w * 0.5f)),
-                         static_cast<int>(std::round(screen.y - dst_h)),
-                         static_cast<int>(std::round(dst_w)),
-                         static_cast<int>(std::round(dst_h))};
-            if (dst.w <= 0 || dst.h <= 0) {
-                continue;
-            }
-            SDL_Point pivot{dst.w / 2, dst.h};
-            SDL_RenderCopyEx(renderer, texture, nullptr, &dst, child.rotation, &pivot, SDL_FLIP_NONE);
+    for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
+        const auto& child = frame->children[i];
+        if (!child.visible) {
+            continue;
         }
+        int tex_w = 0;
+        int tex_h = 0;
+        SDL_Texture* texture = acquire_child_texture(renderer, child_ids_[i], &tex_w, &tex_h);
+        if (!texture || tex_w <= 0 || tex_h <= 0) {
+            continue;
+        }
+        float child_scale_pct = child_scale_percentage(child_ids_[i]);
+        if (!std::isfinite(child_scale_pct) || child_scale_pct <= 0.0f) {
+            continue;
+        }
+        const float sprite_scale = (child_scale_pct / 100.0f) * pixels_per_unit;
+        if (!std::isfinite(sprite_scale) || sprite_scale <= 0.0f) {
+            continue;
+        }
+        SDL_FPoint screen = world_to_screen(SDL_FPoint{child.dx, child.dy});
+        const float dst_w = sprite_scale * static_cast<float>(tex_w);
+        const float dst_h = sprite_scale * static_cast<float>(tex_h);
+        if (!(std::isfinite(dst_w) && std::isfinite(dst_h)) || dst_w <= 0.0f || dst_h <= 0.0f) {
+            continue;
+        }
+        SDL_Rect dst{static_cast<int>(std::round(screen.x - dst_w * 0.5f)),
+                     static_cast<int>(std::round(screen.y - dst_h)),
+                     static_cast<int>(std::round(dst_w)),
+                     static_cast<int>(std::round(dst_h))};
+        if (dst.w <= 0 || dst.h <= 0) {
+            continue;
+        }
+        SDL_Point pivot{dst.w / 2, dst.h};
+        SDL_RenderCopyEx(renderer, texture, nullptr, &dst, child.rotation, &pivot, SDL_FLIP_NONE);
     }
 
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
@@ -577,6 +585,11 @@ void FrameChildrenEditor::invalidate_child_caches() {
     child_asset_dir_cache_.clear();
     cached_assets_root_.clear();
     cached_assets_root_valid_ = false;
+    child_scale_cache_.clear();
+    manifest_scale_cache_.clear();
+    manifest_scale_cache_valid_ = false;
+    cached_manifest_path_.clear();
+    cached_manifest_path_valid_ = false;
 }
 
 FrameChildrenEditor::MovementFrame* FrameChildrenEditor::current_frame() {
@@ -688,6 +701,52 @@ float FrameChildrenEditor::canvas_pixels_per_unit() const {
     return 1.0f;
 }
 
+float FrameChildrenEditor::child_scale_percentage(const std::string& child_id) const {
+    float fallback = 100.0f;
+    if (document_) {
+        float pct = static_cast<float>(document_->scale_percentage());
+        if (std::isfinite(pct) && pct > 0.0f) {
+            fallback = pct;
+        }
+    }
+    if (child_id.empty()) {
+        return fallback;
+    }
+    auto cached = child_scale_cache_.find(child_id);
+    if (cached != child_scale_cache_.end()) {
+        return cached->second;
+    }
+
+    auto try_cache = [&](const std::string& candidate) -> bool {
+        if (candidate.empty()) {
+            return false;
+        }
+        float scale = lookup_scale_from_manifest(candidate);
+        if (std::isfinite(scale) && scale > 0.0f) {
+            child_scale_cache_[child_id] = scale;
+            return true;
+        }
+        return false;
+    };
+
+    if (try_cache(child_id)) {
+        return child_scale_cache_[child_id];
+    }
+
+    fs::path child_dir = resolve_child_asset_directory(child_id);
+    if (!child_dir.empty()) {
+        std::string leaf = child_dir.filename().string();
+        if (!leaf.empty() && !iequals(leaf, child_id)) {
+            if (try_cache(leaf)) {
+                return child_scale_cache_[child_id];
+            }
+        }
+    }
+
+    child_scale_cache_[child_id] = fallback;
+    return fallback;
+}
+
 std::filesystem::path FrameChildrenEditor::resolve_assets_root() const {
     if (cached_assets_root_valid_) {
         return cached_assets_root_;
@@ -721,6 +780,118 @@ std::filesystem::path FrameChildrenEditor::resolve_assets_root() const {
         }
     }
     return cached_assets_root_;
+}
+
+float FrameChildrenEditor::lookup_scale_from_manifest(const std::string& key) const {
+    if (key.empty()) {
+        return std::numeric_limits<float>::quiet_NaN();
+    }
+    ensure_manifest_scale_cache();
+    if (!manifest_scale_cache_valid_) {
+        return std::numeric_limits<float>::quiet_NaN();
+    }
+    std::string lookup_key = lowercase_copy(key);
+    auto it = manifest_scale_cache_.find(lookup_key);
+    if (it != manifest_scale_cache_.end()) {
+        return it->second;
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
+void FrameChildrenEditor::ensure_manifest_scale_cache() const {
+    if (manifest_scale_cache_valid_) {
+        return;
+    }
+    manifest_scale_cache_valid_ = true;
+    manifest_scale_cache_.clear();
+
+    fs::path manifest_path = resolve_manifest_path();
+    if (manifest_path.empty()) {
+        return;
+    }
+    std::ifstream in(manifest_path);
+    if (!in.good()) {
+        return;
+    }
+    nlohmann::json manifest = nlohmann::json::object();
+    try {
+        in >> manifest;
+    } catch (...) {
+        return;
+    }
+    auto assets_it = manifest.find("assets");
+    if (assets_it == manifest.end() || !assets_it->is_object()) {
+        return;
+    }
+    for (const auto& item : assets_it->items()) {
+        if (!item.value().is_object()) {
+            continue;
+        }
+        const auto size_it = item.value().find("size_settings");
+        if (size_it == item.value().end() || !size_it->is_object()) {
+            continue;
+        }
+        const auto scale_it = size_it->find("scale_percentage");
+        if (scale_it == size_it->end() || !scale_it->is_number()) {
+            continue;
+        }
+        double pct = scale_it->get<double>();
+        if (!std::isfinite(pct) || pct <= 0.0) {
+            continue;
+        }
+        manifest_scale_cache_.emplace(lowercase_copy(item.key()), static_cast<float>(pct));
+    }
+}
+
+std::filesystem::path FrameChildrenEditor::resolve_manifest_path() const {
+    if (cached_manifest_path_valid_) {
+        return cached_manifest_path_;
+    }
+    cached_manifest_path_valid_ = true;
+    cached_manifest_path_.clear();
+
+    auto attempt = [&](const fs::path& candidate) -> bool {
+        if (candidate.empty()) {
+            return false;
+        }
+        std::error_code ec;
+        if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
+            cached_manifest_path_ = candidate;
+            return true;
+        }
+        return false;
+    };
+
+    fs::path start;
+    if (document_) {
+        start = document_->asset_root();
+        if (start.empty()) {
+            start = document_->info_path().parent_path();
+        }
+    }
+    if (start.empty()) {
+        start = resolve_assets_root();
+    }
+    if (start.empty()) {
+        std::error_code ec;
+        start = fs::current_path(ec);
+    }
+
+    fs::path search = start;
+    while (!search.empty()) {
+        if (attempt(search / "manifest.json")) {
+            break;
+        }
+        fs::path parent = search.parent_path();
+        if (parent == search) {
+            break;
+        }
+        search = parent;
+    }
+    if (cached_manifest_path_.empty()) {
+        attempt(fs::path("manifest.json"));
+    }
+    return cached_manifest_path_;
 }
 
 std::filesystem::path FrameChildrenEditor::resolve_child_asset_directory(const std::string& child_id) const {

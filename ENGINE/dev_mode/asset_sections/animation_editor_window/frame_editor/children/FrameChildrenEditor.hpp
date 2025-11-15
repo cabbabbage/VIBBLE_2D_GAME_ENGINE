@@ -66,7 +66,11 @@ class FrameChildrenEditor {
     SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
     int hit_test_child(int x, int y) const;
     float canvas_pixels_per_unit() const;
+    float child_scale_percentage(const std::string& child_id) const;
     std::filesystem::path resolve_assets_root() const;
+    float lookup_scale_from_manifest(const std::string& key) const;
+    void ensure_manifest_scale_cache() const;
+    std::filesystem::path resolve_manifest_path() const;
     std::filesystem::path resolve_child_asset_directory(const std::string& child_id) const;
     std::filesystem::path resolve_child_frame_path(const std::string& child_id) const;
     std::filesystem::path find_first_frame_in_folder(const std::filesystem::path& folder) const;
@@ -103,6 +107,11 @@ class FrameChildrenEditor {
     mutable std::unordered_map<std::string, std::filesystem::path> child_asset_dir_cache_;
     mutable std::filesystem::path cached_assets_root_;
     mutable bool cached_assets_root_valid_ = false;
+    mutable std::unordered_map<std::string, float> child_scale_cache_;
+    mutable std::unordered_map<std::string, float> manifest_scale_cache_;
+    mutable bool manifest_scale_cache_valid_ = false;
+    mutable std::filesystem::path cached_manifest_path_;
+    mutable bool cached_manifest_path_valid_ = false;
 };
 
 }

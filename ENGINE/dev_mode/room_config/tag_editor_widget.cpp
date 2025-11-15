@@ -13,6 +13,7 @@
 #include <limits>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <nlohmann/json.hpp>
 
@@ -98,6 +99,44 @@ void collect_tags_recursive(const nlohmann::json& node, std::set<std::string>& t
     }
 }
 
+std::vector<std::filesystem::path> dataset_roots() {
+    std::vector<std::filesystem::path> filtered;
+    std::unordered_set<std::string> seen;
+    std::vector<std::filesystem::path> candidates;
+#ifdef PROJECT_ROOT
+    candidates.emplace_back(std::filesystem::path(PROJECT_ROOT) / "SRC");
+    candidates.emplace_back(std::filesystem::path(PROJECT_ROOT) / "content");
+#endif
+    candidates.emplace_back("SRC");
+    candidates.emplace_back("content");
+
+    for (const auto& candidate : candidates) {
+        std::error_code ec;
+        auto absolute = std::filesystem::absolute(candidate, ec);
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+        auto key = absolute.generic_string();
+        if (key.empty()) {
+            key = absolute.string();
+        }
+        if (key.empty()) {
+            continue;
+        }
+        if (!seen.insert(key).second) {
+            continue;
+        }
+        ec.clear();
+        if (!std::filesystem::exists(absolute, ec)) {
+            continue;
+        }
+        filtered.push_back(std::move(absolute));
+    }
+
+    return filtered;
+}
+
 const std::vector<TagDatasetEntry>& tag_dataset() {
     static std::vector<TagDatasetEntry> dataset;
     static bool loaded = false;
@@ -133,12 +172,8 @@ const std::vector<TagDatasetEntry>& tag_dataset() {
 
     std::error_code ec;
     const std::filesystem::directory_options opts = std::filesystem::directory_options::skip_permission_denied;
-    std::array<std::filesystem::path, 2> roots{ std::filesystem::path("SRC"), std::filesystem::path("content") };
+    auto roots = dataset_roots();
     for (const auto& root : roots) {
-        if (!std::filesystem::exists(root, ec)) {
-            ec.clear();
-            continue;
-        }
         std::filesystem::recursive_directory_iterator it(root, opts, ec);
         std::filesystem::recursive_directory_iterator end;
         while (it != end) {
@@ -512,58 +547,64 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
 
     if (has_tag_recs) {
         if (apply) {
-            rec_tags_label_rect_ = SDL_Rect{0, 0, 0, 0};
+            rec_tags_label_rect_ = SDL_Rect{ origin_x, y, width, label_h };
         }
-        if (!tag_search_box_) {
-            tag_search_box_ = std::make_unique<DMTextBox>("", search_input_);
-        }
-        if (!add_tag_btn_) {
-            add_tag_btn_ = std::make_unique<DMButton>("+", &DMStyles::CreateButton(), 36, DMTextBox::height());
-        }
-        tag_search_box_->set_value(search_input_);
+        y += label_h + label_gap;
+    } else if (apply) {
+        rec_tags_label_rect_ = SDL_Rect{0,0,0,0};
+    }
 
-        int controls_y = y;
-        int button_gap = DMSpacing::small_gap();
-        int desired_button = std::min(48, std::max(28, width / 5 + 20));
-        int button_width = std::min(width, desired_button);
-        int min_search = 60;
-        int search_width = width - button_width - button_gap;
-        if (search_width < min_search) {
-            int deficit = min_search - search_width;
-            button_width = std::max(24, button_width - deficit);
-            if (button_width > width) button_width = width;
-            search_width = width - button_width - button_gap;
-        }
-        if (search_width < 0) {
-            search_width = 0;
-            button_width = width;
-        }
-        int search_height = 0;
+    if (!tag_search_box_) {
+        tag_search_box_ = std::make_unique<DMTextBox>("", search_input_);
+    }
+    if (!add_tag_btn_) {
+        add_tag_btn_ = std::make_unique<DMButton>("+", &DMStyles::CreateButton(), 36, DMTextBox::height());
+    }
+    tag_search_box_->set_value(search_input_);
+
+    int controls_y = y;
+    int button_gap = DMSpacing::small_gap();
+    int desired_button = std::min(48, std::max(28, width / 5 + 20));
+    int button_width = std::min(width, desired_button);
+    int min_search = 60;
+    int search_width = width - button_width - button_gap;
+    if (search_width < min_search) {
+        int deficit = min_search - search_width;
+        button_width = std::max(24, button_width - deficit);
+        if (button_width > width) button_width = width;
+        search_width = width - button_width - button_gap;
+    }
+    if (search_width < 0) {
+        search_width = 0;
+        button_width = width;
+    }
+    int search_height = 0;
+    if (search_width > 0) {
+        search_height = std::max(tag_search_box_->height_for_width(search_width), DMTextBox::height());
+    }
+    int button_height = DMButton::height();
+    int button_offset = 0;
+    if (search_width > 0 && search_height > DMTextBox::height()) {
+        button_offset = (search_height - DMTextBox::height()) / 2;
+    }
+    if (apply) {
         if (search_width > 0) {
-            search_height = std::max(tag_search_box_->height_for_width(search_width), DMTextBox::height());
+            tag_search_box_->set_rect(SDL_Rect{ origin_x, controls_y, search_width, search_height });
+        } else {
+            tag_search_box_->set_rect(SDL_Rect{0,0,0,0});
         }
-        int button_height = DMButton::height();
-        int button_offset = 0;
-        if (search_width > 0 && search_height > DMTextBox::height()) {
-            button_offset = (search_height - DMTextBox::height()) / 2;
-        }
-        if (apply) {
-            if (search_width > 0) {
-                tag_search_box_->set_rect(SDL_Rect{ origin_x, controls_y, search_width, search_height });
-            } else {
-                tag_search_box_->set_rect(SDL_Rect{0,0,0,0});
-            }
-            int add_x = origin_x + (search_width > 0 ? search_width + button_gap : 0);
-            int final_button_width = std::min(width, std::max(24, button_width));
-            int button_y = controls_y + button_offset;
-            add_tag_btn_->set_rect(SDL_Rect{ add_x, button_y, final_button_width, button_height });
-        }
-        int results_spacing = DMSpacing::item_gap();
-        int controls_bottom = controls_y + search_height;
-        int button_bottom = controls_y + button_offset + button_height;
-        int total_height = std::max(controls_bottom, button_bottom);
-        y = total_height + results_spacing;
+        int add_x = origin_x + (search_width > 0 ? search_width + button_gap : 0);
+        int final_button_width = std::min(width, std::max(24, button_width));
+        int button_y = controls_y + button_offset;
+        add_tag_btn_->set_rect(SDL_Rect{ add_x, button_y, final_button_width, button_height });
+    }
+    int results_spacing = DMSpacing::item_gap();
+    int controls_bottom = controls_y + search_height;
+    int button_bottom = controls_y + button_offset + button_height;
+    int total_height = std::max(controls_bottom, button_bottom);
+    y = total_height + results_spacing;
 
+    if (has_tag_recs) {
         size_t matches = filtered_tag_order_.empty() && search_query_.empty() ? rec_tag_chips_.size() : filtered_tag_order_.size();
         size_t visible_tags = show_all_tag_recs_ ? matches : std::min(kRecommendationPreviewCount, matches);
         const auto* display_order = filtered_tag_order_.empty() && search_query_.empty() ? nullptr : &filtered_tag_order_;
@@ -586,10 +627,7 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
         }
         y += section_gap;
     } else if (apply) {
-        rec_tags_label_rect_ = SDL_Rect{0,0,0,0};
         if (show_more_tags_btn_) show_more_tags_btn_->set_rect(SDL_Rect{0,0,0,0});
-        if (tag_search_box_) tag_search_box_->set_rect(SDL_Rect{0,0,0,0});
-        if (add_tag_btn_) add_tag_btn_->set_rect(SDL_Rect{0,0,0,0});
     }
 
     if (has_anti_recs) {
