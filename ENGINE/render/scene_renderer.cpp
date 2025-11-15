@@ -539,6 +539,7 @@ void SceneRenderer::render(){
     SDL_RenderClear(renderer_);
 
     bool rendered_light_map = false;
+    const bool suppress_asset_lights = (assets_ && assets_->is_dev_mode() && !assets_->is_asset_info_lighting_section_expanded());
     auto render_light_map = [&]() {
         if (!light_map_only_mode_) {
             return;
@@ -940,7 +941,7 @@ void SceneRenderer::render(){
                     auto& target_commands = (a->info->type == asset_types::texture) ? texture_commands_ : remaining_commands_;
                     target_commands.push_back(std::move(cmd));
                 }
-            } else if (sprite_visible && has_light_sources) {
+            } else if (!suppress_asset_lights && sprite_visible && has_light_sources) {
                 // Keep a command placeholder so the lighting system can still sample this asset.
                 {
                     AssetRenderCommand cmd;
@@ -969,7 +970,7 @@ void SceneRenderer::render(){
                 remaining_commands_.push_back(std::move(cmd));
             }
 
-            if (has_light_sources && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
+            if (!suppress_asset_lights && has_light_sources && dst.w > 0.0f && dst.h > 0.0f && fw > 0 && fh > 0) {
                 bool has_front_lights         = false;
                 bool has_back_lights          = false;
                 bool has_dark_mask_lights     = false;
@@ -1020,12 +1021,14 @@ void SceneRenderer::render(){
 
     // ---- Modified: bold outline around non-transparent pixels (no interior fill) ----
     std::unordered_map<const Asset*, const LightOverlaySource*> overlay_lookup;
-    overlay_lookup.reserve(light_overlay_sources_.size());
-    for (const auto& source : light_overlay_sources_) {
-        if (!source.asset) {
-            continue;
+    if (!suppress_asset_lights) {
+        overlay_lookup.reserve(light_overlay_sources_.size());
+        for (const auto& source : light_overlay_sources_) {
+            if (!source.asset) {
+                continue;
+            }
+            overlay_lookup.emplace(source.asset, &source);
         }
-        overlay_lookup.emplace(source.asset, &source);
     }
 
     std::vector<const LightOverlaySource*> pending_front_lights;

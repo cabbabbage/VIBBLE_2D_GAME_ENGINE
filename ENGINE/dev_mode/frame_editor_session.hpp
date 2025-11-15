@@ -247,6 +247,8 @@ private:
     void rebuild_rel_positions();
     void smooth_child_offsets(int child_index, int adjusted_index);
     void persist_changes();
+    // Persist only the section relevant to the given mode.
+    void persist_mode_changes(Mode mode);
     void select_frame(int index);
     void select_child(int index);
     void update_asset_preview_frame() const;

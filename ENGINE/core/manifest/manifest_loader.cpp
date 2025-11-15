@@ -5,6 +5,10 @@
 #include <sstream>
 #include <stdexcept>
 #include <system_error>
+#include <thread>
+#include <chrono>
+
+#include "utils/log.hpp"
 
 namespace manifest {
 namespace {
@@ -30,6 +34,12 @@ ManifestData make_manifest_data(nlohmann::json manifest_json) {
     data.assets = data.raw.at("assets");
     data.maps = data.raw.at("maps");
     return data;
+}
+
+// Last known-good manifest to allow graceful fallback on transient parse errors
+static nlohmann::json& cached_manifest_ref() {
+    static nlohmann::json cached = make_default_manifest_json();
+    return cached;
 }
 
 void ensure_directory_exists(const std::filesystem::path& dir,
@@ -99,20 +109,25 @@ ManifestData load_manifest() {
         return data;
     }
 
-    std::ifstream manifest_stream(path);
-    if (!manifest_stream.is_open()) {
-        std::ostringstream oss;
-        oss << "Unable to open manifest file at '" << path.string() << "'.";
-        throw std::runtime_error(oss.str());
-    }
+    auto read_once = [&](nlohmann::json& out) -> bool {
+        std::ifstream is(path);
+        if (!is.is_open()) return false;
+        try {
+            is >> out;
+            return true;
+        } catch (const nlohmann::json::parse_error&) {
+            return false;
+        }
+    };
 
     nlohmann::json manifest_json;
-    try {
-        manifest_stream >> manifest_json;
-    } catch (const nlohmann::json::parse_error& error) {
-        std::ostringstream oss;
-        oss << "Failed to parse manifest at '" << path.string() << "': " << error.what();
-        throw std::runtime_error(oss.str());
+    if (!read_once(manifest_json)) {
+        vibble::log::warn(std::string("manifest: parse error reading '") + path.string() + "', retrying shortly...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        if (!read_once(manifest_json)) {
+            vibble::log::warn(std::string("manifest: still unable to parse '") + path.string() + "'; using cached manifest");
+            manifest_json = cached_manifest_ref();
+        }
     }
 
     bool mutated = false;
@@ -140,6 +155,8 @@ ManifestData load_manifest() {
         write_manifest_file(path, manifest_json);
     }
 
+    // Update last known-good cache
+    cached_manifest_ref() = manifest_json;
     return make_manifest_data(std::move(manifest_json));
 }
 

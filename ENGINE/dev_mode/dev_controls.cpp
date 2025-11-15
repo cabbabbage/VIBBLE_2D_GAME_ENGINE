@@ -2598,7 +2598,7 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
 
     remove_spawn_group_assets(spawn_id);
 
-    std::unordered_map<std::string, std::shared_ptr<AssetInfo>> asset_info_library = assets_->library().all();
+    const auto& asset_info_library = assets_->library().all();
     std::vector<std::unique_ptr<Asset>> spawned;
     Check checker(false);
     std::mt19937 rng(std::random_device{}());

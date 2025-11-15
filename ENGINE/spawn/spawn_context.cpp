@@ -17,7 +17,7 @@
 SpawnContext::SpawnContext(std::mt19937& rng,
                            Check& checker,
                            std::vector<Area>& exclusion_zones,
-                           std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
+                           const std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library,
                            std::vector<std::unique_ptr<Asset>>& all,
                            AssetLibrary* asset_library,
                            vibble::grid::Grid& grid,

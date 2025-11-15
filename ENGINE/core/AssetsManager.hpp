@@ -101,6 +101,8 @@ public:
     void open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& info);
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
+    // Returns true if the Asset Info UI is open and its Lighting section is expanded
+    bool is_asset_info_lighting_section_expanded() const;
     void clear_editor_selection();
     void handle_sdl_event(const SDL_Event& e);
     void finalize_asset_drag(Asset* a, const std::shared_ptr<AssetInfo>& info);

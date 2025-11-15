@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:05:44Z",
+        "generated_at": "2025-11-15T10:12:31Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:05:44Z",
+        "generated_at": "2025-11-15T10:12:31Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:05:44Z",
+        "generated_at": "2025-11-15T10:12:31Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -641,7 +641,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:05:44Z",
+        "generated_at": "2025-11-15T10:12:31Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -711,6 +711,88 @@
       "asset_name": "Vibble_eyes",
       "asset_type": "object",
       "start": "default"
+    },
+    "barrel": {
+      "animations": {
+        "default": {
+          "attack_geometry": [
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            }
+          ],
+          "children": [
+            "Candle"
+          ],
+          "flipped_source": false,
+          "fps": 24,
+          "hit_geometry": [
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            }
+          ],
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_factor": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/barrel",
+      "asset_name": "barrel",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-15T10:12:31Z",
+        "max_scale": 0.8658008575439453,
+        "min_scale": 0.8658008575439453,
+        "recommended_percentages": [
+          100,
+          87,
+          87
+        ],
+        "recommended_steps": [
+          1.0,
+          0.8658008575439453,
+          0.8658008575439453
+        ],
+        "revision": 15022432327188703122,
+        "screen_aspect": 1.6
+      },
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
     },
     "lantern": {
       "animations": {
@@ -839,7 +921,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:05:44Z",
+        "generated_at": "2025-11-15T10:12:31Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -1352,9 +1434,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
             36,
-            184,
+            68,
+            242,
             255
           ],
           "edge_smoothness": 43,
@@ -1370,14 +1452,44 @@
           "min_width": 4000,
           "name": "fountain",
           "radius": 3000,
-          "spawn_groups": []
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "barrel"
+                }
+              ],
+              "display_name": "barrel",
+              "dx": -621,
+              "dy": -2318,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6392,
+              "origional_width": 6536,
+              "position": "Exact",
+              "priority": 0,
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-11f160d5c2cf"
+            }
+          ]
         },
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            31,
-            32,
-            204,
+            242,
+            85,
+            238,
             255
           ],
           "edge_smoothness": 68,

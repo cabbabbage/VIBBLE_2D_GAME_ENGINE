@@ -171,3 +171,51 @@ endif()
 if(MSVC)
     target_link_options(engine PRIVATE "$<$<CONFIG:Debug>:/INCREMENTAL>")
 endif()
+
+# ------------------------------------------
+# Unit tests (doctest-based)
+# ------------------------------------------
+set(TEST_ROOT "${CMAKE_SOURCE_DIR}/TEST_TMP")
+add_executable(engine_tests
+    TESTS/test_main.cpp
+    TESTS/test_dev_json_store.cpp
+    TESTS/test_manifest_loader.cpp
+    ENGINE/dev_mode/core/dev_json_store.cpp
+    ENGINE/core/manifest/manifest_loader.cpp
+    ENGINE/utils/log.cpp
+)
+
+target_include_directories(engine_tests
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/ENGINE
+        ${CMAKE_SOURCE_DIR}/ENGINE/asset
+        ${CMAKE_SOURCE_DIR}/ENGINE/core
+        ${CMAKE_SOURCE_DIR}/ENGINE/dev_mode
+        ${CMAKE_SOURCE_DIR}/ENGINE/render
+        ${CMAKE_SOURCE_DIR}/ENGINE/render_pipeline
+        ${CMAKE_SOURCE_DIR}/ENGINE/map_generation
+        ${CMAKE_SOURCE_DIR}/ENGINE/spawn
+        ${CMAKE_SOURCE_DIR}/ENGINE/ui
+        ${CMAKE_SOURCE_DIR}/ENGINE/utils
+        ${CMAKE_SOURCE_DIR}/external
+)
+
+target_compile_definitions(engine_tests PRIVATE
+    DEV_MODE_DISABLE_JSON_DEBOUNCE=1
+    PROJECT_ROOT="${TEST_ROOT}"
+)
+
+target_link_libraries(engine_tests
+    PRIVATE
+        nlohmann_json::nlohmann_json
+        SDL2::SDL2 ${_SDL2MAIN_TARGET}
+        SDL2_image::SDL2_image
+        SDL2_mixer::SDL2_mixer
+        SDL2_ttf::SDL2_ttf
+        ${GLAD_TARGET}
+        OpenGL::GL
+)
+
+if (WIN32)
+    target_link_libraries(engine_tests PRIVATE Ole32 Shell32)
+endif()

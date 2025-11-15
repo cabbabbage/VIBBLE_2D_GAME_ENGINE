@@ -937,11 +937,36 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     };
 
     // Directory buttons
-    if (handle_button(btn_back_, [this]() { this->end(); })) return true;
-    if (handle_button(btn_movement_, [this]() { this->mode_ = Mode::Movement; this->end_hitbox_drag(false); this->end_attack_drag(false); })) return true;
-    if (handle_button(btn_children_, [this]() { this->mode_ = Mode::Children; this->end_hitbox_drag(false); this->end_attack_drag(false); })) return true;
-    if (handle_button(btn_attack_geometry_, [this]() { this->mode_ = Mode::AttackGeometry; this->end_hitbox_drag(false); this->end_attack_drag(false); })) return true;
-    if (handle_button(btn_hit_geometry_, [this]() { this->mode_ = Mode::HitGeometry; this->end_hitbox_drag(false); this->end_attack_drag(false); })) return true;
+    if (handle_button(btn_back_, [this]() {
+            // Capture any in-memory changes before exiting
+            this->persist_changes();
+            this->end();
+        })) return true;
+    if (handle_button(btn_movement_, [this]() {
+            // Save data relevant to current mode before switching
+            this->persist_mode_changes(this->mode_);
+            this->mode_ = Mode::Movement;
+            this->end_hitbox_drag(false);
+            this->end_attack_drag(false);
+        })) return true;
+    if (handle_button(btn_children_, [this]() {
+            this->persist_mode_changes(this->mode_);
+            this->mode_ = Mode::Children;
+            this->end_hitbox_drag(false);
+            this->end_attack_drag(false);
+        })) return true;
+    if (handle_button(btn_attack_geometry_, [this]() {
+            this->persist_mode_changes(this->mode_);
+            this->mode_ = Mode::AttackGeometry;
+            this->end_hitbox_drag(false);
+            this->end_attack_drag(false);
+        })) return true;
+    if (handle_button(btn_hit_geometry_, [this]() {
+            this->persist_mode_changes(this->mode_);
+            this->mode_ = Mode::HitGeometry;
+            this->end_hitbox_drag(false);
+            this->end_attack_drag(false);
+        })) return true;
     if (mode_ == Mode::HitGeometry) {
         if (handle_button(btn_hitbox_add_remove_, [this]() {
                 const std::string type = this->current_hitbox_type();
@@ -3686,6 +3711,129 @@ void FrameEditorSession::select_frame(int index) {
     update_asset_preview_frame();
     refresh_hitbox_form();
     refresh_attack_form();
+}
+
+void FrameEditorSession::persist_mode_changes(Mode mode) {
+    if (!document_) return;
+    nlohmann::json payload = nlohmann::json::object();
+    if (auto j = document_->animation_payload(animation_id_)) {
+        payload = nlohmann::json::parse(*j, nullptr, false);
+        if (!payload.is_object()) payload = nlohmann::json::object();
+    }
+
+    auto build_movement_json = [&]() -> nlohmann::json {
+        nlohmann::json movement = nlohmann::json::array();
+        for (size_t i = 0; i < frames_.size(); ++i) {
+            const MovementFrame& f = frames_[i];
+            const int dx = static_cast<int>(std::lround(i == 0 ? 0.0f : f.dx));
+            const int dy = static_cast<int>(std::lround(i == 0 ? 0.0f : f.dy));
+            nlohmann::json entry = nlohmann::json::array({dx, dy});
+            if (f.resort_z) entry.push_back(f.resort_z);
+            if (!child_assets_.empty()) {
+                nlohmann::json child_entries = nlohmann::json::array();
+                for (const auto& child : f.children) {
+                    if (child.child_index < 0 ||
+                        child.child_index >= static_cast<int>(child_assets_.size())) {
+                        continue;
+                    }
+                    nlohmann::json child_json = nlohmann::json::array();
+                    child_json.push_back(child.child_index);
+                    child_json.push_back(static_cast<int>(std::lround(child.dx)));
+                    child_json.push_back(static_cast<int>(std::lround(child.dy)));
+                    child_json.push_back(static_cast<double>(child.degree));
+                    child_json.push_back(child.visible);
+                    child_json.push_back(child.render_in_front);
+                    child_entries.push_back(std::move(child_json));
+                }
+                entry.push_back(std::move(child_entries));
+            }
+            movement.push_back(entry);
+        }
+        if (movement.empty()) movement.push_back(nlohmann::json::array({0, 0}));
+        movement[0][0] = 0; movement[0][1] = 0;
+        return movement;
+    };
+
+    auto build_hit_json = [&]() -> nlohmann::json {
+        nlohmann::json hit_geometry = nlohmann::json::array();
+        for (const auto& f : frames_) {
+            nlohmann::json hit_entry = nlohmann::json::object();
+            for (const char* type : kDamageTypeNames) {
+                const auto* box = f.hit.find_box(type);
+                if (!box || box->is_empty() ||
+                    !std::isfinite(box->center_x) || !std::isfinite(box->center_y) ||
+                    !std::isfinite(box->half_width) || !std::isfinite(box->half_height) ||
+                    !std::isfinite(box->rotation_degrees)) {
+                    hit_entry[type] = nullptr;
+                    continue;
+                }
+                hit_entry[type] = nlohmann::json{
+                    {"center_x", box->center_x},
+                    {"center_y", box->center_y},
+                    {"half_width", box->half_width},
+                    {"half_height", box->half_height},
+                    {"rotation", box->rotation_degrees},
+                    {"type", type}
+                };
+            }
+            hit_geometry.push_back(std::move(hit_entry));
+        }
+        return hit_geometry;
+    };
+
+    auto build_attack_json = [&]() -> nlohmann::json {
+        nlohmann::json attack_geometry = nlohmann::json::array();
+        for (const auto& f : frames_) {
+            nlohmann::json attack_entry = nlohmann::json::object();
+            for (const char* type : kDamageTypeNames) {
+                const auto* vec = f.attack.find_vector(type);
+                if (!vec ||
+                    !std::isfinite(vec->start_x) || !std::isfinite(vec->start_y) ||
+                    !std::isfinite(vec->end_x) || !std::isfinite(vec->end_y)) {
+                    attack_entry[type] = nullptr;
+                    continue;
+                }
+                attack_entry[type] = nlohmann::json{
+                    {"start_x", vec->start_x},
+                    {"start_y", vec->start_y},
+                    {"control_x", vec->control_x},
+                    {"control_y", vec->control_y},
+                    {"end_x", vec->end_x},
+                    {"end_y", vec->end_y},
+                    {"damage", vec->damage},
+                    {"type", type}
+                };
+            }
+            attack_geometry.push_back(std::move(attack_entry));
+        }
+        return attack_geometry;
+    };
+
+    switch (mode) {
+        case Mode::Movement:
+        case Mode::Children: {
+            auto movement = build_movement_json();
+            payload["movement"] = std::move(movement);
+            int total_dx = 0, total_dy = 0;
+            for (size_t i = 1; i < frames_.size(); ++i) {
+                total_dx += static_cast<int>(std::lround(frames_[i].dx));
+                total_dy += static_cast<int>(std::lround(frames_[i].dy));
+            }
+            payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
+            break;
+        }
+        case Mode::HitGeometry: {
+            payload["hit_geometry"] = build_hit_json();
+            break;
+        }
+        case Mode::AttackGeometry: {
+            payload["attack_geometry"] = build_attack_json();
+            break;
+        }
+    }
+
+    document_->replace_animation_payload(animation_id_, payload.dump());
+    pending_save_ = true;
 }
 
 void FrameEditorSession::ensure_selected_thumb_visible() {

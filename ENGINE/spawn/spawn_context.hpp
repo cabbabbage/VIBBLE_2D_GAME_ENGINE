@@ -27,7 +27,7 @@ class SpawnContext {
 
         public:
     using Point = SDL_Point;
-    SpawnContext(std::mt19937& rng, Check& checker, std::vector<Area>& exclusion_zones, std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library, std::vector<std::unique_ptr<Asset>>& all, AssetLibrary* asset_library, vibble::grid::Grid& grid, vibble::grid::Occupancy* occupancy = nullptr);
+    SpawnContext(std::mt19937& rng, Check& checker, std::vector<Area>& exclusion_zones, const std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library, std::vector<std::unique_ptr<Asset>>& all, AssetLibrary* asset_library, vibble::grid::Grid& grid, vibble::grid::Occupancy* occupancy = nullptr);
     Asset* spawnAsset(const std::string& name,
                       const std::shared_ptr<AssetInfo>& info,
                       const Area& area,
@@ -49,7 +49,7 @@ class SpawnContext {
     std::mt19937& rng() { return rng_; }
     Check& checker() { return checker_; }
     std::vector<Area>& exclusion_zones() { return exclusion_zones_; }
-    std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& info_library() { return asset_info_library_; }
+    const std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& info_library() const { return asset_info_library_; }
     std::vector<std::unique_ptr<Asset>>& all_assets() { return all_; }
     vibble::grid::Grid& grid() { return grid_; }
     vibble::grid::Occupancy* occupancy() { return occupancy_; }
@@ -83,7 +83,7 @@ class SpawnContext {
     std::mt19937& rng_;
     Check& checker_;
     std::vector<Area>& exclusion_zones_;
-    std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library_;
+    const std::unordered_map<std::string, std::shared_ptr<AssetInfo>>& asset_info_library_;
     std::vector<std::unique_ptr<Asset>>& all_;
     AssetLibrary* asset_library_;
     vibble::grid::Grid& grid_;

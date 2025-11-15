@@ -14,6 +14,13 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <cstdio>
+#ifdef _WIN32
+#  include <share.h>
+#  include <io.h>
+#  include <fcntl.h>
+#  include <windows.h>
+#endif
 
 namespace devmode::core {
 namespace {
@@ -52,17 +59,102 @@ void log_info(const std::string& message) {
 bool write_file(const std::filesystem::path& path,
                 const std::string& payload,
                 std::ostream& error_sink) {
-    std::ofstream out(path);
-    if (!out.is_open()) {
-        error_sink << "[DevJsonStore] Failed to open '" << path << "' for writing\n";
+    std::error_code ec;
+    const auto parent = path.parent_path();
+    if (!parent.empty()) {
+        std::filesystem::create_directories(parent, ec);
+        if (ec) {
+            error_sink << "[DevJsonStore] Failed to create parent directory for '" << path.string()
+                       << "': " << ec.message() << "\n";
+            return false;
+        }
+    }
+
+    // Prepare temp path alongside the destination
+    const std::filesystem::path tmp_path = path; // copy
+    const std::filesystem::path tmp_full = tmp_path.string() + ".tmp";
+
+    // Try to copy permissions from existing target, if present
+    std::filesystem::perms target_perms = std::filesystem::perms::unknown;
+    const bool target_exists = std::filesystem::exists(path, ec);
+    if (!ec && target_exists) {
+        target_perms = std::filesystem::status(path, ec).permissions();
+        ec.clear();
+    } else {
+        ec.clear();
+    }
+
+#ifdef _WIN32
+    // On Windows, open the temp file with exclusive sharing disabled for others
+    // Using _wfsopen + _SH_DENYRW to avoid readers touching the temp while writing
+    std::wstring wtmp = tmp_full.wstring();
+    FILE* fp = _wfsopen(wtmp.c_str(), L"wb", _SH_DENYRW);
+    if (!fp) {
+        error_sink << "[DevJsonStore] Failed to open temp file '" << tmp_full.string() << "' for writing\n";
         return false;
     }
-    out << payload;
-    if (!out.good()) {
-        error_sink << "[DevJsonStore] Stream error while writing '" << path << "'\n";
+    const size_t written = fwrite(payload.data(), 1, payload.size(), fp);
+    if (written != payload.size()) {
+        error_sink << "[DevJsonStore] Short write to temp file '" << tmp_full.string() << "'\n";
+        fclose(fp);
+        std::filesystem::remove(tmp_full, ec);
+        return false;
+    }
+    fflush(fp);
+    // Ensure data is flushed to disk
+    _commit(_fileno(fp));
+    fclose(fp);
+
+    // Apply permissions to temp if we managed to fetch them
+    if (target_perms != std::filesystem::perms::unknown) {
+        std::filesystem::permissions(tmp_full, target_perms, ec);
+        ec.clear();
+    }
+
+    // Atomically replace the destination with the temp file
+    // Prefer MoveFileExW with REPLACE_EXISTING and WRITE_THROUGH for durability
+    std::wstring wdst = path.wstring();
+    if (!MoveFileExW(wtmp.c_str(), wdst.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        const DWORD err = GetLastError();
+        error_sink << "[DevJsonStore] MoveFileExW failed replacing '" << path.string() << "' with temp: error " << err << "\n";
+        // Best effort cleanup
+        std::filesystem::remove(tmp_full, ec);
+        return false;
+    }
+
+    return true;
+#else
+    // POSIX / generic: write to temp via std::ofstream then atomically rename
+    {
+        std::ofstream out(tmp_full, std::ios::binary | std::ios::trunc);
+        if (!out.is_open()) {
+            error_sink << "[DevJsonStore] Failed to open temp file '" << tmp_full << "' for writing\n";
+            return false;
+        }
+        out << payload;
+        out.flush();
+        if (!out.good()) {
+            error_sink << "[DevJsonStore] Stream error while writing temp '" << tmp_full << "'\n";
+            return false;
+        }
+    }
+
+    if (target_perms != std::filesystem::perms::unknown) {
+        std::filesystem::permissions(tmp_full, target_perms, ec);
+        ec.clear();
+    }
+
+    // Rely on POSIX rename semantics (atomic replacement)
+    std::filesystem::rename(tmp_full, path, ec);
+    if (ec) {
+        error_sink << "[DevJsonStore] rename('" << tmp_full.string() << "' -> '" << path.string()
+                   << "') failed: " << ec.message() << "\n";
+        // Attempt cleanup if rename failed
+        std::filesystem::remove(tmp_full, ec);
         return false;
     }
     return true;
+#endif
 }
 
 }
