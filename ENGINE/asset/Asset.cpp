@@ -396,7 +396,11 @@ void Asset::update() {
                     Animation& anim   = def->second;
                     current_frame     = anim.get_first_frame();
                     frame_progress    = 0.0f;
-                    static_frame      = anim.is_frozen() || anim.locked;
+                    if (info && info->type == asset_types::player) {
+                        static_frame = false;
+                    } else {
+                        static_frame = anim.is_frozen() || anim.locked;
+                    }
                 }
             }
         } else {
@@ -405,7 +409,11 @@ void Asset::update() {
                 std::size_t path_index = anim_ ? anim_->path_index_for(current_animation) : 0;
                 current_frame = anim.get_first_frame(path_index);
                 frame_progress = 0.0f;
-                static_frame = anim.is_frozen() || anim.locked;
+                if (info && info->type == asset_types::player) {
+                    static_frame = false;
+                } else {
+                    static_frame = anim.is_frozen() || anim.locked;
+                }
             }
         }
     }
@@ -447,6 +455,7 @@ std::string Asset::get_current_animation() const { return current_animation; }
 
 bool Asset::is_current_animation_locked_in_progress() const {
         if (!info || !current_frame) return false;
+        if (info->type == asset_types::player) return false;
         auto it = info->animations.find(current_animation);
         if (it == info->animations.end()) return false;
         const Animation& anim = it->second;

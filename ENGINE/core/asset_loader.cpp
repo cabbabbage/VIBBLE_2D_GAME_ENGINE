@@ -212,7 +212,12 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                         const bool should_lock = minDist > lock_distance;
                         const bool should_remove = minDist >= remove_distance;
 
-                        asset->static_frame = should_lock;
+                        // Never mark the player as static; always allow its frames to advance.
+                        if (asset && asset->info && asset->info->type == asset_types::player) {
+                                asset->static_frame = false;
+                        } else {
+                                asset->static_frame = should_lock;
+                        }
                         if (should_lock) ++locked;
                         if (should_remove) {
                                 distant_assets.push_back(asset);
