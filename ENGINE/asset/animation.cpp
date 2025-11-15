@@ -1002,10 +1002,9 @@ void Animation::load(const std::string& trigger,
                                                                 cache_entry.mask_heights[variant_idx]  = mask_h;
                                                         }
                                                 }
-                                                if (frame_index < frames.size()) {
-                                                        cache_entry.textures.size(); // no-op to keep static analyzers happy
-                                                        frames[frame_index] = cache_entry.textures[0];
-                                                }
+                                               if (frame_index < frames.size() && !cache_entry.textures.empty()) {
+                                                       frames[frame_index] = cache_entry.textures[0];
+                                               }
                                                 if (frame_index < mask_frames.size() && !cache_entry.mask_textures.empty()) {
                                                         mask_frames[frame_index] = cache_entry.mask_textures[0];
                                                 }

@@ -19,7 +19,7 @@
 #include "utils/area.hpp"
 #include "util/grid.hpp"
 #include "animation_update.hpp" // planner interface
-#include "animation_update/child_attachment_math.hpp"
+#include "animation_update/child_attachment_controller.hpp"
 
 namespace {
 template <typename Fn>
@@ -68,36 +68,6 @@ std::string resolve_animation(const Asset& asset, const std::string& requested) 
 
 bool same_point(SDL_Point lhs, SDL_Point rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-
-void update_child_attachment_dimensions(Asset::AnimationChildAttachment& slot) {
-    slot.cached_w = 0;
-    slot.cached_h = 0;
-    if (!slot.animation || !slot.current_frame) {
-        return;
-    }
-    SDL_Texture* texture = slot.animation->get_frame(slot.current_frame);
-    if (!texture) {
-        return;
-    }
-    int width = 0;
-    int height = 0;
-    if (SDL_QueryTexture(texture, nullptr, nullptr, &width, &height) == 0) {
-        slot.cached_w = width;
-        slot.cached_h = height;
-    }
-}
-
-void restart_child_attachment(Asset::AnimationChildAttachment& slot) {
-    slot.frame_progress = 0.0f;
-    slot.cached_w = 0;
-    slot.cached_h = 0;
-    if (!slot.animation) {
-        slot.current_frame = nullptr;
-        return;
-    }
-    slot.current_frame = slot.animation->get_first_frame();
-    update_child_attachment_dimensions(slot);
 }
 }
 
@@ -408,7 +378,7 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
             }
         }
         if (slot_invalidated || slot.current_frame != previous_frame) {
-            update_child_attachment_dimensions(slot);
+            animation_update::child_attachments::update_dimensions(slot);
         }
     }
 }
@@ -417,87 +387,22 @@ void AnimationRuntime::advance_child_frames(float dt) {
     if (!self_ || self_->animation_children_.empty()) {
         return;
     }
-    if (!(dt > 0.0f)) {
-        dt = 1.0f / 60.0f;
-    }
-    for (auto& slot : self_->animation_children_) {
-        if (!slot.animation || !slot.current_frame) {
-            continue;
-        }
-        const AnimationFrame* previous_frame = slot.current_frame;
-        int fps = slot.animation->playback_fps;
-        if (fps <= 0) {
-            fps = 24;
-        }
-        const float interval = 1.0f / static_cast<float>(fps);
-        slot.frame_progress += dt;
-        while (slot.frame_progress >= interval) {
-            slot.frame_progress -= interval;
-            if (slot.current_frame->next) {
-                slot.current_frame = slot.current_frame->next;
-            } else if (slot.animation->loop ||
-                       self_->current_animation == animation_update::detail::kDefaultAnimation) {
-                slot.current_frame = slot.animation->get_first_frame();
-            } else {
-                break;
-            }
-        }
-        if (slot.current_frame != previous_frame) {
-            update_child_attachment_dimensions(slot);
-        }
-    }
+    animation_update::child_attachments::ParentState parent_state;
+    parent_state.position = self_->pos;
+    parent_state.flipped = self_->flipped;
+    parent_state.animation_id = self_->current_animation;
+    animation_update::child_attachments::advance_frames(self_->animation_children_, parent_state, dt);
 }
 
 void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
     if (!self_ || self_->animation_children_.empty()) {
         return;
     }
-    const int parent_frame_index = frame ? frame->frame_index : -1;
-    for (auto& slot : self_->animation_children_) {
-        const bool parent_looped = parent_frame_index != -1 &&
-                                   slot.last_parent_frame_index != -1 &&
-                                   parent_frame_index < slot.last_parent_frame_index;
-        if (parent_looped) {
-            restart_child_attachment(slot);
-        }
-        slot.last_parent_frame_index = parent_frame_index;
-        slot.visible = false;
-        slot.rotation_degrees = 0.0f;
-        slot.world_pos = self_->pos;
-        slot.render_in_front = true;
-    }
-    if (!frame) {
-        for (auto& slot : self_->animation_children_) {
-            slot.was_visible = slot.visible;
-        }
-        return;
-    }
-    const bool parent_flipped = self_ && self_->flipped;
-    for (const auto& child_data : frame->children) {
-        if (child_data.child_index < 0 ||
-            child_data.child_index >= static_cast<int>(self_->animation_children_.size())) {
-            continue;
-        }
-        auto& slot = self_->animation_children_[child_data.child_index];
-        if (!slot.animation) {
-            continue;
-        }
-        const bool became_visible = child_data.visible && !slot.was_visible;
-        if (became_visible) {
-            restart_child_attachment(slot);
-        }
-        slot.visible = child_data.visible;
-        // Mirror horizontal offset when the parent is flipped so attachments
-        // maintain their relative side of the sprite in game mode.
-        const int dx = parent_flipped ? -child_data.dx : child_data.dx;
-        slot.world_pos.x = self_->pos.x + dx;
-        slot.world_pos.y = self_->pos.y + child_data.dy;
-        slot.rotation_degrees = mirrored_child_rotation(parent_flipped, child_data.degree);
-        slot.render_in_front = child_data.render_in_front;
-    }
-    for (auto& slot : self_->animation_children_) {
-        slot.was_visible = slot.visible;
-    }
+    animation_update::child_attachments::ParentState parent_state;
+    parent_state.position = self_->pos;
+    parent_state.flipped = self_->flipped;
+    parent_state.animation_id = self_->current_animation;
+    animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, frame);
 }
 
 SDL_Point AnimationRuntime::bottom_middle(SDL_Point pos) const {

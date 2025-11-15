@@ -18,6 +18,7 @@
 
 class Assets;
 class Asset;
+class AssetInfo;
 class Input;
 struct SDL_Renderer;
 class DMButton;
@@ -34,6 +35,9 @@ class AnimationEditorWindow;
 class FrameEditorSession {
 public:
     enum class Mode { Movement, Children, AttackGeometry, HitGeometry };
+    static inline constexpr std::array<const char*, 3> kDamageTypeNames = {
+        "projectile", "melee", "explosion"
+    };
 
     FrameEditorSession();
     ~FrameEditorSession();
@@ -73,6 +77,13 @@ private:
         // Per-frame combat geometry, expressed in the asset's local space.
         animation_update::FrameHitGeometry    hit;
         animation_update::FrameAttackGeometry attack;
+    };
+    struct ChildPreviewSlot {
+        std::string asset_name;
+        std::shared_ptr<AssetInfo> info;
+        SDL_Texture* texture = nullptr;
+        int width = 0;
+        int height = 0;
     };
 
     // State wiring
@@ -203,6 +214,9 @@ private:
     // Camera pan/zoom handler (wheel zoom enabled; panning is blocked by default)
     mutable class PanAndZoom pan_zoom_;
     std::vector<std::string> child_assets_;
+    std::vector<ChildPreviewSlot> child_preview_slots_;
+    std::string document_payload_cache_;
+    std::string document_children_signature_;
     std::unordered_map<Asset*, bool> child_hidden_cache_;
     mutable std::vector<std::string> child_dropdown_options_cache_;
     mutable std::vector<std::string> hitbox_type_labels_;
@@ -261,9 +275,6 @@ private:
     void select_frame(int index);
     void select_child(int index);
     void update_asset_preview_frame() const;
-    static inline constexpr std::array<const char*, 3> kDamageTypeNames = {
-        "projectile", "melee", "explosion"
-    };
     static inline MovementFrame clamp_frame(const MovementFrame& in) {
         MovementFrame f = in;
         if (!std::isfinite(f.dx)) f.dx = 0.0f;
@@ -274,6 +285,8 @@ private:
     void sync_child_frames();
     ChildFrame* current_child_frame();
     const ChildFrame* current_child_frame() const;
+    void refresh_child_assets_from_document();
+    void rebuild_child_preview_cache();
     void sync_child_asset_visibility();
     void cache_child_hidden_states();
     void apply_child_hidden_state(bool show_children);

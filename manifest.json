@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:15:54Z",
+        "generated_at": "2025-11-15T12:07:13Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:15:54Z",
+        "generated_at": "2025-11-15T12:07:13Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:15:54Z",
+        "generated_at": "2025-11-15T12:07:13Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -583,7 +583,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:15:54Z",
+        "generated_at": "2025-11-15T12:07:13Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -713,7 +713,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:15:54Z",
+        "generated_at": "2025-11-15T12:07:13Z",
         "max_scale": 0.09090909361839294,
         "min_scale": 0.08658009022474289,
         "recommended_percentages": [
@@ -926,8 +926,173 @@
           "speed_factor": 1.0
         },
         "foward": {
+          "attack_geometry": [
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            }
+          ],
+          "children": [],
           "flipped_source": false,
           "fps": 24,
+          "hit_geometry": [
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            }
+          ],
           "inherit_source_movement": false,
           "locked": true,
           "loop": true,
@@ -937,69 +1102,69 @@
               0
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ],
             [
-              0,
-              0
+              3,
+              6
             ]
           ],
           "movement_total": {
-            "dx": 0,
-            "dy": 0
+            "dx": 45,
+            "dy": 90
           },
           "number_of_frames": 16,
           "on_end": "default",
@@ -1159,7 +1324,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:15:54Z",
+        "generated_at": "2025-11-15T12:07:13Z",
         "max_scale": 0.11818180978298187,
         "min_scale": 0.11818180978298187,
         "recommended_percentages": [
@@ -1236,7 +1401,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:15:54Z",
+        "generated_at": "2025-11-15T12:07:13Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1314,7 +1479,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:15:54Z",
+        "generated_at": "2025-11-15T12:07:13Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1477,7 +1642,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T11:15:54Z",
+        "generated_at": "2025-11-15T12:07:13Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -1766,11 +1931,11 @@
         ]
       },
       "map_grid_settings": {
-        "chunk_size": 16,
+        "chunk_size": 128,
         "jitter": 0,
-        "r_chunk": 4,
-        "resolution": 4,
-        "spacing": 16
+        "r_chunk": 7,
+        "resolution": 7,
+        "spacing": 128
       },
       "map_layers": [
         {
@@ -1998,9 +2163,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            118,
-            242,
             36,
+            149,
+            242,
             255
           ],
           "edge_smoothness": 43,
@@ -2051,9 +2216,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            122,
             242,
-            36,
+            61,
+            242,
             255
           ],
           "edge_smoothness": 68,

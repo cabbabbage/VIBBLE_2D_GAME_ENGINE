@@ -316,6 +316,58 @@ SDL_FRect child_preview_rect(Assets* assets,
     return rect;
 }
 
+std::vector<std::string> parse_child_names_from_payload(const nlohmann::json& payload) {
+    std::vector<std::string> names;
+    if (!payload.is_object()) {
+        return names;
+    }
+    const auto it = payload.find("children");
+    if (it == payload.end() || !it->is_array()) {
+        return names;
+    }
+    for (const auto& entry : *it) {
+        if (!entry.is_string()) continue;
+        std::string name = entry.get<std::string>();
+        if (name.empty()) continue;
+        names.push_back(std::move(name));
+    }
+    return names;
+}
+
+std::string child_list_signature(const std::vector<std::string>& names) {
+    nlohmann::json arr = nlohmann::json::array();
+    for (const auto& name : names) {
+        arr.push_back(name);
+    }
+    return arr.dump();
+}
+
+const Animation* pick_preview_animation(const std::shared_ptr<AssetInfo>& info) {
+    if (!info) {
+        return nullptr;
+    }
+    auto resolve = [&](const std::string& id) -> const Animation* {
+        if (id.empty()) {
+            return nullptr;
+        }
+        auto it = info->animations.find(id);
+        if (it == info->animations.end()) {
+            return nullptr;
+        }
+        return &it->second;
+    };
+    if (const Animation* anim = resolve(info->start_animation)) {
+        return anim;
+    }
+    if (const Animation* anim = resolve(animation_update::detail::kDefaultAnimation)) {
+        return anim;
+    }
+    if (!info->animations.empty()) {
+        return &info->animations.begin()->second;
+    }
+    return nullptr;
+}
+
 } // namespace
 
 FrameEditorSession::FrameEditorSession() = default;
@@ -355,19 +407,20 @@ void FrameEditorSession::begin(Assets* assets,
     // Parse frames from document
     frames_ = parse_movement_frames_json(document_->animation_payload(animation_id_).value_or(std::string{}));
     child_assets_.clear();
+    child_preview_slots_.clear();
+    document_payload_cache_.clear();
+    document_children_signature_.clear();
     if (document_) {
         if (auto payload_dump = document_->animation_payload(animation_id_)) {
+            document_payload_cache_ = *payload_dump;
             nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
-            if (payload.is_object() && payload.contains("children") && payload["children"].is_array()) {
-                for (const auto& entry : payload["children"]) {
-                    if (!entry.is_string()) continue;
-                    std::string name = entry.get<std::string>();
-                    if (name.empty()) continue;
-                    child_assets_.push_back(std::move(name));
-                }
+            if (payload.is_object()) {
+                child_assets_ = parse_child_names_from_payload(payload);
             }
         }
     }
+    document_children_signature_ = child_list_signature(child_assets_);
+    rebuild_child_preview_cache();
     sync_child_frames();
     selected_child_index_ = 0;
     if (frames_.empty()) {
@@ -605,6 +658,9 @@ asset->static_frame = anim.is_frozen() || anim.locked;
     animation_id_.clear();
     frames_.clear();
     rel_positions_.clear();
+    child_preview_slots_.clear();
+    document_payload_cache_.clear();
+    document_children_signature_.clear();
     if (on_end_) { auto cb = std::move(on_end_); on_end_ = {}; cb(); }
 }
 
@@ -615,6 +671,7 @@ void FrameEditorSession::update(const Input& input) {
         end();
         return;
     }
+    refresh_child_assets_from_document();
     // Enable mouse wheel zoom; disable click-drag panning while editing
     if (assets_) {
         camera& cam = assets_->getView();
@@ -1579,15 +1636,15 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             render_label(renderer, child_assets_[i], marker.x + marker.w + 4, marker.y - 4);
         }
         // Overlay actual child textures at edited positions
-        const auto& attachments = target_->animation_children();
-        for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size() && i < attachments.size(); ++i) {
+        const std::size_t preview_count = std::min({ child_assets_.size(), frame.children.size(), child_preview_slots_.size() });
+        for (std::size_t i = 0; i < preview_count; ++i) {
             const auto& child = frame.children[i];
             if (!child.visible) continue;
-            const auto& slot = attachments[i];
-            if (!slot.animation || !slot.current_frame) continue;
-            SDL_Texture* tex = slot.animation->get_frame(slot.current_frame);
+            const auto& slot = child_preview_slots_[i];
+            SDL_Texture* tex = slot.texture;
             if (!tex) continue;
-            int tw = 0, th = 0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            const int tw = slot.width;
+            const int th = slot.height;
             if (tw <= 0 || th <= 0) continue;
 
             // Match in-scene attachment anchoring: offsets are relative to the asset's world pos,
@@ -3616,6 +3673,76 @@ void FrameEditorSession::sync_child_frames() {
     }
 }
 
+void FrameEditorSession::refresh_child_assets_from_document() {
+    if (!document_) {
+        return;
+    }
+    auto payload_dump = document_->animation_payload(animation_id_);
+    if (!payload_dump) {
+        return;
+    }
+    if (*payload_dump == document_payload_cache_) {
+        return;
+    }
+    document_payload_cache_ = *payload_dump;
+    nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
+    if (!payload.is_object()) {
+        return;
+    }
+    std::vector<std::string> names = parse_child_names_from_payload(payload);
+    const std::string new_signature = child_list_signature(names);
+    if (new_signature == document_children_signature_) {
+        return;
+    }
+    document_children_signature_ = new_signature;
+    if (names == child_assets_) {
+        return;
+    }
+    child_assets_ = std::move(names);
+    sync_child_frames();
+    child_dropdown_options_cache_.clear();
+    rebuild_child_preview_cache();
+}
+
+void FrameEditorSession::rebuild_child_preview_cache() {
+    child_preview_slots_.clear();
+    if (!assets_ || child_assets_.empty()) {
+        return;
+    }
+    SDL_Renderer* renderer = assets_->renderer();
+    child_preview_slots_.reserve(child_assets_.size());
+    auto& library = assets_->library();
+    for (const auto& name : child_assets_) {
+        ChildPreviewSlot slot;
+        slot.asset_name = name;
+        if (!name.empty()) {
+            slot.info = library.get(name);
+            if (slot.info) {
+                if (renderer) {
+                    slot.info->loadAnimations(renderer);
+                }
+                if (const Animation* anim = pick_preview_animation(slot.info)) {
+                    const AnimationFrame* frame = anim->get_first_frame();
+                    if (frame) {
+                        SDL_Texture* tex = anim->get_frame(frame);
+                        if (!tex) {
+                            tex = frame->get_base_texture();
+                        }
+                        slot.texture = tex;
+                        if (slot.texture) {
+                            if (SDL_QueryTexture(slot.texture, nullptr, nullptr, &slot.width, &slot.height) != 0) {
+                                slot.width = 0;
+                                slot.height = 0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        child_preview_slots_.push_back(std::move(slot));
+    }
+}
+
 FrameEditorSession::ChildFrame* FrameEditorSession::current_child_frame() {
     if (frames_.empty() || child_assets_.empty()) {
         return nullptr;
@@ -3810,7 +3937,10 @@ void FrameEditorSession::persist_changes() {
         total_dy += static_cast<int>(std::lround(frames_[i].dy));
     }
     payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
-    document_->replace_animation_payload(animation_id_, payload.dump());
+    const std::string payload_dump = payload.dump();
+    document_->replace_animation_payload(animation_id_, payload_dump);
+    document_payload_cache_ = payload_dump;
+    document_children_signature_ = child_list_signature(child_assets_);
     // Defer saving/rebuilding; commit once when Back is pressed
     pending_save_ = true;
 
@@ -3953,7 +4083,10 @@ void FrameEditorSession::persist_mode_changes(Mode mode) {
         }
     }
 
-    document_->replace_animation_payload(animation_id_, payload.dump());
+    const std::string payload_dump = payload.dump();
+    document_->replace_animation_payload(animation_id_, payload_dump);
+    document_payload_cache_ = payload_dump;
+    document_children_signature_ = child_list_signature(child_assets_);
     pending_save_ = true;
 }
 
