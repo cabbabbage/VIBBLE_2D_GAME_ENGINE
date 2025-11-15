@@ -685,9 +685,8 @@ void Animation::load(const std::string& trigger,
                                                         child_data.visible = child_entry[4].get<bool>();
                                                 } else if (child_entry[4].is_number_integer()) {
                                                         child_data.visible = child_entry[4].get<int>() != 0;
-                                                } else {
-                                                        child_data.visible = false;
                                                 }
+                                                // Non-boolean legacy entries are ignored so defaults stay visible.
                                         }
                                         if (child_entry.size() >= 6) {
                                                 if (child_entry[5].is_boolean()) {

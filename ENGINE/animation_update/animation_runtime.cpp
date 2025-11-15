@@ -19,6 +19,7 @@
 #include "utils/area.hpp"
 #include "util/grid.hpp"
 #include "animation_update.hpp" // planner interface
+#include "animation_update/child_attachment_math.hpp"
 
 namespace {
 template <typename Fn>
@@ -85,6 +86,18 @@ void update_child_attachment_dimensions(Asset::AnimationChildAttachment& slot) {
         slot.cached_w = width;
         slot.cached_h = height;
     }
+}
+
+void restart_child_attachment(Asset::AnimationChildAttachment& slot) {
+    slot.frame_progress = 0.0f;
+    slot.cached_w = 0;
+    slot.cached_h = 0;
+    if (!slot.animation) {
+        slot.current_frame = nullptr;
+        return;
+    }
+    slot.current_frame = slot.animation->get_first_frame();
+    update_child_attachment_dimensions(slot);
 }
 }
 
@@ -386,6 +399,10 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
                     slot.animation = &child_anim_it->second;
                     slot.current_frame = slot.animation->get_first_frame();
                     slot.frame_progress = 0.0f;
+                    slot.cached_w = 0;
+                    slot.cached_h = 0;
+                    slot.was_visible = false;
+                    slot.last_parent_frame_index = -1;
                     slot_invalidated = true;
                 }
             }
@@ -435,15 +452,27 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
     if (!self_ || self_->animation_children_.empty()) {
         return;
     }
+    const int parent_frame_index = frame ? frame->frame_index : -1;
     for (auto& slot : self_->animation_children_) {
+        const bool parent_looped = parent_frame_index != -1 &&
+                                   slot.last_parent_frame_index != -1 &&
+                                   parent_frame_index < slot.last_parent_frame_index;
+        if (parent_looped) {
+            restart_child_attachment(slot);
+        }
+        slot.last_parent_frame_index = parent_frame_index;
         slot.visible = false;
         slot.rotation_degrees = 0.0f;
         slot.world_pos = self_->pos;
         slot.render_in_front = true;
     }
     if (!frame) {
+        for (auto& slot : self_->animation_children_) {
+            slot.was_visible = slot.visible;
+        }
         return;
     }
+    const bool parent_flipped = self_ && self_->flipped;
     for (const auto& child_data : frame->children) {
         if (child_data.child_index < 0 ||
             child_data.child_index >= static_cast<int>(self_->animation_children_.size())) {
@@ -453,14 +482,21 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
         if (!slot.animation) {
             continue;
         }
+        const bool became_visible = child_data.visible && !slot.was_visible;
+        if (became_visible) {
+            restart_child_attachment(slot);
+        }
         slot.visible = child_data.visible;
         // Mirror horizontal offset when the parent is flipped so attachments
         // maintain their relative side of the sprite in game mode.
-        const int dx = (self_ && self_->flipped) ? -child_data.dx : child_data.dx;
+        const int dx = parent_flipped ? -child_data.dx : child_data.dx;
         slot.world_pos.x = self_->pos.x + dx;
         slot.world_pos.y = self_->pos.y + child_data.dy;
-        slot.rotation_degrees = child_data.degree;
+        slot.rotation_degrees = mirrored_child_rotation(parent_flipped, child_data.degree);
         slot.render_in_front = child_data.render_in_front;
+    }
+    for (auto& slot : self_->animation_children_) {
+        slot.was_visible = slot.visible;
     }
 }
 

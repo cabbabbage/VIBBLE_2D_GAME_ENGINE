@@ -23,7 +23,18 @@ class SceneRenderer {
 public:
     SceneRenderer(SDL_Renderer* renderer, Assets* assets, int screen_width, int screen_height, const nlohmann::json& map_manifest, const std::string& map_id);
     ~SceneRenderer();
-    static bool prerequisites_ready(SDL_Renderer* renderer, Assets* assets, std::string* reason = nullptr);
+    static inline bool prerequisites_ready(SDL_Renderer* renderer, Assets* assets, std::string* reason = nullptr) {
+        if (!renderer) {
+            if (reason) { *reason = "SDL_Renderer pointer is null."; }
+            return false;
+        }
+        if (!assets) {
+            if (reason) { *reason = "Assets pointer is null."; }
+            return false;
+        }
+        if (reason) { reason->clear(); }
+        return true;
+    }
     void render();
     void apply_map_light_config(const nlohmann::json& data);
     SDL_Renderer* get_renderer() const;

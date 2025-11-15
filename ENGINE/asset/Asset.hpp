@@ -88,6 +88,8 @@ class Asset {
         bool render_in_front = true;
         int cached_w = 0;
         int cached_h = 0;
+        bool was_visible = false;
+        int last_parent_frame_index = -1;
     };
 
     struct BoundsSquare {

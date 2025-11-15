@@ -182,12 +182,12 @@ add_executable(engine_tests
     TESTS/test_manifest_loader.cpp
     TESTS/test_image_effect_settings.cpp
     TESTS/test_scene_renderer_prereqs.cpp
+    TESTS/test_animation_child_visibility.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/core/manifest/manifest_loader.cpp
     ENGINE/render/image_effect_settings.cpp
-    ENGINE/render/scene_renderer.cpp
     ENGINE/utils/log.cpp
-)
+  )
 
 target_include_directories(engine_tests
     PRIVATE

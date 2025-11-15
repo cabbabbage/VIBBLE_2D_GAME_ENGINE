@@ -219,19 +219,6 @@ bool animation_frame_belongs_to_animation(const Animation& anim, const Animation
 
 }
 
-bool SceneRenderer::prerequisites_ready(SDL_Renderer* renderer, Assets* assets, std::string* reason) {
-    if (!renderer) {
-        if (reason) { *reason = "SDL_Renderer pointer is null."; }
-        return false;
-    }
-    if (!assets) {
-        if (reason) { *reason = "Assets pointer is null."; }
-        return false;
-    }
-    if (reason) { reason->clear(); }
-    return true;
-}
-
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              Assets* assets,
                              int screen_width,
