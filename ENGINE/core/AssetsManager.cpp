@@ -2166,9 +2166,10 @@ bool Assets::is_asset_info_editor_open() const {
 
 bool Assets::is_asset_info_lighting_section_expanded() const {
     // Reuse dev controls' lighting-section visibility logic
-    // Only true when DevControls are enabled, in RoomEditor mode, 
+    // Only true when DevControls are enabled, in RoomEditor mode,
     // and the AssetInfo Lighting section is expanded
-    return dev_controls_ && dev_controls_->is_enabled() && dev_controls_->lighting_section_forces_dark_mask();
+    return dev_controls_ && dev_controls_->is_enabled() &&
+           dev_controls_->is_asset_info_lighting_section_expanded();
 }
 
 void Assets::clear_editor_selection() {

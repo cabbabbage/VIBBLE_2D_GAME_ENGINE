@@ -12,6 +12,7 @@
 #endif
 
 namespace fs = std::filesystem;
+using devmode::core::DevJsonStore;
 
 static fs::path test_root() {
 #ifdef PROJECT_ROOT
