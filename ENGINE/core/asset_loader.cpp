@@ -12,6 +12,7 @@
 #include <chrono>
 #include <limits>
 #include <cstdint>
+#include <cstddef>
 #include <string>
 #include <cstdlib>
 #include <SDL.h>
@@ -405,6 +406,13 @@ void AssetLoader::createAssets(world::Grid& grid) {
         vibble::log::debug(std::string("[AssetLoader] createAssets: requested r_chunk=") + std::to_string(map_grid_settings_.r_chunk));
 
         spawned_assets_ = extract_all_assets();
+        const std::size_t extracted_before_guard = spawned_assets_.size();
+        const std::size_t removed_by_faith_guard = faith_guard_.filter_assets(spawned_assets_);
+        if (removed_by_faith_guard > 0) {
+                vibble::log::info(std::string("[AssetLoader] FaithGuard removed ") + std::to_string(removed_by_faith_guard) +
+                                   "/" + std::to_string(extracted_before_guard) +
+                                   " assets to keep the experience centered on Christlike virtues.");
+        }
         vibble::log::info(std::string("[AssetLoader] Extracted ") + std::to_string(spawned_assets_.size()) + " visible assets from rooms");
 
         for (const auto& asset_up : spawned_assets_) {

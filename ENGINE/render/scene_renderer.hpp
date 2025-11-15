@@ -3,7 +3,6 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <unordered_map>
 #include <cstddef>
 #include <cstdint>
 #include <SDL.h>
@@ -24,6 +23,7 @@ class SceneRenderer {
 public:
     SceneRenderer(SDL_Renderer* renderer, Assets* assets, int screen_width, int screen_height, const nlohmann::json& map_manifest, const std::string& map_id);
     ~SceneRenderer();
+    static bool prerequisites_ready(SDL_Renderer* renderer, Assets* assets, std::string* reason = nullptr);
     void render();
     void apply_map_light_config(const nlohmann::json& data);
     SDL_Renderer* get_renderer() const;
@@ -57,6 +57,16 @@ private:
 
     private:
         using LightOverlaySource = runtime_lighting::AssetLight;
+        struct PrevalidatedTag {};
+
+        SceneRenderer(PrevalidatedTag,
+                      SDL_Renderer* renderer,
+                      Assets* assets,
+                      int screen_width,
+                      int screen_height,
+                      const nlohmann::json& map_manifest,
+                      const std::string& map_id);
+        static PrevalidatedTag require_prerequisites(SDL_Renderer* renderer, Assets* assets);
 
     struct AssetRenderCommand {
         Asset*      asset               = nullptr;
@@ -80,6 +90,7 @@ private:
         bool ensure_darkness_overlay();
         void destroy_darkness_overlay();
         void render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds);
+        bool has_dark_mask_overlay_sources();
 
 
     SDL_Renderer*  renderer_;
@@ -98,15 +109,22 @@ private:
     bool           chunk_lighting_suspended_ = false;
     bool           dark_mask_enabled_ = true;
 
-    std::unordered_map<Asset*, const AnimationFrame*> last_rendered_frames_;
     std::uint64_t frame_counter_ = 0;
     std::vector<AssetRenderCommand> texture_commands_;
     std::vector<AssetRenderCommand> remaining_commands_;
     std::vector<LightOverlaySource> light_overlay_sources_;
+    bool                            light_overlay_sources_dark_mask_cache_dirty_ = true;
+    bool                            light_overlay_sources_have_dark_mask_cached_ = false;
     std::vector<SDL_Vertex> darkness_overlay_vertices_;
     std::vector<int>        darkness_overlay_indices_;
     std::size_t             darkness_overlay_vertex_capacity_hint_ = 0;
     std::size_t             darkness_overlay_index_capacity_hint_  = 0;
+    std::vector<SDL_Vertex> grid_slice_vertices_;
+    std::vector<int>        grid_slice_indices_;
+    std::size_t             grid_slice_vertex_capacity_hint_ = 0;
+    std::size_t             grid_slice_index_capacity_hint_  = 0;
+    std::uint64_t           grid_slice_draw_calls_saved_accum_ = 0;
+    std::uint64_t           grid_slice_batches_accum_         = 0;
     SDL_Texture* darkness_overlay_texture_ = nullptr;
     int          darkness_overlay_width_   = 0;
     int          darkness_overlay_height_  = 0;
@@ -121,5 +139,9 @@ private:
     SDL_Texture* scene_composite_tex_ = nullptr;   // Draws full scene here first
     SDL_Texture* postprocess_tex_     = nullptr;   // Reused staging for color pass
     SDL_Texture* blur_tex_            = nullptr;   // Reused staging for blur pass
+
+    std::uint64_t darkness_overlay_skipped_frames_  = 0;
+    std::uint64_t darkness_overlay_rendered_frames_ = 0;
+    bool          darkness_overlay_skip_logged_     = false;
 };
 

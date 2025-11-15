@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <limits>
-#include <mutex>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -14,7 +14,7 @@
 #include "Asset.hpp"
 #include "animation.hpp"
 #include "asset_info.hpp"
-#include "core/manifest/manifest_loader.hpp"
+#include "asset/surface_utils.hpp"
 #include "render/image_effect_settings.hpp"
 #include "render/camera.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
@@ -31,35 +31,7 @@ namespace {
 
 namespace fs = std::filesystem;
 
-constexpr std::uint64_t kSignatureOffset = 1469598103934665603ull;
-constexpr std::uint64_t kSignaturePrime  = 1099511628211ull;
 constexpr int kAnimationCacheVersion     = 3;
-
-std::uint64_t mix_signature(std::uint64_t seed, std::uint64_t value) {
-    seed ^= value;
-    seed *= kSignaturePrime;
-    return seed;
-}
-
-SDL_Surface* duplicate_surface(SDL_Surface* surface) {
-    if (!surface) {
-        return nullptr;
-    }
-    SDL_Surface* copy = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888, 0);
-    if (!copy) {
-        SDL_Surface* fallback = SDL_CreateRGBSurfaceWithFormat(0, surface->w, surface->h, 32, SDL_PIXELFORMAT_RGBA8888);
-        if (!fallback) {
-            return nullptr;
-        }
-        SDL_Rect rect{0, 0, surface->w, surface->h};
-        if (SDL_BlitSurface(surface, &rect, fallback, &rect) != 0) {
-            SDL_FreeSurface(fallback);
-            return nullptr;
-        }
-        copy = fallback;
-    }
-    return copy;
-}
 
 SDL_Surface* texture_to_surface(SDL_Renderer* renderer, SDL_Texture* texture, int width, int height) {
     if (!renderer || !texture || width <= 0 || height <= 0) {
@@ -95,131 +67,9 @@ void free_surface_lists(std::vector<std::vector<SDL_Surface*>>& lists) {
     }
 }
 
-std::uint64_t hash_surface_pixels(SDL_Surface* surface, std::uint64_t seed) {
-    if (!surface || !surface->pixels) {
-        return mix_signature(seed, 0);
-    }
-    seed = mix_signature(seed, static_cast<std::uint64_t>(surface->w));
-    seed = mix_signature(seed, static_cast<std::uint64_t>(surface->h));
-    seed = mix_signature(seed, static_cast<std::uint64_t>(surface->pitch));
-    const std::size_t bytes = static_cast<std::size_t>(surface->pitch) * static_cast<std::size_t>(surface->h);
-    const std::uint8_t* data = static_cast<std::uint8_t*>(surface->pixels);
-    for (std::size_t idx = 0; idx < bytes; ++idx) {
-        seed ^= static_cast<std::uint64_t>(data[idx]);
-        seed *= kSignaturePrime;
-    }
-    return seed;
-}
-
-std::uint64_t compute_surface_signature(const std::vector<std::vector<SDL_Surface*>>& variants) {
-    std::uint64_t signature = kSignatureOffset;
-    for (std::size_t variant_idx = 0; variant_idx < variants.size(); ++variant_idx) {
-        signature = mix_signature(signature, static_cast<std::uint64_t>(variant_idx));
-        const auto& stack = variants[variant_idx];
-        signature = mix_signature(signature, static_cast<std::uint64_t>(stack.size()));
-        for (std::size_t frame_idx = 0; frame_idx < stack.size(); ++frame_idx) {
-            signature = mix_signature(signature, static_cast<std::uint64_t>(frame_idx));
-            signature = hash_surface_pixels(stack[frame_idx], signature);
-        }
-    }
-    return signature;
-}
-
-bool read_effect_settings(const nlohmann::json& json, camera_effects::ImageEffectSettings& out) {
-    if (!json.is_object()) {
-        return false;
-    }
-    camera_effects::ImageEffectSettings parsed{};
-    bool wrote_any = false;
-    auto assign_value = [&](const char* key, float& target) -> bool {
-        auto it = json.find(key);
-        if (it == json.end()) {
-            return false;
-        }
-        if (it->is_number_float()) {
-            target = static_cast<float>(it->get<double>());
-        } else if (it->is_number_integer()) {
-            target = static_cast<float>(it->get<int>());
-        } else {
-            return false;
-        }
-        return true;
-    };
-    wrote_any = assign_value("rgb_boost", parsed.rgb_boost) || wrote_any;
-    wrote_any = assign_value("contrast", parsed.contrast) || wrote_any;
-    wrote_any = assign_value("brightness", parsed.brightness) || wrote_any;
-    wrote_any = assign_value("blur", parsed.blur) || wrote_any;
-    bool has_sat_channel = false;
-    has_sat_channel = assign_value("saturation_red", parsed.saturation_red) || has_sat_channel;
-    has_sat_channel = assign_value("saturation_green", parsed.saturation_green) || has_sat_channel;
-    has_sat_channel = assign_value("saturation_blue", parsed.saturation_blue) || has_sat_channel;
-    if (!has_sat_channel) {
-        float legacy = 0.0f;
-        if (assign_value("saturation", legacy)) {
-            parsed.saturation_red = parsed.saturation_green = parsed.saturation_blue = legacy;
-            has_sat_channel = true;
-        }
-    }
-    wrote_any = has_sat_channel || wrote_any;
-    wrote_any = assign_value("hue", parsed.hue) || wrote_any;
-    if (!wrote_any) {
-        return false;
-    }
-    camera_effects::ClampImageEffectSettings(parsed);
-    out = parsed;
-    return true;
-}
-
-std::optional<camera_effects::image_effects::GlobalState> manifest_effect_defaults() {
-    static std::once_flag once;
-    static std::optional<camera_effects::image_effects::GlobalState> cached_state;
-    std::call_once(once, []() {
-        try {
-            manifest::ManifestData manifest_data = manifest::load_manifest();
-            for (auto it = manifest_data.maps.begin(); it != manifest_data.maps.end(); ++it) {
-                if (!it.value().is_object()) {
-                    continue;
-                }
-                const nlohmann::json& map_entry = it.value();
-                auto camera_it = map_entry.find("camera_settings");
-                if (camera_it == map_entry.end() || !camera_it->is_object()) {
-                    continue;
-                }
-                const nlohmann::json& camera_obj = *camera_it;
-                camera_effects::image_effects::GlobalState state{};
-                bool fg_loaded = false;
-                bool bg_loaded = false;
-                auto fg_it = camera_obj.find("foreground_effects");
-                if (fg_it != camera_obj.end()) {
-                    fg_loaded = read_effect_settings(*fg_it, state.foreground);
-                }
-                auto bg_it = camera_obj.find("background_effects");
-                if (bg_it != camera_obj.end()) {
-                    bg_loaded = read_effect_settings(*bg_it, state.background);
-                }
-                if (fg_loaded || bg_loaded) {
-                    if (!fg_loaded) {
-                        state.foreground = camera_effects::ImageEffectSettings{};
-                    }
-                    if (!bg_loaded) {
-                        state.background = camera_effects::ImageEffectSettings{};
-                    }
-                    cached_state = state;
-                    break;
-                }
-            }
-        } catch (const std::exception& ex) {
-            vibble::log::warn(std::string("[RuntimeAssetMerger] Failed to read manifest depth cue defaults: ") + ex.what());
-        } catch (...) {
-            vibble::log::warn("[RuntimeAssetMerger] Failed to read manifest depth cue defaults (unknown error)");
-        }
-    });
-    return cached_state;
-}
-
 camera_effects::image_effects::GlobalState resolve_effect_state() {
     camera_effects::image_effects::GlobalState state = camera_effects::image_effects::current_state();
-    if (auto defaults = manifest_effect_defaults()) {
+    if (auto defaults = camera_effects::manifest_effect_defaults()) {
         if (camera_effects::ImageEffectSettingsIsIdentity(state.foreground)) {
             state.foreground = defaults->foreground;
         }
@@ -748,7 +598,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     metadata["scale_profile_revision"] = static_cast<std::uint64_t>(0);
     metadata["has_masks"] = (base_mask_surface != nullptr);
     // Skip recording foreground/background effect hashes for runtime-merged assets.
-    metadata["source_signature"] = compute_surface_signature(variant_surfaces);
+    metadata["source_signature"] = asset::surface_utils::compute_surface_signature(variant_surfaces);
     CacheManager::save_metadata((cache_root / "metadata.json").string(), metadata);
 
     std::vector<Animation::FrameCache> caches(1);

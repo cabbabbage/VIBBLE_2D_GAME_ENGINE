@@ -279,7 +279,7 @@ private:
     float cached_zoom_level_      = 0.0f;
     bool  max_asset_dimensions_dirty_ = true;
     std::vector<Asset*> visible_candidate_buffer_;
-    std::unordered_set<Asset*> active_candidate_lookup_;
+    std::uint64_t active_candidate_generation_ = 0;
 
     // Defer the first active-assets rebuild until the grid has
     // populated active chunks on the first update.

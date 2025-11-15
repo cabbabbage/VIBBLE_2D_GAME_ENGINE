@@ -180,6 +180,8 @@ add_executable(engine_tests
     TESTS/test_main.cpp
     TESTS/test_dev_json_store.cpp
     TESTS/test_manifest_loader.cpp
+    TESTS/test_image_effect_settings.cpp
+    TESTS/test_scene_renderer_prereqs.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/core/manifest/manifest_loader.cpp
     ENGINE/utils/log.cpp

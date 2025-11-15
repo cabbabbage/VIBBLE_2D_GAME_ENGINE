@@ -23,12 +23,14 @@
 #include "utils/map_grid_settings.hpp"
 #include "utils/transform_smoothing_settings.hpp"
 #include "utils/quick_task_popup.hpp"
+#include "utils/log.hpp"
 
 #include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cctype>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -220,7 +222,16 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
     }
     camera_.set_scale(static_cast<float>(intro_zoom));
 
-    scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_info_json_, map_id_);
+    if (!renderer) {
+        vibble::log::error("[Assets] SceneRenderer not created: SDL_Renderer pointer is null.");
+    } else {
+        try {
+            scene = new SceneRenderer(renderer, this, screen_width_, screen_height_, map_info_json_, map_id_);
+        } catch (const std::exception& ex) {
+            vibble::log::error(std::string{"[Assets] SceneRenderer initialization failed: "} + ex.what());
+            scene = nullptr;
+        }
+    }
     if (scene) {
         scene->set_dark_mask_enabled(render_dark_mask_enabled_);
     }
@@ -975,10 +986,17 @@ void Assets::update(const Input& input)
     auto& new_active_assets = visible_candidate_buffer_;
     new_active_assets.clear();
     new_active_assets.reserve(active_assets.size() + 32);
-    const std::size_t estimated_candidates =
-        std::min<std::size_t>(all.size(), new_active_assets.capacity());
-    active_candidate_lookup_.clear();
-    active_candidate_lookup_.reserve(estimated_candidates);
+
+    if (++active_candidate_generation_ == 0) {
+        // Wrapped around; reset stamps so equality checks stay correct.
+        ++active_candidate_generation_;
+        for (Asset* asset : all) {
+            if (asset) {
+                asset->visibility_stamp = 0;
+            }
+        }
+    }
+    const std::uint64_t visibility_generation = active_candidate_generation_;
 
     SDL_Rect screen_pixels{0, 0, screen_width, screen_height};
     const bool screen_has_area = screen_pixels.w > 0 && screen_pixels.h > 0;
@@ -1018,9 +1036,10 @@ void Assets::update(const Input& input)
         if (!asset) {
             return;
         }
-        if (!active_candidate_lookup_.insert(asset).second) {
+        if (asset->visibility_stamp == visibility_generation) {
             return;
         }
+        asset->visibility_stamp = visibility_generation;
         new_active_assets.push_back(asset);
     };
 
@@ -1061,9 +1080,6 @@ void Assets::update(const Input& input)
     if (screen_has_area) {
         for (Asset* asset : all) {
             if (!asset) {
-                continue;
-            }
-            if (active_candidate_lookup_.find(asset) != active_candidate_lookup_.end()) {
                 continue;
             }
             SDL_FRect screen_bounds{};

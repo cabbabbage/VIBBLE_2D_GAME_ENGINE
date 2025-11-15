@@ -131,6 +131,7 @@ Asset::~Asset() {
                 SDL_DestroyTexture(final_texture);
                 final_texture = nullptr;
         }
+        visibility_stamp = 0;
 }
 
 Asset::Asset(const Asset& o)
@@ -176,6 +177,7 @@ Asset::Asset(const Asset& o)
 , last_scaled_camera_scale_(-1.0f)
 , last_scale_usage_()
 , final_texture_revision_(o.final_texture_revision_)
+, last_rendered_frame_(nullptr)
 , scale_variant_state_(o.scale_variant_state_)
 , base_bounds_local_(o.base_bounds_local_)
 {
@@ -226,6 +228,7 @@ Asset& Asset::operator=(const Asset& o) {
 	shading_group_set    = o.shading_group_set;
         final_texture        = o.final_texture;
         final_texture_revision_ = o.final_texture_revision_;
+        last_rendered_frame_   = nullptr;
         assets_              = o.assets_;
         spawn_id             = o.spawn_id;
         spawn_method         = o.spawn_method;
@@ -756,6 +759,7 @@ void Asset::deactivate() {
                 SDL_DestroyTexture(final_texture);
                 final_texture = nullptr;
         }
+        visibility_stamp = 0;
 }
 
 void Asset::MaskRenderMetadata::TextureDefaults::reset() {

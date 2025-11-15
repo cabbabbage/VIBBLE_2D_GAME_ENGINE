@@ -1,12 +1,12 @@
 #include "animation.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
+#include "asset/surface_utils.hpp"
 #include "utils/cache_manager.hpp"
 #include "utils/generate_faded_mask.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/loading_status_notifier.hpp"
 #include "utils/log.hpp"
-#include "core/manifest/manifest_loader.hpp"
 #include "render/image_effect_settings.hpp"
 #include "utils/image_effects.hpp"
 #include <SDL_image.h>
@@ -22,8 +22,6 @@
 #include <chrono>
 #include <limits>
 #include <memory>
-#include <mutex>
-#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <iterator>
@@ -31,6 +29,9 @@
 namespace fs = std::filesystem;
 
 namespace {
+using asset::surface_utils::kSignatureOffset;
+using asset::surface_utils::mix_signature;
+
 #if SDL_VERSION_ATLEAST(2,0,12)
 void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info);
 #endif
@@ -147,9 +148,6 @@ struct SourceSignatureResult {
         bool          success = false;
 };
 
-constexpr std::uint64_t kSignatureOffset = 1469598103934665603ull;
-constexpr std::uint64_t kSignaturePrime  = 1099511628211ull;
-
 struct VariantLayerPaths {
         std::string scale_folder;
         std::string normal_folder;
@@ -227,125 +225,6 @@ bool overlay_hashes_match_and_cleanup(const nlohmann::json& metadata,
 
         clear_overlay_directories(variant_paths);
         return false;
-}
-
-SDL_Surface* duplicate_surface(SDL_Surface* surface) {
-        if (!surface) {
-                return nullptr;
-        }
-        SDL_Surface* copy = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888, 0);
-        if (!copy) {
-                SDL_Surface* fallback = SDL_CreateRGBSurfaceWithFormat(0, surface->w, surface->h, 32, SDL_PIXELFORMAT_RGBA8888);
-                if (!fallback) {
-                        return nullptr;
-                }
-                SDL_Rect rect{0, 0, surface->w, surface->h};
-                if (SDL_BlitSurface(surface, &rect, fallback, &rect) != 0) {
-                        SDL_FreeSurface(fallback);
-                        return nullptr;
-                }
-                copy = fallback;
-        }
-        return copy;
-}
-
-std::uint64_t mix_signature(std::uint64_t seed, std::uint64_t value) {
-        seed ^= value;
-        seed *= kSignaturePrime;
-        return seed;
-}
-
-bool read_effect_settings(const nlohmann::json& json,
-                          camera_effects::ImageEffectSettings& out) {
-        if (!json.is_object()) {
-                return false;
-        }
-        camera_effects::ImageEffectSettings parsed{};
-        bool wrote_any = false;
-        auto assign_value = [&](const char* key, float& target) -> bool {
-                auto it = json.find(key);
-                if (it == json.end()) {
-                        return false;
-                }
-                if (it->is_number_float()) {
-                        target = static_cast<float>(it->get<double>());
-                } else if (it->is_number_integer()) {
-                        target = static_cast<float>(it->get<int>());
-                } else {
-                        return false;
-                }
-                return true;
-        };
-        wrote_any = assign_value("rgb_boost", parsed.rgb_boost) || wrote_any;
-        wrote_any = assign_value("contrast", parsed.contrast) || wrote_any;
-        wrote_any = assign_value("brightness", parsed.brightness) || wrote_any;
-        wrote_any = assign_value("blur", parsed.blur) || wrote_any;
-        bool has_sat_channel = false;
-        has_sat_channel = assign_value("saturation_red", parsed.saturation_red) || has_sat_channel;
-        has_sat_channel = assign_value("saturation_green", parsed.saturation_green) || has_sat_channel;
-        has_sat_channel = assign_value("saturation_blue", parsed.saturation_blue) || has_sat_channel;
-        if (!has_sat_channel) {
-                float legacy = 0.0f;
-                if (assign_value("saturation", legacy)) {
-                        parsed.saturation_red = parsed.saturation_green = parsed.saturation_blue = legacy;
-                        has_sat_channel = true;
-                }
-        }
-        wrote_any = has_sat_channel || wrote_any;
-        wrote_any = assign_value("hue", parsed.hue) || wrote_any;
-        if (!wrote_any) {
-                return false;
-        }
-        camera_effects::ClampImageEffectSettings(parsed);
-        out = parsed;
-        return true;
-}
-
-std::optional<camera_effects::image_effects::GlobalState> manifest_effect_defaults() {
-        static std::once_flag once;
-        static std::optional<camera_effects::image_effects::GlobalState> cached_state;
-        std::call_once(once, []() {
-                try {
-                        manifest::ManifestData manifest_data = manifest::load_manifest();
-                        for (auto it = manifest_data.maps.begin(); it != manifest_data.maps.end(); ++it) {
-                                if (!it.value().is_object()) {
-                                        continue;
-                                }
-                                const nlohmann::json& map_entry = it.value();
-                                auto camera_it = map_entry.find("camera_settings");
-                                if (camera_it == map_entry.end() || !camera_it->is_object()) {
-                                        continue;
-                                }
-                                const nlohmann::json& camera_obj = *camera_it;
-                                camera_effects::image_effects::GlobalState state{};
-                                bool fg_loaded = false;
-                                bool bg_loaded = false;
-                                auto fg_it = camera_obj.find("foreground_effects");
-                                if (fg_it != camera_obj.end()) {
-                                        fg_loaded = read_effect_settings(*fg_it, state.foreground);
-                                }
-                                auto bg_it = camera_obj.find("background_effects");
-                                if (bg_it != camera_obj.end()) {
-                                        bg_loaded = read_effect_settings(*bg_it, state.background);
-                                }
-                                if (fg_loaded || bg_loaded) {
-                                        if (!fg_loaded) {
-                                                state.foreground = camera_effects::ImageEffectSettings{};
-                                        }
-                                        if (!bg_loaded) {
-                                                state.background = camera_effects::ImageEffectSettings{};
-                                        }
-                                        cached_state = state;
-                                        break;
-                                }
-                        }
-                } catch (const std::exception& ex) {
-                        vibble::log::warn(std::string("[AnimationLoader] Failed to read manifest depth cue defaults: ") + ex.what());
-                } catch (...) {
-                        vibble::log::warn("[AnimationLoader] Failed to read manifest depth cue defaults (unknown error)");
-                }
-        });
-        return cached_state;
 }
 
 SourceSignatureResult compute_source_signature(const fs::path& folder, int frame_count) {
@@ -636,7 +515,7 @@ void Animation::load(const std::string& trigger,
         clear_texture_cache();
         const bool prefer_cached = !scaling_refresh_pending;
         camera_effects::image_effects::GlobalState effect_state = camera_effects::image_effects::current_state();
-        if (auto defaults = manifest_effect_defaults()) {
+        if (auto defaults = camera_effects::manifest_effect_defaults()) {
                 if (camera_effects::ImageEffectSettingsIsIdentity(effect_state.foreground)) {
                         effect_state.foreground = defaults->foreground;
                 }

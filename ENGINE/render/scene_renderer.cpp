@@ -2,6 +2,7 @@
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "asset/animation_frame.hpp"
+#include "asset/animation.hpp"
 #include "asset/asset_types.hpp"
 #include "world/chunk.hpp"
 #include "render/camera.hpp"
@@ -26,6 +27,7 @@
 #include <vector>
 #include <cstdlib>
 #include <unordered_map>
+#include <stdexcept>
 
 static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
 
@@ -195,28 +197,90 @@ static void ensure_scene_targets(SDL_Renderer* renderer,
     ensure_streaming(blurtex);
 }
 
+bool animation_frame_belongs_to_animation(const Animation& anim, const AnimationFrame* frame) {
+    if (!frame) {
+        return false;
+    }
+    const std::uintptr_t needle = reinterpret_cast<std::uintptr_t>(frame);
+    const std::size_t path_count = anim.movement_path_count();
+    for (std::size_t path_index = 0; path_index < path_count; ++path_index) {
+        const auto& path = anim.movement_path(path_index);
+        if (path.empty()) {
+            continue;
+        }
+        const std::uintptr_t begin = reinterpret_cast<std::uintptr_t>(path.data());
+        const std::uintptr_t end   = reinterpret_cast<std::uintptr_t>(path.data() + path.size());
+        if (needle >= begin && needle < end) {
+            return true;
+        }
+    }
+    return false;
+}
+
+}
+
+bool SceneRenderer::prerequisites_ready(SDL_Renderer* renderer, Assets* assets, std::string* reason) {
+    if (!renderer) {
+        if (reason) { *reason = "SDL_Renderer pointer is null."; }
+        return false;
+    }
+    if (!assets) {
+        if (reason) { *reason = "Assets pointer is null."; }
+        return false;
+    }
+    if (reason) { reason->clear(); }
+    return true;
 }
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
-                            Assets* assets,
-                            int screen_width,
-                            int screen_height,
-                            const nlohmann::json& map_manifest,
-                            const std::string& map_id)
+                             Assets* assets,
+                             int screen_width,
+                             int screen_height,
+                             const nlohmann::json& map_manifest,
+                             const std::string& map_id)
+: SceneRenderer(require_prerequisites(renderer, assets),
+                renderer,
+                assets,
+                screen_width,
+                screen_height,
+                map_manifest,
+                map_id) {}
+
+SceneRenderer::PrevalidatedTag SceneRenderer::require_prerequisites(SDL_Renderer* renderer, Assets* assets) {
+    std::string reason;
+    if (!SceneRenderer::prerequisites_ready(renderer, assets, &reason)) {
+        const std::string message = reason.empty() ? "SceneRenderer prerequisites missing." : reason;
+        vibble::log::error(std::string{"[SceneRenderer] Initialization aborted: "} + message);
+        if (!renderer) { SDL_assert(renderer != nullptr); }
+        if (!assets)   { SDL_assert(assets != nullptr); }
+        throw std::invalid_argument(message);
+    }
+    return PrevalidatedTag{};
+}
+
+SceneRenderer::SceneRenderer(PrevalidatedTag,
+                             SDL_Renderer* renderer,
+                             Assets* assets,
+                             int screen_width,
+                             int screen_height,
+                             const nlohmann::json& map_manifest,
+                             const std::string& map_id)
 : renderer_(renderer),
   assets_(assets),
   screen_width_(screen_width),
   screen_height_(screen_height),
-  main_light_source_(renderer, SDL_Point{ screen_width / 2, screen_height / 2 },
+  main_light_source_(renderer_, SDL_Point{ screen_width / 2, screen_height / 2 },
                      screen_width, SDL_Color{255, 255, 255, 255}),
-  render_pipeline_(renderer,
-                    SceneLighting{ assets->getView(),
+  render_pipeline_(renderer_,
+                    SceneLighting{ assets_->getView(),
                                    main_light_source_,
-                                   assets->player,
+                                   assets_->player,
                                    nullptr,
-                                   &assets->world_grid() }),
+                                   &assets_->world_grid() }),
   update_map_light_enabled_(devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true))
 {
+    vibble::log::debug(std::string{"[SceneRenderer] Initializing for map '"} + map_id +
+                       "' with screen " + std::to_string(screen_width_) + "x" + std::to_string(screen_height_) + ".");
     // Allow override of warmup frames via env var (optional): VIBBLE_DEPTHCUE_WARMUP_FRAMES
     if (const char* override_frames = std::getenv("VIBBLE_DEPTHCUE_WARMUP_FRAMES")) {
         const int v = std::atoi(override_frames);
@@ -343,12 +407,12 @@ bool SceneRenderer::shouldRegen(Asset* a){
     }
 
     const AnimationFrame* current_frame = a->current_frame;
-    auto it = last_rendered_frames_.find(a);
-    if (it == last_rendered_frames_.end()) {
+    const AnimationFrame* last_frame    = a->last_rendered_frame();
+    if (!last_frame) {
         return true;
     }
 
-    return it->second != current_frame;
+    return last_frame != current_frame;
 }
 
 SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float inv_scale,int min_w,int min_h,float ref_sh){
@@ -564,6 +628,8 @@ void SceneRenderer::render(){
     };
 
     light_overlay_sources_.clear();
+    light_overlay_sources_have_dark_mask_cached_ = false;
+    light_overlay_sources_dark_mask_cache_dirty_ = false;
 
     if (!light_map_only_mode_){
         const camera* camera_state = assets_ ? &assets_->getView() : nullptr;
@@ -647,8 +713,132 @@ void SceneRenderer::render(){
         remaining_commands_.reserve(active.size());
         light_overlay_sources_.reserve(active.size());
 
+        struct ChildRenderBatch {
+            bool processed = false;
+            bool has_visible_child = false;
+            std::vector<AssetRenderCommand> commands_back;
+            std::vector<AssetRenderCommand> commands_front;
+        };
+        std::vector<ChildRenderBatch> child_render_batches(active.size());
+
+        auto ensure_child_commands = [&](Asset* parent, ChildRenderBatch& batch) {
+            if (!parent) {
+                batch.processed = true;
+                batch.has_visible_child = false;
+                batch.commands_back.clear();
+                batch.commands_front.clear();
+                return;
+            }
+            if (batch.processed) {
+                return;
+            }
+            batch.processed = true;
+            batch.has_visible_child = false;
+            batch.commands_back.clear();
+            batch.commands_front.clear();
+
+            const auto& child_slots = parent->animation_children();
+            if (child_slots.empty()) {
+                return;
+            }
+
+            batch.commands_back.reserve(child_slots.size());
+            batch.commands_front.reserve(child_slots.size());
+
+            for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
+                const auto& attachment = child_slots[child_index];
+                if (!attachment.visible || !attachment.current_frame) {
+                    continue;
+                }
+                SDL_Texture* child_tex = attachment.current_frame->get_base_texture();
+                if (!child_tex) {
+                    continue;
+                }
+
+                int child_fw = attachment.cached_w;
+                int child_fh = attachment.cached_h;
+                if (child_fw <= 0 || child_fh <= 0) {
+                    if (SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh) == 0 &&
+                        child_fw > 0 && child_fh > 0) {
+                        auto& mutable_slot =
+                            const_cast<Asset::AnimationChildAttachment&>(child_slots[child_index]);
+                        mutable_slot.cached_w = child_fw;
+                        mutable_slot.cached_h = child_fh;
+                    }
+                }
+                if (child_fw <= 0 || child_fh <= 0) {
+                    continue;
+                }
+
+                SDL_FRect child_rect = get_child_position_rect(parent,
+                                                               attachment.world_pos,
+                                                               child_fw,
+                                                               child_fh,
+                                                               inv_scale,
+                                                               min_w,
+                                                               min_h,
+                                                               player_sh);
+                if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
+                    continue;
+                }
+                if (!intersects_padded(child_rect, screen_rect_f)) {
+                    continue;
+                }
+
+                batch.has_visible_child = true;
+
+                SDL_Texture* draw_tex = child_tex;
+                if (attachment.animation && attachment.current_frame) {
+                    const int frame_index = attachment.current_frame->frame_index;
+                    if (frame_index >= 0) {
+                        const auto& steps = attachment.animation->variant_steps();
+                        if (!steps.empty()) {
+                            const float desired = render_pipeline::ScalingLogic::ComputeScale(
+                                child_fw,
+                                child_fh,
+                                static_cast<int>(std::lround(child_rect.w)),
+                                static_cast<int>(std::lround(child_rect.h)));
+                            auto sel = render_pipeline::ScalingLogic::Choose(desired, steps);
+                            if (sel.index >= 0) {
+                                if (SDL_Texture* variant = attachment.animation->frame_variant(
+                                        static_cast<std::size_t>(frame_index),
+                                        static_cast<std::size_t>(sel.index))) {
+                                    draw_tex = variant;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                AssetRenderCommand child_cmd;
+                child_cmd.asset = parent;
+                child_cmd.final_texture = draw_tex;
+                child_cmd.source_texture = draw_tex;
+                child_cmd.dst = child_rect;
+                child_cmd.highlighted = parent->is_highlighted();
+                child_cmd.selected = parent->is_selected();
+                child_cmd.flipped = parent->flipped;
+                child_cmd.alpha = parent ? parent->smoothed_alpha() : 1.0f;
+                if (!std::isfinite(child_cmd.alpha)) {
+                    child_cmd.alpha = 1.0f;
+                }
+                child_cmd.alpha = std::clamp(child_cmd.alpha, 0.0f, 1.0f);
+                child_cmd.rotation_degrees = attachment.rotation_degrees;
+                if (std::fabs(attachment.rotation_degrees) > std::numeric_limits<float>::epsilon()) {
+                    child_cmd.has_custom_pivot = true;
+                    child_cmd.rotation_pivot = SDL_FPoint{ child_rect.w * 0.5f, child_rect.h };
+                }
+
+                if (attachment.render_in_front) {
+                    batch.commands_front.push_back(std::move(child_cmd));
+                } else {
+                    batch.commands_back.push_back(std::move(child_cmd));
+                }
+            }
+        };
+
         // Build and queue sprite draw commands
-        auto should_skip_asset = [&](Asset* asset) -> bool {
+        auto should_skip_asset = [&](Asset* asset, ChildRenderBatch& child_batch) -> bool {
             if (!asset || !asset->info) {
                 return true;
             }
@@ -701,45 +891,8 @@ void SceneRenderer::render(){
 
             bool any_child_visible = false;
             if ((!bounds_visible || (!sprite_visible && !has_light_sources)) && asset->info) {
-                const auto& child_slots = asset->animation_children();
-                for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
-                    const auto& attachment = child_slots[child_index];
-                    if (!attachment.visible || !attachment.current_frame) {
-                        continue;
-                    }
-                    SDL_Texture* child_tex = attachment.current_frame->get_base_texture();
-                    if (!child_tex) {
-                        continue;
-                    }
-                    int child_fw = attachment.cached_w;
-                    int child_fh = attachment.cached_h;
-                    if (child_fw <= 0 || child_fh <= 0) {
-                        if (SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh) == 0 &&
-                            child_fw > 0 && child_fh > 0) {
-                            auto& mutable_slot = const_cast<Asset::AnimationChildAttachment&>(child_slots[child_index]);
-                            mutable_slot.cached_w = child_fw;
-                            mutable_slot.cached_h = child_fh;
-                        }
-                    }
-                    if (child_fw <= 0 || child_fh <= 0) {
-                        continue;
-                    }
-                    SDL_FRect child_rect = get_child_position_rect(asset,
-                                                                   attachment.world_pos,
-                                                                   child_fw,
-                                                                   child_fh,
-                                                                   inv_scale,
-                                                                   min_w,
-                                                                   min_h,
-                                                                   player_sh);
-                    if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
-                        continue;
-                    }
-                    if (intersects_padded(child_rect, screen_rect_f)) {
-                        any_child_visible = true;
-                        break;
-                    }
-                }
+                ensure_child_commands(asset, child_batch);
+                any_child_visible = child_batch.has_visible_child;
             }
 
             if (!bounds_visible && !any_child_visible) {
@@ -751,12 +904,14 @@ void SceneRenderer::render(){
             return false;
         };
 
-        for (Asset* a : active) {
+        for (std::size_t asset_index = 0; asset_index < active.size(); ++asset_index) {
+            Asset* a = active[asset_index];
+            auto& child_batch = child_render_batches[asset_index];
             if (!a || !a->info) {
                 continue;
             }
 
-            if (should_skip_asset(a)) {
+            if (should_skip_asset(a, child_batch)) {
                 continue;
             }
 
@@ -776,7 +931,7 @@ void SceneRenderer::render(){
 
             SDL_Texture* final_tex = a->get_final_texture();
             if (!final_tex) {
-                last_rendered_frames_.erase(a);
+                a->reset_last_rendered_frame();
                 continue;
             }
 
@@ -792,9 +947,9 @@ void SceneRenderer::render(){
 
             auto cache_last_frame = [&]() {
                 if (a->current_frame) {
-                    last_rendered_frames_[a] = a->current_frame;
+                    a->set_last_rendered_frame(a->current_frame);
                 } else {
-                    last_rendered_frames_.erase(a);
+                    a->reset_last_rendered_frame();
                 }
             };
 
@@ -811,47 +966,9 @@ void SceneRenderer::render(){
             const bool sprite_visible  = intersects_padded(dst, screen_rect_f);
             const bool bounds_visible  = intersects_padded(cull_rect, screen_rect_f);
 
-            // Pre-check if any animation child would be visible on screen.
-            // This lets us render visible attachments even when the parent sprite
-            // is culled (e.g., large offsets or perspective effects).
-            const auto& child_slots = a->animation_children();
-            bool any_child_visible = false;
-            if (!child_slots.empty()) {
-                for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
-                    const auto& attachment = child_slots[child_index];
-                    if (!attachment.visible || !attachment.current_frame) {
-                        continue;
-                    }
-                    SDL_Texture* child_tex = attachment.current_frame->get_base_texture();
-                    if (!child_tex) {
-                        continue;
-                    }
-                    int child_fw = attachment.cached_w;
-                    int child_fh = attachment.cached_h;
-                    if ((child_fw == 0 || child_fh == 0)) {
-                        SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh);
-                    }
-                    if (child_fw <= 0 || child_fh <= 0) {
-                        continue;
-                    }
-                    SDL_FRect child_rect = get_child_position_rect(
-                        a,
-                        attachment.world_pos,
-                        child_fw,
-                        child_fh,
-                        inv_scale,
-                        min_w,
-                        min_h,
-                        player_sh);
-                    if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
-                        continue;
-                    }
-                    if (intersects_padded(child_rect, screen_rect_f)) {
-                        any_child_visible = true;
-                        break;
-                    }
-                }
-            }
+            // Evaluate child attachments once so their visibility can keep the parent alive.
+            ensure_child_commands(a, child_batch);
+            const bool any_child_visible = child_batch.has_visible_child;
 
             if (!bounds_visible && !any_child_visible) {
                 cache_last_frame();
@@ -862,105 +979,7 @@ void SceneRenderer::render(){
                 continue;
             }
 
-            std::vector<AssetRenderCommand> child_commands_back;
-            std::vector<AssetRenderCommand> child_commands_front;
-            if (!child_slots.empty()) {
-                child_commands_back.reserve(child_slots.size());
-                child_commands_front.reserve(child_slots.size());
-                auto build_child_command = [&](std::size_t child_index, AssetRenderCommand& out_cmd) -> bool {
-                    if (child_index >= child_slots.size()) {
-                        return false;
-                    }
-                    const auto& attachment = child_slots[child_index];
-                    if (!attachment.visible || !attachment.current_frame) {
-                        return false;
-                    }
-                    SDL_Texture* child_tex = attachment.current_frame->get_base_texture();
-                    if (!child_tex) {
-                        return false;
-                    }
-                    int child_fw = attachment.cached_w;
-                    int child_fh = attachment.cached_h;
-                    if ((child_fw == 0 || child_fh == 0)) {
-                        SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh);
-                        if (child_fw > 0 && child_fh > 0) {
-                            auto& mutable_slot = const_cast<Asset::AnimationChildAttachment&>(child_slots[child_index]);
-                            mutable_slot.cached_w = child_fw;
-                            mutable_slot.cached_h = child_fh;
-                        }
-                    }
-                    SDL_FRect child_rect = get_child_position_rect(
-                        a,
-                        attachment.world_pos,
-                        child_fw,
-                        child_fh,
-                        inv_scale,
-                        min_w,
-                        min_h,
-                        player_sh);
-                    if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
-                        return false;
-                    }
-                    if (!intersects_padded(child_rect, screen_rect_f)) {
-                        return false;
-                    }
-
-                    // Select a pre-scaled texture variant for the child when available,
-                    // using the same scale selection rules as normal assets.
-                    SDL_Texture* draw_tex = child_tex;
-                    if (attachment.animation && attachment.current_frame) {
-                        const int frame_index = attachment.current_frame->frame_index;
-                        if (frame_index >= 0) {
-                            const auto& steps = attachment.animation->variant_steps();
-                            if (!steps.empty()) {
-                                const float desired = render_pipeline::ScalingLogic::ComputeScale(
-                                    child_fw, child_fh,
-                                    static_cast<int>(std::lround(child_rect.w)),
-                                    static_cast<int>(std::lround(child_rect.h)));
-                                auto sel = render_pipeline::ScalingLogic::Choose(desired, steps);
-                                if (sel.index >= 0) {
-                                    if (SDL_Texture* variant = attachment.animation->frame_variant(static_cast<std::size_t>(frame_index), static_cast<std::size_t>(sel.index))) {
-                                        draw_tex = variant;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    AssetRenderCommand child_cmd;
-                    child_cmd.asset = a;
-                    child_cmd.final_texture = draw_tex;
-                    child_cmd.source_texture = draw_tex;
-                    child_cmd.dst = child_rect;
-                    child_cmd.highlighted = a->is_highlighted();
-                    child_cmd.selected = a->is_selected();
-                    child_cmd.flipped = a->flipped;
-                    child_cmd.alpha = a ? a->smoothed_alpha() : 1.0f;
-                    if (!std::isfinite(child_cmd.alpha)) {
-                        child_cmd.alpha = 1.0f;
-                    }
-                    child_cmd.alpha = std::clamp(child_cmd.alpha, 0.0f, 1.0f);
-                    child_cmd.rotation_degrees = attachment.rotation_degrees;
-                    if (std::fabs(attachment.rotation_degrees) > std::numeric_limits<float>::epsilon()) {
-                        child_cmd.has_custom_pivot = true;
-                        child_cmd.rotation_pivot = SDL_FPoint{ child_rect.w * 0.5f, child_rect.h };
-                    }
-                    out_cmd = std::move(child_cmd);
-                    return true;
-                };
-                for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
-                    AssetRenderCommand child_cmd;
-                    if (!build_child_command(child_index, child_cmd)) {
-                        continue;
-                    }
-                    if (child_slots[child_index].render_in_front) {
-                        child_commands_front.push_back(std::move(child_cmd));
-                    } else {
-                        child_commands_back.push_back(std::move(child_cmd));
-                    }
-                }
-            }
-
-            for (auto& cmd : child_commands_back) {
+            for (auto& cmd : child_batch.commands_back) {
                 remaining_commands_.push_back(std::move(cmd));
             }
 
@@ -1015,9 +1034,19 @@ void SceneRenderer::render(){
                         }
                         SDL_FPoint screen_pos = camera_state->map_to_screen_f(SDL_FPoint{ wx, wy });
                         const float screen_y = screen_pos.y;
-                        const AnimationFrame* frame_ptr = a ? a->current_animation_frame() : nullptr;
-                        SDL_Texture* fg_overlay = frame_ptr ? frame_ptr->get_foreground_texture() : nullptr;
-                        SDL_Texture* bg_overlay = frame_ptr ? frame_ptr->get_background_texture() : nullptr;
+                        SDL_Texture* fg_overlay = nullptr;
+                        SDL_Texture* bg_overlay = nullptr;
+                        if (a) {
+                            const AnimationFrame* frame_ptr = a->current_animation_frame();
+                            if (frame_ptr && a->info) {
+                                const auto anim_it = a->info->animations.find(a->current_animation);
+                                if (anim_it != a->info->animations.end() &&
+                                    animation_frame_belongs_to_animation(anim_it->second, frame_ptr)) {
+                                    fg_overlay = frame_ptr->get_foreground_texture();
+                                    bg_overlay = frame_ptr->get_background_texture();
+                                }
+                            }
+                        }
                         const DepthCueSample depth_sample = depth_sample_for(screen_y);
                         if (depth_sample.plane != DepthCuePlane::None) {
                             if (depth_sample.plane == DepthCuePlane::Foreground && fg_overlay && fg_max_opacity > 0) {
@@ -1072,7 +1101,7 @@ void SceneRenderer::render(){
                 }
             }
 
-            for (auto& cmd : child_commands_front) {
+            for (auto& cmd : child_batch.commands_front) {
                 remaining_commands_.push_back(std::move(cmd));
             }
 
@@ -1116,12 +1145,18 @@ void SceneRenderer::render(){
                 source.has_back_lights      = has_back_lights || has_alpha_mask_only_lights;
                 source.has_dark_mask_lights = has_dark_mask_lights;
                 light_overlay_sources_.push_back(std::move(source));
+                if (has_dark_mask_lights) {
+                    light_overlay_sources_have_dark_mask_cached_ = true;
+                    light_overlay_sources_dark_mask_cache_dirty_ = false;
+                } else if (!light_overlay_sources_have_dark_mask_cached_) {
+                    light_overlay_sources_dark_mask_cache_dirty_ = true;
+                }
             }
 
             if (a->current_frame) {
-                last_rendered_frames_[a] = a->current_frame;
+                a->set_last_rendered_frame(a->current_frame);
             } else {
-                last_rendered_frames_.erase(a);
+                a->reset_last_rendered_frame();
             }
         }
 
@@ -1138,6 +1173,9 @@ void SceneRenderer::render(){
     }
 
     std::vector<const LightOverlaySource*> pending_front_lights;
+    std::size_t frame_grid_slice_batches = 0;
+    std::size_t frame_grid_slice_cells = 0;
+    std::size_t frame_grid_slice_calls_saved = 0;
 
     auto render_commands = [&](const std::vector<AssetRenderCommand>& commands, bool overlay_passed) {
         const int outline_px = 3; // outline thickness in screen pixels
@@ -1304,13 +1342,49 @@ void SceneRenderer::render(){
                             const double inv_w = (world_width > 0.0f) ? (1.0 / static_cast<double>(world_width)) : 0.0;
                             const double inv_h = (world_height > 0.0f) ? (1.0 / static_cast<double>(world_height)) : 0.0;
 
-                            const SDL_Color white{255,255,255,255};
-                            int indices[6] = {0, 1, 2, 0, 2, 3};
-
                             // Ensure the texture is in a neutral mod state; use vertex alpha/color
                             SDL_SetTextureColorMod(tex, 255, 255, 255);
                             SDL_SetTextureAlphaMod(tex, 255);
                             SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+
+                            auto estimate_cell_count = [&](double span) -> std::size_t {
+                                if (grid_step <= 0) {
+                                    return 1;
+                                }
+                                const double step = static_cast<double>(grid_step);
+                                const double cells = std::ceil(std::max(0.0, span) / step);
+                                return static_cast<std::size_t>(std::max(1.0, cells));
+                            };
+                            const std::size_t estimated_cols = estimate_cell_count(end_x - start_x);
+                            const std::size_t estimated_rows = estimate_cell_count(end_y - start_y);
+                            const std::size_t worst_case_cells = std::max<std::size_t>(1, estimated_cols * estimated_rows);
+                            const std::size_t required_vertices = worst_case_cells * 4;
+                            const std::size_t required_indices  = worst_case_cells * 6;
+
+                            if (required_vertices > grid_slice_vertex_capacity_hint_) {
+                                grid_slice_vertex_capacity_hint_ = required_vertices;
+                            }
+                            if (required_indices > grid_slice_index_capacity_hint_) {
+                                grid_slice_index_capacity_hint_ = required_indices;
+                            }
+                            if (grid_slice_vertex_capacity_hint_ > grid_slice_vertices_.capacity()) {
+                                grid_slice_vertices_.reserve(grid_slice_vertex_capacity_hint_);
+                            }
+                            if (grid_slice_index_capacity_hint_ > grid_slice_indices_.capacity()) {
+                                grid_slice_indices_.reserve(grid_slice_index_capacity_hint_);
+                            }
+
+                            grid_slice_vertices_.clear();
+                            grid_slice_indices_.clear();
+                            std::size_t emitted_cells = 0;
+                            const Uint8 a_mod = base_alpha_mod;
+                            auto emit_vertex = [&](const SDL_FPoint& pos, double u, double v) {
+                                SDL_Vertex vert{};
+                                vert.position = pos;
+                                vert.color    = SDL_Color{255, 255, 255, a_mod};
+                                vert.tex_coord = SDL_FPoint{ static_cast<float>(u), static_cast<float>(v) };
+                                grid_slice_vertices_.push_back(vert);
+                            };
 
                             for (double wy = start_y; wy < end_y; wy += grid_step) {
                                 const double cell_top    = std::max(wy, top_world);
@@ -1360,18 +1434,39 @@ void SceneRenderer::render(){
                                         std::swap(u0, u1);
                                     }
 
-                                    const Uint8 a_mod = base_alpha_mod;
-                                    SDL_Vertex verts[4]{};
-                                    verts[0].position = s_tl; verts[0].color = SDL_Color{255,255,255,a_mod}; verts[0].tex_coord = SDL_FPoint{ static_cast<float>(u0), static_cast<float>(v0) };
-                                    verts[1].position = s_tr; verts[1].color = SDL_Color{255,255,255,a_mod}; verts[1].tex_coord = SDL_FPoint{ static_cast<float>(u1), static_cast<float>(v0) };
-                                    verts[2].position = s_br; verts[2].color = SDL_Color{255,255,255,a_mod}; verts[2].tex_coord = SDL_FPoint{ static_cast<float>(u1), static_cast<float>(v1) };
-                                    verts[3].position = s_bl; verts[3].color = SDL_Color{255,255,255,a_mod}; verts[3].tex_coord = SDL_FPoint{ static_cast<float>(u0), static_cast<float>(v1) };
+                                    const int base_index = static_cast<int>(grid_slice_vertices_.size());
+                                    emit_vertex(s_tl, u0, v0);
+                                    emit_vertex(s_tr, u1, v0);
+                                    emit_vertex(s_br, u1, v1);
+                                    emit_vertex(s_bl, u0, v1);
 
-                                    SDL_RenderGeometry(renderer_, tex, verts, 4, indices, 6);
+                                    grid_slice_indices_.push_back(base_index + 0);
+                                    grid_slice_indices_.push_back(base_index + 1);
+                                    grid_slice_indices_.push_back(base_index + 2);
+                                    grid_slice_indices_.push_back(base_index + 0);
+                                    grid_slice_indices_.push_back(base_index + 2);
+                                    grid_slice_indices_.push_back(base_index + 3);
+                                    ++emitted_cells;
                                 }
                             }
 
-                            drew_grid_sliced = true;
+                            if (!grid_slice_vertices_.empty()) {
+                                SDL_RenderGeometry(renderer_,
+                                                   tex,
+                                                   grid_slice_vertices_.data(),
+                                                   static_cast<int>(grid_slice_vertices_.size()),
+                                                   grid_slice_indices_.data(),
+                                                   static_cast<int>(grid_slice_indices_.size()));
+                                drew_grid_sliced = true;
+                                ++frame_grid_slice_batches;
+                                frame_grid_slice_cells += emitted_cells;
+                                if (emitted_cells > 1) {
+                                    frame_grid_slice_calls_saved += (emitted_cells - 1);
+                                }
+                            }
+
+                            grid_slice_vertices_.clear();
+                            grid_slice_indices_.clear();
                         }
                     }
                 }
@@ -1444,6 +1539,23 @@ void SceneRenderer::render(){
         }
         render_commands(remaining_commands_, /*overlay_passed=*/false);
 
+        if (frame_grid_slice_batches > 0) {
+            grid_slice_batches_accum_ += frame_grid_slice_batches;
+            grid_slice_draw_calls_saved_accum_ += frame_grid_slice_calls_saved;
+            if ((frame_counter_ % 120ull) == 0ull) {
+                vibble::log::debug(std::string{"[SceneRenderer] Grid-slice batching saved "} +
+                                   std::to_string(frame_grid_slice_calls_saved) +
+                                   " draw calls across " +
+                                   std::to_string(frame_grid_slice_batches) +
+                                   " sprites (" +
+                                   std::to_string(frame_grid_slice_cells) +
+                                   " cells this frame, total_saved=" +
+                                   std::to_string(grid_slice_draw_calls_saved_accum_) +
+                                   ", total_batches=" +
+                                   std::to_string(grid_slice_batches_accum_) + ").");
+            }
+        }
+
         // After all base sprites are drawn, apply the dynamic darkness overlay once
         if (dark_mask_enabled_) {
             render_dynamic_darkness_overlay(map_light_opacity, frame_flicker_time_seconds);
@@ -1466,14 +1578,6 @@ void SceneRenderer::render(){
         }
         pending_front_lights.clear();
 
-        for (auto it = last_rendered_frames_.begin(); it != last_rendered_frames_.end();) {
-            Asset* asset = it->first;
-            if (!asset || asset->last_render_frame_id != frame_counter_) {
-                it = last_rendered_frames_.erase(it);
-            } else {
-                ++it;
-            }
-        }
     } else {
         // Light-map only mode: keep original behavior
         SDL_SetRenderTarget(renderer_, nullptr);
@@ -1526,6 +1630,23 @@ void SceneRenderer::destroy_darkness_overlay() {
 void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds) {
     if (!renderer_) {
         return;
+    }
+
+    if (!has_dark_mask_overlay_sources()) {
+        ++darkness_overlay_skipped_frames_;
+        if (!darkness_overlay_skip_logged_) {
+            vibble::log::debug(std::string{"[SceneRenderer] Skipping dynamic darkness overlay; no dark-mask lights. skipped_frames="} +
+                               std::to_string(darkness_overlay_skipped_frames_));
+            darkness_overlay_skip_logged_ = true;
+        }
+        return;
+    }
+
+    ++darkness_overlay_rendered_frames_;
+    if (darkness_overlay_skip_logged_) {
+        vibble::log::debug(std::string{"[SceneRenderer] Dynamic darkness overlay pass resumed. rendered_frames="} +
+                           std::to_string(darkness_overlay_rendered_frames_));
+        darkness_overlay_skip_logged_ = false;
     }
 
     const float overlay_alpha             = std::clamp(map_light_opacity, 0.0f, 1.0f);
@@ -1594,6 +1715,17 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, flo
 
     SDL_Rect screen_dst{0, 0, screen_width_, screen_height_};
     SDL_RenderCopy(renderer_, darkness_overlay_texture_, nullptr, &screen_dst);
+}
+
+bool SceneRenderer::has_dark_mask_overlay_sources() {
+    if (light_overlay_sources_dark_mask_cache_dirty_) {
+        light_overlay_sources_have_dark_mask_cached_ = std::any_of(
+            light_overlay_sources_.begin(),
+            light_overlay_sources_.end(),
+            [](const LightOverlaySource& source) { return source.has_dark_mask_lights; });
+        light_overlay_sources_dark_mask_cache_dirty_ = false;
+    }
+    return light_overlay_sources_have_dark_mask_cached_;
 }
 
 

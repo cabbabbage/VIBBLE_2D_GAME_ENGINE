@@ -57,7 +57,7 @@ void Grid::set_parallax_resolution(int r) {
         return;
     }
     parallax_resolution_ = clamped;
-    parallax_entries_.clear();
+    clear_parallax_state();
 }
 
 int Grid::parallax_step_size() const {
@@ -227,6 +227,11 @@ void Grid::invalidate_active_cache() {
     last_chunk_resolution_ = -1;
 }
 
+void Grid::clear_parallax_state() {
+    parallax_entries_.clear();
+    parallax_cache_.reset();
+}
+
 std::uint64_t Grid::parallax_key(int i, int j) const {
     const auto hi = static_cast<std::uint32_t>(i);
     const auto lo = static_cast<std::uint32_t>(j);
@@ -290,7 +295,7 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
     parallax_active_ = cam.parallax_enabled() && parallax_strength > 0.0 && camera_height > kParallaxEpsilon;
     if (!parallax_active_) {
-        parallax_entries_.clear();
+        clear_parallax_state();
         return;
     }
 
@@ -315,7 +320,7 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
     const auto& active_chunks = chunks_.active();
     if (active_chunks.empty()) {
-        parallax_entries_.clear();
+        clear_parallax_state();
         return;
     }
 
@@ -334,14 +339,14 @@ void Grid::update_parallax(const camera& cam, float dt) {
     }
 
     if (active_min_i > active_max_i || active_min_j > active_max_j) {
-        parallax_entries_.clear();
+        clear_parallax_state();
         return;
     }
 
     const int chunk_step    = 1 << r_chunk_;
     const int parallax_step = parallax_step_size();
     if (parallax_step <= 0) {
-        parallax_entries_.clear();
+        clear_parallax_state();
         return;
     }
 
@@ -359,6 +364,14 @@ void Grid::update_parallax(const camera& cam, float dt) {
     const int cell_i_max = floor_div((world_max_x - 1) - origin_.x, parallax_step);
     const int cell_j_min = floor_div(world_min_y - origin_.y, parallax_step);
     const int cell_j_max = floor_div((world_max_y - 1) - origin_.y, parallax_step);
+    const int cells_x    = std::max(0, cell_i_max - cell_i_min + 1);
+    const int cells_y    = std::max(0, cell_j_max - cell_j_min + 1);
+    if (cells_x == 0 || cells_y == 0) {
+        clear_parallax_state();
+        return;
+    }
+    parallax_cache_.configure(cell_i_min, cell_j_min, cells_x, cells_y, parallax_step);
+    const std::size_t row_stride = static_cast<std::size_t>(cells_x);
 
     const double step_d     = static_cast<double>(parallax_step);
     const double origin_x_d = static_cast<double>(origin_.x);
@@ -366,6 +379,8 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
     for (int cell_j = cell_j_min; cell_j <= cell_j_max; ++cell_j) {
         const double cell_cy = origin_y_d + (static_cast<double>(cell_j) + 0.5) * step_d;
+        const std::size_t row_offset =
+            static_cast<std::size_t>(cell_j - cell_j_min) * row_stride;
         for (int cell_i = cell_i_min; cell_i <= cell_i_max; ++cell_i) {
             const double cell_cx = origin_x_d + (static_cast<double>(cell_i) + 0.5) * step_d;
 
@@ -421,8 +436,14 @@ void Grid::update_parallax(const camera& cam, float dt) {
             }
 
             entry.last_value = entry.smoothing.value_for_render();
+            const std::size_t col_index = static_cast<std::size_t>(cell_i - cell_i_min);
+            const std::size_t idx       = row_offset + col_index;
+            if (idx < parallax_cache_.values.size()) {
+                parallax_cache_.values[idx] = entry.last_value;
+            }
         }
     }
+    parallax_cache_.mark_ready();
 
     const std::uint64_t prune_threshold = (parallax_frame_counter_ > 480)
         ? parallax_frame_counter_ - 480
@@ -446,6 +467,10 @@ float Grid::parallax_offset(SDL_Point world) const {
     }
     const int i = floor_div(world.x - origin_.x, step);
     const int j = floor_div(world.y - origin_.y, step);
+    std::size_t cache_index = 0;
+    if (parallax_cache_.try_index(i, j, step, cache_index)) {
+        return parallax_cache_.values[cache_index];
+    }
     const auto key = parallax_key(i, j);
     auto it = parallax_entries_.find(key);
     if (it == parallax_entries_.end()) {

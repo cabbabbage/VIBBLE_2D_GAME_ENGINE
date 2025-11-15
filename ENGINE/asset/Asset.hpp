@@ -153,6 +153,9 @@ class Asset {
     int  get_shading_group() const;
     void set_frame_progress(float p) { frame_progress = p; }
     class AnimationFrame* current_frame = nullptr;
+    const AnimationFrame* last_rendered_frame() const { return last_rendered_frame_; }
+    void set_last_rendered_frame(const AnimationFrame* frame) { last_rendered_frame_ = frame; }
+    void reset_last_rendered_frame() { last_rendered_frame_ = nullptr; }
     SDL_Texture* get_final_texture() const;
     void set_final_texture(SDL_Texture* tex);
     void set_camera(camera* v) { window = v; }
@@ -214,6 +217,7 @@ class Asset {
     int cached_w = 0;
     int cached_h = 0;
     std::uint64_t last_render_frame_id = 0;
+    std::uint64_t visibility_stamp = 0;
     std::string spawn_id;
     std::string spawn_method;
     std::string owning_room_name_;
@@ -311,6 +315,7 @@ private:
     TransformSmoothingState alpha_smoothing_{};
 
     std::uint64_t final_texture_revision_ = 0;
+    const AnimationFrame* last_rendered_frame_ = nullptr;
 
     // Tracks whether finalize_setup() has already run for this asset
     bool finalized_ = false;
