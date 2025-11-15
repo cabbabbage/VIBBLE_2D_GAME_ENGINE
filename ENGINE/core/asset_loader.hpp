@@ -6,7 +6,6 @@
 #include <nlohmann/json.hpp>
 
 #include "utils/map_grid_settings.hpp"
-#include "core/faith_content_guard.hpp"
 
 class Asset;
 class Assets;
@@ -75,5 +74,4 @@ class AssetLoader {
     void finalizeAssets();
     std::vector<std::unique_ptr<Asset>> extract_all_assets();
     std::vector<std::unique_ptr<Asset>> spawned_assets_{};
-    vibble::faith::FaithContentGuard faith_guard_;
 };
