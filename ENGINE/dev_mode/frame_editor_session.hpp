@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "dev_mode/pan_and_zoom.hpp"
+#include "animation_update/combat_geometry.hpp"
 
 class Assets;
 class Asset;
@@ -60,7 +61,15 @@ private:
         bool visible = true;
         bool render_in_front = true;
     };
-    struct MovementFrame { float dx = 0.0f; float dy = 0.0f; bool resort_z = false; std::vector<ChildFrame> children; };
+    struct MovementFrame {
+        float dx = 0.0f;
+        float dy = 0.0f;
+        bool resort_z = false;
+        std::vector<ChildFrame> children;
+        // Per-frame combat geometry, expressed in the asset's local space.
+        animation_update::FrameHitGeometry    hit;
+        animation_update::FrameAttackGeometry attack;
+    };
 
     // State wiring
     Assets* assets_ = nullptr;
@@ -110,6 +119,24 @@ private:
     mutable std::unique_ptr<class DMTextBox> tb_child_deg_;
     mutable std::unique_ptr<class DMCheckbox> cb_child_visible_;
     mutable std::unique_ptr<class DMCheckbox> cb_child_render_front_;
+    // Hit geometry widgets
+    mutable std::unique_ptr<class DMDropdown> dd_hitbox_type_;
+    mutable std::unique_ptr<class DMButton> btn_hitbox_add_remove_;
+    mutable std::unique_ptr<class DMButton> btn_hitbox_copy_next_;
+    mutable std::unique_ptr<class DMTextBox> tb_hit_center_x_;
+    mutable std::unique_ptr<class DMTextBox> tb_hit_center_y_;
+    mutable std::unique_ptr<class DMTextBox> tb_hit_width_;
+    mutable std::unique_ptr<class DMTextBox> tb_hit_height_;
+    mutable std::unique_ptr<class DMTextBox> tb_hit_rotation_;
+    // Attack geometry widgets
+    mutable std::unique_ptr<class DMDropdown> dd_attack_type_;
+    mutable std::unique_ptr<class DMButton> btn_attack_add_remove_;
+    mutable std::unique_ptr<class DMButton> btn_attack_copy_next_;
+    mutable std::unique_ptr<class DMTextBox> tb_attack_start_x_;
+    mutable std::unique_ptr<class DMTextBox> tb_attack_start_y_;
+    mutable std::unique_ptr<class DMTextBox> tb_attack_end_x_;
+    mutable std::unique_ptr<class DMTextBox> tb_attack_end_y_;
+    mutable std::unique_ptr<class DMTextBox> tb_attack_damage_;
     // Editable totals fields
     mutable std::unique_ptr<class DMTextBox> tb_total_dx_;
     mutable std::unique_ptr<class DMTextBox> tb_total_dy_;
@@ -124,6 +151,16 @@ private:
     mutable bool last_child_visible_value_ = false;
     mutable bool last_child_front_value_ = true;
     mutable bool cb_show_anim_targets_parent_label_ = false;
+    mutable std::string last_hit_center_x_text_{};
+    mutable std::string last_hit_center_y_text_{};
+    mutable std::string last_hit_width_text_{};
+    mutable std::string last_hit_height_text_{};
+    mutable std::string last_hit_rotation_text_{};
+    mutable std::string last_attack_start_x_text_{};
+    mutable std::string last_attack_start_y_text_{};
+    mutable std::string last_attack_end_x_text_{};
+    mutable std::string last_attack_end_y_text_{};
+    mutable std::string last_attack_damage_text_{};
 
     // UI layout (computed each frame)
     // Panel rectangles are derived from stored top-left positions to allow dragging.
@@ -155,6 +192,32 @@ private:
     std::vector<std::string> child_assets_;
     std::unordered_map<Asset*, bool> child_hidden_cache_;
     mutable std::vector<std::string> child_dropdown_options_cache_;
+    mutable std::vector<std::string> hitbox_type_labels_;
+    mutable std::vector<std::string> attack_type_labels_;
+
+    // Hit box editing state
+    int selected_hitbox_type_index_ = 1; // default to melee
+    enum class HitHandle { None, Move, Left, Right, Top, Bottom, Rotate };
+    HitHandle active_hitbox_handle_ = HitHandle::None;
+    bool hitbox_dragging_ = false;
+    SDL_Point hitbox_drag_start_mouse_{0, 0};
+    SDL_FPoint hitbox_drag_grab_offset_{0.0f, 0.0f};
+    animation_update::FrameHitGeometry::HitBox hitbox_drag_start_box_;
+    float hitbox_drag_left_ = 0.0f;
+    float hitbox_drag_right_ = 0.0f;
+    float hitbox_drag_top_ = 0.0f;
+    float hitbox_drag_bottom_ = 0.0f;
+    bool hitbox_drag_moved_ = false;
+
+    // Attack vector editing state
+    int selected_attack_type_index_ = 1;
+    enum class AttackHandle { None, Start, End, Segment };
+    AttackHandle active_attack_handle_ = AttackHandle::None;
+    bool attack_dragging_ = false;
+    bool attack_drag_moved_ = false;
+    SDL_Point attack_drag_start_mouse_{0, 0};
+    SDL_FPoint attack_drag_start_mouse_local_{0.0f, 0.0f};
+    animation_update::FrameAttackGeometry::Vector attack_drag_start_vector_;
 
     // Defer persistence/rebuild until Back is pressed
     bool pending_save_ = false;
@@ -193,6 +256,10 @@ private:
     int max_scroll_offset() const;
     void clamp_scroll_offset() const;
     void ensure_selected_thumb_visible();
+    void render_hit_geometry(SDL_Renderer* renderer) const;
+    bool begin_hitbox_drag(SDL_Point mouse);
+    void update_hitbox_drag(SDL_Point mouse);
+    void end_hitbox_drag(bool commit);
 
     struct DirectoryPanelMetrics {
         int width = 0;
@@ -243,4 +310,35 @@ private:
     DirectoryPanelMetrics build_directory_panel_metrics() const;
     MovementToolboxMetrics build_movement_toolbox_metrics() const;
     ChildrenToolboxMetrics build_children_toolbox_metrics() const;
+
+    struct HitBoxVisual {
+        SDL_FPoint center{};
+        std::array<SDL_FPoint, 4> corners;
+        std::array<SDL_FPoint, 4> edge_midpoints;
+        SDL_FPoint rotate_handle{};
+    };
+
+    // Hit geometry helpers
+    animation_update::FrameHitGeometry::HitBox* current_hit_box();
+    const animation_update::FrameHitGeometry::HitBox* current_hit_box() const;
+    animation_update::FrameHitGeometry::HitBox* ensure_hit_box_for_type(const std::string& type);
+    void delete_hit_box_for_type(const std::string& type);
+    std::string current_hitbox_type() const;
+    void refresh_hitbox_form() const;
+    void copy_hit_box_to_next_frame();
+    float asset_local_scale() const;
+    SDL_Point asset_anchor_world() const;
+    bool screen_to_local(SDL_Point screen, SDL_FPoint& out_local) const;
+    bool build_hitbox_visual(const animation_update::FrameHitGeometry::HitBox& box, HitBoxVisual& out) const;
+    animation_update::FrameAttackGeometry::Vector* current_attack_vector();
+    const animation_update::FrameAttackGeometry::Vector* current_attack_vector() const;
+    animation_update::FrameAttackGeometry::Vector* ensure_attack_vector_for_type(const std::string& type);
+    void delete_attack_vector_for_type(const std::string& type);
+    std::string current_attack_type() const;
+    void refresh_attack_form() const;
+    void copy_attack_vector_to_next_frame();
+    void render_attack_geometry(SDL_Renderer* renderer) const;
+    bool begin_attack_drag(SDL_Point mouse);
+    void update_attack_drag(SDL_Point mouse);
+    void end_attack_drag(bool commit);
 };

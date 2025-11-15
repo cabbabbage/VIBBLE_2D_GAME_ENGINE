@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <filesystem>
 #include <limits>
+#include <mutex>
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -11,15 +14,221 @@
 #include "Asset.hpp"
 #include "animation.hpp"
 #include "asset_info.hpp"
+#include "core/manifest/manifest_loader.hpp"
+#include "render/image_effect_settings.hpp"
 #include "render/camera.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/area.hpp"
+#include "utils/cache_manager.hpp"
+#include "utils/image_effects.hpp"
+#include "utils/log.hpp"
 
 #include <nlohmann/json.hpp>
 
 namespace runtime {
 
 namespace {
+
+namespace fs = std::filesystem;
+
+constexpr std::uint64_t kSignatureOffset = 1469598103934665603ull;
+constexpr std::uint64_t kSignaturePrime  = 1099511628211ull;
+constexpr int kAnimationCacheVersion     = 3;
+
+std::uint64_t mix_signature(std::uint64_t seed, std::uint64_t value) {
+    seed ^= value;
+    seed *= kSignaturePrime;
+    return seed;
+}
+
+SDL_Surface* duplicate_surface(SDL_Surface* surface) {
+    if (!surface) {
+        return nullptr;
+    }
+    SDL_Surface* copy = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888, 0);
+    if (!copy) {
+        SDL_Surface* fallback = SDL_CreateRGBSurfaceWithFormat(0, surface->w, surface->h, 32, SDL_PIXELFORMAT_RGBA8888);
+        if (!fallback) {
+            return nullptr;
+        }
+        SDL_Rect rect{0, 0, surface->w, surface->h};
+        if (SDL_BlitSurface(surface, &rect, fallback, &rect) != 0) {
+            SDL_FreeSurface(fallback);
+            return nullptr;
+        }
+        copy = fallback;
+    }
+    return copy;
+}
+
+SDL_Surface* texture_to_surface(SDL_Renderer* renderer, SDL_Texture* texture, int width, int height) {
+    if (!renderer || !texture || width <= 0 || height <= 0) {
+        return nullptr;
+    }
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA8888);
+    if (!surface) {
+        return nullptr;
+    }
+    SDL_Texture* previous_target = SDL_GetRenderTarget(renderer);
+    if (SDL_SetRenderTarget(renderer, texture) != 0) {
+        SDL_FreeSurface(surface);
+        return nullptr;
+    }
+    const int read_status = SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, surface->pixels, surface->pitch);
+    SDL_SetRenderTarget(renderer, previous_target);
+    if (read_status != 0) {
+        SDL_FreeSurface(surface);
+        return nullptr;
+    }
+    return surface;
+}
+
+void free_surface_lists(std::vector<std::vector<SDL_Surface*>>& lists) {
+    for (auto& list : lists) {
+        for (SDL_Surface*& surface : list) {
+            if (surface) {
+                SDL_FreeSurface(surface);
+                surface = nullptr;
+            }
+        }
+        list.clear();
+    }
+}
+
+std::uint64_t hash_surface_pixels(SDL_Surface* surface, std::uint64_t seed) {
+    if (!surface || !surface->pixels) {
+        return mix_signature(seed, 0);
+    }
+    seed = mix_signature(seed, static_cast<std::uint64_t>(surface->w));
+    seed = mix_signature(seed, static_cast<std::uint64_t>(surface->h));
+    seed = mix_signature(seed, static_cast<std::uint64_t>(surface->pitch));
+    const std::size_t bytes = static_cast<std::size_t>(surface->pitch) * static_cast<std::size_t>(surface->h);
+    const std::uint8_t* data = static_cast<std::uint8_t*>(surface->pixels);
+    for (std::size_t idx = 0; idx < bytes; ++idx) {
+        seed ^= static_cast<std::uint64_t>(data[idx]);
+        seed *= kSignaturePrime;
+    }
+    return seed;
+}
+
+std::uint64_t compute_surface_signature(const std::vector<std::vector<SDL_Surface*>>& variants) {
+    std::uint64_t signature = kSignatureOffset;
+    for (std::size_t variant_idx = 0; variant_idx < variants.size(); ++variant_idx) {
+        signature = mix_signature(signature, static_cast<std::uint64_t>(variant_idx));
+        const auto& stack = variants[variant_idx];
+        signature = mix_signature(signature, static_cast<std::uint64_t>(stack.size()));
+        for (std::size_t frame_idx = 0; frame_idx < stack.size(); ++frame_idx) {
+            signature = mix_signature(signature, static_cast<std::uint64_t>(frame_idx));
+            signature = hash_surface_pixels(stack[frame_idx], signature);
+        }
+    }
+    return signature;
+}
+
+bool read_effect_settings(const nlohmann::json& json, camera_effects::ImageEffectSettings& out) {
+    if (!json.is_object()) {
+        return false;
+    }
+    camera_effects::ImageEffectSettings parsed{};
+    bool wrote_any = false;
+    auto assign_value = [&](const char* key, float& target) -> bool {
+        auto it = json.find(key);
+        if (it == json.end()) {
+            return false;
+        }
+        if (it->is_number_float()) {
+            target = static_cast<float>(it->get<double>());
+        } else if (it->is_number_integer()) {
+            target = static_cast<float>(it->get<int>());
+        } else {
+            return false;
+        }
+        return true;
+    };
+    wrote_any = assign_value("rgb_boost", parsed.rgb_boost) || wrote_any;
+    wrote_any = assign_value("contrast", parsed.contrast) || wrote_any;
+    wrote_any = assign_value("brightness", parsed.brightness) || wrote_any;
+    wrote_any = assign_value("blur", parsed.blur) || wrote_any;
+    bool has_sat_channel = false;
+    has_sat_channel = assign_value("saturation_red", parsed.saturation_red) || has_sat_channel;
+    has_sat_channel = assign_value("saturation_green", parsed.saturation_green) || has_sat_channel;
+    has_sat_channel = assign_value("saturation_blue", parsed.saturation_blue) || has_sat_channel;
+    if (!has_sat_channel) {
+        float legacy = 0.0f;
+        if (assign_value("saturation", legacy)) {
+            parsed.saturation_red = parsed.saturation_green = parsed.saturation_blue = legacy;
+            has_sat_channel = true;
+        }
+    }
+    wrote_any = has_sat_channel || wrote_any;
+    wrote_any = assign_value("hue", parsed.hue) || wrote_any;
+    if (!wrote_any) {
+        return false;
+    }
+    camera_effects::ClampImageEffectSettings(parsed);
+    out = parsed;
+    return true;
+}
+
+std::optional<camera_effects::image_effects::GlobalState> manifest_effect_defaults() {
+    static std::once_flag once;
+    static std::optional<camera_effects::image_effects::GlobalState> cached_state;
+    std::call_once(once, []() {
+        try {
+            manifest::ManifestData manifest_data = manifest::load_manifest();
+            for (auto it = manifest_data.maps.begin(); it != manifest_data.maps.end(); ++it) {
+                if (!it.value().is_object()) {
+                    continue;
+                }
+                const nlohmann::json& map_entry = it.value();
+                auto camera_it = map_entry.find("camera_settings");
+                if (camera_it == map_entry.end() || !camera_it->is_object()) {
+                    continue;
+                }
+                const nlohmann::json& camera_obj = *camera_it;
+                camera_effects::image_effects::GlobalState state{};
+                bool fg_loaded = false;
+                bool bg_loaded = false;
+                auto fg_it = camera_obj.find("foreground_effects");
+                if (fg_it != camera_obj.end()) {
+                    fg_loaded = read_effect_settings(*fg_it, state.foreground);
+                }
+                auto bg_it = camera_obj.find("background_effects");
+                if (bg_it != camera_obj.end()) {
+                    bg_loaded = read_effect_settings(*bg_it, state.background);
+                }
+                if (fg_loaded || bg_loaded) {
+                    if (!fg_loaded) {
+                        state.foreground = camera_effects::ImageEffectSettings{};
+                    }
+                    if (!bg_loaded) {
+                        state.background = camera_effects::ImageEffectSettings{};
+                    }
+                    cached_state = state;
+                    break;
+                }
+            }
+        } catch (const std::exception& ex) {
+            vibble::log::warn(std::string("[RuntimeAssetMerger] Failed to read manifest depth cue defaults: ") + ex.what());
+        } catch (...) {
+            vibble::log::warn("[RuntimeAssetMerger] Failed to read manifest depth cue defaults (unknown error)");
+        }
+    });
+    return cached_state;
+}
+
+camera_effects::image_effects::GlobalState resolve_effect_state() {
+    camera_effects::image_effects::GlobalState state = camera_effects::image_effects::current_state();
+    if (auto defaults = manifest_effect_defaults()) {
+        if (camera_effects::ImageEffectSettingsIsIdentity(state.foreground)) {
+            state.foreground = defaults->foreground;
+        }
+        if (camera_effects::ImageEffectSettingsIsIdentity(state.background)) {
+            state.background = defaults->background;
+        }
+    }
+    return state;
+}
 
 std::optional<AssetInfo::NamedArea::RenderFrame> select_render_frame(const AssetInfo& info) {
     for (const auto& area : info.areas) {
@@ -435,39 +644,197 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
 
     const float camera_scale = camera_ ? static_cast<float>(sanitize_scale(camera_->get_scale())) : 1.0f;
     const std::vector<float> variant_steps = build_variant_steps(camera_scale);
+    const std::size_t variant_count = variant_steps.size();
 
-    std::vector<Animation::FrameCache> caches(1);
-    caches[0].resize(variant_steps.size());
-    std::vector<SDL_Texture*> frames{ composite };
-    std::vector<SDL_Texture*> masks;
-    masks.push_back(composite_mask);
+    std::string merged_name = "runtime_merged";
+    if (samples.front().asset && samples.front().asset->info && !samples.front().asset->info->name.empty()) {
+        merged_name = samples.front().asset->info->name + "_merged";
+    }
 
-    for (std::size_t idx = 0; idx < variant_steps.size(); ++idx) {
-        const float step = variant_steps[idx];
-        SDL_Texture* texture_variant = (idx == 0) ? composite : create_scaled_texture(composite, base_width, base_height, step, true);
-        SDL_Texture* mask_variant = nullptr;
-        if (composite_mask) {
-            mask_variant = (idx == 0) ? composite_mask : create_scaled_texture(composite_mask, base_width, base_height, step, true);
+    const std::string animation_id = "merged_static";
+    const fs::path cache_root = fs::path("cache") / merged_name / "animations" / animation_id;
+
+    CacheManager cache;
+
+    SDL_Surface* base_surface = texture_to_surface(renderer_, composite, base_width, base_height);
+    SDL_Surface* base_mask_surface = composite_mask ? texture_to_surface(renderer_, composite_mask, base_width, base_height) : nullptr;
+    SDL_DestroyTexture(composite);
+    composite = nullptr;
+    if (composite_mask) {
+        SDL_DestroyTexture(composite_mask);
+        composite_mask = nullptr;
+    }
+
+    if (!base_surface) {
+        if (base_mask_surface) {
+            SDL_FreeSurface(base_mask_surface);
         }
+        throw std::runtime_error("Failed to convert merged texture into CPU surface");
+    }
+    if (any_mask && !base_mask_surface) {
+        SDL_FreeSurface(base_surface);
+        throw std::runtime_error("Failed to convert merged mask texture into CPU surface");
+    }
 
-        caches[0].textures[idx] = texture_variant;
-        caches[0].mask_textures[idx] = mask_variant;
+    std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
+    std::vector<std::vector<SDL_Surface*>> mask_surfaces(variant_count);
+    std::vector<std::vector<SDL_Surface*>> foreground_surfaces(variant_count);
+    std::vector<std::vector<SDL_Surface*>> background_surfaces(variant_count);
 
-        if (texture_variant) {
-            int tex_w = 0;
-            int tex_h = 0;
-            SDL_QueryTexture(texture_variant, nullptr, nullptr, &tex_w, &tex_h);
-            caches[0].widths[idx] = tex_w;
-            caches[0].heights[idx] = tex_h;
+    auto cleanup_surfaces = [&]() {
+        free_surface_lists(variant_surfaces);
+        free_surface_lists(mask_surfaces);
+        free_surface_lists(foreground_surfaces);
+        free_surface_lists(background_surfaces);
+    };
+
+    variant_surfaces[0].push_back(base_surface);
+    if (base_mask_surface) {
+        mask_surfaces[0].push_back(base_mask_surface);
+    }
+
+    for (std::size_t idx = 1; idx < variant_count; ++idx) {
+        SDL_Surface* scaled = render_pipeline::CreateScaledSurface(base_surface, variant_steps[idx]);
+        if (!scaled) {
+            cleanup_surfaces();
+            throw std::runtime_error("Failed to scale merged surface variant");
         }
-        if (mask_variant) {
-            int mask_w = 0;
-            int mask_h = 0;
-            SDL_QueryTexture(mask_variant, nullptr, nullptr, &mask_w, &mask_h);
-            caches[0].mask_widths[idx] = mask_w;
-            caches[0].mask_heights[idx] = mask_h;
+        variant_surfaces[idx].push_back(scaled);
+
+        if (base_mask_surface) {
+            SDL_Surface* scaled_mask = render_pipeline::CreateScaledSurface(base_mask_surface, variant_steps[idx]);
+            if (!scaled_mask) {
+                cleanup_surfaces();
+                throw std::runtime_error("Failed to scale merged mask surface");
+            }
+            mask_surfaces[idx].push_back(scaled_mask);
         }
     }
+
+    camera_effects::image_effects::GlobalState effect_state = resolve_effect_state();
+    const std::uint64_t fg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.foreground);
+    const std::uint64_t bg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.background);
+
+    auto build_overlay_stack = [&](const camera_effects::ImageEffectSettings& effects,
+                                   std::vector<std::vector<SDL_Surface*>>& storage,
+                                   const char* label) {
+        for (std::size_t idx = 0; idx < variant_count; ++idx) {
+            storage[idx].resize(1);
+            SDL_Surface* base = variant_surfaces[idx].empty() ? nullptr : variant_surfaces[idx][0];
+            if (!base) {
+                cleanup_surfaces();
+                throw std::runtime_error(std::string("Missing base surface while building ") + label + " overlays");
+            }
+            SDL_Surface* copy = duplicate_surface(base);
+            if (!copy) {
+                cleanup_surfaces();
+                throw std::runtime_error(std::string("Failed to duplicate surface for ") + label + " overlay");
+            }
+            if (!image_effects::ApplyImageEffectsToSurface(copy, effects)) {
+                SDL_FreeSurface(copy);
+                cleanup_surfaces();
+                throw std::runtime_error(std::string("Failed to apply image effects for ") + label + " overlay");
+            }
+            storage[idx][0] = copy;
+        }
+    };
+
+    build_overlay_stack(effect_state.foreground, foreground_surfaces, "foreground");
+    build_overlay_stack(effect_state.background, background_surfaces, "background");
+
+    const std::vector<int> percent_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps);
+    const std::string cache_root_str = cache_root.string();
+
+    auto save_stack = [&](const std::string& folder, const std::vector<SDL_Surface*>& stack, const char* label) {
+        if (!cache.save_surface_sequence(folder, stack)) {
+            cleanup_surfaces();
+            throw std::runtime_error(std::string("Failed to save ") + label + " surfaces to '" + folder + "'");
+        }
+    };
+
+    for (std::size_t idx = 0; idx < variant_count; ++idx) {
+        const std::string scale_folder = render_pipeline::ScalingLogic::VariantFolder(cache_root_str, variant_steps, idx);
+        const fs::path scale_root(scale_folder);
+        const std::string normal_folder = (scale_root / "normal").string();
+        const std::string foreground_folder = (scale_root / "foreground").string();
+        const std::string background_folder = (scale_root / "background").string();
+
+        save_stack(normal_folder, variant_surfaces[idx], "normal");
+        save_stack(foreground_folder, foreground_surfaces[idx], "foreground");
+        save_stack(background_folder, background_surfaces[idx], "background");
+    }
+
+    nlohmann::json metadata;
+    metadata["cache_version"] = kAnimationCacheVersion;
+    metadata["frame_count"] = 1;
+    metadata["original_width"] = base_width;
+    metadata["original_height"] = base_height;
+    nlohmann::json steps_json = nlohmann::json::array();
+    for (int step : percent_steps) {
+        steps_json.push_back(step);
+    }
+    metadata["scale_steps"] = std::move(steps_json);
+    metadata["scale_profile_revision"] = static_cast<std::uint64_t>(0);
+    metadata["has_masks"] = (base_mask_surface != nullptr);
+    metadata["foreground_effect_hash"] = fg_effect_hash;
+    metadata["background_effect_hash"] = bg_effect_hash;
+    metadata["source_signature"] = compute_surface_signature(variant_surfaces);
+    CacheManager::save_metadata((cache_root / "metadata.json").string(), metadata);
+
+    std::vector<Animation::FrameCache> caches(1);
+    caches[0].resize(variant_count);
+    std::vector<SDL_Texture*> frames;
+    frames.reserve(1);
+    std::vector<SDL_Texture*> masks;
+    masks.reserve(1);
+
+    auto surface_to_texture_checked = [&](SDL_Surface* surface, const char* context, bool required) -> SDL_Texture* {
+        if (!surface) {
+            if (required) {
+                cleanup_surfaces();
+                throw std::runtime_error(std::string("Missing surface for ") + context);
+            }
+            return nullptr;
+        }
+        SDL_Texture* tex = CacheManager::surface_to_texture(renderer_, surface);
+        if (!tex) {
+            cleanup_surfaces();
+            throw std::runtime_error(std::string("Failed to convert ") + context + " surface to texture");
+        }
+        return tex;
+    };
+
+    for (std::size_t idx = 0; idx < variant_count; ++idx) {
+        SDL_Surface* sprite_surface = variant_surfaces[idx].empty() ? nullptr : variant_surfaces[idx][0];
+        SDL_Texture* frame_texture = surface_to_texture_checked(sprite_surface, "sprite", true);
+        caches[0].textures[idx] = frame_texture;
+        caches[0].widths[idx] = sprite_surface->w;
+        caches[0].heights[idx] = sprite_surface->h;
+        if (idx == 0) {
+            frames.push_back(frame_texture);
+        }
+
+        SDL_Surface* mask_surface = mask_surfaces[idx].empty() ? nullptr : mask_surfaces[idx][0];
+        SDL_Texture* mask_texture = surface_to_texture_checked(mask_surface, "mask", false);
+        if (mask_surface) {
+            caches[0].mask_widths[idx] = mask_surface->w;
+            caches[0].mask_heights[idx] = mask_surface->h;
+        } else {
+            caches[0].mask_widths[idx] = 0;
+            caches[0].mask_heights[idx] = 0;
+        }
+        caches[0].mask_textures[idx] = mask_texture;
+        if (idx == 0) {
+            masks.push_back(mask_texture);
+        }
+
+        SDL_Surface* fg_surface = foreground_surfaces[idx].empty() ? nullptr : foreground_surfaces[idx][0];
+        SDL_Surface* bg_surface = background_surfaces[idx].empty() ? nullptr : background_surfaces[idx][0];
+        caches[0].foreground_textures[idx] = surface_to_texture_checked(fg_surface, "foreground overlay", true);
+        caches[0].background_textures[idx] = surface_to_texture_checked(bg_surface, "background overlay", true);
+    }
+
+    cleanup_surfaces();
 
     Animation animation;
     animation.adopt_prebuilt_frames(std::move(caches), std::move(frames), std::move(masks), variant_steps);
@@ -485,17 +852,12 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     path[0].next = nullptr;
     path[0].prev = nullptr;
     path[0].base_texture = animation.frame_variant(0, 0);
-    path[0].depthcue_foreground_texture = animation.depthcue_foreground_variant(0, 0);
-    path[0].depthcue_background_texture = animation.depthcue_background_variant(0, 0);
-
-    std::string merged_name = "runtime_merged";
-    if (samples.front().asset && samples.front().asset->info && !samples.front().asset->info->name.empty()) {
-        merged_name = samples.front().asset->info->name + "_merged";
-    }
+    path[0].foreground_texture = animation.foreground_variant(0, 0);
+    path[0].background_texture = animation.background_variant(0, 0);
 
     TemporaryMergedAssetInfo info_builder(merged_name);
     info_builder.set_geometry(base_width, base_height, pivot, local_polygon);
-    info_builder.set_animation("merged_static", std::move(animation));
+    info_builder.set_animation(animation_id, std::move(animation));
 
     for (const auto& sample : samples) {
         info_builder.absorb(*sample.asset, merged_origin);

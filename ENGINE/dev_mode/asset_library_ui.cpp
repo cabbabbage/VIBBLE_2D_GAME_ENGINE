@@ -925,7 +925,9 @@ void AssetLibraryUI::toggle() {
     floating_->set_visible(should_show);
     if (should_show) {
         floating_->set_expanded(true);
-    }
+            // Ensure at least header controls render immediately
+        rebuild_rows();
+}
 }
 
 bool AssetLibraryUI::is_visible() const { return floating_ && floating_->is_visible(); }
@@ -935,7 +937,9 @@ void AssetLibraryUI::open() {
     if (floating_) {
         floating_->set_visible(true);
         floating_->set_expanded(true);
-    }
+            // Build initial rows so the body isn't empty before first update()
+        rebuild_rows();
+}
 }
 
 void AssetLibraryUI::close() {
@@ -2297,4 +2301,23 @@ bool AssetLibraryUI::is_input_blocking_at(int mx, int my) const {
 
 bool AssetLibraryUI::is_dragging_asset() const {
     return false;
+}
+
+// Panel state helpers declared in the header
+void AssetLibraryUI::set_position(int x, int y) {
+    if (floating_) {
+        floating_->set_position(x, y);
+    }
+}
+
+void AssetLibraryUI::set_expanded(bool e) {
+    if (floating_) {
+        floating_->set_expanded(e);
+        // Keep rows consistent with expanded state
+        rebuild_rows();
+    }
+}
+
+bool AssetLibraryUI::is_expanded() const {
+    return floating_ && floating_->is_expanded();
 }

@@ -1132,6 +1132,9 @@ void Assets::update(const Input& input)
         dev_controls_->set_active_assets(filtered_active_assets);
         sync_dev_controls_current_room(current_room_);
         dev_controls_->update(input);
+        // Update dev-mode UI panels (e.g., asset library, camera panel) after world state
+        // has been processed so their layouts and button states stay in sync.
+        dev_controls_->update_ui(input);
     }
 
     // Apply pending static registrations/removals before querying the grid.

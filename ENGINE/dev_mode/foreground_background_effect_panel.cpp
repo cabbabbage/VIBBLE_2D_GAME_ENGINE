@@ -689,15 +689,44 @@ void ForegroundBackgroundEffectPanel::purge_mismatched_caches(std::uint64_t fg_h
             if (!CacheManager::load_metadata(meta_path.generic_string(), meta)) {
                 continue;
             }
-            const std::uint64_t stored_fg = meta.value("depthcue_foreground_hash", 0ull);
-            const std::uint64_t stored_bg = meta.value("depthcue_background_hash", 0ull);
-            if (!force_purge && stored_fg == fg_hash && stored_bg == bg_hash) {
+            auto read_hash = [&](const char* key, std::uint64_t& value) -> bool {
+                if (!meta.contains(key)) {
+                    return false;
+                }
+                const auto& node = meta.at(key);
+                if (!node.is_number_integer() && !node.is_number_unsigned()) {
+                    return false;
+                }
+                try {
+                    value = node.get<std::uint64_t>();
+                } catch (...) {
+                    return false;
+                }
+                return true;
+            };
+            std::uint64_t stored_fg = 0;
+            std::uint64_t stored_bg = 0;
+            const bool has_fg = read_hash("foreground_effect_hash", stored_fg);
+            const bool has_bg = read_hash("background_effect_hash", stored_bg);
+            const bool hashes_match = has_fg && has_bg && stored_fg == fg_hash && stored_bg == bg_hash;
+            if (!force_purge && hashes_match) {
                 continue;
             }
-            std::error_code remove_ec;
-            fs::remove_all(anim_entry.path() / "foreground", remove_ec);
-            remove_ec.clear();
-            fs::remove_all(anim_entry.path() / "background", remove_ec);
+
+            std::error_code scale_ec;
+            for (const auto& scale_entry : fs::directory_iterator(anim_entry.path(), scale_ec)) {
+                if (!scale_entry.is_directory()) {
+                    continue;
+                }
+                const std::string dir_name = scale_entry.path().filename().string();
+                if (dir_name.rfind("scale_", 0) != 0) {
+                    continue;
+                }
+                std::error_code remove_ec;
+                fs::remove_all(scale_entry.path() / "foreground", remove_ec);
+                remove_ec.clear();
+                fs::remove_all(scale_entry.path() / "background", remove_ec);
+            }
         }
     }
 }

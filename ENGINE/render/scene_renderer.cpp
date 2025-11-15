@@ -696,23 +696,8 @@ void SceneRenderer::render(){
                 SDL_FPoint screen_pos = camera_state->map_to_screen_f(SDL_FPoint{ wx, wy });
                 const float screen_y = screen_pos.y;
                 const AnimationFrame* frame_ptr = asset ? asset->current_animation_frame() : nullptr;
-                SDL_Texture* fg_overlay = frame_ptr ? frame_ptr->depthcue_foreground_texture : nullptr;
-                SDL_Texture* bg_overlay = frame_ptr ? frame_ptr->depthcue_background_texture : nullptr;
-                const Animation* current_anim = nullptr;
-                if ((!fg_overlay || !bg_overlay) && asset && asset->info) {
-                    auto anim_it = asset->info->animations.find(asset->current_animation);
-                    if (anim_it != asset->info->animations.end()) {
-                        current_anim = &anim_it->second;
-                    }
-                }
-                if (current_anim && frame_ptr) {
-                    if (!fg_overlay) {
-                        fg_overlay = current_anim->depthcue_foreground_texture(frame_ptr);
-                    }
-                    if (!bg_overlay) {
-                        bg_overlay = current_anim->depthcue_background_texture(frame_ptr);
-                    }
-                }
+                SDL_Texture* fg_overlay = frame_ptr ? frame_ptr->get_foreground_texture() : nullptr;
+                SDL_Texture* bg_overlay = frame_ptr ? frame_ptr->get_background_texture() : nullptr;
                 const DepthCueSample depth_sample = depth_sample_for(screen_y);
                 if (depth_sample.plane != DepthCuePlane::None) {
                     if (depth_sample.plane == DepthCuePlane::Foreground && fg_overlay && fg_max_opacity > 0) {
@@ -736,7 +721,6 @@ void SceneRenderer::render(){
                             cmd.depthcue_background_texture = bg_overlay;
                         }
                 }
-            }
             }
 
             auto& target_commands = (asset->info->type == asset_types::texture) ? texture_commands_ : remaining_commands_;
@@ -818,10 +802,10 @@ void SceneRenderer::render(){
                         return false;
                     }
                     const auto& attachment = child_slots[child_index];
-                    if (!attachment.visible || !attachment.animation || !attachment.current_frame) {
+                    if (!attachment.visible || !attachment.current_frame) {
                         return false;
                     }
-                    SDL_Texture* child_tex = attachment.animation->get_frame(attachment.current_frame);
+                    SDL_Texture* child_tex = attachment.current_frame->get_base_texture();
                     if (!child_tex) {
                         return false;
                     }
