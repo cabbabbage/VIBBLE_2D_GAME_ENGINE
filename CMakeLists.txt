@@ -184,6 +184,7 @@ add_executable(engine_tests
     TESTS/test_scene_renderer_prereqs.cpp
     TESTS/test_animation_child_visibility.cpp
     TESTS/test_animation_child_runtime.cpp
+    ENGINE/asset/animation.cpp
     ENGINE/animation_update/child_attachment_controller.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/core/manifest/manifest_loader.cpp
