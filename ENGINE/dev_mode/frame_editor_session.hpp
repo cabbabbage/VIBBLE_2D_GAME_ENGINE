@@ -110,6 +110,11 @@ private:
     mutable std::unique_ptr<DMButton> btn_hit_geometry_;
     mutable std::unique_ptr<DMButton> btn_prev_;
     mutable std::unique_ptr<DMButton> btn_next_;
+    // Apply-to-all buttons per-mode
+    mutable std::unique_ptr<class DMButton> btn_apply_all_movement_;
+    mutable std::unique_ptr<class DMButton> btn_apply_all_children_;
+    mutable std::unique_ptr<class DMButton> btn_apply_all_hit_;
+    mutable std::unique_ptr<class DMButton> btn_apply_all_attack_;
     mutable std::unique_ptr<class DMCheckbox> cb_smooth_;
     mutable std::unique_ptr<class DMCheckbox> cb_curve_;
     mutable std::unique_ptr<class DMCheckbox> cb_show_anim_;
@@ -230,6 +235,7 @@ private:
 private:
     void ensure_widgets() const;
     void rebuild_layout() const;
+    void apply_current_mode_to_all_frames();
     void apply_frame_move_from_base(int index, SDL_FPoint desired_rel, const std::vector<SDL_FPoint>& base_rel);
     void redistribute_frames_from_middle_drag(int adjusted_index);
     // Redistribute points after any adjustment. Keeps first and last fixed, and

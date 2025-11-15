@@ -614,13 +614,13 @@ void FrameEditorSession::update(const Input& input) {
         end();
         return;
     }
-    // Enable mouse wheel zoom and allow panning while editing
+    // Enable mouse wheel zoom; disable click-drag panning while editing
     if (assets_) {
         camera& cam = assets_->getView();
         // Make sure layout is up to date before computing any UI blocking logic (future use)
         ensure_widgets();
         rebuild_layout();
-        const bool pan_blocked = false; // allow left-drag panning during frame edit session
+        const bool pan_blocked = true; // block left-drag panning during frame edit session
         pan_zoom_.handle_input(cam, input, pan_blocked);
     }
     // Ensure the asset frame reflects selection
@@ -873,6 +873,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 guard_widget(cb_show_anim_.get());
                 guard_widget(tb_total_dx_.get());
                 guard_widget(tb_total_dy_.get());
+                if (mode_ == Mode::Movement) guard_widget(btn_apply_all_movement_.get());
             }
             if (mode_ == Mode::Children) {
                 guard_widget(dd_child_select_.get());
@@ -882,6 +883,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 guard_widget(tb_child_deg_.get());
                 guard_widget(cb_child_visible_.get());
                 guard_widget(cb_child_render_front_.get());
+                guard_widget(btn_apply_all_children_.get());
             }
             if (mode_ == Mode::HitGeometry) {
                 guard_widget(dd_hitbox_type_.get());
@@ -892,6 +894,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 guard_widget(tb_hit_width_.get());
                 guard_widget(tb_hit_height_.get());
                 guard_widget(tb_hit_rotation_.get());
+                guard_widget(btn_apply_all_hit_.get());
             } else if (mode_ == Mode::AttackGeometry) {
                 guard_widget(dd_attack_type_.get());
                 guard_widget(btn_attack_add_remove_.get());
@@ -903,6 +906,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 guard_widget(tb_attack_end_x_.get());
                 guard_widget(tb_attack_end_y_.get());
                 guard_widget(tb_attack_damage_.get());
+                guard_widget(btn_apply_all_attack_.get());
             }
             if (!over_interactive) {
                 dragging_toolbox_ = true;
@@ -984,6 +988,10 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 this->copy_hit_box_to_next_frame();
                 this->refresh_hitbox_form();
             })) return true;
+        if (handle_button(btn_apply_all_hit_, [this]() {
+                this->apply_current_mode_to_all_frames();
+                this->refresh_hitbox_form();
+            })) return true;
     } else if (mode_ == Mode::AttackGeometry) {
         if (handle_button(btn_attack_add_remove_, [this]() {
                 const std::string type = this->current_attack_type();
@@ -999,6 +1007,10 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         if (handle_button(btn_attack_copy_next_, [this]() {
                 this->end_attack_drag(false);
                 this->copy_attack_vector_to_next_frame();
+                this->refresh_attack_form();
+            })) return true;
+        if (handle_button(btn_apply_all_attack_, [this]() {
+                this->apply_current_mode_to_all_frames();
                 this->refresh_attack_form();
             })) return true;
     }
@@ -1063,6 +1075,13 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             }
         }
         if (consumed_tb) return true;
+        // Apply current settings to all frames
+        if (mode_ == Mode::Movement) {
+            if (handle_button(btn_apply_all_movement_, [this]() { this->apply_current_mode_to_all_frames(); })) return true;
+        }
+        if (mode_ == Mode::Children) {
+            if (handle_button(btn_apply_all_children_, [this]() { this->apply_current_mode_to_all_frames(); })) return true;
+        }
         // If we are in Children mode, do not fall-through; movement controls handled above
         if (mode_ == Mode::Movement) {
             // continue to other handlers below
@@ -1613,6 +1632,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         if (cb_show_anim_) cb_show_anim_->render(renderer);
         if (tb_total_dx_) tb_total_dx_->render(renderer);
         if (tb_total_dy_) tb_total_dy_->render(renderer);
+        if (btn_apply_all_movement_) btn_apply_all_movement_->render(renderer);
     } else if (mode_ == Mode::Children && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         // Movement controls row (shared)
@@ -1628,6 +1648,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         if (tb_child_deg_) tb_child_deg_->render(renderer);
         if (cb_child_visible_) cb_child_visible_->render(renderer);
         if (cb_child_render_front_) cb_child_render_front_->render(renderer);
+        if (btn_apply_all_children_) btn_apply_all_children_->render(renderer);
     } else if (mode_ == Mode::HitGeometry && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         if (dd_hitbox_type_) dd_hitbox_type_->render(renderer);
@@ -1638,6 +1659,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         if (tb_hit_width_) tb_hit_width_->render(renderer);
         if (tb_hit_height_) tb_hit_height_->render(renderer);
         if (tb_hit_rotation_) tb_hit_rotation_->render(renderer);
+        if (btn_apply_all_hit_) btn_apply_all_hit_->render(renderer);
     } else if (mode_ == Mode::AttackGeometry && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         if (dd_attack_type_) dd_attack_type_->render(renderer);
@@ -1650,6 +1672,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         if (tb_attack_end_x_) tb_attack_end_x_->render(renderer);
         if (tb_attack_end_y_) tb_attack_end_y_->render(renderer);
         if (tb_attack_damage_) tb_attack_damage_->render(renderer);
+        if (btn_apply_all_attack_) btn_apply_all_attack_->render(renderer);
     }
 
     // Navigation panel
@@ -1743,6 +1766,10 @@ void FrameEditorSession::ensure_widgets() const {
     if (!btn_hit_geometry_) btn_hit_geometry_ = std::make_unique<DMButton>("Hit Geometry", mode_ == Mode::HitGeometry ? &tab_active : &header, bw, bh);
     if (!btn_prev_) btn_prev_ = std::make_unique<DMButton>("<", &header, 40, 40);
     if (!btn_next_) btn_next_ = std::make_unique<DMButton>(">", &header, 40, 40);
+    if (!btn_apply_all_movement_) btn_apply_all_movement_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
+    if (!btn_apply_all_children_) btn_apply_all_children_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
+    if (!btn_apply_all_hit_) btn_apply_all_hit_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
+    if (!btn_apply_all_attack_) btn_apply_all_attack_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
     if (!cb_smooth_) cb_smooth_ = std::make_unique<DMCheckbox>("Smooth", smooth_enabled_);
     if (!cb_curve_) cb_curve_ = std::make_unique<DMCheckbox>("Curve", curve_enabled_);
     const bool want_parent_label = (mode_ == Mode::Children);
@@ -1946,6 +1973,12 @@ void FrameEditorSession::rebuild_layout() const {
                 const int x = reserve(metrics.totals_width);
                 tb_total_dy_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
             }
+            // Bottom-row: Apply-to-all button spans full width
+            if (btn_apply_all_movement_) {
+                const int inner_w = std::max(0, toolbox_rect_.w - metrics.padding * 2);
+                const int y = row_top + metrics.row_height + metrics.gap;
+                btn_apply_all_movement_->set_rect(SDL_Rect{ toolbox_rect_.x + metrics.padding, y, inner_w, DMButton::height() });
+            }
         }
     } else if (mode_ == Mode::Children) {
         ChildrenToolboxMetrics metrics = build_children_toolbox_metrics();
@@ -2068,6 +2101,14 @@ void FrameEditorSession::rebuild_layout() const {
                     place_checkbox(cb_child_render_front_.get(), metrics.child_render_checkbox_width);
                 }
             }
+
+            // Apply-to-all button at bottom
+            if (btn_apply_all_children_) {
+                const int apply_top = allocate_row(DMButton::height());
+                if (apply_top >= 0) {
+                    btn_apply_all_children_->set_rect(SDL_Rect{ row_left, apply_top, content_width, DMButton::height() });
+                }
+            }
         }
     } else if (mode_ == Mode::HitGeometry) {
         const int padding = DMSpacing::small_gap();
@@ -2110,6 +2151,9 @@ void FrameEditorSession::rebuild_layout() const {
         if (tb_hit_rotation_) {
             const int rot_height = tb_hit_rotation_->height_for_width(inner_width);
             tb_hit_rotation_->set_rect(place_row(rot_height));
+        }
+        if (btn_apply_all_hit_) {
+            btn_apply_all_hit_->set_rect(place_row(DMButton::height()));
         }
         int total_height = content_y > padding ? content_y - gap + padding : padding * 2;
         toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, width, total_height };
@@ -2155,6 +2199,9 @@ void FrameEditorSession::rebuild_layout() const {
         if (tb_attack_damage_) {
             const int dmg_height = tb_attack_damage_->height_for_width(inner_width);
             tb_attack_damage_->set_rect(place_row(dmg_height));
+        }
+        if (btn_apply_all_attack_) {
+            btn_apply_all_attack_->set_rect(place_row(DMButton::height()));
         }
         int total_height = content_y > padding ? content_y - gap + padding : padding * 2;
         toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, width, total_height };
@@ -2304,7 +2351,8 @@ FrameEditorSession::MovementToolboxMetrics FrameEditorSession::build_movement_to
         return metrics;
     }
     metrics.width = row_width + metrics.padding * 2;
-    metrics.height = metrics.row_height + metrics.padding * 2;
+    // Include bottom row for the Apply-to-all button
+    metrics.height = metrics.row_height + metrics.gap + DMButton::height() + metrics.padding * 2;
     return metrics;
 }
 
@@ -2426,6 +2474,8 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     add_row(metrics.movement_row_height);
     add_row(metrics.toggle_row_height);
     add_row(metrics.form_row_height);
+    // Add bottom Apply-to-all button row
+    add_row(DMButton::height());
     return metrics;
 }
 
@@ -2631,6 +2681,75 @@ void FrameEditorSession::copy_hit_box_to_next_frame() {
         *dest = *source;
     }
     persist_changes();
+}
+
+void FrameEditorSession::apply_current_mode_to_all_frames() {
+    if (frames_.empty()) return;
+    switch (mode_) {
+        case Mode::Movement: {
+            const int idx = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+            const MovementFrame src = frames_[idx];
+            for (size_t i = 1; i < frames_.size(); ++i) { // skip first frame which is fixed at 0,0
+                frames_[i].dx = src.dx;
+                frames_[i].dy = src.dy;
+                frames_[i].resort_z = src.resort_z;
+            }
+            rebuild_rel_positions();
+            persist_mode_changes(Mode::Movement);
+            persist_changes();
+            break;
+        }
+        case Mode::Children: {
+            if (child_assets_.empty()) break;
+            const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+            const auto& frame = frames_[frame_index];
+            const int child_index = std::clamp(selected_child_index_, 0, static_cast<int>(frame.children.size()) - 1);
+            const ChildFrame src = frame.children.empty() ? ChildFrame{} : frame.children[child_index];
+            for (auto& f : frames_) {
+                if (child_index >= 0 && child_index < static_cast<int>(f.children.size())) {
+                    auto& d = f.children[child_index];
+                    d.dx = src.dx;
+                    d.dy = src.dy;
+                    d.degree = src.degree;
+                    d.visible = src.visible;
+                    d.render_in_front = src.render_in_front;
+                }
+            }
+            persist_mode_changes(Mode::Children);
+            persist_changes();
+            break;
+        }
+        case Mode::HitGeometry: {
+            const std::string type = current_hitbox_type();
+            const auto* source = current_hit_box();
+            for (auto& f : frames_) {
+                auto& boxes = f.hit.boxes;
+                boxes.erase(std::remove_if(boxes.begin(), boxes.end(), [&](const auto& b) { return b.type == type; }), boxes.end());
+                if (source) {
+                    boxes.push_back(*source);
+                }
+            }
+            refresh_hitbox_form();
+            persist_mode_changes(Mode::HitGeometry);
+            persist_changes();
+            break;
+        }
+        case Mode::AttackGeometry: {
+            const std::string type = current_attack_type();
+            const auto* source = current_attack_vector();
+            for (auto& f : frames_) {
+                auto& vecs = f.attack.vectors;
+                vecs.erase(std::remove_if(vecs.begin(), vecs.end(), [&](const auto& v) { return v.type == type; }), vecs.end());
+                if (source) {
+                    vecs.push_back(*source);
+                }
+            }
+            refresh_attack_form();
+            persist_mode_changes(Mode::AttackGeometry);
+            persist_changes();
+            break;
+        }
+    }
 }
 
 float FrameEditorSession::asset_local_scale() const {

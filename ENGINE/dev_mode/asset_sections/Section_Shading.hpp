@@ -124,13 +124,9 @@ public:
         if (shading_enabled_checkbox_) {
             const bool wants_shading = shading_enabled_checkbox_->value();
             if (wants_shading != was_shaded) {
+                // Update in-memory state only; defer saving and regeneration to the button.
                 info_->set_shading_enabled(wants_shading);
-                (void)info_->commit_manifest();
                 shading_changed = true;
-                if (ui_) {
-                    ui_->notify_light_sources_modified(true);
-                    ui_->regenerate_shadow_masks();
-                }
             }
         }
 
@@ -167,11 +163,8 @@ public:
         const bool changed = !nearly_equal(previous.expansion_ratio, updated.expansion_ratio) || !nearly_equal(previous.blur_scale, updated.blur_scale) || !nearly_equal(previous.falloff_start, updated.falloff_start) || !nearly_equal(previous.falloff_exponent, updated.falloff_exponent) || !nearly_equal(previous.alpha_multiplier, updated.alpha_multiplier);
 
         if (changed) {
+            // Update in-memory state only; defer saving and regeneration to the button.
             info_->set_shadow_mask_settings(updated);
-            (void)info_->commit_manifest();
-            if (ui_) {
-                ui_->regenerate_shadow_masks();
-            }
         }
 
         return used || changed || shading_changed;

@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:33:02Z",
+        "generated_at": "2025-11-15T10:42:12Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:33:02Z",
+        "generated_at": "2025-11-15T10:42:12Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:33:02Z",
+        "generated_at": "2025-11-15T10:42:12Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -604,7 +604,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:33:02Z",
+        "generated_at": "2025-11-15T10:42:12Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -734,7 +734,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:33:02Z",
+        "generated_at": "2025-11-15T10:42:12Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.8658008575439453,
         "recommended_percentages": [
@@ -757,6 +757,162 @@
       },
       "start": "default",
       "tags": [],
+      "update_radius": 0
+    },
+    "grass_3": {
+      "animations": {
+        "default": {
+          "flipped_source": false,
+          "fps": 24,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_factor": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/grass_3",
+      "asset_name": "grass_3",
+      "asset_type": "texture",
+      "can_invert": true,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-15T10:42:12Z",
+        "max_scale": 0.05000000074505806,
+        "min_scale": 0.05000000074505806,
+        "recommended_percentages": [
+          100,
+          5,
+          5
+        ],
+        "recommended_steps": [
+          1.0,
+          0.05000000074505806,
+          0.05000000074505806
+        ],
+        "revision": 13423956906630168268,
+        "screen_aspect": 1.6
+      },
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "size_settings": {
+        "scale_percentage": 2.0
+      },
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tileable": true,
+      "tillable": true,
+      "update_radius": 0
+    },
+    "grass_4": {
+      "animations": {
+        "default": {
+          "flipped_source": false,
+          "fps": 24,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_factor": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/grass_4",
+      "asset_name": "grass_4",
+      "asset_type": "texture",
+      "can_invert": true,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-15T10:42:12Z",
+        "max_scale": 0.05000000074505806,
+        "min_scale": 0.05000000074505806,
+        "recommended_percentages": [
+          100,
+          5,
+          5
+        ],
+        "recommended_steps": [
+          1.0,
+          0.05000000074505806,
+          0.05000000074505806
+        ],
+        "revision": 7918394409082037345,
+        "screen_aspect": 1.6
+      },
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "size_settings": {
+        "scale_percentage": 2.0
+      },
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tileable": true,
+      "tillable": true,
       "update_radius": 0
     },
     "lantern": {
@@ -886,7 +1042,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T10:33:02Z",
+        "generated_at": "2025-11-15T10:42:12Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -1103,16 +1259,24 @@
           {
             "candidates": [
               {
-                "chance": 7,
+                "chance": 5,
                 "name": "null"
               },
               {
-                "chance": 5.3500000000000005,
+                "chance": 1.3500000000000005,
                 "name": "Grass_1"
               },
               {
-                "chance": 5.3500000000000005,
+                "chance": 1.3500000000000005,
                 "name": "Grass_2"
+              },
+              {
+                "chance": 2,
+                "name": "grass_3"
+              },
+              {
+                "chance": 2,
+                "name": "grass_4"
               }
             ],
             "display_name": "batch_map_assets",
@@ -1399,9 +1563,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            75,
             242,
             36,
-            115,
             255
           ],
           "edge_smoothness": 43,
@@ -1452,8 +1616,8 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            37,
             36,
+            238,
             242,
             255
           ],
@@ -2014,6 +2178,239 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-test-Vibble"
+            }
+          ]
+        }
+      },
+      "trails_data": {
+        "basic": {
+          "display_color": [
+            85,
+            242,
+            143,
+            255
+          ],
+          "edge_smoothness": 2,
+          "geometry": "Line",
+          "inherits_map_assets": false,
+          "is_boss": false,
+          "is_spawn": false,
+          "max_height": 800,
+          "max_width": 800,
+          "min_height": 400,
+          "min_width": 400,
+          "name": "basic",
+          "spawn_groups": []
+        }
+      }
+    },
+    "test2": {
+      "audio": {
+        "music": {
+          "content_root": "content/test2/music",
+          "tracks": []
+        }
+      },
+      "camera_settings": {
+        "background_effects": {
+          "blur": 0.0,
+          "brightness": 0.0,
+          "contrast": 0.0,
+          "hue": 0.0,
+          "rgb_boost": 0.0,
+          "saturation": 0.0,
+          "saturation_blue": 0.0,
+          "saturation_green": 0.0,
+          "saturation_red": 0.0
+        },
+        "background_plane_screen_y": 0.0,
+        "background_texture_max_opacity": 0,
+        "distance_scale_strength": 0.10000000149011612,
+        "foreground_effects": {
+          "blur": 0.0,
+          "brightness": 0.0,
+          "contrast": 0.0,
+          "hue": 0.0,
+          "rgb_boost": 0.0,
+          "saturation": 0.0,
+          "saturation_blue": 0.0,
+          "saturation_green": 0.0,
+          "saturation_red": 0.0
+        },
+        "foreground_plane_screen_y": 1080.0,
+        "foreground_texture_max_opacity": 0,
+        "foreshorten_strength": 0.5,
+        "height_at_zoom1": 320.0,
+        "max_zoom_multiplier": 3.0,
+        "min_visible_screen_ratio": 0.009999999776482582,
+        "min_zoom_multiplier": 0.75,
+        "motion_smoothing_max_step": 8000.0,
+        "motion_smoothing_method": 1,
+        "motion_smoothing_snap_threshold": 0.25,
+        "motion_smoothing_spring_frequency": 0.0,
+        "motion_smoothing_tau": 0.0,
+        "parallax_smoothing_lerp_rate": 0.0,
+        "parallax_smoothing_max_step": 8000.0,
+        "parallax_smoothing_method": 2,
+        "parallax_smoothing_snap_threshold": 0.5,
+        "parallax_smoothing_spring_frequency": 6.0,
+        "parallax_strength": 45.0,
+        "realism_enabled": true,
+        "render_quality_percent": 75,
+        "scale_hysteresis_margin": 0.05000000074505806,
+        "smooth_motion_zoom": true,
+        "texture_opacity_falloff_method": 0,
+        "tripod_distance_y": -860.0
+      },
+      "content_root": "content/test2",
+      "map_assets_data": {
+        "spawn_groups": [
+          {
+            "candidates": [
+              {
+                "chance": 100,
+                "name": "null"
+              }
+            ],
+            "display_name": "batch_map_assets",
+            "enforce_spacing": false,
+            "explicit_flip": false,
+            "force_flipped": false,
+            "grid_resolution": 6,
+            "locked": false,
+            "max_number": 1,
+            "min_number": 1,
+            "position": "Random",
+            "priority": 0,
+            "resolution": 0,
+            "resolve_geometry_to_room_size": false,
+            "resolve_quantity_to_room_size": false,
+            "spawn_id": "spn-test2-map_assets"
+          }
+        ]
+      },
+      "map_boundary_data": {
+        "inherits_map_assets": false,
+        "spawn_groups": [
+          {
+            "candidates": [
+              {
+                "chance": 100,
+                "name": "null"
+              }
+            ],
+            "display_name": "batch_map_boundary",
+            "enforce_spacing": false,
+            "grid_resolution": 6,
+            "max_number": 0,
+            "min_number": 0,
+            "position": "Random",
+            "priority": 0,
+            "resolution": 0,
+            "resolve_geometry_to_room_size": false,
+            "resolve_quantity_to_room_size": false,
+            "spawn_id": "spn-test2-map_boundary"
+          }
+        ]
+      },
+      "map_grid_settings": {
+        "chunk_size": 64,
+        "jitter": 0,
+        "r_chunk": 6,
+        "resolution": 6,
+        "spacing": 64
+      },
+      "map_layers": [
+        {
+          "bounding_extent": 1500.0,
+          "level": 0,
+          "max_rooms": 1,
+          "min_rooms": 1,
+          "name": "layer_0",
+          "ring_radius": 0.0,
+          "rooms": [
+            {
+              "max_instances": 1,
+              "min_instances": 1,
+              "name": "spawn",
+              "required_children": []
+            }
+          ]
+        }
+      ],
+      "map_layers_settings": {
+        "min_edge_distance": 200
+      },
+      "map_name": "test2",
+      "reactive_shadows": {
+        "frame_blend_falloff_frames": 15,
+        "opacity_sensitivity_percent": 100.0,
+        "opacity_strength": 1.0,
+        "sampling_weights": {
+          "dynamic_weight": 1.0,
+          "static_weight": 0.0
+        },
+        "shadow_lut": [
+          {
+            "brightness": 0.0,
+            "offset": 0.0,
+            "opacity": 1.0,
+            "scale": 1.0
+          }
+        ]
+      },
+      "rooms_data": {
+        "spawn": {
+          "areas": [],
+          "curvyness": 2,
+          "display_color": [
+            242,
+            36,
+            36,
+            255
+          ],
+          "edge_smoothness": 2,
+          "geometry": "Circle",
+          "inherits_map_assets": true,
+          "is_boss": false,
+          "is_spawn": true,
+          "max_height": 3000,
+          "max_radius": 1500,
+          "max_width": 3000,
+          "min_height": 3000,
+          "min_radius": 1500,
+          "min_width": 3000,
+          "name": "spawn",
+          "radius": 1500,
+          "spawn_groups": [
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Vibble"
+                }
+              ],
+              "display_name": "Vibble",
+              "dx": 0,
+              "dy": 0,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 3000,
+              "origional_width": 3000,
+              "position": "Exact",
+              "priority": 0,
+              "resolution": 6,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-test2-Vibble"
             }
           ]
         }

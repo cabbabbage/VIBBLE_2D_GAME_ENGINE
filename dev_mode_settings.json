@@ -4,7 +4,7 @@
             "current_room": true,
             "filters_expanded": false,
             "initialized": true,
-            "map_assets": false,
+            "map_assets": true,
             "methods": {
                 "center": true,
                 "childrandom": true,
@@ -23,7 +23,7 @@
                 "npc": false,
                 "object": true,
                 "player": true,
-                "texture": false
+                "texture": true
             }
         },
         "grid": {
@@ -68,7 +68,7 @@
         },
         "lock": {
             "asset_info": {
-                "basic": true,
+                "basic": false,
                 "lighting": false
             },
             "camera": {
