@@ -11,11 +11,23 @@ inline float clamp01(float v) {
     return std::clamp(v, 0.0f, 1.0f);
 }
 
+constexpr float kAlphaEpsilon = 1e-4f;
+
 struct HSV {
     float h = 0.0f;
     float s = 0.0f;
     float v = 0.0f;
 };
+
+float hue_weight(float hue_degrees, float center_degrees) {
+    float delta = std::fmod(std::fabs(hue_degrees - center_degrees), 360.0f);
+    if (delta > 180.0f) {
+        delta = 360.0f - delta;
+    }
+    constexpr float kFalloff = 90.0f;
+    const float normalized = std::max(0.0f, 1.0f - delta / kFalloff);
+    return normalized;
+}
 
 HSV rgb_to_hsv(float r, float g, float b) {
     HSV out{};
@@ -141,33 +153,46 @@ bool apply_color_pipeline(SDL_Surface* surface, const camera_effects::ImageEffec
 
     if (std::fabs(clamped.blur) > 1e-4f) {
         const float blur_strength = std::clamp(std::fabs(clamped.blur), 0.0f, 1.0f);
-        const int radius = std::max(1, static_cast<int>(std::round(blur_strength * 12.0f)));
+        const int radius = std::max(1, static_cast<int>(std::round(blur_strength * 20.0f)));
         std::vector<float> blurred_r = work_r;
         std::vector<float> blurred_g = work_g;
         std::vector<float> blurred_b = work_b;
-        std::vector<float> blurred_a = work_a;
         blur_channel(blurred_r, width, height, radius);
         blur_channel(blurred_g, width, height, radius);
         blur_channel(blurred_b, width, height, radius);
-        blur_channel(blurred_a, width, height, radius);
         if (clamped.blur > 0.0f) {
-            const float mix_amount = blur_strength;
+            const float mix_amount = std::clamp(blur_strength * 1.25f, 0.0f, 1.0f);
             const float inv_amount = 1.0f - mix_amount;
             for (std::size_t i = 0; i < total; ++i) {
+                if (base_a[i] <= kAlphaEpsilon) {
+                    work_r[i] = base_r[i];
+                    work_g[i] = base_g[i];
+                    work_b[i] = base_b[i];
+                    work_a[i] = base_a[i];
+                    continue;
+                }
                 work_r[i] = base_r[i] * inv_amount + blurred_r[i] * mix_amount;
                 work_g[i] = base_g[i] * inv_amount + blurred_g[i] * mix_amount;
                 work_b[i] = base_b[i] * inv_amount + blurred_b[i] * mix_amount;
-                work_a[i] = base_a[i] * inv_amount + blurred_a[i] * mix_amount;
+                work_a[i] = base_a[i];
             }
         } else {
-            const float sharpen_amount = blur_strength;
+            const float sharpen_amount = std::clamp(blur_strength * 1.25f, 0.0f, 1.0f);
             for (std::size_t i = 0; i < total; ++i) {
+                if (base_a[i] <= kAlphaEpsilon) {
+                    work_r[i] = base_r[i];
+                    work_g[i] = base_g[i];
+                    work_b[i] = base_b[i];
+                    work_a[i] = base_a[i];
+                    continue;
+                }
                 const float delta_r = base_r[i] - blurred_r[i];
                 const float delta_g = base_g[i] - blurred_g[i];
                 const float delta_b = base_b[i] - blurred_b[i];
                 work_r[i] = clamp01(base_r[i] + sharpen_amount * delta_r);
                 work_g[i] = clamp01(base_g[i] + sharpen_amount * delta_g);
                 work_b[i] = clamp01(base_b[i] + sharpen_amount * delta_b);
+                work_a[i] = base_a[i];
             }
         }
     }
@@ -190,6 +215,12 @@ bool apply_color_pipeline(SDL_Surface* surface, const camera_effects::ImageEffec
             std::fabs(clamped.saturation_green) > 1e-4f ||
             std::fabs(clamped.saturation_blue) > 1e-4f;
         for (std::size_t i = 0; i < total; ++i) {
+            if (base_a[i] <= kAlphaEpsilon) {
+                work_r[i] = base_r[i];
+                work_g[i] = base_g[i];
+                work_b[i] = base_b[i];
+                continue;
+            }
             float r = work_r[i];
             float g = work_g[i];
             float b = work_b[i];
@@ -204,14 +235,14 @@ bool apply_color_pipeline(SDL_Surface* surface, const camera_effects::ImageEffec
 
             HSV hsv = rgb_to_hsv(r, g, b);
             if (has_sat_channels) {
-                const float total_weight = std::max(r + g + b, 1e-5f);
-                const float wr = r / total_weight;
-                const float wg = g / total_weight;
-                const float wb = b / total_weight;
+                const float wr = hue_weight(hsv.h, 0.0f);
+                const float wg = hue_weight(hsv.h, 120.0f);
+                const float wb = hue_weight(hsv.h, 240.0f);
+                const float weight_sum = std::max(wr + wg + wb, 1e-4f);
                 const float sat_delta =
-                    wr * clamped.saturation_red +
-                    wg * clamped.saturation_green +
-                    wb * clamped.saturation_blue;
+                    (wr * clamped.saturation_red +
+                     wg * clamped.saturation_green +
+                     wb * clamped.saturation_blue) / weight_sum;
                 hsv.s = clamp01(hsv.s + sat_delta);
             }
             hsv.h = std::fmod(hsv.h + clamped.hue + 360.0f, 360.0f);

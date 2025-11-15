@@ -8,13 +8,13 @@
 #include <SDL.h>
 
 #include "DockableCollapsible.hpp"
+#include "dev_mode/float_slider_widget.hpp"
 #include "render/image_effect_settings.hpp"
 
 class Assets;
 class AssetInfo;
 class DMDropdown;
 class DropdownWidget;
-class FloatSliderWidget;
 class DMButton;
 class ButtonWidget;
 class Widget;
@@ -65,7 +65,7 @@ private:
     void destroy_preview_textures();
 
     void apply_and_regenerate();
-    void purge_mismatched_caches(std::uint64_t fg_hash, std::uint64_t bg_hash);
+    void purge_mismatched_caches(std::uint64_t fg_hash, std::uint64_t bg_hash, bool force_purge = false);
 
 private:
     Assets* assets_ = nullptr;

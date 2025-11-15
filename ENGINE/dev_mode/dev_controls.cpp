@@ -1517,25 +1517,12 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                         }
                     }
                 }
-                // Right click -> open Area Info UI with Area sections
+                // Right click -> open the Area Tool for this area
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
                     selected_room_area_name_ = hovered.name;
-                    // Open both the Area Tool for this area and the Area Config panel
                     begin_room_area_edit(hovered.name);
-                    if (room_editor_) {
-                        room_editor_->open_area_info_editor(current_room_, hovered.name);
-                    }
                     consume(true);
                     return;
-                }
-                // Double-click left -> open Area Info UI with Area sections
-                if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks >= 2) {
-                    selected_room_area_name_ = hovered.name;
-                    if (room_editor_) {
-                        room_editor_->open_area_info_editor(current_room_, hovered.name);
-                        consume(true);
-                        return;
-                    }
                 }
             } else {
                 if (pointer_event) {

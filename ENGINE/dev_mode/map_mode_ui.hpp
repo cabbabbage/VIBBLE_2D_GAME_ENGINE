@@ -32,7 +32,7 @@ class MapRoomsDisplay;
 
 class MapModeUI {
 public:
-    enum class HeaderMode { Map, Room, Area };
+    enum class HeaderMode { Map, Room };
 
     struct HeaderButtonConfig {
         std::string id;
@@ -78,8 +78,7 @@ public:
     void set_sliding_headers_hidden(bool hidden);
     void set_dev_sliding_headers_hidden(bool hidden);
     void set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons,
-                              std::vector<HeaderButtonConfig> room_buttons,
-                              std::vector<HeaderButtonConfig> area_buttons = {});
+                              std::vector<HeaderButtonConfig> room_buttons);
     void set_header_mode(HeaderMode mode);
     void set_button_state(const std::string& id, bool active);
     void set_button_state(HeaderMode mode, const std::string& id, bool active);
@@ -89,7 +88,6 @@ public:
 
     const std::vector<HeaderButtonConfig>& map_mode_button_configs() const { return map_mode_buttons_; }
     const std::vector<HeaderButtonConfig>& room_mode_button_configs() const { return room_mode_buttons_; }
-    const std::vector<HeaderButtonConfig>& area_mode_button_configs() const { return area_mode_buttons_; }
 
     bool is_point_inside(int x, int y) const;
     bool is_any_panel_visible() const;
@@ -162,7 +160,6 @@ private:
     bool footer_always_visible_ = false;
     std::vector<HeaderButtonConfig> map_mode_buttons_;
     std::vector<HeaderButtonConfig> room_mode_buttons_;
-    std::vector<HeaderButtonConfig> area_mode_buttons_;
     HeaderMode header_mode_ = HeaderMode::Map;
     PanelType active_panel_ = PanelType::None;
     bool headers_suppressed_ = false;

@@ -4,6 +4,7 @@
 #include "asset/animation.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/font_cache.hpp"
 #include "dev_mode/widgets.hpp"
 #include "render/camera.hpp"
 #include "utils/cache_manager.hpp"
@@ -494,7 +495,7 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
 
     const std::uint64_t fg_hash = camera_effects::HashImageEffectSettings(fg_settings_);
     const std::uint64_t bg_hash = camera_effects::HashImageEffectSettings(bg_settings_);
-    purge_mismatched_caches(fg_hash, bg_hash);
+    purge_mismatched_caches(fg_hash, bg_hash, true);
 
     assets_->library().loadAllAnimations(renderer);
     saved_fg_ = fg_settings_;
@@ -503,7 +504,7 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
     preview_dirty_ = true;
 }
 
-void ForegroundBackgroundEffectPanel::purge_mismatched_caches(std::uint64_t fg_hash, std::uint64_t bg_hash) {
+void ForegroundBackgroundEffectPanel::purge_mismatched_caches(std::uint64_t fg_hash, std::uint64_t bg_hash, bool force_purge) {
     const fs::path cache_root("cache");
     std::error_code ec;
     if (!fs::exists(cache_root, ec) || !fs::is_directory(cache_root, ec)) {
@@ -528,7 +529,7 @@ void ForegroundBackgroundEffectPanel::purge_mismatched_caches(std::uint64_t fg_h
             }
             const std::uint64_t stored_fg = meta.value("depthcue_foreground_hash", 0ull);
             const std::uint64_t stored_bg = meta.value("depthcue_background_hash", 0ull);
-            if (stored_fg == fg_hash && stored_bg == bg_hash) {
+            if (!force_purge && stored_fg == fg_hash && stored_bg == bg_hash) {
                 continue;
             }
             std::error_code remove_ec;

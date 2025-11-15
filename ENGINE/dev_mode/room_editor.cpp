@@ -1930,8 +1930,6 @@ void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) 
     }
     if (info_ui_) info_ui_->set_assets(assets_);
     if (info_ui_) {
-        // Ensure Area Config mode is cleared before opening a normal asset
-        info_ui_->clear_area_context();
         info_ui_->clear_info();
         info_ui_->set_info(info);
         info_ui_->set_target_asset(nullptr);
@@ -1947,32 +1945,6 @@ void RoomEditor::open_asset_info_editor_for_asset(Asset* asset) {
     focus_camera_on_asset(asset, 0.8, 0);
     open_asset_info_editor(asset->info);
     if (info_ui_) info_ui_->set_target_asset(asset);
-}
-
-void RoomEditor::open_area_info_editor(Room* room, const std::string& area_name) {
-    if (!room) return;
-    if (library_ui_) library_ui_->close();
-    clear_active_spawn_group_target();
-    if (room_config_dock_open_) { set_room_config_visible(false); }
-    if (!info_ui_) {
-        info_ui_ = std::make_unique<AssetInfoUI>();
-        if (info_ui_) {
-            info_ui_->set_manifest_store(manifest_store_);
-        }
-        info_ui_->set_header_visibility_callback([this](bool visible) {
-            asset_info_panel_visible_ = visible;
-            if (header_visibility_callback_) {
-                header_visibility_callback_(room_config_panel_visible_ || asset_info_panel_visible_);
-            }
-        });
-    }
-    if (info_ui_) info_ui_->set_assets(assets_);
-    if (info_ui_) {
-        info_ui_->clear_info();
-        info_ui_->open_for_room_area(room, area_name);
-        info_ui_->set_target_asset(nullptr);
-    }
-    active_modal_ = ActiveModal::AssetInfo;
 }
 
 void RoomEditor::set_manifest_store(devmode::core::ManifestStore* store) {
@@ -3150,20 +3122,17 @@ void RoomEditor::handle_click(const Input& input) {
             open_asset_info_editor_for_asset(hovered_asset_);
         }
         } else {
-            bool opened_area_info = false;
+            bool handled_area_interaction = false;
             if (current_room_) {
                 if (auto area_name = find_room_area_at_point(world_mouse)) {
-                    // Open area config and tool box on right click over area
-                    open_area_info_editor(current_room_, *area_name);
                     ensure_area_editor();
-                    if (area_editor_) {
-                        area_editor_->begin_for_room(current_room_, *area_name);
+                    if (area_editor_ && area_editor_->begin_for_room(current_room_, *area_name)) {
+                        handled_area_interaction = true;
                     }
-                    opened_area_info = true;
                 }
             }
 
-            if (!opened_area_info) {
+            if (!handled_area_interaction) {
                 bool inside_room = true;
                 if (current_room_ && current_room_->room_area) {
                     inside_room = current_room_->room_area->contains_point(world_mouse);
@@ -3175,6 +3144,8 @@ void RoomEditor::handle_click(const Input& input) {
                     if (!is_asset_library_open()) {
                         pending_spawn_world_pos_.reset();
                     }
+                } else {
+                    open_asset_library();
                 }
             }
         }

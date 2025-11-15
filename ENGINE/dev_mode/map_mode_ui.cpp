@@ -303,11 +303,9 @@ void MapModeUI::refresh_header_suppression_state() {
 }
 
 void MapModeUI::set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons,
-                                     std::vector<HeaderButtonConfig> room_buttons,
-                                     std::vector<HeaderButtonConfig> area_buttons) {
+                                     std::vector<HeaderButtonConfig> room_buttons) {
     map_mode_buttons_ = std::move(map_buttons);
     room_mode_buttons_ = std::move(room_buttons);
-    area_mode_buttons_ = std::move(area_buttons);
     footer_buttons_configured_ = false;
     ensure_panels();
 }
@@ -323,7 +321,7 @@ void MapModeUI::set_header_mode(HeaderMode mode) {
 }
 
 MapModeUI::HeaderButtonConfig* MapModeUI::find_button(HeaderMode mode, const std::string& id) {
-    auto& list = (mode == HeaderMode::Map) ? map_mode_buttons_ : (mode == HeaderMode::Room ? room_mode_buttons_ : area_mode_buttons_);
+    auto& list = (mode == HeaderMode::Map) ? map_mode_buttons_ : room_mode_buttons_;
     auto it = std::find_if(list.begin(), list.end(),
                            [&](const HeaderButtonConfig& cfg) { return cfg.id == id; });
     if (it == list.end()) {
@@ -782,8 +780,6 @@ void MapModeUI::configure_footer_buttons() {
         }
     } else if (header_mode_ == HeaderMode::Room) {
         append_custom(room_mode_buttons_, HeaderMode::Room);
-    } else {
-        append_custom(area_mode_buttons_, HeaderMode::Area);
     }
 
     footer_bar_->set_buttons(std::move(buttons));
@@ -804,10 +800,6 @@ void MapModeUI::sync_footer_button_states() {
         }
     } else if (header_mode_ == HeaderMode::Room) {
         for (const auto& config : room_mode_buttons_) {
-            footer_bar_->set_button_active_state(config.id, config.active);
-        }
-    } else {
-        for (const auto& config : area_mode_buttons_) {
             footer_bar_->set_button_active_state(config.id, config.active);
         }
     }
