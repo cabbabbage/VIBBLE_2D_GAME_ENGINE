@@ -1948,7 +1948,7 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
                 auto& anim = it->second;
                 asset->current_animation = it->first;
                 asset->current_frame = anim.get_first_frame();
-                asset->static_frame = anim.is_static() || anim.locked;
+asset->static_frame = anim.is_frozen() || anim.locked;
             } else {
                 asset->current_animation.clear();
                 asset->current_frame = nullptr;
@@ -2004,7 +2004,7 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
                             auto& anim = it->second;
                             asset->current_animation = it->first;
                             asset->current_frame = anim.get_first_frame();
-                            asset->static_frame = anim.is_static() || anim.locked;
+asset->static_frame = anim.is_frozen() || anim.locked;
                         } else {
                             asset->current_animation.clear();
                             asset->current_frame = nullptr;

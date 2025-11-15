@@ -1973,7 +1973,7 @@ void Animation::change(AnimationFrame*& frame, bool& static_flag) const {
         if (frozen) return;
         auto& self = const_cast<Animation&>(*this);
         frame      = self.get_first_frame();
-        static_flag = is_static() || locked;
+        static_flag = is_frozen() || locked;
 }
 
 std::size_t Animation::movement_path_count() const { return movement_paths_.size(); }
@@ -1999,9 +1999,7 @@ std::size_t Animation::clamp_path_index(std::size_t index) const {
 
 void Animation::freeze() { frozen = true; }
 
-bool Animation::is_frozen() const { return frozen; }
-
-bool Animation::is_static() const { return frames.size() <= 1; }
+bool Animation::is_frozen() const { return frozen || frames.size() <= 1; }
 
 bool Animation::has_audio() const { return static_cast<bool>(audio_clip.chunk); }
 

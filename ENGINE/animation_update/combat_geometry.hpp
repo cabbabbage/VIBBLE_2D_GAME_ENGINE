@@ -45,10 +45,14 @@ struct FrameHitGeometry {
 
 struct FrameAttackGeometry {
     struct Vector {
-        // Line segment in local space, typically used as an attack ray.
+        // Quadratic Bezier segment in local space, typically used as an attack ray.
         std::string type;
         float start_x = 0.0f;
         float start_y = 0.0f;
+        // Control point for curvature (quadratic Bezier). When equal to the
+        // midpoint between start and end, the curve appears as a straight line.
+        float control_x = 0.0f;
+        float control_y = 0.0f;
         float end_x   = 0.0f;
         float end_y   = 0.0f;
         int   damage  = 0;    // damage value applied if this vector hits

@@ -703,19 +703,61 @@ void SceneRenderer::render(){
             const SDL_FRect& cull_rect = has_expanded_bounds ? expanded_bounds : dst;
             const bool sprite_visible  = intersects_padded(dst, screen_rect_f);
             const bool bounds_visible  = intersects_padded(cull_rect, screen_rect_f);
-            if (!bounds_visible) {
+
+            // Pre-check if any animation child would be visible on screen.
+            // This lets us render visible attachments even when the parent sprite
+            // is culled (e.g., large offsets or perspective effects).
+            const auto& child_slots = a->animation_children();
+            bool any_child_visible = false;
+            if (!child_slots.empty()) {
+                for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
+                    const auto& attachment = child_slots[child_index];
+                    if (!attachment.visible || !attachment.current_frame) {
+                        continue;
+                    }
+                    SDL_Texture* child_tex = attachment.current_frame->get_base_texture();
+                    if (!child_tex) {
+                        continue;
+                    }
+                    int child_fw = attachment.cached_w;
+                    int child_fh = attachment.cached_h;
+                    if ((child_fw == 0 || child_fh == 0)) {
+                        SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh);
+                    }
+                    if (child_fw <= 0 || child_fh <= 0) {
+                        continue;
+                    }
+                    SDL_FRect child_rect = get_child_position_rect(
+                        a,
+                        attachment.world_pos,
+                        child_fw,
+                        child_fh,
+                        inv_scale,
+                        min_w,
+                        min_h,
+                        player_sh);
+                    if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
+                        continue;
+                    }
+                    if (intersects_padded(child_rect, screen_rect_f)) {
+                        any_child_visible = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!bounds_visible && !any_child_visible) {
                 cache_last_frame();
                 continue;
             }
-            if (!sprite_visible && !has_light_sources) {
+            if (!sprite_visible && !has_light_sources && !any_child_visible) {
                 cache_last_frame();
                 continue;
             }
 
-            const auto& child_slots = a->animation_children();
             std::vector<AssetRenderCommand> child_commands_back;
             std::vector<AssetRenderCommand> child_commands_front;
-            if (sprite_visible && !child_slots.empty()) {
+            if (!child_slots.empty()) {
                 child_commands_back.reserve(child_slots.size());
                 child_commands_front.reserve(child_slots.size());
                 auto build_child_command = [&](std::size_t child_index, AssetRenderCommand& out_cmd) -> bool {
@@ -755,10 +797,32 @@ void SceneRenderer::render(){
                     if (!intersects_padded(child_rect, screen_rect_f)) {
                         return false;
                     }
+
+                    // Select a pre-scaled texture variant for the child when available,
+                    // using the same scale selection rules as normal assets.
+                    SDL_Texture* draw_tex = child_tex;
+                    if (attachment.animation && attachment.current_frame) {
+                        const int frame_index = attachment.current_frame->frame_index;
+                        if (frame_index >= 0) {
+                            const auto& steps = attachment.animation->variant_steps();
+                            if (!steps.empty()) {
+                                const float desired = render_pipeline::ScalingLogic::ComputeScale(
+                                    child_fw, child_fh,
+                                    static_cast<int>(std::lround(child_rect.w)),
+                                    static_cast<int>(std::lround(child_rect.h)));
+                                auto sel = render_pipeline::ScalingLogic::Choose(desired, steps);
+                                if (sel.index >= 0) {
+                                    if (SDL_Texture* variant = attachment.animation->frame_variant(static_cast<std::size_t>(frame_index), static_cast<std::size_t>(sel.index))) {
+                                        draw_tex = variant;
+                                    }
+                                }
+                            }
+                        }
+                    }
                     AssetRenderCommand child_cmd;
                     child_cmd.asset = a;
-                    child_cmd.final_texture = child_tex;
-                    child_cmd.source_texture = child_tex;
+                    child_cmd.final_texture = draw_tex;
+                    child_cmd.source_texture = draw_tex;
                     child_cmd.dst = child_rect;
                     child_cmd.highlighted = a->is_highlighted();
                     child_cmd.selected = a->is_selected();

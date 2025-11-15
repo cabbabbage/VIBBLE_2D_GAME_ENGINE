@@ -225,8 +225,10 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
         }
     }
 
-    if (anim.locked) {
-        self_->static_frame = anim.is_static() || anim.locked;
+    // If the animation is locked or frozen, do not advance frames.
+    // This keeps base, foreground, and background textures aligned to the frozen frame.
+    if (anim.locked || anim.is_frozen()) {
+        self_->static_frame = anim.is_frozen() || anim.locked;
         update_child_attachments(anim, 0.0f);
         return true;
     }
@@ -289,7 +291,7 @@ void AnimationRuntime::switch_to(const std::string& anim_id, std::size_t path_in
     AnimationFrame* new_frame = anim.get_first_frame(path_index);
     self_->current_animation = it->first;
     self_->current_frame     = new_frame;
-    self_->static_frame      = anim.is_static() || anim.locked;
+self_->static_frame      = anim.is_frozen() || anim.locked;
     self_->frame_progress    = 0.0f;
     active_paths_[self_->current_animation] = path_index;
 }
@@ -444,7 +446,10 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
             continue;
         }
         slot.visible = child_data.visible;
-        slot.world_pos.x = self_->pos.x + child_data.dx;
+        // Mirror horizontal offset when the parent is flipped so attachments
+        // maintain their relative side of the sprite in game mode.
+        const int dx = (self_ && self_->flipped) ? -child_data.dx : child_data.dx;
+        slot.world_pos.x = self_->pos.x + dx;
         slot.world_pos.y = self_->pos.y + child_data.dy;
         slot.rotation_degrees = child_data.degree;
         slot.render_in_front = child_data.render_in_front;

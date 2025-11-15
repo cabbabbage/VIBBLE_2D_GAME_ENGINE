@@ -135,6 +135,8 @@ private:
     mutable std::unique_ptr<class DMButton> btn_attack_copy_next_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_start_x_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_start_y_;
+    mutable std::unique_ptr<class DMTextBox> tb_attack_control_x_;
+    mutable std::unique_ptr<class DMTextBox> tb_attack_control_y_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_end_x_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_end_y_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_damage_;
@@ -159,6 +161,8 @@ private:
     mutable std::string last_hit_rotation_text_{};
     mutable std::string last_attack_start_x_text_{};
     mutable std::string last_attack_start_y_text_{};
+    mutable std::string last_attack_control_x_text_{};
+    mutable std::string last_attack_control_y_text_{};
     mutable std::string last_attack_end_x_text_{};
     mutable std::string last_attack_end_y_text_{};
     mutable std::string last_attack_damage_text_{};
@@ -212,7 +216,7 @@ private:
 
     // Attack vector editing state
     int selected_attack_type_index_ = 1;
-    enum class AttackHandle { None, Start, End, Segment };
+    enum class AttackHandle { None, Start, Control, End, Segment };
     AttackHandle active_attack_handle_ = AttackHandle::None;
     bool attack_dragging_ = false;
     bool attack_drag_moved_ = false;

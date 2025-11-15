@@ -59,7 +59,6 @@ public:
     void change(AnimationFrame*& frame, bool& static_flag) const;
     void freeze();
     bool is_frozen() const;
-    bool is_static() const;
     bool has_audio() const;
     Mix_Chunk* audio_chunk() const;
     const AudioClip* audio_data() const;

@@ -344,9 +344,7 @@ void FrameEditorSession::begin(Assets* assets,
     prev_parallax_enabled_ = cam.parallax_enabled();
     prev_asset_hidden_ = target_->is_hidden();
 
-    // Force perspective OFF; grid overlay ON (transient)
-    cam.set_realism_enabled(false);
-    cam.set_parallax_enabled(false);
+    // Preserve current camera realism/parallax so preview matches in-scene rendering.
     // Grid overlay preference is handled by DevControls when beginning the session.
 
     // Parse frames from document
@@ -556,7 +554,7 @@ void FrameEditorSession::end() {
                                 auto& anim = it->second;
                                 asset->current_animation = it->first;
                                 asset->current_frame = anim.get_first_frame();
-                                asset->static_frame = anim.is_static() || anim.locked;
+asset->static_frame = anim.is_frozen() || anim.locked;
                             } else {
                                 asset->current_animation.clear();
                                 asset->current_frame = nullptr;
@@ -604,13 +602,13 @@ void FrameEditorSession::end() {
 
 void FrameEditorSession::update(const Input& input) {
     if (!active_) return;
-    // Enable mouse wheel zoom on the world camera while editing (panning is blocked to avoid conflicts)
+    // Enable mouse wheel zoom and allow panning while editing
     if (assets_) {
         camera& cam = assets_->getView();
         // Make sure layout is up to date before computing any UI blocking logic (future use)
         ensure_widgets();
         rebuild_layout();
-        const bool pan_blocked = true; // disallow left-drag panning here; only wheel zoom
+        const bool pan_blocked = false; // allow left-drag panning during frame edit session
         pan_zoom_.handle_input(cam, input, pan_blocked);
     }
     // Ensure the asset frame reflects selection
@@ -883,6 +881,8 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 guard_widget(btn_attack_copy_next_.get());
                 guard_widget(tb_attack_start_x_.get());
                 guard_widget(tb_attack_start_y_.get());
+                guard_widget(tb_attack_control_x_.get());
+                guard_widget(tb_attack_control_y_.get());
                 guard_widget(tb_attack_end_x_.get());
                 guard_widget(tb_attack_end_y_.get());
                 guard_widget(tb_attack_damage_.get());
@@ -908,18 +908,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (e.type == SDL_MOUSEWHEEL) {
-        SDL_Point mouse{0, 0};
-        SDL_GetMouseState(&mouse.x, &mouse.y);
-        if (SDL_PointInRect(&mouse, &nav_rect_) && scrollbar_visible_) {
-            int delta = resolve_wheel_delta(e.wheel);
-            if (delta != 0) {
-                scroll_offset_ = std::clamp(scroll_offset_ - delta * 20, 0, max_scroll_offset());
-                rebuild_layout();
-                return true;
-            }
-        }
-    }
+    // Do not handle mouse wheel inside the navigator; allow global zoom/pan to use it
 
     auto handle_button = [&](std::unique_ptr<DMButton>& btn, auto&& on_click) -> bool {
         if (!btn) return false;
@@ -1243,6 +1232,8 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         bool consumed_attack = false;
         if (tb_attack_start_x_) consumed_attack = tb_attack_start_x_->handle_event(e) || consumed_attack;
         if (tb_attack_start_y_) consumed_attack = tb_attack_start_y_->handle_event(e) || consumed_attack;
+        if (tb_attack_control_x_) consumed_attack = tb_attack_control_x_->handle_event(e) || consumed_attack;
+        if (tb_attack_control_y_) consumed_attack = tb_attack_control_y_->handle_event(e) || consumed_attack;
         if (tb_attack_end_x_) consumed_attack = tb_attack_end_x_->handle_event(e) || consumed_attack;
         if (tb_attack_end_y_) consumed_attack = tb_attack_end_y_->handle_event(e) || consumed_attack;
         if (tb_attack_damage_) consumed_attack = tb_attack_damage_->handle_event(e) || consumed_attack;
@@ -1280,6 +1271,20 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                     float value = parse_float(tb_attack_start_y_->value(), vec->start_y);
                     if (std::isfinite(value) && vec->start_y != value) {
                         vec->start_y = value;
+                        changed = true;
+                    }
+                }
+                if (tb_attack_control_x_) {
+                    float value = parse_float(tb_attack_control_x_->value(), vec->control_x);
+                    if (std::isfinite(value) && vec->control_x != value) {
+                        vec->control_x = value;
+                        changed = true;
+                    }
+                }
+                if (tb_attack_control_y_) {
+                    float value = parse_float(tb_attack_control_y_->value(), vec->control_y);
+                    if (std::isfinite(value) && vec->control_y != value) {
+                        vec->control_y = value;
                         changed = true;
                     }
                 }
@@ -1326,6 +1331,20 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             }
         } else if (e.type == SDL_MOUSEMOTION && hitbox_dragging_) {
             update_hitbox_drag(SDL_Point{e.motion.x, e.motion.y});
+            return true;
+        }
+    } else if (mode_ == Mode::AttackGeometry) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            if (begin_attack_drag(SDL_Point{e.button.x, e.button.y})) {
+                return true;
+            }
+        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            if (attack_dragging_) {
+                end_attack_drag(true);
+                return true;
+            }
+        } else if (e.type == SDL_MOUSEMOTION && attack_dragging_) {
+            update_attack_drag(SDL_Point{e.motion.x, e.motion.y});
             return true;
         }
     }
@@ -1421,29 +1440,18 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Swallow pointer events inside our panels to prevent world/editor input from seeing them
-    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL) {
+    // Swallow pointer click/motion events inside our panels to prevent world/editor input from seeing them
+    // but do NOT swallow mouse wheel so PanAndZoom can handle zoom/pan regardless of hover location.
+    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
         SDL_Point sp;
         if (e.type == SDL_MOUSEMOTION) { sp = SDL_Point{ e.motion.x, e.motion.y }; }
-        else if (e.type == SDL_MOUSEWHEEL) { int mx = 0, my = 0; SDL_GetMouseState(&mx, &my); sp = SDL_Point{ mx, my }; }
         else { sp = SDL_Point{ e.button.x, e.button.y }; }
         if (SDL_PointInRect(&sp, &directory_rect_) || SDL_PointInRect(&sp, &nav_rect_) || SDL_PointInRect(&sp, &toolbox_rect_)) {
             return true;
         }
     }
 
-    if (e.type == SDL_MOUSEWHEEL) {
-        SDL_Point mouse{0, 0};
-        SDL_GetMouseState(&mouse.x, &mouse.y);
-        if (!SDL_PointInRect(&mouse, &directory_rect_) && !SDL_PointInRect(&mouse, &nav_rect_) &&
-            !SDL_PointInRect(&mouse, &toolbox_rect_)) {
-            int delta = resolve_wheel_delta(e.wheel);
-            if (delta != 0) {
-                select_frame(selected_index_ - delta);
-                return true;
-            }
-        }
-    }
+    // Do not change selected frame based on mouse wheel; leave wheel for zoom/pan
 
     // Do not consume events outside our panels by default
     return false;
@@ -1490,9 +1498,10 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         // Draw markers and names
         for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size(); ++i) {
             const auto& child = frame.children[i];
+            const float dx_world = target_->flipped ? -static_cast<float>(child.dx) : static_cast<float>(child.dx);
             SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{
-                child.dx + anchor_world.x,
-                child.dy + anchor_world.y
+                dx_world + static_cast<float>(target_->pos.x),
+                static_cast<float>(child.dy) + static_cast<float>(target_->pos.y)
             });
             SDL_Point cp = round_point(screen);
             const int marker_r = (static_cast<int>(i) == selected_child_index_) ? 6 : 4;
@@ -1516,10 +1525,15 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             if (!tex) continue;
             int tw = 0, th = 0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
             if (tw <= 0 || th <= 0) continue;
+
+            // Match in-scene attachment anchoring: offsets are relative to the asset's world pos,
+            // mirroring dx when the parent is flipped (see AnimationRuntime::apply_child_frame_data).
+            const float dx_world = target_->flipped ? -static_cast<float>(child.dx) : static_cast<float>(child.dx);
             SDL_FPoint child_world{
-                static_cast<float>(anchor_world.x) + child.dx,
-                static_cast<float>(anchor_world.y) + child.dy
+                static_cast<float>(target_->pos.x) + dx_world,
+                static_cast<float>(target_->pos.y) + static_cast<float>(child.dy)
             };
+
             SDL_FRect dst = child_preview_rect(assets_, target_, child_world, tw, th, preview_ctx);
             if (dst.w <= 0.0f || dst.h <= 0.0f) continue;
             SDL_FPoint pivot{ dst.w * 0.5f, dst.h }; // bottom-middle pivot
@@ -1587,6 +1601,8 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         if (btn_attack_copy_next_) btn_attack_copy_next_->render(renderer);
         if (tb_attack_start_x_) tb_attack_start_x_->render(renderer);
         if (tb_attack_start_y_) tb_attack_start_y_->render(renderer);
+        if (tb_attack_control_x_) tb_attack_control_x_->render(renderer);
+        if (tb_attack_control_y_) tb_attack_control_y_->render(renderer);
         if (tb_attack_end_x_) tb_attack_end_x_->render(renderer);
         if (tb_attack_end_y_) tb_attack_end_y_->render(renderer);
         if (tb_attack_damage_) tb_attack_damage_->render(renderer);
@@ -1754,6 +1770,8 @@ void FrameEditorSession::ensure_widgets() const {
     }
     if (!tb_attack_start_x_) tb_attack_start_x_ = std::make_unique<DMTextBox>("Start X", "0");
     if (!tb_attack_start_y_) tb_attack_start_y_ = std::make_unique<DMTextBox>("Start Y", "0");
+    if (!tb_attack_control_x_) tb_attack_control_x_ = std::make_unique<DMTextBox>("Control X", "0");
+    if (!tb_attack_control_y_) tb_attack_control_y_ = std::make_unique<DMTextBox>("Control Y", "0");
     if (!tb_attack_end_x_) tb_attack_end_x_ = std::make_unique<DMTextBox>("End X", "0");
     if (!tb_attack_end_y_) tb_attack_end_y_ = std::make_unique<DMTextBox>("End Y", "0");
     if (!tb_attack_damage_) tb_attack_damage_ = std::make_unique<DMTextBox>("Damage", "0");
@@ -2088,6 +2106,7 @@ void FrameEditorSession::rebuild_layout() const {
             if (right) right->set_rect(SDL_Rect{ row.x + col_width + gap, row.y, col_width, row_h });
         };
         place_pair(tb_attack_start_x_.get(), tb_attack_start_y_.get());
+        place_pair(tb_attack_control_x_.get(), tb_attack_control_y_.get());
         place_pair(tb_attack_end_x_.get(), tb_attack_end_y_.get());
         if (tb_attack_damage_) {
             const int dmg_height = tb_attack_damage_->height_for_width(inner_width);
@@ -2474,6 +2493,8 @@ animation_update::FrameAttackGeometry::Vector* FrameEditorSession::ensure_attack
     vec.type = type;
     vec.start_x = 0.0f;
     vec.start_y = 0.0f;
+    vec.control_x = 0.0f;
+    vec.control_y = 0.0f;
     vec.end_x = 0.0f;
     vec.end_y = 0.0f;
     vec.damage = 0;
@@ -2511,12 +2532,16 @@ void FrameEditorSession::refresh_attack_form() const {
     if (vec) {
         sync_field(tb_attack_start_x_.get(), last_attack_start_x_text_, std::to_string(static_cast<int>(std::lround(vec->start_x))));
         sync_field(tb_attack_start_y_.get(), last_attack_start_y_text_, std::to_string(static_cast<int>(std::lround(vec->start_y))));
+        sync_field(tb_attack_control_x_.get(), last_attack_control_x_text_, std::to_string(static_cast<int>(std::lround(vec->control_x))));
+        sync_field(tb_attack_control_y_.get(), last_attack_control_y_text_, std::to_string(static_cast<int>(std::lround(vec->control_y))));
         sync_field(tb_attack_end_x_.get(), last_attack_end_x_text_, std::to_string(static_cast<int>(std::lround(vec->end_x))));
         sync_field(tb_attack_end_y_.get(), last_attack_end_y_text_, std::to_string(static_cast<int>(std::lround(vec->end_y))));
         sync_field(tb_attack_damage_.get(), last_attack_damage_text_, std::to_string(vec->damage));
     } else {
         sync_field(tb_attack_start_x_.get(), last_attack_start_x_text_, "0");
         sync_field(tb_attack_start_y_.get(), last_attack_start_y_text_, "0");
+        sync_field(tb_attack_control_x_.get(), last_attack_control_x_text_, "0");
+        sync_field(tb_attack_control_y_.get(), last_attack_control_y_text_, "0");
         sync_field(tb_attack_end_x_.get(), last_attack_end_x_text_, "0");
         sync_field(tb_attack_end_y_.get(), last_attack_end_y_text_, "0");
         sync_field(tb_attack_damage_.get(), last_attack_damage_text_, "0");
@@ -2659,9 +2684,69 @@ void FrameEditorSession::render_hit_geometry(SDL_Renderer* renderer) const {
         HitBoxVisual visual;
         if (!build_hitbox_visual(box, visual)) continue;
         const bool selected = (box.type == type);
+
+        // Determine hover state for the active (selected) hitbox: if the mouse is
+        // over any actionable area (rotate handle, edge midpoint handles, or inside
+        // the polygon to move), we highlight the full outline white and, if hovering
+        // a specific geometry node, highlight that node as well.
+        bool hovered_any = false;
+        int hovered_edge_index = -1; // 0:Left, 1:Top, 2:Right, 3:Bottom
+        bool hovered_rotate = false;
+        if (selected) {
+            SDL_Point mp{0, 0};
+            SDL_GetMouseState(&mp.x, &mp.y);
+            // Ignore hover if mouse is over any UI panel (not actionable in world)
+            if (!(SDL_PointInRect(&mp, &directory_rect_) ||
+                  SDL_PointInRect(&mp, &nav_rect_) ||
+                  SDL_PointInRect(&mp, &toolbox_rect_))) {
+                const int handle_size = 12;
+                auto point_in_rect = [&](const SDL_FPoint& center) {
+                    SDL_Rect r{ static_cast<int>(std::round(center.x)) - handle_size / 2,
+                                static_cast<int>(std::round(center.y)) - handle_size / 2,
+                                handle_size, handle_size };
+                    return SDL_PointInRect(&mp, &r) == SDL_TRUE;
+                };
+                auto dist_sq = [&](const SDL_FPoint& a, const SDL_FPoint& b) -> float {
+                    const float dx = a.x - b.x;
+                    const float dy = a.y - b.y;
+                    return dx * dx + dy * dy;
+                };
+                SDL_FPoint mpf{ static_cast<float>(mp.x), static_cast<float>(mp.y) };
+                const float rotate_radius = 12.0f;
+                if (dist_sq(mpf, visual.rotate_handle) <= rotate_radius * rotate_radius) {
+                    hovered_any = true;
+                    hovered_rotate = true;
+                } else {
+                    // Edge indices from build_hitbox_visual:
+                    // 0: Top, 1: Right, 2: Bottom, 3: Left
+                    if (point_in_rect(visual.edge_midpoints[3])) { hovered_any = true; hovered_edge_index = 3; } // Left
+                    else if (point_in_rect(visual.edge_midpoints[1])) { hovered_any = true; hovered_edge_index = 1; } // Right
+                    else if (point_in_rect(visual.edge_midpoints[0])) { hovered_any = true; hovered_edge_index = 0; } // Top
+                    else if (point_in_rect(visual.edge_midpoints[2])) { hovered_any = true; hovered_edge_index = 2; } // Bottom
+                    else {
+                        // Point-in-polygon for the rotated rectangle (Move)
+                        bool inside = false;
+                        for (int i = 0, j = 3; i < 4; j = i++) {
+                            const SDL_FPoint& a = visual.corners[i];
+                            const SDL_FPoint& b = visual.corners[j];
+                            const bool intersect = ((a.y > mpf.y) != (b.y > mpf.y)) &&
+                                                   (mpf.x < (b.x - a.x) * (mpf.y - a.y) / (b.y - a.y + 0.0001f) + a.x);
+                            if (intersect) inside = !inside;
+                        }
+                        if (inside) {
+                            hovered_any = true;
+                        }
+                    }
+                }
+            }
+        }
+
         SDL_Color fill = selected ? DMStyles::AccentButton().bg : DMStyles::HeaderButton().bg;
         fill.a = selected ? 90 : 45;
         SDL_Color outline = selected ? DMStyles::AccentButton().border : DMStyles::Border();
+        if (selected && hovered_any) {
+            outline = SDL_Color{255, 255, 255, 255}; // full outline highlight on hover
+        }
         SDL_Vertex verts[4];
         int indices[6] = {0, 1, 2, 0, 2, 3};
         for (int i = 0; i < 4; ++i) {
@@ -2678,17 +2763,27 @@ void FrameEditorSession::render_hit_geometry(SDL_Renderer* renderer) const {
             SDL_RenderDrawLineF(renderer, a.x, a.y, b.x, b.y);
         }
         if (selected) {
-            SDL_SetRenderDrawColor(renderer, DMStyles::AccentButton().hover_bg.r,
-                                   DMStyles::AccentButton().hover_bg.g,
-                                   DMStyles::AccentButton().hover_bg.b, 255);
-            const int handle_size = 10;
-            for (const auto& edge : visual.edge_midpoints) {
-                SDL_FRect r{ edge.x - handle_size * 0.5f, edge.y - handle_size * 0.5f,
+            // Draw edge midpoint handles, highlighting the hovered one (if any)
+            const int base_handle_size = 10;
+            for (int i = 0; i < 4; ++i) {
+                const bool is_hovered_handle = (i == hovered_edge_index);
+                const int handle_size = is_hovered_handle ? (base_handle_size + 2) : base_handle_size;
+                SDL_FRect r{ visual.edge_midpoints[i].x - handle_size * 0.5f,
+                             visual.edge_midpoints[i].y - handle_size * 0.5f,
                              static_cast<float>(handle_size), static_cast<float>(handle_size) };
+                SDL_Color node_col = is_hovered_handle ? SDL_Color{255, 255, 255, 255}
+                                                       : DMStyles::AccentButton().hover_bg;
+                SDL_SetRenderDrawColor(renderer, node_col.r, node_col.g, node_col.b, 255);
                 SDL_RenderFillRectF(renderer, &r);
             }
-            // Draw rotate handle line + circle
-            const SDL_FPoint top_mid = visual.edge_midpoints[1];
+            // Draw rotate handle connector and circle; highlight if hovered
+            // Use the true top midpoint (edge index 0) to anchor rotate handle line
+            const SDL_FPoint top_mid = visual.edge_midpoints[0];
+            SDL_SetRenderDrawColor(renderer,
+                                   (hovered_rotate ? 255 : DMStyles::AccentButton().hover_bg.r),
+                                   (hovered_rotate ? 255 : DMStyles::AccentButton().hover_bg.g),
+                                   (hovered_rotate ? 255 : DMStyles::AccentButton().hover_bg.b),
+                                   255);
             SDL_RenderDrawLineF(renderer, top_mid.x, top_mid.y, visual.rotate_handle.x, visual.rotate_handle.y);
             const float radius = 8.0f;
             for (int i = 0; i < 16; ++i) {
@@ -2720,27 +2815,57 @@ void FrameEditorSession::render_attack_geometry(SDL_Renderer* renderer) const {
         };
         return cam.map_to_screen_f(world);
     };
+    SDL_Point mp{0, 0};
+    SDL_GetMouseState(&mp.x, &mp.y);
     for (const auto& vec : frame.attack.vectors) {
-        SDL_FPoint start_screen = to_screen(vec.start_x, vec.start_y);
-        SDL_FPoint end_screen = to_screen(vec.end_x, vec.end_y);
+        SDL_FPoint start_local{vec.start_x, vec.start_y};
+        SDL_FPoint control_local{vec.control_x, vec.control_y};
+        SDL_FPoint end_local{vec.end_x, vec.end_y};
+        SDL_FPoint start_screen = to_screen(start_local.x, start_local.y);
+        SDL_FPoint control_screen = to_screen(control_local.x, control_local.y);
+        SDL_FPoint end_screen = to_screen(end_local.x, end_local.y);
         const bool selected = (vec.type == active_type);
         SDL_Color line_col = selected ? DMStyles::AccentButton().bg : DMStyles::HeaderButton().bg;
         SDL_SetRenderDrawColor(renderer, line_col.r, line_col.g, line_col.b, 220);
-        SDL_RenderDrawLineF(renderer, start_screen.x, start_screen.y, end_screen.x, end_screen.y);
-        auto draw_node = [&](const SDL_FPoint& p, bool filled) {
+        // Draw the curve as a polyline
+        SDL_FPoint prev = start_screen;
+        for (int i = 1; i <= kCurveArcSamples; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(kCurveArcSamples);
+            // Compute local-space curve point and transform to screen
+            SDL_FPoint p_local = quadratic_bezier_point(start_local, control_local, end_local, t);
+            SDL_FPoint p = to_screen(p_local.x, p_local.y);
+            SDL_RenderDrawLineF(renderer, prev.x, prev.y, p.x, p.y);
+            prev = p;
+        }
+        // Hover detection for nodes (selected vector only and outside UI panels)
+        bool hovered_start = false, hovered_control = false, hovered_end = false;
+        if (selected) {
+            SDL_Point sp = mp;
+            if (!(SDL_PointInRect(&sp, &directory_rect_) || SDL_PointInRect(&sp, &nav_rect_) || SDL_PointInRect(&sp, &toolbox_rect_))) {
+                auto point_hit = [](SDL_Point m, SDL_FPoint p, float radius) -> bool {
+                    const float dx = static_cast<float>(m.x) - p.x;
+                    const float dy = static_cast<float>(m.y) - p.y;
+                    return dx * dx + dy * dy <= radius * radius;
+                };
+                const float node_r = 10.0f;
+                hovered_start = point_hit(sp, start_screen, node_r);
+                hovered_control = point_hit(sp, control_screen, node_r);
+                hovered_end = point_hit(sp, end_screen, node_r);
+            }
+        }
+        auto draw_node = [&](const SDL_FPoint& p, bool filled, bool hovered) {
             const float radius = filled ? 6.0f : 4.0f;
             SDL_FRect rect{ p.x - radius, p.y - radius, radius * 2.0f, radius * 2.0f };
-            SDL_SetRenderDrawColor(renderer,
-                                   line_col.r,
-                                   line_col.g,
-                                   line_col.b,
-                                   filled ? 255 : 180);
+            SDL_Color fill = hovered ? SDL_Color{255, 255, 255, 255}
+                                     : SDL_Color{ line_col.r, line_col.g, line_col.b, static_cast<Uint8>(filled ? 255 : 180) };
+            SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
             SDL_RenderFillRectF(renderer, &rect);
             SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, 255);
             SDL_RenderDrawRectF(renderer, &rect);
         };
-        draw_node(start_screen, selected);
-        draw_node(end_screen, selected);
+        draw_node(start_screen, selected, hovered_start);
+        draw_node(control_screen, selected, hovered_control);
+        draw_node(end_screen, selected, hovered_end);
     }
 }
 
@@ -2768,10 +2893,12 @@ bool FrameEditorSession::begin_hitbox_drag(SDL_Point mouse) {
     if (dist_sq(mouse_f, visual.rotate_handle) <= rotate_radius * rotate_radius) {
         active_hitbox_handle_ = HitHandle::Rotate;
     } else {
-        if (point_in_rect(visual.edge_midpoints[0])) active_hitbox_handle_ = HitHandle::Left;
-        else if (point_in_rect(visual.edge_midpoints[2])) active_hitbox_handle_ = HitHandle::Right;
-        else if (point_in_rect(visual.edge_midpoints[1])) active_hitbox_handle_ = HitHandle::Top;
-        else if (point_in_rect(visual.edge_midpoints[3])) active_hitbox_handle_ = HitHandle::Bottom;
+        // Edge indices from build_hitbox_visual:
+        // 0: Top, 1: Right, 2: Bottom, 3: Left
+        if (point_in_rect(visual.edge_midpoints[3])) active_hitbox_handle_ = HitHandle::Left;
+        else if (point_in_rect(visual.edge_midpoints[1])) active_hitbox_handle_ = HitHandle::Right;
+        else if (point_in_rect(visual.edge_midpoints[0])) active_hitbox_handle_ = HitHandle::Top;
+        else if (point_in_rect(visual.edge_midpoints[2])) active_hitbox_handle_ = HitHandle::Bottom;
         else {
             // Point in polygon?
             bool inside = false;
@@ -2902,17 +3029,35 @@ void FrameEditorSession::end_hitbox_drag(bool commit) {
 
 bool FrameEditorSession::begin_attack_drag(SDL_Point mouse) {
     if (mode_ != Mode::AttackGeometry) return false;
+    // Do not start an attack drag from clicks inside UI panels
+    // (directory/toolbox/navigator); allow those UIs to handle the event.
+    SDL_Point sp{ mouse.x, mouse.y };
+    if (SDL_PointInRect(&sp, &directory_rect_) ||
+        SDL_PointInRect(&sp, &nav_rect_) ||
+        SDL_PointInRect(&sp, &toolbox_rect_)) {
+        return false;
+    }
     auto* vec = current_attack_vector();
     SDL_FPoint mouse_local{};
     if (!vec) {
         if (!screen_to_local(mouse, mouse_local)) return false;
         vec = ensure_attack_vector_for_type(current_attack_type());
         if (!vec) return false;
-        vec->start_x = 0.0f;
-        vec->start_y = 0.0f;
+        // Initialize all three nodes at the click position; begin dragging the end point.
+        vec->start_x = mouse_local.x;
+        vec->start_y = mouse_local.y;
+        vec->control_x = mouse_local.x;
+        vec->control_y = mouse_local.y;
         vec->end_x = mouse_local.x;
         vec->end_y = mouse_local.y;
         vec->damage = std::max(0, vec->damage);
+        // Start a drag on the End handle immediately
+        attack_dragging_ = true;
+        attack_drag_moved_ = false;
+        attack_drag_start_mouse_ = mouse;
+        attack_drag_start_mouse_local_ = mouse_local;
+        attack_drag_start_vector_ = *vec;
+        active_attack_handle_ = AttackHandle::End;
         refresh_attack_form();
         persist_changes();
         return true;
@@ -2931,6 +3076,7 @@ bool FrameEditorSession::begin_attack_drag(SDL_Point mouse) {
         return cam.map_to_screen_f(world);
     };
     SDL_FPoint start_screen = to_screen(vec->start_x, vec->start_y);
+    SDL_FPoint control_screen = to_screen(vec->control_x, vec->control_y);
     SDL_FPoint end_screen = to_screen(vec->end_x, vec->end_y);
     auto dist_sq = [](SDL_FPoint a, SDL_FPoint b) -> float {
         const float dx = a.x - b.x;
@@ -2956,13 +3102,24 @@ bool FrameEditorSession::begin_attack_drag(SDL_Point mouse) {
     AttackHandle handle = AttackHandle::None;
     if (point_hit(start_screen, node_radius)) {
         handle = AttackHandle::Start;
+    } else if (point_hit(control_screen, node_radius)) {
+        handle = AttackHandle::Control;
     } else if (point_hit(end_screen, node_radius)) {
         handle = AttackHandle::End;
     } else {
+        // Approximate distance to the curve by sampling the polyline
         const float segment_thresh = 100.0f;
-        if (dist_to_segment_sq(mouse_f, start_screen, end_screen) <= segment_thresh) {
-            handle = AttackHandle::Segment;
+        SDL_FPoint prev = start_screen;
+        bool near_curve = false;
+        for (int i = 1; i <= kCurveArcSamples; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(kCurveArcSamples);
+            // Compute local point then to screen
+            SDL_FPoint p_local = quadratic_bezier_point(SDL_FPoint{vec->start_x, vec->start_y}, SDL_FPoint{vec->control_x, vec->control_y}, SDL_FPoint{vec->end_x, vec->end_y}, t);
+            SDL_FPoint p = to_screen(p_local.x, p_local.y);
+            if (dist_to_segment_sq(mouse_f, prev, p) <= segment_thresh) { near_curve = true; break; }
+            prev = p;
         }
+        if (near_curve) handle = AttackHandle::Segment;
     }
     if (handle == AttackHandle::None) {
         return false;
@@ -2994,6 +3151,10 @@ void FrameEditorSession::update_attack_drag(SDL_Point mouse) {
             vec->start_x = local.x;
             vec->start_y = local.y;
             break;
+        case AttackHandle::Control:
+            vec->control_x = local.x;
+            vec->control_y = local.y;
+            break;
         case AttackHandle::End:
             vec->end_x = local.x;
             vec->end_y = local.y;
@@ -3003,6 +3164,8 @@ void FrameEditorSession::update_attack_drag(SDL_Point mouse) {
                               local.y - attack_drag_start_mouse_local_.y };
             vec->start_x = attack_drag_start_vector_.start_x + delta.x;
             vec->start_y = attack_drag_start_vector_.start_y + delta.y;
+            vec->control_x = attack_drag_start_vector_.control_x + delta.x;
+            vec->control_y = attack_drag_start_vector_.control_y + delta.y;
             vec->end_x = attack_drag_start_vector_.end_x + delta.x;
             vec->end_y = attack_drag_start_vector_.end_y + delta.y;
             break;
@@ -3460,6 +3623,8 @@ void FrameEditorSession::persist_changes() {
             attack_entry[type] = nlohmann::json{
                 {"start_x", vec->start_x},
                 {"start_y", vec->start_y},
+                {"control_x", vec->control_x},
+                {"control_y", vec->control_y},
                 {"end_x", vec->end_x},
                 {"end_y", vec->end_y},
                 {"damage", vec->damage},
@@ -3669,6 +3834,14 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
         if (node.is_object()) {
             vec.start_x = read_float(node.value("start_x", 0.0f));
             vec.start_y = read_float(node.value("start_y", 0.0f));
+            // Control defaults to midpoint if not specified
+            if (node.contains("control_x") || node.contains("control_y")) {
+                vec.control_x = read_float(node.value("control_x", (vec.start_x)));
+                vec.control_y = read_float(node.value("control_y", (vec.start_y)));
+            } else {
+                vec.control_x = (vec.start_x + read_float(node.value("end_x", 0.0f))) * 0.5f;
+                vec.control_y = (vec.start_y + read_float(node.value("end_y", 0.0f))) * 0.5f;
+            }
             vec.end_x   = read_float(node.value("end_x", 0.0f));
             vec.end_y   = read_float(node.value("end_y", 0.0f));
             vec.damage  = read_int(node.value("damage", 0));
@@ -3681,6 +3854,9 @@ std::vector<FrameEditorSession::MovementFrame> FrameEditorSession::parse_movemen
             if (arr.size() > 1)    vec.start_y = read_float(arr[1]);
             if (arr.size() > 2)    vec.end_x   = read_float(arr[2]);
             if (arr.size() > 3)    vec.end_y   = read_float(arr[3]);
+            // For array form, no explicit control; default to midpoint
+            vec.control_x = (vec.start_x + vec.end_x) * 0.5f;
+            vec.control_y = (vec.start_y + vec.end_y) * 0.5f;
             if (arr.size() > 4)    vec.damage  = read_int(arr[4]);
         } else {
             return;

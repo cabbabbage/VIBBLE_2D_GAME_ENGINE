@@ -62,6 +62,8 @@ rem ----------------------------------------------------
 rem Ensure vcpkg exists (clone if missing)
 rem ----------------------------------------------------
 set "LOCAL_VCPKG=%cd%\vcpkg"
+rem Ensure local vcpkg root is used to suppress VCPKG_ROOT mismatch warning
+set "VCPKG_ROOT=%LOCAL_VCPKG%"
 if not exist "%LOCAL_VCPKG%\scripts\buildsystems\vcpkg.cmake" (
     echo [run.bat] vcpkg not found, cloning...
     git clone --depth 1 https://github.com/microsoft/vcpkg.git "%LOCAL_VCPKG%"

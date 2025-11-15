@@ -1832,6 +1832,12 @@ SDL_Renderer* Assets::renderer() const {
     return scene ? scene->get_renderer() : nullptr;
 }
 
+bool Assets::scene_light_map_only_mode() const {
+    // If we have a scene, report its light-map-only mode state.
+    // In that mode, SceneRenderer performs SDL_RenderPresent itself.
+    return scene ? scene->light_map_only_mode() : false;
+}
+
 std::optional<Asset::TilingInfo> Assets::compute_tiling_for_asset(const Asset* asset) const {
     if (!asset || !asset->info) {
         return std::nullopt;

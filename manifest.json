@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:13:12Z",
+        "generated_at": "2025-11-15T09:52:45Z",
         "max_scale": 0.05454545095562935,
         "min_scale": 0.05454545095562935,
         "recommended_percentages": [
@@ -117,7 +117,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:13:12Z",
+        "generated_at": "2025-11-15T09:52:45Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -170,7 +170,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:13:12Z",
+        "generated_at": "2025-11-15T09:52:45Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -401,11 +401,160 @@
           }
         },
         "left": {
+          "attack_geometry": [
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": {
+                "control_x": 483.61004638671875,
+                "control_y": 693.9534912109375,
+                "damage": 0,
+                "end_x": 1093.310546875,
+                "end_y": 8.040365219116211,
+                "start_x": -44.01041793823242,
+                "start_y": 515.1448974609375,
+                "type": "melee"
+              },
+              "projectile": null
+            }
+          ],
           "children": [
             "Candle"
           ],
           "flipped_source": false,
           "fps": 12,
+          "hit_geometry": [
+            {
+              "explosion": null,
+              "melee": {
+                "center_x": 3.1372032165527344,
+                "center_y": 269.5638122558594,
+                "half_height": 159.35873413085938,
+                "half_width": 114.20491790771484,
+                "rotation": 0.0,
+                "type": "melee"
+              },
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": {
+                "center_x": 3.1372032165527344,
+                "center_y": 269.5638122558594,
+                "half_height": 159.35873413085938,
+                "half_width": 114.20491790771484,
+                "rotation": 0.0,
+                "type": "melee"
+              },
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": {
+                "center_x": 3.1372032165527344,
+                "center_y": 269.5638122558594,
+                "half_height": 159.35873413085938,
+                "half_width": 114.20491790771484,
+                "rotation": 0.0,
+                "type": "melee"
+              },
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": {
+                "center_x": 3.1372032165527344,
+                "center_y": 269.5638122558594,
+                "half_height": 159.35873413085938,
+                "half_width": 114.20491790771484,
+                "rotation": 0.0,
+                "type": "melee"
+              },
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": {
+                "center_x": 3.1372032165527344,
+                "center_y": 269.5638122558594,
+                "half_height": 159.35873413085938,
+                "half_width": 114.20491790771484,
+                "rotation": 0.0,
+                "type": "melee"
+              },
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": {
+                "center_x": 3.1372032165527344,
+                "center_y": 269.5638122558594,
+                "half_height": 159.35873413085938,
+                "half_width": 114.20491790771484,
+                "rotation": 0.0,
+                "type": "melee"
+              },
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": {
+                "center_x": 3.1372032165527344,
+                "center_y": 269.5638122558594,
+                "half_height": 159.35873413085938,
+                "half_width": 114.20491790771484,
+                "rotation": 0.0,
+                "type": "melee"
+              },
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": {
+                "center_x": 3.1372032165527344,
+                "center_y": 269.5638122558594,
+                "half_height": 159.35873413085938,
+                "half_width": 114.20491790771484,
+                "rotation": 0.0,
+                "type": "melee"
+              },
+              "projectile": null
+            }
+          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -492,7 +641,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:13:12Z",
+        "generated_at": "2025-11-15T09:52:45Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -690,7 +839,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-15T09:13:12Z",
+        "generated_at": "2025-11-15T09:52:45Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -863,7 +1012,7 @@
           "saturation_red": 0.0
         },
         "background_plane_screen_y": 158.0,
-        "background_texture_max_opacity": 180,
+        "background_texture_max_opacity": 210,
         "distance_scale_strength": 0.3499999940395355,
         "foreground_effects": {
           "blur": 0.5,
@@ -898,7 +1047,7 @@
         "render_quality_percent": 10,
         "scale_hysteresis_margin": 0.04999999701976776,
         "smooth_motion_zoom": true,
-        "texture_opacity_falloff_method": 2,
+        "texture_opacity_falloff_method": 4,
         "tripod_distance_y": -1720.0
       },
       "content_root": "MAPS/FORREST",
@@ -1203,9 +1352,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            59,
             242,
             36,
+            192,
             255
           ],
           "edge_smoothness": 43,
@@ -1226,9 +1375,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            85,
-            239,
-            242,
+            31,
+            32,
+            204,
             255
           ],
           "edge_smoothness": 68,

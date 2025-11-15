@@ -20,9 +20,9 @@ namespace fs = std::filesystem;
 
 namespace {
 
-class SpacerWidget : public Widget {
+class LocalSpacerWidget : public Widget {
 public:
-    explicit SpacerWidget(int h) : height_(h) {}
+    explicit LocalSpacerWidget(int h) : height_(h) {}
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
     const SDL_Rect& rect() const override { return rect_; }
     int height_for_width(int) const override { return height_; }
@@ -205,7 +205,7 @@ ForegroundBackgroundEffectPanel::ForegroundBackgroundEffectPanel(Assets* assets,
     set_floating_content_width(520);
     set_close_button_enabled(true);
     set_header_button_style(&DMStyles::AccentButton());
-    header_spacer_ = std::make_unique<SpacerWidget>(DMSpacing::header_gap());
+    header_spacer_ = std::make_unique<LocalSpacerWidget>(DMSpacing::header_gap());
     build_ui();
     refresh_from_camera();
     rebuild_asset_options();

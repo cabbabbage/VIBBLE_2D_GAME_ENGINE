@@ -176,6 +176,10 @@ public:
 
     bool is_dev_mode() const { return dev_mode; }
 
+    // True when SceneRenderer is in light-map-only mode,
+    // which internally performs SDL_RenderPresent.
+    bool scene_light_map_only_mode() const;
+
     int shading_group_count() const { return num_groups_; }
 
     void notify_light_map_asset_moved(const Asset* asset);

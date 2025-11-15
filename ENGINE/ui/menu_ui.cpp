@@ -49,12 +49,21 @@ bool MenuUI::wants_return_to_main_menu() const {
 }
 
 void MenuUI::game_loop() {
-	const int FRAME_MS = 1000 / 60;
+	// Use high-resolution pacing consistent with MainApp::game_loop
+        constexpr double TARGET_FPS = 60.0;
+        constexpr double TARGET_FRAME_SECONDS = 1.0 / TARGET_FPS;
+        const double perf_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
+        const double target_counts  = TARGET_FRAME_SECONDS * perf_frequency;
+
 	bool quit = false;
 	SDL_Event e;
         return_to_main_menu_ = false;
+        double idle_counts_accum = 0.0;
+        int idle_frame_counter   = 0;
+        constexpr int IDLE_REPORT_INTERVAL = 120; // keep parity with MainApp (debug only)
+
 	while (!quit) {
-		Uint32 start = SDL_GetTicks();
+                const Uint64 frame_begin = SDL_GetPerformanceCounter();
 		while (SDL_PollEvent(&e)) {
 			if (e.type == SDL_QUIT) {
 					quit = true;
@@ -62,30 +71,30 @@ void MenuUI::game_loop() {
                         if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && e.key.repeat == 0) {
                                 bool esc_consumed = false;
                                 if (game_assets_) {
-                                                if (game_assets_->is_asset_info_editor_open()) {
-
-                                                                game_assets_->close_asset_info_editor();
-                                                                esc_consumed = true;
-                                                }
-
+                                        if (game_assets_->is_asset_info_editor_open()) {
+                                                game_assets_->close_asset_info_editor();
+                                                esc_consumed = true;
+                                        }
                                 }
                                 if (!esc_consumed) {
-                                                toggleMenu();
+                                        toggleMenu();
                                 }
                         }
                         if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
                                 const bool ctrl_down = (e.key.keysym.mod & KMOD_CTRL) != 0;
                                 if (ctrl_down && e.key.keysym.sym == SDLK_d) {
-                                                doToggleDevMode();
+                                        doToggleDevMode();
                                 }
                         }
                         if (input_) input_->handleEvent(e);
                         if (game_assets_) game_assets_->handle_sdl_event(e);
                         if (menu_active_) handle_event(e);
                 }
+
                 if (game_assets_ && input_) {
                         game_assets_->update(*input_);
                 }
+
                 if (game_assets_) {
                         static bool opened_asset_info_once = false;
                         if (!opened_asset_info_once) {
@@ -96,19 +105,45 @@ void MenuUI::game_loop() {
                                 }
                         }
                 }
+
                 if (menu_active_) {
                         render();
                         switch (consumeAction()) {
-                                        case MenuAction::EXIT:            doExit();         quit = true;        break;
-                                        case MenuAction::RESTART:         doRestart();                             break;
-                                        case MenuAction::SETTINGS:        doSettings();                         break;
-                                        default: break;
+                                case MenuAction::EXIT:     doExit();    quit = true; break;
+                                case MenuAction::RESTART:  doRestart();               break;
+                                case MenuAction::SETTINGS: doSettings();             break;
+                                default: break;
                         }
                 }
-                SDL_RenderPresent(renderer_);
+
+                // Present only when needed:
+                // - If menu overlay drawn (menu_active_), we must present now.
+                // - Else, if scene is in light-map-only mode, it already presented; skip.
+                // - Otherwise (advanced pipeline), present here.
+                bool scene_presents_itself = (game_assets_ && game_assets_->scene_light_map_only_mode());
+                if (menu_active_ || !scene_presents_itself) {
+                        SDL_RenderPresent(renderer_);
+                }
+
                 if (input_) input_->update();
-		Uint32 elapsed = SDL_GetTicks() - start;
-		if (elapsed < FRAME_MS) SDL_Delay(FRAME_MS - elapsed);
+
+                const Uint64 frame_end = SDL_GetPerformanceCounter();
+                const double work_counts = static_cast<double>(frame_end - frame_begin);
+                if (work_counts < target_counts) {
+                        const double remaining_counts = target_counts - work_counts;
+                        idle_counts_accum += remaining_counts;
+                        ++idle_frame_counter;
+                        const double remaining_ms = (remaining_counts * 1000.0) / perf_frequency;
+                        if (remaining_ms >= 1.0) {
+                                SDL_Delay(static_cast<Uint32>(remaining_ms));
+                        }
+                }
+
+                if (idle_frame_counter >= IDLE_REPORT_INTERVAL) {
+                        // Keep parity with MainApp's debug pacing logs (if enabled elsewhere)
+                        idle_counts_accum = 0.0;
+                        idle_frame_counter = 0;
+                }
 	}
 }
 
