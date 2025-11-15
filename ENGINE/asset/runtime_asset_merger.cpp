@@ -852,8 +852,8 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     path[0].next = nullptr;
     path[0].prev = nullptr;
     path[0].base_texture = animation.frame_variant(0, 0);
-    path[0].foreground_texture = animation.foreground_variant(0, 0);
-    path[0].background_texture = animation.background_variant(0, 0);
+    path[0].foreground_texture = animation.depthcue_foreground_variant(0, 0);
+    path[0].background_texture = animation.depthcue_background_variant(0, 0);
 
     TemporaryMergedAssetInfo info_builder(merged_name);
     info_builder.set_geometry(base_width, base_height, pivot, local_polygon);

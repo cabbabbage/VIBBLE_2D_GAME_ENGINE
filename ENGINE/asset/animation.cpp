@@ -488,7 +488,8 @@ SDL_Texture* Animation::mask_variant(std::size_t frame_index, std::size_t varian
         return cache_entry.mask_textures[variant_index];
 }
 
-SDL_Texture* Animation::foreground_variant(std::size_t frame_index, std::size_t variant_index) const {
+SDL_Texture* Animation::depthcue_foreground_variant(std::size_t frame_index,
+                                                    std::size_t variant_index) const {
         if (frame_index >= frame_cache_.size()) {
                 return nullptr;
         }
@@ -503,9 +504,14 @@ SDL_Texture* Animation::foreground_variant(std::size_t frame_index, std::size_t 
         return cache_entry.foreground_textures[variant_index];
 }
 
-SDL_Texture* Animation::background_variant(std::size_t frame_index, std::size_t variant_index) const {
+SDL_Texture* Animation::foreground_variant(std::size_t frame_index, std::size_t variant_index) const {
+        return depthcue_foreground_variant(frame_index, variant_index);
+}
+
+SDL_Texture* Animation::depthcue_background_variant(std::size_t frame_index,
+                                                    std::size_t variant_index) const {
         if (frame_index >= frame_cache_.size()) {
-            return nullptr;
+                return nullptr;
         }
         const FrameCache& cache_entry = frame_cache_[frame_index];
         if (cache_entry.background_textures.empty()) {
@@ -518,6 +524,9 @@ SDL_Texture* Animation::background_variant(std::size_t frame_index, std::size_t 
         return cache_entry.background_textures[variant_index];
 }
 
+SDL_Texture* Animation::background_variant(std::size_t frame_index, std::size_t variant_index) const {
+        return depthcue_background_variant(frame_index, variant_index);
+}
 void Animation::bind_textures_to_frame(AnimationFrame& frame) const {
         SDL_Texture* base = nullptr;
         SDL_Texture* fg   = nullptr;
@@ -527,8 +536,8 @@ void Animation::bind_textures_to_frame(AnimationFrame& frame) const {
         }
         if (frame.frame_index >= 0) {
                 const std::size_t idx = static_cast<std::size_t>(frame.frame_index);
-                fg = foreground_variant(idx, 0);
-                bg = background_variant(idx, 0);
+                fg = depthcue_foreground_variant(idx, 0);
+                bg = depthcue_background_variant(idx, 0);
         }
         frame.base_texture                 = base;
         frame.foreground_texture           = fg;

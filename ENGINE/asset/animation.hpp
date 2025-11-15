@@ -68,6 +68,8 @@ public:
     SDL_Texture* mask_variant(std::size_t frame_index, std::size_t variant_index) const;
     SDL_Texture* foreground_variant(std::size_t frame_index, std::size_t variant_index) const;
     SDL_Texture* background_variant(std::size_t frame_index, std::size_t variant_index) const;
+    SDL_Texture* depthcue_foreground_variant(std::size_t frame_index, std::size_t variant_index) const;
+    SDL_Texture* depthcue_background_variant(std::size_t frame_index, std::size_t variant_index) const;
     void adopt_prebuilt_frames(std::vector<FrameCache> caches, std::vector<SDL_Texture*> base_frames, std::vector<SDL_Texture*> base_masks, std::vector<float> variant_steps);
     struct Source {
         std::string kind;
