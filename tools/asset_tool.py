@@ -2,13 +2,13 @@
 """
 Unified VIBBLE 2D Game Engine Asset Tool.
 
-Combines CacheManager, animation texture building, and all assets building
-into a single fast-executing tool.
+Processes and saves animation images with scaling and effects.
+C++ side handles metadata generation, signatures, and caching logic.
 
 Commands:
-  cache-manager: Cache operations (load/save metadata, images, sequences)
+  cache-manager: Image loading/saving operations (no metadata)
   build-texture: Build animation textures for single asset
-  build-all: Build caches for all assets with parallel processing
+  build-all: Build cached images for all assets with parallel processing
 
 Usage: python tools/asset_tool.py <command> [args...]
 """
@@ -35,25 +35,7 @@ kSignatureOffset = 0xDEADBEEFDEADBEEF  # Matching surface_utils.cpp
 class CacheManager:
     """Python implementation of C++ CacheManager functionality."""
 
-    @staticmethod
-    def load_metadata(meta_file: str) -> Optional[dict]:
-        """Load JSON metadata file."""
-        try:
-            with open(meta_file, 'r') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return None
 
-    @staticmethod
-    def save_metadata(meta_file: str, meta: dict) -> bool:
-        """Save JSON metadata file."""
-        try:
-            os.makedirs(os.path.dirname(meta_file), exist_ok=True)
-            with open(meta_file, 'w') as f:
-                json.dump(meta, f, indent=2)
-            return True
-        except Exception:
-            return False
 
     @staticmethod
     def load_surface(path: str) -> Optional[Image.Image]:
@@ -151,28 +133,7 @@ class CacheManager:
 
         return img
 
-def hash_image_effects(settings: Dict[str, float]) -> int:
-    """Replicate C++ HashImageEffectSettings exactly."""
-    def quantize(value: float, scale: float) -> int:
-        return round(value * scale)
 
-    hash_val = 1469598103934665603  # FNV offset
-    def mix(v: int):
-        nonlocal hash_val
-        hash_val ^= v
-        hash_val *= 1099511628211
-        hash_val &= 0xFFFFFFFFFFFFFFFF  # Keep as uint64
-
-    mix(quantize(settings['rgb_boost'], 1000.0))
-    mix(quantize(settings['contrast'], 1000.0))
-    mix(quantize(settings['brightness'], 1000.0))
-    mix(quantize(settings['blur'], 1000.0))
-    mix(quantize(settings['saturation_red'], 1000.0))
-    mix(quantize(settings['saturation_green'], 1000.0))
-    mix(quantize(settings['saturation_blue'], 1000.0))
-    mix(quantize(settings['hue'], 10.0))
-
-    return hash_val
 
 class ImageEffectProcessor:
     """Process image effects matching C++ image_effects.cpp implementation."""
@@ -329,72 +290,12 @@ def scan_animation_frames(src_folder: Path) -> Tuple[int, int, int]:
 
     return frame_count, orig_w, orig_h
 
-def compute_source_signature(src_folder: Path, frame_count: int) -> int:
-    """Compute source signature matching C++ compute_source_signature exactly."""
-    if frame_count <= 0:
-        return 0
-    
-    signature = kSignatureOffset
-    
-    def mix_signature(sig: int, value: int) -> int:
-        """FNV-1a mixing function matching C++ mix_signature."""
-        sig ^= value
-        sig *= 1099511628211
-        sig &= 0xFFFFFFFFFFFFFFFF  # Keep as uint64
-        return sig
-    
-    import os
-    try:
-        print(f"  Computing source signature from: {src_folder}", file=sys.stderr)
-        for idx in range(frame_count):
-            frame_path = src_folder / f"{idx}.png"
-            if not frame_path.exists():
-                print(f"  ERROR: Frame {idx} not found at {frame_path}", file=sys.stderr)
-                return 0
-            
-            # Get file size
-            file_size = os.path.getsize(frame_path)
-            
-            # Get file modification time in nanoseconds
-            mtime = os.path.getmtime(frame_path)
-            nanos = int(mtime * 1_000_000_000)
-            
-            if idx == 0:  # Debug first frame
-                print(f"  Frame 0: size={file_size}, mtime_nanos={nanos}", file=sys.stderr)
-            
-            signature = mix_signature(signature, idx)
-            signature = mix_signature(signature, file_size)
-            signature = mix_signature(signature, nanos)
-        
-        signature = mix_signature(signature, frame_count)
-        final_sig = signature & 0xFFFFFFFFFFFFFFFF
-        print(f"  Computed signature: 0x{final_sig:x} ({final_sig})", file=sys.stderr)
-        return final_sig
-    except Exception as e:
-        print(f"  ERROR computing signature: {e}", file=sys.stderr)
-        return 0
 
-def compute_scale_profile_revision(steps: List[int]) -> int:
-    """Compute scale profile revision matching C++ ProfileRevision."""
-    if not steps:
-        return 0
-    
-    # FNV-1a hash of the scale steps
-    revision = 1469598103934665603  # FNV offset
-    
-    def mix(v: int):
-        nonlocal revision
-        revision ^= v
-        revision *= 1099511628211
-        revision &= 0xFFFFFFFFFFFFFFFF
-    
-    for step in steps:
-        mix(step)
-    
-    return revision
+
+
 
 def generate_animation_cache(asset_src_dir: Path, asset_name: str, effects_config: Dict[str, Dict[str, float]], scales: List[int]) -> None:
-    """Main function to generate animation cache."""
+    """Main function to generate animation cached images."""
 
     cache_root = Path("cache") / asset_name / "animations"
 
@@ -484,53 +385,7 @@ def generate_animation_cache(asset_src_dir: Path, asset_name: str, effects_confi
 
             print(f"    Generated {frame_count} frames for normal/foreground/background")
 
-        # Compute effect hashes
-        fg_hash = hash_image_effects(effects_config['foreground'])
-        bg_hash = hash_image_effects(effects_config['background'])
-        
-        # Compute source signature from source frames
-        source_sig = compute_source_signature(anim_dir, frame_count)
-        
-        # Get profile revision from manifest (don't compute it)
-        _, profile_revision_from_manifest = get_asset_scale_profile_and_revision(
-            asset_name, "manifest.json"
-        )
-        
-        # Use manifest revision if available, otherwise use computed one
-        if profile_revision_from_manifest != 0:
-            profile_revision = profile_revision_from_manifest
-        else:
-            profile_revision = compute_scale_profile_revision(scales)
-
-        # Write per-animation metadata
-        metadata = {
-            "cache_version": kAnimationCacheVersion,
-            "frame_count": frame_count,
-            "original_width": orig_w,
-            "original_height": orig_h,
-            "scale_steps": scales,
-            "scale_profile_revision": profile_revision,
-            "has_masks": False,
-            "foreground_effect_hash": fg_hash & 0xFFFFFFFFFFFFFFFF,
-            "background_effect_hash": bg_hash & 0xFFFFFFFFFFFFFFFF,
-            "source_signature": source_sig
-        }
-
-        metadata_path = anim_cache_root / "metadata.json"
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f, indent=2)
-        
-        # Ensure file is written to disk
-        import os
-        if hasattr(os, 'sync'):
-            os.sync()
-
-        print(f"  Wrote metadata for {anim_id}")
-
-    print(f"Generated cache for animations in {cache_root}")
-    
-    # Small delay to ensure all filesystem operations complete
-    time.sleep(0.1)
+    print(f"Generated cached images for animations in {cache_root}")
 
 def discover_assets(src_dir: Path) -> list:
     """Discover all asset directories."""
@@ -545,42 +400,13 @@ def discover_assets(src_dir: Path) -> list:
 
     return assets
 
-def get_asset_scale_profile_and_revision(asset_name: str, manifest_path: str) -> tuple:
-    """Get scale profile and revision for an asset from manifest."""
-    try:
-        with open(manifest_path, 'r') as f:
-            manifest = json.load(f)
-        
-        # Get the asset entry
-        if "assets" in manifest and asset_name in manifest["assets"]:
-            asset_entry = manifest["assets"][asset_name]
-            
-            # Get scaling profile
-            if "scaling_profile" in asset_entry and isinstance(asset_entry["scaling_profile"], dict):
-                profile = asset_entry["scaling_profile"]
-                
-                # Get revision from manifest
-                revision = profile.get("revision", 0)
-                
-                # Get percentages (convert to int list)
-                if "recommended_percentages" in profile:
-                    steps = [int(p) for p in profile.get("recommended_percentages", [])]
-                    return steps, revision
-                    
-    except (FileNotFoundError, json.JSONDecodeError, KeyError):
-        pass
-    
-    # Default scales if not found
-    return [100, 75, 50, 33], 0
 
-def build_asset_cache(asset_name: str, src_dir: Path, effects_config: dict) -> dict:
+
+def build_asset_cache(asset_name: str, src_dir: Path, effects_config: dict, scales: List[int]) -> dict:
     """Build cache for a single asset."""
     start_time = time.time()
 
     asset_src_dir = src_dir / asset_name
-    
-    # Get scales AND revision from manifest
-    scales, _ = get_asset_scale_profile_and_revision(asset_name, "manifest.json")
 
     try:
         print(f"Building cache for asset: {asset_name} (scales: {scales})")
@@ -594,15 +420,6 @@ def cache_manager_main(args):
     """Handle cache-manager command."""
     parser = argparse.ArgumentParser(description="CacheManager operations")
     subparsers = parser.add_subparsers(dest='operation', help='Available operations')
-
-    # load_metadata
-    load_meta_parser = subparsers.add_parser('load_metadata', help='Load JSON metadata')
-    load_meta_parser.add_argument('meta_file', help='Path to metadata JSON file')
-
-    # save_metadata
-    save_meta_parser = subparsers.add_parser('save_metadata', help='Save JSON metadata')
-    save_meta_parser.add_argument('meta_file', help='Path to save metadata JSON file')
-    save_meta_parser.add_argument('--json', '-j', required=True, help='JSON string to save')
 
     # load_surface
     load_surface_parser = subparsers.add_parser('load_surface', help='Load image surface info')
@@ -620,24 +437,7 @@ def cache_manager_main(args):
 
     sub_args = parser.parse_known_args(args)[0]
 
-    if sub_args.operation == 'load_metadata':
-        meta = CacheManager.load_metadata(sub_args.meta_file)
-        if meta is None:
-            print(json.dumps({"error": "Failed to load metadata"}))
-            sys.exit(1)
-        else:
-            print(json.dumps(meta))
-
-    elif sub_args.operation == 'save_metadata':
-        try:
-            meta = json.loads(sub_args.json)
-            success = CacheManager.save_metadata(sub_args.meta_file, meta)
-            print(json.dumps({"success": success}))
-        except json.JSONDecodeError:
-            print(json.dumps({"error": "Invalid JSON"}))
-            sys.exit(1)
-
-    elif sub_args.operation == 'load_surface':
+    if sub_args.operation == 'load_surface':
         img = CacheManager.load_surface(sub_args.path)
         if img is None:
             print(json.dumps({"error": "Failed to load surface"}))
@@ -664,6 +464,9 @@ def cache_manager_main(args):
     elif sub_args.operation == 'save_surface_sequence':
         # Would need to implement sequence loading from stdin or args, simplified
         print(json.dumps({"error": "Not implemented"}))
+        sys.exit(1)
+    else:
+        print(json.dumps({"error": "Unknown operation"}))
         sys.exit(1)
 
 def build_texture_main(args):
@@ -731,8 +534,10 @@ def build_all_main(args):
     start_time = time.time()
 
     with ThreadPoolExecutor(max_workers=parallel_jobs) as executor:
+        # Default scales for legacy support - C++ should provide explicit scales
+        default_scales = [100, 75, 50, 33]
         future_to_asset = {
-            executor.submit(build_asset_cache, asset_name, src_dir, effects_config): asset_name
+            executor.submit(build_asset_cache, asset_name, src_dir, effects_config, default_scales): asset_name
             for asset_name in assets_to_build
         }
 

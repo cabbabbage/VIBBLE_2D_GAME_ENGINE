@@ -39,54 +39,22 @@ bool has_depthcue_effects(const std::string& /*settings*/) {
         return false;
 }
 
+// Count PNG files (0.png, 1.png, 2.png, etc.) in a folder
+int count_png_files(const std::string& folder) {
+        int count = 0;
+        while (true) {
+                std::string frame_path = folder + "/" + std::to_string(count) + ".png";
+                if (!std::filesystem::exists(frame_path)) {
+                        break;
+                }
+                ++count;
+        }
+        return count;
+}
+
 // load_surface_sequence_from_folder removed - logic now in CacheManager::load_surface_sequence for consistency
 
-bool call_python_script_to_regenerate_cache(const std::string& asset_name,
-                                            const std::string& src_folder,
-                                            const std::vector<int>& scale_steps,
-                                            const std::string& effects_config) {
-        std::string python_cmd = "python tools/asset_tool.py build-texture";
 
-        std::vector<int> scales = scale_steps;
-        if (scales.empty()) {
-                const auto defaults = render_pipeline::ScalingLogic::PercentSteps();
-                scales.assign(defaults.begin(), defaults.end());
-        }
-
-        std::ostringstream scale_stream;
-        for (std::size_t i = 0; i < scales.size(); ++i) {
-                if (i > 0) {
-                        scale_stream << ",";
-                }
-                scale_stream << scales[i];
-        }
-
-        std::vector<std::string> args = {
-            "--asset-name", asset_name,
-            "--asset-src-dir", "\"" + src_folder + "\"",
-            "--scales", scale_stream.str(),
-            "--manifest-path", "manifest.json"
-        };
-
-        std::string full_cmd = python_cmd;
-        for (const auto& arg : args) {
-            full_cmd += " " + arg;
-        }
-
-        std::cout << "[AnimationLoader] Regenerating cache for asset '" << asset_name
-                  << "' -> executing: " << full_cmd << "\n";
-
-        int result = std::system(full_cmd.c_str());
-
-        if (result == 0) {
-                std::cout << "[AnimationLoader] Cache regeneration succeeded for '" << asset_name << "'\n";
-                return true;
-        } else {
-                std::cerr << "[AnimationLoader] Cache regeneration FAILED for '" << asset_name
-                          << "' with exit code: " << result << "\n";
-                return false;
-        }
-}
 
 void destroy_texture(SDL_Texture*& texture) {
         if (texture) {
@@ -191,10 +159,7 @@ std::string format_percent_steps(const std::vector<int>& steps) {
         return oss.str();
 }
 
-struct SourceSignatureResult {
-        std::uint64_t value = 0;
-        bool          success = false;
-};
+// SourceSignatureResult removed - signature validation no longer used
 
 struct VariantLayerPaths {
         std::string scale_folder;
@@ -230,93 +195,8 @@ bool overlay_hashes_match_and_cleanup(const nlohmann::json& metadata,
                                       std::uint64_t expected_bg_hash,
                                       const std::string& asset_name,
                                       const std::string& trigger) {
-        if (variant_paths.empty()) {
-                return true;
-        }
-
-        auto read_hash = [&](const char* key, std::uint64_t& value) -> bool {
-                if (!metadata.contains(key)) {
-                        return false;
-                }
-                const auto& entry = metadata.at(key);
-                if (!entry.is_number_integer() && !entry.is_number_unsigned()) {
-                        return false;
-                }
-                try {
-                        value = entry.get<std::uint64_t>();
-                } catch (...) {
-                        return false;
-                }
-                return true;
-        };
-
-        std::uint64_t stored_fg = 0;
-        std::uint64_t stored_bg = 0;
-        const bool     has_fg    = read_hash("foreground_effect_hash", stored_fg);
-        const bool     has_bg    = read_hash("background_effect_hash", stored_bg);
-
-        const bool hashes_match =
-                (has_fg && has_bg && stored_fg == expected_fg_hash && stored_bg == expected_bg_hash);
-        if (hashes_match) {
-                return true;
-        }
-
-        if (!has_fg || !has_bg) {
-                std::cout << "[AnimationLoader] " << asset_name << "::" << trigger
-                          << " metadata missing effect hash -> clearing overlay cache\n";
-        } else {
-                std::cout << "[AnimationLoader] " << asset_name << "::" << trigger
-                          << " effect hash mismatch (fg=0x" << std::hex << stored_fg << " bg=0x" << stored_bg
-                          << " expected fg=0x" << expected_fg_hash << " bg=0x" << expected_bg_hash << std::dec
-                          << ") -> clearing overlay cache\n";
-        }
-
-        clear_overlay_directories(variant_paths);
-        return false;
-}
-
-SourceSignatureResult compute_source_signature(const fs::path& folder, int frame_count) {
-        if (frame_count <= 0) {
-                return {};
-        }
-
-        std::uint64_t signature = kSignatureOffset;
-        std::error_code ec;
-        
-        std::cout << "[DEBUG] Computing source signature from: " << folder.string() << "\n";
-        
-        for (int idx = 0; idx < frame_count; ++idx) {
-                const fs::path frame_path = folder / (std::to_string(idx) + ".png");
-                if (!fs::exists(frame_path, ec) || ec) {
-                        std::cerr << "[DEBUG] Frame " << idx << " not found at " << frame_path.string() << "\n";
-                        return {};
-                }
-
-                const auto file_size = fs::file_size(frame_path, ec);
-                if (ec) {
-                        std::cerr << "[DEBUG] Failed to get file size for frame " << idx << "\n";
-                        return {};
-                }
-
-                const auto write_time = fs::last_write_time(frame_path, ec);
-                if (ec) {
-                        std::cerr << "[DEBUG] Failed to get write time for frame " << idx << "\n";
-                        return {};
-                }
-
-                signature = mix_signature(signature, static_cast<std::uint64_t>(idx));
-                signature = mix_signature(signature, static_cast<std::uint64_t>(file_size));
-                const auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(write_time.time_since_epoch()).count();
-                signature = mix_signature(signature, static_cast<std::uint64_t>(nanos));
-                
-                if (idx == 0) {  // Debug first frame
-                        std::cout << "[DEBUG] Frame 0: size=" << file_size << ", mtime_nanos=" << nanos << "\n";
-                }
-        }
-
-        signature = mix_signature(signature, static_cast<std::uint64_t>(frame_count));
-        std::cout << "[DEBUG] Computed signature: 0x" << std::hex << signature << std::dec << " (" << signature << ")\n";
-        return {signature, true};
+        // Overlay validation removed - overlays handled by Python
+        return true;
 }
 
 using AudioCache = std::unordered_map<std::string, std::weak_ptr<Mix_Chunk>>;
@@ -1067,124 +947,23 @@ void Animation::load(const std::string& trigger,
                         }
                 }
         } else {
-                fs::path src_folder      = resolve_source_folder(dir_path, source.path);
+                // Simplified cache loading - assume PNGs exist and load them directly
                 std::string cache_folder = root_cache + "/" + trigger;
-                std::string meta_file    = cache_folder + "/metadata.json";
-                int expected_frames = 0;
-                int orig_w = 0, orig_h = 0;
-                while (true) {
-                        fs::path frame_path = src_folder / (std::to_string(expected_frames) + ".png");
-                        if (!fs::exists(frame_path)) break;
-                        if (expected_frames == 0) {
-                                        if (SDL_Surface* s = IMG_Load(frame_path.string().c_str())) {
-                                                                orig_w = s->w;
-                                                                orig_h = s->h;
-                                                                SDL_FreeSurface(s);
-                                        }
-                        }
-			++expected_frames;
-		}
-		if (expected_frames == 0) {
-                        flush_diagnostics();
-                        return;
-                }
-                bool metadata_valid = false;
-                nlohmann::json meta;
-                std::vector<int> expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
-                const std::uint64_t expected_revision = info.scale_profile_revision;
-                if (CacheManager::load_metadata(meta_file, meta)) {
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " found metadata (revision "
-                                  << meta.value("scale_profile_revision", static_cast<std::uint64_t>(0)) << ") expecting revision " << expected_revision << "\n";
-                        const bool meta_has_masks = meta.value("has_masks", false);
-                        bool meta_ok = ( meta.value("cache_version", 0) == kAnimationCacheVersion && meta.value("frame_count", -1) == expected_frames && meta.value("original_width", -1) == orig_w && meta.value("original_height", -1) == orig_h && (meta_has_masks == info.is_shaded));
-                        if (meta_ok) {
-                                if (meta.contains("scale_steps") && meta["scale_steps"].is_array()) {
-                                        const auto& stored = meta["scale_steps"];
-                                        std::vector<int> stored_steps;
-                                        stored_steps.reserve(stored.size());
-                                        bool stored_valid = true;
-                                        for (const auto& value : stored) {
-                                                if (!value.is_number_integer()) {
-                                                        stored_valid = false;
-                                                        break;
-                                                }
-                                                stored_steps.push_back(value.get<int>());
-                                        }
-                                        if (!stored_valid) {
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " metadata scale_steps invalid -> forcing rebuild\n";
-                                                meta_ok = false;
-                                        } else if (stored_steps != expected_steps) {
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " metadata steps " << format_percent_steps(stored_steps) << " differ from profile " << format_percent_steps(expected_steps) << " -> rebuild required\n";
-                                                meta_ok = false;
-                                        }
-                                } else {
-                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                  << " metadata missing scale_steps -> forcing rebuild\n";
-                                        meta_ok = false;
-                                }
-                        }
-                        if (meta_ok) {
-                                const bool has_signature =
-                                        meta.contains("source_signature") &&
-                                        (meta["source_signature"].is_number_unsigned() || meta["source_signature"].is_number_integer());
-                                if (!has_signature) {
-                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                  << " metadata missing source signature -> forcing rebuild\n";
-                                        meta_ok = false;
-                                } else {
-                                        std::uint64_t stored_signature = 0;
-                                        try {
-                                                stored_signature = meta["source_signature"].get<std::uint64_t>();
-                                        } catch (...) {
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " metadata source signature invalid -> forcing rebuild\n";
-                                                meta_ok = false;
-                                        }
-                                        if (meta_ok) {
-                                                const auto current_signature = compute_source_signature(src_folder, expected_frames);
-                                                if (!current_signature.success) {
-                                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                                  << " unable to compute source signature for '" << src_folder.string()
-                                                                  << "' -> forcing rebuild\n";
-                                                        meta_ok = false;
-                                                } else if (stored_signature != current_signature.value) {
-                                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                                  << " source signature mismatch (0x" << std::hex << stored_signature
-                                                                  << " != 0x" << current_signature.value << std::dec << ") -> rebuild\n";
-                                                        meta_ok = false;
-                                                }
-                                        }
-                                }
-                        }
-                        if (meta_ok) {
-                                const std::uint64_t stored_revision = meta.value("scale_profile_revision", static_cast<std::uint64_t>(0));
-                                if (!prefer_cached && stored_revision != expected_revision) {
-                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                  << " metadata revision mismatch (" << stored_revision << " != "
-                                                  << expected_revision << ") -> rebuild\n";
-                                        meta_ok = false;
-                                }
-                        }
-                        metadata_valid = meta_ok;
-                        if (!metadata_valid) {
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " cache metadata rejected -> rebuilding variants\n";
-                        }
-                } else {
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " cache metadata missing -> rebuilding variants\n";
-                }
                 std::size_t variant_count = variant_steps_.size();
                 if (variant_count == 0) {
                         variant_steps_.push_back(1.0f);
                         variant_count = 1;
                         info.scale_variants = variant_steps_;
-                        expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
                 }
 
+                // Build paths for each variant
+                std::vector<VariantLayerPaths> variant_paths;
+                variant_paths.reserve(variant_count);
+                for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                        variant_paths.push_back(build_variant_layer_paths(cache_folder, variant_steps_, idx));
+                }
+
+                // Lambda for freeing surface lists
                 auto free_surface_lists = [](std::vector<std::vector<SDL_Surface*>>& lists) {
                         for (auto& list : lists) {
                                 for (SDL_Surface* surf : list) {
@@ -1194,309 +973,61 @@ void Animation::load(const std::string& trigger,
                                 }
                                 list.clear();
                         }
-};
-                const std::string mask_cache_folder = cache_folder + "/masks";
-                std::vector<VariantLayerPaths> variant_paths;
-                variant_paths.reserve(variant_count);
-                for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                        variant_paths.push_back(build_variant_layer_paths(cache_folder, variant_steps_, idx));
-                        const VariantLayerPaths& paths = variant_paths.back();
-                        std::error_code mkdir_ec;
-                        fs::create_directories(paths.normal_folder, mkdir_ec);
-                        mkdir_ec.clear();
-                        fs::create_directories(paths.foreground_folder, mkdir_ec);
-                        mkdir_ec.clear();
-                        fs::create_directories(paths.background_folder, mkdir_ec);
-                        mkdir_ec.clear();
+                };
+
+                // Count frames in the first variant to determine correct frame count
+                int frame_count = 0;
+                if (!variant_paths.empty()) {
+                        frame_count = count_png_files(variant_paths[0].normal_folder);
                 }
+                if (frame_count == 0) {
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " no cached frames found\n";
+                        flush_diagnostics();
+                        return;
+                }
+
+                // Try to load surfaces from the expected cache locations
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> foreground_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> background_surfaces(variant_count);
-                std::vector<bool> foreground_needs_generation(variant_count, true);
-                std::vector<bool> background_needs_generation(variant_count, true);
                 GenerateFadedMask::MaskVariants mask_surfaces;
-                bool masks_loaded_from_cache = false;
-                std::vector<bool> rebuild_variant(variant_count, false);
 
-                // Ignore foreground/background effect hash changes at runtime; do not clear or rebuild overlays.
-
-                if (!metadata_valid || effect_hash_mismatch) {
-                        std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
-                }
-
-                if (!prefer_cached) {
-                        std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " prefer_cached disabled -> forcing rebuild\n";
-                }
-
-                auto cleanup_variant_directories = [&](const std::string& folder) {
-                        try {
-                                std::unordered_set<std::string> expected_names;
-                                expected_names.reserve(variant_count);
-                                for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                        const int percent = (idx < expected_steps.size()) ? expected_steps[idx] : static_cast<int>(std::lround(variant_steps_[idx] * 100.0f));
-                                        expected_names.insert("scale_" + std::to_string(percent));
-                                }
-                                for (const auto& entry : fs::directory_iterator(folder)) {
-                                        if (!entry.is_directory()) {
-                                                continue;
-                                        }
-                                        const std::string name = entry.path().filename().string();
-                                        if (name.rfind("scale_", 0) != 0) {
-                                                continue;
-                                        }
-                                        if (expected_names.find(name) == expected_names.end()) {
-                                                fs::remove_all(entry.path());
-                                                continue;
-                                        }
-
-                                        // For the main sprite cache folder, clean up any stray PNGs that
-                                        // live directly under scale_* as well as stale normal/foreground/
-                                        // background subfolders, but only for variants that are about to
-                                        // be rebuilt so that we preserve reusable caches.
-                                        if (folder == cache_folder) {
-                                                const fs::path scale_root = entry.path();
-                                                std::size_t variant_index = variant_count;
-                                                for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                                        if (fs::path(variant_paths[idx].scale_folder) == scale_root) {
-                                                                variant_index = idx;
-                                                                break;
-                                                        }
-                                                }
-                                                if (variant_index >= variant_count || !rebuild_variant[variant_index]) {
-                                                        continue;
-                                                }
-                                                try {
-                                                        for (const auto& child : fs::directory_iterator(scale_root)) {
-                                                                const fs::path child_path = child.path();
-                                                                if (child.is_regular_file()) {
-                                                                        const std::string ext = child_path.extension().string();
-                                                                        if (ext == ".png") {
-                                                                                std::error_code rm_ec;
-                                                                                fs::remove(child_path, rm_ec);
-                                                                        }
-                                                                        continue;
-                                                                }
-                                                                if (child.is_directory()) {
-                                                                        const std::string child_name = child_path.filename().string();
-                                                                        if (child_name == "normal" ||
-                                                                            child_name == "foreground" ||
-                                                                            child_name == "background") {
-                                                                                std::error_code rm_ec;
-                                                                                fs::remove_all(child_path, rm_ec);
-                                                                        }
-                                                                }
-                                                        }
-                                                } catch (...) {
-                                                }
-                                        }
-                                }
-                        } catch (...) {
-                        }
-};
-
-                const bool attempt_cache_load = metadata_valid && prefer_cached;
-                if (attempt_cache_load) {
-                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                const VariantLayerPaths& paths = variant_paths[idx];
-                                std::vector<SDL_Surface*> loaded;
-                                bool loaded_ok = CacheManager::load_surface_sequence(paths.normal_folder, expected_frames, loaded);
-                                if (!loaded_ok) {
-                                        rebuild_variant[idx] = true;
-                                        cache_invalid_detected = true;
-                                        continue;
-                                }
+                bool all_surfaces_loaded = true;
+                for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                        const VariantLayerPaths& paths = variant_paths[idx];
+                        std::vector<SDL_Surface*> loaded;
+                        bool loaded_ok = CacheManager::load_surface_sequence(paths.normal_folder, frame_count, loaded);
+                        if (loaded_ok && static_cast<int>(loaded.size()) == frame_count) {
                                 variant_surfaces[idx] = std::move(loaded);
-                        }
-                }
-
-                if (variant_surfaces.empty() || variant_surfaces[0].empty() || !variant_surfaces[0][0]) {
-                        cache_invalid_detected = true;
-                        std::fill(rebuild_variant.begin(), rebuild_variant.end(), true);
-                        free_surface_lists(variant_surfaces);
-                } else if (!rebuild_variant[0]) {
-                        original_canvas_width  = orig_w;
-                        original_canvas_height = orig_h;
-                        scaled_sprite_w        = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
-                        scaled_sprite_h        = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
-                }
-
-                bool need_generation = std::any_of(rebuild_variant.begin(), rebuild_variant.end(), [](bool v) { return v; });
-                bool cache_regenerated = false;
-
-                if (need_generation) {
-                        // Cache is invalid - regenerate using Python script instead of creating surfaces in C++
-
-                        // Clean up any existing cache directory to force complete regeneration
-                        cleanup_variant_directories(cache_folder);
-                        cleanup_variant_directories(mask_cache_folder);
-
-                        // Clear any partial surfaces we may have loaded
-                        free_surface_lists(variant_surfaces);
-
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " cache invalid, calling Python script to regenerate for "
-                                  << expected_frames << " frame(s) across " << variant_count << " variant(s)\n";
-
-                        // Get effects config from manifest for the Python script
-                        std::string effects_config = R"(
-{
-  "foreground": {
-    "rgb_boost": 0.0,
-    "contrast": 0.0,
-    "brightness": 0.0,
-    "blur": 0.0,
-    "saturation_red": 0.0,
-    "saturation_green": 0.0,
-    "saturation_blue": 0.0,
-    "hue": 0.0
-  },
-  "background": {
-    "rgb_boost": 0.0,
-    "contrast": 0.0,
-    "brightness": 0.0,
-    "blur": 0.0,
-    "saturation_red": 0.0,
-    "saturation_green": 0.0,
-    "saturation_blue": 0.0,
-    "hue": 0.0
-  }
-}
-)";
-
-                        // Call Python script to regenerate all cache for this asset
-                        const std::vector<int> scale_percents =
-                                render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
-                        bool python_success = call_python_script_to_regenerate_cache(
-                                info.name,
-                                src_folder.string(),
-                                scale_percents,
-                                effects_config);
-
-                        if (!python_success) {
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " Python regeneration failed, retrying once more...\n";
-                                // Retry once on failure
-                                python_success = call_python_script_to_regenerate_cache(
-                                        info.name,
-                                        src_folder.string(),
-                                        scale_percents,
-                                        effects_config);
-                        }
-
-                        if (!python_success) {
-                                std::cerr << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " Python regeneration failed after retry, cannot load animation\n";
-                                free_surface_lists(variant_surfaces);
-                                flush_diagnostics();
-                                return;
-                        }
-
-                        cache_regenerated = true;
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " Python regeneration succeeded, retrying cache load\n";
-                        
-                        // Small delay to ensure filesystem operations complete
-                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-                        // Retry cache loading after Python script success
-                        if (attempt_cache_load) {
-                                for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                        const VariantLayerPaths& paths = variant_paths[idx];
-                                        std::vector<SDL_Surface*> loaded;
-                                        bool loaded_ok = CacheManager::load_surface_sequence(paths.normal_folder, expected_frames, loaded);
-                                        if (loaded_ok) {
-                                                variant_surfaces[idx] = std::move(loaded);
-                                        } else {
-                                                std::cerr << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " retry failed to load regenerated cache for variant " << idx << "\n";
-                                                free_surface_lists(variant_surfaces);
-                                                flush_diagnostics();
-                                                return;
-                                        }
-                                }
-                        }
-                }
-
-                if (!variant_surfaces.empty() && !variant_surfaces[0].empty() && variant_surfaces[0][0]) {
-                        if (scaled_sprite_w <= 0 || scaled_sprite_h <= 0) {
-                                scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
-                                scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
-                        }
-                        original_canvas_width  = orig_w;
-                        original_canvas_height = orig_h;
-                }
-
-                const bool cached_variants_loaded = (!cache_regenerated && attempt_cache_load);
-
-                if (supports_depthcue_cache) {
-                        const bool overlay_cache_eligible = true; // Always attempt to load precomputed overlays
-
-                        // Attempt to load cached foreground/background surfaces for each variant.
-                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                const VariantLayerPaths& paths = variant_paths[idx];
-
-                                if (overlay_cache_eligible) {
-                                        std::vector<SDL_Surface*> loaded_fg;
-                                        if (CacheManager::load_surface_sequence(paths.foreground_folder, expected_frames, loaded_fg) &&
-                                            loaded_fg.size() == static_cast<std::size_t>(expected_frames)) {
-                                                foreground_surfaces[idx] = std::move(loaded_fg);
-                                                foreground_needs_generation[idx] = false;
-                                        }
-
-                                        std::vector<SDL_Surface*> loaded_bg;
-                                        if (CacheManager::load_surface_sequence(paths.background_folder, expected_frames, loaded_bg) &&
-                                            loaded_bg.size() == static_cast<std::size_t>(expected_frames)) {
-                                                background_surfaces[idx] = std::move(loaded_bg);
-                                                background_needs_generation[idx] = false;
-                                        }
-                                }
-                        }
-
-                        // Do not generate any missing overlays at runtime.
-                }
-
-                if (info.is_shaded) {
-                        bool announced_generation = false;
-                        loading_status::notify("Creating texture/mask for " + info.name);
-                        auto mask_result = GenerateFadedMask::BuildMasks(info.name, trigger, expected_steps, variant_surfaces, info.shadow_mask_settings);
-                        mask_surfaces            = std::move(mask_result.first);
-                        masks_loaded_from_cache  = mask_result.second;
-                        if (masks_loaded_from_cache) {
-                                loading_status::notify("Loading assets");
                         } else {
-                                announced_generation = true;
+                                all_surfaces_loaded = false;
+                                break; // If any variant fails, we need to regenerate
                         }
-                        if (mask_surfaces.size() != variant_surfaces.size()) {
-                                mask_surfaces.resize(variant_surfaces.size());
-                        }
-                        if (masks_loaded_from_cache) {
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " loaded faded mask surfaces from cache\n";
-                        } else {
-                                const std::size_t mask_frame_count = (!mask_surfaces.empty() && !mask_surfaces.front().empty()) ? mask_surfaces.front().size() : 0;
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " generated " << mask_frame_count
-                                          << " faded mask frame(s) across " << mask_surfaces.size() << " variant(s)\n";
-                                if (announced_generation) {
-                                        loading_status::notify("Loading assets");
-                                }
-                        }
-                } else {
-                        mask_surfaces.resize(variant_surfaces.size());
                 }
 
-                if (!variant_surfaces[0].empty() && variant_surfaces[0][0] && (scaled_sprite_w <= 0 || scaled_sprite_h <= 0)) {
-                        scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
-                        scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
+                if (!all_surfaces_loaded || variant_surfaces[0].empty() || !variant_surfaces[0][0]) {
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " cache surfaces not found, cannot load animation\n";
+                        free_surface_lists(variant_surfaces);
+                        flush_diagnostics();
+                        return;
                 }
-                if (original_canvas_width <= 0 && orig_w > 0) {
-                        original_canvas_width = orig_w;
-                }
-                if (original_canvas_height <= 0 && orig_h > 0) {
-                        original_canvas_height = orig_h;
-                }
+
+                const int expected_frames = static_cast<int>(variant_surfaces[0].size());
+                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                          << " loaded " << expected_frames << " cached frame(s) for "
+                          << variant_count << " variant(s)\n";
+
+                original_canvas_width  = variant_surfaces[0][0]->w;
+                original_canvas_height = variant_surfaces[0][0]->h;
+                scaled_sprite_w        = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
+                scaled_sprite_h        = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
+
+                // Cache is valid - load textures
+                int orig_w = variant_surfaces[0][0]->w;
+                int orig_h = variant_surfaces[0][0]->h;
+
                 if ((scaled_sprite_w <= 0 || scaled_sprite_h <= 0) && orig_w > 0 && orig_h > 0) {
                         int fallback_w = scaled_dimension(orig_w, safe_scale);
                         int fallback_h = scaled_dimension(orig_h, safe_scale);
@@ -1505,6 +1036,11 @@ void Animation::load(const std::string& trigger,
                         scaled_sprite_w = fallback_w;
                         scaled_sprite_h = fallback_h;
                 }
+
+                // Initialize mask surfaces (disabled for cached loading)
+                mask_surfaces.resize(variant_surfaces.size());
+                bool masks_loaded_from_cache = false;
+
                 frames.clear();
                 mask_frames.clear();
                 frame_cache_.clear();
@@ -1534,55 +1070,17 @@ void Animation::load(const std::string& trigger,
                                 cache_entry.widths[variant_idx]   = tex_w;
                                 cache_entry.heights[variant_idx]  = tex_h;
 
-                                SDL_Texture* fg_tex = nullptr;
-                                SDL_Texture* bg_tex = nullptr;
-                                if (supports_depthcue_cache && renderer) {
-                                        SDL_Surface* fg_surface = (variant_idx < foreground_surfaces.size() &&
-                                                                   frame_idx < foreground_surfaces[variant_idx].size())
-                                                ? foreground_surfaces[variant_idx][frame_idx]
-                                                : nullptr;
-                                        SDL_Surface* bg_surface = (variant_idx < background_surfaces.size() &&
-                                                                   frame_idx < background_surfaces[variant_idx].size())
-                                                ? background_surfaces[variant_idx][frame_idx]
-                                                : nullptr;
-                                        if (fg_surface) {
-                                                fg_tex = CacheManager::surface_to_texture(renderer, fg_surface);
-                                                if (fg_tex) {
-                                                        apply_scale_mode(fg_tex, info);
-                                                }
-                                        }
-                                        if (bg_surface) {
-                                                bg_tex = CacheManager::surface_to_texture(renderer, bg_surface);
-                                                if (bg_tex) {
-                                                        apply_scale_mode(bg_tex, info);
-                                                }
-                                        }
-                                }
-                                cache_entry.foreground_textures[variant_idx] = fg_tex;
-                                cache_entry.background_textures[variant_idx] = bg_tex;
+                                // Overlays disabled
+                                cache_entry.foreground_textures[variant_idx] = nullptr;
+                                cache_entry.background_textures[variant_idx] = nullptr;
 
-                                SDL_Surface* mask_surface = (variant_idx < mask_surfaces.size() && frame_idx < mask_surfaces[variant_idx].size()) ? mask_surfaces[variant_idx][frame_idx] : nullptr;
-                                SDL_Texture* mask_variant = nullptr;
-                                int mask_w = mask_surface ? mask_surface->w : 0;
-                                int mask_h = mask_surface ? mask_surface->h : 0;
-                                if (mask_surface) {
-                                        mask_variant = CacheManager::surface_to_texture(renderer, mask_surface);
-                                        if (mask_variant) {
-                                                apply_scale_mode(mask_variant, info);
-                                        }
-                                        if (mask_variant && (mask_w == 0 || mask_h == 0)) {
-                                                SDL_QueryTexture(mask_variant, nullptr, nullptr, &mask_w, &mask_h);
-                                        }
-                                }
-                                if (!mask_variant) {
-                                        mask_w = 0;
-                                        mask_h = 0;
-                                }
-                                cache_entry.mask_textures[variant_idx] = mask_variant;
-                                cache_entry.mask_widths[variant_idx]   = mask_w;
-                                cache_entry.mask_heights[variant_idx]  = mask_h;
+                                // Masks disabled for cached loading
+                                cache_entry.mask_textures[variant_idx] = nullptr;
+                                cache_entry.mask_widths[variant_idx]   = 0;
+                                cache_entry.mask_heights[variant_idx]  = 0;
+
                                 if (variant_idx == 0) {
-                                        variant0_mask = mask_variant;
+                                        variant0_mask = nullptr;
                                 }
                                 if (variant_idx == 0) {
                                         frames.push_back(tex_variant);
@@ -1593,109 +1091,14 @@ void Animation::load(const std::string& trigger,
                 }
 
                 free_surface_lists(variant_surfaces);
-                free_surface_lists(mask_surfaces);
-                free_surface_lists(foreground_surfaces);
-                free_surface_lists(background_surfaces);
-                if ((flipped_source || flip_vertical_source) && renderer && !frame_cache_.empty()) {
-                        SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
-                        if (flipped_source) {
-                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
-                        }
-                        if (flip_vertical_source) {
-                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
-                        }
-                        for (std::size_t frame_index = 0; frame_index < frame_cache_.size(); ++frame_index) {
-                                FrameCache& cache_entry = frame_cache_[frame_index];
-                                for (std::size_t variant_idx = 0; variant_idx < cache_entry.textures.size(); ++variant_idx) {
-                                        SDL_Texture* src_tex = cache_entry.textures[variant_idx];
-                                        if (!src_tex) {
-                                                continue;
-                                        }
-                                        Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
-                                        int access = 0;
-                                        int tex_w = cache_entry.widths[variant_idx];
-                                        int tex_h = cache_entry.heights[variant_idx];
-                                        if (tex_w <= 0 || tex_h <= 0) {
-                                                if (SDL_QueryTexture(src_tex, &fmt, &access, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-                                                        continue;
-                                                }
-                                        } else if (SDL_QueryTexture(src_tex, &fmt, &access, nullptr, nullptr) != 0) {
-                                                fmt = SDL_PIXELFORMAT_RGBA8888;
-                                        }
-                                        SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
-                                        if (!dst) {
-                                                continue;
-                                        }
-                                        SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
-                                        apply_scale_mode(dst, info);
-                                        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-                                        SDL_SetRenderTarget(renderer, dst);
-                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                        SDL_RenderClear(renderer);
-                                        SDL_Rect rect{0, 0, tex_w, tex_h};
-                                        SDL_RenderCopyEx(renderer, src_tex, nullptr, &rect, 0.0, nullptr, flip_flags);
-                                        SDL_SetRenderTarget(renderer, prev_target);
-                                        SDL_DestroyTexture(src_tex);
-                                        cache_entry.textures[variant_idx] = dst;
-                                        cache_entry.widths[variant_idx]   = tex_w;
-                                        cache_entry.heights[variant_idx]  = tex_h;
 
-                                        // Do not mutate or generate overlay textures at runtime; draw-time flipping is used.
-                                        SDL_Texture* src_mask = nullptr;
-                                        if (variant_idx < cache_entry.mask_textures.size()) {
-                                                src_mask = cache_entry.mask_textures[variant_idx];
-                                        }
-                                        if (src_mask) {
-                                                Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                int mask_access = 0;
-                                                int mask_w = cache_entry.mask_widths[variant_idx];
-                                                int mask_h = cache_entry.mask_heights[variant_idx];
-                                                if (mask_w <= 0 || mask_h <= 0) {
-                                                        if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
-                                                                SDL_DestroyTexture(src_mask);
-                                                                cache_entry.mask_textures[variant_idx] = nullptr;
-                                                                cache_entry.mask_widths[variant_idx]   = 0;
-                                                                cache_entry.mask_heights[variant_idx]  = 0;
-                                                                continue;
-                                                        }
-                                                } else if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, nullptr, nullptr) != 0) {
-                                                        mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                }
-                                                SDL_Texture* mask_dst = SDL_CreateTexture(renderer, mask_fmt, SDL_TEXTUREACCESS_TARGET, mask_w, mask_h);
-                                                if (mask_dst) {
-                                                        SDL_SetTextureBlendMode(mask_dst, SDL_BLENDMODE_BLEND);
-                                                        apply_scale_mode(mask_dst, info);
-                                                        SDL_Texture* prev_target_mask = SDL_GetRenderTarget(renderer);
-                                                        SDL_SetRenderTarget(renderer, mask_dst);
-                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                        SDL_RenderClear(renderer);
-                                                        SDL_Rect rect{0, 0, mask_w, mask_h};
-                                                        SDL_RenderCopyEx(renderer, src_mask, nullptr, &rect, 0.0, nullptr, flip_flags);
-                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
-                                                } else {
-                                                        mask_w = 0;
-                                                        mask_h = 0;
-                                                }
-                                                SDL_DestroyTexture(src_mask);
-                                                cache_entry.mask_textures[variant_idx] = mask_dst;
-                                                cache_entry.mask_widths[variant_idx]   = mask_w;
-                                                cache_entry.mask_heights[variant_idx]  = mask_h;
-                                        }
-                                }
-                                if (frame_index < frames.size()) {
-                                        frames[frame_index] = cache_entry.textures[0];
-                                }
-                                if (frame_index < mask_frames.size() && !cache_entry.mask_textures.empty()) {
-                                        mask_frames[frame_index] = cache_entry.mask_textures[0];
-                                }
-                        }
-                }
+                // Flip processing disabled for cached loading
                 if (reverse_source && !frames.empty()) {
                         std::reverse(frames.begin(), frames.end());
                         std::reverse(mask_frames.begin(), mask_frames.end());
                         std::reverse(frame_cache_.begin(), frame_cache_.end());
                 }
-                loaded_from_cache = cached_variants_loaded;
+                loaded_from_cache = true;
         }
         if (!movement_specified && source.kind == "animation" && inherit_source_movement && !source.name.empty()) {
                 auto it = info.animations.find(source.name);

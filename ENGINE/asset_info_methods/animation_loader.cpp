@@ -250,58 +250,14 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 return;
         }
 
+        // Simplified loading - no metadata validation or Python script retry
         LoadAttemptResult attempt = load_asset_animations_once(info, renderer, false);
-        if (attempt.success && !attempt.cache_issue) {
-                return;
-        }
-
-        if (attempt.cache_issue) {
-                std::cout << "[AnimationLoader] " << info.name << " detected invalid cache structure -> calling Python script\n";
-        } else {
-                std::cout << "[AnimationLoader] " << info.name << " encountered errors -> calling Python script\n";
-        }
-
-        // Call Python script to regenerate cache
-        if (!call_python_script_for_asset(info)) {
-                std::cerr << "[AnimationLoader] " << info.name << " Python script failed, skipping animations\n";
-                return;
-        }
-
-        // Retry loading after Python script
-        LoadAttemptResult retry = load_asset_animations_once(info, renderer, false);
-        if (!retry.success) {
-                std::cerr << "[AnimationLoader] " << info.name << " failed to load animations after Python script\n";
-        } else if (retry.cache_issue) {
-                std::cerr << "[AnimationLoader] " << info.name << " Python script succeeded but cache inconsistencies persist\n";
+        if (!attempt.success) {
+                std::cerr << "[AnimationLoader] " << info.name << " failed to load animations\n";
         }
 }
 
-bool AnimationLoader::call_python_script_for_asset(const AssetInfo& info) {
-    // Construct source directory path: SRC/assets/<AssetName>/
-    std::filesystem::path src_dir = std::filesystem::path("SRC") / "assets" / info.name;
-    std::string src_dir_arg = src_dir.string();
 
-    // Convert scales to percentages for command line
-    std::string scales_arg;
-    for (size_t i = 0; i < info.scale_variants.size(); ++i) {
-        if (i > 0) scales_arg += ",";
-        scales_arg += std::to_string(static_cast<int>(std::lround(info.scale_variants[i] * 100.0f)));
-    }
-
-    // Construct command using unified asset_tool.py
-    std::string cmd = "python tools/asset_tool.py build-texture";
-    cmd += " --asset-src-dir \"" + src_dir_arg + "\"";
-    cmd += " --asset-name \"" + info.name + "\"";
-    cmd += " --manifest-path manifest.json";
-    cmd += " --scales \"" + scales_arg + "\"";
-
-    std::cout << "[AnimationLoader] Calling Python tool: " << cmd << "\n";
-
-    // Execute command
-    int result = std::system(cmd.c_str());
-
-    return result == 0;
-}
 
 void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer) {
 	if (!renderer) return;
