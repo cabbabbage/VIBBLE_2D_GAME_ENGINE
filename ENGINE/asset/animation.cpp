@@ -282,19 +282,25 @@ SourceSignatureResult compute_source_signature(const fs::path& folder, int frame
 
         std::uint64_t signature = kSignatureOffset;
         std::error_code ec;
+        
+        std::cout << "[DEBUG] Computing source signature from: " << folder.string() << "\n";
+        
         for (int idx = 0; idx < frame_count; ++idx) {
                 const fs::path frame_path = folder / (std::to_string(idx) + ".png");
                 if (!fs::exists(frame_path, ec) || ec) {
+                        std::cerr << "[DEBUG] Frame " << idx << " not found at " << frame_path.string() << "\n";
                         return {};
                 }
 
                 const auto file_size = fs::file_size(frame_path, ec);
                 if (ec) {
+                        std::cerr << "[DEBUG] Failed to get file size for frame " << idx << "\n";
                         return {};
                 }
 
                 const auto write_time = fs::last_write_time(frame_path, ec);
                 if (ec) {
+                        std::cerr << "[DEBUG] Failed to get write time for frame " << idx << "\n";
                         return {};
                 }
 
@@ -302,9 +308,14 @@ SourceSignatureResult compute_source_signature(const fs::path& folder, int frame
                 signature = mix_signature(signature, static_cast<std::uint64_t>(file_size));
                 const auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(write_time.time_since_epoch()).count();
                 signature = mix_signature(signature, static_cast<std::uint64_t>(nanos));
+                
+                if (idx == 0) {  // Debug first frame
+                        std::cout << "[DEBUG] Frame 0: size=" << file_size << ", mtime_nanos=" << nanos << "\n";
+                }
         }
 
         signature = mix_signature(signature, static_cast<std::uint64_t>(frame_count));
+        std::cout << "[DEBUG] Computed signature: 0x" << std::hex << signature << std::dec << " (" << signature << ")\n";
         return {signature, true};
 }
 
@@ -1385,6 +1396,9 @@ void Animation::load(const std::string& trigger,
                         cache_regenerated = true;
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " Python regeneration succeeded, retrying cache load\n";
+                        
+                        // Small delay to ensure filesystem operations complete
+                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
                         // Retry cache loading after Python script success
                         if (attempt_cache_load) {
