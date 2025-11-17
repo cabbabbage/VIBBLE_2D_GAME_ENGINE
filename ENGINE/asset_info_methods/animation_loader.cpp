@@ -4,6 +4,7 @@
 #include "utils/cache_manager.hpp"
 #include "asset/animation.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
+#include "render/image_effect_settings.hpp"
 #include <nlohmann/json.hpp>
 #include <SDL.h>
 #include <SDL_image.h>
@@ -18,6 +19,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <fstream>
 #include "animation_update/custom_controllers/Vibble_controller.hpp"
 #include "animation_update/custom_controllers/Bomb_controller.hpp"
 #include "animation_update/custom_controllers/Frog_controller.hpp"
@@ -254,26 +256,55 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
         }
 
         if (attempt.cache_issue) {
-                std::cout << "[AnimationLoader] " << info.name << " detected invalid cache structure -> rebuilding from source\n";
+                std::cout << "[AnimationLoader] " << info.name << " detected invalid cache structure -> calling Python script\n";
         } else {
-                std::cout << "[AnimationLoader] " << info.name << " encountered errors -> rebuilding from source\n";
+                std::cout << "[AnimationLoader] " << info.name << " encountered errors -> calling Python script\n";
         }
 
-        if (!clear_asset_cache(info.name)) {
-                std::cerr << "[AnimationLoader] Unable to fully clear cache for " << info.name << " before rebuild\n";
+        // Call Python script to regenerate cache
+        if (!call_python_script_for_asset(info)) {
+                std::cerr << "[AnimationLoader] " << info.name << " Python script failed, skipping animations\n";
+                return;
         }
 
-        LoadAttemptResult retry = load_asset_animations_once(info, renderer, true);
+        // Retry loading after Python script
+        LoadAttemptResult retry = load_asset_animations_once(info, renderer, false);
         if (!retry.success) {
-                std::cerr << "[AnimationLoader] " << info.name << " failed to rebuild animations from source\n";
+                std::cerr << "[AnimationLoader] " << info.name << " failed to load animations after Python script\n";
         } else if (retry.cache_issue) {
-                std::cerr << "[AnimationLoader] " << info.name << " rebuild succeeded but cache inconsistencies persist\n";
+                std::cerr << "[AnimationLoader] " << info.name << " Python script succeeded but cache inconsistencies persist\n";
         }
+}
+
+bool AnimationLoader::call_python_script_for_asset(const AssetInfo& info) {
+    // Construct source directory path: SRC/assets/<AssetName>/
+    std::filesystem::path src_dir = std::filesystem::path("SRC") / "assets" / info.name;
+    std::string src_dir_arg = src_dir.string();
+
+    // Convert scales to percentages for command line
+    std::string scales_arg;
+    for (size_t i = 0; i < info.scale_variants.size(); ++i) {
+        if (i > 0) scales_arg += ",";
+        scales_arg += std::to_string(static_cast<int>(std::lround(info.scale_variants[i] * 100.0f)));
+    }
+
+    // Construct command using unified asset_tool.py
+    std::string cmd = "python tools/asset_tool.py build-texture";
+    cmd += " --asset-src-dir \"" + src_dir_arg + "\"";
+    cmd += " --asset-name \"" + info.name + "\"";
+    cmd += " --manifest-path manifest.json";
+    cmd += " --scales \"" + scales_arg + "\"";
+
+    std::cout << "[AnimationLoader] Calling Python tool: " << cmd << "\n";
+
+    // Execute command
+    int result = std::system(cmd.c_str());
+
+    return result == 0;
 }
 
 void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer) {
 	if (!renderer) return;
-	CacheManager cache;
 	for (auto& named : info.areas) {
 		if (!named.area) continue;
 		std::string folder = "cache/areas/" + info.name + "_" + named.name;
@@ -282,12 +313,12 @@ void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer)
 		std::string bmp_fallback = folder + "/0.bmp";
 		auto [minx, miny, maxx, maxy] = named.area->get_bounds();
 		json meta;
-		if (cache.load_metadata(meta_file, meta)) {
+		if (CacheManager::load_metadata(meta_file, meta)) {
 					if (meta.value("bounds", std::vector<int>{}) == std::vector<int>{minx, miny, maxx, maxy}) {
-					SDL_Surface* surf = cache.load_surface(png_file);
-					if (!surf) surf = cache.load_surface(bmp_fallback);
+					SDL_Surface* surf = CacheManager::load_surface(png_file);
+					if (!surf) surf = CacheManager::load_surface(bmp_fallback);
 					if (surf) {
-								SDL_Texture* tex = cache.surface_to_texture(renderer, surf);
+								SDL_Texture* tex = CacheManager::surface_to_texture(renderer, surf);
 								SDL_FreeSurface(surf);
 								if (tex) {
 													named.area->set_cached_texture(tex);
@@ -305,10 +336,10 @@ void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer)
 					SDL_SetRenderTarget(renderer, tex);
 					SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, surf->pixels, surf->pitch);
 					// Persist as PNG (older BMP caches remain as fallback reads)
-					cache.save_surface_as_png(surf, png_file);
+					CacheManager::save_surface_as_png(surf, png_file);
 					SDL_FreeSurface(surf);
 					meta["bounds"] = {minx, miny, maxx, maxy};
-					cache.save_metadata(meta_file, meta);
+					CacheManager::save_metadata(meta_file, meta);
 					SDL_SetRenderTarget(renderer, prev_target);
 			}
 		}

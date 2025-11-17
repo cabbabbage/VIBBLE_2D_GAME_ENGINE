@@ -1289,6 +1289,7 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
 
 void AnimationEditorWindow::on_live_frame_editor_closed(const std::string& animation_id) {
     live_frame_editor_session_active_ = false;
+    preview_provider_->invalidate_all();
     set_visible(true);
     if (!animation_id.empty()) {
         focus_animation(animation_id);

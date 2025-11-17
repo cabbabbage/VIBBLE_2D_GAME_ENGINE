@@ -589,12 +589,11 @@ void FrameEditorSession::end() {
         pending_save_ = false;
         document_->save_to_file();
     }
-    
-    // Reopen animation editor window BEFORE clearing session data
-    if (host_) {
-        host_->on_live_frame_editor_closed(animation_id_);
-    }
-    
+
+    // Save critical locals before clearing session data
+    auto saved_host = host_;
+    auto saved_animation_id = animation_id_;
+
     // Clear session data
     active_ = false;
     Assets* saved_assets = assets_;
@@ -609,7 +608,7 @@ void FrameEditorSession::end() {
     child_preview_slots_.clear();
     document_payload_cache_.clear();
     document_children_signature_.clear();
-    
+
     // Reload animations AFTER session is closed
     if (info_to_reload && saved_assets) {
         if (!asset_name_for_cache.empty()) {
@@ -625,11 +624,16 @@ void FrameEditorSession::end() {
             saved_assets->mark_active_assets_dirty();
         }
     }
-    
-    if (on_end_) { 
-        auto cb = std::move(on_end_); 
-        on_end_ = {}; 
-        cb(); 
+
+    // Reopen animation editor window AFTER reloading animations
+    if (saved_host) {
+        saved_host->on_live_frame_editor_closed(saved_animation_id);
+    }
+
+    if (on_end_) {
+        auto cb = std::move(on_end_);
+        on_end_ = {};
+        cb();
     }
 }
 
@@ -4105,4 +4109,3 @@ void FrameEditorSession::update_asset_preview_frame() const {
     target_->static_frame = anim.frames.size() <= 1;
     target_->set_frame_progress(0.0f);
 }
-

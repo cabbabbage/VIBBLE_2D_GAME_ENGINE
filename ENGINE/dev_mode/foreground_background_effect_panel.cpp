@@ -8,13 +8,14 @@
 #include "dev_mode/widgets.hpp"
 #include "render/camera.hpp"
 #include "utils/cache_manager.hpp"
-#include "utils/image_effects.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <limits>
 #include <nlohmann/json.hpp>
+#include <iostream>
+#include <fstream>
 
 namespace fs = std::filesystem;
 
@@ -209,6 +210,7 @@ ForegroundBackgroundEffectPanel::ForegroundBackgroundEffectPanel(Assets* assets,
     build_ui();
     refresh_from_camera();
     rebuild_asset_options();
+    load_depth_cue_settings_from_manifest();
 }
 
 ForegroundBackgroundEffectPanel::~ForegroundBackgroundEffectPanel() {
@@ -446,6 +448,174 @@ void ForegroundBackgroundEffectPanel::save_current_mode_settings() {
     }
 }
 
+void ForegroundBackgroundEffectPanel::save_depth_cue_settings_to_manifest() {
+    // Save the global image effect settings to manifest.json top-level image_effects section
+    std::string manifest_path = "manifest.json";
+    std::error_code ec;
+    if (!fs::exists(manifest_path, ec)) {
+        std::cerr << "[DepthCuePanel] manifest.json not found: " << manifest_path << "\n";
+        return;
+    }
+
+    nlohmann::json manifest;
+    try {
+        std::ifstream manifest_file(manifest_path);
+        if (!manifest_file.is_open()) {
+            std::cerr << "[DepthCuePanel] Failed to open manifest.json\n";
+            return;
+        }
+        manifest_file >> manifest;
+    } catch (const std::exception& e) {
+        std::cerr << "[DepthCuePanel] Error reading manifest.json: " << e.what() << "\n";
+        return;
+    }
+
+    // Build the global image effects structure
+    nlohmann::json image_effects = nlohmann::json::object();
+
+    // Convert C++ ImageEffectSettings to JSON for foreground and background
+    auto add_image_effects = [&](const std::string& type, const camera_effects::ImageEffectSettings& settings) {
+        nlohmann::json effects_json = {
+            {"rgb_boost", settings.rgb_boost},
+            {"contrast", settings.contrast},
+            {"brightness", settings.brightness},
+            {"blur", settings.blur},
+            {"saturation_red", settings.saturation_red},
+            {"saturation_green", settings.saturation_green},
+            {"saturation_blue", settings.saturation_blue},
+            {"hue", settings.hue}
+        };
+        image_effects[type] = effects_json;
+    };
+
+    add_image_effects("foreground", fg_settings_);
+    add_image_effects("background", bg_settings_);
+
+    // Update the top-level image_effects section
+    manifest["image_effects"] = image_effects;
+
+    // Save the manifest back
+    try {
+        std::ofstream manifest_file(manifest_path);
+        if (!manifest_file.is_open()) {
+            std::cerr << "[DepthCuePanel] Failed to write manifest.json\n";
+            return;
+        }
+        manifest_file << manifest.dump(2);
+    } catch (const std::exception& e) {
+        std::cerr << "[DepthCuePanel] Error writing manifest.json: " << e.what() << "\n";
+        return;
+    }
+
+    std::cout << "[DepthCuePanel] Saved global image effect settings\n";
+    has_unsaved_changes_ = false;
+}
+
+bool ForegroundBackgroundEffectPanel::load_depth_cue_settings_from_manifest() {
+    // Load global image effect settings from manifest.json top-level image_effects section
+    std::string manifest_path = "manifest.json";
+    std::error_code ec;
+    if (!fs::exists(manifest_path, ec)) {
+        std::cerr << "[DepthCuePanel] manifest.json not found: " << manifest_path << "\n";
+        return false;
+    }
+
+    nlohmann::json manifest;
+    try {
+        std::ifstream manifest_file(manifest_path);
+        if (!manifest_file.is_open()) {
+            std::cerr << "[DepthCuePanel] Failed to open manifest.json\n";
+            return false;
+        }
+        manifest_file >> manifest;
+    } catch (const std::exception& e) {
+        std::cerr << "[DepthCuePanel] Error reading manifest.json: " << e.what() << "\n";
+        return false;
+    }
+
+    // Check for the top-level image_effects section
+    if (!manifest.contains("image_effects") || !manifest["image_effects"].is_object()) {
+        std::cout << "[DepthCuePanel] No image_effects section found in manifest.json, using defaults\n";
+        // Reset to defaults
+        fg_settings_ = camera_effects::ImageEffectSettings{};
+        bg_settings_ = camera_effects::ImageEffectSettings{};
+        saved_fg_ = fg_settings_;
+        saved_bg_ = bg_settings_;
+        load_current_mode_settings();
+        return false;
+    }
+
+    auto& image_effects = manifest["image_effects"];
+
+    // Load image effects from JSON
+    auto load_image_effects = [&](const std::string& type) -> camera_effects::ImageEffectSettings {
+        camera_effects::ImageEffectSettings settings{};
+
+        if (!image_effects.contains(type)) {
+            std::cout << "[DepthCuePanel] Missing " << type << " effects in image_effects, using defaults\n";
+            return settings;
+        }
+
+        auto& effects_json = image_effects[type];
+        if (!effects_json.is_object()) {
+            std::cout << "[DepthCuePanel] Invalid " << type << " effects format, using defaults\n";
+            return settings;
+        }
+
+        // Load each effect value
+        settings.rgb_boost = effects_json.value("rgb_boost", 0.0f);
+        settings.contrast = effects_json.value("contrast", 0.0f);
+        settings.brightness = effects_json.value("brightness", 0.0f);
+        settings.blur = effects_json.value("blur", 0.0f);
+        settings.saturation_red = effects_json.value("saturation_red", 0.0f);
+        settings.saturation_green = effects_json.value("saturation_green", 0.0f);
+        settings.saturation_blue = effects_json.value("saturation_blue", 0.0f);
+        settings.hue = effects_json.value("hue", 0.0f);
+
+        camera_effects::ClampImageEffectSettings(settings);
+        return settings;
+    };
+
+    // Load foreground and background settings
+    fg_settings_ = load_image_effects("foreground");
+    bg_settings_ = load_image_effects("background");
+
+    saved_fg_ = fg_settings_;
+    saved_bg_ = bg_settings_;
+    load_current_mode_settings();
+
+    std::cout << "[DepthCuePanel] Loaded global image effect settings\n";
+    return true;
+}
+
+void ForegroundBackgroundEffectPanel::generate_preview_with_python(const std::string& image_path, const std::string& effect_type) {
+    // Call Python script to generate preview using global image effects settings from manifest
+    if (image_path.empty() || effect_type.empty()) {
+        std::cerr << "[DepthCuePanel] Invalid preview parameters\n";
+        return;
+    }
+
+    std::string python_cmd = "python tools/asset_tool.py build-texture";
+    std::string manifest_arg = "--manifest-path manifest.json";
+    std::string preview_image_arg = "--preview-image \"" + image_path + "\"";
+    std::string preview_type_arg = "--preview-type " + effect_type;
+
+    std::string full_cmd = python_cmd + " " + preview_image_arg + " " + preview_type_arg + " " + manifest_arg;
+
+    std::cout << "[DepthCuePanel] Executing: " << full_cmd << "\n";
+
+    // Execute the command (simplified for now - would need proper process execution)
+    int result = std::system(full_cmd.c_str());
+
+    if (result == 0) {
+        std::cout << "[DepthCuePanel] Preview generated successfully\n";
+        // Trigger preview reload if needed
+        preview_dirty_ = true;
+    } else {
+        std::cerr << "[DepthCuePanel] Failed to generate preview, exit code: " << result << "\n";
+    }
+}
+
 void ForegroundBackgroundEffectPanel::load_current_mode_settings() {
     if (current_mode_ == EffectMode::Foreground) {
         current_settings_ = fg_settings_;
@@ -601,18 +771,9 @@ void ForegroundBackgroundEffectPanel::rebuild_previews() {
         return;
     }
 
+    // No longer using C++ image effects for preview - handled by Python tool
     const bool has_adjustments = !camera_effects::ImageEffectSettingsIsIdentity(current_settings_);
-    if (has_adjustments && base_preview_texture_) {
-        // Create preview texture for current mode using shared processor
-        current_preview_texture_ = image_effects::ImageEffectProcessor::apply_effects(renderer,
-                                                                                        base_preview_texture_,
-                                                                                        base_preview_w_,
-                                                                                        base_preview_h_,
-                                                                                        current_settings_);
-        if (current_preview_texture_) {
-            SDL_QueryTexture(current_preview_texture_, nullptr, nullptr, &current_preview_w_, &current_preview_h_);
-        }
-    }
+    // Preview effects are now generated via Python script, so just show original texture
 
     // Set texture on the single preview widget (show processed or original)
     if (auto* image_preview = dynamic_cast<ImagePreviewWidget*>(preview_.get())) {

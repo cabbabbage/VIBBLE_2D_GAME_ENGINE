@@ -7,8 +7,6 @@
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/loading_status_notifier.hpp"
 #include "utils/log.hpp"
-#include "render/image_effect_settings.hpp"
-#include "utils/image_effects.hpp"
 #include <SDL_image.h>
 #include <SDL_mixer.h>
 #include <algorithm>
@@ -36,8 +34,58 @@ using asset::surface_utils::mix_signature;
 void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info);
 #endif
 
-bool has_depthcue_effects(const camera_effects::ImageEffectSettings& settings) {
-        return !camera_effects::ImageEffectSettingsIsIdentity(settings);
+bool has_depthcue_effects(const std::string& /*settings*/) {
+        // Image effects are now handled by Python, so we always assume no depth cues
+        return false;
+}
+
+// load_surface_sequence_from_folder removed - logic now in CacheManager::load_surface_sequence for consistency
+
+bool call_python_script_to_regenerate_cache(const std::string& asset_name,
+                                            const std::string& src_folder,
+                                            const std::vector<int>& scale_steps,
+                                            const std::string& effects_config) {
+        std::string python_cmd = "python tools/asset_tool.py build-texture";
+
+        std::vector<int> scales = scale_steps;
+        if (scales.empty()) {
+                const auto defaults = render_pipeline::ScalingLogic::PercentSteps();
+                scales.assign(defaults.begin(), defaults.end());
+        }
+
+        std::ostringstream scale_stream;
+        for (std::size_t i = 0; i < scales.size(); ++i) {
+                if (i > 0) {
+                        scale_stream << ",";
+                }
+                scale_stream << scales[i];
+        }
+
+        std::vector<std::string> args = {
+            "--asset-name", asset_name,
+            "--asset-src-dir", "\"" + src_folder + "\"",
+            "--scales", scale_stream.str(),
+            "--manifest-path", "manifest.json"
+        };
+
+        std::string full_cmd = python_cmd;
+        for (const auto& arg : args) {
+            full_cmd += " " + arg;
+        }
+
+        std::cout << "[AnimationLoader] Regenerating cache for asset '" << asset_name
+                  << "' -> executing: " << full_cmd << "\n";
+
+        int result = std::system(full_cmd.c_str());
+
+        if (result == 0) {
+                std::cout << "[AnimationLoader] Cache regeneration succeeded for '" << asset_name << "'\n";
+                return true;
+        } else {
+                std::cerr << "[AnimationLoader] Cache regeneration FAILED for '" << asset_name
+                          << "' with exit code: " << result << "\n";
+                return false;
+        }
 }
 
 void destroy_texture(SDL_Texture*& texture) {
@@ -53,8 +101,8 @@ void rebuild_depthcue_textures(SDL_Renderer*,
                                int,
                                SDL_Texture*& /*fg_texture*/,
                                SDL_Texture*& /*bg_texture*/,
-                               const camera_effects::ImageEffectSettings& /*fg_settings*/,
-                               const camera_effects::ImageEffectSettings& /*bg_settings*/,
+                               const std::string& /*fg_settings*/,
+                               const std::string& /*bg_settings*/,
                                const AssetInfo& /*info*/) {
         // Runtime generation of depth-cue overlays is disabled.
         return;
@@ -501,7 +549,7 @@ void Animation::load(const std::string& trigger,
                      bool scaling_refresh_pending,
                      LoadDiagnostics* diagnostics)
 {
-        CacheManager cache;
+
         const auto load_start = std::chrono::steady_clock::now();
         bool       loaded_from_cache = false;
         bool       reused_animation  = false;
@@ -514,19 +562,8 @@ void Animation::load(const std::string& trigger,
         const double safe_scale = sanitize_scale_factor(scale_factor);
         clear_texture_cache();
         const bool prefer_cached = !scaling_refresh_pending;
-        camera_effects::image_effects::GlobalState effect_state = camera_effects::image_effects::current_state();
-        if (auto defaults = camera_effects::manifest_effect_defaults()) {
-                if (camera_effects::ImageEffectSettingsIsIdentity(effect_state.foreground)) {
-                        effect_state.foreground = defaults->foreground;
-                }
-                if (camera_effects::ImageEffectSettingsIsIdentity(effect_state.background)) {
-                        effect_state.background = defaults->background;
-                }
-        }
-        const std::uint64_t fg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.foreground);
-        const std::uint64_t bg_effect_hash = camera_effects::HashImageEffectSettings(effect_state.background);
-        const bool supports_depthcue_cache = renderer &&
-                (has_depthcue_effects(effect_state.foreground) || has_depthcue_effects(effect_state.background));
+        // Image effects are now handled by Python, so depth cues are not supported at runtime
+        const bool supports_depthcue_cache = false;
         bool effect_hash_mismatch = false;
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                   << " profile steps (pre-normalize): " << format_steps(variant_steps_) << ", prefer_cached=" << (prefer_cached ? "true" : "false") << ", scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false") << "\n";
@@ -1044,7 +1081,7 @@ void Animation::load(const std::string& trigger,
                 nlohmann::json meta;
                 std::vector<int> expected_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
                 const std::uint64_t expected_revision = info.scale_profile_revision;
-                if (cache.load_metadata(meta_file, meta)) {
+                if (CacheManager::load_metadata(meta_file, meta)) {
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " found metadata (revision "
                                   << meta.value("scale_profile_revision", static_cast<std::uint64_t>(0)) << ") expecting revision " << expected_revision << "\n";
@@ -1253,7 +1290,7 @@ void Animation::load(const std::string& trigger,
                         for (std::size_t idx = 0; idx < variant_count; ++idx) {
                                 const VariantLayerPaths& paths = variant_paths[idx];
                                 std::vector<SDL_Surface*> loaded;
-                                bool loaded_ok = cache.load_surface_sequence(paths.normal_folder, expected_frames, loaded);
+                                bool loaded_ok = CacheManager::load_surface_sequence(paths.normal_folder, expected_frames, loaded);
                                 if (!loaded_ok) {
                                         rebuild_variant[idx] = true;
                                         cache_invalid_detected = true;
@@ -1275,102 +1312,100 @@ void Animation::load(const std::string& trigger,
                 }
 
                 bool need_generation = std::any_of(rebuild_variant.begin(), rebuild_variant.end(), [](bool v) { return v; });
+                bool cache_regenerated = false;
+
                 if (need_generation) {
+                        // Cache is invalid - regenerate using Python script instead of creating surfaces in C++
+
+                        // Clean up any existing cache directory to force complete regeneration
                         cleanup_variant_directories(cache_folder);
                         cleanup_variant_directories(mask_cache_folder);
+
+                        // Clear any partial surfaces we may have loaded
+                        free_surface_lists(variant_surfaces);
+
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " generating variant surfaces for " << expected_frames
-                                  << " frame(s) across " << variant_count << " step(s)\n";
-                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                if (!rebuild_variant[idx]) {
-                                        continue;
-                                }
-                                for (SDL_Surface* surf : variant_surfaces[idx]) {
-                                        if (surf) {
-                                                SDL_FreeSurface(surf);
-                                        }
-                                }
-                                variant_surfaces[idx].clear();
-                        }
-                        if (rebuild_variant[0]) {
-                                std::vector<SDL_Surface*> base_surfaces;
-                                base_surfaces.reserve(expected_frames);
-                                for (int i = 0; i < expected_frames; ++i) {
-                                        fs::path frame_path = src_folder / (std::to_string(i) + ".png");
-                                        int new_w = 0, new_h = 0;
-                                        SDL_Surface* scaled = cache.load_and_scale_surface(frame_path.string(), 1.0f, new_w, new_h);
-                                        if (!scaled) {
-                                                std::cerr << "[Animation] Failed to load or scale: " << frame_path.string() << "\n";
-                                                continue;
-                                        }
-                                        if (i == 0) {
-                                                original_canvas_width  = orig_w;
-                                                original_canvas_height = orig_h;
-                                                scaled_sprite_w        = scaled_dimension(new_w, safe_scale);
-                                                scaled_sprite_h        = scaled_dimension(new_h, safe_scale);
-                                        }
-                                        base_surfaces.push_back(scaled);
-                                }
-                                if (base_surfaces.size() != static_cast<std::size_t>(expected_frames)) {
-                                        for (SDL_Surface* surf : base_surfaces) {
-                                                if (surf) {
-                                                        SDL_FreeSurface(surf);
-                                                }
-                                        }
-                                        flush_diagnostics();
-                                        return;
-                                }
-                                variant_surfaces[0] = std::move(base_surfaces);
-                        }
-                        const std::vector<SDL_Surface*>& base_reference = variant_surfaces[0];
-                        for (std::size_t idx = 1; idx < variant_count; ++idx) {
-                                if (!rebuild_variant[idx]) {
-                                        continue;
-                                }
-                                const float scale_step = variant_steps_[idx];
-                                variant_surfaces[idx].reserve(base_reference.size());
-                                for (SDL_Surface* base_surface : base_reference) {
-                                        SDL_Surface* scaled = base_surface ? render_pipeline::CreateScaledSurface(base_surface, scale_step) : nullptr;
-                                        variant_surfaces[idx].push_back(scaled);
-                                }
-                        }
-                        for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                                if (!rebuild_variant[idx]) {
-                                        continue;
-                                }
-                                const VariantLayerPaths& paths = variant_paths[idx];
-                                cache.save_surface_sequence(paths.normal_folder, variant_surfaces[idx]);
+                                  << " cache invalid, calling Python script to regenerate for "
+                                  << expected_frames << " frame(s) across " << variant_count << " variant(s)\n";
+
+                        // Get effects config from manifest for the Python script
+                        std::string effects_config = R"(
+{
+  "foreground": {
+    "rgb_boost": 0.0,
+    "contrast": 0.0,
+    "brightness": 0.0,
+    "blur": 0.0,
+    "saturation_red": 0.0,
+    "saturation_green": 0.0,
+    "saturation_blue": 0.0,
+    "hue": 0.0
+  },
+  "background": {
+    "rgb_boost": 0.0,
+    "contrast": 0.0,
+    "brightness": 0.0,
+    "blur": 0.0,
+    "saturation_red": 0.0,
+    "saturation_green": 0.0,
+    "saturation_blue": 0.0,
+    "hue": 0.0
+  }
+}
+)";
+
+                        // Call Python script to regenerate all cache for this asset
+                        const std::vector<int> scale_percents =
+                                render_pipeline::ScalingLogic::PercentSteps(variant_steps_);
+                        bool python_success = call_python_script_to_regenerate_cache(
+                                info.name,
+                                src_folder.string(),
+                                scale_percents,
+                                effects_config);
+
+                        if (!python_success) {
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " stored " << variant_surfaces[idx].size() << " frame(s) for variant index " << idx << " (scale " << std::fixed << std::setprecision(2) << variant_steps_[idx] << std::defaultfloat << ")\n";
+                                          << " Python regeneration failed, retrying once more...\n";
+                                // Retry once on failure
+                                python_success = call_python_script_to_regenerate_cache(
+                                        info.name,
+                                        src_folder.string(),
+                                        scale_percents,
+                                        effects_config);
                         }
-                        nlohmann::json new_meta;
-                        new_meta["cache_version"]    = kAnimationCacheVersion;
-                        new_meta["frame_count"]     = expected_frames;
-                        new_meta["original_width"]  = orig_w;
-                        new_meta["original_height"] = orig_h;
-                        nlohmann::json step_arr = nlohmann::json::array();
-                        for (std::size_t idx = 0; idx < expected_steps.size(); ++idx) {
-                                step_arr.push_back(expected_steps[idx]);
+
+                        if (!python_success) {
+                                std::cerr << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " Python regeneration failed after retry, cannot load animation\n";
+                                free_surface_lists(variant_surfaces);
+                                flush_diagnostics();
+                                return;
                         }
-                        new_meta["scale_steps"] = std::move(step_arr);
-                        new_meta["scale_profile_revision"] = expected_revision;
-                        new_meta["has_masks"]              = info.is_shaded;
-                        new_meta["foreground_effect_hash"] = fg_effect_hash;
-                        new_meta["background_effect_hash"] = bg_effect_hash;
-                        const auto generated_signature = compute_source_signature(src_folder, expected_frames);
-                        if (generated_signature.success) {
-                                new_meta["source_signature"] = generated_signature.value;
-                        } else {
-                                new_meta["source_signature"] = 0;
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " unable to record source signature for '" << src_folder.string()
-                                          << "' -> metadata will be refreshed on next load\n";
-                        }
-                        cache.save_metadata(meta_file, new_meta);
+
+                        cache_regenerated = true;
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " wrote metadata with steps "
-                                  << format_percent_steps(expected_steps) << " revision " << expected_revision << "\n";
-                } else if (!variant_surfaces.empty() && !variant_surfaces[0].empty() && variant_surfaces[0][0]) {
+                                  << " Python regeneration succeeded, retrying cache load\n";
+
+                        // Retry cache loading after Python script success
+                        if (attempt_cache_load) {
+                                for (std::size_t idx = 0; idx < variant_count; ++idx) {
+                                        const VariantLayerPaths& paths = variant_paths[idx];
+                                        std::vector<SDL_Surface*> loaded;
+                                        bool loaded_ok = CacheManager::load_surface_sequence(paths.normal_folder, expected_frames, loaded);
+                                        if (loaded_ok) {
+                                                variant_surfaces[idx] = std::move(loaded);
+                                        } else {
+                                                std::cerr << "[AnimationLoader] " << info.name << "::" << trigger
+                                                          << " retry failed to load regenerated cache for variant " << idx << "\n";
+                                                free_surface_lists(variant_surfaces);
+                                                flush_diagnostics();
+                                                return;
+                                        }
+                                }
+                        }
+                }
+
+                if (!variant_surfaces.empty() && !variant_surfaces[0].empty() && variant_surfaces[0][0]) {
                         if (scaled_sprite_w <= 0 || scaled_sprite_h <= 0) {
                                 scaled_sprite_w = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
                                 scaled_sprite_h = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
@@ -1379,7 +1414,7 @@ void Animation::load(const std::string& trigger,
                         original_canvas_height = orig_h;
                 }
 
-                const bool cached_variants_loaded = (!need_generation && attempt_cache_load);
+                const bool cached_variants_loaded = (!cache_regenerated && attempt_cache_load);
 
                 if (supports_depthcue_cache) {
                         const bool overlay_cache_eligible = true; // Always attempt to load precomputed overlays
@@ -1390,14 +1425,14 @@ void Animation::load(const std::string& trigger,
 
                                 if (overlay_cache_eligible) {
                                         std::vector<SDL_Surface*> loaded_fg;
-                                        if (cache.load_surface_sequence(paths.foreground_folder, expected_frames, loaded_fg) &&
+                                        if (CacheManager::load_surface_sequence(paths.foreground_folder, expected_frames, loaded_fg) &&
                                             loaded_fg.size() == static_cast<std::size_t>(expected_frames)) {
                                                 foreground_surfaces[idx] = std::move(loaded_fg);
                                                 foreground_needs_generation[idx] = false;
                                         }
 
                                         std::vector<SDL_Surface*> loaded_bg;
-                                        if (cache.load_surface_sequence(paths.background_folder, expected_frames, loaded_bg) &&
+                                        if (CacheManager::load_surface_sequence(paths.background_folder, expected_frames, loaded_bg) &&
                                             loaded_bg.size() == static_cast<std::size_t>(expected_frames)) {
                                                 background_surfaces[idx] = std::move(loaded_bg);
                                                 background_needs_generation[idx] = false;
@@ -1471,7 +1506,7 @@ void Animation::load(const std::string& trigger,
                                 SDL_Surface* surface = (frame_idx < variant_surfaces[variant_idx].size()) ? variant_surfaces[variant_idx][frame_idx] : nullptr;
                                 SDL_Texture* tex_variant = nullptr;
                                 if (surface) {
-                                        tex_variant = cache.surface_to_texture(renderer, surface);
+                                        tex_variant = CacheManager::surface_to_texture(renderer, surface);
                                         if (tex_variant) {
                                                 apply_scale_mode(tex_variant, info);
                                         }
@@ -1497,13 +1532,13 @@ void Animation::load(const std::string& trigger,
                                                 ? background_surfaces[variant_idx][frame_idx]
                                                 : nullptr;
                                         if (fg_surface) {
-                                                fg_tex = cache.surface_to_texture(renderer, fg_surface);
+                                                fg_tex = CacheManager::surface_to_texture(renderer, fg_surface);
                                                 if (fg_tex) {
                                                         apply_scale_mode(fg_tex, info);
                                                 }
                                         }
                                         if (bg_surface) {
-                                                bg_tex = cache.surface_to_texture(renderer, bg_surface);
+                                                bg_tex = CacheManager::surface_to_texture(renderer, bg_surface);
                                                 if (bg_tex) {
                                                         apply_scale_mode(bg_tex, info);
                                                 }
@@ -1517,7 +1552,7 @@ void Animation::load(const std::string& trigger,
                                 int mask_w = mask_surface ? mask_surface->w : 0;
                                 int mask_h = mask_surface ? mask_surface->h : 0;
                                 if (mask_surface) {
-                                        mask_variant = cache.surface_to_texture(renderer, mask_surface);
+                                        mask_variant = CacheManager::surface_to_texture(renderer, mask_surface);
                                         if (mask_variant) {
                                                 apply_scale_mode(mask_variant, info);
                                         }

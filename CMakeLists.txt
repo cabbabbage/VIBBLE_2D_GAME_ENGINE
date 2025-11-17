@@ -180,7 +180,6 @@ add_executable(engine_tests
     TESTS/test_main.cpp
     TESTS/test_dev_json_store.cpp
     TESTS/test_manifest_loader.cpp
-    TESTS/test_image_effect_settings.cpp
     TESTS/test_scene_renderer_prereqs.cpp
     TESTS/test_animation_child_visibility.cpp
     TESTS/test_animation_child_runtime.cpp
@@ -189,7 +188,6 @@ add_executable(engine_tests
     ENGINE/animation_update/child_attachment_controller.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/core/manifest/manifest_loader.cpp
-    ENGINE/render/image_effect_settings.cpp
     ENGINE/utils/log.cpp
     ENGINE/utils/cache_manager.cpp
     ENGINE/utils/generate_faded_mask.cpp

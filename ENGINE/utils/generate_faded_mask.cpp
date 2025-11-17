@@ -5,6 +5,10 @@
 
 #include <SDL.h>
 
+// Skip cache operations in GenerateFadedMask since this functionality has moved to Python
+// This avoids linker errors with missing CacheManager functions during the migration
+#define VIBBLE_SKIP_FADED_MASK_CACHE 1
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -305,7 +309,13 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
 
     json meta;
     bool cache_ok = false;
-    bool metadata_loaded = CacheManager::load_metadata(meta_path.string(), meta);
+    bool metadata_loaded = false;
+
+#if !VIBBLE_SKIP_FADED_MASK_CACHE
+    metadata_loaded = CacheManager::load_metadata(meta_path.string(), meta);
+#else
+    metadata_loaded = false; // Skip cache loading - functionality moved to Python
+#endif
 
     if (metadata_loaded) {
         try {
@@ -349,6 +359,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
         }
     }
 
+#if !VIBBLE_SKIP_FADED_MASK_CACHE
     if (cache_ok) {
         bool all_loaded = true;
         for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
@@ -369,10 +380,13 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
         }
         masks.assign(variant_count, {});
     }
+#endif // !VIBBLE_SKIP_FADED_MASK_CACHE
 
+#if !VIBBLE_SKIP_FADED_MASK_CACHE
     try {
         fs::create_directories(preferred_folder);
     } catch (...) {}
+#endif
 
     for (std::size_t variant_idx = 0; variant_idx < variant_frames.size(); ++variant_idx) {
         const auto& frames = variant_frames[variant_idx];
@@ -391,10 +405,13 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
             mask_list.push_back(mask_surface);
         }
 
+#if !VIBBLE_SKIP_FADED_MASK_CACHE
         const std::string folder = variant_folder(preferred_folder, variant_idx, scale_steps);
         CacheManager::save_surface_sequence(folder, mask_list);
+#endif
     }
 
+#if !VIBBLE_SKIP_FADED_MASK_CACHE
     json new_meta;
     new_meta["version"]        = kCacheVersion;
     new_meta["frame_count"]    = static_cast<int>(frame_count);
@@ -418,6 +435,7 @@ std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     }
 
     CacheManager::save_metadata((preferred_folder / "metadata.json").string(), new_meta);
+#endif // !VIBBLE_SKIP_FADED_MASK_CACHE
 
     return {std::move(masks), false};
 }

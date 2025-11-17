@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <functional>
+#include <iostream>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -11,6 +13,7 @@
 #include "DockableCollapsible.hpp"
 #include "dev_mode/float_slider_widget.hpp"
 #include "render/image_effect_settings.hpp"
+#include <nlohmann/json.hpp>
 
 class Assets;
 class AssetInfo;
@@ -70,6 +73,11 @@ private:
     void apply_and_regenerate();
     void restore_defaults();
     void purge_mismatched_caches(std::uint64_t fg_hash, std::uint64_t bg_hash, bool force_purge = false);
+
+    // Manifest-based loading/saving
+    void save_depth_cue_settings_to_manifest();
+    bool load_depth_cue_settings_from_manifest();
+    void generate_preview_with_python(const std::string& image_path, const std::string& effect_type);
 
 private:
     Assets* assets_ = nullptr;

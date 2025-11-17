@@ -25,4 +25,5 @@ class AnimationLoader {
     };
 
     static LoadAttemptResult load_asset_animations_once(AssetInfo& info, SDL_Renderer* renderer, bool force_rebuild);
+    static bool call_python_script_for_asset(const AssetInfo& info);
 };

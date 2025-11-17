@@ -11,7 +11,6 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "render/scene_renderer.hpp"
-#include "render/image_effect_settings.hpp"
 #include "world/chunk.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
@@ -442,11 +441,7 @@ void Assets::apply_camera_runtime_settings() {
     }
     const camera::RealismSettings& settings = camera_.realism_settings();
     update_motion_smoothing_settings(settings);
-    camera_effects::image_effects::GlobalState effects_state{
-        settings.foreground_effects,
-        settings.background_effects
-    };
-    camera_effects::image_effects::set_global_state(effects_state);
+    // Image effects are now handled by Python, so no longer setting global state here
 }
 
 TransformSmoothingParams Assets::sanitize_smoothing(const TransformSmoothingParams& params) {

@@ -20,7 +20,6 @@
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/area.hpp"
 #include "utils/cache_manager.hpp"
-#include "utils/image_effects.hpp"
 #include "utils/log.hpp"
 
 #include <nlohmann/json.hpp>
@@ -67,17 +66,13 @@ void free_surface_lists(std::vector<std::vector<SDL_Surface*>>& lists) {
     }
 }
 
-camera_effects::image_effects::GlobalState resolve_effect_state() {
-    camera_effects::image_effects::GlobalState state = camera_effects::image_effects::current_state();
-    if (auto defaults = camera_effects::manifest_effect_defaults()) {
-        if (camera_effects::ImageEffectSettingsIsIdentity(state.foreground)) {
-            state.foreground = defaults->foreground;
-        }
-        if (camera_effects::ImageEffectSettingsIsIdentity(state.background)) {
-            state.background = defaults->background;
-        }
-    }
-    return state;
+struct DummyEffectState {
+    // Dummy structure since image effects are now handled by Python
+};
+
+DummyEffectState resolve_effect_state() {
+    // Image effects are now handled by Python, so we don't need runtime resolvement
+    return {};
 }
 
 std::optional<AssetInfo::NamedArea::RenderFrame> select_render_frame(const AssetInfo& info) {
@@ -504,8 +499,6 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     const std::string animation_id = "merged_static";
     const fs::path cache_root = fs::path("cache") / merged_name / "animations" / animation_id;
 
-    CacheManager cache;
-
     SDL_Surface* base_surface = texture_to_surface(renderer_, composite, base_width, base_height);
     SDL_Surface* base_mask_surface = composite_mask ? texture_to_surface(renderer_, composite_mask, base_width, base_height) : nullptr;
     SDL_DestroyTexture(composite);
@@ -568,7 +561,7 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     const std::string cache_root_str = cache_root.string();
 
     auto save_stack = [&](const std::string& folder, const std::vector<SDL_Surface*>& stack, const char* label) {
-        if (!cache.save_surface_sequence(folder, stack)) {
+        if (!CacheManager::save_surface_sequence(folder, stack)) {
             cleanup_surfaces();
             throw std::runtime_error(std::string("Failed to save ") + label + " surfaces to '" + folder + "'");
         }
