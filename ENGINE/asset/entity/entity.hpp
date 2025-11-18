@@ -1,7 +1,10 @@
+#ifndef TYPE_H
+#define TYPE_H
 #include <vector>
 #include <string>
+#include "damage.hpp"
 
-class entity {
+class Entity {
     public: 
         enum Type{
             PLAYER,
@@ -9,12 +12,18 @@ class entity {
             RANGEDENEMY
         };
 
-    virtual int getHealth() = 0;
+    virtual int getHealth();
+    virtual Type getType();
+    virtual bool isDamageable();
+    virtual int dealDamage(Damage *damage);
+    
+    Damage damage;
 
-    private:
+    protected:
         int health;
         int speed;
         Type type;
         bool can_damage = true;
         std::vector<std::string> items;
 };
+#endif

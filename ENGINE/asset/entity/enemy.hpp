@@ -1,23 +1,20 @@
-#ifndef PLAYER_H
-#define PLAYER_H
+#ifndef ENEMY_H
+#define ENEMY_H
 #include <vector>
 #include <string>
 #include "entity.hpp"
 
-class Player : public Entity {
+class Enemy : public Entity {
+    Type type = ENEMY;
+    int health = 150;
+    int speed = 1;
+    bool can_damage = true;
+    std::vector<std::string> items;
+
 public:
-    Player() {
-        type = PLAYER;
-        health = 150;
-        speed = 1;
-    }
-    
     Type getType() override;
     int getHealth() override;
     bool isDamageable() override;
-
     int dealDamage(Damage *damage) override;
-
 };
-
 #endif
