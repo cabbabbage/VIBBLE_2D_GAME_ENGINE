@@ -103,7 +103,6 @@ private:
 
     // Single set of controls for current mode
     std::unique_ptr<Widget> preview_;
-    std::unique_ptr<FloatSliderWidget> rgb_boost_;
     std::unique_ptr<FloatSliderWidget> contrast_;
     std::unique_ptr<FloatSliderWidget> brightness_;
     std::unique_ptr<FloatSliderWidget> blur_;

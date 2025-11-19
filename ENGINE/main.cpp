@@ -41,6 +41,7 @@
 #include <cmath>
 #include <cstdlib>
 #include "utils/log.hpp"
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -87,37 +88,53 @@ void MainApp::setup() {
 
         try {
                 // Elevate log level to DEBUG during load if requested
-                struct ScopedLogLevel { vibble::log::Level prev; explicit ScopedLogLevel(vibble::log::Level next): prev(vibble::log::level()) { vibble::log::set_level(next); } ~ScopedLogLevel(){ vibble::log::set_level(prev);} };
+                struct ScopedLogLevel {
+                        vibble::log::Level prev;
+                        explicit ScopedLogLevel(vibble::log::Level next)
+                        : prev(vibble::log::level()) {
+                                vibble::log::set_level(next);
+                        }
+                        ~ScopedLogLevel() {
+                                vibble::log::set_level(prev);
+                        }
+                };
+
                 std::unique_ptr<ScopedLogLevel> loader_debug_guard;
                 if (const char* v = std::getenv("VIBBLE_LOADER_DEBUG")) {
-                        if (*v && (*v == '1' || *v == 'y' || *v == 'Y' || *v == 't' || *v == 'T' || std::tolower(static_cast<unsigned char>(*v)) == 'd')) {
+                        if (*v && (*v == '1' || *v == 'y' || *v == 'Y' ||
+                                   *v == 't' || *v == 'T' ||
+                                   std::tolower(static_cast<unsigned char>(*v)) == 'd')) {
                                 loader_debug_guard = std::make_unique<ScopedLogLevel>(vibble::log::Level::Debug);
                                 vibble::log::info("[MainApp] VIBBLE_LOADER_DEBUG enabled; log level set to DEBUG during loading.");
                         }
                 }
+
                 // While loading, render the loading screen (if provided) and
                 // keep pumping/discarding OS events to avoid "Not Responding".
                 std::unique_ptr<loading_status::ScopedNotifier> scoped_loading_notifier;
                 if (loading_screen_ && renderer_) {
-                        scoped_loading_notifier = std::make_unique<loading_status::ScopedNotifier>([this](const std::string& status) {
-                                try {
-                                        loading_screen_->set_status(status);
-                                        loading_screen_->draw_frame();
-                                        SDL_RenderPresent(renderer_);
-                                } catch (...) {
-                                        // Best-effort only; ignore rendering errors during load
-                                }
-                                SDL_Event ev;
-                                while (SDL_PollEvent(&ev)) {
-                                        // Intentionally discard all input events during blocking load
-                                }
-                        });
+                        scoped_loading_notifier = std::make_unique<loading_status::ScopedNotifier>(
+                                [this](const std::string& status) {
+                                        try {
+                                                loading_screen_->set_status(status);
+                                                loading_screen_->draw_frame();
+                                                SDL_RenderPresent(renderer_);
+                                        } catch (...) {
+                                                // Best effort only; ignore rendering errors during load
+                                        }
+                                        SDL_Event ev;
+                                        while (SDL_PollEvent(&ev)) {
+                                                // Intentionally discard all input events during blocking load
+                                        }
+                                });
                         // Draw an initial loading frame and pump events once
                         loading_screen_->set_status("Preparing...");
                         loading_screen_->draw_frame();
                         SDL_RenderPresent(renderer_);
-                        SDL_Event ev; while (SDL_PollEvent(&ev)) {}
+                        SDL_Event ev;
+                        while (SDL_PollEvent(&ev)) {}
                 }
+
                 nlohmann::json map_manifest_json = nlohmann::json::object();
                 std::string content_root;
                 const std::string map_identifier = map_descriptor_.id.empty() ? map_path_ : map_descriptor_.id;
@@ -134,10 +151,12 @@ void MainApp::setup() {
 
                 if (!manifest_entry_found) {
                         if (map_descriptor_.data.is_object() && !map_descriptor_.data.empty()) {
-                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier + "' missing from manifest. Using descriptor payload.");
+                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier +
+                                                  "' missing from manifest. Using descriptor payload.");
                                 map_manifest_json = map_descriptor_.data;
                         } else {
-                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier + "' missing from manifest. Generating default map manifest.");
+                                vibble::log::warn(std::string("[MainApp] Map '") + map_identifier +
+                                                  "' missing from manifest. Generating default map manifest.");
                                 map_manifest_json = build_default_map_manifest(map_identifier);
                         }
                 }
@@ -161,7 +180,8 @@ void MainApp::setup() {
                         relative_content_root = fs::path("content") / map_identifier;
                         map_manifest_json["content_root"] = relative_content_root.generic_string();
                         manifest_updated = true;
-                        vibble::log::warn(std::string("[MainApp] No content_root for map '") + map_identifier + "'. Using default '" + relative_content_root.generic_string() + "'.");
+                        vibble::log::warn(std::string("[MainApp] No content_root for map '") + map_identifier +
+                                          "'. Using default '" + relative_content_root.generic_string() + "'.");
                 }
 
                 fs::path resolved_root = relative_content_root;
@@ -174,30 +194,32 @@ void MainApp::setup() {
                 fs::create_directories(resolved_root, dir_error);
                 if (dir_error) {
                         std::ostringstream oss;
-                        oss << "Failed to prepare content root '" << resolved_root.string() << "': " << dir_error.message();
+                        oss << "Failed to prepare content root '" << resolved_root.string()
+                            << "': " << dir_error.message();
                         throw std::runtime_error(oss.str());
                 }
                 content_root = resolved_root.string();
-
-
 
                 if (manifest_updated) {
                         try {
                                 devmode::core::ManifestStore store;
                                 store.reload();
                                 if (!store.update_map_entry(map_identifier, map_manifest_json)) {
-                                        vibble::log::warn(std::string("[MainApp] Failed to persist manifest entry for '") + map_identifier + "'.");
+                                        vibble::log::warn(std::string("[MainApp] Failed to persist manifest entry for '") +
+                                                          map_identifier + "'.");
                                 } else {
                                         store.flush();
                                 }
                         } catch (const std::exception& ex) {
-                                vibble::log::warn(std::string("[MainApp] Unable to persist manifest entry for '") + map_identifier + "': " + ex.what());
+                                vibble::log::warn(std::string("[MainApp] Unable to persist manifest entry for '") +
+                                                  map_identifier + "': " + ex.what());
                         }
                 }
 
                 render_pipeline::ScalingProfileBuildOptions scaling_options;
                 if (screen_w_ > 0 && screen_h_ > 0) {
-                        scaling_options.screen_aspect = static_cast<double>(screen_w_) / static_cast<double>(screen_h_);
+                        scaling_options.screen_aspect =
+                                static_cast<double>(screen_w_) / static_cast<double>(screen_h_);
                 }
                 scaling_options.asset_library = const_cast<const AssetLibrary*>(asset_library_);
                 try {
@@ -209,49 +231,97 @@ void MainApp::setup() {
                                 vibble::log::info("[MainApp] No assets detected; skipping scaling profile build.");
                         }
                 } catch (const std::exception& ex) {
-                        vibble::log::warn(std::string("[MainApp] Scaling profile build skipped due to error: ") + ex.what());
+                        vibble::log::warn(std::string("[MainApp] Scaling profile build skipped due to error: ") +
+                                          ex.what());
                 } catch (...) {
                         vibble::log::warn("[MainApp] Scaling profile build skipped due to unknown error.");
                 }
 
                 vibble::log::info("[MainApp] Constructing AssetLoader...");
                 auto loader_begin = std::chrono::steady_clock::now();
-                loader_ = std::make_unique<AssetLoader>(map_identifier, map_manifest_json, renderer_, content_root, nullptr, asset_library_);
+                loader_ = std::make_unique<AssetLoader>(
+                        map_identifier,
+                        map_manifest_json,
+                        renderer_,
+                        content_root,
+                        nullptr,
+                        asset_library_);
                 auto loader_end = std::chrono::steady_clock::now();
-                vibble::log::info(std::string("[MainApp] AssetLoader constructed in ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(loader_end - loader_begin).count()) + "ms");
+                vibble::log::info(
+                        std::string("[MainApp] AssetLoader constructed in ") +
+                        std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                               loader_end - loader_begin)
+                                               .count()) +
+                        "ms");
+
                 loading_status::notify("Spawning assets");
                 auto spawn_begin = std::chrono::steady_clock::now();
                 world::Grid world_grid{};
                 loader_->createAssets(world_grid);
                 auto all_assets = loader_->take_spawned_assets();
-                vibble::log::info(std::string("[MainApp] Asset spawning finished for map '") + map_identifier + "'.");
-                vibble::log::info(std::string("[MainApp] ") + std::to_string(all_assets.size()) + " assets created and cached.");
+                vibble::log::info(std::string("[MainApp] Asset spawning finished for map '") +
+                                  map_identifier + "'.");
+                vibble::log::info(std::string("[MainApp] ") +
+                                  std::to_string(all_assets.size()) + " assets created and cached.");
                 // Hard safety limit to prevent runaway spawns causing severe performance issues
                 if (all_assets.size() > 200000) {
-                        vibble::log::error(std::string("[MainApp] Asset count ") + std::to_string(all_assets.size()) +
+                        vibble::log::error(std::string("[MainApp] Asset count ") +
+                                           std::to_string(all_assets.size()) +
                                            " exceeds limit (200000). Aborting to avoid instability.");
                         throw std::runtime_error("Asset count exceeds 200000; aborting.");
                 }
+
                 const auto asset_count = all_assets.size();
                 const auto room_count = loader_->getRooms().size();
+
                 Asset* player_ptr = nullptr;
                 for (auto& a : all_assets) {
                         Asset* candidate = a.get();
-                        if (candidate && candidate->info && candidate->info->type == asset_types::player) { player_ptr = candidate; break; }
+                        if (candidate && candidate->info &&
+                            candidate->info->type == asset_types::player) {
+                                player_ptr = candidate;
+                                break;
+                        }
                 }
-                int start_px = player_ptr ? player_ptr->pos.x : static_cast<int>(loader_->getMapRadius());
-                int start_py = player_ptr ? player_ptr->pos.y : static_cast<int>(loader_->getMapRadius());
+
+                int start_px = player_ptr ? player_ptr->pos.x
+                                          : static_cast<int>(loader_->getMapRadius());
+                int start_py = player_ptr ? player_ptr->pos.y
+                                          : static_cast<int>(loader_->getMapRadius());
+
                 AssetLibrary* active_library = loader_->getAssetLibrary();
                 if (!active_library) {
                         throw std::runtime_error("Asset library unavailable during game setup.");
                 }
-                game_assets_ = new Assets(std::move(all_assets), *active_library, player_ptr, loader_->getRooms(), screen_w_, screen_h_, start_px, start_py, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, loader_->map_identifier(), loader_->map_manifest(), loader_->content_root(), std::move(world_grid));
-                const double spawn_seconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - spawn_begin).count() / 1000.0;
+
+                game_assets_ = new Assets(
+                        std::move(all_assets),
+                        *active_library,
+                        player_ptr,
+                        loader_->getRooms(),
+                        screen_w_,
+                        screen_h_,
+                        start_px,
+                        start_py,
+                        static_cast<int>(loader_->getMapRadius() * 1.2),
+                        renderer_,
+                        loader_->map_identifier(),
+                        loader_->map_manifest(),
+                        loader_->content_root(),
+                        std::move(world_grid));
+
+                const double spawn_seconds =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now() - spawn_begin)
+                                .count() /
+                        1000.0;
+
                 std::ostringstream init_summary;
                 init_summary << "[Init] Assets initialized: " << asset_count
                              << " assets across " << room_count << " rooms in "
                              << std::fixed << std::setprecision(2) << spawn_seconds << "s";
                 vibble::log::info(init_summary.str());
+
                 input_ = new Input();
                 game_assets_->set_input(input_);
                 if (!player_ptr) {
@@ -273,11 +343,13 @@ void MainApp::game_loop() {
         constexpr double TARGET_FRAME_SECONDS = 1.0 / TARGET_FPS;
         const double perf_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
         const double target_counts  = TARGET_FRAME_SECONDS * perf_frequency;
+
         double idle_counts_accum = 0.0;
         int idle_frame_counter   = 0;
         constexpr int IDLE_REPORT_INTERVAL = 120;
         bool quit = false;
         SDL_Event e;
+
         vibble::log::info("[MainApp] Game loop started.");
 
         if (game_assets_) {
@@ -288,17 +360,29 @@ void MainApp::game_loop() {
 
         while (!quit) {
                 const Uint64 frame_begin = SDL_GetPerformanceCounter();
+
                 while (SDL_PollEvent(&e)) {
-                        if (e.type == SDL_QUIT) quit = true;
-			if (input_) input_->handleEvent(e);
-			if (game_assets_) game_assets_->handle_sdl_event(e);
-		}
+                        if (e.type == SDL_QUIT) {
+                                quit = true;
+                        }
+                        if (input_) {
+                                input_->handleEvent(e);
+                        }
+                        if (game_assets_) {
+                                game_assets_->handle_sdl_event(e);
+                        }
+                }
+
                 if (game_assets_ && input_) {
                         game_assets_->update(*input_);
                 }
-                if (input_) input_->update();
+                if (input_) {
+                        input_->update();
+                }
+
                 const Uint64 frame_end = SDL_GetPerformanceCounter();
                 const double work_counts = static_cast<double>(frame_end - frame_begin);
+
                 if (work_counts < target_counts) {
                         const double remaining_counts = target_counts - work_counts;
                         idle_counts_accum += remaining_counts;
@@ -308,10 +392,18 @@ void MainApp::game_loop() {
                                 SDL_Delay(static_cast<Uint32>(remaining_ms));
                         }
                 }
+
                 if (idle_frame_counter >= IDLE_REPORT_INTERVAL) {
-                        const double total_idle_ms = (idle_counts_accum * 1000.0) / perf_frequency;
-                        const double average_idle_ms = total_idle_ms / static_cast<double>(idle_frame_counter);
-                        vibble::log::debug("[MainApp] Idle pacing: total " + std::to_string(total_idle_ms) + "ms over " + std::to_string(idle_frame_counter) + " frame(s); avg " + std::to_string(average_idle_ms) + "ms.");
+                        const double total_idle_ms =
+                                (idle_counts_accum * 1000.0) / perf_frequency;
+                        const double average_idle_ms =
+                                total_idle_ms / static_cast<double>(idle_frame_counter);
+                        vibble::log::debug(
+                                "[MainApp] Idle pacing: total " +
+                                std::to_string(total_idle_ms) + "ms over " +
+                                std::to_string(idle_frame_counter) +
+                                " frame(s); avg " +
+                                std::to_string(average_idle_ms) + "ms.");
                         idle_counts_accum = 0.0;
                         idle_frame_counter = 0;
                 }
@@ -322,11 +414,13 @@ namespace {
 
 std::string trim_copy(const std::string& value) {
     size_t start = 0;
-    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
+    while (start < value.size() &&
+           std::isspace(static_cast<unsigned char>(value[start]))) {
         ++start;
     }
     size_t end = value.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+    while (end > start &&
+           std::isspace(static_cast<unsigned char>(value[end - 1]))) {
         --end;
     }
     return value.substr(start, end - start);
@@ -366,7 +460,8 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
         return std::string("spn-") + cleaned + "-" + suffix;
     };
 
-    auto make_room_spawn_group = [&](const std::string& display_name, const std::string& asset_name) {
+    auto make_room_spawn_group = [&](const std::string& display_name,
+                                     const std::string& asset_name) {
         nlohmann::json group;
         group["display_name"] = display_name;
         group["spawn_id"] = spawn_id_for(display_name);
@@ -392,7 +487,8 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
         return group;
     };
 
-    auto make_batch_spawn_group = [&](const std::string& suffix, const std::string& display_name) {
+    auto make_batch_spawn_group = [&](const std::string& suffix,
+                                      const std::string& display_name) {
         nlohmann::json group;
         group["display_name"] = display_name;
         group["spawn_id"] = spawn_id_for(suffix);
@@ -428,11 +524,15 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
     map_info["map_layers"] = nlohmann::json::array({layer});
 
     map_info["map_assets_data"] = nlohmann::json::object({
-        {"spawn_groups", nlohmann::json::array({ make_batch_spawn_group("map_assets", "batch_map_assets") })}
+        {"spawn_groups",
+         nlohmann::json::array({ make_batch_spawn_group("map_assets",
+                                                        "batch_map_assets") })}
     });
     map_info["map_boundary_data"] = nlohmann::json::object({
         {"inherits_map_assets", false},
-        {"spawn_groups", nlohmann::json::array({ make_batch_spawn_group("map_boundary", "batch_map_boundary") })}
+        {"spawn_groups",
+         nlohmann::json::array({ make_batch_spawn_group("map_boundary",
+                                                        "batch_map_boundary") })}
     });
     map_info["reactive_shadows"] = nlohmann::json::object({
         {"frame_blend_falloff_frames", 15},
@@ -553,19 +653,24 @@ std::optional<MapDescriptor> create_new_map_interactively() {
     }
 
     while (true) {
-        const char* response = tinyfd_inputBox("Create New Map", "Enter the name for your new map:", "");
+        const char* response =
+            tinyfd_inputBox("Create New Map", "Enter the name for your new map:", "");
         if (!response) {
             return std::nullopt;
         }
 
         auto sanitized = sanitize_map_name(response);
         if (!sanitized) {
-            tinyfd_messageBox("Invalid Map Name", "Map names may only contain letters, numbers, underscores, or hyphens.", "ok", "error", 0);
+            tinyfd_messageBox("Invalid Map Name",
+                              "Map names may only contain letters, numbers, underscores, or hyphens.",
+                              "ok", "error", 0);
             continue;
         }
 
         if (manifest_store.find_map_entry(*sanitized)) {
-            tinyfd_messageBox("Map Exists", "A map with that name already exists.", "ok", "error", 0);
+            tinyfd_messageBox("Map Exists",
+                              "A map with that name already exists.",
+                              "ok", "error", 0);
             continue;
         }
 
@@ -584,7 +689,8 @@ std::optional<MapDescriptor> create_new_map_interactively() {
         fs::path content_root = manifest_root / "content";
         fs::create_directories(content_root, dir_error);
         if (dir_error) {
-            std::string msg = std::string("Failed to prepare content folder: ") + dir_error.message();
+            std::string msg = std::string("Failed to prepare content folder: ") +
+                              dir_error.message();
             tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
             continue;
         }
@@ -593,14 +699,16 @@ std::optional<MapDescriptor> create_new_map_interactively() {
         dir_error.clear();
         fs::create_directories(map_dir, dir_error);
         if (dir_error) {
-            std::string msg = std::string("Failed to create map folder: ") + dir_error.message();
+            std::string msg = std::string("Failed to create map folder: ") +
+                              dir_error.message();
             tinyfd_messageBox("Error", msg.c_str(), "ok", "error", 0);
             continue;
         }
         dir_error.clear();
         fs::create_directories(map_dir / "music", dir_error);
 
-        map_info["content_root"] = (fs::path("content") / *sanitized).generic_string();
+        map_info["content_root"] =
+            (fs::path("content") / *sanitized).generic_string();
         auto audio_it = map_info.find("audio");
         if (audio_it == map_info.end() || !audio_it->is_object()) {
             map_info["audio"] = nlohmann::json::object();
@@ -611,15 +719,18 @@ std::optional<MapDescriptor> create_new_map_interactively() {
         if (!music_section.is_object()) {
             music_section = nlohmann::json::object();
         }
-        music_section["content_root"] = (fs::path(map_info["content_root"].get<std::string>()) / "music").generic_string();
-        if (!music_section.contains("tracks") || !music_section["tracks"].is_array()) {
+        music_section["content_root"] =
+            (fs::path(map_info["content_root"].get<std::string>()) / "music")
+                    .generic_string();
+        if (!music_section.contains("tracks") ||
+            !music_section["tracks"].is_array()) {
             music_section["tracks"] = nlohmann::json::array();
         }
 
-
-
         if (!manifest_store.update_map_entry(*sanitized, map_info)) {
-            tinyfd_messageBox("Error Creating Map", "Failed to update manifest for new map.", "ok", "error", 0);
+            tinyfd_messageBox("Error Creating Map",
+                              "Failed to update manifest for new map.",
+                              "ok", "error", 0);
             continue;
         }
 
@@ -632,9 +743,13 @@ std::optional<MapDescriptor> create_new_map_interactively() {
     }
 }
 
-}
+} // namespace
 
-void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h, bool rebuild_cache) {
+void run(SDL_Window* window,
+         SDL_Renderer* renderer,
+         int screen_w,
+         int screen_h,
+         bool rebuild_cache) {
     (void)window;
 
     // Present a black screen immediately and keep the window responsive
@@ -643,24 +758,29 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
         SDL_RenderPresent(renderer);
-        SDL_Event ev; while (SDL_PollEvent(&ev)) {}
+        SDL_Event ev;
+        while (SDL_PollEvent(&ev)) {}
     }
 
     manifest::ManifestData manifest_data;
     try {
         manifest_data = manifest::load_manifest();
         // Pump and discard input after a potentially heavy step
-        SDL_Event ev; while (SDL_PollEvent(&ev)) {}
+        SDL_Event ev;
+        while (SDL_PollEvent(&ev)) {}
     } catch (const std::exception& ex) {
         vibble::log::error(std::string("[Main] Failed to load manifest: ") + ex.what());
         return;
     }
 
-    std::shared_ptr<AssetLibrary> shared_asset_library = std::make_shared<AssetLibrary>(false);
+    std::shared_ptr<AssetLibrary> shared_asset_library =
+        std::make_shared<AssetLibrary>(false);
     vibble::log::info("[Main] Preparing asset metadata cache...");
     shared_asset_library->load_all_from_SRC();
     { SDL_Event ev; while (SDL_PollEvent(&ev)) {} }
-    vibble::log::info(std::string("[Main] Asset metadata cache ready for ") + std::to_string(shared_asset_library->all().size()) + " asset(s).");
+    vibble::log::info(std::string("[Main] Asset metadata cache ready for ") +
+                      std::to_string(shared_asset_library->all().size()) +
+                      " asset(s).");
     vibble::log::info("[Main] Loading cached asset resources...");
     shared_asset_library->loadAllAnimations(renderer);
     { SDL_Event ev; while (SDL_PollEvent(&ev)) {} }
@@ -674,6 +794,7 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
         bool should_show_loading_screen = false;
         SDL_Event e;
         bool choosing = true;
+
         while (choosing) {
             while (SDL_PollEvent(&e)) {
                 if (e.type == SDL_QUIT) {
@@ -694,7 +815,8 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
                     auto created = create_new_map_interactively();
                     if (created) {
                         chosen_map = std::move(*created);
-                        vibble::log::info(std::string("[Main] New map created and selected: ") + chosen_map->id);
+                        vibble::log::info(std::string("[Main] New map created and selected: ") +
+                                          chosen_map->id);
                         choosing = false;
                         should_show_loading_screen = true;
                     }
@@ -719,10 +841,13 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
             SDL_RenderPresent(renderer);
             SDL_Delay(16);
         }
+
         if (should_show_loading_screen) {
             menu.showLoadingScreen();
         }
-        if (quit_requested || !chosen_map) break;
+        if (quit_requested || !chosen_map) {
+            break;
+        }
 
         MapDescriptor selected_map = std::move(*chosen_map);
         LoadingScreen loading_screen(renderer, screen_w, screen_h);
@@ -738,19 +863,53 @@ void run(SDL_Window* window, SDL_Renderer* renderer, int screen_w, int screen_h,
             shared_asset_library->loadAllAnimations(renderer);
             vibble::log::info("[Main] Shared asset library refreshed.");
         }
-        MenuUI app(renderer, screen_w, screen_h, std::move(selected_map), &loading_screen, shared_asset_library.get());
+
+        MenuUI app(renderer, screen_w, screen_h, std::move(selected_map),
+                   &loading_screen, shared_asset_library.get());
         app.init();
-        if (app.wants_return_to_main_menu()) continue;
+        if (app.wants_return_to_main_menu()) {
+            continue;
+        }
         break;
     }
 }
 
 int main(int argc, char* argv[]) {
-	vibble::log::info("[Main] Starting game engine...");
-	const bool rebuild_cache = (argc > 1 && argv[1] && std::string(argv[1]) == "-r");
-        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-                vibble::log::error(std::string("SDL_Init failed: ") + SDL_GetError()); return 1;
+        vibble::log::info("[Main] Starting game engine...");
+        const bool rebuild_cache =
+                (argc > 1 && argv[1] && std::string(argv[1]) == "-r");
+
+        // Very first step: regenerate assets via Python asset_tool
+        try {
+                std::string manifest_path_str = manifest::manifest_path();
+                vibble::log::info("[Main] Regenerating assets from manifest via asset_tool.py...");
+        #if defined(_WIN32)
+                std::string cmd = "python tools\\asset_tool.py \"" +
+                                  manifest_path_str + "\" cache";
+        #else
+                std::string cmd = "python tools/asset_tool.py \"" +
+                                  manifest_path_str + "\" cache";
+        #endif
+                int ret = std::system(cmd.c_str());
+                if (ret != 0) {
+                        vibble::log::warn(
+                                std::string("[Main] Asset regeneration script returned non-zero: ") +
+                                std::to_string(ret));
+                } else {
+                        vibble::log::info("[Main] Asset regeneration complete.");
+                }
+        } catch (const std::exception& ex) {
+                vibble::log::error(
+                        std::string("[Main] Exception while regenerating assets: ") +
+                        ex.what());
+                // Keep going so the engine can still start even if this fails
         }
+
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+                vibble::log::error(std::string("SDL_Init failed: ") + SDL_GetError());
+                return 1;
+        }
+
         // Prefer the highest quality texture filtering globally
         if (SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best") != SDL_TRUE) {
                 if (SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2") != SDL_TRUE) {
@@ -758,44 +917,72 @@ int main(int argc, char* argv[]) {
                 }
         }
         vibble::log::info("[Main] Requested high quality texture filtering.");
+
         if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
-                vibble::log::error(std::string("Mix_OpenAudio failed: ") + Mix_GetError()); SDL_Quit(); return 1;
+                vibble::log::error(std::string("Mix_OpenAudio failed: ") + Mix_GetError());
+                SDL_Quit();
+                return 1;
         }
-	if (TTF_Init() < 0) {
-		vibble::log::error(std::string("TTF_Init failed: ") + TTF_GetError()); SDL_Quit(); return 1;
-	}
-	if (!(IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG | IMG_INIT_TIF | IMG_INIT_WEBP) &
-	(IMG_INIT_PNG | IMG_INIT_JPG | IMG_INIT_TIF | IMG_INIT_WEBP))) {
-		vibble::log::error(std::string("IMG_Init failed: ") + IMG_GetError()); SDL_Quit(); return 1;
-	}
-	SDL_Window* window = SDL_CreateWindow("Game Window", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
-	if (!window) {
-		vibble::log::error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
-		IMG_Quit(); TTF_Quit(); SDL_Quit(); return 1;
-	}
-	vibble::log::info("[Main] Regenerating assets...");
-	std::string manifest_path_str = manifest::manifest_path();
-	std::string cmd = "python tools\\asset_tool.py \"" + manifest_path_str + "\" cache";
-	int ret = system(cmd.c_str());
-	if (ret != 0) {
-		vibble::log::warn(std::string("[Main] Asset regeneration script returned non-zero: ") + std::to_string(ret));
-	} else {
-		vibble::log::info("[Main] Asset regeneration complete.");
-	}
-	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-	if (!renderer) {
-		vibble::log::error(std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
-		SDL_DestroyWindow(window); IMG_Quit(); TTF_Quit(); SDL_Quit(); return 1;
-	}
-	SDL_RendererInfo info; SDL_GetRendererInfo(renderer, &info);
-	vibble::log::info(std::string("[Main] Renderer: ") + (info.name ? info.name : "Unknown"));
-	int screen_width = 0, screen_height = 0;
-	SDL_GetRendererOutputSize(renderer, &screen_width, &screen_height);
-	vibble::log::info(std::string("[Main] Screen resolution: ") + std::to_string(screen_width) + "x" + std::to_string(screen_height));
-	run(window, renderer, screen_width, screen_height, rebuild_cache);
-	SDL_DestroyRenderer(renderer);
-	SDL_DestroyWindow(window);
-	IMG_Quit(); TTF_Quit(); SDL_Quit();
-	vibble::log::info("[Main] Game exited cleanly.");
-	return 0;
+
+        if (TTF_Init() < 0) {
+                vibble::log::error(std::string("TTF_Init failed: ") + TTF_GetError());
+                SDL_Quit();
+                return 1;
+        }
+
+        if (!(IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG | IMG_INIT_TIF | IMG_INIT_WEBP) &
+              (IMG_INIT_PNG | IMG_INIT_JPG | IMG_INIT_TIF | IMG_INIT_WEBP))) {
+                vibble::log::error(std::string("IMG_Init failed: ") + IMG_GetError());
+                SDL_Quit();
+                return 1;
+        }
+
+        SDL_Window* window = SDL_CreateWindow(
+                "Game Window",
+                SDL_WINDOWPOS_CENTERED,
+                SDL_WINDOWPOS_CENTERED,
+                0,
+                0,
+                SDL_WINDOW_FULLSCREEN_DESKTOP);
+        if (!window) {
+                vibble::log::error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
+                IMG_Quit();
+                TTF_Quit();
+                SDL_Quit();
+                return 1;
+        }
+
+        SDL_Renderer* renderer =
+                SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+        if (!renderer) {
+                vibble::log::error(std::string("SDL_CreateRenderer failed: ") +
+                                   SDL_GetError());
+                SDL_DestroyWindow(window);
+                IMG_Quit();
+                TTF_Quit();
+                SDL_Quit();
+                return 1;
+        }
+
+        SDL_RendererInfo info;
+        SDL_GetRendererInfo(renderer, &info);
+        vibble::log::info(std::string("[Main] Renderer: ") +
+                          (info.name ? info.name : "Unknown"));
+
+        int screen_width = 0;
+        int screen_height = 0;
+        SDL_GetRendererOutputSize(renderer, &screen_width, &screen_height);
+        vibble::log::info(std::string("[Main] Screen resolution: ") +
+                          std::to_string(screen_width) + "x" +
+                          std::to_string(screen_height));
+
+        run(window, renderer, screen_width, screen_height, rebuild_cache);
+
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        IMG_Quit();
+        TTF_Quit();
+        SDL_Quit();
+        vibble::log::info("[Main] Game exited cleanly.");
+        return 0;
 }

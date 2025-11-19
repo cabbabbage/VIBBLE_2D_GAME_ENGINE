@@ -38,9 +38,9 @@
     },
     "dev_ui": {
         "camera": {
-            "background_texture_max_opacity": 255.0,
+            "background_texture_max_opacity": 188.0,
             "depthcue_enabled": true,
-            "foreground_texture_max_opacity": 255.0
+            "foreground_texture_max_opacity": 185.0
         },
         "lighting": {
             "map_panel": {

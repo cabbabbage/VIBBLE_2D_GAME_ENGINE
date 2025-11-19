@@ -303,7 +303,6 @@ void ForegroundBackgroundEffectPanel::build_ui() {
         target->set_on_value_changed([this](float) { on_slider_changed(); });
     };
 
-    configure_slider(rgb_boost_, "RGB Boost", -1.0f, 1.0f, 0.02f, 2);
     configure_slider(contrast_, "Contrast", -1.0f, 1.0f, 0.02f, 2);
     configure_slider(brightness_, "Brightness", -1.0f, 1.0f, 0.02f, 2);
     configure_slider(blur_, "Blur / Sharpen", -1.0f, 1.0f, 0.02f, 2);
@@ -334,7 +333,7 @@ void ForegroundBackgroundEffectPanel::rebuild_rows() {
     if (asset_dropdown_widget_) rows.push_back({ asset_dropdown_widget_.get() });
 
     // Single set of sliders for current mode
-    rows.push_back({ rgb_boost_.get(), contrast_.get() });
+    rows.push_back({ contrast_.get() });
     rows.push_back({ brightness_.get(), blur_.get() });
     rows.push_back({ saturation_r_.get(), saturation_g_.get() });
     rows.push_back({ saturation_b_.get(), hue_.get() });
@@ -473,7 +472,6 @@ void ForegroundBackgroundEffectPanel::handle_asset_selection(int index) {
 }
 
 void ForegroundBackgroundEffectPanel::update_controls_from_settings(const camera_effects::ImageEffectSettings& settings) {
-    if (rgb_boost_) rgb_boost_->set_value(settings.rgb_boost);
     if (contrast_) contrast_->set_value(settings.contrast);
     if (brightness_) brightness_->set_value(settings.brightness);
     if (blur_) blur_->set_value(settings.blur);
@@ -486,7 +484,6 @@ void ForegroundBackgroundEffectPanel::update_controls_from_settings(const camera
 
 camera_effects::ImageEffectSettings ForegroundBackgroundEffectPanel::read_current_settings() const {
     camera_effects::ImageEffectSettings settings{};
-    if (rgb_boost_) settings.rgb_boost = rgb_boost_->value();
     if (contrast_) settings.contrast = contrast_->value();
     if (brightness_) settings.brightness = brightness_->value();
     if (blur_) settings.blur = blur_->value();
@@ -535,7 +532,6 @@ void ForegroundBackgroundEffectPanel::save_depth_cue_settings_to_manifest() {
     // Convert C++ ImageEffectSettings to JSON for foreground and background
     auto add_image_effects = [&](const std::string& type, const camera_effects::ImageEffectSettings& settings) {
         nlohmann::json effects_json = {
-            {"rgb_boost", settings.rgb_boost},
             {"contrast", settings.contrast},
             {"brightness", settings.brightness},
             {"blur", settings.blur},
@@ -680,7 +676,6 @@ bool ForegroundBackgroundEffectPanel::load_depth_cue_settings_from_manifest() {
         }
 
         // Load each effect value
-        settings.rgb_boost = effects_json.value("rgb_boost", 0.0f);
         settings.contrast = effects_json.value("contrast", 0.0f);
         settings.brightness = effects_json.value("brightness", 0.0f);
         settings.blur = effects_json.value("blur", 0.0f);
@@ -730,7 +725,6 @@ void ForegroundBackgroundEffectPanel::generate_preview_with_python(
 
     std::string full_cmd = python_cmd +
         " \"" + image_path + "\" \"" + output_path + "\" " + layer_type + " " +
-        std::to_string(settings.rgb_boost) + " " +
         std::to_string(settings.contrast) + " " +
         std::to_string(settings.brightness) + " " +
         std::to_string(settings.blur) + " " +

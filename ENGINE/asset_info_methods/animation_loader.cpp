@@ -25,6 +25,7 @@
 #include "animation_update/custom_controllers/Bomb_controller.hpp"
 #include "animation_update/custom_controllers/Frog_controller.hpp"
 #include "animation_update/custom_controllers/default_controller.hpp"
+
 using nlohmann::json;
 
 namespace {
@@ -53,28 +54,35 @@ bool AnimationLoader::clear_asset_cache(const std::string& asset_name) {
         std::error_code ec;
         const bool exists = std::filesystem::exists(asset_cache, ec);
         if (!exists || ec) {
-                if (ec) {
-                        std::cerr << "[AnimationLoader] Failed to query cache for " << asset_name
-                                  << ": " << ec.message() << "\n";
-                        return false;
-                }
-                return true;
+            if (ec) {
+                std::cerr << "[AnimationLoader] Failed to query cache for " << asset_name
+                          << ": " << ec.message() << "\n";
+                return false;
+            }
+            return true;
         }
 
         ec.clear();
         std::filesystem::remove_all(asset_cache, ec);
         if (ec) {
-                std::cerr << "[AnimationLoader] Failed to clear cache for " << asset_name << ": " << ec.message() << "\n";
+                std::cerr << "[AnimationLoader] Failed to clear cache for " << asset_name
+                          << ": " << ec.message() << "\n";
                 return false;
         }
 
-        std::cout << "[AnimationLoader] " << asset_name << " cleared cache folder '" << asset_cache.string() << "'\n";
+        std::cout << "[AnimationLoader] " << asset_name
+                  << " cleared cache folder '" << asset_cache.string() << "'\n";
         return true;
 }
 
-AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(AssetInfo& info, SDL_Renderer* renderer, bool force_rebuild) {
+AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(
+        AssetInfo& info,
+        SDL_Renderer* renderer,
+        bool force_rebuild
+) {
         LoadAttemptResult result{};
 
+        // Reset state
         for (auto& entry : info.animations) {
                 entry.second.clear_texture_cache();
         }
@@ -90,7 +98,7 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(A
         render_pipeline::ScalingLogic::LoadPrecomputedProfiles(true);
         const auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info.name);
         const bool profile_refresh_requested = profile.created_entry || profile.revision_changed;
-        const bool scaling_refresh_pending = force_rebuild || profile_refresh_requested;
+        const bool scaling_refresh_pending   = force_rebuild || profile_refresh_requested;
 
         std::cout << "[AnimationLoader] " << info.name
                   << " profile_revision=" << profile.revision
@@ -106,40 +114,34 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(A
                 }
 
                 if (!clear_asset_cache(info.name)) {
-                        std::cerr << "[AnimationLoader] Unable to clear animation cache for " << info.name
-                                  << " after scaling profile updates\n";
+                        std::cerr << "[AnimationLoader] Unable to clear animation cache for "
+                                  << info.name << " after scaling profile updates\n";
                 }
+        }
 
-                // Regenerate cache for this asset after clearing
-                auto root = std::filesystem::path(manifest::manifest_path()).parent_path();
-                std::filesystem::path python_script = root / "tools" / "asset_tool.py";
-                std::filesystem::path manifest_file = root / "manifest.json";
-                std::string manifest_path = manifest_file.string();
-                std::string cache_root = (root / "cache").string();
-                std::string asset_list = info.name;
-                std::string python_cmd = "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && python \"" + python_script.string() + "\" " + manifest_path + " " + cache_root + " \"" + asset_list + "\"";
-                std::cout << "[AnimationLoader] Regenerating cache for " << info.name << "\n";
-                std::cout << "[AnimationLoader] Running: " << python_cmd << "\n";
-                int result = std::system(python_cmd.c_str());
-                if (result != 0) {
-                        std::cerr << "[AnimationLoader] Failed to regenerate cache for " << info.name
-                                  << ", exit code: " << result << "\n";
-                }
+        // Mark this attempt as a cache issue if the profile changed and we are not in a force_rebuild pass.
+        // This tells the outer load() that a regenerate is reasonable if this attempt fails.
+        if (profile_refresh_requested && !force_rebuild) {
+                result.cache_issue = true;
         }
 
         info.scale_variants = profile.steps;
         render_pipeline::ScalingLogic::NormalizeVariantSteps(info.scale_variants);
         std::cout << "[AnimationLoader] " << info.name
-                  << " normalized asset scaling steps: " << format_steps(info.scale_variants)
+                  << " normalized asset scaling steps: "
+                  << format_steps(info.scale_variants)
                   << " (profile revision " << profile.revision << ")\n";
         info.scale_profile_revision = profile.revision;
 
-        auto load_animation_payload = [&](const std::string& trigger, const nlohmann::json& anim_json) -> bool {
+        auto load_animation_payload =
+            [&](const std::string& trigger, const nlohmann::json& anim_json) -> bool {
                 if (anim_json.is_null()) {
                         return true;
                 }
+
                 Animation anim;
                 Animation::LoadDiagnostics diagnostics;
+
                 try {
                         anim.load(trigger,
                                   anim_json,
@@ -156,14 +158,18 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(A
                                   scaling_refresh_pending,
                                   &diagnostics);
                 } catch (const std::exception& ex) {
-                        std::cerr << "[AnimationLoader] Exception while loading " << info.name << "::" << trigger
+                        std::cerr << "[AnimationLoader] Exception while loading "
+                                  << info.name << "::" << trigger
                                   << ": " << ex.what() << "\n";
                         return false;
                 } catch (...) {
-                        std::cerr << "[AnimationLoader] Unknown exception while loading " << info.name << "::" << trigger << "\n";
+                        std::cerr << "[AnimationLoader] Unknown exception while loading "
+                                  << info.name << "::" << trigger << "\n";
                         return false;
                 }
 
+                // If cache was invalid during a non forced build, mark that so outer code
+                // knows this looks like a cache problem.
                 if (diagnostics.cache_invalid && !force_rebuild) {
                         result.cache_issue = true;
                 }
@@ -173,47 +179,65 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(A
                         return true;
                 }
 
-                std::cerr << "[AnimationLoader] " << info.name << "::" << trigger << " produced no frames\n";
+                std::cerr << "[AnimationLoader] " << info.name << "::" << trigger
+                          << " produced no frames\n";
+                // No frames is effectively a cache or content problem
+                if (!force_rebuild) {
+                        result.cache_issue = true;
+                }
                 return false;
         };
 
+        // First pass: concrete animations
         std::vector<std::pair<std::string, nlohmann::json>> alias_queue;
         for (auto it = info.anims_json_.begin(); it != info.anims_json_.end(); ++it) {
-                const std::string& trigger  = it.key();
+                const std::string& trigger   = it.key();
                 const auto&        anim_json = it.value();
                 if (anim_json.is_null()) {
                         continue;
                 }
+
                 if (anim_json.contains("source") && anim_json["source"].is_object()) {
-                        std::string kind = anim_json["source"].value("kind", std::string{"folder"});
+                        std::string kind = anim_json["source"].value("kind",
+                                                                     std::string{"folder"});
                         if (kind == "animation") {
                                 alias_queue.emplace_back(trigger, anim_json);
                                 continue;
                         }
                 }
+
                 if (!load_animation_payload(trigger, anim_json)) {
+                        // Failed loading a concrete animation
                         return result;
                 }
         }
 
+        // Second pass: animation aliases that refer to other triggers
         {
                 std::vector<std::pair<std::string, nlohmann::json>> pending = alias_queue;
-                int         safety         = 0;
+                int safety = 0;
+
                 while (!pending.empty() && safety < 1024) {
                         ++safety;
                         std::vector<std::pair<std::string, nlohmann::json>> next;
                         std::size_t resolved_this_pass = 0;
+
                         for (auto& item : pending) {
                                 const std::string& trigger   = item.first;
                                 const auto&        anim_json = item.second;
-                                std::string        source_name;
+
+                                std::string source_name;
                                 try {
-                                        if (anim_json.contains("source") && anim_json["source"].is_object()) {
+                                        if (anim_json.contains("source") &&
+                                            anim_json["source"].is_object()) {
                                                 const auto& s = anim_json["source"];
-                                                if (s.value("kind", std::string{"folder"}) == std::string{"animation"}) {
-                                                        source_name = s.value("name", std::string{});
+                                                if (s.value("kind", std::string{"folder"}) ==
+                                                    std::string{"animation"}) {
+                                                        source_name = s.value("name",
+                                                                              std::string{});
                                                         if (source_name.empty()) {
-                                                                source_name = s.value("path", std::string{});
+                                                                source_name = s.value("path",
+                                                                                      std::string{});
                                                         }
                                                 }
                                         }
@@ -221,7 +245,9 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(A
                                         source_name.clear();
                                 }
 
-                                if (!source_name.empty() && info.animations.find(source_name) == info.animations.end()) {
+                                if (!source_name.empty() &&
+                                    info.animations.find(source_name) ==
+                                        info.animations.end()) {
                                         next.emplace_back(trigger, anim_json);
                                         continue;
                                 }
@@ -267,76 +293,107 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 return;
         }
 
-        // Load animations
+        // First attempt: load from existing cache
         LoadAttemptResult attempt = load_asset_animations_once(info, renderer, false);
+
+        // Only if loading failed and we believe it is a cache issue, run the Python
+        // script once for this single asset, then retry exactly once.
         if (!attempt.success && attempt.cache_issue) {
-                // Cache issue detected, regenerate cache and retry
                 auto root = std::filesystem::path(manifest::manifest_path()).parent_path();
                 std::filesystem::path python_script = root / "tools" / "asset_tool.py";
                 std::filesystem::path manifest_file = root / "manifest.json";
+
                 std::string manifest_path = manifest_file.string();
-                std::string cache_root = (root / "cache").string();
-                std::string asset_list = info.name;
-                std::string python_cmd = "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && python \"" + python_script.string() + "\" " + manifest_path + " " + cache_root + " \"" + asset_list + "\"";
-                std::cout << "[AnimationLoader] Cache issue for " << info.name << ", regenerating: " << python_cmd << "\n";
+                std::string cache_root    = (root / "cache").string();
+                std::string asset_list    = info.name;
+
+                std::string python_cmd =
+                        "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" "
+                        "&& python \"" + python_script.string() + "\" "
+                        + "\"" + manifest_path + "\" "
+                        + "\"" + cache_root + "\" "
+                        + "\"" + asset_list + "\"";
+
+                std::cout << "[AnimationLoader] Cache issue for " << info.name
+                          << ", regenerating with: " << python_cmd << "\n";
+
                 int ret = std::system(python_cmd.c_str());
                 if (ret == 0) {
-                        // Retry load after regeneration
-                        LoadAttemptResult retry_attempt = load_asset_animations_once(info, renderer, false);
+                        // Retry load after regeneration. Use force_rebuild=true so
+                        // diagnostics do not flag the same cache issue again.
+                        LoadAttemptResult retry_attempt =
+                                load_asset_animations_once(info, renderer, true);
                         if (retry_attempt.success) {
-                                return;  // Success on retry
+                                return;
                         }
-                        attempt = retry_attempt;  // Update attempt with retry result
+                        attempt = retry_attempt;
                 } else {
-                        std::cerr << "[AnimationLoader] Failed to regenerate cache for " << info.name << ", exit code: " << ret << "\n";
+                        std::cerr << "[AnimationLoader] Failed to regenerate cache for "
+                                  << info.name << ", exit code: " << ret << "\n";
                 }
         }
+
         if (!attempt.success) {
-                std::cerr << "[AnimationLoader] " << info.name << " failed to load animations\n";
+                std::cerr << "[AnimationLoader] " << info.name
+                          << " failed to load animations\n";
         }
 }
 
-
-
 void AnimationLoader::get_area_textures(AssetInfo& info, SDL_Renderer* renderer) {
-	if (!renderer) return;
-	for (auto& named : info.areas) {
-		if (!named.area) continue;
-		std::string folder = "cache/areas/" + info.name + "_" + named.name;
-		std::string meta_file = folder + "/metadata.json";
-		std::string png_file = folder + "/0.png";
-		std::string bmp_fallback = folder + "/0.bmp";
-		auto [minx, miny, maxx, maxy] = named.area->get_bounds();
-		json meta;
-		if (CacheManager::load_metadata(meta_file, meta)) {
-					if (meta.value("bounds", std::vector<int>{}) == std::vector<int>{minx, miny, maxx, maxy}) {
-					SDL_Surface* surf = CacheManager::load_surface(png_file);
-					if (!surf) surf = CacheManager::load_surface(bmp_fallback);
-					if (surf) {
-								SDL_Texture* tex = CacheManager::surface_to_texture(renderer, surf);
-								SDL_FreeSurface(surf);
-								if (tex) {
-													named.area->set_cached_texture(tex);
-													continue;
-								}
-					}
-			}
-		}
-		named.area->create_area_texture(renderer);
-		SDL_Texture* tex = named.area->get_texture();
-		if (tex) {
-			SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, maxx - minx + 1, maxy - miny + 1, 32, SDL_PIXELFORMAT_RGBA8888);
-			if (surf) {
-					SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-					SDL_SetRenderTarget(renderer, tex);
-					SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA8888, surf->pixels, surf->pitch);
-					// Persist as PNG (older BMP caches remain as fallback reads)
-					CacheManager::save_surface_as_png(surf, png_file);
-					SDL_FreeSurface(surf);
-					meta["bounds"] = {minx, miny, maxx, maxy};
-					CacheManager::save_metadata(meta_file, meta);
-					SDL_SetRenderTarget(renderer, prev_target);
-			}
-		}
-	}
+        if (!renderer) return;
+
+        for (auto& named : info.areas) {
+                if (!named.area) continue;
+
+                std::string folder       = "cache/areas/" + info.name + "_" + named.name;
+                std::string meta_file    = folder + "/metadata.json";
+                std::string png_file     = folder + "/0.png";
+                std::string bmp_fallback = folder + "/0.bmp";
+
+                auto [minx, miny, maxx, maxy] = named.area->get_bounds();
+                json meta;
+
+                if (CacheManager::load_metadata(meta_file, meta)) {
+                        if (meta.value("bounds", std::vector<int>{}) ==
+                            std::vector<int>{minx, miny, maxx, maxy}) {
+                                SDL_Surface* surf = CacheManager::load_surface(png_file);
+                                if (!surf) surf = CacheManager::load_surface(bmp_fallback);
+                                if (surf) {
+                                        SDL_Texture* tex =
+                                                CacheManager::surface_to_texture(renderer, surf);
+                                        SDL_FreeSurface(surf);
+                                        if (tex) {
+                                                named.area->set_cached_texture(tex);
+                                                continue;
+                                        }
+                                }
+                        }
+                }
+
+                named.area->create_area_texture(renderer);
+                SDL_Texture* tex = named.area->get_texture();
+                if (tex) {
+                        SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(
+                                0,
+                                maxx - minx + 1,
+                                maxy - miny + 1,
+                                32,
+                                SDL_PIXELFORMAT_RGBA8888);
+                        if (surf) {
+                                SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+                                SDL_SetRenderTarget(renderer, tex);
+                                SDL_RenderReadPixels(renderer,
+                                                     nullptr,
+                                                     SDL_PIXELFORMAT_RGBA8888,
+                                                     surf->pixels,
+                                                     surf->pitch);
+                                // Persist as PNG (older BMP caches remain as fallback reads)
+                                CacheManager::save_surface_as_png(surf, png_file);
+                                SDL_FreeSurface(surf);
+                                meta["bounds"] = {minx, miny, maxx, maxy};
+                                CacheManager::save_metadata(meta_file, meta);
+                                SDL_SetRenderTarget(renderer, prev_target);
+                        }
+                }
+        }
 }

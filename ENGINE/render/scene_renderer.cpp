@@ -456,21 +456,11 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
 
     const float min_w_f = static_cast<float>(min_w);
     const float min_h_f = static_cast<float>(min_h);
-    if (scaled_sw < min_w_f && final_h < min_h_f) {
-        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
-    }
-
     float width  = scaled_sw;
     float height = final_h;
 
-    bool enforced_min = false;
-    if (width < min_w_f) {
-        width = min_w_f;
-        enforced_min = true;
-    }
-    if (height < min_h_f) {
-        height = min_h_f;
-        enforced_min = true;
+    if (width <= min_w_f || height <= min_h_f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
     }
 
     width  = std::max(width, 1.0f);
@@ -478,11 +468,6 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
 
     const float left     = center_x - width * 0.5f;
     const float top      = ef.screen_position.y - height;
-
-    if (enforced_min) {
-        width  = static_cast<float>(std::max(1, static_cast<int>(std::lround(width))));
-        height = static_cast<float>(std::max(1, static_cast<int>(std::lround(height))));
-    }
 
     return SDL_FRect{ left, top, width, height };
 }
@@ -537,18 +522,8 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
 
     const float min_w_f = static_cast<float>(min_w);
     const float min_h_f = static_cast<float>(min_h);
-    if (width < min_w_f && height < min_h_f) {
+    if (width <= min_w_f || height <= min_h_f) {
         return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
-    }
-
-    bool enforced_min = false;
-    if (width < min_w_f) {
-        width = min_w_f;
-        enforced_min = true;
-    }
-    if (height < min_h_f) {
-        height = min_h_f;
-        enforced_min = true;
     }
 
     width  = std::max(width, 1.0f);
@@ -556,11 +531,6 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
 
     const float left = center_x - width * 0.5f;
     const float top  = ef.screen_position.y - height;
-
-    if (enforced_min) {
-        width  = static_cast<float>(std::max(1, static_cast<int>(std::lround(width))));
-        height = static_cast<float>(std::max(1, static_cast<int>(std::lround(height))));
-    }
 
     return SDL_FRect{ left, top, width, height };
 }
@@ -1714,5 +1684,3 @@ bool SceneRenderer::has_dark_mask_overlay_sources() {
     }
     return light_overlay_sources_have_dark_mask_cached_;
 }
-
-

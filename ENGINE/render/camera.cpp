@@ -105,7 +105,7 @@ static inline Area make_rect_area(const std::string& name, SDL_Point center, int
         { right, top    },
         { right, bottom },
         { left,  bottom }
-};
+    };
     return Area(name, corners, resolution);
 }
 
@@ -184,12 +184,15 @@ void camera::set_screen_center(SDL_Point p) {
     screen_center_ = p;
 
     const double distance = std::hypot(dx, dy);
-    // Use screen dimensions (in pixels) converted to world units for teleport threshold.
-    // This keeps the behavior consistent regardless of zoom level.
     const double px_margin = static_cast<double>(std::max(screen_width_, screen_height_));
     const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
     const double teleport_threshold = std::max(200.0, px_margin * scale_for_world * 0.25);
     if (distance > teleport_threshold) {
+        // Large jump: snap the smoothed center to avoid slow pan across half the map.
+        center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
+        center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
+        smoothed_center_.x = center_smoothing_x_.value_for_render();
+        smoothed_center_.y = center_smoothing_y_.value_for_render();
     }
 }
 
@@ -478,10 +481,6 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
     const double anchored_center_x = world_x - static_cast<double>(screen_point.x) * new_scale + (static_cast<double>(base_w) * new_scale) * 0.5;
     const double anchored_center_y = world_y - static_cast<double>(screen_point.y) * new_scale + (static_cast<double>(base_h) * new_scale) * 0.5;
 
-    // Exaggerate the pan toward the mouse by a gain factor.
-    // Gain of 2.0 makes the camera move twice as far as the
-    // standard "keep mouse anchored" solution, increasing the
-    // perceived panning intensity during zoom.
     constexpr double PAN_GAIN = 2.0;
     const double dx = anchored_center_x - static_cast<double>(screen_center_.x);
     const double dy = anchored_center_y - static_cast<double>(screen_center_.y);
@@ -558,38 +557,48 @@ camera::RenderEffects camera::compute_render_effects(
     }
 
     constexpr double EPS              = 1e-6;
-    constexpr double SY               = 200.0;
-    constexpr double PARALLAX_KV      = 0.25;
-    constexpr double PARALLAX_STEEPEN = 1.5;
-    constexpr double PARALLAX_MAX     = 4000.0;
+    constexpr double SCREEN_Y_SCALE   = 200.0;
     constexpr double SQUASH_HEIGHT_WT = 0.3;
     constexpr double SQUASH_BASE_WT   = 1.0 - SQUASH_HEIGHT_WT;
     constexpr double ZOOM_ATTEN_WT    = 0.8;
-    constexpr double DIST_EXPONENT    = 3;
+    constexpr double DIST_EXPONENT    = 3.0;
     constexpr double DIST_MIN         = 0.3;
     constexpr double DIST_MAX         = 1.3;
-    constexpr double DY_WEIGHT        = 1.2;
-    constexpr double RANGE_COMPRESS   = 2.0;
-    constexpr double R_REF            = 400.0;
 
-    const double raw_scale      = std::isfinite(smoothed_scale_) ? static_cast<double>(smoothed_scale_) : 0.0;
-    const double zoom_norm      = std::clamp(raw_scale, 0.0, 1.0);
-    const double height_at_zoom1 = std::isfinite(settings_.height_at_zoom1) ? std::max(0.0f, settings_.height_at_zoom1) : 0.0f;
+    // How fast y depth dominates and x fades as you move away vertically.
+    constexpr double DEPTH_RANGE_PIXELS = 600.0;
+    constexpr double R_REF              = 400.0;
+
+    const double raw_scale = std::isfinite(smoothed_scale_)
+                                 ? static_cast<double>(smoothed_scale_)
+                                 : 0.0;
+    const double zoom_norm = std::clamp(raw_scale, 0.0, 1.0);
+
+    const double height_at_zoom1 = std::isfinite(settings_.height_at_zoom1)
+                                       ? std::max(0.0f, settings_.height_at_zoom1)
+                                       : 0.0f;
     const double camera_height  = height_at_zoom1 * zoom_norm;
 
-    const double tripod_distance = std::isfinite(settings_.tripod_distance_y) ? static_cast<double>(settings_.tripod_distance_y) : 0.0;
+    const double tripod_distance = std::isfinite(settings_.tripod_distance_y)
+                                       ? static_cast<double>(settings_.tripod_distance_y)
+                                       : 0.0;
 
     const double base_x = static_cast<double>(screen_center_.x);
     const double base_y = static_cast<double>(screen_center_.y) - tripod_distance;
 
     const double dx = static_cast<double>(world.x) - base_x;
     const double dy = static_cast<double>(world.y) - base_y;
-    const double r  = std::hypot(dx, dy);
 
-    const double zoom_attenuation = (camera_height > EPS) ? camera_height / (camera_height + height_at_zoom1 + EPS) : 1.0;
+    // Camera closer to the ground flattens depth effect.
+    const double zoom_attenuation =
+        (camera_height > EPS)
+            ? camera_height / (camera_height + height_at_zoom1 + EPS)
+            : 1.0;
 
-    const double screen_bias = 0.5 + 0.5 * std::tanh(dy / SY);
+    // Bias for foreshortening: things lower on the screen are closer.
+    const double screen_bias = 0.5 + 0.5 * std::tanh(dy / SCREEN_Y_SCALE);
 
+    // Vertical squash from perspective.
     {
         const double foreshorten_strength = std::max(0.0f, settings_.foreshorten_strength);
         if (foreshorten_strength > 0.0 && camera_height > EPS) {
@@ -608,18 +617,38 @@ camera::RenderEffects camera::compute_render_effects(
         }
     }
 
+    // Distance based scaling with y depth dominating and x fading with depth.
     {
         const double distance_strength = std::max(0.0f, settings_.distance_scale_strength);
         if (distance_strength > 0.0) {
-            const double r_weighted   = std::hypot(dx, dy * DY_WEIGHT);
-            const double r_normalized = r_weighted / RANGE_COMPRESS;
+            const double depth_abs    = std::abs(dy);
+            const double lateral_abs  = std::abs(dx);
 
-            const double base_scale = std::sqrt( (camera_height + R_REF) / (camera_height + r_normalized + EPS) );
+            // As depth increases:
+            //  - depth_weight grows so y distance matters more.
+            //  - lateral_weight shrinks so x distance matters less.
+            const double depth_norm     = depth_abs / (DEPTH_RANGE_PIXELS + EPS);
+            const double depth_weight   = 1.0 + depth_norm;              // up to about 2 in a few screens of depth
+            const double lateral_weight = 1.0 / (1.0 + depth_norm);      // falls off as depth increases
+
+            const double wy = depth_abs * depth_weight;
+            const double wx = lateral_abs * lateral_weight;
+
+            const double r_weighted = std::sqrt(wx * wx + wy * wy) + EPS;
+
+            // Simple perspective: closer (small r) looks larger, farther looks smaller.
+            // Camera height softens this to avoid extreme shrinking at far depth.
+            const double base_scale =
+                std::sqrt((camera_height + R_REF) /
+                          (camera_height + r_weighted + EPS));
 
             double distance_scale = 1.0 + (base_scale - 1.0) * distance_strength;
 
+            // Tie distance scaling into vertical squash so things that are heavily foreshortened
+            // also get stronger size falloff.
             const double squash_factor = static_cast<double>(result.vertical_scale);
-            distance_scale = 1.0 + (distance_scale - 1.0) * std::pow(squash_factor, DIST_EXPONENT);
+            distance_scale = 1.0 + (distance_scale - 1.0) *
+                                       std::pow(squash_factor, DIST_EXPONENT);
 
             distance_scale = std::clamp(distance_scale, DIST_MIN, DIST_MAX);
             result.distance_scale = static_cast<float>(distance_scale);
@@ -646,7 +675,7 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
             return true;
         }
         return false;
-};
+    };
 
     auto realism_it = data.find("realism_enabled");
     if (realism_it != data.end()) {
@@ -672,7 +701,7 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         } else if (it->is_number_float()) {
             target = static_cast<int>(std::lround(it->get<double>()));
         }
-};
+    };
 
     try_read_int("render_quality_percent", settings_.render_quality_percent);
 
@@ -760,7 +789,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     try_read_float("min_zoom_multiplier", settings_.min_zoom_multiplier);
     try_read_float("max_zoom_multiplier", settings_.max_zoom_multiplier);
 
-    // Depth cue texture blending
     auto try_read_opacity = [&](const char* key, int& target) -> bool {
         auto it = data.find(key);
         if (it == data.end()) return false;
@@ -847,7 +875,7 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
             }
         }
         return best;
-};
+    };
 
     settings_.render_quality_percent = align_quality(settings_.render_quality_percent);
 
@@ -912,7 +940,6 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["parallax_smoothing_max_step"] = settings_.parallax_smoothing.max_step;
     j["parallax_smoothing_snap_threshold"] = settings_.parallax_smoothing.snap_threshold;
 
-    // Depth cue texture blending
     j["foreground_texture_max_opacity"] = settings_.foreground_texture_max_opacity;
     j["background_texture_max_opacity"] = settings_.background_texture_max_opacity;
     j["foreground_plane_screen_y"] = settings_.foreground_plane_screen_y;

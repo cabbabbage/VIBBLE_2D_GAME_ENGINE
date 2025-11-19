@@ -4,10 +4,14 @@ VIBBLE 2D Game Engine
 Apply color and lighting effects to a single image.
 
 Usage:
-  python apply_color_effects.py <img_path> <output_path> <layer_type> <rgb_boost> <contrast> <brightness> <blur> <saturation_red> <saturation_green> <saturation_blue> <hue>
+  python apply_color_effects.py <img_path> <output_path> <layer_type>
+                                <rgb_boost> <contrast> <brightness> <blur>
+                                <saturation_red> <saturation_green>
+                                <saturation_blue> <hue>
 
 Where:
   <layer_type> is either "foreground" or "background"
+  <hue> is in degrees in the range [-180, 180]
 """
 
 from typing import Optional
@@ -16,68 +20,66 @@ from effects import Effects
 import numpy as np
 from PIL import Image, ImageFilter
 
+# Optional GPU backend: PyTorch (no CuPy)
+try:
+    import torch
+
+    _TORCH_AVAILABLE = torch.cuda.is_available()
+except Exception:
+    torch = None
+    _TORCH_AVAILABLE = False
+
 
 class ApplyEffects:
     """
-    Vectorized effect processor (CPU only, NumPy).
+    Effect processor.
 
-    Parameters are expected to be normalized floats. You can tune ranges
-    in your manifest, but a reasonable assumption is:
+    Uses GPU with PyTorch if available and enabled, otherwise falls back
+    to NumPy CPU.
+
+    Parameters are expected to be normalized floats (except hue in degrees).
 
       brightness       approx [-1.0, 1.0]
       contrast         approx [-1.0, 1.0] where 0.0 means no change
-      rgb_boost        approx [-1.0, 1.0] final multiplier on RGB
       blur             in [-1.0, 1.0]
-                        > 0: Gaussian blur (1.0 = strong blur)
-                        < 0: sharpening (-1.0 = strong sharpen)
+                        > 0: defocus blur
+                        < 0: sharpening
       saturation_red   approx [-1.0, 1.0]
       saturation_green approx [-1.0, 1.0]
       saturation_blue  approx [-1.0, 1.0]
-      hue              approx [-1.0, 1.0] where 1.0 is a full turn (360 degrees)
-
-    Implementation notes:
-
-    - brightness, contrast, rgb_boost are applied in RGB space on visible pixels.
-    - Per channel saturation knobs are treated as per channel boosts. Each
-      channel is pushed away from or toward the per pixel gray level.
-    - hue rotates H in HSV space for visible pixels only.
-    - blur/sharpen is applied at the end via PIL.
+      hue              degrees in [-180.0, 180.0], 0 means no change
     """
 
     def __init__(self, use_gpu: Optional[bool] = None) -> None:
         """
-        Kept for API compatibility. All processing is CPU only now.
+        If use_gpu is None, GPU is used when torch with CUDA is available.
+        If use_gpu is True, try GPU, otherwise CPU.
 
-        Parameters:
-            use_gpu: ignored, present only so existing calls do not break.
+        If torch or CUDA is not available, always falls back to CPU.
         """
-        self.use_gpu = False
+        if use_gpu is None:
+            self.use_gpu = _TORCH_AVAILABLE
+        else:
+            self.use_gpu = bool(use_gpu) and _TORCH_AVAILABLE
+
+    # ---------- NumPy HSV helpers ----------
 
     @staticmethod
-    def _rgb_to_hsv(r: np.ndarray, g: np.ndarray, b: np.ndarray):
-        """
-        Vectorized RGB to HSV conversion.
-
-        r, g, b in [0, 1].
-        Returns h, s, v in [0, 1].
-        """
+    def _rgb_to_hsv_np(r: np.ndarray, g: np.ndarray, b: np.ndarray):
         maxc = np.maximum(np.maximum(r, g), b)
         minc = np.minimum(np.minimum(r, g), b)
         v = maxc
         delta = maxc - minc
 
-        # Avoid division by zero
         s = np.where(maxc > 0.0, delta / np.where(maxc == 0.0, 1.0, maxc), 0.0)
 
         h = np.zeros_like(maxc)
         non_zero = delta > 1e-6
 
-        # Masks for which channel is max
         r_is_max = non_zero & (maxc == r)
         g_is_max = non_zero & (maxc == g)
         b_is_max = non_zero & (maxc == b)
 
-        # Compute hue in [0, 6)
         if np.any(r_is_max):
             h_r = (g - b) / np.where(delta == 0.0, 1.0, delta)
             h = np.where(r_is_max, (h_r % 6.0), h)
@@ -90,19 +92,11 @@ class ApplyEffects:
             h_b = (r - g) / np.where(delta == 0.0, 1.0, delta) + 4.0
             h = np.where(b_is_max, h_b, h)
 
-        # Normalize to [0, 1]
         h = (h / 6.0) % 1.0
-
         return h, s, v
 
     @staticmethod
-    def _hsv_to_rgb(h: np.ndarray, s: np.ndarray, v: np.ndarray):
-        """
-        Vectorized HSV to RGB conversion.
-
-        h, s, v in [0, 1].
-        Returns r, g, b in [0, 1].
-        """
+    def _hsv_to_rgb_np(h: np.ndarray, s: np.ndarray, v: np.ndarray):
         h6 = h * 6.0
         c = v * s
         x = c * (1.0 - np.abs((h6 % 2.0) - 1.0))
@@ -112,7 +106,6 @@ class ApplyEffects:
         g = np.zeros_like(h)
         b = np.zeros_like(h)
 
-        # Ranges for h6
         cond0 = (0.0 <= h6) & (h6 < 1.0)
         cond1 = (1.0 <= h6) & (h6 < 2.0)
         cond2 = (2.0 <= h6) & (h6 < 3.0)
@@ -156,6 +149,110 @@ class ApplyEffects:
 
         return r, g, b
 
+    # ---------- Torch HSV helpers ----------
+
+    @staticmethod
+    def _rgb_to_hsv_torch(r, g, b):
+        """
+        r, g, b in [0, 1], torch tensors.
+        Returns h, s, v in [0, 1].
+        """
+        stacked = torch.stack([r, g, b], dim=0)
+        maxc, _ = torch.max(stacked, dim=0)
+        minc, _ = torch.min(stacked, dim=0)
+        v = maxc
+        delta = maxc - minc
+
+        s = torch.where(
+            maxc > 0.0,
+            delta / torch.where(maxc == 0.0, torch.ones_like(maxc), maxc),
+            torch.zeros_like(maxc),
+        )
+
+        h = torch.zeros_like(maxc)
+        non_zero = delta > 1e-6
+
+        r_is_max = non_zero & (maxc == r)
+        g_is_max = non_zero & (maxc == g)
+        b_is_max = non_zero & (maxc == b)
+
+        denom = torch.where(delta == 0.0, torch.ones_like(delta), delta)
+
+        if r_is_max.any():
+            h_r = (g - b) / denom
+            h = torch.where(r_is_max, h_r.remainder(6.0), h)
+
+        if g_is_max.any():
+            h_g = (b - r) / denom + 2.0
+            h = torch.where(g_is_max, h_g, h)
+
+        if b_is_max.any():
+            h_b = (r - g) / denom + 4.0
+            h = torch.where(b_is_max, h_b, h)
+
+        h = (h / 6.0) % 1.0
+        return h, s, v
+
+    @staticmethod
+    def _hsv_to_rgb_torch(h, s, v):
+        """
+        h, s, v in [0, 1], torch tensors.
+        Returns r, g, b in [0, 1].
+        """
+        h6 = h * 6.0
+        c = v * s
+        x = c * (1.0 - torch.abs((h6 % 2.0) - 1.0))
+        m = v - c
+
+        r = torch.zeros_like(h)
+        g = torch.zeros_like(h)
+        b = torch.zeros_like(h)
+
+        cond0 = (0.0 <= h6) & (h6 < 1.0)
+        cond1 = (1.0 <= h6) & (h6 < 2.0)
+        cond2 = (2.0 <= h6) & (h6 < 3.0)
+        cond3 = (3.0 <= h6) & (h6 < 4.0)
+        cond4 = (4.0 <= h6) & (h6 < 5.0)
+        cond5 = (5.0 <= h6) & (h6 < 6.0)
+
+        if cond0.any():
+            r = torch.where(cond0, c, r)
+            g = torch.where(cond0, x, g)
+            b = torch.where(cond0, torch.zeros_like(b), b)
+
+        if cond1.any():
+            r = torch.where(cond1, x, r)
+            g = torch.where(cond1, c, g)
+            b = torch.where(cond1, torch.zeros_like(b), b)
+
+        if cond2.any():
+            r = torch.where(cond2, torch.zeros_like(r), r)
+            g = torch.where(cond2, c, g)
+            b = torch.where(cond2, x, b)
+
+        if cond3.any():
+            r = torch.where(cond3, torch.zeros_like(r), r)
+            g = torch.where(cond3, x, g)
+            b = torch.where(cond3, c, b)
+
+        if cond4.any():
+            r = torch.where(cond4, x, r)
+            g = torch.where(cond4, torch.zeros_like(g), g)
+            b = torch.where(cond4, c, b)
+
+        if cond5.any():
+            r = torch.where(cond5, c, r)
+            g = torch.where(cond5, torch.zeros_like(g), g)
+            b = torch.where(cond5, x, b)
+
+        r = r + m
+        g = g + m
+        b = b + m
+
+        return r, g, b
+
+    # ---------- Blur / sharpen ----------
+
     @staticmethod
     def _apply_blur_or_sharpen(img: Image.Image, blur_val: float) -> Image.Image:
         """
@@ -163,17 +260,12 @@ class ApplyEffects:
 
         > 0: defocus blur, interpreted differently for foreground vs background:
              - foreground: larger, slightly ringy blur (strong foreground bokeh)
-             - background: smoother blur with highlight bloom (background bokeh)
+             - background: smoother blur with strong highlight bloom (background bokeh)
         < 0: UnsharpMask sharpening, strength mapped from 0 to 1.
         0:   no change.
-
-        The caller is expected to optionally attach a boolean attribute:
-            img.foreground = True  for foreground objects
-            img.foreground = False for background objects
         """
-        from PIL import ImageChops, ImageEnhance
+        from PIL import ImageEnhance
 
-        # Clamp to [-1, 1]
         try:
             v = float(blur_val)
         except Exception:
@@ -181,34 +273,23 @@ class ApplyEffects:
 
         v = max(-1.0, min(1.0, v))
 
-        # Tiny values are treated as no-op
         if abs(v) < 1e-3:
             return img
 
-        # Foreground/background flag (defaults to background if missing)
         is_foreground = bool(getattr(img, "foreground", False))
 
-        # Positive: defocus blur (foreground vs background behavior)
         if v > 0.0:
-            # Base physical-ish blur radius
-            # v in (0,1] -> radius in roughly [0.5, 10]
-            max_radius = 10.0
+            max_radius = 20.0
             base_radius = v * max_radius
-            if base_radius < 0.5:
-                base_radius = 0.5
+            if base_radius < 1.0:
+                base_radius = 1.0
 
             if is_foreground:
-                # Foreground out of focus:
-                # Larger circle of confusion, slightly harder edge / ring-like bokeh.
-                radius = base_radius * 1.6
-
-                # Heavy blur first
+                radius = base_radius * 2.0
                 blurred = img.filter(ImageFilter.GaussianBlur(radius=radius))
 
-                # Mild unsharp pass on the blurred image itself to
-                # tighten the edges of the blur disks (gives a ringy feel).
-                ring_radius = max(0.5, radius * 0.5)
-                ring_percent = 60
+                ring_radius = max(1.0, radius * 0.5)
+                ring_percent = 80
                 ring = blurred.filter(
                     ImageFilter.UnsharpMask(
                         radius=ring_radius,
@@ -217,95 +298,57 @@ class ApplyEffects:
                     )
                 )
                 return ring
-
             else:
-                # Background out of focus:
-                # Slightly smaller radius for the same blur_val and
-                # bloom specular highlights for bokeh balls.
-                radius = base_radius * 0.9
+                radius = base_radius * 1.3
                 blurred = img.filter(ImageFilter.GaussianBlur(radius=radius))
 
-                # Build a luminance-based mask of bright areas
-                # to exaggerate highlight bokeh.
                 lum = img.convert("L")
 
                 def bright_curve(x):
-                    # Push only the very bright pixels into the mask
-                    # x>200 gets ramped to 255, below that stays near 0.
-                    return 0 if x < 200 else min(255, int((x - 200) * 4))
+                    if x < 170:
+                        return 0
+                    return min(255, int((x - 170) * 3))
 
                 mask = lum.point(bright_curve, mode="L")
+                mask = mask.filter(
+                    ImageFilter.GaussianBlur(radius=max(1.0, radius * 0.8))
+                )
 
-                # Soften the mask a bit so bloom is not harsh
-                mask = mask.filter(ImageFilter.GaussianBlur(radius=max(1.0, radius * 0.5)))
-
-                # Slightly brighten blurred image where mask is strong
-                bright_blurred = ImageEnhance.Brightness(blurred).enhance(1.2)
-
-                # Composite: brightened blur where highlights are, normal blur elsewhere
+                bright_blurred = ImageEnhance.Brightness(blurred).enhance(1.4)
                 result = Image.composite(bright_blurred, blurred, mask)
                 return result
 
-        # v < 0 -> sharpening using UnsharpMask
-        strength = -v  # in (0, 1]
-        # Map to radius and percent
-        radius = 0.5 + strength * 2.5      # 0.5..3.0
-        percent = 50 + strength * 200      # 50..250
+        strength = -v
+        radius = 0.7 + strength * 3.3
+        percent = 80 + strength * 220
         threshold = 0
         return img.filter(
             ImageFilter.UnsharpMask(radius=radius, percent=int(percent), threshold=threshold)
         )
 
-    def apply_effects(
-        self,
-        image: Image.Image,
-        Effects_params: Effects
-    ) -> Image.Image:
-        """
-        Apply all effects to a PIL Image and return a new image.
+    # ---------- CPU implementation ----------
 
-        Parameters:
-            image:                 PIL Image (converted to RGBA if needed)
-            brightness:            additive offset in roughly [-1.0, 1.0]
-            contrast:              contrast adjustment in [-1.0, 1.0], 0.0 is no change
-            rgb_boost:             RGB multiplier offset in [-1.0, 1.0],
-                                   0.25 increases channels by 25 percent
-            blur:                  in [-1.0, 1.0], >0 blur, <0 sharpen
-            saturation_red:        red channel saturation style boost
-            saturation_green:      green channel saturation style boost
-            saturation_blue:       blue channel saturation style boost
-            hue:                   hue rotation fraction in [-1.0, 1.0],
-                                   1.0 is full circle (360 degrees)
-
-        Returns:
-            New PIL Image with effects applied.
-        """
-        if not isinstance(image, Image.Image):
-            return image
-
+    def _apply_cpu(self, image: Image.Image, params: Effects) -> Image.Image:
         if image.mode != "RGBA":
             image = image.convert("RGBA")
 
-        # Clamp effect parameters to expected ranges
-        def clamp01(v: float) -> float:
+        def clamp_unit(v: float) -> float:
             return max(-1.0, min(1.0, float(v)))
 
-        brightness = clamp01(getattr(Effects_params, "brightness", 0.0))
-        contrast = clamp01(getattr(Effects_params, "contrast", 0.0))
-        rgb_boost = clamp01(getattr(Effects_params, "rgb_boost", 0.0))
-        blur = clamp01(getattr(Effects_params, "blur", 0.0))
-        sat_r = clamp01(getattr(Effects_params, "saturation_red", 0.0))
-        sat_g = clamp01(getattr(Effects_params, "saturation_green", 0.0))
-        sat_b = clamp01(getattr(Effects_params, "saturation_blue", 0.0))
-        hue = clamp01(getattr(Effects_params, "hue", 0.0))
+        brightness = clamp_unit(getattr(params, "brightness", 0.0))
+        contrast = clamp_unit(getattr(params, "contrast", 0.0))
+        blur = clamp_unit(getattr(params, "blur", 0.0))
+        sat_r = clamp_unit(getattr(params, "saturation_red", 0.0))
+        sat_g = clamp_unit(getattr(params, "saturation_green", 0.0))
+        sat_b = clamp_unit(getattr(params, "saturation_blue", 0.0))
 
-        # CPU NumPy array
+        raw_hue_deg = float(getattr(params, "hue", 0.0))
+        hue_deg = max(-180.0, min(180.0, raw_hue_deg))
+        hue_offset = hue_deg / 360.0
+
         img_np = np.asarray(image, dtype=np.uint8)
-
-        # Normalize to [0, 1] float32
         img_float = img_np.astype(np.float32) / 255.0
 
-        # Split channels
         r = img_float[:, :, 0]
         g = img_float[:, :, 1]
         b = img_float[:, :, 2]
@@ -313,96 +356,177 @@ class ApplyEffects:
 
         alpha_mask = a > 0
 
-        # Fast path: no color / tone changes, only possible blur/sharpen.
         if (
             not np.any(alpha_mask)
             or (
                 abs(brightness) < 1e-6
                 and abs(contrast) < 1e-6
-                and abs(rgb_boost) < 1e-6
                 and abs(sat_r) < 1e-6
                 and abs(sat_g) < 1e-6
                 and abs(sat_b) < 1e-6
-                and abs(hue) < 1e-6
+                and abs(hue_deg) < 1e-6
             )
         ):
             img_uint8 = (img_float * 255.0).astype(np.uint8)
             result = Image.fromarray(img_uint8, mode="RGBA")
-            # Apply blur/sharpen if needed
             result = self._apply_blur_or_sharpen(result, blur)
             return result
 
-        # Visible pixels only
         r_vis = r[alpha_mask]
         g_vis = g[alpha_mask]
         b_vis = b[alpha_mask]
 
-        # 1. brightness (additive)
         if abs(brightness) > 1e-6:
             r_vis = np.clip(r_vis + brightness, 0.0, 1.0)
             g_vis = np.clip(g_vis + brightness, 0.0, 1.0)
             b_vis = np.clip(b_vis + brightness, 0.0, 1.0)
 
-        # 2. contrast
-        # contrast in [-1, 1]; c = 1 + contrast so:
-        #   contrast = 0   -> c = 1 (no change)
-        #   contrast = 1   -> c = 2 (stronger contrast)
-        #   contrast = -1  -> c = 0 (everything pulled to mid gray 0.5)
         if abs(contrast) > 1e-6:
             c = 1.0 + contrast
             r_vis = np.clip((r_vis - 0.5) * c + 0.5, 0.0, 1.0)
             g_vis = np.clip((g_vis - 0.5) * c + 0.5, 0.0, 1.0)
             b_vis = np.clip((b_vis - 0.5) * c + 0.5, 0.0, 1.0)
 
-        # 3. RGB boost (final linear multiplier)
-        if abs(rgb_boost) > 1e-6:
-            m = 1.0 + rgb_boost
-            r_vis = np.clip(r_vis * m, 0.0, 1.0)
-            g_vis = np.clip(g_vis * m, 0.0, 1.0)
-            b_vis = np.clip(b_vis * m, 0.0, 1.0)
+        if abs(hue_deg) > 1e-6:
+            h, s, v = self._rgb_to_hsv_np(r_vis, g_vis, b_vis)
+            h = (h + hue_offset) % 1.0
+            r_vis, g_vis, b_vis = self._hsv_to_rgb_np(h, s, v)
 
-        # 4. hue rotation (HSV) on visible pixels
-        if abs(hue) > 1e-6:
-            # hue is in [-1, 1]; treat it as fraction of a full cycle
-            # so 1.0 is full circle, -1.0 is full circle in the other direction.
-            h, s, v = self._rgb_to_hsv(r_vis, g_vis, b_vis)
-            h = (h + hue) % 1.0
-            r_vis, g_vis, b_vis = self._hsv_to_rgb(h, s, v)
+        def sat_factor(sat_val: float) -> float:
+            return max(0.0, min(3.0, 1.0 + 2.0 * sat_val))
 
-        # 5. Per channel saturation style boosts
         if abs(sat_r) > 1e-6 or abs(sat_g) > 1e-6 or abs(sat_b) > 1e-6:
-            # Per pixel gray level
             gray = (r_vis + g_vis + b_vis) / 3.0
 
-            # For each channel, push away from or toward gray
             if abs(sat_r) > 1e-6:
-                f_r = 1.0 + sat_r
+                f_r = sat_factor(sat_r)
                 r_vis = np.clip(gray + (r_vis - gray) * f_r, 0.0, 1.0)
 
             if abs(sat_g) > 1e-6:
-                f_g = 1.0 + sat_g
+                f_g = sat_factor(sat_g)
                 g_vis = np.clip(gray + (g_vis - gray) * f_g, 0.0, 1.0)
 
             if abs(sat_b) > 1e-6:
-                f_b = 1.0 + sat_b
+                f_b = sat_factor(sat_b)
                 b_vis = np.clip(gray + (b_vis - gray) * f_b, 0.0, 1.0)
 
-        # Write visible pixels back
         r[alpha_mask] = r_vis
         g[alpha_mask] = g_vis
         b[alpha_mask] = b_vis
 
-        # Reassemble RGBA
         img_float = np.stack([r, g, b, a], axis=2)
-
-        # Back to uint8 on CPU
         img_uint8 = np.clip(img_float * 255.0, 0, 255).astype(np.uint8)
         result = Image.fromarray(img_uint8, mode="RGBA")
-
-        # 6. blur/sharpen at the end in PIL
         result = self._apply_blur_or_sharpen(result, blur)
-
         return result
+
+    # ---------- GPU implementation (PyTorch) ----------
+
+    def _apply_gpu(self, image: Image.Image, params: Effects) -> Image.Image:
+        if not _TORCH_AVAILABLE:
+            return self._apply_cpu(image, params)
+
+        device = torch.device("cuda")
+
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
+
+        def clamp_unit(v: float) -> float:
+            return max(-1.0, min(1.0, float(v)))
+
+        brightness = clamp_unit(getattr(params, "brightness", 0.0))
+        contrast = clamp_unit(getattr(params, "contrast", 0.0))
+        blur = clamp_unit(getattr(params, "blur", 0.0))
+        sat_r = clamp_unit(getattr(params, "saturation_red", 0.0))
+        sat_g = clamp_unit(getattr(params, "saturation_green", 0.0))
+        sat_b = clamp_unit(getattr(params, "saturation_blue", 0.0))
+
+        raw_hue_deg = float(getattr(params, "hue", 0.0))
+        hue_deg = max(-180.0, min(180.0, raw_hue_deg))
+        hue_offset = hue_deg / 360.0
+
+        img_np = np.asarray(image, dtype=np.uint8)
+        img_float = img_np.astype(np.float32) / 255.0
+
+        img_t = torch.from_numpy(img_float).to(device=device, dtype=torch.float32)
+
+        r = img_t[:, :, 0]
+        g = img_t[:, :, 1]
+        b = img_t[:, :, 2]
+        a = img_t[:, :, 3]
+
+        alpha_mask = a > 0
+
+        if (
+            not bool(torch.any(alpha_mask).item())
+            or (
+                abs(brightness) < 1e-6
+                and abs(contrast) < 1e-6
+                and abs(sat_r) < 1e-6
+                and abs(sat_g) < 1e-6
+                and abs(sat_b) < 1e-6
+                and abs(hue_deg) < 1e-6
+            )
+        ):
+            img_uint8 = (img_t.clamp(0.0, 1.0) * 255.0).byte().cpu().numpy()
+            result = Image.fromarray(img_uint8, mode="RGBA")
+            result = self._apply_blur_or_sharpen(result, blur)
+            return result
+
+        r_vis = r[alpha_mask]
+        g_vis = g[alpha_mask]
+        b_vis = b[alpha_mask]
+
+        if abs(brightness) > 1e-6:
+            r_vis = torch.clamp(r_vis + brightness, 0.0, 1.0)
+            g_vis = torch.clamp(g_vis + brightness, 0.0, 1.0)
+            b_vis = torch.clamp(b_vis + brightness, 0.0, 1.0)
+
+        if abs(contrast) > 1e-6:
+            c = 1.0 + contrast
+            r_vis = torch.clamp((r_vis - 0.5) * c + 0.5, 0.0, 1.0)
+            g_vis = torch.clamp((g_vis - 0.5) * c + 0.5, 0.0, 1.0)
+            b_vis = torch.clamp((b_vis - 0.5) * c + 0.5, 0.0, 1.0)
+
+        if abs(hue_deg) > 1e-6:
+            h, s, v = self._rgb_to_hsv_torch(r_vis, g_vis, b_vis)
+            h = (h + hue_offset) % 1.0
+            r_vis, g_vis, b_vis = self._hsv_to_rgb_torch(h, s, v)
+
+        def sat_factor(sat_val: float) -> float:
+            return max(0.0, min(3.0, 1.0 + 2.0 * sat_val))
+
+        if abs(sat_r) > 1e-6 or abs(sat_g) > 1e-6 or abs(sat_b) > 1e-6:
+            gray = (r_vis + g_vis + b_vis) / 3.0
+
+            if abs(sat_r) > 1e-6:
+                f_r = sat_factor(sat_r)
+                r_vis = torch.clamp(gray + (r_vis - gray) * f_r, 0.0, 1.0)
+
+            if abs(sat_g) > 1e-6:
+                f_g = sat_factor(sat_g)
+                g_vis = torch.clamp(gray + (g_vis - gray) * f_g, 0.0, 1.0)
+
+            if abs(sat_b) > 1e-6:
+                f_b = sat_factor(sat_b)
+                b_vis = torch.clamp(gray + (b_vis - gray) * f_b, 0.0, 1.0)
+
+        r[alpha_mask] = r_vis
+        g[alpha_mask] = g_vis
+        b[alpha_mask] = b_vis
+
+        img_t = torch.stack([r, g, b, a], dim=2)
+        img_uint8 = (img_t.clamp(0.0, 1.0) * 255.0).byte().cpu().numpy()
+        result = Image.fromarray(img_uint8, mode="RGBA")
+        result = self._apply_blur_or_sharpen(result, blur)
+        return result
+
+    # ---------- public API ----------
+
+    def apply_effects(self, image: Image.Image, Effects_params: Effects) -> Image.Image:
+        if self.use_gpu and _TORCH_AVAILABLE:
+            return self._apply_gpu(image, Effects_params)
+        return self._apply_cpu(image, Effects_params)
 
 
 if __name__ == "__main__":
@@ -422,7 +546,8 @@ if __name__ == "__main__":
     layer_type = sys.argv[3].strip().lower()
 
     try:
-        rgb_boost = float(sys.argv[4])
+        # rgb_boost at argv[4] is accepted but ignored in this script
+        _rgb_boost_ignored = float(sys.argv[4])
         contrast = float(sys.argv[5])
         brightness = float(sys.argv[6])
         blur = float(sys.argv[7])
@@ -440,14 +565,14 @@ if __name__ == "__main__":
         print(f"Failed to open image: {e}")
         sys.exit(1)
 
-    # Mark foreground/background on the image so blur can react appropriately
+    # Mark foreground or background so blur behaves correctly
     image_in.foreground = layer_type in ("foreground", "fg", "front")
 
-    eff = ApplyEffects()  # GPU flag ignored, CPU only
+    # Default: try GPU if available
+    eff = ApplyEffects(use_gpu=None)
 
     try:
         effects = Effects(
-            rgb_boost=rgb_boost,
             contrast=contrast,
             brightness=brightness,
             blur=blur,
@@ -456,7 +581,7 @@ if __name__ == "__main__":
             saturation_blue=saturation_blue,
             hue=hue,
         )
-        # Also mark the effects object, in case caller uses it elsewhere
+
         if hasattr(effects, "foreground"):
             effects.foreground = image_in.foreground
 
