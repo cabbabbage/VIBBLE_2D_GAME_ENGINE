@@ -773,6 +773,15 @@ int main(int argc, char* argv[]) {
 		vibble::log::error(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
 		IMG_Quit(); TTF_Quit(); SDL_Quit(); return 1;
 	}
+	vibble::log::info("[Main] Regenerating assets...");
+	std::string manifest_path_str = manifest::manifest_path();
+	std::string cmd = "python tools\\asset_tool.py \"" + manifest_path_str + "\" cache";
+	int ret = system(cmd.c_str());
+	if (ret != 0) {
+		vibble::log::warn(std::string("[Main] Asset regeneration script returned non-zero: ") + std::to_string(ret));
+	} else {
+		vibble::log::info("[Main] Asset regeneration complete.");
+	}
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 	if (!renderer) {
 		vibble::log::error(std::string("SDL_CreateRenderer failed: ") + SDL_GetError());

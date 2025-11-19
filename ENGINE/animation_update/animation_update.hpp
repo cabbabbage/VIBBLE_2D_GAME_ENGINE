@@ -9,6 +9,8 @@
 #include "stride_types.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
+#include "render/camera.hpp"
+#include "asset/animation.hpp"
 
 class Area;
 class Asset;
@@ -19,7 +21,24 @@ namespace vibble::grid {
 class Grid;
 }
 
+class Animation; // forward
 class AnimationRuntime; // non-public executor
+
+struct AnimationPlayer {
+    Animation* m_animation = nullptr;
+    int m_fps = 25;
+    int m_start_frame = 0;
+    int m_end_frame = 0;
+    int m_current_frame = 0;
+    int m_variant = 0; // 0 normal, 1 fg, 2 bg
+
+    SDL_Texture* current_texture() const {
+        if (!m_animation || m_current_frame < 0 || m_current_frame >= int(m_animation->frames.size())) {
+            return nullptr;
+        }
+        return m_animation->frame_variant(m_current_frame, m_variant);
+    }
+};
 
 namespace animation_update::detail {
 
@@ -65,6 +84,12 @@ public:
     // Query active movement path index for a given animation (delegates to executor)
     std::size_t path_index_for(const std::string& anim_id) const;
 
+    AnimationPlayer& player() { return player_; }
+    void set_animation(Animation* anim, int fps) {
+        player_.m_animation = anim;
+        player_.m_fps = fps;
+    }
+
     // Exposed state for controllers to inspect
     bool      path_requested = false;
     SDL_Point final_dest{0, 0};
@@ -86,6 +111,8 @@ private:
 
 private:
     friend class AnimationRuntime;
+
+    AnimationPlayer player_{};
 
     Asset*  self_          = nullptr;
     Assets* assets_owner_  = nullptr;

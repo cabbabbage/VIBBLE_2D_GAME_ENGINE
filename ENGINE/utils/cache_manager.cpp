@@ -17,11 +17,15 @@ bool load_surface_sequence(const std::string& folder, int frame_count, std::vect
     surfaces.clear();
     surfaces.reserve(frame_count);
 
+    std::cout << "[CacheManager] load_surface_sequence: folder=" << folder 
+              << " frame_count=" << frame_count << std::endl;
+
     for (int i = 0; i < frame_count; ++i) {
         std::string frame_path = folder + "/" + std::to_string(i) + ".png";
         SDL_Surface* surface = IMG_Load(frame_path.c_str());
         if (!surface) {
-            std::cerr << "[CacheManager] Failed to load surface from: " << frame_path << ": " << IMG_GetError() << std::endl;
+            std::cerr << "[CacheManager] Failed to load surface from: " << frame_path 
+                      << " (IMG_Error: " << IMG_GetError() << ")" << std::endl;
             // Free already loaded surfaces on failure
             for (SDL_Surface* surf : surfaces) {
                 if (surf) SDL_FreeSurface(surf);
@@ -31,6 +35,9 @@ bool load_surface_sequence(const std::string& folder, int frame_count, std::vect
         }
         surfaces.push_back(surface);
     }
+    
+    std::cout << "[CacheManager] Successfully loaded " << surfaces.size() 
+              << " surfaces from " << folder << std::endl;
     return true;
 }
 

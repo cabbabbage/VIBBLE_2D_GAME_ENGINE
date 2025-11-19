@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <unordered_set>
 #include <iostream>
+#include <filesystem>
 
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
@@ -33,6 +34,7 @@
 #include "util/grid.hpp"
 #include "world/grid.hpp"
 #include "asset_info_methods/animation_loader.hpp"
+#include "core/manifest/manifest_loader.hpp"
 
 using animation_editor::AnimationDocument;
 using animation_editor::PreviewProvider;
@@ -613,6 +615,22 @@ void FrameEditorSession::end() {
     if (info_to_reload && saved_assets) {
         if (!asset_name_for_cache.empty()) {
             AnimationLoader::clear_asset_cache(asset_name_for_cache);
+
+            // Regenerate cache for this asset after clearing
+            auto root = std::filesystem::path(manifest::manifest_path()).parent_path();
+            std::filesystem::path python_script = root / "tools" / "asset_tool.py";
+            std::filesystem::path manifest_file = root / "manifest.json";
+            std::string manifest_path = manifest_file.string();
+            std::string cache_root = (root / "cache").string();
+            std::string asset_list = asset_name_for_cache;
+            std::string python_cmd = "python \"" + python_script.string() + "\" " + manifest_path + " " + cache_root + " \"" + asset_list + "\"";
+            std::cout << "[FrameEditor] Regenerating cache for " << asset_name_for_cache << "\n";
+            std::cout << "[FrameEditor] Running: " << python_cmd << "\n";
+            int result = std::system(python_cmd.c_str());
+            if (result != 0) {
+                std::cerr << "[FrameEditor] Failed to regenerate cache for " << asset_name_for_cache
+                          << ", exit code: " << result << "\n";
+            }
         }
         const bool ok = info_to_reload->reload_animations_from_disk();
         SDL_Renderer* renderer = saved_assets->renderer();

@@ -6,6 +6,46 @@ if "%~1"=="__RUN__" (
     goto :main
 )
 
+
+
+echo Installing NVIDIA CUDA Toolkit with winget...
+winget install --id=Nvidia.CUDA -e --accept-package-agreements --accept-source-agreements
+if errorlevel 1 (
+    echo Failed to install NVIDIA CUDA Toolkit with winget.
+    goto :EOF
+)
+
+REM Edit this if your CUDA version or path is different
+set "CUDA_VER=v12.6"
+set "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\%CUDA_VER%"
+
+echo Setting CUDA_PATH to %CUDA_PATH% ...
+REM Set for future sessions (system wide)
+setx CUDA_PATH "%CUDA_PATH%" /M
+
+REM Update PATH for current session
+set "PATH=%CUDA_PATH%\bin;%CUDA_PATH%\libnvvp;%PATH%"
+
+echo Using Python from PATH. Change this if you want a specific python.exe.
+set "PYTHON=python"
+
+echo Upgrading pip...
+%PYTHON% -m pip install --upgrade pip
+
+echo Removing any existing CuPy installs...
+%PYTHON% -m pip uninstall -y cupy cupy-cuda11x cupy-cuda12x
+
+echo Installing CuPy with CUDA 12.x wheels...
+%PYTHON% -m pip install cupy-cuda12x --extra-index-url https://download.cupy.dev/wheels/cu12x
+if errorlevel 1 (
+    echo Failed to install cupy-cuda12x. Check Python version and pip output.
+    goto :EOF
+)
+
+
+
+
+
 set "SETUP_LOG=%~dp0setup_log.txt"
 type nul > "%SETUP_LOG%"
 set "SCRIPT_PATH=%~f0"

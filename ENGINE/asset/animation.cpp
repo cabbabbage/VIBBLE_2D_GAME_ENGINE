@@ -30,9 +30,7 @@ namespace {
 using asset::surface_utils::kSignatureOffset;
 using asset::surface_utils::mix_signature;
 
-#if SDL_VERSION_ATLEAST(2,0,12)
-void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info);
-#endif
+
 
 bool has_depthcue_effects(const std::string& /*settings*/) {
         // Image effects are now handled by Python, so we always assume no depth cues
@@ -42,13 +40,23 @@ bool has_depthcue_effects(const std::string& /*settings*/) {
 // Count PNG files (0.png, 1.png, 2.png, etc.) in a folder
 int count_png_files(const std::string& folder) {
         int count = 0;
+        const fs::path folder_path(folder);
+        
+        std::error_code ec;
+        if (!fs::exists(folder_path, ec) || ec) {
+                std::cout << "[Animation] count_png_files: folder does not exist: " << folder << "\n";
+                return 0;
+        }
+        
         while (true) {
-                std::string frame_path = folder + "/" + std::to_string(count) + ".png";
-                if (!std::filesystem::exists(frame_path)) {
+                fs::path frame_path = folder_path / (std::to_string(count) + ".png");
+                if (!fs::exists(frame_path, ec) || ec) {
                         break;
                 }
                 ++count;
         }
+        
+        std::cout << "[Animation] count_png_files: folder=" << folder << ", count=" << count << "\n";
         return count;
 }
 
@@ -177,7 +185,14 @@ VariantLayerPaths build_variant_layer_paths(const std::string& cache_folder,
         paths.normal_folder     = (scale_root / "normal").string();
         paths.foreground_folder = (scale_root / "foreground").string();
         paths.background_folder = (scale_root / "background").string();
+        
+        // Log constructed paths for debugging
+        std::cout << "[Animation] build_variant_layer_paths idx=" << index 
+                  << " scale=" << (index < steps.size() ? steps[index] : 0.0f)
+                  << " normal_folder=" << paths.normal_folder << "\n";
+        
         return paths;
+}
 }
 
 void clear_overlay_directories(const std::vector<VariantLayerPaths>& variant_paths) {
@@ -264,8 +279,6 @@ void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info) {
 #else
 void apply_scale_mode(SDL_Texture*, const AssetInfo&) {}
 #endif
-
-}
 
 Animation::Animation() = default;
 
@@ -948,12 +961,30 @@ void Animation::load(const std::string& trigger,
                 }
         } else {
                 // Simplified cache loading - assume PNGs exist and load them directly
-                std::string cache_folder = root_cache + "/" + trigger;
+                const fs::path cache_folder_path = fs::path(root_cache) / trigger;
+                std::string cache_folder = cache_folder_path.string();
+                
                 std::size_t variant_count = variant_steps_.size();
                 if (variant_count == 0) {
                         variant_steps_.push_back(1.0f);
                         variant_count = 1;
                         info.scale_variants = variant_steps_;
+                }
+
+                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                          << " loading from cache_folder=" << cache_folder
+                          << " variant_count=" << variant_count << "\n";
+
+                // Check for .ready marker to ensure Python finished writing
+                const fs::path ready_marker = cache_folder_path / ".ready";
+                std::error_code ec;
+                bool ready_exists = fs::exists(ready_marker, ec);
+                if (!ready_exists || ec) {
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " .ready marker not found, cache may not be complete\n";
+                        // Signal that cache is invalid so it gets regenerated
+                        cache_invalid_detected = true;
+                        // Continue anyway, but warn
                 }
 
                 // Build paths for each variant
@@ -975,14 +1006,34 @@ void Animation::load(const std::string& trigger,
                         }
                 };
 
-                // Count frames in the first variant to determine correct frame count
+                // Find the first variant that exists to determine frame count
                 int frame_count = 0;
-                if (!variant_paths.empty()) {
-                        frame_count = count_png_files(variant_paths[0].normal_folder);
+                std::size_t working_variant_idx = 0;
+                for (std::size_t idx = 0; idx < variant_paths.size(); ++idx) {
+                        const fs::path normal_folder_path(variant_paths[idx].normal_folder);
+                        const fs::path test_frame = normal_folder_path / "0.png";
+                        
+                        std::error_code test_ec;
+                        if (fs::exists(test_frame, test_ec) && !test_ec) {
+                                frame_count = count_png_files(variant_paths[idx].normal_folder);
+                                if (frame_count > 0) {
+                                        working_variant_idx = idx;
+                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                  << " using variant " << idx << " (scale=" 
+                                                  << (idx < variant_steps_.size() ? variant_steps_[idx] : 0.0f)
+                                                  << ") to determine frame_count=" << frame_count << "\n";
+                                        break;
+                                }
+                        }
                 }
+                
                 if (frame_count == 0) {
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " no cached frames found\n";
+                                  << " no cached frames found in any variant folder\n";
+                        for (std::size_t idx = 0; idx < variant_paths.size(); ++idx) {
+                                std::cout << "[AnimationLoader]   variant " << idx << " normal_folder=" 
+                                          << variant_paths[idx].normal_folder << "\n";
+                        }
                         flush_diagnostics();
                         return;
                 }
@@ -1002,14 +1053,32 @@ void Animation::load(const std::string& trigger,
                                 variant_surfaces[idx] = std::move(loaded);
                         } else {
                                 all_surfaces_loaded = false;
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " failed to load variant " << idx << " from " << paths.normal_folder << "\n";
                                 break; // If any variant fails, we need to regenerate
+                        }
+                        
+                        // Load foreground textures if available
+                        std::vector<SDL_Surface*> fg_loaded;
+                        if (CacheManager::load_surface_sequence(paths.foreground_folder, frame_count, fg_loaded) && 
+                            static_cast<int>(fg_loaded.size()) == frame_count) {
+                                foreground_surfaces[idx] = std::move(fg_loaded);
+                        }
+                        
+                        // Load background textures if available
+                        std::vector<SDL_Surface*> bg_loaded;
+                        if (CacheManager::load_surface_sequence(paths.background_folder, frame_count, bg_loaded) && 
+                            static_cast<int>(bg_loaded.size()) == frame_count) {
+                                background_surfaces[idx] = std::move(bg_loaded);
                         }
                 }
 
                 if (!all_surfaces_loaded || variant_surfaces[0].empty() || !variant_surfaces[0][0]) {
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " cache surfaces not found, cannot load animation\n";
+                                  << " cache surfaces not found or incomplete, cannot load animation\n";
                         free_surface_lists(variant_surfaces);
+                        free_surface_lists(foreground_surfaces);
+                        free_surface_lists(background_surfaces);
                         flush_diagnostics();
                         return;
                 }
@@ -1070,9 +1139,25 @@ void Animation::load(const std::string& trigger,
                                 cache_entry.widths[variant_idx]   = tex_w;
                                 cache_entry.heights[variant_idx]  = tex_h;
 
-                                // Overlays disabled
-                                cache_entry.foreground_textures[variant_idx] = nullptr;
-                                cache_entry.background_textures[variant_idx] = nullptr;
+                                // Load foreground overlay if available
+                                SDL_Texture* fg_tex = nullptr;
+                                if (frame_idx < foreground_surfaces[variant_idx].size() && foreground_surfaces[variant_idx][frame_idx]) {
+                                        fg_tex = CacheManager::surface_to_texture(renderer, foreground_surfaces[variant_idx][frame_idx]);
+                                        if (fg_tex) {
+                                                apply_scale_mode(fg_tex, info);
+                                        }
+                                }
+                                cache_entry.foreground_textures[variant_idx] = fg_tex;
+
+                                // Load background overlay if available
+                                SDL_Texture* bg_tex = nullptr;
+                                if (frame_idx < background_surfaces[variant_idx].size() && background_surfaces[variant_idx][frame_idx]) {
+                                        bg_tex = CacheManager::surface_to_texture(renderer, background_surfaces[variant_idx][frame_idx]);
+                                        if (bg_tex) {
+                                                apply_scale_mode(bg_tex, info);
+                                        }
+                                }
+                                cache_entry.background_textures[variant_idx] = bg_tex;
 
                                 // Masks disabled for cached loading
                                 cache_entry.mask_textures[variant_idx] = nullptr;
@@ -1091,6 +1176,8 @@ void Animation::load(const std::string& trigger,
                 }
 
                 free_surface_lists(variant_surfaces);
+                free_surface_lists(foreground_surfaces);
+                free_surface_lists(background_surfaces);
 
                 // Flip processing disabled for cached loading
                 if (reverse_source && !frames.empty()) {

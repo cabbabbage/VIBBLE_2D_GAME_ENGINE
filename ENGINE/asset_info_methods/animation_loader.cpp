@@ -5,6 +5,7 @@
 #include "asset/animation.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "render/image_effect_settings.hpp"
+#include "core/manifest/manifest_loader.hpp"
 #include <nlohmann/json.hpp>
 #include <SDL.h>
 #include <SDL_image.h>
@@ -107,6 +108,22 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(A
                 if (!clear_asset_cache(info.name)) {
                         std::cerr << "[AnimationLoader] Unable to clear animation cache for " << info.name
                                   << " after scaling profile updates\n";
+                }
+
+                // Regenerate cache for this asset after clearing
+                auto root = std::filesystem::path(manifest::manifest_path()).parent_path();
+                std::filesystem::path python_script = root / "tools" / "asset_tool.py";
+                std::filesystem::path manifest_file = root / "manifest.json";
+                std::string manifest_path = manifest_file.string();
+                std::string cache_root = (root / "cache").string();
+                std::string asset_list = info.name;
+                std::string python_cmd = "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && python \"" + python_script.string() + "\" " + manifest_path + " " + cache_root + " \"" + asset_list + "\"";
+                std::cout << "[AnimationLoader] Regenerating cache for " << info.name << "\n";
+                std::cout << "[AnimationLoader] Running: " << python_cmd << "\n";
+                int result = std::system(python_cmd.c_str());
+                if (result != 0) {
+                        std::cerr << "[AnimationLoader] Failed to regenerate cache for " << info.name
+                                  << ", exit code: " << result << "\n";
                 }
         }
 
@@ -250,8 +267,30 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 return;
         }
 
-        // Simplified loading - no metadata validation or Python script retry
+        // Load animations
         LoadAttemptResult attempt = load_asset_animations_once(info, renderer, false);
+        if (!attempt.success && attempt.cache_issue) {
+                // Cache issue detected, regenerate cache and retry
+                auto root = std::filesystem::path(manifest::manifest_path()).parent_path();
+                std::filesystem::path python_script = root / "tools" / "asset_tool.py";
+                std::filesystem::path manifest_file = root / "manifest.json";
+                std::string manifest_path = manifest_file.string();
+                std::string cache_root = (root / "cache").string();
+                std::string asset_list = info.name;
+                std::string python_cmd = "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && python \"" + python_script.string() + "\" " + manifest_path + " " + cache_root + " \"" + asset_list + "\"";
+                std::cout << "[AnimationLoader] Cache issue for " << info.name << ", regenerating: " << python_cmd << "\n";
+                int ret = std::system(python_cmd.c_str());
+                if (ret == 0) {
+                        // Retry load after regeneration
+                        LoadAttemptResult retry_attempt = load_asset_animations_once(info, renderer, false);
+                        if (retry_attempt.success) {
+                                return;  // Success on retry
+                        }
+                        attempt = retry_attempt;  // Update attempt with retry result
+                } else {
+                        std::cerr << "[AnimationLoader] Failed to regenerate cache for " << info.name << ", exit code: " << ret << "\n";
+                }
+        }
         if (!attempt.success) {
                 std::cerr << "[AnimationLoader] " << info.name << " failed to load animations\n";
         }

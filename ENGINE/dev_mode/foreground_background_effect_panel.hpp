@@ -77,7 +77,9 @@ private:
     // Manifest-based loading/saving
     void save_depth_cue_settings_to_manifest();
     bool load_depth_cue_settings_from_manifest();
-    void generate_preview_with_python(const std::string& image_path, const std::string& effect_type);
+    void update_preview_and_manifest();
+    void generate_preview_with_python(const std::string& image_path, const camera_effects::ImageEffectSettings& settings);
+    void load_preview_texture(const std::string& image_path);
 
 private:
     Assets* assets_ = nullptr;

@@ -1065,7 +1065,7 @@ void DevControls::update(const Input& input) {
         // highlight/select assets by skipping RoomEditor update and clearing highlights.
         const bool frame_editing = frame_editor_session_ && frame_editor_session_->is_active();
         if (!frame_editing) {
-            if (!pointer_over_camera_panel_ && !pointer_over_image_effect_panel_) {
+            if (camera_panel_ && camera_panel_->is_visible() && !pointer_over_camera_panel_ && !pointer_over_image_effect_panel_) {
                 room_editor_->update(input);
             }
             // Update Area Tool overlay/editor if active
@@ -1620,7 +1620,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
 
     // Do not route to RoomEditor while the in-world Frame Editor is active
-    if (!(frame_editor_session_ && frame_editor_session_->is_active()) && can_route_room_editor && room_editor_->handle_sdl_event(event)) {
+    if (!(frame_editor_session_ && frame_editor_session_->is_active()) && can_route_room_editor && camera_panel_->is_visible() && room_editor_->handle_sdl_event(event)) {
         consume(true);
         return;
     }
@@ -2446,7 +2446,7 @@ void DevControls::sync_header_button_states() {
 
     if (room_editor_) {
         room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::AssetLibrary, library_open);
-        room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::Camera, camera_open);
+        // Camera panel blocking removed to allow pan/zoom when panel open but mouse not over it
         room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::Lighting, lights_open);
         room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::MapLayers, layers_open);
     }

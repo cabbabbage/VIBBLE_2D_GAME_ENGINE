@@ -9,6 +9,8 @@
 #include "render/camera.hpp"
 #include "utils/cache_manager.hpp"
 
+#include <SDL_image.h>
+
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -145,7 +147,7 @@ bool query_texture_size(SDL_Texture* texture, int& width, int& height) {
     return width > 0 && height > 0;
 }
 
-PreviewTextureSelection pick_smallest_cached_variant(Animation& animation) {
+PreviewTextureSelection pick_cached_variant(Animation& animation, int preferred_variant_index = -1) {
     PreviewTextureSelection selection{};
     if (animation.frames.empty()) {
         return selection;
@@ -166,6 +168,19 @@ PreviewTextureSelection pick_smallest_cached_variant(Animation& animation) {
     }
 
     const std::size_t variant_count = animation.variant_count();
+
+    // If preferred variant specified and available, use it
+    if (preferred_variant_index >= 0 && static_cast<std::size_t>(preferred_variant_index) < variant_count) {
+        SDL_Texture* preferred_tex = animation.frame_variant(frame_index, preferred_variant_index);
+        if (preferred_tex) {
+            selection.texture = preferred_tex;
+            if (query_texture_size(preferred_tex, selection.width, selection.height)) {
+                return selection;
+            }
+        }
+    }
+
+    // Else pick smallest
     if (variant_count > 0) {
         double best_area = std::numeric_limits<double>::max();
         for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
@@ -330,7 +345,6 @@ void ForegroundBackgroundEffectPanel::rebuild_rows() {
     }
     set_rows(rows);
 }
-
 void ForegroundBackgroundEffectPanel::layout_custom_content(int, int) const {
     preview_rect_ = SDL_Rect{0, 0, 0, 0};
     if (!preview_) {
@@ -343,13 +357,56 @@ void ForegroundBackgroundEffectPanel::layout_custom_content(int, int) const {
     }
 
     const int preview_gap = DMSpacing::section_gap();
-    preview_rect_.x = body_viewport_.x + body_viewport_.w + preview_gap;
-    preview_rect_.y = body_viewport_.y;
-    preview_rect_.w = kPreviewPanelWidth;
-    preview_rect_.h = body_viewport_h_;
+
+    // Right side column that will contain:
+    // [ FG / BG buttons | asset dropdown ]
+    // [      preview image panel        ]
+    SDL_Rect right_rect;
+    right_rect.x = body_viewport_.x + body_viewport_.w + preview_gap;
+    right_rect.y = body_viewport_.y;
+    right_rect.w = kPreviewPanelWidth;
+    right_rect.h = body_viewport_h_;
+
+    const int inner_gap = DMSpacing::item_gap();
+    const int inner_x = right_rect.x + inner_gap;
+    int cursor_y = right_rect.y + inner_gap;
+    const int inner_w = std::max(0, right_rect.w - inner_gap * 2);
+
+    // 1) Foreground / Background buttons on a single row
+    int header_height = 0;
+    int button_height = DMButton::height();
+    int half_w = (inner_w - inner_gap) / 2;
+
+    if (fg_mode_button_widget_ && bg_mode_button_widget_) {
+        SDL_Rect fg_rect{ inner_x, cursor_y, half_w, button_height };
+        SDL_Rect bg_rect{ inner_x + half_w + inner_gap, cursor_y, half_w, button_height };
+
+        fg_mode_button_widget_->set_rect(fg_rect);
+        bg_mode_button_widget_->set_rect(bg_rect);
+
+        cursor_y += button_height + inner_gap;
+        header_height += button_height + inner_gap;
+    }
+
+    // 2) Asset dropdown full width under the buttons
+    if (asset_dropdown_widget_) {
+        int dd_height = asset_dropdown_widget_->height_for_width(inner_w);
+        SDL_Rect dd_rect{ inner_x, cursor_y, inner_w, dd_height };
+        asset_dropdown_widget_->set_rect(dd_rect);
+
+        cursor_y += dd_height + inner_gap;
+        header_height += dd_height + inner_gap;
+    }
+
+    // 3) Preview rect below header controls, fills remaining height
+    preview_rect_.x = right_rect.x;
+    preview_rect_.y = cursor_y;
+    preview_rect_.w = right_rect.w;
+    preview_rect_.h = std::max(0, right_rect.h - (cursor_y - right_rect.y));
 
     preview_->set_rect(preview_rect_);
 
+    // Expand panel width so right column is fully visible
     body_viewport_.w = (preview_rect_.x + preview_rect_.w) - body_viewport_.x;
 
     const int preview_right = preview_rect_.x + preview_rect_.w;
@@ -410,6 +467,8 @@ void ForegroundBackgroundEffectPanel::handle_asset_selection(int index) {
     }
     index = std::clamp(index, 0, static_cast<int>(asset_names_.size()) - 1);
     selected_asset_ = asset_names_[static_cast<std::size_t>(index)];
+    // Destroy current preview texture when changing assets
+    destroy_preview_textures();
     preview_dirty_ = true;
 }
 
@@ -511,6 +570,64 @@ void ForegroundBackgroundEffectPanel::save_depth_cue_settings_to_manifest() {
     has_unsaved_changes_ = false;
 }
 
+void ForegroundBackgroundEffectPanel::update_preview_and_manifest() {
+    save_depth_cue_settings_to_manifest();
+
+    // Generate preview when slider values change
+    if (selected_asset_.empty()) {
+        preview_dirty_ = true;
+        return;
+    }
+
+    // Find the smallest cached variant image to use for preview
+    auto info = assets_->library().get(selected_asset_);
+    if (!info || info->animations.empty()) {
+        preview_dirty_ = true;
+        return;
+    }
+
+    const auto& anim = info->animations.begin()->second;
+    if (anim.frames.empty()) {
+        preview_dirty_ = true;
+        return;
+    }
+
+    // Get the cache path for this asset
+    const std::string asset_cache_path = "cache/" + selected_asset_ + "/animations";
+    std::error_code ec;
+
+    // Find existing cache files to pick from
+    std::string image_to_use;
+    for (const auto& anim_entry : fs::directory_iterator(asset_cache_path, ec)) {
+        if (!anim_entry.is_directory()) continue;
+        for (const auto& scale_entry : fs::directory_iterator(anim_entry.path(), ec)) {
+            if (!scale_entry.is_directory()) continue;
+            const std::string dir_name = scale_entry.path().filename().string();
+            if (dir_name != "scale_100") continue;  // Use 100% scale for preview
+
+            // Look for normal variant (unprocessed image)
+            const fs::path normal_dir = scale_entry.path() / "normal";
+            if (fs::exists(normal_dir, ec) && fs::is_directory(normal_dir, ec)) {
+                for (const auto& frame_file : fs::directory_iterator(normal_dir, ec)) {
+                    if (frame_file.is_regular_file() && frame_file.path().extension() == ".png") {
+                        image_to_use = frame_file.path().string();
+                        break;
+                    }
+                }
+                if (!image_to_use.empty()) break;
+            }
+        }
+        if (!image_to_use.empty()) break;
+    }
+
+    if (!image_to_use.empty()) {
+        // Generate preview with current settings
+        generate_preview_with_python(image_to_use, current_settings_);
+    } else {
+        preview_dirty_ = true;
+    }
+}
+
 bool ForegroundBackgroundEffectPanel::load_depth_cue_settings_from_manifest() {
     // Load global image effect settings from manifest.json top-level image_effects section
     std::string manifest_path = "manifest.json";
@@ -587,33 +704,88 @@ bool ForegroundBackgroundEffectPanel::load_depth_cue_settings_from_manifest() {
     std::cout << "[DepthCuePanel] Loaded global image effect settings\n";
     return true;
 }
-
-void ForegroundBackgroundEffectPanel::generate_preview_with_python(const std::string& image_path, const std::string& effect_type) {
-    // Call Python script to generate preview using global image effects settings from manifest
-    if (image_path.empty() || effect_type.empty()) {
-        std::cerr << "[DepthCuePanel] Invalid preview parameters\n";
+void ForegroundBackgroundEffectPanel::generate_preview_with_python(
+    const std::string& image_path,
+    const camera_effects::ImageEffectSettings& settings
+) {
+    if (image_path.empty()) {
+        std::cerr << "[DepthCuePanel] Invalid preview image path\n";
         return;
     }
 
-    std::string python_cmd = "python tools/asset_tool.py build-texture";
-    std::string manifest_arg = "--manifest-path manifest.json";
-    std::string preview_image_arg = "--preview-image \"" + image_path + "\"";
-    std::string preview_type_arg = "--preview-type " + effect_type;
+    std::string python_cmd = "python tools/apply_color_effects.py";
+    std::string output_path = "cache/preview_image.png";
 
-    std::string full_cmd = python_cmd + " " + preview_image_arg + " " + preview_type_arg + " " + manifest_arg;
+    // Ensure the cache directory exists
+    std::error_code ec;
+    std::filesystem::create_directories("cache", ec);
+    if (ec) {
+        std::cerr << "[DepthCuePanel] Failed to create cache directory: " << ec.message() << "\n";
+        return;
+    }
+
+    // New: pass foreground or background as third arg
+    std::string layer_type =
+        (current_mode_ == EffectMode::Foreground) ? "foreground" : "background";
+
+    std::string full_cmd = python_cmd +
+        " \"" + image_path + "\" \"" + output_path + "\" " + layer_type + " " +
+        std::to_string(settings.rgb_boost) + " " +
+        std::to_string(settings.contrast) + " " +
+        std::to_string(settings.brightness) + " " +
+        std::to_string(settings.blur) + " " +
+        std::to_string(settings.saturation_red) + " " +
+        std::to_string(settings.saturation_green) + " " +
+        std::to_string(settings.saturation_blue) + " " +
+        std::to_string(settings.hue);
 
     std::cout << "[DepthCuePanel] Executing: " << full_cmd << "\n";
 
-    // Execute the command (simplified for now - would need proper process execution)
     int result = std::system(full_cmd.c_str());
 
     if (result == 0) {
-        std::cout << "[DepthCuePanel] Preview generated successfully\n";
-        // Trigger preview reload if needed
+        std::cout << "[DepthCuePanel] Preview image generated successfully\n";
+        load_preview_texture(output_path);
         preview_dirty_ = true;
     } else {
         std::cerr << "[DepthCuePanel] Failed to generate preview, exit code: " << result << "\n";
     }
+}
+
+
+void ForegroundBackgroundEffectPanel::load_preview_texture(const std::string& image_path) {
+    // Destroy old preview texture before loading new one
+    if (current_preview_texture_) {
+        SDL_DestroyTexture(current_preview_texture_);
+        current_preview_texture_ = nullptr;
+    }
+    current_preview_w_ = current_preview_h_ = 0;
+
+    SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
+    if (!renderer) {
+        std::cerr << "[DepthCuePanel] No renderer available for loading preview texture\n";
+        return;
+    }
+
+    // Assume PNG loader is available (IMG_Load or similar)
+    SDL_Surface* surface = IMG_Load(image_path.c_str());
+    if (!surface) {
+        std::cerr << "[DepthCuePanel] Failed to load image from: " << image_path << "\n";
+        return;
+    }
+
+    current_preview_texture_ = SDL_CreateTextureFromSurface(renderer, surface);
+    if (!current_preview_texture_) {
+        std::cerr << "[DepthCuePanel] Failed to create texture from surface\n";
+        SDL_FreeSurface(surface);
+        return;
+    }
+
+    current_preview_w_ = surface->w;
+    current_preview_h_ = surface->h;
+    SDL_FreeSurface(surface);
+
+    std::cout << "[DepthCuePanel] Loaded preview texture: " << current_preview_w_ << "x" << current_preview_h_ << "\n";
 }
 
 void ForegroundBackgroundEffectPanel::load_current_mode_settings() {
@@ -643,13 +815,16 @@ void ForegroundBackgroundEffectPanel::set_mode(EffectMode mode) {
     // Load settings for new mode
     load_current_mode_settings();
 
+    // Save to manifest after mode switch
+    save_depth_cue_settings_to_manifest();
+
     // Rebuild preview
     preview_dirty_ = true;
 }
 
 void ForegroundBackgroundEffectPanel::on_slider_changed() {
     save_current_mode_settings();
-    preview_dirty_ = true;
+    update_preview_and_manifest();
 }
 
 void ForegroundBackgroundEffectPanel::refresh_from_camera() {
@@ -727,13 +902,17 @@ bool ForegroundBackgroundEffectPanel::ensure_preview_source() {
         return false;
     }
 
-    PreviewTextureSelection selection = pick_smallest_cached_variant(*anim);
+    int preferred_variant = -1;
+    if (!camera_effects::ImageEffectSettingsIsIdentity(current_settings_)) {
+        preferred_variant = (current_mode_ == EffectMode::Foreground) ? 1 : 2;
+    }
+    PreviewTextureSelection selection = pick_cached_variant(*anim, preferred_variant);
     if (!selection.texture && !reloaded_asset) {
         info->loadAnimations(renderer);
         reloaded_asset = true;
         anim = select_animation();
         if (anim) {
-            selection = pick_smallest_cached_variant(*anim);
+            selection = pick_cached_variant(*anim, preferred_variant);
         }
     }
 
@@ -760,7 +939,6 @@ void ForegroundBackgroundEffectPanel::rebuild_previews() {
     if (auto* image_preview = dynamic_cast<ImagePreviewWidget*>(preview_.get())) {
         image_preview->clear_texture();
     }
-    destroy_preview_textures();
 
     if (!ensure_preview_source()) {
         return;
@@ -797,6 +975,9 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
     if (!renderer) {
         return;
     }
+
+    // Save settings to manifest and camera
+    save_depth_cue_settings_to_manifest();
     camera& cam = assets_->getView();
     camera::RealismSettings settings = cam.realism_settings();
     settings.foreground_effects = fg_settings_;
@@ -804,15 +985,34 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
     cam.set_realism_settings(settings);
     assets_->on_camera_settings_changed();
 
-    const std::uint64_t fg_hash = camera_effects::HashImageEffectSettings(fg_settings_);
-    const std::uint64_t bg_hash = camera_effects::HashImageEffectSettings(bg_settings_);
-    purge_mismatched_caches(fg_hash, bg_hash, true);
+    // Check if cache directory exists
+    const fs::path cache_dir("cache");
+    std::error_code ec;
+    const bool cache_exists = fs::exists(cache_dir, ec) && fs::is_directory(cache_dir, ec);
+
+    // Force regeneration of selected asset by removing its cache if it exists
+    std::error_code del_ec;
+    fs::remove_all(cache_dir / selected_asset_, del_ec);
+
+    if (!cache_exists) {
+        // If no cache folder exists, regenerate the selected asset
+        std::string manifest_path = "manifest.json";
+        std::string cache_root = "cache";
+        std::string asset_list = selected_asset_;
+        std::string python_cmd = std::string("python tools/asset_tool.py ") + manifest_path + " " + cache_root + " \"" + asset_list + "\"";
+        std::cout << "[DepthCuePanel] Executing: " << python_cmd << "\n";
+        int result = std::system(python_cmd.c_str());
+        if (result != 0) {
+            std::cerr << "[DepthCuePanel] Failed to regenerate cache for " << selected_asset_ << ", exit code: " << result << "\n";
+        }
+    }
 
     assets_->library().loadAllAnimations(renderer);
     saved_fg_ = fg_settings_;
     saved_bg_ = bg_settings_;
     has_unsaved_changes_ = false;
     preview_dirty_ = true;
+    rebuild_previews();
 }
 
 void ForegroundBackgroundEffectPanel::restore_defaults() {
@@ -823,6 +1023,9 @@ void ForegroundBackgroundEffectPanel::restore_defaults() {
 
     // Save the reset settings to current mode storage
     save_current_mode_settings();
+
+    // Destroy preview texture since we're resetting to defaults
+    destroy_preview_textures();
 
     // Rebuild preview to show reset appearance
     preview_dirty_ = true;
