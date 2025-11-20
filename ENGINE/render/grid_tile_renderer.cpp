@@ -86,8 +86,12 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const camera& cam, const w
             screen_br.x = grid.parallax_adjusted_screen_x(world_br, screen_br.x);
             screen_bl.x = grid.parallax_adjusted_screen_x(world_bl, screen_bl.x);
 
-            const float tex_w = static_cast<float>(tile.world_rect.w);
-            const float tex_h = static_cast<float>(tile.world_rect.h);
+            int tex_w_int = 0, tex_h_int = 0;
+            if (SDL_QueryTexture(tile.texture, nullptr, nullptr, &tex_w_int, &tex_h_int) != 0) {
+                continue;
+            }
+            const float tex_w = static_cast<float>(tex_w_int);
+            const float tex_h = static_cast<float>(tex_h_int);
             if (tex_w <= 0.0f || tex_h <= 0.0f) {
                 continue;
             }

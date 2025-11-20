@@ -963,7 +963,7 @@ void Assets::update(const Input& input)
         grid_registration_buffer_.clear();
     }
 
-    const bool zoom_animation_active = camera_.zooming_;
+    const bool zoom_animation_active = camera_.is_zooming();
     const bool camera_refresh_needed = room_changed || player_moved || zoom_animation_active;
     camera_.update_zoom(current_room_, finder_, player, camera_refresh_needed, last_frame_dt_seconds_);
 

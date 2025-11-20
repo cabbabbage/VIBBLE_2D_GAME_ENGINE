@@ -1044,7 +1044,7 @@ void RoomEditor::update_ui(const Input& input) {
         }
     }
 
-    ensure_area_editor();
+        ensure_area_editor();
     if (area_editor_) {
         const bool was = last_area_editor_active_;
         const bool now = area_editor_->is_active();
@@ -1057,7 +1057,7 @@ void RoomEditor::update_ui(const Input& input) {
             if (assets_) {
                 camera& cam = assets_->getView();
                 if (should_enable_mouse_controls()) {
-                    pan_zoom_.handle_input(cam, input, true);
+                    pan_zoom_.handle_input(cam, input, false);
                 } else {
                     pan_zoom_.cancel(cam);
                 }

@@ -17,6 +17,7 @@ class Area {
     SDL_Point pos{0, 0};
 
 	public:
+    Area() : Area("default_area", 0) {}
     explicit Area(const std::string& name, int resolution = 0);
     Area(const std::string& name, const std::vector<Point>& pts, int resolution = 0);
     Area(const std::string& name, SDL_Point center, int w, int h, const std::string& geometry, int edge_smoothness, int map_width, int map_height, int resolution = 0);

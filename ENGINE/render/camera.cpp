@@ -1,16 +1,23 @@
 #include "camera.hpp"
+
 #include "asset/Asset.hpp"
 #include "utils/area.hpp"
 #include "map_generation/room.hpp"
 #include "core/find_current_room.hpp"
 #include "utils/transform_smoothing_settings.hpp"
+
 #include <cmath>
 #include <algorithm>
 #include <vector>
+#include <tuple>
 #include <nlohmann/json.hpp>
 
 namespace {
-    constexpr float kMinTau = 1e-4f;
+    constexpr float  kMinTau    = 1e-4f;
+    constexpr double SCALE_EPS  = 1e-4;
+    constexpr double BASE_RATIO = 1.1;
+    constexpr double PI_D       = 3.14159265358979323846;
+    constexpr double HALF_FOV_Y = PI_D / 4.0; // 45 deg half FOV (90 total)
 
     TransformSmoothingParams sanitize_params(const TransformSmoothingParams& params) {
         TransformSmoothingParams out = params;
@@ -79,86 +86,168 @@ namespace {
         params.snap_threshold = std::max(0.0f, settings.motion_smoothing_snap_threshold);
         return sanitize_params(params);
     }
+
+    static inline int width_from_area(const Area& a) {
+        int minx, miny, maxx, maxy;
+        std::tie(minx, miny, maxx, maxy) = a.get_bounds();
+        (void)miny; (void)maxy;
+        return std::max(0, maxx - minx);
+    }
+
+    static inline int height_from_area(const Area& a) {
+        int minx, miny, maxx, maxy;
+        std::tie(minx, miny, maxx, maxy) = a.get_bounds();
+        (void)minx; (void)maxx;
+        return std::max(0, maxy - miny);
+    }
+
+    static inline Area make_rect_area(const std::string& name, SDL_Point center, int w, int h, int resolution) {
+        const int left   = center.x - (w / 2);
+        const int top    = center.y - (h / 2);
+        const int right  = left + w;
+        const int bottom = top + h;
+        std::vector<Area::Point> corners{
+            { left,  top    },
+            { right, top    },
+            { right, bottom },
+            { left,  bottom }
+        };
+        return Area(name, corners, resolution);
+    }
 }
 
-static inline int width_from_area(const Area& a) {
-    int minx, miny, maxx, maxy;
-    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
-    (void)miny; (void)maxy;
-    return std::max(0, maxx - minx);
+// TransformSmoother1D implementation
+
+void camera::TransformSmoother1D::set_params(const TransformSmoothingParams& p) {
+    params = sanitize_params(p);
 }
 
-static inline int height_from_area(const Area& a) {
-    int minx, miny, maxx, maxy;
-    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
-    (void)minx; (void)maxx;
-    return std::max(0, maxy - miny);
+void camera::TransformSmoother1D::reset(float value) {
+    current  = value;
+    target   = value;
+    velocity = 0.0f;
 }
 
-static inline Area make_rect_area(const std::string& name, SDL_Point center, int w, int h, int resolution) {
-    const int left   = center.x - (w / 2);
-    const int top    = center.y - (h / 2);
-    const int right  = left + w;
-    const int bottom = top + h;
-    std::vector<Area::Point> corners{
-        { left,  top    },
-        { right, top    },
-        { right, bottom },
-        { left,  bottom }
-    };
-    return Area(name, corners, resolution);
-}
+void camera::TransformSmoother1D::advance(float dt) {
+    if (!std::isfinite(dt) || dt <= 0.0f) {
+        return;
+    }
 
-namespace {
-    static constexpr double SCALE_EPS  = 1e-4;
-    static constexpr double BASE_RATIO = 1.1;
+    const float snap_threshold = std::max(0.0f, params.snap_threshold);
+    const float max_step       = std::max(0.0f, params.max_step);
+
+    const float delta = target - current;
+    if (snap_threshold > 0.0f && std::fabs(delta) < snap_threshold) {
+        current  = target;
+        velocity = 0.0f;
+        return;
+    }
+
+    switch (params.method) {
+    case TransformSmoothingMethod::None: {
+        current  = target;
+        velocity = 0.0f;
+        break;
+    }
+    case TransformSmoothingMethod::Lerp: {
+        const float rate = std::max(0.0f, params.lerp_rate);
+        if (rate <= 0.0f) {
+            current  = target;
+            velocity = 0.0f;
+            break;
+        }
+        const float t = 1.0f - std::exp(-rate * dt);
+        float step = delta * t;
+        if (max_step > 0.0f) {
+            const float max_delta = max_step * dt;
+            if (step >  max_delta) step =  max_delta;
+            if (step < -max_delta) step = -max_delta;
+        }
+        current += step;
+        velocity = step / std::max(dt, 1e-6f);
+        break;
+    }
+    case TransformSmoothingMethod::CriticallyDampedSpring: {
+        const float freq = std::max(0.0f, params.spring_frequency);
+        if (freq <= 0.0f) {
+            current  = target;
+            velocity = 0.0f;
+            break;
+        }
+        const float omega = 2.0f * static_cast<float>(PI_D) * freq;
+        const float x0    = current - target;
+        const float v0    = velocity;
+        const float e     = std::exp(-omega * dt);
+
+        const float x = (x0 + (v0 + omega * x0) * dt) * e;
+        const float v = (v0 - omega * (v0 + omega * x0) * dt) * e;
+
+        current  = target + x;
+        velocity = v;
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
 {
     screen_width_  = screen_width;
     screen_height_ = screen_height;
-    aspect_        = (screen_height_ > 0) ? static_cast<double>(screen_width_) / static_cast<double>(screen_height_) : 1.0;
-    Area adjusted_start = convert_area_to_aspect(starting_zoom);
-    SDL_Point start_center = adjusted_start.get_center();
+    aspect_        = (screen_height_ > 0)
+        ? static_cast<double>(screen_width_) / static_cast<double>(screen_height_)
+        : 1.0;
+
+    Area      adjusted_start = convert_area_to_aspect(starting_zoom);
+    SDL_Point start_center   = adjusted_start.get_center();
+
     base_zoom_    = make_rect_area("base_zoom", start_center, screen_width_, screen_height_, adjusted_start.resolution());
     current_view_ = adjusted_start;
     screen_center_ = start_center;
     screen_center_initialized_ = true;
     pan_offset_x_ = 0.0;
     pan_offset_y_ = 0.0;
+
     const int base_w = width_from_area(base_zoom_);
     const int curr_w = width_from_area(current_view_);
-    scale_ = (base_w > 0) ? static_cast<float>(static_cast<double>(curr_w) / static_cast<double>(base_w)) : 1.0f;
-    zooming_ = false;
-    steps_total_ = steps_done_ = 0;
-    start_scale_ = target_scale_ = scale_;
+    scale_ = (base_w > 0)
+        ? static_cast<float>(static_cast<double>(curr_w) / static_cast<double>(base_w))
+        : 1.0f;
+
+    zooming_     = false;
+    steps_total_ = 0;
+    steps_done_  = 0;
+    start_scale_ = scale_;
+    target_scale_ = scale_;
 
     TransformSmoothingParams center_defaults = transform_smoothing::camera_center_params();
     TransformSmoothingParams zoom_defaults   = transform_smoothing::camera_zoom_params();
+
     center_smoothing_x_.set_params(center_defaults);
     center_smoothing_y_.set_params(center_defaults);
     zoom_smoothing_.set_params(zoom_defaults);
+
     center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
     center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
     zoom_smoothing_.reset(std::max(scale_, 0.0001f));
+
     smoothed_center_.x = center_smoothing_x_.value_for_render();
     smoothed_center_.y = center_smoothing_y_.value_for_render();
     smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
 
-    settings_.smooth_motion_zoom           = center_defaults.method != TransformSmoothingMethod::None;
-    settings_.motion_smoothing_method      = center_defaults.method;
-    settings_.motion_smoothing_tau         = tau_from_rate(center_defaults.lerp_rate);
-    settings_.motion_smoothing_spring_frequency = center_defaults.spring_frequency;
-    settings_.motion_smoothing_max_step    = center_defaults.max_step;
-    settings_.motion_smoothing_snap_threshold = center_defaults.snap_threshold;
+    settings_.smooth_motion_zoom                 = center_defaults.method != TransformSmoothingMethod::None;
+    settings_.motion_smoothing_method            = center_defaults.method;
+    settings_.motion_smoothing_tau               = tau_from_rate(center_defaults.lerp_rate);
+    settings_.motion_smoothing_spring_frequency  = center_defaults.spring_frequency;
+    settings_.motion_smoothing_max_step          = center_defaults.max_step;
+    settings_.motion_smoothing_snap_threshold    = center_defaults.snap_threshold;
 }
 
 void camera::set_realism_settings(const RealismSettings& settings) {
     settings_ = settings;
-    camera_effects::ClampImageEffectSettings(settings_.foreground_effects);
-    camera_effects::ClampImageEffectSettings(settings_.background_effects);
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
+
     TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
     center_smoothing_x_.set_params(motion_params);
     center_smoothing_y_.set_params(motion_params);
@@ -167,28 +256,28 @@ void camera::set_realism_settings(const RealismSettings& settings) {
 
 void camera::set_screen_center(SDL_Point p) {
     if (!screen_center_initialized_) {
-        screen_center_ = p;
-        screen_center_initialized_ = true;
-        pan_offset_x_ = 0.0;
-        pan_offset_y_ = 0.0;
+        screen_center_              = p;
+        screen_center_initialized_  = true;
+        pan_offset_x_               = 0.0;
+        pan_offset_y_               = 0.0;
         center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
         center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
         smoothed_center_.x = center_smoothing_x_.value_for_render();
         smoothed_center_.y = center_smoothing_y_.value_for_render();
         return;
     }
+
     const double dx = static_cast<double>(p.x) - static_cast<double>(screen_center_.x);
     const double dy = static_cast<double>(p.y) - static_cast<double>(screen_center_.y);
     pan_offset_x_ += dx;
     pan_offset_y_ += dy;
     screen_center_ = p;
 
-    const double distance = std::hypot(dx, dy);
-    const double px_margin = static_cast<double>(std::max(screen_width_, screen_height_));
-    const double scale_for_world = std::max(0.0001, static_cast<double>(smoothed_scale_));
-    const double teleport_threshold = std::max(200.0, px_margin * scale_for_world * 0.25);
-    if (distance > teleport_threshold) {
-        // Large jump: snap the smoothed center to avoid slow pan across half the map.
+    const double distance     = std::hypot(dx, dy);
+    const double px_margin    = static_cast<double>(std::max(screen_width_, screen_height_));
+    const double scale_world  = std::max(0.0001, static_cast<double>(smoothed_scale_));
+    const double teleport_thr = std::max(200.0, px_margin * scale_world * 0.25);
+    if (distance > teleport_thr) {
         center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
         center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
         smoothed_center_.x = center_smoothing_x_.value_for_render();
@@ -198,14 +287,18 @@ void camera::set_screen_center(SDL_Point p) {
 
 void camera::set_scale(float s) {
     scale_ = (s > 0.0f) ? s : 0.0001f;
-    zooming_ = false;
-    steps_total_ = steps_done_ = 0;
-    start_scale_ = target_scale_ = scale_;
+    zooming_     = false;
+    steps_total_ = 0;
+    steps_done_  = 0;
+    start_scale_ = scale_;
+    target_scale_= scale_;
     zoom_smoothing_.reset(scale_);
     smoothed_scale_ = scale_;
 }
 
-float camera::get_scale() const { return smoothed_scale_; }
+float camera::get_scale() const {
+    return smoothed_scale_;
+}
 
 void camera::zoom_to_scale(double target_scale, int duration_steps) {
     double clamped = (target_scale > 0.0) ? target_scale : 0.0001;
@@ -247,25 +340,34 @@ void camera::update(float dt) {
 
     if (zooming_) {
         ++steps_done_;
-        double t = static_cast<double>(steps_done_) / static_cast<double>(std::max(1, steps_total_));
+        double t = static_cast<double>(steps_done_) /
+                   static_cast<double>(std::max(1, steps_total_));
         t = std::clamp(t, 0.0, 1.0);
         double s = start_scale_ + (target_scale_ - start_scale_) * t;
         scale_ = static_cast<float>(std::max(0.0001, s));
+
         if (pan_override_) {
-            const double cx = static_cast<double>(start_center_.x) + (static_cast<double>(target_center_.x) - static_cast<double>(start_center_.x)) * t;
-            const double cy = static_cast<double>(start_center_.y) + (static_cast<double>(target_center_.y) - static_cast<double>(start_center_.y)) * t;
-            SDL_Point new_center{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
+            const double cx = static_cast<double>(start_center_.x) +
+                              (static_cast<double>(target_center_.x) - static_cast<double>(start_center_.x)) * t;
+            const double cy = static_cast<double>(start_center_.y) +
+                              (static_cast<double>(target_center_.y) - static_cast<double>(start_center_.y)) * t;
+            SDL_Point new_center{
+                static_cast<int>(std::lround(cx)),
+                static_cast<int>(std::lround(cy))
+            };
             set_screen_center(new_center);
         }
+
         if (steps_done_ >= steps_total_) {
             scale_ = static_cast<float>(target_scale_);
             if (pan_override_) {
                 set_screen_center(target_center_);
             }
-            zooming_ = false;
+            zooming_      = false;
             pan_override_ = false;
-            steps_total_ = steps_done_ = 0;
-            start_scale_ = target_scale_;
+            steps_total_  = 0;
+            steps_done_   = 0;
+            start_scale_  = target_scale_;
         }
     } else {
         intro = false;
@@ -287,10 +389,16 @@ void camera::update(float dt) {
 }
 
 double camera::compute_room_scale_from_area(const Room* room) const {
-    if (!room || !room->room_area || starting_area_ <= 0.0) return BASE_RATIO;
+    if (!room || !room->room_area || starting_area_ <= 0.0) {
+        return BASE_RATIO;
+    }
+
     Area adjusted = convert_area_to_aspect(*room->room_area);
     double a = adjusted.get_size();
-    if (a <= 0.0 || room->type == "trail") return BASE_RATIO * 0.8;
+    if (a <= 0.0 || room->type == "trail") {
+        return BASE_RATIO * 0.8;
+    }
+
     double s = (a / starting_area_) * BASE_RATIO;
     s = std::clamp(s, BASE_RATIO * 0.9, BASE_RATIO * 1.05);
     return s;
@@ -300,6 +408,7 @@ void camera::set_up_rooms(CurrentRoomFinder* finder) {
     if (!finder) return;
     Room* current = finder->getCurrentRoom();
     if (!current) return;
+
     starting_room_ = current;
     if (starting_room_ && starting_room_->room_area) {
         Area adjusted = convert_area_to_aspect(*starting_room_->room_area);
@@ -308,21 +417,22 @@ void camera::set_up_rooms(CurrentRoomFinder* finder) {
     }
 }
 
-double camera::default_zoom_for_room(const Room* room) const {
-    return compute_room_scale_from_area(room);
-}
+
 
 void camera::update_zoom(Room* cur,
                          CurrentRoomFinder* finder,
                          Asset* player,
                          bool refresh_requested,
-                         float dt) {
+                         float dt)
+{
     if (!refresh_requested && !zooming_) {
         update(dt);
         return;
     }
+
     pan_offset_x_ = 0.0;
     pan_offset_y_ = 0.0;
+
     if (!pan_override_) {
         if (focus_override_) {
             set_screen_center(focus_point_);
@@ -332,40 +442,55 @@ void camera::update_zoom(Room* cur,
             set_screen_center(cur->room_area->get_center());
         }
     }
+
     if (!starting_room_ && cur && cur->room_area) {
         starting_room_ = cur;
         Area adjusted = convert_area_to_aspect(*cur->room_area);
         starting_area_ = adjusted.get_size();
         if (starting_area_ <= 0.0) starting_area_ = 1.0;
     }
+
     update(dt);
+
     if (!cur) return;
     if (manual_zoom_override_) {
         return;
     }
+
     Room* neigh = nullptr;
     if (finder) {
         neigh = finder->getNeighboringRoom(cur);
     }
     if (!neigh) neigh = cur;
+
     const double sa = compute_room_scale_from_area(cur);
     const double sb = compute_room_scale_from_area(neigh);
     double target_zoom = sa;
+
     if (player && cur && cur->room_area && neigh && neigh->room_area) {
         auto [ax, ay] = cur->room_area->get_center();
         auto [bx, by] = neigh->room_area->get_center();
         const double pax = double(player->pos.x);
         const double pay = double(player->pos.y);
+
         const double vx = double(bx - ax);
         const double vy = double(by - ay);
         const double wx = double(pax - ax);
         const double wy = double(pay - ay);
         const double vlen2 = vx * vx + vy * vy;
+
         double t = (vlen2 > 0.0) ? ((wx * vx + wy * vy) / vlen2) : 0.0;
         t = std::clamp(t, 0.0, 1.0);
+
         target_zoom = (sa * (1.0 - t)) + (sb * t);
     }
-    target_zoom = std::clamp(target_zoom, BASE_RATIO * settings_.min_zoom_multiplier, BASE_RATIO * settings_.max_zoom_multiplier);
+
+    target_zoom = std::clamp(
+        target_zoom,
+        BASE_RATIO * settings_.min_zoom_multiplier,
+        BASE_RATIO * settings_.max_zoom_multiplier
+    );
+
     const bool idle = !zooming_;
     if (idle || std::fabs(target_zoom - target_scale_) > SCALE_EPS) {
         zoom_to_scale(target_zoom, 35);
@@ -377,6 +502,7 @@ Area camera::convert_area_to_aspect(const Area& in) const {
     int w = std::max(1, maxx - minx);
     int h = std::max(1, maxy - miny);
     SDL_Point c = in.get_center();
+
     const double cur = static_cast<double>(w) / static_cast<double>(h);
     int target_w = w;
     int target_h = h;
@@ -398,20 +524,26 @@ void camera::recompute_current_view() {
         static_cast<int>(std::lround(smoothed_center_.x)),
         static_cast<int>(std::lround(smoothed_center_.y))
     };
-    current_view_    = make_rect_area("current_view", center, cur_w, cur_h, base_zoom_.resolution());
+    current_view_ = make_rect_area("current_view", center, cur_w, cur_h, base_zoom_.resolution());
 }
 
 void camera::pan_and_zoom_to_point(SDL_Point world_pos, double zoom_scale_factor, int duration_steps) {
-    set_focus_override(world_pos);
-    const double factor = (zoom_scale_factor > 0.0) ? zoom_scale_factor : 1.0;
+    focus_override_ = true;
+    focus_point_    = world_pos;
+
+    const double factor    = (zoom_scale_factor > 0.0) ? zoom_scale_factor : 1.0;
     const double new_scale = std::max(0.0001, static_cast<double>(scale_) * factor);
+
     if (duration_steps <= 0) {
         manual_zoom_override_ = true;
-        pan_override_ = false;
-        zooming_ = false;
-        steps_total_ = steps_done_ = 0;
-        start_scale_ = target_scale_ = new_scale;
-        start_center_ = target_center_ = world_pos;
+        pan_override_         = false;
+        zooming_              = false;
+        steps_total_          = 0;
+        steps_done_           = 0;
+        start_scale_          = new_scale;
+        target_scale_         = new_scale;
+        start_center_         = world_pos;
+        target_center_        = world_pos;
         set_screen_center(world_pos);
         set_scale(static_cast<float>(new_scale));
         recompute_current_view();
@@ -438,13 +570,17 @@ void camera::pan_and_zoom_to_asset(const Asset* a, double zoom_scale_factor, int
 void camera::animate_zoom_multiply(double factor, int duration_steps) {
     if (factor <= 0.0) factor = 1.0;
     const double new_scale = std::max(0.0001, static_cast<double>(scale_) * factor);
+
     if (duration_steps <= 0) {
         manual_zoom_override_ = true;
-        pan_override_ = false;
-        zooming_ = false;
-        steps_total_ = steps_done_ = 0;
-        start_scale_ = target_scale_ = new_scale;
-        start_center_ = target_center_ = screen_center_;
+        pan_override_         = false;
+        zooming_              = false;
+        steps_total_          = 0;
+        steps_done_           = 0;
+        start_scale_          = new_scale;
+        target_scale_         = new_scale;
+        start_center_         = screen_center_;
+        target_center_        = screen_center_;
         set_scale(static_cast<float>(new_scale));
         recompute_current_view();
         return;
@@ -478,8 +614,12 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
     const int base_w = std::max(1, width_from_area(base_zoom_));
     const int base_h = std::max(1, height_from_area(base_zoom_));
 
-    const double anchored_center_x = world_x - static_cast<double>(screen_point.x) * new_scale + (static_cast<double>(base_w) * new_scale) * 0.5;
-    const double anchored_center_y = world_y - static_cast<double>(screen_point.y) * new_scale + (static_cast<double>(base_h) * new_scale) * 0.5;
+    const double anchored_center_x =
+        world_x - static_cast<double>(screen_point.x) * new_scale +
+        (static_cast<double>(base_w) * new_scale) * 0.5;
+    const double anchored_center_y =
+        world_y - static_cast<double>(screen_point.y) * new_scale +
+        (static_cast<double>(base_h) * new_scale) * 0.5;
 
     constexpr double PAN_GAIN = 2.0;
     const double dx = anchored_center_x - static_cast<double>(screen_center_.x);
@@ -488,16 +628,20 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
     const double target_center_y = static_cast<double>(screen_center_.y) + dy * PAN_GAIN;
 
     SDL_Point target_center{
-        static_cast<int>(std::lround(target_center_x)), static_cast<int>(std::lround(target_center_y)) };
+        static_cast<int>(std::lround(target_center_x)),
+        static_cast<int>(std::lround(target_center_y))
+    };
 
     if (duration_steps <= 0) {
         manual_zoom_override_ = true;
-        pan_override_ = false;
-        zooming_ = false;
-        steps_total_ = steps_done_ = 0;
-        start_scale_ = target_scale_ = new_scale;
-        start_center_ = screen_center_;
-        target_center_ = target_center;
+        pan_override_         = false;
+        zooming_              = false;
+        steps_total_          = 0;
+        steps_done_           = 0;
+        start_scale_          = new_scale;
+        target_scale_         = new_scale;
+        start_center_         = screen_center_;
+        target_center_        = target_center;
         set_screen_center(target_center);
         set_scale(static_cast<float>(new_scale));
         recompute_current_view();
@@ -506,7 +650,6 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
 
     start_center_  = screen_center_;
     target_center_ = target_center;
-
     start_scale_   = scale_;
     target_scale_  = new_scale;
     steps_total_   = std::max(1, duration_steps);
@@ -519,7 +662,10 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
 SDL_FPoint camera::map_to_screen_f(SDL_FPoint world) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
-    const double inv_scale = (smoothed_scale_ > 0.000001f) ? (1.0 / static_cast<double>(smoothed_scale_)) : 1e6;
+    const double inv_scale =
+        (smoothed_scale_ > 0.000001f)
+            ? (1.0 / static_cast<double>(smoothed_scale_))
+            : 1e6;
     const double sx = (static_cast<double>(world.x) - static_cast<double>(left)) * inv_scale;
     const double sy = (static_cast<double>(world.y) - static_cast<double>(top)) * inv_scale;
     return SDL_FPoint{ static_cast<float>(sx), static_cast<float>(sy) };
@@ -543,9 +689,8 @@ camera::RenderEffects camera::compute_render_effects(
     SDL_Point world,
     float asset_screen_height,
     float reference_screen_height,
-    RenderSmoothingKey smoothing_key) const
+    RenderSmoothingKey /*smoothing_key*/) const
 {
-    (void)smoothing_key;
     RenderEffects result;
     SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
     result.screen_position  = map_to_screen_f(world_f);
@@ -560,43 +705,40 @@ camera::RenderEffects camera::compute_render_effects(
     constexpr double SCREEN_Y_SCALE   = 200.0;
     constexpr double SQUASH_HEIGHT_WT = 0.3;
     constexpr double SQUASH_BASE_WT   = 1.0 - SQUASH_HEIGHT_WT;
-    constexpr double ZOOM_ATTEN_WT    = 0.8;
     constexpr double DIST_EXPONENT    = 3.0;
     constexpr double DIST_MIN         = 0.3;
     constexpr double DIST_MAX         = 1.3;
-
-    // How fast y depth dominates and x fades as you move away vertically.
     constexpr double DEPTH_RANGE_PIXELS = 600.0;
     constexpr double R_REF              = 400.0;
 
-    const double raw_scale = std::isfinite(smoothed_scale_)
-                                 ? static_cast<double>(smoothed_scale_)
-                                 : 0.0;
-    const double zoom_norm = std::clamp(raw_scale, 0.0, 1.0);
+    // Treat zoom (smoothed_scale_) as camera height driver.
+    const int base_h = std::max(1, height_from_area(base_zoom_));
+    const double scale_value   = std::max(0.0001, static_cast<double>(smoothed_scale_));
+    const double camera_height = 0.5 * static_cast<double>(base_h) * scale_value;
 
-    const double height_at_zoom1 = std::isfinite(settings_.height_at_zoom1)
-                                       ? std::max(0.0f, settings_.height_at_zoom1)
-                                       : 0.0f;
-    const double camera_height  = height_at_zoom1 * zoom_norm;
+    const double pitch_rad_raw = std::isfinite(settings_.grid_pitch_degrees)
+        ? static_cast<double>(settings_.grid_pitch_degrees) * (PI_D / 180.0)
+        : 0.0;
+    const double max_pitch = HALF_FOV_Y * 0.95;
+    const double pitch_rad = std::clamp(pitch_rad_raw, -max_pitch, max_pitch);
 
-    const double tripod_distance = std::isfinite(settings_.tripod_distance_y)
-                                       ? static_cast<double>(settings_.tripod_distance_y)
-                                       : 0.0;
+    const double pitch_factor = std::min(std::abs(pitch_rad) / (PI_D / 3.0), 1.0);
 
     const double base_x = static_cast<double>(screen_center_.x);
-    const double base_y = static_cast<double>(screen_center_.y) - tripod_distance;
+    const double base_y = static_cast<double>(screen_center_.y) -
+                          static_cast<double>(settings_.tripod_distance_y);
 
     const double dx = static_cast<double>(world.x) - base_x;
     const double dy = static_cast<double>(world.y) - base_y;
 
-    // Camera closer to the ground flattens depth effect.
-    const double zoom_attenuation =
+    // View depth factor: stronger depth cues at higher camera and stronger pitch.
+    const double view_depth_factor =
         (camera_height > EPS)
-            ? camera_height / (camera_height + height_at_zoom1 + EPS)
-            : 1.0;
-
-    // Bias for foreshortening: things lower on the screen are closer.
-    const double screen_bias = 0.5 + 0.5 * std::tanh(dy / SCREEN_Y_SCALE);
+            ? std::clamp(
+                  (camera_height / (camera_height + static_cast<double>(base_h))) *
+                      (0.25 + 0.75 * pitch_factor),
+                  0.0, 1.0)
+            : 0.0;
 
     // Vertical squash from perspective.
     {
@@ -604,9 +746,19 @@ camera::RenderEffects camera::compute_render_effects(
         if (foreshorten_strength > 0.0 && camera_height > EPS) {
             const double ref_h = (reference_screen_height > EPS) ? reference_screen_height : 1.0;
 
-            const double squash_base   = foreshorten_strength * screen_bias *
-                                         (zoom_attenuation * ZOOM_ATTEN_WT);
-            const double height_factor = std::sqrt(static_cast<double>(asset_screen_height) / ref_h);
+            // Bias: things lower on the screen are closer.
+            const double screen_bias = 0.5 + 0.5 * std::tanh(dy / SCREEN_Y_SCALE);
+
+            const double depth_norm = std::clamp(std::abs(dy) / (camera_height + base_h), 0.0, 1.0);
+
+            const double squash_base = foreshorten_strength *
+                                       view_depth_factor *
+                                       screen_bias *
+                                       depth_norm;
+
+            const double height_factor = std::sqrt(
+                static_cast<double>(asset_screen_height) / ref_h
+            );
             const double squash_height = squash_base * height_factor;
 
             const double squash = SQUASH_BASE_WT * squash_base +
@@ -617,38 +769,30 @@ camera::RenderEffects camera::compute_render_effects(
         }
     }
 
-    // Distance based scaling with y depth dominating and x fading with depth.
+    // Distance based scaling: objects further away in depth (dy) appear smaller.
     {
         const double distance_strength = std::max(0.0f, settings_.distance_scale_strength);
         if (distance_strength > 0.0) {
-            const double depth_abs    = std::abs(dy);
-            const double lateral_abs  = std::abs(dx);
+            // Only use vertical depth from the camera anchor, ignore lateral offset.
+            const double depth_abs = std::abs(dy);
 
-            // As depth increases:
-            //  - depth_weight grows so y distance matters more.
-            //  - lateral_weight shrinks so x distance matters less.
-            const double depth_norm     = depth_abs / (DEPTH_RANGE_PIXELS + EPS);
-            const double depth_weight   = 1.0 + depth_norm;              // up to about 2 in a few screens of depth
-            const double lateral_weight = 1.0 / (1.0 + depth_norm);      // falls off as depth increases
+            const double depth_norm   = depth_abs / (DEPTH_RANGE_PIXELS + EPS);
+            const double depth_weight = 1.0 + depth_norm;
 
-            const double wy = depth_abs * depth_weight;
-            const double wx = lateral_abs * lateral_weight;
+            // Effective depth that grows slightly faster than linear with distance.
+            const double r_weighted = depth_abs * depth_weight + EPS;
 
-            const double r_weighted = std::sqrt(wx * wx + wy * wy) + EPS;
-
-            // Simple perspective: closer (small r) looks larger, farther looks smaller.
-            // Camera height softens this to avoid extreme shrinking at far depth.
             const double base_scale =
-                std::sqrt((camera_height + R_REF) /
-                          (camera_height + r_weighted + EPS));
+                std::sqrt(
+                    (camera_height + R_REF) /
+                    (camera_height + r_weighted + EPS)
+                );
 
             double distance_scale = 1.0 + (base_scale - 1.0) * distance_strength;
 
-            // Tie distance scaling into vertical squash so things that are heavily foreshortened
-            // also get stronger size falloff.
             const double squash_factor = static_cast<double>(result.vertical_scale);
             distance_scale = 1.0 + (distance_scale - 1.0) *
-                                       std::pow(squash_factor, DIST_EXPONENT);
+                             std::pow(squash_factor, DIST_EXPONENT);
 
             distance_scale = std::clamp(distance_scale, DIST_MIN, DIST_MAX);
             result.distance_scale = static_cast<float>(distance_scale);
@@ -686,12 +830,16 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
 
-    try_read_float("parallax_strength", settings_.parallax_strength);
-    try_read_float("foreshorten_strength", settings_.foreshorten_strength);
-    try_read_float("distance_scale_strength", settings_.distance_scale_strength);
-    try_read_float("height_at_zoom1", settings_.height_at_zoom1);
-    try_read_float("tripod_distance_y", settings_.tripod_distance_y);
-    try_read_float("min_visible_screen_ratio", settings_.min_visible_screen_ratio);
+    try_read_float("parallax_strength",          settings_.parallax_strength);
+    try_read_float("foreshorten_strength",       settings_.foreshorten_strength);
+    try_read_float("distance_scale_strength",    settings_.distance_scale_strength);
+    try_read_float("height_at_zoom1",            settings_.height_at_zoom1);
+    try_read_float("tripod_distance_y",          settings_.tripod_distance_y);
+    try_read_float("min_visible_screen_ratio",   settings_.min_visible_screen_ratio);
+
+    // Grid depth / pitch controls (strength is ignored in the math now, but kept for compatibility).
+    try_read_float("grid_depth_strength",        settings_.grid_depth_strength);
+    try_read_float("grid_pitch_degrees",         settings_.grid_pitch_degrees);
 
     auto try_read_int = [&](const char* key, int& target) {
         auto it = data.find(key);
@@ -717,43 +865,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_bool("smooth_motion_zoom", settings_.smooth_motion_zoom);
 
-    auto read_effect_settings = [&](const char* key, camera_effects::ImageEffectSettings& target) {
-        auto it = data.find(key);
-        if (it == data.end() || !it->is_object()) {
-            return;
-        }
-        const nlohmann::json& obj = *it;
-        auto read_value = [&](const char* field, float& out) -> bool {
-            auto fit = obj.find(field);
-            if (fit == obj.end()) {
-                return false;
-            }
-            if (fit->is_number_float()) {
-                out = static_cast<float>(fit->get<double>());
-            } else if (fit->is_number_integer()) {
-                out = static_cast<float>(fit->get<int>());
-            } else {
-                return false;
-            }
-            return true;
-        };
-        read_value("rgb_boost", target.rgb_boost);
-        read_value("contrast", target.contrast);
-        read_value("brightness", target.brightness);
-        read_value("blur", target.blur);
-        const bool has_sat_r = read_value("saturation_red", target.saturation_red);
-        const bool has_sat_g = read_value("saturation_green", target.saturation_green);
-        const bool has_sat_b = read_value("saturation_blue", target.saturation_blue);
-        if (!has_sat_r && !has_sat_g && !has_sat_b) {
-            float legacy = 0.0f;
-            if (read_value("saturation", legacy)) {
-                target.saturation_red = target.saturation_green = target.saturation_blue = legacy;
-            }
-        }
-        read_value("hue", target.hue);
-        camera_effects::ClampImageEffectSettings(target);
-    };
-
     auto try_read_smoothing_method = [&](const char* key, TransformSmoothingMethod& target) {
         auto it = data.find(key);
         if (it == data.end()) return;
@@ -776,18 +887,18 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     };
 
     try_read_smoothing_method("parallax_smoothing_method", settings_.parallax_smoothing.method);
-    try_read_smoothing_method("motion_smoothing_method", settings_.motion_smoothing_method);
-    try_read_float("parallax_smoothing_lerp_rate", settings_.parallax_smoothing.lerp_rate);
-    try_read_float("parallax_smoothing_spring_frequency", settings_.parallax_smoothing.spring_frequency);
-    try_read_float("parallax_smoothing_max_step", settings_.parallax_smoothing.max_step);
-    try_read_float("parallax_smoothing_snap_threshold", settings_.parallax_smoothing.snap_threshold);
-    try_read_float("motion_smoothing_tau", settings_.motion_smoothing_tau);
-    try_read_float("motion_smoothing_spring_frequency", settings_.motion_smoothing_spring_frequency);
-    try_read_float("motion_smoothing_max_step", settings_.motion_smoothing_max_step);
-    try_read_float("motion_smoothing_snap_threshold", settings_.motion_smoothing_snap_threshold);
-    try_read_float("scale_hysteresis_margin", settings_.scale_variant_hysteresis_margin);
-    try_read_float("min_zoom_multiplier", settings_.min_zoom_multiplier);
-    try_read_float("max_zoom_multiplier", settings_.max_zoom_multiplier);
+    try_read_smoothing_method("motion_smoothing_method",   settings_.motion_smoothing_method);
+    try_read_float("parallax_smoothing_lerp_rate",         settings_.parallax_smoothing.lerp_rate);
+    try_read_float("parallax_smoothing_spring_frequency",  settings_.parallax_smoothing.spring_frequency);
+    try_read_float("parallax_smoothing_max_step",          settings_.parallax_smoothing.max_step);
+    try_read_float("parallax_smoothing_snap_threshold",    settings_.parallax_smoothing.snap_threshold);
+    try_read_float("motion_smoothing_tau",                 settings_.motion_smoothing_tau);
+    try_read_float("motion_smoothing_spring_frequency",    settings_.motion_smoothing_spring_frequency);
+    try_read_float("motion_smoothing_max_step",            settings_.motion_smoothing_max_step);
+    try_read_float("motion_smoothing_snap_threshold",      settings_.motion_smoothing_snap_threshold);
+    try_read_float("scale_hysteresis_margin",              settings_.scale_variant_hysteresis_margin);
+    try_read_float("min_zoom_multiplier",                  settings_.min_zoom_multiplier);
+    try_read_float("max_zoom_multiplier",                  settings_.max_zoom_multiplier);
 
     auto try_read_opacity = [&](const char* key, int& target) -> bool {
         auto it = data.find(key);
@@ -826,23 +937,36 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
 
-    settings_.foreground_texture_max_opacity = std::clamp(settings_.foreground_texture_max_opacity, 0, 255);
-    settings_.background_texture_max_opacity = std::clamp(settings_.background_texture_max_opacity, 0, 255);
+    settings_.foreground_texture_max_opacity =
+        std::clamp(settings_.foreground_texture_max_opacity, 0, 255);
+    settings_.background_texture_max_opacity =
+        std::clamp(settings_.background_texture_max_opacity, 0, 255);
+
     if (!std::isfinite(settings_.foreground_plane_screen_y)) {
         settings_.foreground_plane_screen_y = 1080.0f;
     } else {
-        settings_.foreground_plane_screen_y = std::clamp(settings_.foreground_plane_screen_y, 0.0f, 4000.0f);
+        settings_.foreground_plane_screen_y =
+            std::clamp(settings_.foreground_plane_screen_y, 0.0f, 4000.0f);
     }
+
     if (!std::isfinite(settings_.background_plane_screen_y)) {
         settings_.background_plane_screen_y = 0.0f;
     } else {
-        settings_.background_plane_screen_y = std::clamp(settings_.background_plane_screen_y, 0.0f, 4000.0f);
+        settings_.background_plane_screen_y =
+            std::clamp(settings_.background_plane_screen_y, 0.0f, 4000.0f);
     }
-    settings_.parallax_strength = std::isfinite(settings_.parallax_strength) ? std::max(0.0f, settings_.parallax_strength) : 0.0f;
 
-    settings_.foreshorten_strength = std::isfinite(settings_.foreshorten_strength) ? std::max(0.0f, settings_.foreshorten_strength) : 0.0f;
+    settings_.parallax_strength = std::isfinite(settings_.parallax_strength)
+        ? std::max(0.0f, settings_.parallax_strength)
+        : 0.0f;
 
-    settings_.distance_scale_strength = std::isfinite(settings_.distance_scale_strength) ? std::max(0.0f, settings_.distance_scale_strength) : 0.0f;
+    settings_.foreshorten_strength = std::isfinite(settings_.foreshorten_strength)
+        ? std::max(0.0f, settings_.foreshorten_strength)
+        : 0.0f;
+
+    settings_.distance_scale_strength = std::isfinite(settings_.distance_scale_strength)
+        ? std::max(0.0f, settings_.distance_scale_strength)
+        : 0.0f;
 
     if (!std::isfinite(settings_.height_at_zoom1) || settings_.height_at_zoom1 < 0.0f) {
         settings_.height_at_zoom1 = 18.0f;
@@ -851,17 +975,33 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     if (!std::isfinite(settings_.tripod_distance_y)) {
         settings_.tripod_distance_y = 0.0f;
     } else {
-        settings_.tripod_distance_y = std::clamp(settings_.tripod_distance_y, -2000.0f, 2000.0f);
+        settings_.tripod_distance_y =
+            std::clamp(settings_.tripod_distance_y, -2000.0f, 2000.0f);
     }
 
-    if (!std::isfinite(settings_.min_visible_screen_ratio) || settings_.min_visible_screen_ratio < 0.0f) {
+    if (!std::isfinite(settings_.min_visible_screen_ratio) ||
+        settings_.min_visible_screen_ratio < 0.0f) {
         settings_.min_visible_screen_ratio = 0.015f;
     } else {
-        settings_.min_visible_screen_ratio = std::clamp(settings_.min_visible_screen_ratio, 0.0f, 0.5f);
+        settings_.min_visible_screen_ratio =
+            std::clamp(settings_.min_visible_screen_ratio, 0.0f, 0.5f);
     }
 
-    read_effect_settings("foreground_effects", settings_.foreground_effects);
-    read_effect_settings("background_effects", settings_.background_effects);
+    // Clamp grid fields; depth strength is kept but not used in the math now.
+    if (!std::isfinite(settings_.grid_depth_strength) ||
+        settings_.grid_depth_strength < 0.0f) {
+        settings_.grid_depth_strength = 0.0f;
+    } else {
+        settings_.grid_depth_strength =
+            std::clamp(settings_.grid_depth_strength, 0.0f, 1.5f);
+    }
+
+    if (!std::isfinite(settings_.grid_pitch_degrees)) {
+        settings_.grid_pitch_degrees = 0.0f;
+    } else {
+        settings_.grid_pitch_degrees =
+            std::clamp(settings_.grid_pitch_degrees, -60.0f, 60.0f);
+    }
 
     auto align_quality = [](int percent) {
         constexpr int kOptions[] = {100, 75, 50, 25, 10};
@@ -881,85 +1021,88 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
 
-    settings_.smooth_motion_zoom = settings_.smooth_motion_zoom &&
+    settings_.smooth_motion_zoom =
+        settings_.smooth_motion_zoom &&
         settings_.motion_smoothing_method != TransformSmoothingMethod::None;
-    if (!std::isfinite(settings_.motion_smoothing_tau) || settings_.motion_smoothing_tau < 0.0f) {
+
+    if (!std::isfinite(settings_.motion_smoothing_tau) ||
+        settings_.motion_smoothing_tau < 0.0f) {
         settings_.motion_smoothing_tau = 0.0f;
     }
-    if (!std::isfinite(settings_.motion_smoothing_max_step) || settings_.motion_smoothing_max_step < 0.0f) {
+    if (!std::isfinite(settings_.motion_smoothing_max_step) ||
+        settings_.motion_smoothing_max_step < 0.0f) {
         settings_.motion_smoothing_max_step = 0.0f;
     }
-    if (!std::isfinite(settings_.motion_smoothing_snap_threshold) || settings_.motion_smoothing_snap_threshold < 0.0f) {
+    if (!std::isfinite(settings_.motion_smoothing_snap_threshold) ||
+        settings_.motion_smoothing_snap_threshold < 0.0f) {
         settings_.motion_smoothing_snap_threshold = 0.0f;
     }
-    if (!std::isfinite(settings_.motion_smoothing_spring_frequency) || settings_.motion_smoothing_spring_frequency < 0.0f) {
+    if (!std::isfinite(settings_.motion_smoothing_spring_frequency) ||
+        settings_.motion_smoothing_spring_frequency < 0.0f) {
         settings_.motion_smoothing_spring_frequency = 0.0f;
     }
-    if (!std::isfinite(settings_.scale_variant_hysteresis_margin) || settings_.scale_variant_hysteresis_margin < 0.0f) {
+    if (!std::isfinite(settings_.scale_variant_hysteresis_margin) ||
+        settings_.scale_variant_hysteresis_margin < 0.0f) {
         settings_.scale_variant_hysteresis_margin = 0.05f;
     }
-    if (!std::isfinite(settings_.min_zoom_multiplier) || settings_.min_zoom_multiplier < 0.1f) {
+    if (!std::isfinite(settings_.min_zoom_multiplier) ||
+        settings_.min_zoom_multiplier < 0.1f) {
         settings_.min_zoom_multiplier = 0.7f;
     } else {
-        settings_.min_zoom_multiplier = std::clamp(settings_.min_zoom_multiplier, 0.1f, 2.0f);
+        settings_.min_zoom_multiplier =
+            std::clamp(settings_.min_zoom_multiplier, 0.1f, 2.0f);
     }
-    if (!std::isfinite(settings_.max_zoom_multiplier) || settings_.max_zoom_multiplier < 0.1f) {
+    if (!std::isfinite(settings_.max_zoom_multiplier) ||
+        settings_.max_zoom_multiplier < 0.1f) {
         settings_.max_zoom_multiplier = 1.3f;
     } else {
-        settings_.max_zoom_multiplier = std::clamp(settings_.max_zoom_multiplier, 0.1f, 3.0f);
+        settings_.max_zoom_multiplier =
+            std::clamp(settings_.max_zoom_multiplier, 0.1f, 3.0f);
     }
+
     TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
     center_smoothing_x_.set_params(motion_params);
     center_smoothing_y_.set_params(motion_params);
     zoom_smoothing_.set_params(motion_params);
-
 }
 
 nlohmann::json camera::camera_settings_to_json() const {
     nlohmann::json j = nlohmann::json::object();
-    j["realism_enabled"]       = realism_enabled_;
-    j["parallax_strength"]     = settings_.parallax_strength;
-    j["foreshorten_strength"]  = settings_.foreshorten_strength;
-    j["distance_scale_strength"] = settings_.distance_scale_strength;
-    j["height_at_zoom1"]       = settings_.height_at_zoom1;
-    j["tripod_distance_y"]     = settings_.tripod_distance_y;
-    j["min_visible_screen_ratio"] = settings_.min_visible_screen_ratio;
-    j["render_quality_percent"]   = settings_.render_quality_percent;
-    j["smooth_motion_zoom"]        = settings_.smooth_motion_zoom;
-    j["motion_smoothing_method"]   = static_cast<int>(settings_.motion_smoothing_method);
-    j["motion_smoothing_tau"]      = settings_.motion_smoothing_tau;
+    j["realism_enabled"]                 = realism_enabled_;
+    j["parallax_strength"]               = settings_.parallax_strength;
+    j["foreshorten_strength"]            = settings_.foreshorten_strength;
+    j["distance_scale_strength"]         = settings_.distance_scale_strength;
+    j["height_at_zoom1"]                 = settings_.height_at_zoom1;
+    j["tripod_distance_y"]               = settings_.tripod_distance_y;
+    j["min_visible_screen_ratio"]        = settings_.min_visible_screen_ratio;
+    j["render_quality_percent"]          = settings_.render_quality_percent;
+    j["smooth_motion_zoom"]              = settings_.smooth_motion_zoom;
+    j["motion_smoothing_method"]         = static_cast<int>(settings_.motion_smoothing_method);
+    j["motion_smoothing_tau"]            = settings_.motion_smoothing_tau;
     j["motion_smoothing_spring_frequency"] = settings_.motion_smoothing_spring_frequency;
-    j["motion_smoothing_max_step"] = settings_.motion_smoothing_max_step;
+    j["motion_smoothing_max_step"]       = settings_.motion_smoothing_max_step;
     j["motion_smoothing_snap_threshold"] = settings_.motion_smoothing_snap_threshold;
-    j["scale_hysteresis_margin"]   = settings_.scale_variant_hysteresis_margin;
-    j["min_zoom_multiplier"]       = settings_.min_zoom_multiplier;
-    j["max_zoom_multiplier"]       = settings_.max_zoom_multiplier;
-    j["parallax_smoothing_method"] = static_cast<int>(settings_.parallax_smoothing.method);
-    j["parallax_smoothing_lerp_rate"] = settings_.parallax_smoothing.lerp_rate;
+    j["scale_hysteresis_margin"]         = settings_.scale_variant_hysteresis_margin;
+    j["min_zoom_multiplier"]             = settings_.min_zoom_multiplier;
+    j["max_zoom_multiplier"]             = settings_.max_zoom_multiplier;
+    j["parallax_smoothing_method"]       = static_cast<int>(settings_.parallax_smoothing.method);
+    j["parallax_smoothing_lerp_rate"]    = settings_.parallax_smoothing.lerp_rate;
     j["parallax_smoothing_spring_frequency"] = settings_.parallax_smoothing.spring_frequency;
-    j["parallax_smoothing_max_step"] = settings_.parallax_smoothing.max_step;
-    j["parallax_smoothing_snap_threshold"] = settings_.parallax_smoothing.snap_threshold;
+    j["parallax_smoothing_max_step"]     = settings_.parallax_smoothing.max_step;
+    j["parallax_smoothing_snap_threshold"] = settings_.parallax_smoothing_snap_threshold;
 
-    j["foreground_texture_max_opacity"] = settings_.foreground_texture_max_opacity;
-    j["background_texture_max_opacity"] = settings_.background_texture_max_opacity;
-    j["foreground_plane_screen_y"] = settings_.foreground_plane_screen_y;
-    j["background_plane_screen_y"] = settings_.background_plane_screen_y;
-    j["texture_opacity_falloff_method"] = static_cast<int>(settings_.texture_opacity_falloff_method);
-    auto encode_effects = [](const camera_effects::ImageEffectSettings& effects) {
-        nlohmann::json node = nlohmann::json::object();
-        node["rgb_boost"]  = effects.rgb_boost;
-        node["contrast"]   = effects.contrast;
-        node["brightness"] = effects.brightness;
-        node["blur"]             = effects.blur;
-        node["saturation_red"]   = effects.saturation_red;
-        node["saturation_green"] = effects.saturation_green;
-        node["saturation_blue"]  = effects.saturation_blue;
-        node["saturation"]       = (effects.saturation_red + effects.saturation_green + effects.saturation_blue) / 3.0f;
-        node["hue"]              = effects.hue;
-        return node;
-    };
-    j["foreground_effects"] = encode_effects(settings_.foreground_effects);
-    j["background_effects"] = encode_effects(settings_.background_effects);
+    // Depth cue texture blending
+    j["foreground_texture_max_opacity"]  = settings_.foreground_texture_max_opacity;
+    j["background_texture_max_opacity"]  = settings_.background_texture_max_opacity;
+    j["foreground_plane_screen_y"]       = settings_.foreground_plane_screen_y;
+    j["background_plane_screen_y"]       = settings_.background_plane_screen_y;
+    j["texture_opacity_falloff_method"]  =
+        static_cast<int>(settings_.texture_opacity_falloff_method);
+
+    // Grid depth / pitch fields (strength is a leftover knob, math uses pitch and zoom).
+    j["grid_depth_strength"]             = settings_.grid_depth_strength;
+    j["grid_pitch_degrees"]              = settings_.grid_pitch_degrees;
+
     return j;
 }
 
@@ -976,4 +1119,121 @@ SDL_FPoint camera::get_view_center_f() const {
     const float cx = (static_cast<float>(left) + static_cast<float>(right)) * 0.5f;
     const float cy = (static_cast<float>(top)  + static_cast<float>(bottom)) * 0.5f;
     return SDL_FPoint{ cx, cy };
+}
+
+// Floor depth helpers for warped grid lines using actual camera height (from zoom) and pitch.
+
+
+camera::FloorDepthParams camera::compute_floor_depth_params() const {
+    FloorDepthParams p{};
+
+    if (!realism_enabled_) {
+        return p;
+    }
+
+    if (!std::isfinite(settings_.grid_pitch_degrees)) {
+        return p;
+    }
+
+    // Base pitch from settings, interpreted as the maximum tilt at max zoom-out.
+    const double base_pitch_deg = static_cast<double>(settings_.grid_pitch_degrees);
+    if (std::abs(base_pitch_deg) < 0.001) {
+        return p; // no pitch configured, keep flat grid
+    }
+
+    // Map current zoom scale to a [0,1] factor where:
+    //   0 -> fully zoomed in (ground level, pitch ~ 0)
+    //   1 -> fully zoomed out (high camera, full pitch).
+    const double scale_value = std::max(0.0001, static_cast<double>(smoothed_scale_));
+    double min_scale = BASE_RATIO * static_cast<double>(settings_.min_zoom_multiplier);
+    double max_scale = BASE_RATIO * static_cast<double>(settings_.max_zoom_multiplier);
+
+    if (!std::isfinite(min_scale) || min_scale <= 0.0) {
+        min_scale = 0.1;
+    }
+    if (!std::isfinite(max_scale) || max_scale <= min_scale + 1e-3) {
+        max_scale = min_scale + 1.0;
+    }
+
+    double t = (scale_value - min_scale) / (max_scale - min_scale);
+    t = std::clamp(t, 0.0, 1.0);
+
+    // Ease the curve so the transition near ground level is gentler.
+    t = t * t * (3.0 - 2.0 * t); // smoothstep
+
+    double pitch_deg = base_pitch_deg * t;
+    if (std::abs(pitch_deg) < 0.001) {
+        return p; // close enough to flat
+    }
+
+    double pitch_rad = pitch_deg * (PI_D / 180.0);
+    const double max_pitch = HALF_FOV_Y * 0.95;
+    pitch_rad = std::clamp(pitch_rad, -max_pitch, max_pitch);
+
+    // Horizon line in NDC from pitch and FOV.
+    double horizon_ndc = std::tan(pitch_rad) / std::tan(HALF_FOV_Y);
+    horizon_ndc = std::clamp(horizon_ndc, -0.999, 0.999);
+
+    const double screen_h = static_cast<double>(screen_height_);
+    const double horizon_y = screen_h * (0.5 - 0.5 * horizon_ndc);
+
+    p.horizon_screen_y = horizon_y;
+    p.bottom_screen_y  = screen_h;
+
+    // World y directly under camera on the floor.
+    p.base_world_y     = static_cast<double>(smoothed_center_.y);
+
+    p.strength         = 1.0;
+    p.pitch_radians    = pitch_rad;
+    p.enabled          = true;
+
+    return p;
+}
+float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
+    FloorDepthParams p = compute_floor_depth_params();
+    if (!p.enabled) {
+        // No pitch or realism disabled, keep the original linear mapping.
+        return linear_screen_y;
+    }
+
+    // Camera height derived from zoom: higher zoom means higher camera.
+    const int base_h = std::max(1, height_from_area(base_zoom_));
+    const double scale_value   = std::max(0.0001, static_cast<double>(smoothed_scale_));
+    const double camera_height = 0.5 * static_cast<double>(base_h) * scale_value;
+
+    if (camera_height < 1e-3) {
+        // Degenerate, fall back to linear.
+        return linear_screen_y;
+    }
+
+    // Depth along the floor relative to the camera projection on the plane.
+    // Important fix: depth increases as world_y moves UP (away from camera),
+    // so we flip the sign here.
+    double z = static_cast<double>(p.base_world_y) - static_cast<double>(world_y);
+
+    // Enforce a near plane so we do not blow up for points right under the camera.
+    const double min_depth = camera_height * 0.1;
+    if (z < min_depth) {
+        z = min_depth;
+    }
+
+    // Vertical angle from horizontal to the point on the floor.
+    // Negative for points in front below the camera.
+    const double a = std::atan2(-camera_height, z);
+
+    // Difference from optical axis (pitched down by p.pitch_radians).
+    double theta = a + p.pitch_radians;
+
+    const double max_theta = HALF_FOV_Y * 0.99;
+    theta = std::clamp(theta, -max_theta, max_theta);
+
+    // Perspective projection to vertical NDC, then to screen space.
+    double y_ndc = std::tan(theta) / std::tan(HALF_FOV_Y);
+    y_ndc = std::clamp(y_ndc, -1.0, 1.0);
+
+    const double screen_h = static_cast<double>(screen_height_);
+    double y_proj = screen_h * (0.5 - 0.5 * y_ndc);
+    y_proj = std::clamp(y_proj, 0.0, screen_h);
+
+    return static_cast<float>(y_proj);
 }

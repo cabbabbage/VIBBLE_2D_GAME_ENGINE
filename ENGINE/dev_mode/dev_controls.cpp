@@ -1191,7 +1191,7 @@ void DevControls::update(const Input& input) {
     // once the camera finishes its pan/zoom animation.
     if (render_suppression_in_progress_) {
         camera* cam = assets_ ? &assets_->getView() : nullptr;
-        const bool camera_idle = !cam || !cam->zooming_;
+        const bool camera_idle = !cam || !cam->is_zooming();
         if (camera_idle) {
             if (assets_) {
                 assets_->set_render_suppressed(false);

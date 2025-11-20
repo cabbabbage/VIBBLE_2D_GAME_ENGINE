@@ -15,7 +15,7 @@
 #include "animation.hpp"
 #include "asset_info.hpp"
 #include "asset/surface_utils.hpp"
-#include "render/image_effect_settings.hpp"
+
 #include "render/camera.hpp"
 #include "render_pipeline/ScalingLogic.hpp"
 #include "utils/area.hpp"

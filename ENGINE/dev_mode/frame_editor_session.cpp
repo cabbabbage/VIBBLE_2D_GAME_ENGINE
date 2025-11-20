@@ -1906,7 +1906,7 @@ void FrameEditorSession::ensure_widgets() const {
 void FrameEditorSession::rebuild_layout() const {
     if (!assets_ || !target_) return;
     const camera& cam = assets_->getView();
-    const int screen_w = assets_->renderer() ? assets_->getView().get_current_view().width() : 0; // not used for clamp heavily
+    const int screen_w = assets_->renderer() ? assets_->getView().get_camera_area().width() : 0; // not used for clamp heavily
     (void)screen_w;
     (void)cam; // anchor-based layout replaced by draggable screen-space positions
     DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
