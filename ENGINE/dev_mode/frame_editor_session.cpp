@@ -60,6 +60,39 @@ constexpr auto& kDamageTypeNames = FrameEditorSession::kDamageTypeNames;
 constexpr float kDegToRad = static_cast<float>(M_PI / 180.0);
 constexpr float kRadToDeg = static_cast<float>(180.0 / M_PI);
 
+int nav_header_height_px(bool has_dropdown) {
+    const int dropdown_h = has_dropdown ? DMDropdown::height() : kNavTitleHeight;
+    return std::max(kNavTitleHeight, dropdown_h);
+}
+
+bool animation_supports_frame_editing(const AnimationDocument* document, const std::string& animation_id) {
+    if (!document || animation_id.empty()) {
+        return false;
+    }
+    auto payload_dump = document->animation_payload(animation_id);
+    if (!payload_dump) {
+        return true;
+    }
+    nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
+    if (!payload.is_object()) {
+        return true;
+    }
+    const nlohmann::json* source = (payload.contains("source") && payload["source"].is_object()) ? &payload["source"] : nullptr;
+    bool derived = false;
+    if (source) {
+        std::string kind = "folder";
+        if (source->contains("kind") && (*source)["kind"].is_string()) {
+            kind = (*source)["kind"].get<std::string>();
+        }
+        derived = (kind == std::string{"animation"});
+    }
+    bool inherit_movement = derived;
+    if (payload.contains("inherit_source_movement") && payload["inherit_source_movement"].is_boolean()) {
+        inherit_movement = payload["inherit_source_movement"].get<bool>();
+    }
+    return !(derived && inherit_movement);
+}
+
 int resolve_wheel_delta(const SDL_MouseWheelEvent& wheel) {
     int delta = wheel.y;
     if (wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
@@ -397,6 +430,7 @@ void FrameEditorSession::begin(Assets* assets,
     animation_id_ = animation_id;
     host_ = host_to_toggle;
     on_end_ = std::move(on_end_callback);
+    edited_animation_ids_.clear();
 
     // Snapshot state
     camera& cam = assets_->getView();
@@ -407,59 +441,10 @@ void FrameEditorSession::begin(Assets* assets,
     // Preserve current camera realism/parallax so preview matches in-scene rendering.
     // Grid overlay preference is handled by DevControls when beginning the session.
 
-    // Parse frames from document
-    frames_ = parse_movement_frames_json(document_->animation_payload(animation_id_).value_or(std::string{}));
-    child_assets_.clear();
-    child_preview_slots_.clear();
-    document_payload_cache_.clear();
-    document_children_signature_.clear();
-    if (document_) {
-        if (auto payload_dump = document_->animation_payload(animation_id_)) {
-            document_payload_cache_ = *payload_dump;
-            nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
-            if (payload.is_object()) {
-                child_assets_ = parse_child_names_from_payload(payload);
-            }
-        }
-    }
-    document_children_signature_ = child_list_signature(child_assets_);
-    rebuild_child_preview_cache();
-    sync_child_frames();
-    selected_child_index_ = 0;
-    if (frames_.empty()) {
-        frames_.push_back(clamp_frame(MovementFrame{}));
-    }
-    // Ensure movement frames always match the visual preview frame count so navigation
-    // thumbnails reflect every frame regardless of animation source.
-    {
-        int desired_frames = static_cast<int>(frames_.size());
-        if (preview_) {
-            desired_frames = preview_->get_frame_count(animation_id_);
-        }
-        if (desired_frames <= 0) {
-            desired_frames = std::max(1, static_cast<int>(frames_.size()));
-        }
-        if (static_cast<int>(frames_.size()) < desired_frames) {
-            const int to_add = desired_frames - static_cast<int>(frames_.size());
-            for (int i = 0; i < to_add; ++i) {
-                frames_.push_back(clamp_frame(MovementFrame{}));
-            }
-        } else if (static_cast<int>(frames_.size()) > desired_frames) {
-            frames_.resize(desired_frames);
-        }
-    }
-    // After padding/resizing, ensure newly added frames receive child placeholders.
-    sync_child_frames();
-    // Always keep the first frame zeroed
-    frames_.front().dx = 0.0f;
-    frames_.front().dy = 0.0f;
-    rebuild_rel_positions();
+    load_animation_data(animation_id_);
 
     // Focus camera on asset; start at frame 0 and set asset anim
     assets_->focus_camera_on_asset(target_, 0.85, 18);
-    selected_index_ = 0;
-    target_->current_animation = animation_id_;
-    update_asset_preview_frame();
 
     // Show animation/children initially; ensure asset visible
     show_animation_ = true;
@@ -478,6 +463,7 @@ void FrameEditorSession::begin(Assets* assets,
     scroll_offset_ = 0;
     dragging_scrollbar_thumb_ = false;
     child_dropdown_options_cache_.clear();
+    animation_dropdown_options_cache_.clear();
     last_applied_show_asset_state_ = show_animation_;
     child_hidden_cache_.clear();
     cache_child_hidden_states();
@@ -551,6 +537,70 @@ void FrameEditorSession::begin(Assets* assets,
     active_ = true;
 }
 
+void FrameEditorSession::load_animation_data(const std::string& animation_id) {
+    if (!document_ || !target_) {
+        return;
+    }
+    animation_id_ = animation_id;
+    auto payload_dump = document_->animation_payload(animation_id_);
+    frames_ = parse_movement_frames_json(payload_dump.value_or(std::string{}));
+    child_assets_.clear();
+    child_preview_slots_.clear();
+    document_payload_cache_.clear();
+    document_children_signature_.clear();
+
+    if (payload_dump) {
+        document_payload_cache_ = *payload_dump;
+        nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
+        if (payload.is_object()) {
+            child_assets_ = parse_child_names_from_payload(payload);
+        }
+    }
+    document_children_signature_ = child_list_signature(child_assets_);
+    rebuild_child_preview_cache();
+    sync_child_frames();
+    selected_child_index_ = 0;
+    if (frames_.empty()) {
+        frames_.push_back(clamp_frame(MovementFrame{}));
+    }
+    // Ensure movement frames always match the visual preview frame count so navigation
+    // thumbnails reflect every frame regardless of animation source.
+    int desired_frames = static_cast<int>(frames_.size());
+    if (preview_) {
+        desired_frames = preview_->get_frame_count(animation_id_);
+    }
+    if (desired_frames <= 0) {
+        desired_frames = std::max(1, static_cast<int>(frames_.size()));
+    }
+    if (static_cast<int>(frames_.size()) < desired_frames) {
+        const int to_add = desired_frames - static_cast<int>(frames_.size());
+        for (int i = 0; i < to_add; ++i) {
+            frames_.push_back(clamp_frame(MovementFrame{}));
+        }
+    } else if (static_cast<int>(frames_.size()) > desired_frames) {
+        frames_.resize(desired_frames);
+    }
+    // After padding/resizing, ensure newly added frames receive child placeholders.
+    sync_child_frames();
+    // Always keep the first frame zeroed
+    frames_.front().dx = 0.0f;
+    frames_.front().dy = 0.0f;
+    rebuild_rel_positions();
+
+    selected_index_ = 0;
+    scroll_offset_ = 0;
+    dragging_scrollbar_thumb_ = false;
+    child_dropdown_options_cache_.clear();
+    animation_dropdown_options_cache_.clear();
+
+    target_->current_animation = animation_id_;
+    update_asset_preview_frame();
+    refresh_hitbox_form();
+    refresh_attack_form();
+    refresh_hitbox_form();
+    update_navigation_styles();
+}
+
 void FrameEditorSession::end() {
     if (!active_) return;
     
@@ -596,6 +646,11 @@ void FrameEditorSession::end() {
     // Save critical locals before clearing session data
     auto saved_host = host_;
     auto saved_animation_id = animation_id_;
+    std::vector<std::string> animations_to_reload = edited_animation_ids_;
+    if (!saved_animation_id.empty() &&
+        std::find(animations_to_reload.begin(), animations_to_reload.end(), saved_animation_id) == animations_to_reload.end()) {
+        animations_to_reload.push_back(saved_animation_id);
+    }
 
     // Clear session data
     active_ = false;
@@ -611,17 +666,23 @@ void FrameEditorSession::end() {
     child_preview_slots_.clear();
     document_payload_cache_.clear();
     document_children_signature_.clear();
+    edited_animation_ids_.clear();
 
     // Reload animations AFTER session is closed
     if (info_to_reload && saved_assets) {
         bool refreshed = false;
         bool regen_failed = false;
 
-        if (!asset_name_for_cache.empty() && !saved_animation_id.empty()) {
-            auto result = devmode::AnimationRegenerator::regenerate_animation(
-                saved_assets, info_to_reload, saved_animation_id);
-            refreshed = result.refreshed_instances || result.reloaded;
-            regen_failed = result.python_launched && !result.python_success;
+        if (!asset_name_for_cache.empty()) {
+            for (const auto& anim_id : animations_to_reload) {
+                if (anim_id.empty()) {
+                    continue;
+                }
+                auto result = devmode::AnimationRegenerator::regenerate_animation(
+                    saved_assets, info_to_reload, anim_id);
+                refreshed = refreshed || result.refreshed_instances || result.reloaded;
+                regen_failed = regen_failed || (result.python_launched && !result.python_success);
+            }
         }
 
         // Fallback reload when regeneration was not attempted or when reload failed without
@@ -678,6 +739,18 @@ void FrameEditorSession::update(const Input& input) {
         int desired = child_assets_.empty() ? 0 : std::clamp(selected_child_index_, 0, static_cast<int>(child_assets_.size()) - 1);
         if (dd_child_select_->selected() != desired) {
             dd_child_select_->set_selected(desired);
+        }
+    }
+    if (dd_animation_select_) {
+        int desired = 0;
+        auto it = std::find(animation_dropdown_options_cache_.begin(),
+                            animation_dropdown_options_cache_.end(),
+                            animation_id_);
+        if (it != animation_dropdown_options_cache_.end()) {
+            desired = static_cast<int>(std::distance(animation_dropdown_options_cache_.begin(), it));
+        }
+        if (dd_animation_select_->selected() != desired) {
+            dd_animation_select_->set_selected(desired);
         }
     }
     if (cb_smooth_) {
@@ -913,6 +986,10 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             bool over_nav_ctrl = false;
             if (btn_prev_) { const SDL_Rect& r = btn_prev_->rect(); if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true; }
             if (!over_nav_ctrl && btn_next_) { const SDL_Rect& r = btn_next_->rect(); if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true; }
+            if (!over_nav_ctrl && dd_animation_select_) {
+                const SDL_Rect& r = dd_animation_select_->rect();
+                if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true;
+            }
             if (!over_nav_ctrl) over_nav_ctrl = point_in_any_thumb(p);
             if (!over_nav_ctrl && point_in_scrollbar(p)) over_nav_ctrl = true;
             if (!over_nav_ctrl) {
@@ -1404,6 +1481,17 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         }
     }
 
+    if (dd_animation_select_ && dd_animation_select_->handle_event(e)) {
+        if (!animation_dropdown_options_cache_.empty()) {
+            int idx = std::clamp(dd_animation_select_->selected(), 0, static_cast<int>(animation_dropdown_options_cache_.size()) - 1);
+            const std::string& desired_id = animation_dropdown_options_cache_[idx];
+            if (!desired_id.empty() && desired_id != animation_id_) {
+                switch_animation(desired_id);
+            }
+        }
+        return true;
+    }
+
     // Navigation
     if (handle_button(btn_prev_, [this]() { this->select_frame(std::max(0, this->selected_index_ - 1)); })) return true;
     if (handle_button(btn_next_, [this]() { this->select_frame(this->selected_index_ + 1); })) return true;
@@ -1672,8 +1760,9 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
 
     // Navigation panel
     dm_draw::DrawBeveledRect(renderer, nav_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-    // Title: show animation name above buttons
-    if (!animation_id_.empty()) {
+    if (dd_animation_select_) {
+        dd_animation_select_->render(renderer);
+    } else if (!animation_id_.empty()) {
         render_label(renderer, animation_id_, nav_rect_.x + 8, nav_rect_.y + 4);
     }
     if (btn_prev_) btn_prev_->render(renderer);
@@ -1761,6 +1850,34 @@ void FrameEditorSession::ensure_widgets() const {
     if (!btn_hit_geometry_) btn_hit_geometry_ = std::make_unique<DMButton>("Hit Geometry", mode_ == Mode::HitGeometry ? &tab_active : &header, bw, bh);
     if (!btn_prev_) btn_prev_ = std::make_unique<DMButton>("<", &header, 40, 40);
     if (!btn_next_) btn_next_ = std::make_unique<DMButton>(">", &header, 40, 40);
+    if (document_) {
+        std::vector<std::string> eligible;
+        for (const auto& id : document_->animation_ids()) {
+            if (animation_supports_frame_editing(document_.get(), id)) {
+                eligible.push_back(id);
+            }
+        }
+        if (!animation_id_.empty() &&
+            std::find(eligible.begin(), eligible.end(), animation_id_) == eligible.end()) {
+            eligible.insert(eligible.begin(), animation_id_);
+        }
+        if (!eligible.empty()) {
+            if (!dd_animation_select_ || eligible != animation_dropdown_options_cache_) {
+                animation_dropdown_options_cache_ = eligible;
+                int selected_idx = 0;
+                auto it = std::find(animation_dropdown_options_cache_.begin(),
+                                    animation_dropdown_options_cache_.end(),
+                                    animation_id_);
+                if (it != animation_dropdown_options_cache_.end()) {
+                    selected_idx = static_cast<int>(std::distance(animation_dropdown_options_cache_.begin(), it));
+                }
+                dd_animation_select_ = std::make_unique<DMDropdown>("Animation", animation_dropdown_options_cache_, selected_idx);
+            }
+        } else {
+            dd_animation_select_.reset();
+            animation_dropdown_options_cache_.clear();
+        }
+    }
     if (!btn_apply_all_movement_) btn_apply_all_movement_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
     if (!btn_apply_all_children_) btn_apply_all_children_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
     if (!btn_apply_all_hit_) btn_apply_all_hit_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
@@ -2257,12 +2374,23 @@ void FrameEditorSession::rebuild_layout() const {
     if (btn_prev_) btn_prev_->set_rect(SDL_Rect{ nav_rect_.x + 6, nav_rect_.y + (nav_rect_.h - 40)/2, prev_w, 40 });
     if (btn_next_) btn_next_->set_rect(SDL_Rect{ nav_rect_.x + nav_rect_.w - next_w - 6, nav_rect_.y + (nav_rect_.h - 40)/2, next_w, 40 });
 
-    const int title_h = kNavTitleHeight;
+    const int title_h = nav_header_height_px(dd_animation_select_ != nullptr);
     const int thumb_h = std::max(1, nav_rect_.h - 16 - title_h - kNavSliderGap);
     const int thumb_w = thumb_h;
     const int spacing = kNavSpacing;
     const int viewport_left = (btn_prev_ ? btn_prev_->rect().x + btn_prev_->rect().w + spacing : nav_rect_.x + spacing);
     const int viewport_right = (btn_next_ ? btn_next_->rect().x - spacing : nav_rect_.x + nav_rect_.w - spacing);
+    if (dd_animation_select_) {
+        const int dropdown_h = DMDropdown::height();
+        const int dropdown_w = std::max(120, viewport_right - viewport_left);
+        const int dropdown_y = nav_rect_.y + DMSpacing::small_gap();
+        dd_animation_select_->set_rect(SDL_Rect{
+            viewport_left,
+            dropdown_y,
+            std::max(0, dropdown_w),
+            dropdown_h
+        });
+    }
     thumb_viewport_width_ = std::max(0, viewport_right - viewport_left);
     const int per = thumb_w + spacing;
     const int count = static_cast<int>(frames_.size());
@@ -3804,6 +3932,26 @@ void FrameEditorSession::apply_child_hidden_state(bool show_children) {
     recurse(target_);
 }
 
+void FrameEditorSession::switch_animation(const std::string& animation_id) {
+    if (animation_id.empty() || animation_id_ == animation_id) {
+        return;
+    }
+    if (!animation_supports_frame_editing(document_.get(), animation_id)) {
+        return;
+    }
+    persist_changes();
+    end_hitbox_drag(false);
+    end_attack_drag(false);
+    load_animation_data(animation_id);
+    child_hidden_cache_.clear();
+    last_applied_show_asset_state_ = show_animation_ && show_child_;
+    cache_child_hidden_states();
+    sync_child_asset_visibility();
+    ensure_widgets();
+    rebuild_layout();
+    ensure_selected_thumb_visible();
+}
+
 void FrameEditorSession::select_child(int index) {
     int clamped = child_assets_.empty()
         ? 0
@@ -3819,6 +3967,10 @@ void FrameEditorSession::select_child(int index) {
 
 void FrameEditorSession::persist_changes() {
     if (!document_) return;
+    if (!animation_id_.empty() &&
+        std::find(edited_animation_ids_.begin(), edited_animation_ids_.end(), animation_id_) == edited_animation_ids_.end()) {
+        edited_animation_ids_.push_back(animation_id_);
+    }
     // Serialize primary movement + totals (reuse logic similar to FrameMovementEditor)
     nlohmann::json payload = nlohmann::json::object();
     if (auto j = document_->animation_payload(animation_id_)) {
@@ -3947,6 +4099,10 @@ void FrameEditorSession::select_frame(int index) {
 
 void FrameEditorSession::persist_mode_changes(Mode mode) {
     if (!document_) return;
+    if (!animation_id_.empty() &&
+        std::find(edited_animation_ids_.begin(), edited_animation_ids_.end(), animation_id_) == edited_animation_ids_.end()) {
+        edited_animation_ids_.push_back(animation_id_);
+    }
     nlohmann::json payload = nlohmann::json::object();
     if (auto j = document_->animation_payload(animation_id_)) {
         payload = nlohmann::json::parse(*j, nullptr, false);
@@ -4079,7 +4235,7 @@ void FrameEditorSession::ensure_selected_thumb_visible() {
     rebuild_layout();
     const int viewport_w = thumb_viewport_width_;
     if (viewport_w <= 0) return;
-    const int title_h = kNavTitleHeight;
+    const int title_h = nav_header_height_px(dd_animation_select_ != nullptr);
     const int thumb_h = std::max(1, nav_rect_.h - 16 - title_h - kNavSliderGap);
     const int thumb_w = thumb_h;
     const int spacing = kNavSpacing;

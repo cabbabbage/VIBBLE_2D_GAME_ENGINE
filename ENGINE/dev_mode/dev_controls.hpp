@@ -261,6 +261,10 @@ private:
     bool snap_to_grid_enabled_ = false;
     int  grid_cell_size_px_ = 8; // pixels per cell
 
+    // Footer depth toggle may temporarily disable camera realism.
+    bool depth_effects_forced_realism_disabled_ = false;
+    bool depth_effects_prev_realism_enabled_ = true;
+
     // Grid header controls
     // Standard ticker for grid resolution (r)
     std::unique_ptr<class DMNumericStepper> grid_resolution_stepper_;

@@ -79,7 +79,12 @@ bool run_python_regen(const fs::path& project_root,
     return true;
 }
 
-void refresh_loaded_instances(Assets* assets, const std::shared_ptr<AssetInfo>& info) {
+} // namespace
+
+namespace devmode {
+
+void AnimationRegenerator::refresh_loaded_instances(Assets* assets,
+                                                     const std::shared_ptr<AssetInfo>& info) {
     if (!assets || !info) {
         return;
     }
@@ -133,10 +138,6 @@ void refresh_loaded_instances(Assets* assets, const std::shared_ptr<AssetInfo>& 
 
     assets->mark_active_assets_dirty();
 }
-
-} // namespace
-
-namespace devmode {
 
 AnimationRegenerationResult AnimationRegenerator::regenerate_animation(
     Assets* assets,

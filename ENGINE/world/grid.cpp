@@ -445,7 +445,9 @@ void Grid::update_parallax(const camera& cam, float dt) {
     double pitch_deg = std::isfinite(cam.current_pitch_degrees())
         ? static_cast<double>(cam.current_pitch_degrees())
         : static_cast<double>(settings.grid_pitch_degrees);
-    pitch_deg = std::clamp(pitch_deg, -60.0, 60.0);
+    pitch_deg = std::clamp(pitch_deg,
+                           static_cast<double>(camera::kMinPitchDegrees),
+                           static_cast<double>(camera::kMaxPitchDegrees));
 
     constexpr double PI_D = 3.14159265358979323846;
     const double pitch_rad  = pitch_deg * (PI_D / 180.0);

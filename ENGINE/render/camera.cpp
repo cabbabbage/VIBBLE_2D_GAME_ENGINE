@@ -5,11 +5,13 @@
 #include "map_generation/room.hpp"
 #include "core/find_current_room.hpp"
 #include "utils/transform_smoothing_settings.hpp"
+#include "utils/log.hpp"
 
 #include <cmath>
 #include <algorithm>
 #include <vector>
 #include <tuple>
+#include <string>
 #include <nlohmann/json.hpp>
 
 namespace {
@@ -20,6 +22,17 @@ namespace {
     constexpr double HALF_FOV_Y = PI_D / 4.0; // 45 deg half FOV (90 total)
     constexpr double RAD_TO_DEG = 180.0 / PI_D;
     constexpr double kFocusCenteringFactor = 0.65; // 0 = free drift, 1 = force exact center
+    constexpr float  kDefaultPitchDegrees   = 30.0f;
+
+    float sanitize_pitch_degrees(float raw_value, bool* clamped = nullptr) {
+        if (clamped) *clamped = false;
+        float value = std::isfinite(raw_value) ? raw_value : kDefaultPitchDegrees;
+        const float clamped_value = std::clamp(value, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
+        if (clamped && clamped_value != raw_value) {
+            *clamped = true;
+        }
+        return clamped_value;
+    }
 
     TransformSmoothingParams sanitize_params(const TransformSmoothingParams& params) {
         TransformSmoothingParams out = params;
@@ -145,10 +158,7 @@ camera::CameraGeometry camera::compute_geometry() const {
     g.anchor_world_y = anchor_world_y();
     g.focus_depth = 0.0; // measured in world units along +Y from anchor
 
-    double pitch_deg = std::isfinite(settings_.grid_pitch_degrees)
-        ? static_cast<double>(settings_.grid_pitch_degrees)
-        : 0.0;
-    pitch_deg = std::clamp(pitch_deg, -85.0, 85.0);
+    const double pitch_deg = static_cast<double>(sanitize_pitch_degrees(settings_.grid_pitch_degrees));
     g.pitch_radians = pitch_deg * (PI_D / 180.0);
     g.pitch_degrees = static_cast<float>(pitch_deg);
 
@@ -328,6 +338,7 @@ void camera::set_realism_settings(const RealismSettings& settings) {
     settings_.height_low_px  = std::max(1.0f, settings_.height_low_px);
     settings_.height_high_px = std::max(settings_.height_low_px, settings_.height_high_px);
     settings_.grid_depth_offset_px = std::max(1.0f, settings_.grid_depth_offset_px);
+    settings_.grid_pitch_degrees = sanitize_pitch_degrees(settings_.grid_pitch_degrees);
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
     if (settings_.parallax_smoothing.method == TransformSmoothingMethod::Lerp &&
         settings_.parallax_smoothing.lerp_rate <= 0.0f) {
@@ -1083,11 +1094,17 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
             std::clamp(settings_.min_visible_screen_ratio, 0.0f, 0.5f);
     }
 
-    if (!std::isfinite(settings_.grid_pitch_degrees)) {
-        settings_.grid_pitch_degrees = 0.0f;
-    } else {
-        settings_.grid_pitch_degrees =
-            std::clamp(settings_.grid_pitch_degrees, -60.0f, 60.0f);
+    {
+        bool clamped_pitch = false;
+        const float raw_pitch = settings_.grid_pitch_degrees;
+        settings_.grid_pitch_degrees = sanitize_pitch_degrees(raw_pitch, &clamped_pitch);
+        if (clamped_pitch) {
+            vibble::log::warn(
+                "[Camera] grid_pitch_degrees out of range; clamping to " +
+                std::to_string(camera::kMinPitchDegrees) + "–" +
+                std::to_string(camera::kMaxPitchDegrees) +
+                " degrees (incoming value: " + std::to_string(raw_pitch) + ")");
+        }
     }
 
     settings_.zoom_low = std::max(0.0001f, settings_.zoom_low);

@@ -22,6 +22,7 @@
 #include "dev_mode/float_slider_widget.hpp"
 #include "dev_mode/shared/formatting.hpp"
 #include "dev_mode/widgets.hpp"
+#include "render/camera.hpp"
 #include "utils/input.hpp"
 
 namespace {
@@ -238,7 +239,10 @@ public:
         std::snprintf(buffer, sizeof(buffer), "Offset: %.0f px", values_.depth_offset_px);
         DrawLabelText(renderer, buffer, layout_.camera_x - 20, layout_.ground_y - label_style.font_size - 6, label_style);
 
-        std::snprintf(buffer, sizeof(buffer), "Pitch: %.1f°", values_.pitch_degrees);
+        std::snprintf(buffer, sizeof(buffer), "Pitch: %.1f° (%.0f–%.0f°)",
+                      values_.pitch_degrees,
+                      camera::kMinPitchDegrees,
+                      camera::kMaxPitchDegrees);
         DrawLabelText(renderer, buffer, layout_.camera_x + 8, layout_.camera_y - layout_.icon_size - 6, label_style);
 
         DrawLabelText(renderer, "Low", layout_.content.x + 6, layout_.low_y - label_style.font_size - 2, label_style);
@@ -253,7 +257,9 @@ public:
         SDL_SetRenderDrawColor(renderer, 60, 50, 30, 255);
         SDL_RenderDrawRect(renderer, &depth_handle_rect_);
 
-        const float clamped_pitch = std::clamp(values_.pitch_degrees, -85.0f, 85.0f);
+        const float clamped_pitch = std::clamp(values_.pitch_degrees,
+                                              camera::kMinPitchDegrees,
+                                              camera::kMaxPitchDegrees);
         const float pitch_radians = clamped_pitch * (kPi / 180.0f);
         const int line_length = std::max(layout_.icon_size * 2, layout_.content.w / 4);
         const int pitch_dx = line_length;
@@ -273,6 +279,7 @@ public:
         values_ = v;
         enforce_height_constraints();
         enforce_zoom_constraints();
+        enforce_pitch_constraints();
         sync_text_fields();
     }
     CameraDepthViewValues values() const { return values_; }
@@ -376,6 +383,12 @@ private:
     void enforce_height_constraints() {
         values_.height_low_px = std::max(0.0f, values_.height_low_px);
         values_.height_high_px = std::max(values_.height_low_px, values_.height_high_px);
+    }
+
+    void enforce_pitch_constraints() {
+        values_.pitch_degrees = std::clamp(values_.pitch_degrees,
+                                           camera::kMinPitchDegrees,
+                                           camera::kMaxPitchDegrees);
     }
 
     void enforce_zoom_constraints() {
@@ -1514,7 +1527,9 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         settings.zoom_high       = vals.zoom_high;
         settings.height_low_px   = vals.height_low_px;
         settings.height_high_px  = vals.height_high_px;
-        settings.grid_pitch_degrees   = vals.pitch_degrees;
+        settings.grid_pitch_degrees   = std::clamp(vals.pitch_degrees,
+                                                   camera::kMinPitchDegrees,
+                                                   camera::kMaxPitchDegrees);
         settings.grid_depth_offset_px = vals.depth_offset_px;
     }
     // Depth cue texture settings

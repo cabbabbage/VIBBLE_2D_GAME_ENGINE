@@ -631,9 +631,29 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 : devmode::camera_prefs::load_depthcue_enabled();
             footer->set_depth_effects_enabled(depth_effects_enabled);
             footer->set_depth_effects_callbacks([this](bool enabled) {
+                auto* cam = camera_override_for_testing_
+                    ? camera_override_for_testing_
+                    : (assets_ ? &assets_->getView() : nullptr);
                 if (assets_) {
                     assets_->set_depth_effects_enabled(enabled);
+                    if (cam) {
+                        if (!enabled) {
+                            if (!depth_effects_forced_realism_disabled_) {
+                                depth_effects_prev_realism_enabled_ = cam->realism_enabled();
+                                depth_effects_forced_realism_disabled_ = true;
+                            }
+                            if (cam->realism_enabled()) {
+                                cam->set_realism_enabled(false);
+                            }
+                        } else if (depth_effects_forced_realism_disabled_) {
+                            cam->set_realism_enabled(depth_effects_prev_realism_enabled_);
+                            depth_effects_forced_realism_disabled_ = false;
+                        }
+                    }
                     assets_->apply_camera_runtime_settings();
+                    if (camera_panel_) {
+                        camera_panel_->sync_from_camera();
+                    }
                 } else {
                     devmode::camera_prefs::save_depthcue_enabled(enabled);
                 }

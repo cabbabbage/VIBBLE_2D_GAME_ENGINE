@@ -97,6 +97,7 @@ private:
     // Session state
     bool active_ = false;
     std::string animation_id_;
+    std::vector<std::string> edited_animation_ids_;
     int selected_index_ = 0;
     Mode mode_ = Mode::Movement;
     bool show_animation_ = true;
@@ -124,6 +125,7 @@ private:
     mutable std::unique_ptr<DMButton> btn_hit_geometry_;
     mutable std::unique_ptr<DMButton> btn_prev_;
     mutable std::unique_ptr<DMButton> btn_next_;
+    mutable std::unique_ptr<DMDropdown> dd_animation_select_;
     // Apply-to-all buttons per-mode
     mutable std::unique_ptr<class DMButton> btn_apply_all_movement_;
     mutable std::unique_ptr<class DMButton> btn_apply_all_children_;
@@ -219,6 +221,7 @@ private:
     std::string document_payload_cache_;
     std::string document_children_signature_;
     std::unordered_map<Asset*, bool> child_hidden_cache_;
+    mutable std::vector<std::string> animation_dropdown_options_cache_;
     mutable std::vector<std::string> child_dropdown_options_cache_;
     mutable std::vector<std::string> hitbox_type_labels_;
     mutable std::vector<std::string> attack_type_labels_;
@@ -251,6 +254,8 @@ private:
     bool pending_save_ = false;
 
 private:
+    void load_animation_data(const std::string& animation_id);
+    void switch_animation(const std::string& animation_id);
     void ensure_widgets() const;
     void rebuild_layout() const;
     void apply_current_mode_to_all_frames();
