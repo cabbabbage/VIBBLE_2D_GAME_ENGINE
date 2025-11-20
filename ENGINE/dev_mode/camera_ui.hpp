@@ -31,6 +31,7 @@ public:
     void toggle();
     bool is_point_inside(int x, int y) const;
     bool is_blur_section_visible() const { return is_visible() && depthcue_section_expanded_; }
+    bool is_depth_section_visible() const { return is_visible() && depth_section_expanded_; }
 
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
@@ -69,7 +70,6 @@ private:
 
     std::unique_ptr<FloatSliderWidget> tripod_distance_slider_;
     std::unique_ptr<FloatSliderWidget> height_zoom1_slider_;
-    std::unique_ptr<FloatSliderWidget> parallax_strength_slider_;
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;

@@ -7,8 +7,8 @@
 namespace camera_effects {
 
 struct ImageEffectSettings {
-    float rgb_boost = 0.0f;
-    float contrast = 1.0f;
+    // Identity values here mirror apply_color_effects.py expectations
+    float contrast = 0.0f;
     float brightness = 0.0f;
     float blur = 0.0f;
     float saturation_red = 0.0f;

@@ -63,6 +63,7 @@
 #include <tuple>
 #include <cctype>
 #include <string>
+#include <limits>
 #include <vector>
 #include <optional>
 #include <iostream>
@@ -1638,20 +1639,27 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         return;
     }
 
+    const bool show_depth_guides = camera_panel_ && camera_panel_->is_depth_section_visible();
+    std::optional<float> depth_offset_screen_y;
+    std::optional<float> horizon_screen_y;
+
     // Render grid overlay if enabled (moved to beginning to render behind UI)
-    if (renderer && grid_overlay_enabled_ && assets_) {
+    const bool need_grid_helpers = assets_ && (grid_overlay_enabled_ || show_depth_guides);
+    if (renderer && need_grid_helpers) {
         const camera& cam = assets_->getView();
         world::Grid& grid = assets_->world_grid();
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
-        SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
-        SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+        if (grid_overlay_enabled_) {
+            SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+        }
         // Grid colors (reduced alpha)
         SDL_Color minor{0, 255, 255, 48};
         SDL_Color major{0, 255, 255, 80};
 
-        // Calculate visible world bounds
+        // Calculate visible world bounds with padding to cover the full screen.
         SDL_FPoint top_left_world = cam.screen_to_map(SDL_Point{0, 0});
         SDL_FPoint bottom_right_world = cam.screen_to_map(SDL_Point{screen_w_, screen_h_});
 
@@ -1669,47 +1677,128 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         }
         cell = std::max(1, cell);
         if (cell > 0) {
+            const float world_padding = static_cast<float>(cell) * 4.0f;
+            const float min_world_x = std::min(top_left_world.x, bottom_right_world.x) - world_padding;
+            const float max_world_x = std::max(top_left_world.x, bottom_right_world.x) + world_padding;
+            const float min_world_y = std::min(top_left_world.y, bottom_right_world.y) - world_padding;
+            const float max_world_y = std::max(top_left_world.y, bottom_right_world.y) + world_padding;
+
+            if (show_depth_guides) {
+                SDL_FPoint center = cam.get_view_center_f();
+                float anchor_y = center.y + cam.realism_settings().tripod_distance_y;
+                SDL_Point anchor_world{
+                    static_cast<int>(std::lround(center.x)),
+                    static_cast<int>(std::lround(anchor_y))
+                };
+                SDL_FPoint anchor_screen = grid.floor_warped_screen_position(cam, anchor_world);
+                depth_offset_screen_y = anchor_screen.y;
+            }
+
             const int major_interval = 8; // major line every N cells
-            // Vertical lines
-            float start_x = std::floor(top_left_world.x / cell) * cell;
+            constexpr float kMinHorizontalLineScreenSpacing = 6.0f;
+            const int samples_per_line = 24;
+            const float mid_world_x = (min_world_x + max_world_x) * 0.5f;
+            const bool apply_spacing_cutoff = cam.realism_enabled();
 
-            for (float x = start_x; x <= bottom_right_world.x + cell; x += cell) {
-                // Base screen coordinates (no parallax skew)
-                SDL_Point world_start{ static_cast<int>(std::lround(x)), static_cast<int>(std::lround(top_left_world.y)) };
-                SDL_Point world_end  { static_cast<int>(std::lround(x)), static_cast<int>(std::lround(bottom_right_world.y)) };
-                SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
-                SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
-                const float sx0_f = grid.parallax_adjusted_screen_x(world_start, screen_start.x);
-                const float sx1_f = grid.parallax_adjusted_screen_x(world_end,   screen_end.x);
-                int sx0 = static_cast<int>(std::lround(sx0_f));
-                int sy0 = static_cast<int>(std::lround(screen_start.y));
-                int sx1 = static_cast<int>(std::lround(sx1_f));
-                int sy1 = static_cast<int>(std::lround(screen_end.y));
-
-                const bool is_major = (static_cast<long long>(std::llround(x)) % (cell * major_interval) == 0);
-                SDL_Color c = is_major ? major : minor;
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-                SDL_RenderDrawLine(renderer, sx0, sy0, sx1, sy1);
+            // Vertical lines (sample along Y then warp through the camera + parallax)
+            float start_x = std::floor(min_world_x / cell) * cell;
+            for (float x = start_x; x <= max_world_x + cell; x += cell) {
+                std::vector<SDL_Point> polyline;
+                polyline.reserve(static_cast<std::size_t>(samples_per_line + 1));
+                for (int s = 0; s <= samples_per_line; ++s) {
+                    const float t = static_cast<float>(s) / static_cast<float>(samples_per_line);
+                    const float wy = min_world_y + (max_world_y - min_world_y) * t;
+                    SDL_Point world_point{
+                        static_cast<int>(std::lround(x)),
+                        static_cast<int>(std::lround(wy))
+                    };
+                    SDL_FPoint screen = grid.floor_warped_screen_position(cam, world_point);
+                    polyline.push_back(SDL_Point{
+                        static_cast<int>(std::lround(screen.x)),
+                        static_cast<int>(std::lround(screen.y))
+                    });
+                }
+                if (grid_overlay_enabled_ && polyline.size() >= 2) {
+                    const bool is_major = (static_cast<long long>(std::llround(x)) % (cell * major_interval) == 0);
+                    SDL_Color c = is_major ? major : minor;
+                    SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                    SDL_RenderDrawLines(renderer, polyline.data(), static_cast<int>(polyline.size()));
+                }
             }
 
-            // Horizontal lines
-            float start_y = std::floor(top_left_world.y / cell) * cell;
-            for (float y = start_y; y <= bottom_right_world.y + cell; y += cell) {
-                SDL_Point world_start{ static_cast<int>(std::lround(top_left_world.x)),     static_cast<int>(std::lround(y)) };
-                SDL_Point world_end  { static_cast<int>(std::lround(bottom_right_world.x)), static_cast<int>(std::lround(y)) };
-                SDL_FPoint screen_start = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_start.x), static_cast<float>(world_start.y)});
-                SDL_FPoint screen_end   = cam.map_to_screen_f(SDL_FPoint{static_cast<float>(world_end.x),   static_cast<float>(world_end.y)});
-                const float sx0_f = grid.parallax_adjusted_screen_x(world_start, screen_start.x);
-                const float sx1_f = grid.parallax_adjusted_screen_x(world_end,   screen_end.x);
-                int sx0 = static_cast<int>(std::lround(sx0_f));
-                int sy0 = static_cast<int>(std::lround(screen_start.y));
-                int sx1 = static_cast<int>(std::lround(sx1_f));
-                int sy1 = static_cast<int>(std::lround(screen_end.y));
-                const bool is_major = (static_cast<long long>(std::llround(y)) % (cell * major_interval) == 0);
-                SDL_Color c = is_major ? major : minor;
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-                SDL_RenderDrawLine(renderer, sx0, sy0, sx1, sy1);
+            // Horizontal lines (sample along X; stop when screen spacing collapses near the horizon).
+            float start_y = std::floor(max_world_y / cell) * cell;
+            float last_screen_y = std::numeric_limits<float>::quiet_NaN();
+            for (float y = start_y; y >= min_world_y - cell; y -= cell) {
+                SDL_Point sample_world{
+                    static_cast<int>(std::lround(mid_world_x)),
+                    static_cast<int>(std::lround(y))
+                };
+                SDL_FPoint sample_screen = grid.floor_warped_screen_position(cam, sample_world);
+                const float screen_y = sample_screen.y;
+                if (apply_spacing_cutoff && std::isfinite(last_screen_y)) {
+                    if (std::fabs(screen_y - last_screen_y) < kMinHorizontalLineScreenSpacing) {
+                        horizon_screen_y = screen_y;
+                        break;
+                    }
+                }
+                last_screen_y = screen_y;
+
+                std::vector<SDL_Point> polyline;
+                polyline.reserve(static_cast<std::size_t>(samples_per_line + 1));
+                for (int s = 0; s <= samples_per_line; ++s) {
+                    const float t = static_cast<float>(s) / static_cast<float>(samples_per_line);
+                    const float wx = min_world_x + (max_world_x - min_world_x) * t;
+                    SDL_Point world_point{
+                        static_cast<int>(std::lround(wx)),
+                        static_cast<int>(std::lround(y))
+                    };
+                    SDL_FPoint screen = grid.floor_warped_screen_position(cam, world_point);
+                    polyline.push_back(SDL_Point{
+                        static_cast<int>(std::lround(screen.x)),
+                        static_cast<int>(std::lround(screen.y))
+                    });
+                }
+                if (grid_overlay_enabled_ && polyline.size() >= 2) {
+                    const bool is_major = (static_cast<long long>(std::llround(y)) % (cell * major_interval) == 0);
+                    SDL_Color c = is_major ? major : minor;
+                    SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                    SDL_RenderDrawLines(renderer, polyline.data(), static_cast<int>(polyline.size()));
+                }
             }
+            if (apply_spacing_cutoff && !horizon_screen_y && std::isfinite(last_screen_y)) {
+                horizon_screen_y = last_screen_y;
+            }
+        }
+
+        if (grid_overlay_enabled_) {
+            SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
+            SDL_SetRenderDrawBlendMode(renderer, prev_mode);
+        }
+    }
+
+    if (renderer && show_depth_guides) {
+        SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+        SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
+        SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+
+        auto draw_labeled_line = [&](float y, SDL_Color color, const char* label) {
+            const int yi = static_cast<int>(std::lround(y));
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+            SDL_RenderDrawLine(renderer, 0, yi, screen_w_, yi);
+            DMLabelStyle style = DMStyles::Label();
+            style.color = color;
+            const int label_y = std::max(0, yi - style.font_size - 2);
+            DrawLabelText(renderer, label, 8, label_y, style);
+        };
+
+        if (depth_offset_screen_y) {
+            draw_labeled_line(*depth_offset_screen_y, SDL_Color{255, 32, 32, 220}, "Depth Offset");
+        }
+        if (horizon_screen_y) {
+            draw_labeled_line(*horizon_screen_y, SDL_Color{255, 140, 0, 220}, "Horizon");
         }
 
         SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);

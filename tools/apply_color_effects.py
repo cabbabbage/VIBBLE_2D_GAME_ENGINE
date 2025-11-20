@@ -5,9 +5,9 @@ Apply color and lighting effects to a single image.
 
 Usage:
   python apply_color_effects.py <img_path> <output_path> <layer_type>
-                                <rgb_boost> <contrast> <brightness> <blur>
-                                <saturation_red> <saturation_green>
-                                <saturation_blue> <hue>
+                                <contrast> <brightness> <blur>
+                                <saturation_red> <saturation_green> <saturation_blue>
+                                <hue>
 
 Where:
   <layer_type> is either "foreground" or "background"
@@ -532,11 +532,11 @@ class ApplyEffects:
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) != 12:
+    if len(sys.argv) != 11:
         print(
             "Usage: python apply_color_effects.py "
             "<img_path> <output_path> <layer_type> "
-            "<rgb_boost> <contrast> <brightness> <blur> "
+            "<contrast> <brightness> <blur> "
             "<saturation_red> <saturation_green> <saturation_blue> <hue>"
         )
         sys.exit(1)
@@ -546,15 +546,13 @@ if __name__ == "__main__":
     layer_type = sys.argv[3].strip().lower()
 
     try:
-        # rgb_boost at argv[4] is accepted but ignored in this script
-        _rgb_boost_ignored = float(sys.argv[4])
-        contrast = float(sys.argv[5])
-        brightness = float(sys.argv[6])
-        blur = float(sys.argv[7])
-        saturation_red = float(sys.argv[8])
-        saturation_green = float(sys.argv[9])
-        saturation_blue = float(sys.argv[10])
-        hue = float(sys.argv[11])
+        contrast = float(sys.argv[4])
+        brightness = float(sys.argv[5])
+        blur = float(sys.argv[6])
+        saturation_red = float(sys.argv[7])
+        saturation_green = float(sys.argv[8])
+        saturation_blue = float(sys.argv[9])
+        hue = float(sys.argv[10])
     except ValueError as e:
         print(f"Invalid effect parameter: {e}")
         sys.exit(1)

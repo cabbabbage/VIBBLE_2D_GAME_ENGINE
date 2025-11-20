@@ -18,6 +18,10 @@ namespace {
     constexpr double BASE_RATIO = 1.1;
     constexpr double PI_D       = 3.14159265358979323846;
     constexpr double HALF_FOV_Y = PI_D / 4.0; // 45 deg half FOV (90 total)
+    constexpr double RAD_TO_DEG = 180.0 / PI_D;
+    constexpr double kFocusDepthFactor = 1.0; // base ratio between camera height and forward focus depth
+    constexpr double kPitchGain        = 0.35; // how strongly height changes translate to pitch
+    constexpr double kFocusCenteringFactor = 0.65; // 0 = free drift, 1 = force exact center
 
     TransformSmoothingParams sanitize_params(const TransformSmoothingParams& params) {
         TransformSmoothingParams out = params;
@@ -113,6 +117,72 @@ namespace {
             { left,  bottom }
         };
         return Area(name, corners, resolution);
+    }
+}
+
+camera::CameraGeometry camera::compute_geometry() const {
+    CameraGeometry g{};
+    if (!realism_enabled_) {
+        return g;
+    }
+
+    const int base_h = std::max(1, height_from_area(base_zoom_));
+    const double scale_value = std::max(0.0001, static_cast<double>(smoothed_scale_));
+    const double effective_base_h = std::max(
+        1.0,
+        static_cast<double>(base_h) + static_cast<double>(settings_.height_at_zoom1)
+    );
+
+    g.camera_height = effective_base_h * scale_value;
+    if (g.camera_height <= 0.0) {
+        return g;
+    }
+
+    g.anchor_world_y = static_cast<double>(smoothed_center_.y) +
+                       static_cast<double>(settings_.tripod_distance_y);
+    g.focus_depth = 0.0; // measured in world units along +Y from anchor
+
+    // Increase pitch as camera height decreases relative to base height.
+    const double height_norm = std::clamp(effective_base_h / g.camera_height, 0.0, 8.0);
+    const double target_pitch = height_norm * kPitchGain;
+    const double max_pitch = HALF_FOV_Y * 0.9;
+    g.pitch_radians = std::clamp(target_pitch, 0.0, max_pitch);
+    g.pitch_degrees = static_cast<float>(g.pitch_radians * RAD_TO_DEG);
+
+    // Compute NDC offset needed to keep the focus point (smoothed_center_) at screen center.
+    const double dy_focus = static_cast<double>(smoothed_center_.y) - g.anchor_world_y;
+    const double cos_p = std::cos(g.pitch_radians);
+    const double sin_p = std::sin(g.pitch_radians);
+    const double tan_fov = std::tan(HALF_FOV_Y);
+    const double y_cam_focus = dy_focus * cos_p + g.camera_height * sin_p;
+    const double z_cam_focus = dy_focus * sin_p - g.camera_height * cos_p;
+    double z_forward = -z_cam_focus;
+    if (z_forward < 1e-3) {
+        z_forward = 1e-3;
+    }
+    g.focus_ndc_offset = ((y_cam_focus / z_forward) / tan_fov) * kFocusCenteringFactor;
+
+    g.valid = true;
+    return g;
+}
+
+void camera::update_geometry_cache(const CameraGeometry& g) {
+    runtime_camera_height_ = g.camera_height;
+    runtime_focus_depth_   = g.focus_depth;
+    runtime_anchor_world_y_ = g.anchor_world_y;
+    runtime_focus_ndc_offset_ = g.focus_ndc_offset;
+    runtime_pitch_rad_     = g.pitch_radians;
+    runtime_pitch_deg_     = g.pitch_degrees;
+    geometry_valid_        = g.valid;
+    if (g.valid) {
+        settings_.grid_pitch_degrees = g.pitch_degrees;
+    } else {
+        runtime_camera_height_ = 0.0;
+        runtime_focus_depth_   = 0.0;
+        runtime_anchor_world_y_ = 0.0;
+        runtime_focus_ndc_offset_ = 0.0;
+        runtime_pitch_rad_     = 0.0;
+        runtime_pitch_deg_     = 0.0f;
     }
 }
 
@@ -235,6 +305,7 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
     smoothed_center_.x = center_smoothing_x_.value_for_render();
     smoothed_center_.y = center_smoothing_y_.value_for_render();
     smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
+    update_geometry_cache(compute_geometry());
 
     settings_.smooth_motion_zoom                 = center_defaults.method != TransformSmoothingMethod::None;
     settings_.motion_smoothing_method            = center_defaults.method;
@@ -247,6 +318,13 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
 void camera::set_realism_settings(const RealismSettings& settings) {
     settings_ = settings;
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
+    if (settings_.parallax_smoothing.method == TransformSmoothingMethod::Lerp &&
+        settings_.parallax_smoothing.lerp_rate <= 0.0f) {
+        settings_.parallax_smoothing.lerp_rate = rate_from_tau(0.08f);
+    } else if (settings_.parallax_smoothing.method == TransformSmoothingMethod::CriticallyDampedSpring &&
+               settings_.parallax_smoothing.spring_frequency <= 0.0f) {
+        settings_.parallax_smoothing.spring_frequency = 10.0f;
+    }
 
     TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
     center_smoothing_x_.set_params(motion_params);
@@ -294,6 +372,7 @@ void camera::set_scale(float s) {
     target_scale_= scale_;
     zoom_smoothing_.reset(scale_);
     smoothed_scale_ = scale_;
+    update_geometry_cache(compute_geometry());
 }
 
 float camera::get_scale() const {
@@ -525,6 +604,7 @@ void camera::recompute_current_view() {
         static_cast<int>(std::lround(smoothed_center_.y))
     };
     current_view_ = make_rect_area("current_view", center, cur_w, cur_h, base_zoom_.resolution());
+    update_geometry_cache(compute_geometry());
 }
 
 void camera::pan_and_zoom_to_point(SDL_Point world_pos, double zoom_scale_factor, int duration_steps) {
@@ -711,21 +791,22 @@ camera::RenderEffects camera::compute_render_effects(
     constexpr double DEPTH_RANGE_PIXELS = 600.0;
     constexpr double R_REF              = 400.0;
 
-    // Treat zoom (smoothed_scale_) as camera height driver.
+    const CameraGeometry geom = compute_geometry();
+    if (!geom.valid || geom.camera_height <= EPS) {
+        return result;
+    }
+
     const int base_h = std::max(1, height_from_area(base_zoom_));
-    const double scale_value   = std::max(0.0001, static_cast<double>(smoothed_scale_));
-    const double camera_height = 0.5 * static_cast<double>(base_h) * scale_value;
+    const double effective_base_h = std::max(
+        1.0,
+        static_cast<double>(base_h) + static_cast<double>(settings_.height_at_zoom1)
+    );
+    const double camera_height = geom.camera_height;
+    const double pitch_rad     = geom.pitch_radians;
+    const double pitch_factor  = std::min(std::abs(pitch_rad) / (PI_D / 3.0), 1.0);
 
-    const double pitch_rad_raw = std::isfinite(settings_.grid_pitch_degrees)
-        ? static_cast<double>(settings_.grid_pitch_degrees) * (PI_D / 180.0)
-        : 0.0;
-    const double max_pitch = HALF_FOV_Y * 0.95;
-    const double pitch_rad = std::clamp(pitch_rad_raw, -max_pitch, max_pitch);
-
-    const double pitch_factor = std::min(std::abs(pitch_rad) / (PI_D / 3.0), 1.0);
-
-    const double base_x = static_cast<double>(screen_center_.x);
-    const double base_y = static_cast<double>(screen_center_.y) -
+    const double base_x = static_cast<double>(smoothed_center_.x);
+    const double base_y = static_cast<double>(smoothed_center_.y) +
                           static_cast<double>(settings_.tripod_distance_y);
 
     const double dx = static_cast<double>(world.x) - base_x;
@@ -742,14 +823,15 @@ camera::RenderEffects camera::compute_render_effects(
 
     // Vertical squash from perspective.
     {
-        const double foreshorten_strength = std::max(0.0f, settings_.foreshorten_strength);
-        if (foreshorten_strength > 0.0 && camera_height > EPS) {
+        const double foreshorten_strength =
+            std::clamp(camera_height / (camera_height + effective_base_h), 0.0, 1.0);
+        if (foreshorten_strength > EPS) {
             const double ref_h = (reference_screen_height > EPS) ? reference_screen_height : 1.0;
 
             // Bias: things lower on the screen are closer.
             const double screen_bias = 0.5 + 0.5 * std::tanh(dy / SCREEN_Y_SCALE);
 
-            const double depth_norm = std::clamp(std::abs(dy) / (camera_height + base_h), 0.0, 1.0);
+            const double depth_norm = std::clamp(std::abs(dy) / (camera_height + effective_base_h), 0.0, 1.0);
 
             const double squash_base = foreshorten_strength *
                                        view_depth_factor *
@@ -771,7 +853,7 @@ camera::RenderEffects camera::compute_render_effects(
 
     // Distance based scaling: objects further away in depth (dy) appear smaller.
     {
-        const double distance_strength = std::max(0.0f, settings_.distance_scale_strength);
+        const double distance_strength = view_depth_factor;
         if (distance_strength > 0.0) {
             // Only use vertical depth from the camera anchor, ignore lateral offset.
             const double depth_abs = std::abs(dy);
@@ -830,7 +912,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
 
-    try_read_float("parallax_strength",          settings_.parallax_strength);
     try_read_float("foreshorten_strength",       settings_.foreshorten_strength);
     try_read_float("distance_scale_strength",    settings_.distance_scale_strength);
     try_read_float("height_at_zoom1",            settings_.height_at_zoom1);
@@ -956,10 +1037,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
             std::clamp(settings_.background_plane_screen_y, 0.0f, 4000.0f);
     }
 
-    settings_.parallax_strength = std::isfinite(settings_.parallax_strength)
-        ? std::max(0.0f, settings_.parallax_strength)
-        : 0.0f;
-
     settings_.foreshorten_strength = std::isfinite(settings_.foreshorten_strength)
         ? std::max(0.0f, settings_.foreshorten_strength)
         : 0.0f;
@@ -968,15 +1045,12 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         ? std::max(0.0f, settings_.distance_scale_strength)
         : 0.0f;
 
-    if (!std::isfinite(settings_.height_at_zoom1) || settings_.height_at_zoom1 < 0.0f) {
-        settings_.height_at_zoom1 = 18.0f;
+    if (!std::isfinite(settings_.height_at_zoom1)) {
+        settings_.height_at_zoom1 = 0.0f;
     }
 
     if (!std::isfinite(settings_.tripod_distance_y)) {
         settings_.tripod_distance_y = 0.0f;
-    } else {
-        settings_.tripod_distance_y =
-            std::clamp(settings_.tripod_distance_y, -2000.0f, 2000.0f);
     }
 
     if (!std::isfinite(settings_.min_visible_screen_ratio) ||
@@ -1069,7 +1143,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 nlohmann::json camera::camera_settings_to_json() const {
     nlohmann::json j = nlohmann::json::object();
     j["realism_enabled"]                 = realism_enabled_;
-    j["parallax_strength"]               = settings_.parallax_strength;
     j["foreshorten_strength"]            = settings_.foreshorten_strength;
     j["distance_scale_strength"]         = settings_.distance_scale_strength;
     j["height_at_zoom1"]                 = settings_.height_at_zoom1;
@@ -1131,60 +1204,18 @@ camera::FloorDepthParams camera::compute_floor_depth_params() const {
         return p;
     }
 
-    if (!std::isfinite(settings_.grid_pitch_degrees)) {
+    const CameraGeometry geom = compute_geometry();
+    if (!geom.valid) {
         return p;
     }
+    const double pitch_rad = geom.pitch_radians;
 
-    // Base pitch from settings, interpreted as the maximum tilt at max zoom-out.
-    const double base_pitch_deg = static_cast<double>(settings_.grid_pitch_degrees);
-    if (std::abs(base_pitch_deg) < 0.001) {
-        return p; // no pitch configured, keep flat grid
-    }
-
-    // Map current zoom scale to a [0,1] factor where:
-    //   0 -> fully zoomed in (ground level, pitch ~ 0)
-    //   1 -> fully zoomed out (high camera, full pitch).
-    const double scale_value = std::max(0.0001, static_cast<double>(smoothed_scale_));
-    double min_scale = BASE_RATIO * static_cast<double>(settings_.min_zoom_multiplier);
-    double max_scale = BASE_RATIO * static_cast<double>(settings_.max_zoom_multiplier);
-
-    if (!std::isfinite(min_scale) || min_scale <= 0.0) {
-        min_scale = 0.1;
-    }
-    if (!std::isfinite(max_scale) || max_scale <= min_scale + 1e-3) {
-        max_scale = min_scale + 1.0;
-    }
-
-    double t = (scale_value - min_scale) / (max_scale - min_scale);
-    t = std::clamp(t, 0.0, 1.0);
-
-    // Ease the curve so the transition near ground level is gentler.
-    t = t * t * (3.0 - 2.0 * t); // smoothstep
-
-    double pitch_deg = base_pitch_deg * t;
-    if (std::abs(pitch_deg) < 0.001) {
-        return p; // close enough to flat
-    }
-
-    double pitch_rad = pitch_deg * (PI_D / 180.0);
-    const double max_pitch = HALF_FOV_Y * 0.95;
-    pitch_rad = std::clamp(pitch_rad, -max_pitch, max_pitch);
-
-    // Horizon line in NDC from pitch and FOV.
-    double horizon_ndc = std::tan(pitch_rad) / std::tan(HALF_FOV_Y);
-    horizon_ndc = std::clamp(horizon_ndc, -0.999, 0.999);
-
-    const double screen_h = static_cast<double>(screen_height_);
-    const double horizon_y = screen_h * (0.5 - 0.5 * horizon_ndc);
-
-    p.horizon_screen_y = horizon_y;
-    p.bottom_screen_y  = screen_h;
-
-    // World y directly under camera on the floor.
+    p.horizon_screen_y = 0.0;
+    p.bottom_screen_y  = static_cast<double>(screen_height_);
     p.base_world_y     = static_cast<double>(smoothed_center_.y);
-
-    p.strength         = 1.0;
     p.pitch_radians    = pitch_rad;
+    p.focus_ndc_offset = geom.focus_ndc_offset;
+    p.strength         = 1.0;
     p.enabled          = true;
 
     return p;
@@ -1196,44 +1227,38 @@ float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
         return linear_screen_y;
     }
 
-    // Camera height derived from zoom: higher zoom means higher camera.
-    const int base_h = std::max(1, height_from_area(base_zoom_));
-    const double scale_value   = std::max(0.0001, static_cast<double>(smoothed_scale_));
-    const double camera_height = 0.5 * static_cast<double>(base_h) * scale_value;
-
-    if (camera_height < 1e-3) {
-        // Degenerate, fall back to linear.
+    const CameraGeometry geom = compute_geometry();
+    if (!geom.valid || geom.camera_height < 1e-6) {
         return linear_screen_y;
     }
 
-    // Depth along the floor relative to the camera projection on the plane.
-    // Important fix: depth increases as world_y moves UP (away from camera),
-    // so we flip the sign here.
-    double z = static_cast<double>(p.base_world_y) - static_cast<double>(world_y);
+    const double tan_fov = std::tan(HALF_FOV_Y);
+    const double cos_p = std::cos(p.pitch_radians);
+    const double sin_p = std::sin(p.pitch_radians);
 
-    // Enforce a near plane so we do not blow up for points right under the camera.
-    const double min_depth = camera_height * 0.1;
-    if (z < min_depth) {
-        z = min_depth;
+    // Depth relative to the pitched camera anchor (positive means farther "ahead").
+    const double anchor_y = geom.anchor_world_y;
+    const double dy = static_cast<double>(world_y) - anchor_y;
+
+    // Rotate into camera space (pitch about X).
+    double y_cam = dy * cos_p + geom.camera_height * sin_p;
+    double z_cam = dy * sin_p - geom.camera_height * cos_p;
+
+    // Ensure the point stays in front of the camera.
+    double z_forward = -z_cam;
+    const double min_depth = std::max(geom.camera_height * 0.05, 1.0);
+    if (z_forward < min_depth) {
+        z_forward = min_depth;
+        z_cam = -z_forward;
     }
 
-    // Vertical angle from horizontal to the point on the floor.
-    // Negative for points in front below the camera.
-    const double a = std::atan2(-camera_height, z);
+    double y_ndc = (y_cam / z_forward) / tan_fov;
 
-    // Difference from optical axis (pitched down by p.pitch_radians).
-    double theta = a + p.pitch_radians;
-
-    const double max_theta = HALF_FOV_Y * 0.99;
-    theta = std::clamp(theta, -max_theta, max_theta);
-
-    // Perspective projection to vertical NDC, then to screen space.
-    double y_ndc = std::tan(theta) / std::tan(HALF_FOV_Y);
+    // Offset so the focus point remains at screen center even as pitch changes.
+    y_ndc -= p.focus_ndc_offset;
     y_ndc = std::clamp(y_ndc, -1.0, 1.0);
 
     const double screen_h = static_cast<double>(screen_height_);
-    double y_proj = screen_h * (0.5 - 0.5 * y_ndc);
-    y_proj = std::clamp(y_proj, 0.0, screen_h);
-
+    const double y_proj = std::clamp(screen_h * (0.5 - 0.5 * y_ndc), 0.0, screen_h);
     return static_cast<float>(y_proj);
 }

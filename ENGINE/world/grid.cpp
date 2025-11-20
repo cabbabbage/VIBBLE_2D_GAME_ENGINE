@@ -466,20 +466,29 @@ void Grid::update_parallax(const camera& cam, float dt) {
     // Camera position in world coordinates (same basis as world positions).
     const SDL_Point center_px = cam.get_screen_center();
     const double base_x = static_cast<double>(center_px.x);
-    const double base_y = static_cast<double>(center_px.y);
+    const double base_y = static_cast<double>(center_px.y) +
+                          static_cast<double>(settings.tripod_distance_y);
 
-    // Depth reference grows with view height and is modulated by zoom and pitch.
+    // Depth reference shrinks as the camera ascends so distant lines compress toward the horizon.
     const double depth_ref_base = view_height * kParallaxDepthRefFactor;
-    const double height_factor  = 1.0 / safe_scale;       // zoomed out -> smaller factor
-    const double pitch_adjust   = 1.0 + 0.75 * pitch_norm; // more tilt -> stronger compression
+    const double height_factor  = 1.0 / safe_scale;
+    const double pitch_adjust   = 1.0 + std::abs(std::tan(pitch_rad)) * 0.5;
     const double depth_ref_effect =
-        std::max(kParallaxEpsilon, depth_ref_base * height_factor / pitch_adjust);
+        std::max(kParallaxEpsilon, depth_ref_base * height_factor * pitch_adjust);
 
     // Only use parallax_smoothing for temporal smoothing, not for strength.
     TransformSmoothingParams smoothing =
         sanitize_smoothing(settings.parallax_smoothing);
     if (!settings.smooth_motion_zoom) {
         smoothing.method = TransformSmoothingMethod::None;
+    }
+    // Make parallax smoothing snappy by default if unset.
+    if (smoothing.method == TransformSmoothingMethod::Lerp &&
+        smoothing.lerp_rate <= 0.0f) {
+        smoothing.lerp_rate = 12.5f; // ~0.08s time constant
+    } else if (smoothing.method == TransformSmoothingMethod::CriticallyDampedSpring &&
+               smoothing.spring_frequency <= 0.0f) {
+        smoothing.spring_frequency = 10.0f;
     }
 
     const auto& active_chunks = chunks_.active();
@@ -544,8 +553,8 @@ void Grid::update_parallax(const camera& cam, float dt) {
     const double origin_y_d = static_cast<double>(origin_.y);
 
     // Base parallax gain. Pitch makes it stronger as tilt increases.
-    constexpr double kParallaxAmountBase = 0.35;
-    const double pitch_gain              = 0.5 + 0.5 * pitch_norm; // 0.5..1
+    constexpr double kParallaxAmountBase = 0.5;
+    const double pitch_gain              = 1.0 + 0.5 * std::sin(std::abs(pitch_rad));
     const double parallax_amount         = kParallaxAmountBase * pitch_gain;
 
     for (int cell_j = cell_j_min; cell_j <= cell_j_max; ++cell_j) {

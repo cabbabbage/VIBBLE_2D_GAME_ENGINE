@@ -29,7 +29,7 @@
         "grid": {
             "cell_size_px": 35.0,
             "overlay": {
-                "enabled": true
+                "enabled": false
             },
             "snap": {
                 "enabled": false
@@ -38,9 +38,9 @@
     },
     "dev_ui": {
         "camera": {
-            "background_texture_max_opacity": 146.0,
+            "background_texture_max_opacity": 255.0,
             "depthcue_enabled": true,
-            "foreground_texture_max_opacity": 132.0
+            "foreground_texture_max_opacity": 255.0
         },
         "lighting": {
             "map_panel": {
@@ -102,7 +102,7 @@
                 },
                 "translation": {
                     "lerp_rate": 0.0,
-                    "max_step": 525.0,
+                    "max_step": 300.0,
                     "method": 1.0,
                     "snap_threshold": 0.25,
                     "spring_frequency": 0.0
@@ -111,14 +111,14 @@
             "camera": {
                 "center": {
                     "lerp_rate": 0.0,
-                    "max_step": 525.0,
+                    "max_step": 300.0,
                     "method": 1.0,
                     "snap_threshold": 0.25,
                     "spring_frequency": 0.0
                 },
                 "zoom": {
                     "lerp_rate": 0.0,
-                    "max_step": 525.0,
+                    "max_step": 300.0,
                     "method": 1.0,
                     "snap_threshold": 0.25,
                     "spring_frequency": 0.0

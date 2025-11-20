@@ -3,6 +3,7 @@
 #include "asset/asset_info.hpp"
 #include "asset/animation.hpp"
 #include "core/AssetsManager.hpp"
+#include "core/manifest/manifest_loader.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/widgets.hpp"
@@ -506,25 +507,7 @@ void ForegroundBackgroundEffectPanel::save_current_mode_settings() {
 
 void ForegroundBackgroundEffectPanel::save_depth_cue_settings_to_manifest() {
     // Save the global image effect settings to manifest.json top-level image_effects section
-    std::string manifest_path = "manifest.json";
-    std::error_code ec;
-    if (!fs::exists(manifest_path, ec)) {
-        std::cerr << "[DepthCuePanel] manifest.json not found: " << manifest_path << "\n";
-        return;
-    }
-
-    nlohmann::json manifest;
-    try {
-        std::ifstream manifest_file(manifest_path);
-        if (!manifest_file.is_open()) {
-            std::cerr << "[DepthCuePanel] Failed to open manifest.json\n";
-            return;
-        }
-        manifest_file >> manifest;
-    } catch (const std::exception& e) {
-        std::cerr << "[DepthCuePanel] Error reading manifest.json: " << e.what() << "\n";
-        return;
-    }
+    nlohmann::json manifest = manifest::load_manifest().raw;
 
     // Build the global image effects structure
     nlohmann::json image_effects = nlohmann::json::object();
@@ -549,18 +532,12 @@ void ForegroundBackgroundEffectPanel::save_depth_cue_settings_to_manifest() {
     // Update the top-level image_effects section
     manifest["image_effects"] = image_effects;
 
-    // Save the manifest back
-    try {
-        std::ofstream manifest_file(manifest_path);
-        if (!manifest_file.is_open()) {
-            std::cerr << "[DepthCuePanel] Failed to write manifest.json\n";
-            return;
-        }
-        manifest_file << manifest.dump(2);
-    } catch (const std::exception& e) {
-        std::cerr << "[DepthCuePanel] Error writing manifest.json: " << e.what() << "\n";
-        return;
-    }
+    // Save the manifest back through the shared manifest utility
+    manifest::ManifestData data;
+    data.raw = manifest;
+    data.assets = manifest.contains("assets") && manifest["assets"].is_object() ? manifest["assets"] : nlohmann::json::object();
+    data.maps = manifest.contains("maps") && manifest["maps"].is_object() ? manifest["maps"] : nlohmann::json::object();
+    manifest::save_manifest(data);
 
     std::cout << "[DepthCuePanel] Saved global image effect settings\n";
     has_unsaved_changes_ = false;
@@ -571,6 +548,10 @@ void ForegroundBackgroundEffectPanel::update_preview_and_manifest() {
 
     // Generate preview when slider values change
     if (selected_asset_.empty()) {
+        preview_dirty_ = true;
+        return;
+    }
+    if (!assets_) {
         preview_dirty_ = true;
         return;
     }
@@ -617,6 +598,10 @@ void ForegroundBackgroundEffectPanel::update_preview_and_manifest() {
     }
 
     if (!image_to_use.empty()) {
+        if (should_skip_preview(image_to_use, current_mode_, current_settings_)) {
+            preview_dirty_ = true;
+            return;
+        }
         // Generate preview with current settings
         generate_preview_with_python(image_to_use, current_settings_);
     } else {
@@ -626,25 +611,7 @@ void ForegroundBackgroundEffectPanel::update_preview_and_manifest() {
 
 bool ForegroundBackgroundEffectPanel::load_depth_cue_settings_from_manifest() {
     // Load global image effect settings from manifest.json top-level image_effects section
-    std::string manifest_path = "manifest.json";
-    std::error_code ec;
-    if (!fs::exists(manifest_path, ec)) {
-        std::cerr << "[DepthCuePanel] manifest.json not found: " << manifest_path << "\n";
-        return false;
-    }
-
-    nlohmann::json manifest;
-    try {
-        std::ifstream manifest_file(manifest_path);
-        if (!manifest_file.is_open()) {
-            std::cerr << "[DepthCuePanel] Failed to open manifest.json\n";
-            return false;
-        }
-        manifest_file >> manifest;
-    } catch (const std::exception& e) {
-        std::cerr << "[DepthCuePanel] Error reading manifest.json: " << e.what() << "\n";
-        return false;
-    }
+    nlohmann::json manifest = manifest::load_manifest().raw;
 
     // Check for the top-level image_effects section
     if (!manifest.contains("image_effects") || !manifest["image_effects"].is_object()) {
@@ -675,14 +642,14 @@ bool ForegroundBackgroundEffectPanel::load_depth_cue_settings_from_manifest() {
             return settings;
         }
 
-        // Load each effect value
-        settings.contrast = effects_json.value("contrast", 0.0f);
-        settings.brightness = effects_json.value("brightness", 0.0f);
-        settings.blur = effects_json.value("blur", 0.0f);
-        settings.saturation_red = effects_json.value("saturation_red", 0.0f);
-        settings.saturation_green = effects_json.value("saturation_green", 0.0f);
-        settings.saturation_blue = effects_json.value("saturation_blue", 0.0f);
-        settings.hue = effects_json.value("hue", 0.0f);
+        // Load each effect value, defaulting to the struct's identity values
+        settings.contrast = effects_json.value("contrast", settings.contrast);
+        settings.brightness = effects_json.value("brightness", settings.brightness);
+        settings.blur = effects_json.value("blur", settings.blur);
+        settings.saturation_red = effects_json.value("saturation_red", settings.saturation_red);
+        settings.saturation_green = effects_json.value("saturation_green", settings.saturation_green);
+        settings.saturation_blue = effects_json.value("saturation_blue", settings.saturation_blue);
+        settings.hue = effects_json.value("hue", settings.hue);
 
         camera_effects::ClampImageEffectSettings(settings);
         return settings;
@@ -739,6 +706,10 @@ void ForegroundBackgroundEffectPanel::generate_preview_with_python(
 
     if (result == 0) {
         std::cout << "[DepthCuePanel] Preview image generated successfully\n";
+        last_preview_settings_ = settings;
+        last_preview_mode_ = current_mode_;
+        last_preview_asset_ = selected_asset_;
+        last_preview_source_path_ = image_path;
         load_preview_texture(output_path);
         preview_dirty_ = true;
     } else {
@@ -782,6 +753,35 @@ void ForegroundBackgroundEffectPanel::load_preview_texture(const std::string& im
     std::cout << "[DepthCuePanel] Loaded preview texture: " << current_preview_w_ << "x" << current_preview_h_ << "\n";
 }
 
+bool ForegroundBackgroundEffectPanel::settings_equal(
+    const camera_effects::ImageEffectSettings& a,
+    const camera_effects::ImageEffectSettings& b,
+    float epsilon) const {
+    return std::fabs(a.contrast - b.contrast) <= epsilon &&
+           std::fabs(a.brightness - b.brightness) <= epsilon &&
+           std::fabs(a.blur - b.blur) <= epsilon &&
+           std::fabs(a.saturation_red - b.saturation_red) <= epsilon &&
+           std::fabs(a.saturation_green - b.saturation_green) <= epsilon &&
+           std::fabs(a.saturation_blue - b.saturation_blue) <= epsilon &&
+           std::fabs(a.hue - b.hue) <= epsilon;
+}
+
+bool ForegroundBackgroundEffectPanel::should_skip_preview(
+    const std::string& source_path,
+    EffectMode mode,
+    const camera_effects::ImageEffectSettings& settings) const {
+    if (mode != last_preview_mode_) {
+        return false;
+    }
+    if (selected_asset_ != last_preview_asset_) {
+        return false;
+    }
+    if (source_path != last_preview_source_path_) {
+        return false;
+    }
+    return settings_equal(settings, last_preview_settings_, 1e-5f);
+}
+
 void ForegroundBackgroundEffectPanel::load_current_mode_settings() {
     if (current_mode_ == EffectMode::Foreground) {
         current_settings_ = fg_settings_;
@@ -818,6 +818,7 @@ void ForegroundBackgroundEffectPanel::set_mode(EffectMode mode) {
 
 void ForegroundBackgroundEffectPanel::on_slider_changed() {
     save_current_mode_settings();
+    has_unsaved_changes_ = true;
     update_preview_and_manifest();
 }
 
@@ -983,22 +984,30 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
     const fs::path cache_dir("cache");
     std::error_code ec;
     const bool cache_exists = fs::exists(cache_dir, ec) && fs::is_directory(cache_dir, ec);
+    if (!cache_exists) {
+        std::filesystem::create_directories(cache_dir, ec);
+    }
 
     // Force regeneration of selected asset by removing its cache if it exists
     std::error_code del_ec;
-    fs::remove_all(cache_dir / selected_asset_, del_ec);
+    if (!selected_asset_.empty()) {
+        fs::remove_all(cache_dir / selected_asset_, del_ec);
+    }
 
-    if (!cache_exists) {
-        // If no cache folder exists, regenerate the selected asset
-        std::string manifest_path = "manifest.json";
-        std::string cache_root = "cache";
-        std::string asset_list = selected_asset_;
-        std::string python_cmd = std::string("python tools/asset_tool.py ") + manifest_path + " " + cache_root + " \"" + asset_list + "\"";
-        std::cout << "[DepthCuePanel] Executing: " << python_cmd << "\n";
-        int result = std::system(python_cmd.c_str());
-        if (result != 0) {
-            std::cerr << "[DepthCuePanel] Failed to regenerate cache for " << selected_asset_ << ", exit code: " << result << "\n";
-        }
+    // Always regenerate the selected asset (or all assets if none selected) so Python applies current settings
+    const fs::path manifest_path = manifest::manifest_path();
+    const fs::path cache_root = "cache";
+    std::string python_cmd = std::string("python tools/asset_tool.py \"") +
+                             manifest_path.string() + "\" \"" + cache_root.string() + "\"";
+    if (!selected_asset_.empty()) {
+        python_cmd += " \"" + selected_asset_ + "\"";
+    }
+    std::cout << "[DepthCuePanel] Executing: " << python_cmd << "\n";
+    int result = std::system(python_cmd.c_str());
+    if (result != 0) {
+        std::cerr << "[DepthCuePanel] Failed to regenerate cache"
+                  << (selected_asset_.empty() ? "" : " for " + selected_asset_)
+                  << ", exit code: " << result << "\n";
     }
 
     assets_->library().loadAllAnimations(renderer);

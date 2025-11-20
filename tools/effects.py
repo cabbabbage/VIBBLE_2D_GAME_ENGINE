@@ -38,7 +38,6 @@ class Effects:
 
     brightness: float = 0.0
     contrast: float = 0.0
-    rgb_boost: float = 0.0
     blur: float = 0.0
     saturation_red: float = 0.0
     saturation_green: float = 0.0
@@ -60,7 +59,6 @@ class Effects:
         return cls(
             brightness=float(data.get("brightness", 0.0)),
             contrast=float(data.get("contrast", 0.0)),
-            rgb_boost=float(data.get("rgb_boost", 0.0)),
             blur=float(data.get("blur", 0.0)),
             saturation_red=float(data.get("saturation_red", 0.0)),
             saturation_green=float(data.get("saturation_green", 0.0)),
@@ -166,7 +164,6 @@ class EffectsParser:
         for key in [
             "brightness",
             "contrast",
-            "rgb_boost",
             "blur",
             "saturation_red",
             "saturation_green",

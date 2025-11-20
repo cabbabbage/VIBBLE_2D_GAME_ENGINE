@@ -34,10 +34,9 @@ public:
     };
     struct RealismSettings {
         // Parallax and perspective sliders
-        float parallax_strength            = 0.0f;
         float foreshorten_strength         = 0.0f;
         float distance_scale_strength      = 0.0f;
-        float height_at_zoom1              = 18.0f;
+        float height_at_zoom1              = 0.0f;
         float tripod_distance_y            = 0.0f;
         float min_visible_screen_ratio     = 0.015f;
 
@@ -88,8 +87,9 @@ public:
         double horizon_screen_y   = 0.0;
         double bottom_screen_y    = 0.0;
         double base_world_y       = 0.0;
-        double strength           = 0.0;
         double pitch_radians      = 0.0;
+        double focus_ndc_offset   = 0.0;
+        double strength           = 0.0;
         bool   enabled            = false;
     };
 
@@ -146,7 +146,7 @@ public:
     TransformSmoothingParams motion_smoothing_params() const;
 
     bool parallax_enabled() const {
-        return realism_enabled_ && settings_.parallax_strength > 0.0f;
+        return realism_enabled_;
     }
 
     bool realism_enabled() const { return realism_enabled_; }
@@ -159,6 +159,10 @@ public:
     // New floor depth helpers for the warped grid
     FloorDepthParams compute_floor_depth_params() const;
     float warp_floor_screen_y(float world_y, float linear_screen_y) const;
+
+    // Runtime camera geometry helpers (derived from zoom + offsets).
+    float  current_pitch_degrees() const { return runtime_pitch_deg_; }
+    double current_camera_height() const { return runtime_camera_height_; }
 
     // Override controls for dev mode
     void set_manual_zoom_override(bool enabled) { manual_zoom_override_ = enabled; }
@@ -214,6 +218,13 @@ private:
 
     SDL_FPoint smoothed_center_{0.0f, 0.0f};
     float      smoothed_scale_ = 1.0f;
+    double     runtime_camera_height_ = 0.0;
+    double     runtime_focus_depth_   = 0.0;
+    double     runtime_anchor_world_y_ = 0.0;
+    double     runtime_focus_ndc_offset_ = 0.0;
+    double     runtime_pitch_rad_     = 0.0;
+    float      runtime_pitch_deg_     = 0.0f;
+    bool       geometry_valid_        = false;
 
     RealismSettings settings_{};
     bool realism_enabled_ = true;
@@ -229,4 +240,16 @@ private:
 
     Room*  starting_room_ = nullptr;
     double starting_area_ = 1.0;
+
+    struct CameraGeometry {
+        double camera_height = 0.0;
+        double focus_depth   = 0.0;
+        double anchor_world_y = 0.0;
+        double focus_ndc_offset = 0.0;
+        double pitch_radians = 0.0;
+        float  pitch_degrees = 0.0f;
+        bool   valid         = false;
+    };
+    CameraGeometry compute_geometry() const;
+    void update_geometry_cache(const CameraGeometry& g);
 };
