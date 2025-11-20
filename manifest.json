@@ -64,9 +64,9 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
+        "generated_at": "2025-11-20T09:22:59Z",
         "max_scale": 0.06818182021379471,
-        "min_scale": 0.051948051899671555,
+        "min_scale": 0.05382118001580238,
         "recommended_percentages": [
           100,
           7,
@@ -76,10 +76,10 @@
         "recommended_steps": [
           1.0,
           0.06818182021379471,
-          0.05951397120952606,
-          0.051948051899671555
+          0.06057743728160858,
+          0.05382118001580238
         ],
-        "revision": 15216200396871486443,
+        "revision": 16947100374909488020,
         "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
@@ -119,7 +119,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
+        "generated_at": "2025-11-20T09:22:59Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -172,7 +172,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
+        "generated_at": "2025-11-20T09:22:59Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -697,7 +697,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
+        "generated_at": "2025-11-20T09:22:59Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -827,9 +827,9 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
-        "max_scale": 0.08658009022474289,
-        "min_scale": 0.08658009022474289,
+        "generated_at": "2025-11-20T09:22:59Z",
+        "max_scale": 0.08970197290182114,
+        "min_scale": 0.08970197290182114,
         "recommended_percentages": [
           100,
           9,
@@ -837,10 +837,10 @@
         ],
         "recommended_steps": [
           1.0,
-          0.08658009022474289,
-          0.08658009022474289
+          0.08970197290182114,
+          0.08970197290182114
         ],
-        "revision": 2971822716602099074,
+        "revision": 3450304775264595686,
         "screen_aspect": 1.7777777777777777
       },
       "shading_opacity_multiplier": 1.0,
@@ -1537,23 +1537,6 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
-      "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
-        "max_scale": 0.11818180978298187,
-        "min_scale": 0.11818180978298187,
-        "recommended_percentages": [
-          100,
-          12,
-          12
-        ],
-        "recommended_steps": [
-          1.0,
-          0.11818180978298187,
-          0.11818180978298187
-        ],
-        "revision": 13914579950487410362,
-        "screen_aspect": 1.7777777777777777
-      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -1615,7 +1598,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
+        "generated_at": "2025-11-20T09:22:59Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1693,7 +1676,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
+        "generated_at": "2025-11-20T09:22:59Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1855,23 +1838,6 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
-      "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
-        "max_scale": 0.38181817531585693,
-        "min_scale": 0.38181817531585693,
-        "recommended_percentages": [
-          100,
-          38,
-          38
-        ],
-        "recommended_steps": [
-          1.0,
-          0.38181817531585693,
-          0.38181817531585693
-        ],
-        "revision": 11688286490698651680,
-        "screen_aspect": 1.7777777777777777
-      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -1988,7 +1954,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T08:21:57Z",
+        "generated_at": "2025-11-20T09:22:59Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.9090908765792847,
         "recommended_percentages": [
@@ -2056,14 +2022,14 @@
       "camera_settings": {
         "background_plane_screen_y": 198.0,
         "background_texture_max_opacity": 153,
-        "distance_scale_strength": 0.14000000059604645,
+        "distance_scale_strength": 0.1599999964237213,
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 108,
         "foreshorten_strength": 0.32999998331069946,
-        "grid_depth_offset_px": 677.115966796875,
-        "grid_pitch_degrees": 18.91875457763672,
-        "height_high_px": 104.0,
-        "height_low_px": 86.0,
+        "grid_depth_offset_px": 4000.0,
+        "grid_pitch_degrees": 0.0,
+        "height_high_px": 943.0,
+        "height_low_px": 79.0,
         "min_visible_screen_ratio": 0.006000000052154064,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
@@ -2080,8 +2046,8 @@
         "scale_hysteresis_margin": 0.029999999329447746,
         "smooth_motion_zoom": true,
         "texture_opacity_falloff_method": 3,
-        "zoom_high": 1.0621193647384644,
-        "zoom_low": 1.0619840621948242
+        "zoom_high": 7.3446784019470215,
+        "zoom_low": 0.705933153629303
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2173,7 +2139,7 @@
       },
       "map_layers": [
         {
-          "bounding_extent": 2000.0,
+          "bounding_extent": 2980.0,
           "level": 0,
           "max_rooms": 1,
           "min_rooms": 1,
@@ -2381,9 +2347,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            36,
-            137,
+            183,
             242,
+            36,
             255
           ],
           "edge_smoothness": 43,
@@ -2434,54 +2400,25 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
+            32,
             31,
             204,
-            31,
             255
           ],
-          "edge_smoothness": 68,
+          "edge_smoothness": 101,
           "geometry": "Circle",
           "inherits_map_assets": true,
           "is_boss": false,
           "is_spawn": true,
-          "max_height": 4000,
-          "max_radius": 2000,
-          "max_width": 4000,
-          "min_height": 4000,
-          "min_radius": 2000,
-          "min_width": 4000,
+          "max_height": 5960,
+          "max_radius": 2980,
+          "max_width": 5960,
+          "min_height": 5960,
+          "min_radius": 2980,
+          "min_width": 5960,
           "name": "spawn",
-          "radius": 2000,
+          "radius": 2980,
           "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Candle"
-                }
-              ],
-              "display_name": "Candle",
-              "dx": -92,
-              "dy": -424,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": true,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 4192,
-              "origional_width": 4120,
-              "position": "Exact",
-              "priority": 0,
-              "resolution": 12,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-c81e6b20bf1d"
-            },
             {
               "candidates": [
                 {
@@ -2505,69 +2442,11 @@
               "origional_height": 4192,
               "origional_width": 4136,
               "position": "Exact",
-              "priority": 1,
+              "priority": 0,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-c5bf286223ce"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "lantern"
-                }
-              ],
-              "display_name": "lantern",
-              "dx": -496,
-              "dy": -472,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 4176,
-              "origional_width": 4144,
-              "position": "Exact",
-              "priority": 2,
-              "resolution": 4,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-b03088c2c2fe"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "bomb"
-                }
-              ],
-              "display_name": "bomb",
-              "dx": -452,
-              "dy": -580,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 4216,
-              "origional_width": 4104,
-              "position": "Exact",
-              "priority": 3,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-bd44cd31a417"
             },
             {
               "candidates": [
@@ -2588,11 +2467,42 @@
               "max_number": 1,
               "min_number": 1,
               "position": "Random",
-              "priority": 4,
+              "priority": 1,
               "resolution": 4,
               "resolve_geometry_to_room_size": false,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-1d25c6b86193"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Candle"
+                }
+              ],
+              "display_name": "Candle",
+              "dx": 202,
+              "dy": -538,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 2,
+              "min_number": 2,
+              "origional_height": 4176,
+              "origional_width": 4216,
+              "perimeter_radius": 110,
+              "position": "Perimeter",
+              "priority": 2,
+              "radius": 110,
+              "resolution": 11,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-777b933aa392"
             }
           ]
         }

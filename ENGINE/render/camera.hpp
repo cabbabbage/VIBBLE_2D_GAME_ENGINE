@@ -23,8 +23,8 @@ class CurrentRoomFinder;
 
 class camera {
 public:
-    static constexpr float kMinPitchDegrees = 0.0f;
-    static constexpr float kMaxPitchDegrees = 60.0f;
+    static constexpr float kMinPitchDegrees = -60.0f;
+    static constexpr float kMaxPitchDegrees = 0.0f;
 
     // Define BlurFalloffMethod here to avoid an extra include and ensure
     // BlurFalloffMethod::Linear is a valid name at compile time.
@@ -70,8 +70,8 @@ public:
 
         // New grid depth parameters
         // Strength of vertical grid line compression with depth.
-        // How steep the camera is pitched over the floor. Positive means more tilt.
-        float grid_pitch_degrees             = 0.0f;   // enforced to forward/down 0–60°
+        // How steep the camera is pitched over the floor. More negative means more downward tilt.
+        float grid_pitch_degrees             = 0.0f;   // enforced to -60..0 degrees
         // Distance (in screen px) to place the depth offset below the bottom of the screen.
         float grid_depth_offset_px           = 240.0f;
 

@@ -22,7 +22,7 @@ namespace {
     constexpr double HALF_FOV_Y = PI_D / 4.0; // 45 deg half FOV (90 total)
     constexpr double RAD_TO_DEG = 180.0 / PI_D;
     constexpr double kFocusCenteringFactor = 0.65; // 0 = free drift, 1 = force exact center
-    constexpr float  kDefaultPitchDegrees   = 30.0f;
+    constexpr float  kDefaultPitchDegrees   = -30.0f;
 
     float sanitize_pitch_degrees(float raw_value, bool* clamped = nullptr) {
         if (clamped) *clamped = false;
@@ -141,6 +141,18 @@ namespace {
         t = std::clamp(t, 0.0, 1.0);
         return low_height + (high_height - low_height) * t;
     }
+
+    double compute_pitch_to_center_focus(double camera_height, double focus_to_anchor_distance) {
+        const double safe_height = std::max(0.0, camera_height);
+        const double safe_focus  = std::max(0.0, focus_to_anchor_distance);
+        if (safe_height <= 0.0 || safe_focus <= 0.0) {
+            return 0.0;
+        }
+        const double pitch_rad = -std::atan2(safe_focus, safe_height);
+        const double min_rad   = camera::kMinPitchDegrees * (PI_D / 180.0);
+        const double max_rad   = camera::kMaxPitchDegrees * (PI_D / 180.0);
+        return std::clamp(pitch_rad, min_rad, max_rad);
+    }
 }
 
 camera::CameraGeometry camera::compute_geometry() const {
@@ -158,9 +170,9 @@ camera::CameraGeometry camera::compute_geometry() const {
     g.anchor_world_y = anchor_world_y();
     g.focus_depth = 0.0; // measured in world units along +Y from anchor
 
-    const double pitch_deg = static_cast<double>(sanitize_pitch_degrees(settings_.grid_pitch_degrees));
-    g.pitch_radians = pitch_deg * (PI_D / 180.0);
-    g.pitch_degrees = static_cast<float>(pitch_deg);
+    const double focus_to_anchor = std::max(0.0, g.anchor_world_y - static_cast<double>(smoothed_center_.y));
+    g.pitch_radians = compute_pitch_to_center_focus(g.camera_height, focus_to_anchor);
+    g.pitch_degrees = static_cast<float>(g.pitch_radians * RAD_TO_DEG);
 
     // Compute NDC offset needed to keep the focus point (smoothed_center_) at screen center.
     const double dy_focus = static_cast<double>(smoothed_center_.y) - g.anchor_world_y;
@@ -187,6 +199,9 @@ void camera::update_geometry_cache(const CameraGeometry& g) {
     runtime_pitch_rad_     = g.pitch_radians;
     runtime_pitch_deg_     = g.pitch_degrees;
     geometry_valid_        = g.valid;
+    if (g.valid) {
+        settings_.grid_pitch_degrees = g.pitch_degrees;
+    }
     if (!g.valid) {
         runtime_camera_height_ = 0.0;
         runtime_focus_depth_   = 0.0;

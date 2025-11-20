@@ -270,6 +270,7 @@ public:
         pending_dirty_ = false;
     }
     bool defer_commit_until_unfocus() const { return defer_commit_until_unfocus_; }
+    bool has_pending_values() const { return pending_dirty_; }
     void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;

@@ -1907,10 +1907,6 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
     if (e.type == SDL_MOUSEMOTION) {
         SDL_Point p{ e.motion.x, e.motion.y };
         update_hover(p);
-        const bool dragging_state = dragging_min_ || dragging_max_;
-        if (!dragging_state && focused_ && !hovered_) {
-            set_focus(false);
-        }
         bool dragging = false;
         if (dragging_min_) {
             apply_min_interaction(value_for_x(p.x));
@@ -1926,12 +1922,11 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
     } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{ e.button.x, e.button.y };
         bool inside = update_hover(p);
+        bool focus_changed = false;
         if (inside) {
             bool was_focused = focused_;
             set_focus(true);
-            if (!was_focused) {
-                return true;
-            }
+            focus_changed = !was_focused;
         } else if (!dragging_min_ && !dragging_max_) {
             set_focus(false);
         }
@@ -1940,12 +1935,14 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
             const bool on_min_value = SDL_PointInRect(&p, &min_value_rect_);
             const bool on_max_value = SDL_PointInRect(&p, &max_value_rect_);
             if (on_min_value) {
+                wheel_target_max_ = false;
                 edit_min_ = std::make_unique<DMTextBox>("", std::to_string(display_min_value()));
                 edit_min_->set_rect(min_value_rect_);
                 edit_min_->handle_event(e);
                 return true;
             }
             if (on_max_value) {
+                wheel_target_max_ = true;
                 edit_max_ = std::make_unique<DMTextBox>("", std::to_string(display_max_value()));
                 edit_max_->set_rect(max_value_rect_);
                 edit_max_->handle_event(e);
@@ -1994,6 +1991,9 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
                 return true;
             }
         }
+        if (focus_changed) {
+            return true;
+        }
     } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
         bool was_dragging = dragging_min_ || dragging_max_;
         dragging_min_ = false;
@@ -2031,7 +2031,11 @@ bool DMRangeSlider::handle_event(const SDL_Event& e) {
         }
         const int prev_min = display_min_value();
         const int prev_max = display_max_value();
-        bool target_max = max_hovered_ && !min_hovered_ ? true : wheel_target_max_;
+        bool target_max = wheel_target_max_;
+        if (max_hovered_ != min_hovered_) {
+            target_max = max_hovered_;
+        }
+        wheel_target_max_ = target_max;
         bool changed = false;
         if (target_max) {
             changed = apply_max_interaction(prev_max + delta);
@@ -2078,12 +2082,10 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
         const SDL_Color track_fill = active ? st.track_fill_active : st.track_fill;
         dm_draw::DrawBeveledRect( r, fill, radius, bevel, track_fill, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     }
-    const bool min_active = focused_ || dragging_min_;
-    const bool max_active = focused_ || dragging_max_;
+    const bool min_active = dragging_min_ || (focused_ && !wheel_target_max_);
+    const bool max_active = dragging_max_ || (focused_ && wheel_target_max_);
     SDL_Color col_min = st.knob;
-    SDL_Color col_max = st.knob;
     SDL_Color border_min = st.knob_border;
-    SDL_Color border_max = st.knob_border;
     if (min_active) {
         col_min = st.knob_accent;
         border_min = st.knob_accent_border;
@@ -2091,12 +2093,14 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
         col_min = st.knob_hover;
         border_min = st.knob_border_hover;
     }
+    SDL_Color col_max = dm_draw::DarkenColor(st.knob_accent, 0.12f);
+    SDL_Color border_max = dm_draw::DarkenColor(st.knob_accent_border, 0.12f);
     if (max_active) {
         col_max = st.knob_accent;
         border_max = st.knob_accent_border;
     } else if (max_hovered_) {
-        col_max = st.knob_hover;
-        border_max = st.knob_border_hover;
+        col_max = dm_draw::LightenColor(st.knob_accent, 0.08f);
+        border_max = st.knob_accent_border;
     }
     const int knob_radius = std::min(DMStyles::CornerRadius(), std::min(kmin.w, kmin.h) / 2);
     const int knob_bevel = std::min(DMStyles::BevelDepth(), std::max(0, std::min(kmin.w, kmin.h) / 2));
@@ -2104,6 +2108,16 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
     dm_draw::DrawRoundedOutline( r, kmin, knob_radius, kKnobOutlineThickness, border_min);
     dm_draw::DrawBeveledRect( r, kmax, knob_radius, knob_bevel, col_max, highlight, shadow, false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     dm_draw::DrawRoundedOutline( r, kmax, knob_radius, kKnobOutlineThickness, border_max);
+    auto draw_knob_band = [&](const SDL_Rect& knob, SDL_Color color, bool align_right) {
+        const int inset = 3;
+        const int band_w = std::max(2, knob.w / 5);
+        SDL_Rect band{ knob.x + inset, knob.y + 3, band_w, std::max(2, knob.h - 6) };
+        if (align_right) band.x = knob.x + knob.w - band_w - inset;
+        SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
+        SDL_RenderFillRect(r, &band);
+    };
+    draw_knob_band(kmin, border_min, false);
+    draw_knob_band(kmax, border_max, true);
     if (edit_min_) {
         edit_min_->render(r);
     } else {

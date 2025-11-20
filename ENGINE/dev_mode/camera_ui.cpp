@@ -140,16 +140,40 @@ public:
         }
 
         const SDL_Point p = event_point(e);
+        const SDL_Rect low_slider_interaction_rect = low_height_slider_ ? low_height_slider_->interaction_rect() : SDL_Rect{0,0,0,0};
+        const SDL_Rect high_slider_interaction_rect = high_height_slider_ ? high_height_slider_->interaction_rect() : SDL_Rect{0,0,0,0};
+        const bool pointer_on_low_slider = low_height_slider_ && point_in_rect(p, low_slider_interaction_rect);
+        const bool pointer_on_high_slider = high_height_slider_ && point_in_rect(p, high_slider_interaction_rect);
+        const bool low_slider_event_allowed = low_height_slider_ && slider_event_allowed(*low_height_slider_, e, p);
+        const bool high_slider_event_allowed = high_height_slider_ && slider_event_allowed(*high_height_slider_, e, p);
         if (dragging_ == DragTarget::None) {
             hover_target_ = detect_hover_target(p);
         }
-        const bool mouse_inside = (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN ||
-                                   e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL) &&
-                                  point_in_rect(p, rect_);
+        const bool mouse_inside = is_pointer_event(e) && point_in_rect(p, rect_);
 
-        if (low_height_slider_ && slider_event_allowed(*low_height_slider_, e, p)) {
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            if (!pointer_on_low_slider && hit_line(low_line_hitbox_, e.button.x, e.button.y)) {
+                dragging_ = DragTarget::LowLine;
+                hover_target_ = DragTarget::None;
+                update_anchor_from_pointer(e.button.y, true);
+                return true;
+            } else if (!pointer_on_high_slider && hit_line(high_line_hitbox_, e.button.x, e.button.y)) {
+                dragging_ = DragTarget::HighLine;
+                hover_target_ = DragTarget::None;
+                update_anchor_from_pointer(e.button.y, false);
+                return true;
+            } else if (hit_depth_handle(p)) {
+                dragging_ = DragTarget::DepthOffset;
+                hover_target_ = DragTarget::None;
+                update_depth_offset_from_pointer(e.button.x);
+                return true;
+            }
+        }
+        bool used_slider = false;
+        if (low_height_slider_ && low_slider_event_allowed) {
             const int before = low_height_slider_->displayed_value();
             if (low_height_slider_->handle_event(e)) {
+                used_slider = true;
                 const int after = low_height_slider_->displayed_value();
                 if (after != before) {
                     apply_height_from_slider(*low_height_slider_, true);
@@ -157,34 +181,14 @@ public:
                 return true;
             }
         }
-        if (high_height_slider_ && slider_event_allowed(*high_height_slider_, e, p)) {
+        if (high_height_slider_ && high_slider_event_allowed) {
             const int before = high_height_slider_->displayed_value();
             if (high_height_slider_->handle_event(e)) {
+                used_slider = true;
                 const int after = high_height_slider_->displayed_value();
                 if (after != before) {
                     apply_height_from_slider(*high_height_slider_, false);
                 }
-                return true;
-            }
-        }
-
-        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            if (hit_line(low_line_hitbox_, e.button.x, e.button.y)) {
-                dragging_ = DragTarget::LowLine;
-                hover_target_ = DragTarget::None;
-                update_anchor_from_pointer(e.button.y, true);
-                return true;
-            }
-            if (hit_line(high_line_hitbox_, e.button.x, e.button.y)) {
-                dragging_ = DragTarget::HighLine;
-                hover_target_ = DragTarget::None;
-                update_anchor_from_pointer(e.button.y, false);
-                return true;
-            }
-            if (hit_depth_handle(p)) {
-                dragging_ = DragTarget::DepthOffset;
-                hover_target_ = DragTarget::None;
-                update_depth_offset_from_pointer(e.button.x);
                 return true;
             }
         }
@@ -199,9 +203,10 @@ public:
             return true;
         }
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            const bool was_dragging = dragging_ != DragTarget::None;
             dragging_ = DragTarget::None;
             hover_target_ = detect_hover_target(p);
-            if (mouse_inside) return true;
+            if (mouse_inside || used_slider || was_dragging) return true;
         }
 
         if (mouse_inside) {
@@ -217,108 +222,90 @@ public:
         if (!render_rect_valid_) return;
 
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, 18, 22, 30, 255);
+        SDL_SetRenderDrawColor(renderer, 12, 16, 26, 245);
         SDL_RenderFillRect(renderer, &rect_);
-        SDL_SetRenderDrawColor(renderer, 34, 49, 68, 120);
-        SDL_Rect top_glow{rect_.x, rect_.y, rect_.w, std::max(12, rect_.h / 4)};
-        SDL_RenderFillRect(renderer, &top_glow);
-        SDL_SetRenderDrawColor(renderer, 10, 12, 18, 160);
-        SDL_Rect bottom_shade{rect_.x, rect_.y + rect_.h / 2, rect_.w, rect_.h / 2};
-        SDL_RenderFillRect(renderer, &bottom_shade);
-        SDL_SetRenderDrawColor(renderer, 64, 82, 102, 230);
+        SDL_SetRenderDrawColor(renderer, 54, 74, 98, 220);
         SDL_RenderDrawRect(renderer, &rect_);
-        SDL_Rect inset{rect_.x + 1, rect_.y + 1, rect_.w - 2, rect_.h - 2};
-        SDL_SetRenderDrawColor(renderer, 18, 26, 34, 120);
-        SDL_RenderDrawRect(renderer, &inset);
 
-        SDL_Rect content_bg{layout_.content.x, layout_.content.y, layout_.content.w, layout_.content.h};
-        SDL_SetRenderDrawColor(renderer, 24, 32, 42, 80);
-        SDL_RenderFillRect(renderer, &content_bg);
+        auto draw_outline = [&](const SDL_Rect& r, Uint8 alpha = 210) {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, alpha);
+            SDL_RenderDrawRect(renderer, &r);
+        };
 
-        // Draw the subject first so the sliders and guides sit over it.
+        SDL_SetRenderDrawColor(renderer, 16, 24, 36, 235);
+        SDL_RenderFillRect(renderer, &layout_.view);
+        SDL_SetRenderDrawColor(renderer, 44, 60, 84, 190);
+        SDL_RenderDrawRect(renderer, &layout_.view);
+
+        const SDL_Color low_color{112, 190, 255, 235};
+        const SDL_Color high_color{186, 150, 255, 235};
+        const SDL_Color ground_color{108, 132, 164, 255};
+        const SDL_Color handle_color{236, 194, 104, 215};
+
+        DMLabelStyle label_style = DMStyles::Label();
+        label_style.color = dm::rgba(232, 238, 245, 255);
+        DMLabelStyle small_label = label_style;
+        small_label.font_size = std::max(10, label_style.font_size - 2);
+        char buffer[128] = {0};
+
+        SDL_Rect ground_band{layout_.view.x, layout_.ground_y, layout_.view.w, 3};
+        SDL_SetRenderDrawColor(renderer, ground_color.r, ground_color.g, ground_color.b, ground_color.a);
+        SDL_RenderFillRect(renderer, &ground_band);
+
         draw_icon(renderer, subject_texture_, subject_texture_failed_, layout_.subject_rect, "Subject");
+        const int subject_label_y = std::min(layout_.view.y + layout_.view.h - small_label.font_size, layout_.ground_y + 6);
+        DrawLabelText(renderer, "Subject", layout_.subject_rect.x, subject_label_y, small_label);
 
-        SDL_SetRenderDrawColor(renderer, 78, 94, 116, 220);
-        SDL_RenderDrawLine(renderer, layout_.content.x, layout_.ground_y, layout_.content.x + layout_.content.w, layout_.ground_y);
-        SDL_Rect ground_thick{layout_.content.x, layout_.ground_y, layout_.content.w, 2};
-        SDL_RenderFillRect(renderer, &ground_thick);
-
-        SDL_SetRenderDrawColor(renderer, 112, 186, 255, 235);
-        SDL_RenderDrawLine(renderer, layout_.content.x, layout_.low_y, layout_.content.x + layout_.content.w, layout_.low_y);
-        SDL_SetRenderDrawColor(renderer, 112, 186, 255, 48);
-        SDL_RenderFillRect(renderer, &low_line_hitbox_);
-        if (should_highlight(DragTarget::LowLine)) {
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 190);
-            for (int dy = -1; dy <= 1; ++dy) {
-                SDL_RenderDrawLine(renderer, layout_.content.x, layout_.low_y + dy,
-                                   layout_.content.x + layout_.content.w, layout_.low_y + dy);
+        auto draw_anchor_line = [&](int y, const SDL_Color& color, DragTarget target, const char* caption, float zoom_value, const SDL_Rect& hitbox) {
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+            SDL_RenderDrawLine(renderer, layout_.view.x, y, layout_.view.x + layout_.view.w, y);
+            if (should_highlight(target)) {
+                SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 42);
+                SDL_RenderFillRect(renderer, &hitbox);
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
+                SDL_RenderDrawLine(renderer, layout_.view.x, y - 1, layout_.view.x + layout_.view.w, y - 1);
+                SDL_RenderDrawLine(renderer, layout_.view.x, y + 1, layout_.view.x + layout_.view.w, y + 1);
             }
-        }
+            DrawLabelText(renderer, caption, layout_.view.x + 8, y - small_label.font_size - 2, small_label);
+            std::snprintf(buffer, sizeof(buffer), "Zoom: %.2f", zoom_value);
+            const int zoom_label_x = layout_.view.x + layout_.view.w - layout_.height_slider_w - padding_;
+            DrawLabelText(renderer, buffer, zoom_label_x, y - small_label.font_size - 2, small_label);
+        };
 
-        SDL_SetRenderDrawColor(renderer, 196, 148, 255, 235);
-        SDL_RenderDrawLine(renderer, layout_.content.x, layout_.high_y, layout_.content.x + layout_.content.w, layout_.high_y);
-        SDL_SetRenderDrawColor(renderer, 196, 148, 255, 40);
-        SDL_RenderFillRect(renderer, &high_line_hitbox_);
-        if (should_highlight(DragTarget::HighLine)) {
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 190);
-            for (int dy = -1; dy <= 1; ++dy) {
-                SDL_RenderDrawLine(renderer, layout_.content.x, layout_.high_y + dy,
-                                   layout_.content.x + layout_.content.w, layout_.high_y + dy);
-            }
-        }
+        draw_anchor_line(layout_.high_y, high_color, DragTarget::HighLine, "High anchor", values_.zoom_high, high_line_hitbox_);
+        draw_anchor_line(layout_.low_y, low_color, DragTarget::LowLine, "Low anchor", values_.zoom_low, low_line_hitbox_);
 
-        SDL_SetRenderDrawColor(renderer, 255, 210, 120, 200);
-        for (int y = layout_.camera_y; y <= layout_.ground_y; y += 6) {
+        const int camera_line_start = layout_.camera_rect.y + layout_.camera_rect.h;
+        SDL_SetRenderDrawColor(renderer, handle_color.r, handle_color.g, handle_color.b, handle_color.a);
+        for (int y = camera_line_start; y <= layout_.ground_y; y += 6) {
             SDL_RenderDrawLine(renderer, layout_.camera_x, y, layout_.camera_x, std::min(y + 3, layout_.ground_y));
         }
         if (should_highlight(DragTarget::DepthOffset)) {
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 190);
             for (int dx = -1; dx <= 1; ++dx) {
-                SDL_RenderDrawLine(renderer, layout_.camera_x + dx, layout_.camera_y,
+                SDL_RenderDrawLine(renderer, layout_.camera_x + dx, camera_line_start,
                                    layout_.camera_x + dx, layout_.ground_y);
             }
         }
 
-        DMLabelStyle label_style = DMStyles::Label();
-        label_style.font_size = std::max(10, label_style.font_size - 2);
-        char buffer[128] = {0};
-        std::snprintf(buffer, sizeof(buffer), "Height %.0f px", values_.current_height);
-        DrawLabelText(renderer, buffer, layout_.camera_x + 8, (layout_.camera_y + layout_.ground_y) / 2 - label_style.font_size / 2, label_style);
-        std::snprintf(buffer, sizeof(buffer), "Offset %.0f px", values_.depth_offset_px);
-        DrawLabelText(renderer, buffer, layout_.camera_x - 24, layout_.ground_y - label_style.font_size - 6, label_style);
-
-        const float clamped_pitch = std::clamp(values_.pitch_degrees,
-                                              camera::kMinPitchDegrees,
-                                              camera::kMaxPitchDegrees);
-        std::snprintf(buffer, sizeof(buffer), "Pitch %.1f deg (%.0f-%.0f)",
-                      clamped_pitch,
-                      camera::kMinPitchDegrees,
-                      camera::kMaxPitchDegrees);
-        DrawLabelText(renderer, buffer, layout_.camera_x + 8, layout_.camera_y - layout_.icon_size - 6, label_style);
-
-        DrawLabelText(renderer, "Low anchor", layout_.content.x + 6, layout_.low_y - label_style.font_size - 2, label_style);
-        std::snprintf(buffer, sizeof(buffer), "Zoom %.2f", values_.zoom_low);
-        DrawLabelText(renderer, buffer, layout_.content.x + 6, layout_.low_y + 6, label_style);
-        DrawLabelText(renderer, "High anchor", layout_.content.x + 6, layout_.high_y - label_style.font_size - 2, label_style);
-        std::snprintf(buffer, sizeof(buffer), "Zoom %.2f", values_.zoom_high);
-        DrawLabelText(renderer, buffer, layout_.content.x + 6, layout_.high_y + 6, label_style);
-
-        SDL_SetRenderDrawColor(renderer, 255, 210, 120, 180);
+        SDL_SetRenderDrawColor(renderer, handle_color.r, handle_color.g, handle_color.b, handle_color.a);
         SDL_RenderFillRect(renderer, &depth_handle_rect_);
         SDL_SetRenderDrawColor(renderer, 60, 50, 30, 255);
         SDL_RenderDrawRect(renderer, &depth_handle_rect_);
         if (should_highlight(DragTarget::DepthOffset)) {
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 220);
             SDL_Rect handle_highlight = depth_handle_rect_;
             handle_highlight.x -= 2;
             handle_highlight.y -= 2;
             handle_highlight.w += 4;
             handle_highlight.h += 4;
-            SDL_RenderDrawRect(renderer, &handle_highlight);
+            draw_outline(handle_highlight, 230);
         }
 
+        const float clamped_pitch = std::clamp(values_.pitch_degrees,
+                                               camera::kMinPitchDegrees,
+                                               camera::kMaxPitchDegrees);
         const float pitch_radians = clamped_pitch * (kPi / 180.0f);
-        const int line_length = std::max(layout_.icon_size * 2, layout_.content.w / 4);
+        const int line_length = std::max(layout_.icon_size * 2, layout_.view.w / 3);
         const int pitch_dx = line_length;
         const int pitch_dy = static_cast<int>(std::round(std::tan(pitch_radians) * static_cast<float>(line_length) * 0.45f));
         SDL_SetRenderDrawColor(renderer, 154, 203, 255, 200);
@@ -326,11 +313,30 @@ public:
 
         draw_icon(renderer, camera_texture_, camera_texture_failed_, layout_.camera_rect, "Camera", clamped_pitch);
 
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 26);
-        SDL_RenderDrawLine(renderer, layout_.content.x, layout_.camera_y, layout_.camera_x, layout_.camera_y);
+        std::snprintf(buffer, sizeof(buffer), "Height: %.0f px", values_.current_height);
+        const int height_label_y = camera_line_start + (layout_.ground_y - camera_line_start) / 2 - small_label.font_size / 2;
+        DrawLabelText(renderer, buffer, layout_.camera_x + 10, std::clamp(height_label_y, layout_.view.y, layout_.view.y + layout_.view.h - small_label.font_size), small_label);
+        std::snprintf(buffer, sizeof(buffer), "Offset: %.0f px", values_.depth_offset_px);
+        DrawLabelText(renderer, buffer, depth_handle_rect_.x - 6, depth_handle_rect_.y - small_label.font_size - 2, small_label);
+        std::snprintf(buffer, sizeof(buffer), "Pitch (auto) %.1f deg (%.0f-%.0f)",
+                      clamped_pitch,
+                      camera::kMinPitchDegrees,
+                      camera::kMaxPitchDegrees);
+        DrawLabelText(renderer, buffer, layout_.camera_rect.x + layout_.camera_rect.w + 8, layout_.camera_rect.y - small_label.font_size - 2, small_label);
+
+        auto outline_slider_if_hot = [&](const std::unique_ptr<DMSlider>& slider, DragTarget target) {
+            if (!slider) return;
+            if (!should_highlight(target)) return;
+            SDL_Rect hit = slider->interaction_rect();
+            hit.x -= 2; hit.y -= 2; hit.w += 4; hit.h += 4;
+            draw_outline(hit, 220);
+        };
 
         if (low_height_slider_) low_height_slider_->render(renderer);
         if (high_height_slider_) high_height_slider_->render(renderer);
+
+        outline_slider_if_hot(low_height_slider_, DragTarget::LowHeightField);
+        outline_slider_if_hot(high_height_slider_, DragTarget::HighHeightField);
     }
     bool wants_full_row() const override { return true; }
 
@@ -348,6 +354,7 @@ public:
 private:
     struct LayoutState {
         SDL_Rect content{0,0,0,0};
+        SDL_Rect view{0,0,0,0};
         int ground_y = 0;
         int zoom_axis_top = 0;
         int zoom_axis_bottom = 0;
@@ -358,12 +365,12 @@ private:
         int icon_size = 0;
         SDL_Rect subject_rect{0,0,0,0};
         SDL_Rect camera_rect{0,0,0,0};
-        float pixels_per_unit = 1.0f;
         int offset_range_x = 0;
         int offset_range_w = 1;
+        int height_slider_w = 0;
     };
 
-    enum class DragTarget { None, LowLine, HighLine, DepthOffset };
+    enum class DragTarget { None, LowLine, HighLine, DepthOffset, LowHeightField, HighHeightField };
 
     void notify() { if (on_change_) on_change_(values_); }
 
@@ -457,15 +464,15 @@ private:
 
     SDL_Rect align_slider_to_line(DMSlider& slider, int line_y, int slider_w) const {
         const int slider_h = slider.preferred_height(slider_w);
-        SDL_Rect rect{layout_.content.x + layout_.content.w - slider_w - padding_, line_y - slider_h / 2, slider_w, slider_h};
+        SDL_Rect rect{layout_.view.x + layout_.view.w - slider_w - padding_, line_y - slider_h / 2, slider_w, slider_h};
         slider.set_rect(rect);
         int delta = slider.track_center_y() - line_y;
         if (delta != 0) {
-            rect.y = std::clamp(rect.y - delta, layout_.content.y, layout_.content.y + layout_.content.h - slider_h);
+            rect.y = std::clamp(rect.y - delta, layout_.view.y, layout_.view.y + layout_.view.h - slider_h);
             slider.set_rect(rect);
             delta = slider.track_center_y() - line_y;
             if (delta != 0) {
-                rect.y = std::clamp(rect.y - delta, layout_.content.y, layout_.content.y + layout_.content.h - slider_h);
+                rect.y = std::clamp(rect.y - delta, layout_.view.y, layout_.view.y + layout_.view.h - slider_h);
                 slider.set_rect(rect);
             }
         }
@@ -476,9 +483,11 @@ private:
         if (!render_rect_valid_) return;
         const float target_zoom = pointer_y_to_zoom(py);
         if (low_line) {
-            values_.zoom_low = target_zoom;
+            const float max_low = values_.zoom_high - kMinZoomDelta;
+            values_.zoom_low = std::clamp(target_zoom, kMinZoom, max_low);
         } else {
-            values_.zoom_high = target_zoom;
+            const float min_high = values_.zoom_low + kMinZoomDelta;
+            values_.zoom_high = std::max(target_zoom, min_high);
         }
         enforce_zoom_constraints();
         recompute_current_height();
@@ -489,11 +498,22 @@ private:
         return std::max(1, layout_.zoom_axis_bottom - layout_.zoom_axis_top);
     }
 
+    std::pair<float, float> zoom_axis_range() const {
+        // Keep extra headroom so dragging can expand anchor zooms beyond their current values.
+        const float anchor_min = std::min(values_.zoom_low, values_.zoom_high);
+        const float anchor_max = std::max(values_.zoom_low, values_.zoom_high);
+        const float anchor_span = std::max(kMinZoomDelta, anchor_max - anchor_min);
+        const float padded_span = std::max(kMinZoomSpan, anchor_span * (1.0f + kZoomAxisPaddingFraction));
+        const float mid = anchor_min + anchor_span * 0.5f;
+        float min_zoom = std::max(kMinZoom, mid - padded_span * 0.5f);
+        float max_zoom = std::max(min_zoom + kMinZoomSpan, mid + padded_span * 0.5f);
+        return {min_zoom, max_zoom};
+    }
+
     int zoom_to_y(float zoom) const {
-        const float min_zoom = std::min(values_.zoom_low, values_.zoom_high);
-        const float max_zoom = std::max(values_.zoom_low, values_.zoom_high);
-        const float zoom_span = std::max(0.0001f, max_zoom - min_zoom);
-        const float normalized = std::clamp((zoom - min_zoom) / zoom_span, 0.0f, 1.0f);
+        const auto [axis_min, axis_max] = zoom_axis_range();
+        const float zoom_span = std::max(kMinZoomDelta, axis_max - axis_min);
+        const float normalized = std::clamp((zoom - axis_min) / zoom_span, 0.0f, 1.0f);
         const float offset = normalized * static_cast<float>(zoom_axis_span());
         const int y = layout_.zoom_axis_bottom - static_cast<int>(std::lround(offset));
         return std::clamp(y, layout_.zoom_axis_top, layout_.zoom_axis_bottom);
@@ -508,10 +528,9 @@ private:
         const int clamped_py = std::clamp(py, top, bottom);
         const float span = static_cast<float>(bottom - top);
         const float normalized = std::clamp((bottom - clamped_py) / span, 0.0f, 1.0f);
-        const float min_zoom = std::min(values_.zoom_low, values_.zoom_high);
-        const float max_zoom = std::max(values_.zoom_low, values_.zoom_high);
-        const float zoom_span = std::max(0.0001f, max_zoom - min_zoom);
-        return min_zoom + normalized * zoom_span;
+        const auto [axis_min, axis_max] = zoom_axis_range();
+        const float zoom_span = std::max(kMinZoomDelta, axis_max - axis_min);
+        return axis_min + normalized * zoom_span;
     }
 
     void update_depth_offset_from_pointer(int px) {
@@ -531,6 +550,8 @@ private:
 
     DragTarget detect_hover_target(SDL_Point p) const {
         if (!render_rect_valid_) return DragTarget::None;
+        if (low_height_slider_ && point_in_rect(p, low_height_slider_->interaction_rect())) return DragTarget::LowHeightField;
+        if (high_height_slider_ && point_in_rect(p, high_height_slider_->interaction_rect())) return DragTarget::HighHeightField;
         if (hit_line(low_line_hitbox_, p.x, p.y)) return DragTarget::LowLine;
         if (hit_line(high_line_hitbox_, p.x, p.y)) return DragTarget::HighLine;
         if (hit_depth_handle(p)) return DragTarget::DepthOffset;
@@ -541,6 +562,8 @@ private:
         if (dragging_ != DragTarget::None) {
             return dragging_ == target;
         }
+        if (target == DragTarget::LowHeightField && low_height_slider_ && low_height_slider_->is_dragging()) return true;
+        if (target == DragTarget::HighHeightField && high_height_slider_ && high_height_slider_->is_dragging()) return true;
         return hover_target_ == target;
     }
 
@@ -556,8 +579,6 @@ private:
     }
 
     void enforce_zoom_constraints() {
-        constexpr float kMinZoom      = 0.05f;
-        constexpr float kMinZoomDelta = 0.0001f;
         values_.zoom_low = std::max(kMinZoom, values_.zoom_low);
         values_.zoom_high = std::max(values_.zoom_low + kMinZoomDelta, values_.zoom_high);
     }
@@ -612,58 +633,61 @@ private:
             return;
         }
 
-        layout_.icon_size = std::max(28, static_cast<int>(std::round(std::min(layout_.content.w, layout_.content.h) * 0.18f)));
+        ensure_height_sliders();
 
-        const float max_height = std::max({values_.height_low_px, values_.height_high_px, values_.current_height, 1.0f});
-        const float span_px = std::max(max_height, 120.0f);
-        const int top_padding = layout_.icon_size;
-        const int usable_height = std::max(1, layout_.content.h - top_padding);
-        layout_.pixels_per_unit = static_cast<float>(usable_height) / span_px;
-        layout_.ground_y = layout_.content.y + layout_.content.h - 1;
-        layout_.zoom_axis_top = layout_.content.y + 2;
-        layout_.zoom_axis_bottom = std::max(layout_.zoom_axis_top, layout_.ground_y - 2);
-        auto height_to_y = [&](float h) {
-            const int y = layout_.ground_y - static_cast<int>(std::lround(std::max(0.0f, h) * layout_.pixels_per_unit));
-            return std::clamp(y, layout_.content.y, layout_.ground_y - 2);
-        };
+        const int view_padding = std::max(10, padding_ / 2);
+        const int view_top = layout_.content.y;
+        const int view_height = std::max(1, layout_.content.h - (view_top - layout_.content.y));
+        layout_.view = SDL_Rect{layout_.content.x, view_top, layout_.content.w, view_height};
+
+        layout_.icon_size = std::max(30, static_cast<int>(std::round(std::min(layout_.view.w, layout_.view.h) * 0.16f)));
+        layout_.ground_y = layout_.view.y + layout_.view.h - 6;
+        layout_.zoom_axis_top = layout_.view.y + view_padding;
+        layout_.zoom_axis_bottom = std::max(layout_.zoom_axis_top + 4, layout_.ground_y - 6);
+
         layout_.low_y  = zoom_to_y(values_.zoom_low);
         layout_.high_y = zoom_to_y(values_.zoom_high);
         if (layout_.high_y > layout_.low_y) layout_.high_y = layout_.low_y;
 
-        const int drag_pad = std::max(10, layout_.icon_size / 3);
-        low_line_hitbox_ = SDL_Rect{layout_.content.x, layout_.low_y - drag_pad, layout_.content.w, drag_pad * 2};
-        high_line_hitbox_ = SDL_Rect{layout_.content.x, layout_.high_y - drag_pad, layout_.content.w, drag_pad * 2};
+        const int drag_pad = std::max(18, layout_.icon_size / 2);
+        low_line_hitbox_ = SDL_Rect{layout_.view.x, layout_.low_y - drag_pad, layout_.view.w, drag_pad * 2};
+        high_line_hitbox_ = SDL_Rect{layout_.view.x, layout_.high_y - drag_pad, layout_.view.w, drag_pad * 2};
 
-        layout_.offset_range_x = layout_.content.x + layout_.icon_size * 2;
-        layout_.offset_range_w = std::max(layout_.content.w - layout_.icon_size * 3, layout_.icon_size);
+        const int height_slider_max = std::max(180, layout_.view.w - view_padding * 2);
+        layout_.height_slider_w = std::clamp(layout_.view.w / 2, 160, height_slider_max);
+        const int slider_left = layout_.view.x + layout_.view.w - layout_.height_slider_w - padding_;
+
+        const int offset_min_x = layout_.view.x + layout_.icon_size * 2;
+        const int offset_max_x = std::max(offset_min_x + layout_.icon_size, slider_left - layout_.icon_size);
+        layout_.offset_range_x = offset_min_x;
+        layout_.offset_range_w = std::max(1, offset_max_x - offset_min_x);
         const float t = std::clamp(values_.depth_offset_px / kMaxDepthOffsetPx, 0.0f, 1.0f);
         layout_.camera_x = layout_.offset_range_x + static_cast<int>(std::round(t * layout_.offset_range_w));
-        layout_.camera_y = height_to_y(values_.current_height);
+        layout_.camera_y = zoom_to_y(values_.current_zoom);
 
-        layout_.subject_rect = SDL_Rect{layout_.content.x + layout_.icon_size / 2, layout_.ground_y - layout_.icon_size, layout_.icon_size, layout_.icon_size};
-        layout_.camera_rect = SDL_Rect{layout_.camera_x - layout_.icon_size / 2, layout_.camera_y - layout_.icon_size / 2, layout_.icon_size, layout_.icon_size};
+        layout_.subject_rect = SDL_Rect{layout_.view.x + view_padding, layout_.ground_y - layout_.icon_size, layout_.icon_size, layout_.icon_size};
+        const int cam_half = layout_.icon_size / 2;
+        const int cam_top = std::clamp(layout_.camera_y - cam_half, layout_.view.y, std::max(layout_.view.y, layout_.ground_y - layout_.icon_size - 2));
+        layout_.camera_rect = SDL_Rect{layout_.camera_x - cam_half, cam_top, layout_.icon_size, layout_.icon_size};
+        layout_.camera_y = layout_.camera_rect.y + layout_.camera_rect.h / 2;
 
-        const int handle_w = std::max(14, layout_.icon_size / 2);
-        const int handle_h = std::max(14, layout_.icon_size / 2);
-        int handle_y = std::min(layout_.content.y + layout_.content.h - handle_h, layout_.ground_y + 6);
-        handle_y = std::max(layout_.content.y, handle_y);
+        const int handle_w = std::max(16, layout_.icon_size / 2);
+        const int handle_h = std::max(16, layout_.icon_size / 2);
+        int handle_y = std::clamp(layout_.ground_y - handle_h - 2, layout_.view.y, layout_.view.y + layout_.view.h - handle_h);
         depth_handle_rect_ = SDL_Rect{layout_.camera_x - handle_w / 2, handle_y, handle_w, handle_h};
-        const int drag_w = std::max(handle_w * 2, layout_.icon_size + 12);
+        const int drag_w = std::max(handle_w * 2, layout_.icon_size + 18);
         camera_drag_hitbox_ = SDL_Rect{
             layout_.camera_x - drag_w / 2,
-            layout_.content.y,
+            layout_.view.y,
             drag_w,
-            layout_.content.h
+            layout_.view.h
         };
 
-        const int slider_w_max = std::max(180, layout_.content.w - padding_ * 2);
-        const int slider_w = std::clamp(layout_.content.w / 2, 180, slider_w_max);
-        ensure_height_sliders();
         if (low_height_slider_) {
-            align_slider_to_line(*low_height_slider_, layout_.low_y, slider_w);
+            align_slider_to_line(*low_height_slider_, layout_.low_y, layout_.height_slider_w);
         }
         if (high_height_slider_) {
-            align_slider_to_line(*high_height_slider_, layout_.high_y, slider_w);
+            align_slider_to_line(*high_height_slider_, layout_.high_y, layout_.height_slider_w);
         }
 
         (void)renderer;
@@ -690,6 +714,10 @@ private:
     mutable bool camera_texture_failed_ = false;
     DragTarget dragging_ = DragTarget::None;
     DragTarget hover_target_ = DragTarget::None;
+    inline static constexpr float kMinZoom = 0.05f;
+    inline static constexpr float kMinZoomDelta = 0.0001f;
+    inline static constexpr float kMinZoomSpan = 0.5f;
+    inline static constexpr float kZoomAxisPaddingFraction = 0.6f;
     inline static constexpr float kMaxDepthOffsetPx = 4000.0f;
     inline static constexpr int kMaxHeightSliderPx = 40000;
 };
@@ -714,6 +742,7 @@ public:
         set_col_gap(DMSpacing::small_gap());
         set_close_button_enabled(true);
         set_scroll_enabled(false);
+        set_floatable(true);
         set_floating_content_width(560);
         set_visible_height(420);
         set_cell_width(520);
@@ -1672,7 +1701,10 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         settings.zoom_high       = vals.zoom_high;
         settings.height_low_px   = vals.height_low_px;
         settings.height_high_px  = vals.height_high_px;
-        settings.grid_pitch_degrees   = std::clamp(vals.pitch_degrees,
+        const float dynamic_pitch = assets_
+            ? assets_->getView().current_pitch_degrees()
+            : vals.pitch_degrees;
+        settings.grid_pitch_degrees   = std::clamp(dynamic_pitch,
                                                    camera::kMinPitchDegrees,
                                                    camera::kMaxPitchDegrees);
         settings.grid_depth_offset_px = vals.depth_offset_px;
