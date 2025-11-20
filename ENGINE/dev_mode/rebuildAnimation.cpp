@@ -1,4 +1,4 @@
-#include "dev_mode/animation_regenerator.hpp"
+#include "dev_mode/rebuildAnimation.hpp"
 
 #include <SDL.h>
 #include <cstdlib>

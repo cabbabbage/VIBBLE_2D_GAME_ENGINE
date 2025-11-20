@@ -39,7 +39,6 @@ public:
         // Parallax and perspective sliders
         float foreshorten_strength         = 0.0f;
         float distance_scale_strength      = 0.0f;
-        float tripod_distance_y            = 0.0f;
         float min_visible_screen_ratio     = 0.015f;
 
         // Camera height mapping: interpret zoom as a height parameter between two anchors.

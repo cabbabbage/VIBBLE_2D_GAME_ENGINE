@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.06818182021379471,
         "min_scale": 0.051948051899671555,
         "recommended_percentages": [
@@ -119,7 +119,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -172,7 +172,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -585,7 +585,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -715,7 +715,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.08658009022474289,
         "min_scale": 0.08658009022474289,
         "recommended_percentages": [
@@ -1426,7 +1426,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.11818180978298187,
         "min_scale": 0.11818180978298187,
         "recommended_percentages": [
@@ -1503,7 +1503,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1581,7 +1581,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1744,7 +1744,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -1876,7 +1876,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T07:03:20Z",
+        "generated_at": "2025-11-20T07:09:07Z",
         "max_scale": 0.9090908765792847,
         "min_scale": 0.9090908765792847,
         "recommended_percentages": [
@@ -1948,10 +1948,10 @@
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 108,
         "foreshorten_strength": 0.5899999737739563,
-        "grid_depth_offset_px": 880.0,
+        "grid_depth_offset_px": 100.3134765625,
         "grid_pitch_degrees": 18.91875457763672,
-        "height_high_px": 960.0,
-        "height_low_px": 320.0,
+        "height_high_px": 60.18691635131836,
+        "height_low_px": 25.046730041503906,
         "min_visible_screen_ratio": 0.006000000052154064,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
@@ -1968,9 +1968,8 @@
         "scale_hysteresis_margin": 0.029999999329447746,
         "smooth_motion_zoom": true,
         "texture_opacity_falloff_method": 3,
-        "tripod_distance_y": 0.0,
-        "zoom_high": 3.0,
-        "zoom_low": 0.75
+        "zoom_high": 11.00365924835205,
+        "zoom_low": 1.2900381088256836
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2054,11 +2053,11 @@
         ]
       },
       "map_grid_settings": {
-        "chunk_size": 8,
+        "chunk_size": 32,
         "jitter": 0,
-        "r_chunk": 3,
-        "resolution": 3,
-        "spacing": 8
+        "r_chunk": 5,
+        "resolution": 5,
+        "spacing": 32
       },
       "map_layers": [
         {
@@ -2270,9 +2269,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            53,
-            242,
             36,
+            133,
+            242,
             255
           ],
           "edge_smoothness": 43,
@@ -2323,9 +2322,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            228,
-            36,
-            242,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 68,
@@ -2597,10 +2596,7 @@
       "camera_settings": {
         "distance_scale_strength": 0.10000000149011612,
         "foreshorten_strength": 0.5,
-        "height_at_zoom1": 320.0,
-        "max_zoom_multiplier": 3.0,
         "min_visible_screen_ratio": 0.009999999776482582,
-        "min_zoom_multiplier": 0.75,
         "motion_smoothing_max_step": 8000.0,
         "motion_smoothing_method": 1,
         "motion_smoothing_snap_threshold": 0.25,
@@ -2611,12 +2607,10 @@
         "parallax_smoothing_method": 2,
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 6.0,
-        "parallax_strength": 45.0,
         "realism_enabled": false,
         "render_quality_percent": 75,
         "scale_hysteresis_margin": 0.05000000074505806,
-        "smooth_motion_zoom": true,
-        "tripod_distance_y": -860.0
+        "smooth_motion_zoom": true
       },
       "content_root": "content/test",
       "map_assets_data": {
@@ -2970,10 +2964,7 @@
         "foreground_plane_screen_y": 1080.0,
         "foreground_texture_max_opacity": 0,
         "foreshorten_strength": 0.5,
-        "height_at_zoom1": 320.0,
-        "max_zoom_multiplier": 3.0,
         "min_visible_screen_ratio": 0.009999999776482582,
-        "min_zoom_multiplier": 0.75,
         "motion_smoothing_max_step": 8000.0,
         "motion_smoothing_method": 1,
         "motion_smoothing_snap_threshold": 0.25,
@@ -2984,13 +2975,11 @@
         "parallax_smoothing_method": 2,
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 6.0,
-        "parallax_strength": 45.0,
         "realism_enabled": true,
         "render_quality_percent": 75,
         "scale_hysteresis_margin": 0.05000000074505806,
         "smooth_motion_zoom": true,
-        "texture_opacity_falloff_method": 0,
-        "tripod_distance_y": -860.0
+        "texture_opacity_falloff_method": 0
       },
       "content_root": "content/test2",
       "map_assets_data": {

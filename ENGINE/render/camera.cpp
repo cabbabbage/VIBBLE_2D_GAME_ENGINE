@@ -328,8 +328,6 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
 
 void camera::set_realism_settings(const RealismSettings& settings) {
     settings_ = settings;
-    // Tripod/anchor offset is now derived from the current view height; ignore any persisted value.
-    settings_.tripod_distance_y = 0.0f;
     settings_.zoom_low = std::max(0.0001f, settings_.zoom_low);
     settings_.zoom_high = std::max(settings_.zoom_low + 0.0001f, settings_.zoom_high);
     if (settings_.height_high_px < settings_.height_low_px) {
@@ -938,7 +936,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     try_read_float("zoom_high",                   settings_.zoom_high);
     try_read_float("height_low_px",               settings_.height_low_px);
     try_read_float("height_high_px",              settings_.height_high_px);
-    try_read_float("tripod_distance_y",          settings_.tripod_distance_y);
     try_read_float("min_visible_screen_ratio",   settings_.min_visible_screen_ratio);
 
     // Grid depth / pitch controls (strength was deprecated).
@@ -1018,12 +1015,8 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     try_read_opacity("foreground_texture_max_opacity", settings_.foreground_texture_max_opacity);
     try_read_opacity("background_texture_max_opacity", settings_.background_texture_max_opacity);
 
-    if (!try_read_float("foreground_plane_screen_y", settings_.foreground_plane_screen_y)) {
-        try_read_float("blur_foreground_screen_y", settings_.foreground_plane_screen_y);
-    }
-    if (!try_read_float("background_plane_screen_y", settings_.background_plane_screen_y)) {
-        try_read_float("blur_background_screen_y", settings_.background_plane_screen_y);
-    }
+    try_read_float("foreground_plane_screen_y", settings_.foreground_plane_screen_y);
+    try_read_float("background_plane_screen_y", settings_.background_plane_screen_y);
 
     auto try_read_curve = [&](const char* key, BlurFalloffMethod& target) -> bool {
         auto it = data.find(key);
@@ -1034,9 +1027,7 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         return true;
     };
     if (!try_read_curve("texture_opacity_falloff_method", settings_.texture_opacity_falloff_method)) {
-        if (!try_read_curve("blur_falloff_method", settings_.texture_opacity_falloff_method)) {
-            settings_.texture_opacity_falloff_method = BlurFalloffMethod::Linear;
-        }
+        settings_.texture_opacity_falloff_method = BlurFalloffMethod::Linear;
     }
 
     settings_.foreground_texture_max_opacity =
@@ -1080,10 +1071,6 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     if (!std::isfinite(settings_.height_high_px)) {
         settings_.height_high_px = 960.0f;
-    }
-
-    if (!std::isfinite(settings_.tripod_distance_y)) {
-        settings_.tripod_distance_y = 0.0f;
     }
 
     if (!std::isfinite(settings_.min_visible_screen_ratio) ||
@@ -1172,7 +1159,6 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["zoom_high"]                       = settings_.zoom_high;
     j["height_low_px"]                   = settings_.height_low_px;
     j["height_high_px"]                  = settings_.height_high_px;
-    j["tripod_distance_y"]               = settings_.tripod_distance_y;
     j["min_visible_screen_ratio"]        = settings_.min_visible_screen_ratio;
     j["render_quality_percent"]          = settings_.render_quality_percent;
     j["smooth_motion_zoom"]              = settings_.smooth_motion_zoom;

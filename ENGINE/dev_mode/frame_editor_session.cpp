@@ -22,7 +22,7 @@
 #include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode/widgets.hpp"
 #include "dev_mode/pan_and_zoom.hpp"
-#include "dev_mode/animation_regenerator.hpp"
+#include "dev_mode/rebuildAnimation.hpp"
 #include "render/camera.hpp"
 #include "utils/input.hpp"
 
@@ -598,7 +598,6 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     refresh_hitbox_form();
     refresh_attack_form();
     refresh_hitbox_form();
-    update_navigation_styles();
 }
 
 void FrameEditorSession::end() {
