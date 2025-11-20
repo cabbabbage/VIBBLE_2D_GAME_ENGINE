@@ -93,9 +93,9 @@ public:
         double horizon_screen_y   = 0.0;
         double bottom_screen_y    = 0.0;
         double base_world_y       = 0.0;
+        double camera_height      = 0.0;
         double pitch_radians      = 0.0;
         double focus_ndc_offset   = 0.0;
-        double depth_offset_screen_y = 0.0;
         double pitch_norm         = 0.0;
         double strength           = 0.0;
         bool   enabled            = false;

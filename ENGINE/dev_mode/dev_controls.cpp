@@ -1646,7 +1646,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
 
     const bool show_depth_guides = camera_panel_ && camera_panel_->is_depth_section_visible();
-    std::optional<float> depth_offset_screen_y;
     std::optional<float> horizon_screen_y;
 
     // Render grid overlay if enabled (moved to beginning to render behind UI)
@@ -1683,8 +1682,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             const float max_world_y = std::max(top_left_world.y, bottom_right_world.y) + world_padding + depth_world_padding;
 
             if (depth_params.enabled) {
-                depth_offset_screen_y = static_cast<float>(depth_params.depth_offset_screen_y);
-                horizon_screen_y      = static_cast<float>(depth_params.horizon_screen_y);
+                horizon_screen_y = static_cast<float>(depth_params.horizon_screen_y);
             }
 
             const int major_interval = 8; // major line every N cells
@@ -1800,15 +1798,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             DrawLabelText(renderer, label, 8, label_y, style);
         };
 
-        if (depth_offset_screen_y) {
-            const bool offscreen = *depth_offset_screen_y > static_cast<float>(screen_h_);
-            const int safe_screen_h = std::max(1, screen_h_);
-            const float display_y = offscreen
-                ? static_cast<float>(safe_screen_h - 1)
-                : *depth_offset_screen_y;
-            const char* label = offscreen ? "Depth Offset (off-screen)" : "Depth Offset";
-            draw_labeled_line(display_y, SDL_Color{255, 32, 32, 220}, label);
-        }
         if (horizon_screen_y) {
             draw_labeled_line(*horizon_screen_y, SDL_Color{255, 140, 0, 220}, "Horizon");
         }

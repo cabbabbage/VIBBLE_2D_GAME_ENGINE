@@ -1241,36 +1241,34 @@ camera::FloorDepthParams camera::compute_floor_depth_params() const {
 
     const double focus_screen_y = screen_h * 0.5;
     const double top_margin     = std::max(12.0, screen_h * 0.05);
-    const double max_horizon    = std::max(top_margin + 1.0, focus_screen_y - 4.0);
     const double min_horizon    = top_margin + 1.0;
-    const double horizon_span   = std::max(1.0, max_horizon - min_horizon);
 
+    const double tan_fov = std::tan(HALF_FOV_Y);
+    const double tan_pitch = std::tan(geom.pitch_radians);
     double pitch_norm = geom.pitch_radians / (PI_D / 3.0);
     pitch_norm = std::clamp(pitch_norm, -1.0, 1.0);
     if (pitch_norm < 0.0 && pitch_norm > -1e-4) {
-        // Snap tiny negative values to flat to avoid an unintended downward bias.
         pitch_norm = 0.0;
     }
 
-    const double horizon_y   = max_horizon - horizon_span * pitch_norm;
-    const double depth_px    = std::max(1.0, static_cast<double>(settings_.grid_depth_offset_px));
-    const double depth_y     = screen_h + depth_px;
-    const double focus_cap   = std::max(min_horizon, focus_screen_y - 2.0);
+    double horizon_ndc = (tan_pitch / tan_fov) - geom.focus_ndc_offset;
+    horizon_ndc = std::clamp(horizon_ndc, -10.0, 10.0);
+    double horizon_y = screen_h * (0.5 - 0.5 * horizon_ndc);
+    horizon_y = std::clamp(horizon_y, min_horizon, focus_screen_y - 2.0);
 
-    p.horizon_screen_y     = std::clamp(horizon_y, min_horizon, focus_cap);
+    p.horizon_screen_y     = horizon_y;
     p.bottom_screen_y      = screen_h;
     p.base_world_y         = anchor_world_y();
+    p.camera_height        = geom.camera_height;
     p.pitch_radians        = geom.pitch_radians;
     p.pitch_norm           = pitch_norm;
     p.focus_ndc_offset     = geom.focus_ndc_offset;
-    p.depth_offset_screen_y = depth_y;
     p.strength             = 1.0;
     p.enabled              = true;
 
     return p;
 }
 float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
-    (void)world_y;
     FloorDepthParams p = compute_floor_depth_params();
     if (!p.enabled) {
         // No pitch or realism disabled, keep the original linear mapping.
@@ -1278,49 +1276,26 @@ float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
     }
 
     const double screen_h = static_cast<double>(screen_height_);
-    const double horizon_y = std::clamp(p.horizon_screen_y, 0.0, std::max(1.0, screen_h));
-    const double depth_offset_y = std::max(p.depth_offset_screen_y, horizon_y + 1.0);
-    const double visible_span = std::max(1.0, screen_h - horizon_y);
-    const double offscreen_span = std::max(1.0, depth_offset_y - screen_h);
+    const double cos_p = std::cos(p.pitch_radians);
+    const double sin_p = std::sin(p.pitch_radians);
+    const double tan_fov = std::tan(HALF_FOV_Y);
 
-    double y = static_cast<double>(linear_screen_y);
-    if (!std::isfinite(y)) {
-        y = horizon_y;
-    }
-    y = std::max(y, horizon_y);
+    const double depth_world = static_cast<double>(world_y) - p.base_world_y;
+    const double y_cam = depth_world * cos_p + p.camera_height * sin_p;
+    const double z_cam = depth_world * sin_p - p.camera_height * cos_p;
+    double forward = -z_cam;
 
-    const double pitch_norm_signed = std::clamp(p.pitch_norm, -1.0, 1.0);
-    const double pitch_strength    = std::abs(pitch_norm_signed);
-    const double compression_power = 1.0 + 1.35 * pitch_strength;
-    const double compression_mix   = 0.35 + 0.55 * pitch_strength;
-    double warped = screen_h;
-
-    if (y <= screen_h) {
-        const double effective_span = visible_span + offscreen_span * 0.35;
-        auto warp_t = [&](double raw_t) {
-            double clamped = std::clamp(raw_t, 0.0, 1.0);
-            const double eased = std::pow(clamped, compression_power);
-            return clamped + (eased - clamped) * compression_mix;
-        };
-
-        const double t_screen = (screen_h - horizon_y) / effective_span;
-        const double warped_t_at_screen = warp_t(t_screen);
-        const double normalization = std::max(1e-4, warped_t_at_screen);
-
-        double t = (y - horizon_y) / effective_span;
-        const double warped_t = warp_t(t);
-        const double normalized = std::clamp(warped_t / normalization, 0.0, 1.0);
-
-        warped = horizon_y + visible_span * normalized;
-    } else {
-        double extra_t = (y - screen_h) / offscreen_span;
-        extra_t = std::clamp(extra_t, 0.0, 1.0);
-        const double offscreen_power = 1.0 + 0.5 * pitch_strength;
-        const double eased_extra = std::pow(extra_t, offscreen_power);
-        warped = screen_h + offscreen_span * eased_extra;
+    if (forward < 1e-6) {
+        // Clamp to the projected horizon when the point lies beyond the viewing direction.
+        return static_cast<float>(p.horizon_screen_y);
     }
 
-    return static_cast<float>(warped);
+    double y_ndc = (y_cam / forward) / tan_fov;
+    y_ndc -= p.focus_ndc_offset;
+
+    const double screen_y = screen_h * (0.5 - 0.5 * y_ndc);
+    const double clamped = std::clamp(screen_y, 0.0, std::max(1.0, screen_h));
+    return static_cast<float>(clamped);
 }
 
 double camera::view_height_world() const {
@@ -1338,21 +1313,10 @@ double camera::horizon_screen_y_for_scale() const {
         return 0.0;
     }
 
-    const CameraGeometry geom = compute_geometry();
-    if (!geom.valid) {
+    const FloorDepthParams depth = compute_floor_depth_params();
+    if (!depth.enabled) {
         return static_cast<double>(screen_height_) * 0.5;
     }
 
-    const double tan_fov = std::tan(HALF_FOV_Y);
-    double y_ndc = (std::tan(geom.pitch_radians) / tan_fov) - geom.focus_ndc_offset;
-    y_ndc = std::clamp(y_ndc, -1.0, 1.0);
-
-    const double screen_h = static_cast<double>(screen_height_);
-    double y_proj = screen_h * (0.5 - 0.5 * y_ndc);
-
-    // Never let the horizon slip below the focus point on screen.
-    const double focus_screen_y = screen_h * 0.5;
-    y_proj = std::min(y_proj, focus_screen_y - 2.0);
-
-    return std::clamp(y_proj, 0.0, screen_h);
+    return std::clamp(depth.horizon_screen_y, 0.0, static_cast<double>(screen_height_));
 }
