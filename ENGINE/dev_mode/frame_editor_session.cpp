@@ -22,6 +22,7 @@
 #include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode/widgets.hpp"
 #include "dev_mode/pan_and_zoom.hpp"
+#include "dev_mode/animation_regenerator.hpp"
 #include "render/camera.hpp"
 #include "utils/input.hpp"
 
@@ -613,33 +614,25 @@ void FrameEditorSession::end() {
 
     // Reload animations AFTER session is closed
     if (info_to_reload && saved_assets) {
-        if (!asset_name_for_cache.empty()) {
-            AnimationLoader::clear_asset_cache(asset_name_for_cache);
+        bool refreshed = false;
+        bool regen_failed = false;
 
-            // Regenerate cache for this asset after clearing
-            auto root = std::filesystem::path(manifest::manifest_path()).parent_path();
-            std::filesystem::path python_script = root / "tools" / "asset_tool.py";
-            std::filesystem::path manifest_file = root / "manifest.json";
-            std::string manifest_path = manifest_file.string();
-            std::string cache_root = (root / "cache").string();
-            std::string asset_list = asset_name_for_cache;
-            std::string python_cmd = "python \"" + python_script.string() + "\" " + manifest_path + " " + cache_root + " \"" + asset_list + "\"";
-            std::cout << "[FrameEditor] Regenerating cache for " << asset_name_for_cache << "\n";
-            std::cout << "[FrameEditor] Running: " << python_cmd << "\n";
-            int result = std::system(python_cmd.c_str());
-            if (result != 0) {
-                std::cerr << "[FrameEditor] Failed to regenerate cache for " << asset_name_for_cache
-                          << ", exit code: " << result << "\n";
+        if (!asset_name_for_cache.empty() && !saved_animation_id.empty()) {
+            auto result = devmode::AnimationRegenerator::regenerate_animation(
+                saved_assets, info_to_reload, saved_animation_id);
+            refreshed = result.refreshed_instances || result.reloaded;
+            regen_failed = result.python_launched && !result.python_success;
+        }
+
+        // Fallback reload when regeneration was not attempted or when reload failed without
+        // a python error (e.g., missing renderer).
+        if (!refreshed && !regen_failed) {
+            const bool ok = info_to_reload->reload_animations_from_disk();
+            SDL_Renderer* renderer = saved_assets->renderer();
+            if (ok && renderer) {
+                info_to_reload->loadAnimations(renderer);
+                saved_assets->mark_active_assets_dirty();
             }
-        }
-        const bool ok = info_to_reload->reload_animations_from_disk();
-        SDL_Renderer* renderer = saved_assets->renderer();
-        if (ok && renderer) {
-            info_to_reload->loadAnimations(renderer);
-        }
-        // Simple refresh without complex iteration
-        if (saved_assets) {
-            saved_assets->mark_active_assets_dirty();
         }
     }
 
