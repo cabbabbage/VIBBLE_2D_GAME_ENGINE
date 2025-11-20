@@ -464,10 +464,9 @@ void Grid::update_parallax(const camera& cam, float dt) {
     const double pitch_norm = std::min(std::abs(pitch_rad) / (PI_D / 3.0), 1.0);
 
     // Camera position in world coordinates (same basis as world positions).
-    const SDL_Point center_px = cam.get_screen_center();
+    const SDL_FPoint center_px = cam.get_view_center_f();
     const double base_x = static_cast<double>(center_px.x);
-    const double base_y = static_cast<double>(center_px.y) +
-                          static_cast<double>(settings.tripod_distance_y);
+    const double base_y = static_cast<double>(center_px.y) + (view_height * 0.5);
 
     // Depth reference shrinks as the camera ascends so distant lines compress toward the horizon.
     const double depth_ref_base = view_height * kParallaxDepthRefFactor;

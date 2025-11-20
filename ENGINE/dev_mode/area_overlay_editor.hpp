@@ -44,6 +44,8 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r);
     void set_on_saved(std::function<void()> cb) { on_saved_callback_ = std::move(cb); }
+    // Returns true when the pointer is inside any of the editor's UI panels.
+    bool is_point_blocking_ui(int mx, int my) const;
 
 private:
     enum class Mode { Mask, Geometry };

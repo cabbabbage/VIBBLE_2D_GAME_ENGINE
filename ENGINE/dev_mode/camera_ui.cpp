@@ -531,7 +531,6 @@ void CameraUIPanel::sync_from_camera() {
     if (effects_checkbox_) effects_checkbox_->set_value(effects_enabled);
 
     if (min_render_size_slider_) min_render_size_slider_->set_value(last_settings_.min_visible_screen_ratio);
-    if (tripod_distance_slider_) tripod_distance_slider_->set_value(last_settings_.tripod_distance_y);
     if (height_zoom1_slider_) height_zoom1_slider_->set_value(last_settings_.height_at_zoom1);
     if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(last_settings_.foreshorten_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(last_settings_.distance_scale_strength);
@@ -605,9 +604,6 @@ void CameraUIPanel::build_ui() {
     min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min On-Screen Size", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
     min_render_size_slider_->set_tooltip("Cull sprites once their height drops below this fraction of the screen (0.01 = 1%).");
     min_render_size_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-    tripod_distance_slider_ = std::make_unique<FloatSliderWidget>("Depth Offset (px)", -2000.0f, 2000.0f, 5.0f, defaults.tripod_distance_y, 0);
-    tripod_distance_slider_->set_tooltip("Shifts the parallax anchor up or down to bias how layers separate.");
-    tripod_distance_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Base Camera Height Offset (px)", -1000.0f, 1000.0f, 1.0f, defaults.height_at_zoom1, 0);
     height_zoom1_slider_->set_tooltip("Add or subtract pixels from the baseline camera height before zoom scaling.");
     height_zoom1_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
@@ -728,7 +724,7 @@ void CameraUIPanel::build_ui() {
     min_zoom_multiplier_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     max_zoom_multiplier_slider_ = std::make_unique<FloatSliderWidget>(
-        "Maximum Zoom", 0.1f, 3.0f, 0.01f, defaults.max_zoom_multiplier, 2);
+        "Maximum Zoom", 0.1f, 20.0f, 0.01f, defaults.max_zoom_multiplier, 2);
     max_zoom_multiplier_slider_->set_tooltip(
         "Upper bound for automatic zooming (larger = wider view).");
     max_zoom_multiplier_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
@@ -759,7 +755,6 @@ void CameraUIPanel::rebuild_rows() {
 
     if (depth_section_header_) rows.push_back({ depth_section_header_.get() });
     if (depth_section_expanded_) {
-        if (tripod_distance_slider_) rows.push_back({ tripod_distance_slider_.get() });
         if (height_zoom1_slider_) rows.push_back({ height_zoom1_slider_.get() });
             if (foreshorten_strength_slider_) rows.push_back({ foreshorten_strength_slider_.get() });
             if (distance_strength_slider_) rows.push_back({ distance_strength_slider_.get() });
@@ -813,7 +808,7 @@ void CameraUIPanel::apply_settings_if_needed() {
 
     bool changed = (effects_enabled != last_realism_enabled_) || (depthcue_enabled != last_depthcue_enabled_);
     const camera::RealismSettings& prev = last_settings_;
-    changed = changed || differs(settings.tripod_distance_y, prev.tripod_distance_y) || differs(settings.height_at_zoom1, prev.height_at_zoom1) || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength) || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
+    changed = changed || differs(settings.height_at_zoom1, prev.height_at_zoom1) || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength) || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
     if (render_quality_slider_) {
         changed = changed || settings.render_quality_percent != prev.render_quality_percent;
     }
@@ -892,7 +887,6 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
 camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     camera::RealismSettings settings = last_settings_;
     if (min_render_size_slider_) settings.min_visible_screen_ratio = std::clamp(min_render_size_slider_->value(), 0.0f, 0.5f);
-    if (tripod_distance_slider_) settings.tripod_distance_y = std::clamp(tripod_distance_slider_->value(), -2000.0f, 2000.0f);
     if (height_zoom1_slider_) settings.height_at_zoom1 = height_zoom1_slider_->value();
     if (foreshorten_strength_slider_) settings.foreshorten_strength = std::max(0.0f, foreshorten_strength_slider_->value());
     if (distance_strength_slider_) settings.distance_scale_strength = std::max(0.0f, distance_strength_slider_->value());

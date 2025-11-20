@@ -620,7 +620,7 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
         {"motion_smoothing_method", 1},
         {"motion_smoothing_max_step", 8000.0},
         {"motion_smoothing_snap_threshold", 0.25},
-        {"tripod_distance_y", -860.0},
+        {"tripod_distance_y", 0.0},
         {"min_visible_screen_ratio", 0.01}
     });
     map_info["map_grid_settings"] = nlohmann::json::object({

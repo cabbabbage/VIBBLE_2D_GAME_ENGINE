@@ -3468,6 +3468,15 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
     if (library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(mx, my)) {
         return true;
     }
+    auto floating = FloatingDockableManager::instance().open_panels();
+    for (DockableCollapsible* panel : floating) {
+        if (!panel) continue;
+        if (!panel->is_visible()) continue;
+        if (spawn_group_panel_ && panel == spawn_group_panel_.get()) continue;
+        if (panel->is_point_inside(mx, my)) {
+            return true;
+        }
+    }
     if (area_editor_ && area_editor_->is_active()) {
         return true;
     }
@@ -3487,28 +3496,12 @@ bool RoomEditor::should_enable_mouse_controls() const {
         return false;
     }
 
-    // CHANGED: do NOT block on info_ui_ visibility anymore.
-    // if (info_ui_ && info_ui_->is_visible()) {
-    //     return false;
-    // }
-
-    if (library_ui_ && library_ui_->is_visible()) {
-        return false;
-    }
-    if (area_editor_ && area_editor_->is_active()) {
-        return false;
-    }
-
-    if (any_blocking_panel_visible()) {
-        return false;
-    }
-
-    auto floating = FloatingDockableManager::instance().open_panels();
-    for (DockableCollapsible* panel : floating) {
-        if (!panel) continue;
-        if (spawn_group_panel_ && panel == spawn_group_panel_.get()) continue;
-        if (!panel->is_visible()) continue;
-        return false;
+    if (input_) {
+        const int mx = input_->getX();
+        const int my = input_->getY();
+        if (is_ui_blocking_input(mx, my)) {
+            return false;
+        }
     }
 
     return true;

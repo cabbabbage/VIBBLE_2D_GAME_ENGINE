@@ -1685,7 +1685,10 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
             if (show_depth_guides) {
                 SDL_FPoint center = cam.get_view_center_f();
-                float anchor_y = center.y + cam.realism_settings().tripod_distance_y;
+                int minx = 0, miny = 0, maxx = 0, maxy = 0;
+                std::tie(minx, miny, maxx, maxy) = cam.get_camera_area().get_bounds();
+                const float view_height = static_cast<float>(std::max(0, maxy - miny));
+                float anchor_y = center.y + view_height * 0.5f;
                 SDL_Point anchor_world{
                     static_cast<int>(std::lround(center.x)),
                     static_cast<int>(std::lround(anchor_y))
@@ -1768,6 +1771,13 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             }
             if (apply_spacing_cutoff && !horizon_screen_y && std::isfinite(last_screen_y)) {
                 horizon_screen_y = last_screen_y;
+            }
+
+            if (!horizon_screen_y) {
+                const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
+                if (depth_params.enabled) {
+                    horizon_screen_y = static_cast<float>(depth_params.horizon_screen_y);
+                }
             }
         }
 

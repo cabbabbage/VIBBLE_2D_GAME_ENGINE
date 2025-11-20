@@ -180,6 +180,9 @@ public:
     double compute_room_scale_from_area(const Room* room) const;
 
 private:
+    double view_height_world() const;
+    double anchor_world_y() const;
+    double horizon_screen_y_for_scale() const;
 
     struct TransformSmoother1D {
         TransformSmoothingParams params{};

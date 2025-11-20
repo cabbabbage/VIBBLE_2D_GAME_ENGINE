@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-asset_info.py
-
-Simple asset descriptor wrapper around manifest.json.
-"""
 
 import json
 import logging
@@ -28,10 +23,20 @@ def _configure_logger() -> logging.Logger:
 LOGGER = _configure_logger()
 
 
+def _strip_generated_at_fields(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {
+            key: _strip_generated_at_fields(value)
+            for key, value in obj.items()
+            if key != "generated_at"
+        }
+    if isinstance(obj, list):
+        return [_strip_generated_at_fields(value) for value in obj]
+    return obj
+
+
 @dataclass
 class Asset:
-    """Represents a single asset entry from manifest.json."""
-
     name: str
     manifest_path: str
 
@@ -41,13 +46,12 @@ class Asset:
     type: str = ""
     needs_regen: bool = True
 
-    cache_dir: Optional[str] = None  # optional override for cache location
+    cache_dir: Optional[str] = None
 
     def __post_init__(self) -> None:
         self._load_from_manifest()
 
     def _load_from_manifest(self) -> None:
-        """Load manifest, extract snippet and populate fields, then check cache."""
         manifest_abs = os.path.abspath(self.manifest_path)
 
         if not os.path.exists(manifest_abs):
@@ -83,15 +87,13 @@ class Asset:
             self.needs_regen = True
             return
 
-        # Store the raw snippet
-        self.json_entry = raw_entry
+        cleaned_entry = _strip_generated_at_fields(raw_entry)
+        self.json_entry = cleaned_entry
 
-        # Extract simple fields from the snippet
-        self.src_path = str(raw_entry.get("asset_directory", ""))
-        self.type = str(raw_entry.get("asset_type", ""))
+        self.src_path = str(cleaned_entry.get("asset_directory", ""))
+        self.type = str(cleaned_entry.get("asset_type", ""))
 
-        # Size variants from scaling_profile.recommended_percentages if present
-        scaling_profile = raw_entry.get("scaling_profile", {})
+        scaling_profile = cleaned_entry.get("scaling_profile", {})
         if isinstance(scaling_profile, dict):
             variants = scaling_profile.get("recommended_percentages")
             if isinstance(variants, list):
@@ -109,34 +111,20 @@ class Asset:
         else:
             self.size_variants = [100]
 
-        # Determine cache path
         cache_file = self._get_cache_path(manifest_abs)
-
-        # Use the full snippet as the basis for cache comparison
         same = compare_and_update_json(self.json_entry, cache_file)
-
-        # If cache content matches snippet, no regen needed
         self.needs_regen = not same
 
     def _get_cache_path(self, manifest_abs: str) -> str:
-        """
-        Resolve cache file path for this asset.
-
-        Default: <manifest_dir>/.asset_cache/<asset_name>.json
-        Directory creation is handled by cache_helper when writing.
-        """
         if self.cache_dir:
             cache_root = os.path.abspath(self.cache_dir)
         else:
             manifest_dir = os.path.dirname(manifest_abs)
             cache_root = os.path.join(manifest_dir, ".asset_cache")
-
         return os.path.join(cache_root, f"{self.name}.json")
 
 
 if __name__ == "__main__":
-    # Simple manual test:
-    #   python asset_info.py <asset_name> <path_to_manifest.json> [cache_dir]
     if len(sys.argv) < 3:
         print(
             "Usage: python asset_info.py <asset_name> <path_to_manifest.json> [cache_dir]",

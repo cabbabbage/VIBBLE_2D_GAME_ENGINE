@@ -138,8 +138,7 @@ camera::CameraGeometry camera::compute_geometry() const {
         return g;
     }
 
-    g.anchor_world_y = static_cast<double>(smoothed_center_.y) +
-                       static_cast<double>(settings_.tripod_distance_y);
+    g.anchor_world_y = anchor_world_y();
     g.focus_depth = 0.0; // measured in world units along +Y from anchor
 
     // Increase pitch as camera height decreases relative to base height.
@@ -317,6 +316,10 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
 
 void camera::set_realism_settings(const RealismSettings& settings) {
     settings_ = settings;
+    // Tripod/anchor offset is now derived from the current view height; ignore any persisted value.
+    settings_.tripod_distance_y = 0.0f;
+    settings_.min_zoom_multiplier = std::max(0.1f, settings_.min_zoom_multiplier);
+    settings_.max_zoom_multiplier = std::clamp(settings_.max_zoom_multiplier, settings_.min_zoom_multiplier, 20.0f);
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
     if (settings_.parallax_smoothing.method == TransformSmoothingMethod::Lerp &&
         settings_.parallax_smoothing.lerp_rate <= 0.0f) {
@@ -806,8 +809,7 @@ camera::RenderEffects camera::compute_render_effects(
     const double pitch_factor  = std::min(std::abs(pitch_rad) / (PI_D / 3.0), 1.0);
 
     const double base_x = static_cast<double>(smoothed_center_.x);
-    const double base_y = static_cast<double>(smoothed_center_.y) +
-                          static_cast<double>(settings_.tripod_distance_y);
+    const double base_y = anchor_world_y();
 
     const double dx = static_cast<double>(world.x) - base_x;
     const double dy = static_cast<double>(world.y) - base_y;
@@ -1210,9 +1212,9 @@ camera::FloorDepthParams camera::compute_floor_depth_params() const {
     }
     const double pitch_rad = geom.pitch_radians;
 
-    p.horizon_screen_y = 0.0;
+    p.horizon_screen_y = horizon_screen_y_for_scale();
     p.bottom_screen_y  = static_cast<double>(screen_height_);
-    p.base_world_y     = static_cast<double>(smoothed_center_.y);
+    p.base_world_y     = anchor_world_y();
     p.pitch_radians    = pitch_rad;
     p.focus_ndc_offset = geom.focus_ndc_offset;
     p.strength         = 1.0;
@@ -1238,7 +1240,8 @@ float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
 
     // Depth relative to the pitched camera anchor (positive means farther "ahead").
     const double anchor_y = geom.anchor_world_y;
-    const double dy = static_cast<double>(world_y) - anchor_y;
+    // Flip depth sign so distant points compress toward the horizon at the top.
+    const double dy = anchor_y - static_cast<double>(world_y);
 
     // Rotate into camera space (pitch about X).
     double y_cam = dy * cos_p + geom.camera_height * sin_p;
@@ -1259,6 +1262,46 @@ float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
     y_ndc = std::clamp(y_ndc, -1.0, 1.0);
 
     const double screen_h = static_cast<double>(screen_height_);
-    const double y_proj = std::clamp(screen_h * (0.5 - 0.5 * y_ndc), 0.0, screen_h);
+    double y_proj = std::clamp(screen_h * (0.5 - 0.5 * y_ndc), 0.0, screen_h);
+
+    // Keep the warped floor pinned at or below the horizon while never exceeding the screen bounds.
+    const double horizon_y = std::clamp(p.horizon_screen_y, 0.0, screen_h);
+    const double min_y = std::min(horizon_y, screen_h);
+    y_proj = std::clamp(y_proj, min_y, screen_h);
+
     return static_cast<float>(y_proj);
+}
+
+double camera::view_height_world() const {
+    int minx = 0, miny = 0, maxx = 0, maxy = 0;
+    std::tie(minx, miny, maxx, maxy) = current_view_.get_bounds();
+    return static_cast<double>(std::max(0, maxy - miny));
+}
+
+double camera::anchor_world_y() const {
+    return static_cast<double>(smoothed_center_.y) + (view_height_world() * 0.5);
+}
+
+double camera::horizon_screen_y_for_scale() const {
+    if (screen_height_ <= 0) {
+        return 0.0;
+    }
+
+    const CameraGeometry geom = compute_geometry();
+    if (!geom.valid) {
+        return static_cast<double>(screen_height_) * 0.5;
+    }
+
+    const double tan_fov = std::tan(HALF_FOV_Y);
+    double y_ndc = (std::tan(geom.pitch_radians) / tan_fov) - geom.focus_ndc_offset;
+    y_ndc = std::clamp(y_ndc, -1.0, 1.0);
+
+    const double screen_h = static_cast<double>(screen_height_);
+    double y_proj = screen_h * (0.5 - 0.5 * y_ndc);
+
+    // Never let the horizon slip below the focus point on screen.
+    const double focus_screen_y = screen_h * 0.5;
+    y_proj = std::min(y_proj, focus_screen_y - 2.0);
+
+    return std::clamp(y_proj, 0.0, screen_h);
 }
