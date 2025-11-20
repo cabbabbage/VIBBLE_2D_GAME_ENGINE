@@ -71,7 +71,7 @@ public:
 
     // Callbacks for grid controls in footer
     void set_grid_controls_callbacks(std::function<void(bool)> on_overlay_toggle,
-                                     std::function<void(int)> on_resolution_change,
+                                     std::function<void(int, bool)> on_resolution_change,
                                      std::function<void(bool)> on_snap_toggle);
 
 private:
@@ -104,7 +104,7 @@ private:
     std::unique_ptr<DMNumericStepper> grid_stepper_;
     std::function<void(bool)> on_depth_effects_toggle_;
     std::function<void(bool)> on_grid_overlay_toggle_;
-    std::function<void(int)> on_grid_resolution_change_;
+    std::function<void(int, bool)> on_grid_resolution_change_;
     std::function<void(bool)> on_snap_to_grid_toggle_;
     int grid_controls_right_ = 0;
 };

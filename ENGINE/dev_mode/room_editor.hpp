@@ -327,6 +327,7 @@ private:
     int drag_perimeter_orig_h_ = 0;
     int drag_perimeter_curr_w_ = 0;
     int drag_resolution_ = 0;
+    bool drag_snap_enabled_ = false;
 
     const Area* drag_edge_area_ = nullptr;
     SDL_Point drag_edge_center_{0, 0};

@@ -193,6 +193,7 @@ private:
     void apply_camera_area_render_flag();
     void set_mode_from_header(int header_mode);
     void set_mode(Mode new_mode);
+    void apply_overlay_grid_resolution(int resolution, bool user_override, bool update_stepper, bool update_footer);
     void restore_filter_hidden_assets() const;
     void apply_dark_mask_visibility();
     bool lighting_section_forces_dark_mask() const;
@@ -259,7 +260,9 @@ private:
     // Grid header state
     bool grid_overlay_enabled_ = false;
     bool snap_to_grid_enabled_ = false;
-    int  grid_cell_size_px_ = 8; // pixels per cell
+    int  grid_overlay_resolution_r_ = 0;
+    bool grid_overlay_resolution_user_override_ = false;
+    int  grid_cell_size_px_ = 1; // pixels per cell
 
     // Footer depth toggle may temporarily disable camera realism.
     bool depth_effects_forced_realism_disabled_ = false;

@@ -1228,11 +1228,37 @@ SDL_Rect DMSlider::track_rect() const {
     return SDL_Rect{ content_rect_.x, content_rect_.y + content_rect_.h/2 - kSliderTrackThickness / 2, track_width, kSliderTrackThickness };
 }
 
+int DMSlider::track_center_y() const {
+    SDL_Rect tr = track_rect();
+    return tr.y + tr.h / 2;
+}
+
 SDL_Rect DMSlider::knob_rect() const {
     SDL_Rect tr = track_rect();
     int usable = std::max(1, tr.w - kSliderKnobWidth);
     int x = tr.x + (int)((display_value() - min_) * usable / (double)(std::max(1, max_ - min_)));
     return SDL_Rect{ x, tr.y - kSliderKnobVerticalInset, kSliderKnobWidth, kSliderKnobHeight };
+}
+
+SDL_Rect DMSlider::interaction_rect() const {
+    SDL_Rect knob = knob_rect();
+    const int pad_x = 8;
+    const int pad_y = 6;
+    knob.x -= pad_x;
+    knob.y -= pad_y;
+    knob.w += pad_x * 2;
+    knob.h += pad_y * 2;
+    const int bounds_x = rect_.x;
+    const int bounds_y = rect_.y;
+    const int bounds_w = std::max(0, rect_.w);
+    const int bounds_h = std::max(0, rect_.h);
+    const int bounds_right = bounds_x + bounds_w;
+    const int bounds_bottom = bounds_y + bounds_h;
+    knob.x = std::clamp(knob.x, bounds_x, bounds_right);
+    knob.y = std::clamp(knob.y, bounds_y, bounds_bottom);
+    knob.w = std::max(0, std::min(knob.w, bounds_right - knob.x));
+    knob.h = std::max(0, std::min(knob.h, bounds_bottom - knob.y));
+    return knob;
 }
 
 int DMSlider::value_for_x(int x) const {
@@ -1372,20 +1398,17 @@ bool DMSlider::handle_event(const SDL_Event& e) {
             return true;
         }
     } else if (e.type == SDL_MOUSEWHEEL) {
+        if (!focused_) {
+            return false;
+        }
         SDL_Point mouse{0, 0};
         SDL_GetMouseState(&mouse.x, &mouse.y);
         const bool pointer_inside = SDL_PointInRect(&mouse, &rect_);
-        if (!pointer_inside && !focused_) {
-            return false;
-        }
         if (pointer_inside) {
             update_hover(mouse);
         } else if (!dragging_) {
             hovered_ = false;
             knob_hovered_ = false;
-        }
-        if (!focused_) {
-            set_focus(true);
         }
         int delta = e.wheel.y;
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {

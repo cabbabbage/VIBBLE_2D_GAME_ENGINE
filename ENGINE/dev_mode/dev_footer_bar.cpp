@@ -220,7 +220,7 @@ bool DevFooterBar::handle_event(const SDL_Event& e) {
         used = true;
         grid_resolution_ = grid_stepper_->value();
         if (on_grid_resolution_change_) {
-            on_grid_resolution_change_(grid_resolution_);
+            on_grid_resolution_change_(grid_resolution_, true);
         }
     }
 
@@ -485,7 +485,7 @@ void DevFooterBar::set_grid_resolution(int resolution) {
             grid_stepper_->set_value(resolution);
         }
         if (on_grid_resolution_change_) {
-            on_grid_resolution_change_(resolution);
+            on_grid_resolution_change_(resolution, false);
         }
     }
 }
@@ -503,7 +503,7 @@ void DevFooterBar::set_snap_to_grid_enabled(bool enabled) {
 }
 
 void DevFooterBar::set_grid_controls_callbacks(std::function<void(bool)> on_overlay_toggle,
-                                               std::function<void(int)> on_resolution_change,
+                                               std::function<void(int, bool)> on_resolution_change,
                                                std::function<void(bool)> on_snap_toggle) {
     on_grid_overlay_toggle_ = std::move(on_overlay_toggle);
     on_grid_resolution_change_ = std::move(on_resolution_change);

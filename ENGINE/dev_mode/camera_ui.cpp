@@ -135,28 +135,34 @@ public:
     bool handle_event(const SDL_Event& e) override {
         update_layout_cache();
         if (!render_rect_valid_) {
+            hover_target_ = DragTarget::None;
             return false;
         }
 
         const SDL_Point p = event_point(e);
+        if (dragging_ == DragTarget::None) {
+            hover_target_ = detect_hover_target(p);
+        }
         const bool mouse_inside = (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN ||
                                    e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL) &&
                                   point_in_rect(p, rect_);
 
-        if (low_height_box_) {
-            const bool was_editing = low_height_box_->is_editing();
-            if (low_height_box_->handle_event(e)) {
-                if (!low_height_box_->is_editing() && (was_editing || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_KEYDOWN)) {
-                    apply_height_from_textbox(*low_height_box_, true);
+        if (low_height_slider_ && slider_event_allowed(*low_height_slider_, e, p)) {
+            const int before = low_height_slider_->displayed_value();
+            if (low_height_slider_->handle_event(e)) {
+                const int after = low_height_slider_->displayed_value();
+                if (after != before) {
+                    apply_height_from_slider(*low_height_slider_, true);
                 }
                 return true;
             }
         }
-        if (high_height_box_) {
-            const bool was_editing = high_height_box_->is_editing();
-            if (high_height_box_->handle_event(e)) {
-                if (!high_height_box_->is_editing() && (was_editing || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_KEYDOWN)) {
-                    apply_height_from_textbox(*high_height_box_, false);
+        if (high_height_slider_ && slider_event_allowed(*high_height_slider_, e, p)) {
+            const int before = high_height_slider_->displayed_value();
+            if (high_height_slider_->handle_event(e)) {
+                const int after = high_height_slider_->displayed_value();
+                if (after != before) {
+                    apply_height_from_slider(*high_height_slider_, false);
                 }
                 return true;
             }
@@ -165,16 +171,19 @@ public:
         if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
             if (hit_line(low_line_hitbox_, e.button.x, e.button.y)) {
                 dragging_ = DragTarget::LowLine;
+                hover_target_ = DragTarget::None;
                 update_anchor_from_pointer(e.button.y, true);
                 return true;
             }
             if (hit_line(high_line_hitbox_, e.button.x, e.button.y)) {
                 dragging_ = DragTarget::HighLine;
+                hover_target_ = DragTarget::None;
                 update_anchor_from_pointer(e.button.y, false);
                 return true;
             }
             if (hit_depth_handle(p)) {
                 dragging_ = DragTarget::DepthOffset;
+                hover_target_ = DragTarget::None;
                 update_depth_offset_from_pointer(e.button.x);
                 return true;
             }
@@ -191,6 +200,7 @@ public:
         }
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             dragging_ = DragTarget::None;
+            hover_target_ = detect_hover_target(p);
             if (mouse_inside) return true;
         }
 
@@ -206,72 +216,121 @@ public:
         update_layout_cache(renderer);
         if (!render_rect_valid_) return;
 
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, 18, 22, 30, 255);
         SDL_RenderFillRect(renderer, &rect_);
-        SDL_SetRenderDrawColor(renderer, 64, 82, 102, 255);
+        SDL_SetRenderDrawColor(renderer, 34, 49, 68, 120);
+        SDL_Rect top_glow{rect_.x, rect_.y, rect_.w, std::max(12, rect_.h / 4)};
+        SDL_RenderFillRect(renderer, &top_glow);
+        SDL_SetRenderDrawColor(renderer, 10, 12, 18, 160);
+        SDL_Rect bottom_shade{rect_.x, rect_.y + rect_.h / 2, rect_.w, rect_.h / 2};
+        SDL_RenderFillRect(renderer, &bottom_shade);
+        SDL_SetRenderDrawColor(renderer, 64, 82, 102, 230);
         SDL_RenderDrawRect(renderer, &rect_);
+        SDL_Rect inset{rect_.x + 1, rect_.y + 1, rect_.w - 2, rect_.h - 2};
+        SDL_SetRenderDrawColor(renderer, 18, 26, 34, 120);
+        SDL_RenderDrawRect(renderer, &inset);
 
-        SDL_SetRenderDrawColor(renderer, 90, 105, 125, 255);
+        SDL_Rect content_bg{layout_.content.x, layout_.content.y, layout_.content.w, layout_.content.h};
+        SDL_SetRenderDrawColor(renderer, 24, 32, 42, 80);
+        SDL_RenderFillRect(renderer, &content_bg);
+
+        // Draw the subject first so the sliders and guides sit over it.
+        draw_icon(renderer, subject_texture_, subject_texture_failed_, layout_.subject_rect, "Subject");
+
+        SDL_SetRenderDrawColor(renderer, 78, 94, 116, 220);
         SDL_RenderDrawLine(renderer, layout_.content.x, layout_.ground_y, layout_.content.x + layout_.content.w, layout_.ground_y);
         SDL_Rect ground_thick{layout_.content.x, layout_.ground_y, layout_.content.w, 2};
         SDL_RenderFillRect(renderer, &ground_thick);
 
-        SDL_SetRenderDrawColor(renderer, 120, 186, 255, 255);
+        SDL_SetRenderDrawColor(renderer, 112, 186, 255, 235);
         SDL_RenderDrawLine(renderer, layout_.content.x, layout_.low_y, layout_.content.x + layout_.content.w, layout_.low_y);
-        SDL_SetRenderDrawColor(renderer, 120, 186, 255, 40);
+        SDL_SetRenderDrawColor(renderer, 112, 186, 255, 48);
         SDL_RenderFillRect(renderer, &low_line_hitbox_);
+        if (should_highlight(DragTarget::LowLine)) {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 190);
+            for (int dy = -1; dy <= 1; ++dy) {
+                SDL_RenderDrawLine(renderer, layout_.content.x, layout_.low_y + dy,
+                                   layout_.content.x + layout_.content.w, layout_.low_y + dy);
+            }
+        }
 
-        SDL_SetRenderDrawColor(renderer, 166, 116, 255, 255);
+        SDL_SetRenderDrawColor(renderer, 196, 148, 255, 235);
         SDL_RenderDrawLine(renderer, layout_.content.x, layout_.high_y, layout_.content.x + layout_.content.w, layout_.high_y);
-        SDL_SetRenderDrawColor(renderer, 166, 116, 255, 32);
+        SDL_SetRenderDrawColor(renderer, 196, 148, 255, 40);
         SDL_RenderFillRect(renderer, &high_line_hitbox_);
+        if (should_highlight(DragTarget::HighLine)) {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 190);
+            for (int dy = -1; dy <= 1; ++dy) {
+                SDL_RenderDrawLine(renderer, layout_.content.x, layout_.high_y + dy,
+                                   layout_.content.x + layout_.content.w, layout_.high_y + dy);
+            }
+        }
 
         SDL_SetRenderDrawColor(renderer, 255, 210, 120, 200);
         for (int y = layout_.camera_y; y <= layout_.ground_y; y += 6) {
             SDL_RenderDrawLine(renderer, layout_.camera_x, y, layout_.camera_x, std::min(y + 3, layout_.ground_y));
         }
+        if (should_highlight(DragTarget::DepthOffset)) {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 190);
+            for (int dx = -1; dx <= 1; ++dx) {
+                SDL_RenderDrawLine(renderer, layout_.camera_x + dx, layout_.camera_y,
+                                   layout_.camera_x + dx, layout_.ground_y);
+            }
+        }
 
         DMLabelStyle label_style = DMStyles::Label();
         label_style.font_size = std::max(10, label_style.font_size - 2);
         char buffer[128] = {0};
-        std::snprintf(buffer, sizeof(buffer), "Height: %.0f px", values_.current_height);
+        std::snprintf(buffer, sizeof(buffer), "Height %.0f px", values_.current_height);
         DrawLabelText(renderer, buffer, layout_.camera_x + 8, (layout_.camera_y + layout_.ground_y) / 2 - label_style.font_size / 2, label_style);
-        std::snprintf(buffer, sizeof(buffer), "Offset: %.0f px", values_.depth_offset_px);
-        DrawLabelText(renderer, buffer, layout_.camera_x - 20, layout_.ground_y - label_style.font_size - 6, label_style);
+        std::snprintf(buffer, sizeof(buffer), "Offset %.0f px", values_.depth_offset_px);
+        DrawLabelText(renderer, buffer, layout_.camera_x - 24, layout_.ground_y - label_style.font_size - 6, label_style);
 
-        std::snprintf(buffer, sizeof(buffer), "Pitch: %.1f° (%.0f–%.0f°)",
-                      values_.pitch_degrees,
+        const float clamped_pitch = std::clamp(values_.pitch_degrees,
+                                              camera::kMinPitchDegrees,
+                                              camera::kMaxPitchDegrees);
+        std::snprintf(buffer, sizeof(buffer), "Pitch %.1f deg (%.0f-%.0f)",
+                      clamped_pitch,
                       camera::kMinPitchDegrees,
                       camera::kMaxPitchDegrees);
         DrawLabelText(renderer, buffer, layout_.camera_x + 8, layout_.camera_y - layout_.icon_size - 6, label_style);
 
-        DrawLabelText(renderer, "Low", layout_.content.x + 6, layout_.low_y - label_style.font_size - 2, label_style);
-        std::snprintf(buffer, sizeof(buffer), "Zoom: %.2f", values_.zoom_low);
+        DrawLabelText(renderer, "Low anchor", layout_.content.x + 6, layout_.low_y - label_style.font_size - 2, label_style);
+        std::snprintf(buffer, sizeof(buffer), "Zoom %.2f", values_.zoom_low);
         DrawLabelText(renderer, buffer, layout_.content.x + 6, layout_.low_y + 6, label_style);
-        DrawLabelText(renderer, "High", layout_.content.x + 6, layout_.high_y - label_style.font_size - 2, label_style);
-        std::snprintf(buffer, sizeof(buffer), "Zoom: %.2f", values_.zoom_high);
+        DrawLabelText(renderer, "High anchor", layout_.content.x + 6, layout_.high_y - label_style.font_size - 2, label_style);
+        std::snprintf(buffer, sizeof(buffer), "Zoom %.2f", values_.zoom_high);
         DrawLabelText(renderer, buffer, layout_.content.x + 6, layout_.high_y + 6, label_style);
 
         SDL_SetRenderDrawColor(renderer, 255, 210, 120, 180);
         SDL_RenderFillRect(renderer, &depth_handle_rect_);
         SDL_SetRenderDrawColor(renderer, 60, 50, 30, 255);
         SDL_RenderDrawRect(renderer, &depth_handle_rect_);
+        if (should_highlight(DragTarget::DepthOffset)) {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 220);
+            SDL_Rect handle_highlight = depth_handle_rect_;
+            handle_highlight.x -= 2;
+            handle_highlight.y -= 2;
+            handle_highlight.w += 4;
+            handle_highlight.h += 4;
+            SDL_RenderDrawRect(renderer, &handle_highlight);
+        }
 
-        const float clamped_pitch = std::clamp(values_.pitch_degrees,
-                                              camera::kMinPitchDegrees,
-                                              camera::kMaxPitchDegrees);
         const float pitch_radians = clamped_pitch * (kPi / 180.0f);
         const int line_length = std::max(layout_.icon_size * 2, layout_.content.w / 4);
         const int pitch_dx = line_length;
         const int pitch_dy = static_cast<int>(std::round(std::tan(pitch_radians) * static_cast<float>(line_length) * 0.45f));
-        SDL_SetRenderDrawColor(renderer, 154, 203, 255, 180);
+        SDL_SetRenderDrawColor(renderer, 154, 203, 255, 200);
         SDL_RenderDrawLine(renderer, layout_.camera_x, layout_.camera_y, layout_.camera_x + pitch_dx, layout_.camera_y - pitch_dy);
 
-        draw_icon(renderer, subject_texture_, subject_texture_failed_, layout_.subject_rect, "Subject");
-        draw_icon(renderer, camera_texture_, camera_texture_failed_, layout_.camera_rect, "Camera", values_.pitch_degrees);
+        draw_icon(renderer, camera_texture_, camera_texture_failed_, layout_.camera_rect, "Camera", clamped_pitch);
 
-        if (low_height_box_) low_height_box_->render(renderer);
-        if (high_height_box_) high_height_box_->render(renderer);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 26);
+        SDL_RenderDrawLine(renderer, layout_.content.x, layout_.camera_y, layout_.camera_x, layout_.camera_y);
+
+        if (low_height_slider_) low_height_slider_->render(renderer);
+        if (high_height_slider_) high_height_slider_->render(renderer);
     }
     bool wants_full_row() const override { return true; }
 
@@ -280,7 +339,7 @@ public:
         enforce_height_constraints();
         enforce_zoom_constraints();
         enforce_pitch_constraints();
-        sync_text_fields();
+        sync_sliders();
     }
     CameraDepthViewValues values() const { return values_; }
     void set_on_change(ChangeCallback cb) { on_change_ = std::move(cb); }
@@ -290,6 +349,8 @@ private:
     struct LayoutState {
         SDL_Rect content{0,0,0,0};
         int ground_y = 0;
+        int zoom_axis_top = 0;
+        int zoom_axis_bottom = 0;
         int low_y = 0;
         int high_y = 0;
         int camera_x = 0;
@@ -326,43 +387,131 @@ private:
         return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
     }
 
-    float parse_px_value(const std::string& text, float fallback) const {
-        char* end = nullptr;
-        const float parsed = std::strtof(text.c_str(), &end);
-        if (end == text.c_str()) return fallback;
-        if (!std::isfinite(parsed)) return fallback;
-        return parsed;
+    static bool is_pointer_event(const SDL_Event& e) {
+        switch (e.type) {
+        case SDL_MOUSEMOTION:
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+        case SDL_MOUSEWHEEL:
+            return true;
+        default:
+            return false;
+        }
     }
 
-    void apply_height_from_textbox(const DMTextBox& box, bool low_line) {
-        const float preserved_slope = safe_height_per_zoom();
-        const float parsed = parse_px_value(box.value(), low_line ? values_.height_low_px : values_.height_high_px);
+    bool slider_event_allowed(const DMSlider& slider, const SDL_Event& e, SDL_Point point) const {
+        if (!is_pointer_event(e)) {
+            return true;
+        }
+        if (slider.is_dragging()) {
+            return true;
+        }
+        const SDL_Rect hit = slider.interaction_rect();
+        if (hit.w <= 0 || hit.h <= 0) {
+            return false;
+        }
+        return point_in_rect(point, hit);
+    }
+
+    void apply_height_from_slider(const DMSlider& slider, bool low_line) {
+        const float parsed = static_cast<float>(slider.displayed_value());
         if (low_line) {
             values_.height_low_px = std::clamp(parsed, 0.0f, values_.height_high_px);
         } else {
             values_.height_high_px = std::max(parsed, values_.height_low_px);
         }
         enforce_height_constraints();
-        sync_zoom_from_height_change(low_line, preserved_slope);
-        sync_text_fields();
+        sync_sliders();
+        recompute_current_height();
         notify();
+    }
+
+    int compute_height_slider_max() const {
+        const float max_height = std::max({values_.height_low_px, values_.height_high_px, values_.current_height, 600.0f});
+        const float padded = std::max(600.0f, max_height * 1.35f);
+        const int quantized = static_cast<int>(std::ceil(padded / 100.0f) * 100.0f);
+        return std::clamp(quantized, 800, kMaxHeightSliderPx);
+    }
+
+    void ensure_height_sliders() const {
+        const int desired_max = compute_height_slider_max();
+        const bool needs_rebuild = desired_max != height_slider_range_px_ || !low_height_slider_ || !high_height_slider_;
+        if (needs_rebuild) {
+            height_slider_range_px_ = desired_max;
+            low_height_slider_ = std::make_unique<DMSlider>("Low Height (px)", 0, height_slider_range_px_, static_cast<int>(std::lround(values_.height_low_px)));
+            high_height_slider_ = std::make_unique<DMSlider>("High Height (px)", 0, height_slider_range_px_, static_cast<int>(std::lround(values_.height_high_px)));
+            if (low_height_slider_) low_height_slider_->set_defer_commit_until_unfocus(false);
+            if (high_height_slider_) high_height_slider_->set_defer_commit_until_unfocus(false);
+        }
+        if (low_height_slider_) {
+            low_height_slider_->set_value(static_cast<int>(std::lround(values_.height_low_px)));
+        }
+        if (high_height_slider_) {
+            high_height_slider_->set_value(static_cast<int>(std::lround(values_.height_high_px)));
+        }
+    }
+
+    void sync_sliders() const {
+        ensure_height_sliders();
+    }
+
+    SDL_Rect align_slider_to_line(DMSlider& slider, int line_y, int slider_w) const {
+        const int slider_h = slider.preferred_height(slider_w);
+        SDL_Rect rect{layout_.content.x + layout_.content.w - slider_w - padding_, line_y - slider_h / 2, slider_w, slider_h};
+        slider.set_rect(rect);
+        int delta = slider.track_center_y() - line_y;
+        if (delta != 0) {
+            rect.y = std::clamp(rect.y - delta, layout_.content.y, layout_.content.y + layout_.content.h - slider_h);
+            slider.set_rect(rect);
+            delta = slider.track_center_y() - line_y;
+            if (delta != 0) {
+                rect.y = std::clamp(rect.y - delta, layout_.content.y, layout_.content.y + layout_.content.h - slider_h);
+                slider.set_rect(rect);
+            }
+        }
+        return rect;
     }
 
     void update_anchor_from_pointer(int py, bool low_line) {
         if (!render_rect_valid_) return;
-        const float preserved_slope = safe_height_per_zoom();
-        const int clamped_py = std::clamp(py, layout_.content.y, layout_.content.y + layout_.content.h);
-        const int dy = std::max(0, layout_.ground_y - clamped_py);
-        const float height_px = static_cast<float>(dy) / std::max(0.001f, layout_.pixels_per_unit);
+        const float target_zoom = pointer_y_to_zoom(py);
         if (low_line) {
-            values_.height_low_px = std::clamp(height_px, 0.0f, values_.height_high_px);
+            values_.zoom_low = target_zoom;
         } else {
-            values_.height_high_px = std::max(height_px, values_.height_low_px);
+            values_.zoom_high = target_zoom;
         }
-        enforce_height_constraints();
-        sync_zoom_from_height_change(low_line, preserved_slope);
-        sync_text_fields();
+        enforce_zoom_constraints();
+        recompute_current_height();
         notify();
+    }
+
+    int zoom_axis_span() const {
+        return std::max(1, layout_.zoom_axis_bottom - layout_.zoom_axis_top);
+    }
+
+    int zoom_to_y(float zoom) const {
+        const float min_zoom = std::min(values_.zoom_low, values_.zoom_high);
+        const float max_zoom = std::max(values_.zoom_low, values_.zoom_high);
+        const float zoom_span = std::max(0.0001f, max_zoom - min_zoom);
+        const float normalized = std::clamp((zoom - min_zoom) / zoom_span, 0.0f, 1.0f);
+        const float offset = normalized * static_cast<float>(zoom_axis_span());
+        const int y = layout_.zoom_axis_bottom - static_cast<int>(std::lround(offset));
+        return std::clamp(y, layout_.zoom_axis_top, layout_.zoom_axis_bottom);
+    }
+
+    float pointer_y_to_zoom(int py) const {
+        const int top = layout_.zoom_axis_top;
+        const int bottom = layout_.zoom_axis_bottom;
+        if (bottom <= top) {
+            return values_.zoom_low;
+        }
+        const int clamped_py = std::clamp(py, top, bottom);
+        const float span = static_cast<float>(bottom - top);
+        const float normalized = std::clamp((bottom - clamped_py) / span, 0.0f, 1.0f);
+        const float min_zoom = std::min(values_.zoom_low, values_.zoom_high);
+        const float max_zoom = std::max(values_.zoom_low, values_.zoom_high);
+        const float zoom_span = std::max(0.0001f, max_zoom - min_zoom);
+        return min_zoom + normalized * zoom_span;
     }
 
     void update_depth_offset_from_pointer(int px) {
@@ -378,6 +527,21 @@ private:
         if (!render_rect_valid_) return false;
         if (hit_line(camera_drag_hitbox_, p.x, p.y)) return true;
         return hit_line(depth_handle_rect_, p.x, p.y);
+    }
+
+    DragTarget detect_hover_target(SDL_Point p) const {
+        if (!render_rect_valid_) return DragTarget::None;
+        if (hit_line(low_line_hitbox_, p.x, p.y)) return DragTarget::LowLine;
+        if (hit_line(high_line_hitbox_, p.x, p.y)) return DragTarget::HighLine;
+        if (hit_depth_handle(p)) return DragTarget::DepthOffset;
+        return DragTarget::None;
+    }
+
+    bool should_highlight(DragTarget target) const {
+        if (dragging_ != DragTarget::None) {
+            return dragging_ == target;
+        }
+        return hover_target_ == target;
     }
 
     void enforce_height_constraints() {
@@ -398,34 +562,15 @@ private:
         values_.zoom_high = std::max(values_.zoom_low + kMinZoomDelta, values_.zoom_high);
     }
 
-    float safe_height_per_zoom() const {
-        const float dz = std::max(0.0001f, values_.zoom_high - values_.zoom_low);
-        const float slope = (values_.height_high_px - values_.height_low_px) / dz;
-        return (std::fabs(slope) < 1e-4f) ? 1.0f : slope;
+    void recompute_current_height() {
+        camera::RealismSettings settings{};
+        settings.zoom_low = values_.zoom_low;
+        settings.zoom_high = values_.zoom_high;
+        settings.height_low_px = values_.height_low_px;
+        settings.height_high_px = values_.height_high_px;
+        values_.current_height = interpolate_height_for_ui(settings, values_.current_zoom);
     }
 
-    void sync_zoom_from_height_change(bool low_line, float preserved_slope) {
-        const float slope = (std::fabs(preserved_slope) < 1e-4f) ? 1.0f : preserved_slope;
-        const float height_span = values_.height_high_px - values_.height_low_px;
-        const float new_delta_zoom = height_span / slope;
-        if (low_line) {
-            values_.zoom_low = values_.zoom_high - new_delta_zoom;
-        } else {
-            values_.zoom_high = values_.zoom_low + new_delta_zoom;
-        }
-        enforce_zoom_constraints();
-    }
-
-    void sync_text_fields() {
-        if (low_height_box_) low_height_box_->set_value(format_height(values_.height_low_px));
-        if (high_height_box_) high_height_box_->set_value(format_height(values_.height_high_px));
-    }
-
-    std::string format_height(float value) const {
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "%.0f", value);
-        return buf;
-    }
 
     void draw_icon(SDL_Renderer* renderer,
                    SDL_Texture*& tex,
@@ -475,15 +620,17 @@ private:
         const int usable_height = std::max(1, layout_.content.h - top_padding);
         layout_.pixels_per_unit = static_cast<float>(usable_height) / span_px;
         layout_.ground_y = layout_.content.y + layout_.content.h - 1;
+        layout_.zoom_axis_top = layout_.content.y + 2;
+        layout_.zoom_axis_bottom = std::max(layout_.zoom_axis_top, layout_.ground_y - 2);
         auto height_to_y = [&](float h) {
             const int y = layout_.ground_y - static_cast<int>(std::lround(std::max(0.0f, h) * layout_.pixels_per_unit));
             return std::clamp(y, layout_.content.y, layout_.ground_y - 2);
         };
-        layout_.low_y  = height_to_y(values_.height_low_px);
-        layout_.high_y = height_to_y(values_.height_high_px);
+        layout_.low_y  = zoom_to_y(values_.zoom_low);
+        layout_.high_y = zoom_to_y(values_.zoom_high);
         if (layout_.high_y > layout_.low_y) layout_.high_y = layout_.low_y;
 
-        const int drag_pad = std::max(6, layout_.icon_size / 4);
+        const int drag_pad = std::max(10, layout_.icon_size / 3);
         low_line_hitbox_ = SDL_Rect{layout_.content.x, layout_.low_y - drag_pad, layout_.content.w, drag_pad * 2};
         high_line_hitbox_ = SDL_Rect{layout_.content.x, layout_.high_y - drag_pad, layout_.content.w, drag_pad * 2};
 
@@ -509,20 +656,15 @@ private:
             layout_.content.h
         };
 
-        const int box_w = std::max(120, layout_.content.w / 4);
-        const int box_h = DMTextBox::height();
-        SDL_Rect low_box{layout_.content.x + layout_.content.w - box_w - padding_, layout_.low_y - box_h / 2, box_w, box_h};
-        SDL_Rect high_box{layout_.content.x + layout_.content.w - box_w - padding_, layout_.high_y - box_h / 2, box_w, box_h};
-        low_box.y = std::clamp(low_box.y, layout_.content.y, layout_.content.y + layout_.content.h - box_h);
-        high_box.y = std::clamp(high_box.y, layout_.content.y, layout_.content.y + layout_.content.h - box_h);
-        if (!low_height_box_) {
-            low_height_box_ = std::make_unique<DMTextBox>("Height (px)", format_height(values_.height_low_px));
+        const int slider_w_max = std::max(180, layout_.content.w - padding_ * 2);
+        const int slider_w = std::clamp(layout_.content.w / 2, 180, slider_w_max);
+        ensure_height_sliders();
+        if (low_height_slider_) {
+            align_slider_to_line(*low_height_slider_, layout_.low_y, slider_w);
         }
-        if (!high_height_box_) {
-            high_height_box_ = std::make_unique<DMTextBox>("Height (px)", format_height(values_.height_high_px));
+        if (high_height_slider_) {
+            align_slider_to_line(*high_height_slider_, layout_.high_y, slider_w);
         }
-        if (low_height_box_) low_height_box_->set_rect(low_box);
-        if (high_height_box_) high_height_box_->set_rect(high_box);
 
         (void)renderer;
         render_rect_valid_ = true;
@@ -539,15 +681,18 @@ private:
     mutable SDL_Rect camera_drag_hitbox_{0,0,0,0};
     mutable bool render_rect_valid_ = false;
     mutable LayoutState layout_{};
-    mutable std::unique_ptr<DMTextBox> low_height_box_{};
-    mutable std::unique_ptr<DMTextBox> high_height_box_{};
+    mutable std::unique_ptr<DMSlider> low_height_slider_{};
+    mutable std::unique_ptr<DMSlider> high_height_slider_{};
+    mutable int height_slider_range_px_ = 6000;
     mutable SDL_Texture* subject_texture_ = nullptr;
     mutable SDL_Texture* camera_texture_ = nullptr;
     mutable bool subject_texture_failed_ = false;
     mutable bool camera_texture_failed_ = false;
     DragTarget dragging_ = DragTarget::None;
+    DragTarget hover_target_ = DragTarget::None;
     inline static constexpr float kMaxDepthOffsetPx = 4000.0f;
-}; 
+    inline static constexpr int kMaxHeightSliderPx = 40000;
+};
 
 class CameraSideViewPanel : public DockableCollapsible {
 public:
@@ -627,7 +772,7 @@ private:
     CameraSideViewWidget::ChangeCallback on_change_{};
 };
 
-class PanelBannerWidget : public Widget {
+class PanelBannerWidget  : public Widget {
 public:
     PanelBannerWidget(std::string heading, std::string detail)
         : heading_(std::move(heading)),

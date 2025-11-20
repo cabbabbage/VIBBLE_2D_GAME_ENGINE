@@ -94,6 +94,7 @@ constexpr int kPopupOutlineThickness = 1;
 constexpr const char* kGridOverlayEnabledKey = "dev.grid.overlay.enabled";
 constexpr const char* kGridSnapEnabledKey    = "dev.grid.snap.enabled";
 constexpr const char* kGridCellSizePxKey     = "dev.grid.cell_size_px";
+constexpr const char* kGridOverlayResolutionKey = "dev.grid.overlay.r";
 
 void draw_simple_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
     if (!renderer) return;
@@ -499,8 +500,14 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     // Load grid header settings
     grid_overlay_enabled_ = devmode::ui_settings::load_bool(kGridOverlayEnabledKey, false);
     snap_to_grid_enabled_ = devmode::ui_settings::load_bool(kGridSnapEnabledKey, false);
-    // Initialize cell size from map grid settings if available later; default to 2^0 = 1
-    grid_cell_size_px_ = 1;
+    const int saved_overlay_r = static_cast<int>(devmode::ui_settings::load_number(kGridOverlayResolutionKey, -1));
+    if (saved_overlay_r >= 0) {
+        grid_overlay_resolution_user_override_ = true;
+        grid_overlay_resolution_r_ = vibble::grid::clamp_resolution(saved_overlay_r);
+    } else {
+        grid_overlay_resolution_r_ = 0;
+    }
+    grid_cell_size_px_ = vibble::grid::delta(grid_overlay_resolution_r_);
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
     if (room_editor_) {
         room_editor_->set_manifest_store(&manifest_store_);
@@ -549,33 +556,18 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     map_grid_regen_cb_ = [this]() { this->regenerate_map_grid_assets(); };
     apply_header_suppression();
-    // Resolution stepper uses same range as map grid (0..kMaxResolution)
-    grid_resolution_stepper_ = std::make_unique<DMNumericStepper>("Grid Resolution (r)", 0, vibble::grid::kMaxResolution, 0);
+    // Grid overlay snap resolution uses the same exponent range (0..kMaxResolution)
+    grid_resolution_stepper_ = std::make_unique<DMNumericStepper>("Grid Resolution (r)", 0, vibble::grid::kMaxResolution, grid_overlay_resolution_r_);
     grid_resolution_stepper_->set_on_change([this](int new_r){
-        // Clamp and apply to map grid settings, then update derived cell size for overlay
-        const int clamped_r = std::clamp(new_r, 0, vibble::grid::kMaxResolution);
-        // Persist into map info if available
-        if (map_info_json_) {
-            ensure_map_grid_settings(*map_info_json_);
-            nlohmann::json& section = (*map_info_json_)["map_grid_settings"];
-            MapGridSettings settings = MapGridSettings::from_json(&section);
-            settings.resolution = clamped_r;
-            settings.r_chunk   = clamped_r;
-            settings.clamp();
-            settings.apply_to_json(section);
-            if (assets_) {
-                assets_->apply_map_grid_settings(settings, /*persist_json=*/false);
-            }
-            if (map_grid_save_cb_) {
-                map_grid_save_cb_();
-            }
-            // Derive pixel cell size from resolution
-            grid_cell_size_px_ = settings.spacing();
-        } else {
-            // Fallback: derive pixel size directly if no map info yet
-            grid_cell_size_px_ = vibble::grid::delta(clamped_r);
+        const int clamped_r = vibble::grid::clamp_resolution(new_r);
+        if (clamped_r == grid_overlay_resolution_r_) {
+            return;
         }
+        apply_overlay_grid_resolution(clamped_r, /*user_override=*/true, /*update_stepper=*/false, /*update_footer=*/true);
     });
+    if (grid_resolution_stepper_) {
+        grid_resolution_stepper_->set_value(grid_overlay_resolution_r_);
+    }
 
     // Grid overlay checkbox
     grid_overlay_checkbox_ = std::make_unique<DMCheckbox>("Show Grid", grid_overlay_enabled_);
@@ -659,32 +651,19 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 }
             });
             footer->set_grid_overlay_enabled(grid_overlay_enabled_);
-            footer->set_grid_resolution(0); // Will be updated when map info is set
+            footer->set_grid_resolution(grid_overlay_resolution_r_);
             footer->set_snap_to_grid_enabled(snap_to_grid_enabled_);
             footer->set_grid_controls_callbacks(
                 [this](bool enabled) {
                     grid_overlay_enabled_ = enabled;
                     devmode::ui_settings::save_bool(kGridOverlayEnabledKey, enabled);
                 },
-                [this](int resolution) {
-                    // Update grid resolution in map settings
-                    if (map_info_json_) {
-                        ensure_map_grid_settings(*map_info_json_);
-                        nlohmann::json& section = (*map_info_json_)["map_grid_settings"];
-                        MapGridSettings settings = MapGridSettings::from_json(&section);
-                        settings.resolution = resolution;
-                        settings.r_chunk   = resolution;
-                        settings.clamp();
-                        settings.apply_to_json(section);
-                        if (assets_) {
-                            assets_->apply_map_grid_settings(settings, /*persist_json=*/false);
-                        }
-                        if (map_grid_save_cb_) {
-                            map_grid_save_cb_();
-                        }
-                        // Update derived cell size
-                        grid_cell_size_px_ = settings.spacing();
+                [this](int resolution, bool from_user) {
+                    const int clamped = vibble::grid::clamp_resolution(resolution);
+                    if (clamped == grid_overlay_resolution_r_) {
+                        return;
                     }
+                    apply_overlay_grid_resolution(clamped, /*user_override=*/from_user, /*update_stepper=*/true, /*update_footer=*/false);
                 },
                 [this](bool enabled) {
                     snap_to_grid_enabled_ = enabled;
@@ -771,24 +750,45 @@ void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCall
         map_mode_ui_->set_map_context(map_info_json_, map_path_);
     }
     asset_filter_.set_map_info(map_info_json_);
-    // Sync header stepper and cell size from current map grid settings
+    // Sync overlay snap resolution; default to map grid settings unless the user overrides.
     if (map_info_json_) {
         ensure_map_grid_settings(*map_info_json_);
         const nlohmann::json& section = (*map_info_json_)["map_grid_settings"];
         MapGridSettings settings = MapGridSettings::from_json(&section);
         settings.clamp();
-        grid_cell_size_px_ = settings.spacing();
-        if (grid_resolution_stepper_) {
-            grid_resolution_stepper_->set_value(settings.resolution);
+        if (!grid_overlay_resolution_user_override_) {
+            apply_overlay_grid_resolution(settings.resolution, /*user_override=*/false, /*update_stepper=*/true, /*update_footer=*/true);
+        } else {
+            apply_overlay_grid_resolution(grid_overlay_resolution_r_, /*user_override=*/false, /*update_stepper=*/true, /*update_footer=*/true);
         }
-        // Sync with footer bar
-        if (map_mode_ui_) {
-            if (auto* footer = map_mode_ui_->get_footer_bar()) {
-                footer->set_grid_resolution(settings.resolution);
+    } else {
+        apply_overlay_grid_resolution(grid_overlay_resolution_r_, /*user_override=*/false, /*update_stepper=*/true, /*update_footer=*/true);
+    }
+    configure_header_button_sets();
+}
+
+void DevControls::apply_overlay_grid_resolution(int resolution, bool user_override, bool update_stepper, bool update_footer) {
+    const int clamped = vibble::grid::clamp_resolution(resolution);
+    grid_overlay_resolution_r_ = clamped;
+    grid_cell_size_px_ = vibble::grid::delta(clamped);
+    if (user_override) {
+        grid_overlay_resolution_user_override_ = true;
+        devmode::ui_settings::save_number(kGridOverlayResolutionKey, clamped);
+        devmode::ui_settings::save_number(kGridCellSizePxKey, grid_cell_size_px_);
+    }
+    if (update_stepper && grid_resolution_stepper_ && grid_resolution_stepper_->value() != clamped) {
+        grid_resolution_stepper_->set_value(clamped);
+    }
+    if (update_footer && map_mode_ui_) {
+        if (auto* footer = map_mode_ui_->get_footer_bar()) {
+            if (footer->grid_resolution() != clamped) {
+                footer->set_grid_resolution(clamped);
             }
         }
     }
-    configure_header_button_sets();
+    if (frame_editor_session_ && frame_editor_session_->is_active()) {
+        frame_editor_session_->set_snap_resolution(clamped);
+    }
 }
 
 void DevControls::set_player(Asset* player) {
@@ -1092,7 +1092,9 @@ void DevControls::update(const Input& input) {
         // highlight/select assets by skipping RoomEditor update and clearing highlights.
         const bool frame_editing = frame_editor_session_ && frame_editor_session_->is_active();
         if (!frame_editing) {
-            if (camera_panel_ && camera_panel_->is_visible() && !pointer_over_camera_panel_ && !pointer_over_image_effect_panel_) {
+            const bool camera_panel_blocking = camera_panel_ && camera_panel_->is_visible() &&
+                                              (pointer_over_camera_panel_ || pointer_over_image_effect_panel_);
+            if (!camera_panel_blocking) {
                 room_editor_->update(input);
             }
         } else {
@@ -1670,19 +1672,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_FPoint bottom_right_world = cam.screen_to_map(SDL_Point{screen_w_, screen_h_});
         const float cam_scale = std::max(0.0001f, cam.get_scale());
 
-        // Calculate grid lines using map grid resolution when available
-        int cell = grid_cell_size_px_;
-        if (map_info_json_) {
-            const nlohmann::json* section = nullptr;
-            auto it = map_info_json_->find("map_grid_settings");
-            if (it != map_info_json_->end() && it->is_object()) {
-                section = &(*it);
-            }
-            MapGridSettings settings = MapGridSettings::from_json(section);
-            settings.clamp();
-            cell = settings.spacing();
-        }
-        cell = std::max(1, cell);
+        // Calculate grid lines using the current overlay snap resolution
+        int cell = std::max(1, grid_cell_size_px_);
         if (cell > 0) {
             const float world_padding = static_cast<float>(cell) * 4.0f;
             const float depth_world_padding = cam_scale * std::max(0.0f, cam_settings.grid_depth_offset_px);
@@ -2094,11 +2085,12 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
 void DevControls::begin_frame_editor_session(Asset* asset,
                                              std::shared_ptr<animation_editor::AnimationDocument> document,
-                                             std::shared_ptr<animation_editor::PreviewProvider> preview,
+                                            std::shared_ptr<animation_editor::PreviewProvider> preview,
                                              const std::string& animation_id,
                                              animation_editor::AnimationEditorWindow* host_to_toggle) {
     if (!asset || !assets_ || animation_id.empty()) return;
     if (!frame_editor_session_) frame_editor_session_ = std::make_unique<FrameEditorSession>();
+    frame_editor_session_->set_snap_resolution(grid_overlay_resolution_r_);
     // Snapshot grid overlay and force ON (non-persistent)
     frame_editor_prev_grid_overlay_ = grid_overlay_enabled_;
     grid_overlay_enabled_ = true;

@@ -22,6 +22,7 @@ class AnimationLoader {
     struct LoadAttemptResult {
         bool success     = false;
         bool cache_issue = false;
+        std::string failed_animation;
     };
 
     static LoadAttemptResult load_asset_animations_once(AssetInfo& info, SDL_Renderer* renderer, bool force_rebuild);

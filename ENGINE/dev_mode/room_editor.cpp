@@ -3711,6 +3711,8 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
 
     drag_anchor_asset_ = primary;
     drag_spawn_id_ = primary->spawn_id;
+    overlay_resolution_before_drag_.reset();
+    drag_snap_enabled_ = false;
 
     MapGridSettings map_settings = current_room_ ? current_room_->map_grid_settings() : MapGridSettings::defaults();
     map_settings.clamp();
@@ -3744,24 +3746,27 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     bool resolve_geometry = (method == "Exact" || method == "Exact Position" || method == "Perimeter");
 
     // Handle snap-to-grid + footer overlay resolution interactions on drag start
-    const int overlay_resolution = shared_footer_bar_ ? shared_footer_bar_->grid_resolution()
-                                                     : vibble::grid::clamp_resolution(map_settings.resolution);
-    const bool snap_enabled = shared_footer_bar_ ? shared_footer_bar_->snap_to_grid_enabled() : false;
+    const bool editing_spawn_config = is_spawn_group_panel_visible() && active_spawn_group_id_.has_value();
+    const int overlay_resolution = (editing_spawn_config && shared_footer_bar_)
+        ? shared_footer_bar_->grid_resolution()
+        : vibble::grid::clamp_resolution(map_settings.resolution);
+    const bool snap_enabled = editing_spawn_config && shared_footer_bar_ && shared_footer_bar_->snap_to_grid_enabled();
+    drag_snap_enabled_ = editing_spawn_config;
 
-    if (snap_enabled) {
-        // Snap ON: set group resolution to overlay immediately on drag start
-        const int clamped_overlay_r = vibble::grid::clamp_resolution(overlay_resolution);
-        drag_resolution_ = clamped_overlay_r;
-        if (spawn_entry) {
-            (*spawn_entry)["resolution"] = clamped_overlay_r;
-            // Persist the resolution update immediately
-            save_current_room_assets_json();
-        }
-        // Do not change overlay resolution
-        overlay_resolution_before_drag_.reset();
-    } else {
-        // Snap OFF: snap to the group's set resolution, and temporarily sync overlay to it
-        if (spawn_entry) {
+    if (editing_spawn_config) {
+        if (snap_enabled) {
+            // Snap ON: set group resolution to overlay immediately on drag start
+            const int clamped_overlay_r = vibble::grid::clamp_resolution(overlay_resolution);
+            drag_resolution_ = clamped_overlay_r;
+            if (spawn_entry) {
+                (*spawn_entry)["resolution"] = clamped_overlay_r;
+                // Persist the resolution update immediately
+                save_current_room_assets_json();
+            }
+            // Do not change overlay resolution
+            overlay_resolution_before_drag_.reset();
+        } else if (spawn_entry) {
+            // Snap OFF: snap to the group's set resolution, and temporarily sync overlay to it
             const int group_r = vibble::grid::clamp_resolution(spawn_entry->value("resolution", drag_resolution_));
             drag_resolution_ = group_r;
             if (shared_footer_bar_) {
@@ -3772,6 +3777,8 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
                 }
             }
         }
+    } else {
+        overlay_resolution_before_drag_.reset();
     }
 
     auto [room_w, room_h] = get_room_dimensions();
@@ -4158,6 +4165,7 @@ void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
 
 bool RoomEditor::snap_dragged_assets_to_grid() {
     if (drag_states_.empty()) return false;
+    if (!drag_snap_enabled_) return false;
     const int resolution = vibble::grid::clamp_resolution(drag_resolution_);
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
     bool changed = false;
@@ -4198,7 +4206,7 @@ bool RoomEditor::snap_dragged_assets_to_grid() {
 
 void RoomEditor::finalize_drag_session() {
     // Restore overlay grid resolution if we changed it for the drag
-    if (shared_footer_bar_ && overlay_resolution_before_drag_.has_value()) {
+    if (drag_snap_enabled_ && shared_footer_bar_ && overlay_resolution_before_drag_.has_value()) {
         shared_footer_bar_->set_grid_resolution(*overlay_resolution_before_drag_);
         overlay_resolution_before_drag_.reset();
     }
@@ -4323,6 +4331,7 @@ void RoomEditor::reset_drag_state() {
     drag_edge_inset_percent_ = 100.0;
     drag_moved_ = false;
     drag_spawn_id_.clear();
+    drag_snap_enabled_ = false;
     overlay_resolution_before_drag_.reset();
 }
 

@@ -4,7 +4,7 @@
             "current_room": true,
             "filters_expanded": false,
             "initialized": true,
-            "map_assets": true,
+            "map_assets": false,
             "methods": {
                 "center": true,
                 "childrandom": true,
@@ -27,9 +27,10 @@
             }
         },
         "grid": {
-            "cell_size_px": 35.0,
+            "cell_size_px": 16.0,
             "overlay": {
-                "enabled": true
+                "enabled": true,
+                "r": 4.0
             },
             "snap": {
                 "enabled": false

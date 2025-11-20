@@ -133,6 +133,12 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(
                   << " (profile revision " << profile.revision << ")\n";
         info.scale_profile_revision = profile.revision;
 
+        auto mark_failed_animation = [&](const std::string& trigger) {
+                if (result.failed_animation.empty()) {
+                        result.failed_animation = trigger;
+                }
+        };
+
         auto load_animation_payload =
             [&](const std::string& trigger, const nlohmann::json& anim_json) -> bool {
                 if (anim_json.is_null()) {
@@ -161,10 +167,12 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(
                         std::cerr << "[AnimationLoader] Exception while loading "
                                   << info.name << "::" << trigger
                                   << ": " << ex.what() << "\n";
+                        mark_failed_animation(trigger);
                         return false;
                 } catch (...) {
                         std::cerr << "[AnimationLoader] Unknown exception while loading "
                                   << info.name << "::" << trigger << "\n";
+                        mark_failed_animation(trigger);
                         return false;
                 }
 
@@ -185,6 +193,7 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(
                 if (!force_rebuild) {
                         result.cache_issue = true;
                 }
+                mark_failed_animation(trigger);
                 return false;
         };
 
@@ -306,6 +315,7 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                 std::string manifest_path = manifest_file.string();
                 std::string cache_root    = (root / "cache").string();
                 std::string asset_list    = info.name;
+                std::string animation_list = attempt.failed_animation;
 
                 std::string python_cmd =
                         "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" "
@@ -313,8 +323,15 @@ void AnimationLoader::load(AssetInfo& info, SDL_Renderer* renderer) {
                         + "\"" + manifest_path + "\" "
                         + "\"" + cache_root + "\" "
                         + "\"" + asset_list + "\"";
+                if (!animation_list.empty()) {
+                        python_cmd += " \"" + animation_list + "\"";
+                }
 
-                std::cout << "[AnimationLoader] Cache issue for " << info.name
+                std::string target_name = info.name;
+                if (!animation_list.empty()) {
+                        target_name += "::" + animation_list;
+                }
+                std::cout << "[AnimationLoader] Cache issue for " << target_name
                           << ", regenerating with: " << python_cmd << "\n";
 
                 int ret = std::system(python_cmd.c_str());

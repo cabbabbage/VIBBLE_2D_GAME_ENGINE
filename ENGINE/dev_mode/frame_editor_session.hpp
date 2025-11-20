@@ -58,6 +58,7 @@ public:
     void render(SDL_Renderer* renderer) const;
 
     // External helpers
+    void set_snap_resolution(int r);
     void set_grid_overlay_enabled_transient(bool enabled);
 
 private:
@@ -112,6 +113,9 @@ private:
     bool prev_parallax_enabled_ = true;
     bool prev_grid_overlay_enabled_ = false;
     bool prev_asset_hidden_ = false;
+
+    int  snap_resolution_r_ = 0;
+    bool snap_resolution_override_ = false;
 
     // Computed path data (relative positions, anchored at bottom-middle)
     std::vector<MovementFrame> frames_;
@@ -192,7 +196,9 @@ private:
     // Panel rectangles are derived from stored top-left positions to allow dragging.
     mutable SDL_Rect directory_rect_{0,0,0,0};
     mutable SDL_Rect toolbox_rect_{0,0,0,0};
+    mutable SDL_Rect toolbox_drag_rect_{0,0,0,0};
     mutable SDL_Rect nav_rect_{0,0,0,0};
+    mutable SDL_Rect nav_drag_rect_{0,0,0,0};
     mutable std::vector<SDL_Rect> toolbox_widget_rects_;
     SDL_Point dir_pos_{0, 0};
     SDL_Point toolbox_pos_{0, 0};
@@ -257,6 +263,7 @@ private:
     void load_animation_data(const std::string& animation_id);
     void switch_animation(const std::string& animation_id);
     void ensure_widgets() const;
+    void refresh_animation_dropdown() const;
     void rebuild_layout() const;
     void apply_current_mode_to_all_frames();
     void apply_frame_move_from_base(int index, SDL_FPoint desired_rel, const std::vector<SDL_FPoint>& base_rel);
@@ -315,6 +322,7 @@ private:
         int gap = 0;
         int width = 0;
         int height = 0;
+        int drag_handle_height = 0;
         int row_height = 0;
         int smooth_checkbox_width = 0;
         int curve_checkbox_width = 0;
@@ -328,6 +336,7 @@ private:
         int gap = 0;
         int width = 0;
         int height = 0;
+        int drag_handle_height = 0;
         // Dropdown row
         int dropdown_row_height = 0;
         // Movement controls row (Smooth/Curve + Totals) shared with Movement mode

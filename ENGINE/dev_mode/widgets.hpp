@@ -200,6 +200,9 @@ public:
     void set_tooltip_state(DMWidgetTooltipState* state);
     void set_enabled(bool enabled);
     bool enabled() const { return enabled_; }
+    int track_center_y() const;
+    SDL_Rect interaction_rect() const;
+    bool is_dragging() const { return dragging_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     int preferred_height(int width) const;
