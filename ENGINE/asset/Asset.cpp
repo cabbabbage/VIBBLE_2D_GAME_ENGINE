@@ -4,7 +4,7 @@
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
 #include "render/camera.hpp"
-#include "render_pipeline/render_asset/shading/RenderShadingStages.hpp"
+#include "render/render.hpp"
 #include "animation_update/animation_runtime.hpp"
 #include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
@@ -17,21 +17,16 @@
 #include <cmath>
 #include <limits>
 #include <SDL.h>
-
-namespace {
-
-std::mt19937& asset_rng()
+static std::mt19937& asset_rng()
 {
         static std::mt19937 rng{ std::random_device{}() };
         return rng;
 }
 
-std::mutex& asset_rng_mutex()
+static std::mutex& asset_rng_mutex()
 {
         static std::mutex mutex;
         return mutex;
-}
-
 }
 
 // Static storage for per-spawn-group flip overrides

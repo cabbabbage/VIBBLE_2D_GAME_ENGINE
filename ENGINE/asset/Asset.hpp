@@ -20,7 +20,7 @@
 
 #include "asset_controller.hpp"
 #include "animation_update/animation_update.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+#include "render/render.hpp"
 
 class camera;
 class Assets;

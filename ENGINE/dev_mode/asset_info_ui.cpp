@@ -46,8 +46,7 @@
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
-#include "render/global_light_source.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+#include "render/render.hpp"
 #include "search_assets.hpp"
 #include "draw_utils.hpp"
 #include <SDL_ttf.h>

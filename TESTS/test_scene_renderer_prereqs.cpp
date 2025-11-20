@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-#include "render/scene_renderer.hpp"
+#include "render/render.hpp"
 
 TEST_CASE("SceneRenderer prerequisites reject missing renderer") {
     Assets* dummy_assets = reinterpret_cast<Assets*>(static_cast<std::uintptr_t>(0x1));

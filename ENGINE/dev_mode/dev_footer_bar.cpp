@@ -57,6 +57,7 @@ void draw_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
 DevFooterBar::DevFooterBar(std::string title)
     : title_(std::move(title)),
       height_(kDefaultFooterHeight) {
+    depth_effects_checkbox_ = std::make_unique<DMCheckbox>("Depth Effects", false);
     grid_checkbox_ = std::make_unique<DMCheckbox>("Show Grid", grid_overlay_enabled_);
     snap_checkbox_ = std::make_unique<DMCheckbox>("Snap to Grid", snap_to_grid_enabled_);
     grid_stepper_ = std::make_unique<DMNumericStepper>("Grid Resolution (r)", 0, 10, grid_resolution_);
@@ -191,7 +192,14 @@ bool DevFooterBar::handle_event(const SDL_Event& e) {
 
     bool used = false;
 
-    // Handle grid controls first (they are on the left)
+    // Handle depth effects toggle first
+    if (depth_effects_checkbox_ && depth_effects_checkbox_->handle_event(e)) {
+        used = true;
+        if (on_depth_effects_toggle_) {
+            on_depth_effects_toggle_(depth_effects_checkbox_->value());
+        }
+    }
+
     if (grid_checkbox_ && grid_checkbox_->handle_event(e)) {
         used = true;
         grid_overlay_enabled_ = grid_checkbox_->value();
@@ -278,7 +286,11 @@ void DevFooterBar::render(SDL_Renderer* renderer) const {
                            rect_.y + rect_.h - kFooterVerticalPadding);
     }
 
-    // Render grid controls first (on the left)
+    // Render depth effects toggle first
+    if (depth_effects_checkbox_) {
+        depth_effects_checkbox_->render(renderer);
+    }
+
     if (grid_checkbox_) {
         grid_checkbox_->render(renderer);
     }
@@ -478,6 +490,18 @@ void DevFooterBar::set_grid_resolution(int resolution) {
     }
 }
 
+void DevFooterBar::set_snap_to_grid_enabled(bool enabled) {
+    if (snap_to_grid_enabled_ != enabled) {
+        snap_to_grid_enabled_ = enabled;
+        if (snap_checkbox_) {
+            snap_checkbox_->set_value(enabled);
+        }
+        if (on_snap_to_grid_toggle_) {
+            on_snap_to_grid_toggle_(enabled);
+        }
+    }
+}
+
 void DevFooterBar::set_grid_controls_callbacks(std::function<void(bool)> on_overlay_toggle,
                                                std::function<void(int)> on_resolution_change,
                                                std::function<void(bool)> on_snap_toggle) {
@@ -488,7 +512,7 @@ void DevFooterBar::set_grid_controls_callbacks(std::function<void(bool)> on_over
 
 void DevFooterBar::layout_grid_controls() {
     grid_controls_right_ = rect_.x + kFooterHorizontalPadding;
-    if (!grid_checkbox_ || !grid_stepper_) {
+    if (!depth_effects_checkbox_ || !grid_checkbox_ || !grid_stepper_) {
         return;
     }
 
@@ -497,6 +521,12 @@ void DevFooterBar::layout_grid_controls() {
     const int stepper_y = rect_.y + (rect_.h - DMNumericStepper::height()) / 2;
     const int gap = DMSpacing::small_gap();
 
+    // Depth effects first
+    SDL_Rect depth_rect{x, checkbox_y, depth_effects_checkbox_->preferred_width(), DMCheckbox::height()};
+    depth_effects_checkbox_->set_rect(depth_rect);
+    x += depth_rect.w + gap;
+
+    // Then grid
     SDL_Rect checkbox_rect{x, checkbox_y, grid_checkbox_->preferred_width(), DMCheckbox::height()};
     grid_checkbox_->set_rect(checkbox_rect);
     x += checkbox_rect.w + gap;
@@ -513,14 +543,13 @@ void DevFooterBar::layout_grid_controls() {
     grid_controls_right_ = stepper_rect.x + stepper_rect.w;
 }
 
-void DevFooterBar::set_snap_to_grid_enabled(bool enabled) {
-    if (snap_to_grid_enabled_ != enabled) {
-        snap_to_grid_enabled_ = enabled;
-        if (snap_checkbox_) {
-            snap_checkbox_->set_value(enabled);
-        }
-        if (on_snap_to_grid_toggle_) {
-            on_snap_to_grid_toggle_(enabled);
-        }
+// Depth effects implementation
+void DevFooterBar::set_depth_effects_enabled(bool enabled) {
+    if (depth_effects_checkbox_) {
+        depth_effects_checkbox_->set_value(enabled);
     }
+}
+
+void DevFooterBar::set_depth_effects_callbacks(std::function<void(bool)> cb) {
+    on_depth_effects_toggle_ = std::move(cb);
 }

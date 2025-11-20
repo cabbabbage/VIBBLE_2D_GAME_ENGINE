@@ -4,7 +4,7 @@
 #include "asset/surface_utils.hpp"
 #include "utils/cache_manager.hpp"
 #include "utils/generate_faded_mask.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+#include "render/render.hpp"
 #include "utils/loading_status_notifier.hpp"
 #include "utils/log.hpp"
 #include <SDL_image.h>

@@ -12,7 +12,7 @@
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/camera.hpp"
-#include "render/global_light_source.hpp"
+#include "render/render.hpp"
 #include "world/grid.hpp"
 
 namespace chunk_detail {

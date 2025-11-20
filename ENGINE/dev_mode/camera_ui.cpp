@@ -493,7 +493,6 @@ void CameraUIPanel::update(const Input& input, int screen_w, int screen_h) {
         return;
     }
     apply_settings_if_needed();
-    enforce_depth_effects_choice();
 }
 
 bool CameraUIPanel::handle_event(const SDL_Event& e) {
@@ -528,7 +527,6 @@ void CameraUIPanel::sync_from_camera() {
     last_settings_ = cam.realism_settings();
     bool effects_enabled = cam.realism_enabled() && cam.parallax_enabled();
     last_realism_enabled_ = effects_enabled;
-    if (effects_checkbox_) effects_checkbox_->set_value(effects_enabled);
 
     if (min_render_size_slider_) min_render_size_slider_->set_value(last_settings_.min_visible_screen_ratio);
     if (height_zoom1_slider_) height_zoom1_slider_->set_value(last_settings_.height_at_zoom1);
@@ -561,7 +559,6 @@ void CameraUIPanel::sync_from_camera() {
     if (texture_opacity_interp_dropdown_) {
         texture_opacity_interp_dropdown_->set_selected(static_cast<int>(last_settings_.texture_opacity_falloff_method));
     }
-    if (depthcue_checkbox_) depthcue_checkbox_->set_value(last_depthcue_enabled_);
     
 }
 
@@ -579,9 +576,7 @@ void CameraUIPanel::build_ui() {
         "Dial in render buffers, parallax depth, and smoothing without leaving the editor.");
     controls_spacer_ = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
 
-    effects_checkbox_ = std::make_unique<DMCheckbox>("Depth Effects", true);
-    effects_widget_ = std::make_unique<CheckboxWidget>(effects_checkbox_.get());
-    effects_widget_->set_tooltip("Enable parallax, foreshortening, and distance-based scaling.");
+
 
     camera::RealismSettings defaults;
 
@@ -656,10 +651,6 @@ void CameraUIPanel::build_ui() {
         image_effect_widget_->set_tooltip("Open the global image effect editor to regenerate depth cue textures.");
     }
 
-    // Depth Cue enable toggle
-    depthcue_checkbox_ = std::make_unique<DMCheckbox>("Enable Depth Cue", last_depthcue_enabled_);
-    depthcue_widget_   = std::make_unique<CheckboxWidget>(depthcue_checkbox_.get());
-    depthcue_widget_->set_tooltip("Toggle depth cue texture compositing.\nDoes not affect parallax or foreshortening.");
 
     smoothing_checkbox_ = std::make_unique<DMCheckbox>("Smooth Motion", defaults.smooth_motion_zoom);
     smoothing_widget_   = std::make_unique<CheckboxWidget>(smoothing_checkbox_.get());
@@ -748,8 +739,6 @@ void CameraUIPanel::rebuild_rows() {
     Rows rows;
     if (header_spacer_) rows.push_back({ header_spacer_.get() });
     if (hero_banner_widget_) rows.push_back({ hero_banner_widget_.get() });
-    if (effects_widget_) rows.push_back({ effects_widget_.get() });
-    if (depthcue_widget_) rows.push_back({ depthcue_widget_.get() });
     if (controls_spacer_) rows.push_back({ controls_spacer_.get() });
 
     if (visibility_section_header_) rows.push_back({ visibility_section_header_.get() });
@@ -805,8 +794,8 @@ void CameraUIPanel::rebuild_rows() {
 void CameraUIPanel::apply_settings_if_needed() {
     if (!assets_) return;
     camera::RealismSettings settings = read_settings_from_ui();
-    const bool effects_enabled = effects_checkbox_ ? effects_checkbox_->value() : last_realism_enabled_;
-    const bool depthcue_enabled = depthcue_checkbox_ ? depthcue_checkbox_->value() : last_depthcue_enabled_;
+    const bool effects_enabled = assets_->getView().realism_enabled();
+    const bool depthcue_enabled = last_depthcue_enabled_;
 
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;
@@ -846,24 +835,7 @@ void CameraUIPanel::apply_settings_if_needed() {
     }
 }
 
-void CameraUIPanel::enforce_depth_effects_choice() {
-    if (!assets_ || !effects_checkbox_) return;
-    camera& cam = assets_->getView();
-    const bool desired = effects_checkbox_->value();
-    bool state_changed = false;
-    if (cam.realism_enabled() != desired) {
-        cam.set_realism_enabled(desired);
-        state_changed = true;
-    }
-    if (cam.parallax_enabled() != desired) {
-        cam.set_parallax_enabled(desired);
-        state_changed = true;
-    }
-    if (state_changed) {
-        assets_->apply_camera_runtime_settings();
-        last_realism_enabled_ = desired;
-    }
-}
+
 
 void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& settings,
                                              bool effects_enabled,

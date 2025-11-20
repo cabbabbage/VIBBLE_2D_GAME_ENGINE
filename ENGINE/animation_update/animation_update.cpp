@@ -298,7 +298,7 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
         absolute.push_back(next_world);
     }
 
-    plan_      = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_);
+    plan_      = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_, grid());
     final_dest = plan_.final_dest;
     plan_.override_non_locked = override_non_locked;
 
@@ -381,4 +381,3 @@ int AnimationUpdate::effective_grid_resolution(std::optional<int> override_resol
     }
     return 0;
 }
-

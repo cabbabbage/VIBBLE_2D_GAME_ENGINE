@@ -3,7 +3,7 @@
 #include "asset/asset_info.hpp"
 #include "utils/cache_manager.hpp"
 #include "asset/animation.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+#include "render/render.hpp"
 #include "render/image_effect_settings.hpp"
 #include "core/manifest/manifest_loader.hpp"
 #include <nlohmann/json.hpp>

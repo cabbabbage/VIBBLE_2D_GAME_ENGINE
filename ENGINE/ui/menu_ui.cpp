@@ -3,7 +3,6 @@
 #include "ui/tinyfiledialogs.h"
 #include "asset_loader.hpp"
 #include "asset/asset_types.hpp"
-#include "scene_renderer.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
 #include "world/grid.hpp"

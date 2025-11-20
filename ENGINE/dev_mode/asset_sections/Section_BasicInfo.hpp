@@ -6,7 +6,7 @@
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
 #include "render/camera.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+#include "render/render.hpp"
 #include "widgets.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 #include "dm_styles.hpp"

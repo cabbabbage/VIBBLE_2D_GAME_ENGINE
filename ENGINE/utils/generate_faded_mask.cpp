@@ -1,7 +1,7 @@
 #include "generate_faded_mask.hpp"
 
 #include "cache_manager.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+#include "render/render.hpp"
 
 #include <SDL.h>
 

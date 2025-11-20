@@ -27,7 +27,7 @@
 #include "room_overlay_renderer.hpp"
 #include "widgets.hpp"
 #include "dev_controls_persistence.hpp"
-#include "render/global_light_source.hpp"
+#include "render/render.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 
 #include "asset/Asset.hpp"
@@ -631,6 +631,13 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     // Set up grid controls in footer bar
     if (map_mode_ui_) {
         if (auto* footer = map_mode_ui_->get_footer_bar()) {
+            footer->set_depth_effects_enabled(devmode::camera_prefs::load_depthcue_enabled());
+            footer->set_depth_effects_callbacks([this](bool enabled) {
+                devmode::camera_prefs::save_depthcue_enabled(enabled);
+                if (assets_) {
+                    assets_->apply_camera_runtime_settings();
+                }
+            });
             footer->set_grid_overlay_enabled(grid_overlay_enabled_);
             footer->set_grid_resolution(0); // Will be updated when map info is set
             footer->set_snap_to_grid_enabled(snap_to_grid_enabled_);

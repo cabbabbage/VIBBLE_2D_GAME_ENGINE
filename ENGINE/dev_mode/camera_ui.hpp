@@ -46,7 +46,6 @@ private:
     void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled, bool depthcue_enabled);
     camera::RealismSettings read_settings_from_ui() const;
     void on_control_value_changed();
-    void enforce_depth_effects_choice();
 
 private:
     Assets* assets_ = nullptr;
@@ -56,8 +55,7 @@ private:
     bool suppress_apply_once_ = false;
     bool was_visible_ = false;
 
-    std::unique_ptr<DMCheckbox> effects_checkbox_;
-    std::unique_ptr<CheckboxWidget> effects_widget_;
+
 
     std::unique_ptr<Widget> header_spacer_;
     std::unique_ptr<Widget> hero_banner_widget_;
@@ -83,8 +81,6 @@ private:
     std::unique_ptr<ButtonWidget> image_effect_widget_;
 
     // DepthCue section enable/disable
-    std::unique_ptr<DMCheckbox> depthcue_checkbox_;
-    std::unique_ptr<CheckboxWidget> depthcue_widget_;
     std::unique_ptr<DiscreteSliderWidget> render_quality_slider_;
     std::unique_ptr<DMCheckbox> smoothing_checkbox_;
     std::unique_ptr<CheckboxWidget> smoothing_widget_;

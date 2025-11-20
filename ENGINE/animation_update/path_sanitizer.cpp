@@ -9,14 +9,12 @@
 #include "core/asset_list.hpp"
 #include "utils/area.hpp"
 
-namespace {
-
 struct CollisionArea {
     const Asset* asset = nullptr;
     Area         area{ "impassable" };
 };
 
-std::vector<CollisionArea> gather_collision_areas(const Asset& self) {
+static std::vector<CollisionArea> gather_collision_areas(const Asset& self) {
     std::vector<CollisionArea> result;
     const AssetList* list = self.get_impassable_naighbors();
     if (!list) {
@@ -43,7 +41,7 @@ std::vector<CollisionArea> gather_collision_areas(const Asset& self) {
     return result;
 }
 
-bool segment_hits_any(SDL_Point from, SDL_Point to, const std::vector<CollisionArea>& areas) {
+static bool segment_hits_any(SDL_Point from, SDL_Point to, const std::vector<CollisionArea>& areas) {
     for (const auto& entry : areas) {
         if (animation_update::detail::segment_hits_area(from, to, entry.area)) {
             return true;
@@ -52,7 +50,7 @@ bool segment_hits_any(SDL_Point from, SDL_Point to, const std::vector<CollisionA
     return false;
 }
 
-SDL_Point nudge_outside(SDL_Point pt, const Area& area) {
+static SDL_Point nudge_outside(SDL_Point pt, const Area& area) {
     SDL_Point center = area.get_center();
     int dx = pt.x - center.x;
     int dy = pt.y - center.y;
@@ -73,7 +71,7 @@ SDL_Point nudge_outside(SDL_Point pt, const Area& area) {
     return result;
 }
 
-SDL_Point walk_back_to_perimeter(SDL_Point start,
+static SDL_Point walk_back_to_perimeter(SDL_Point start,
                                  SDL_Point target,
                                  const std::vector<CollisionArea>& areas) {
     const int steps = std::max(std::abs(target.x - start.x), std::abs(target.y - start.y));
@@ -104,8 +102,6 @@ SDL_Point walk_back_to_perimeter(SDL_Point start,
     }
 
     return best;
-}
-
 }
 
 std::vector<SDL_Point> PathSanitizer::sanitize(const Asset& self,

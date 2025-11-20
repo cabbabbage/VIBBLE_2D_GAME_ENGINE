@@ -8,7 +8,7 @@
 #include <SDL.h>
 #include <nlohmann/json.hpp>
 #include "animation_frame.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+#include "render/render.hpp"
 
 class AssetInfo;
 struct Mix_Chunk;

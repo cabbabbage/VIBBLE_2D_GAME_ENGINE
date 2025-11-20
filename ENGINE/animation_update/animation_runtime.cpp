@@ -210,8 +210,11 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
 
     // If the animation is locked, frozen, or the asset is flagged static, do not advance frames.
     // Exception: the player asset should always advance.
+    // Exception: non-player assets with an active plan may override locked animations for auto-movement.
     const bool is_player = self_->info && self_->info->type == asset_types::player;
-    if (!is_player && (self_->static_frame || anim.locked || anim.is_frozen())) {
+    bool should_skip = !is_player && (self_->static_frame || anim.locked || anim.is_frozen());
+    bool has_overriding_plan = planner_iface_ && !planner_iface_->plan_.strides.empty() && planner_iface_->plan_.override_non_locked;
+    if (should_skip && !has_overriding_plan) {
         self_->static_frame = self_->static_frame || anim.is_frozen() || anim.locked;
         update_child_attachments(anim, 0.0f);
         return true;
@@ -743,7 +746,7 @@ bool AnimationRuntime::adjust_next_checkpoint(const std::vector<const Asset*>& b
         if (targets.empty()) return false;
         auto sanitized = sanitizer_.sanitize(*self_, targets, planner_iface_->visited_thresh_);
         if (sanitized.empty()) return false;
-        Plan new_plan = planner_(*self_, sanitized, planner_iface_->visited_thresh_);
+        Plan new_plan = planner_(*self_, sanitized, planner_iface_->visited_thresh_, grid());
         new_plan.override_non_locked = planner_iface_->plan_.override_non_locked;
         if (new_plan.strides.empty()) return false;
         planner_iface_->plan_ = std::move(new_plan);
@@ -815,7 +818,7 @@ bool AnimationRuntime::replan_to_destination() {
     if (sanitized.empty()) {
         return false;
     }
-    Plan new_plan = planner_(*self_, sanitized, planner_iface_->visited_thresh_);
+    Plan new_plan = planner_(*self_, sanitized, planner_iface_->visited_thresh_, grid());
     new_plan.override_non_locked = planner_iface_->plan_.override_non_locked;
     if (new_plan.strides.empty()) {
         return false;
