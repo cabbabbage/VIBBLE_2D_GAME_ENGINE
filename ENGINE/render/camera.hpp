@@ -171,6 +171,7 @@ public:
     // Runtime camera geometry helpers (derived from zoom + offsets).
     float  current_pitch_degrees() const { return runtime_pitch_deg_; }
     double current_camera_height() const { return runtime_camera_height_; }
+    double current_anchor_world_y() const { return runtime_anchor_world_y_; }
 
     // Override controls for dev mode
     void set_manual_zoom_override(bool enabled) { manual_zoom_override_ = enabled; }

@@ -456,7 +456,8 @@ void Grid::update_parallax(const camera& cam, float dt) {
     // Camera position in world coordinates (same basis as world positions).
     const SDL_FPoint center_px = cam.get_view_center_f();
     const double base_x = static_cast<double>(center_px.x);
-    const double base_y = static_cast<double>(center_px.y);
+    // Ground anchor represents where the camera rig meets the floor plane.
+    const double anchor_y = cam.current_anchor_world_y();
 
     // Depth reference derived from camera height plus user depth offset.
     const double depth_ref_effect = std::max(
@@ -544,7 +545,9 @@ void Grid::update_parallax(const camera& cam, float dt) {
     constexpr double kParallaxAmountBase = 0.5;
     const double pitch_gain              = 1.0 + 0.5 * std::sin(std::abs(pitch_rad));
     const double parallax_amount         = kParallaxAmountBase * pitch_gain;
-    const double height_projection       = std::max(kParallaxEpsilon, camera_height * std::cos(pitch_rad));
+    const double cos_p                   = std::cos(pitch_rad);
+    const double sin_p                   = std::sin(pitch_rad);
+    const double height_projection       = std::max(kParallaxEpsilon, camera_height * cos_p);
 
     for (int cell_j = cell_j_min; cell_j <= cell_j_max; ++cell_j) {
         const double cell_cy = origin_y_d + (static_cast<double>(cell_j) + 0.5) * step_d;
@@ -555,14 +558,20 @@ void Grid::update_parallax(const camera& cam, float dt) {
             const double cell_cx = origin_x_d + (static_cast<double>(cell_i) + 0.5) * step_d;
 
             const double dx_world = cell_cx - base_x;
-            const double dy_world = cell_cy - base_y;
 
-            const double forward_depth = std::max(
-                kParallaxEpsilon,
-                camera_height + dy_world * std::cos(pitch_rad)
-            );
+            // Measure ground distance relative to the camera's anchor on the floor so
+            // rows closer to the camera gain stronger parallax than rows near the
+            // horizon.
+            const double ground_distance = std::max(0.0, anchor_y - cell_cy);
 
-            // Depth based attenuation driven by real camera height and pitch.
+            // Project the ground point into camera space using the real camera height
+            // and pitch so the parallax gain matches the floor perspective.
+            const double y_cam = ground_distance * cos_p + camera_height * sin_p;
+            const double z_cam = ground_distance * sin_p - camera_height * cos_p;
+            const double forward_depth = std::max(kParallaxEpsilon, -z_cam);
+
+            // Depth based attenuation driven by real camera height and pitch. Parallax
+            // must shrink as world Y moves away from the anchor toward the horizon.
             const double depth_gain  = height_projection / (forward_depth + depth_ref_effect);
 
             double parallax_px = dx_world * depth_gain * parallax_amount;
