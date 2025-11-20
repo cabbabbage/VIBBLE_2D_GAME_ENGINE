@@ -1325,6 +1325,17 @@ void AreaOverlayEditor::position_toolbox_near_anchor(int screen_w, int screen_h)
     toolbox_->set_position_from_layout_manager(pos.x, pos.y);
 }
 
+bool AreaOverlayEditor::is_point_blocking_ui(int mx, int my) const {
+    if (!active_) return false;
+    if (toolbox_ && toolbox_->is_point_inside(mx, my)) {
+        return true;
+    }
+    if (room_area_spawn_list_ && room_area_spawn_list_->is_point_inside(mx, my)) {
+        return true;
+    }
+    return false;
+}
+
 void AreaOverlayEditor::update(const Input& input, int screen_w, int screen_h) {
     if (!active_ || !assets_) return;
 

@@ -68,6 +68,8 @@ public:
         float grid_depth_strength            = 0.0f;   // 0 to roughly 1.5
         // How steep the camera is pitched over the floor. Positive means more tilt.
         float grid_pitch_degrees             = 0.0f;   // about -60 to +60
+        // Distance (in screen px) to place the depth offset below the bottom of the screen.
+        float grid_depth_offset_px           = 240.0f;
 
         // Image effects for foreground and background
         camera_effects::ImageEffectSettings foreground_effects{};
@@ -89,6 +91,8 @@ public:
         double base_world_y       = 0.0;
         double pitch_radians      = 0.0;
         double focus_ndc_offset   = 0.0;
+        double depth_offset_screen_y = 0.0;
+        double pitch_norm         = 0.0;
         double strength           = 0.0;
         bool   enabled            = false;
     };

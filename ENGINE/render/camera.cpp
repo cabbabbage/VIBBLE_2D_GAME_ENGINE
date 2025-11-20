@@ -320,6 +320,7 @@ void camera::set_realism_settings(const RealismSettings& settings) {
     settings_.tripod_distance_y = 0.0f;
     settings_.min_zoom_multiplier = std::max(0.1f, settings_.min_zoom_multiplier);
     settings_.max_zoom_multiplier = std::clamp(settings_.max_zoom_multiplier, settings_.min_zoom_multiplier, 20.0f);
+    settings_.grid_depth_offset_px = std::max(1.0f, settings_.grid_depth_offset_px);
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
     if (settings_.parallax_smoothing.method == TransformSmoothingMethod::Lerp &&
         settings_.parallax_smoothing.lerp_rate <= 0.0f) {
@@ -923,6 +924,7 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     // Grid depth / pitch controls (strength is ignored in the math now, but kept for compatibility).
     try_read_float("grid_depth_strength",        settings_.grid_depth_strength);
     try_read_float("grid_pitch_degrees",         settings_.grid_pitch_degrees);
+    try_read_float("grid_depth_offset_px",       settings_.grid_depth_offset_px);
 
     auto try_read_int = [&](const char* key, int& target) {
         auto it = data.find(key);
@@ -1177,6 +1179,7 @@ nlohmann::json camera::camera_settings_to_json() const {
     // Grid depth / pitch fields (strength is a leftover knob, math uses pitch and zoom).
     j["grid_depth_strength"]             = settings_.grid_depth_strength;
     j["grid_pitch_degrees"]              = settings_.grid_pitch_degrees;
+    j["grid_depth_offset_px"]            = settings_.grid_depth_offset_px;
 
     return j;
 }
@@ -1210,66 +1213,63 @@ camera::FloorDepthParams camera::compute_floor_depth_params() const {
     if (!geom.valid) {
         return p;
     }
-    const double pitch_rad = geom.pitch_radians;
 
-    p.horizon_screen_y = horizon_screen_y_for_scale();
-    p.bottom_screen_y  = static_cast<double>(screen_height_);
-    p.base_world_y     = anchor_world_y();
-    p.pitch_radians    = pitch_rad;
-    p.focus_ndc_offset = geom.focus_ndc_offset;
-    p.strength         = 1.0;
-    p.enabled          = true;
+    const double screen_h = static_cast<double>(screen_height_);
+    if (screen_h <= 1.0) {
+        return p;
+    }
+
+    const double focus_screen_y = screen_h * 0.5;
+    const double top_margin     = std::max(4.0, screen_h * 0.02);
+    const double max_horizon    = std::max(top_margin + 1.0, focus_screen_y - 4.0);
+    const double min_horizon    = top_margin + 1.0;
+    const double horizon_span   = std::max(1.0, max_horizon - min_horizon);
+
+    const double pitch_abs   = std::abs(geom.pitch_radians);
+    const double pitch_norm  = std::clamp(pitch_abs / (PI_D / 3.0), 0.0, 1.0);
+    const double horizon_y   = max_horizon - horizon_span * pitch_norm;
+    const double depth_px    = std::max(1.0, static_cast<double>(settings_.grid_depth_offset_px));
+    const double depth_y     = screen_h + depth_px;
+
+    p.horizon_screen_y     = std::clamp(horizon_y, min_horizon, max_horizon);
+    p.bottom_screen_y      = screen_h;
+    p.base_world_y         = anchor_world_y();
+    p.pitch_radians        = geom.pitch_radians;
+    p.pitch_norm           = pitch_norm;
+    p.focus_ndc_offset     = geom.focus_ndc_offset;
+    p.depth_offset_screen_y = depth_y;
+    p.strength             = 1.0;
+    p.enabled              = true;
 
     return p;
 }
 float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
+    (void)world_y;
     FloorDepthParams p = compute_floor_depth_params();
     if (!p.enabled) {
         // No pitch or realism disabled, keep the original linear mapping.
         return linear_screen_y;
     }
 
-    const CameraGeometry geom = compute_geometry();
-    if (!geom.valid || geom.camera_height < 1e-6) {
-        return linear_screen_y;
-    }
-
-    const double tan_fov = std::tan(HALF_FOV_Y);
-    const double cos_p = std::cos(p.pitch_radians);
-    const double sin_p = std::sin(p.pitch_radians);
-
-    // Depth relative to the pitched camera anchor (positive means farther "ahead").
-    const double anchor_y = geom.anchor_world_y;
-    // Flip depth sign so distant points compress toward the horizon at the top.
-    const double dy = anchor_y - static_cast<double>(world_y);
-
-    // Rotate into camera space (pitch about X).
-    double y_cam = dy * cos_p + geom.camera_height * sin_p;
-    double z_cam = dy * sin_p - geom.camera_height * cos_p;
-
-    // Ensure the point stays in front of the camera.
-    double z_forward = -z_cam;
-    const double min_depth = std::max(geom.camera_height * 0.05, 1.0);
-    if (z_forward < min_depth) {
-        z_forward = min_depth;
-        z_cam = -z_forward;
-    }
-
-    double y_ndc = (y_cam / z_forward) / tan_fov;
-
-    // Offset so the focus point remains at screen center even as pitch changes.
-    y_ndc -= p.focus_ndc_offset;
-    y_ndc = std::clamp(y_ndc, -1.0, 1.0);
-
     const double screen_h = static_cast<double>(screen_height_);
-    double y_proj = std::clamp(screen_h * (0.5 - 0.5 * y_ndc), 0.0, screen_h);
+    const double horizon_y = std::clamp(p.horizon_screen_y, 0.0, std::max(1.0, screen_h));
+    const double depth_offset_y = std::max(p.depth_offset_screen_y, horizon_y + 1.0);
+    const double span = std::max(1.0, depth_offset_y - horizon_y);
 
-    // Keep the warped floor pinned at or below the horizon while never exceeding the screen bounds.
-    const double horizon_y = std::clamp(p.horizon_screen_y, 0.0, screen_h);
-    const double min_y = std::min(horizon_y, screen_h);
-    y_proj = std::clamp(y_proj, min_y, screen_h);
+    double y = static_cast<double>(linear_screen_y);
+    if (!std::isfinite(y)) {
+        y = horizon_y;
+    }
+    y = std::max(y, horizon_y);
 
-    return static_cast<float>(y_proj);
+    double t = (y - horizon_y) / span;
+    t = std::clamp(t, 0.0, 1.0);
+
+    const double compression_power = 1.0 + 2.75 * std::clamp(p.pitch_norm, 0.0, 1.0);
+    const double eased = std::pow(t, compression_power);
+
+    const double warped = horizon_y + span * eased;
+    return static_cast<float>(warped);
 }
 
 double camera::view_height_world() const {

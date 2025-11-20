@@ -1647,6 +1647,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     const bool need_grid_helpers = assets_ && (grid_overlay_enabled_ || show_depth_guides);
     if (renderer && need_grid_helpers) {
         const camera& cam = assets_->getView();
+        const camera::RealismSettings& cam_settings = cam.realism_settings();
+        const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
         world::Grid& grid = assets_->world_grid();
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
         Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
@@ -1662,6 +1664,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         // Calculate visible world bounds with padding to cover the full screen.
         SDL_FPoint top_left_world = cam.screen_to_map(SDL_Point{0, 0});
         SDL_FPoint bottom_right_world = cam.screen_to_map(SDL_Point{screen_w_, screen_h_});
+        const float cam_scale = std::max(0.0001f, cam.get_scale());
 
         // Calculate grid lines using map grid resolution when available
         int cell = grid_cell_size_px_;
@@ -1678,28 +1681,20 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         cell = std::max(1, cell);
         if (cell > 0) {
             const float world_padding = static_cast<float>(cell) * 4.0f;
+            const float depth_world_padding = cam_scale * std::max(0.0f, cam_settings.grid_depth_offset_px);
             const float min_world_x = std::min(top_left_world.x, bottom_right_world.x) - world_padding;
             const float max_world_x = std::max(top_left_world.x, bottom_right_world.x) + world_padding;
-            const float min_world_y = std::min(top_left_world.y, bottom_right_world.y) - world_padding;
-            const float max_world_y = std::max(top_left_world.y, bottom_right_world.y) + world_padding;
+            const float min_world_y = std::min(top_left_world.y, bottom_right_world.y) - world_padding - depth_world_padding * 0.5f;
+            const float max_world_y = std::max(top_left_world.y, bottom_right_world.y) + world_padding + depth_world_padding;
 
-            if (show_depth_guides) {
-                SDL_FPoint center = cam.get_view_center_f();
-                int minx = 0, miny = 0, maxx = 0, maxy = 0;
-                std::tie(minx, miny, maxx, maxy) = cam.get_camera_area().get_bounds();
-                const float view_height = static_cast<float>(std::max(0, maxy - miny));
-                float anchor_y = center.y + view_height * 0.5f;
-                SDL_Point anchor_world{
-                    static_cast<int>(std::lround(center.x)),
-                    static_cast<int>(std::lround(anchor_y))
-                };
-                SDL_FPoint anchor_screen = grid.floor_warped_screen_position(cam, anchor_world);
-                depth_offset_screen_y = anchor_screen.y;
+            if (depth_params.enabled) {
+                depth_offset_screen_y = static_cast<float>(depth_params.depth_offset_screen_y);
+                horizon_screen_y      = static_cast<float>(depth_params.horizon_screen_y);
             }
 
             const int major_interval = 8; // major line every N cells
             constexpr float kMinHorizontalLineScreenSpacing = 6.0f;
-            const int samples_per_line = 24;
+            const int samples_per_line = 32;
             const float mid_world_x = (min_world_x + max_world_x) * 0.5f;
             const bool apply_spacing_cutoff = cam.realism_enabled();
 
@@ -1769,15 +1764,20 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                     SDL_RenderDrawLines(renderer, polyline.data(), static_cast<int>(polyline.size()));
                 }
             }
-            if (apply_spacing_cutoff && !horizon_screen_y && std::isfinite(last_screen_y)) {
-                horizon_screen_y = last_screen_y;
+            if (apply_spacing_cutoff && std::isfinite(last_screen_y)) {
+                if (horizon_screen_y) {
+                    horizon_screen_y = std::min(*horizon_screen_y, last_screen_y);
+                } else {
+                    horizon_screen_y = last_screen_y;
+                }
             }
 
             if (!horizon_screen_y) {
-                const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
                 if (depth_params.enabled) {
                     horizon_screen_y = static_cast<float>(depth_params.horizon_screen_y);
                 }
+            } else if (depth_params.enabled) {
+                horizon_screen_y = std::min(*horizon_screen_y, static_cast<float>(depth_params.horizon_screen_y));
             }
         }
 

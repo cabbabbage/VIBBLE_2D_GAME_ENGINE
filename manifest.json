@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T02:45:41Z",
+        "generated_at": "2025-11-20T02:55:14Z",
         "max_scale": 0.06818182021379471,
         "min_scale": 0.051948051899671555,
         "recommended_percentages": [
@@ -119,7 +119,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T02:45:41Z",
+        "generated_at": "2025-11-20T02:55:14Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -172,7 +172,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T02:45:41Z",
+        "generated_at": "2025-11-20T02:55:14Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -585,7 +585,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T02:45:41Z",
+        "generated_at": "2025-11-20T02:55:14Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -715,7 +715,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T02:45:41Z",
+        "generated_at": "2025-11-20T02:55:14Z",
         "max_scale": 0.08658009022474289,
         "min_scale": 0.08658009022474289,
         "recommended_percentages": [
@@ -1419,7 +1419,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T02:45:41Z",
+        "generated_at": "2025-11-20T02:55:14Z",
         "max_scale": 0.11818180978298187,
         "min_scale": 0.11818180978298187,
         "recommended_percentages": [
@@ -1496,7 +1496,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T02:45:41Z",
+        "generated_at": "2025-11-20T02:55:14Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1574,7 +1574,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T02:45:41Z",
+        "generated_at": "2025-11-20T02:55:14Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1737,7 +1737,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T02:45:41Z",
+        "generated_at": "2025-11-20T02:55:14Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -1919,11 +1919,12 @@
       },
       "camera_settings": {
         "background_plane_screen_y": 198.0,
-        "background_texture_max_opacity": 255,
+        "background_texture_max_opacity": 0,
         "distance_scale_strength": 0.8299999833106995,
         "foreground_plane_screen_y": 1037.0,
-        "foreground_texture_max_opacity": 255,
+        "foreground_texture_max_opacity": 0,
         "foreshorten_strength": 0.5799999833106995,
+        "grid_depth_offset_px": 240.0,
         "grid_depth_strength": 0.0,
         "grid_pitch_degrees": 18.2304744720459,
         "height_at_zoom1": -527.0,
@@ -1940,7 +1941,7 @@
         "parallax_smoothing_method": 1,
         "parallax_smoothing_snap_threshold": 0.0,
         "parallax_smoothing_spring_frequency": 0.0,
-        "realism_enabled": true,
+        "realism_enabled": false,
         "render_quality_percent": 10,
         "scale_hysteresis_margin": 0.029999999329447746,
         "smooth_motion_zoom": true,
@@ -2261,9 +2262,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            36,
-            189,
             242,
+            36,
+            131,
             255
           ],
           "edge_smoothness": 43,
@@ -2314,9 +2315,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            242,
+            242,
+            61,
             255
           ],
           "edge_smoothness": 68,

@@ -532,6 +532,7 @@ void CameraUIPanel::sync_from_camera() {
 
     if (min_render_size_slider_) min_render_size_slider_->set_value(last_settings_.min_visible_screen_ratio);
     if (height_zoom1_slider_) height_zoom1_slider_->set_value(last_settings_.height_at_zoom1);
+    if (depth_offset_slider_) depth_offset_slider_->set_value(last_settings_.grid_depth_offset_px);
     if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(last_settings_.foreshorten_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(last_settings_.distance_scale_strength);
     if (render_quality_slider_) render_quality_slider_->set_value(last_settings_.render_quality_percent);
@@ -607,6 +608,10 @@ void CameraUIPanel::build_ui() {
     height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Base Camera Height Offset (px)", -1000.0f, 1000.0f, 1.0f, defaults.height_at_zoom1, 0);
     height_zoom1_slider_->set_tooltip("Add or subtract pixels from the baseline camera height before zoom scaling.");
     height_zoom1_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    depth_offset_slider_ = std::make_unique<FloatSliderWidget>(
+        "Depth Offset (px below screen)", 0.0f, 2000.0f, 5.0f, defaults.grid_depth_offset_px, 0);
+    depth_offset_slider_->set_tooltip("Push the grid depth origin below the screen to stabilize perspective lines.");
+    depth_offset_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Stretch", 0.0f, 2.0f, 0.01f, defaults.foreshorten_strength, 2);
     foreshorten_strength_slider_->set_tooltip("Controls how much tall sprites stretch or compress with depth.");
     foreshorten_strength_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
@@ -756,8 +761,9 @@ void CameraUIPanel::rebuild_rows() {
     if (depth_section_header_) rows.push_back({ depth_section_header_.get() });
     if (depth_section_expanded_) {
         if (height_zoom1_slider_) rows.push_back({ height_zoom1_slider_.get() });
-            if (foreshorten_strength_slider_) rows.push_back({ foreshorten_strength_slider_.get() });
-            if (distance_strength_slider_) rows.push_back({ distance_strength_slider_.get() });
+        if (depth_offset_slider_) rows.push_back({ depth_offset_slider_.get() });
+        if (foreshorten_strength_slider_) rows.push_back({ foreshorten_strength_slider_.get() });
+        if (distance_strength_slider_) rows.push_back({ distance_strength_slider_.get() });
     }
 
     if (depthcue_section_header_) rows.push_back({ depthcue_section_header_.get() });
@@ -812,6 +818,7 @@ void CameraUIPanel::apply_settings_if_needed() {
     if (render_quality_slider_) {
         changed = changed || settings.render_quality_percent != prev.render_quality_percent;
     }
+    changed = changed || differs(settings.grid_depth_offset_px, prev.grid_depth_offset_px);
     changed = changed || settings.smooth_motion_zoom != prev.smooth_motion_zoom;
     changed = changed || settings.motion_smoothing_method != prev.motion_smoothing_method;
     changed = changed || differs(settings.motion_smoothing_tau, prev.motion_smoothing_tau);
@@ -888,6 +895,7 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     camera::RealismSettings settings = last_settings_;
     if (min_render_size_slider_) settings.min_visible_screen_ratio = std::clamp(min_render_size_slider_->value(), 0.0f, 0.5f);
     if (height_zoom1_slider_) settings.height_at_zoom1 = height_zoom1_slider_->value();
+    if (depth_offset_slider_) settings.grid_depth_offset_px = std::max(1.0f, depth_offset_slider_->value());
     if (foreshorten_strength_slider_) settings.foreshorten_strength = std::max(0.0f, foreshorten_strength_slider_->value());
     if (distance_strength_slider_) settings.distance_scale_strength = std::max(0.0f, distance_strength_slider_->value());
     if (render_quality_slider_) settings.render_quality_percent = render_quality_slider_->value();

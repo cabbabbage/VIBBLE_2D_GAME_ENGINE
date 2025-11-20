@@ -69,6 +69,7 @@ private:
     std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
     std::unique_ptr<FloatSliderWidget> height_zoom1_slider_;
+    std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;

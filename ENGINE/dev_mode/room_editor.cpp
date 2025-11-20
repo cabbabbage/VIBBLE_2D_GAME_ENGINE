@@ -1268,7 +1268,7 @@ bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
         return true;
     }
 
-    if (area_editor_ && area_editor_->is_active()) {
+    if (area_editor_ && area_editor_->is_point_blocking_ui(x, y)) {
         return true;
     }
 
@@ -3477,7 +3477,7 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
             return true;
         }
     }
-    if (area_editor_ && area_editor_->is_active()) {
+    if (area_editor_ && area_editor_->is_point_blocking_ui(mx, my)) {
         return true;
     }
 
