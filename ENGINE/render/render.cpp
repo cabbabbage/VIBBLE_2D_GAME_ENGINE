@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -18,6 +19,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <SDL_image.h>
 
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
@@ -1177,7 +1179,8 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
                                    assets_->player,
                                    nullptr,
                                    &assets_->world_grid() }),
-  update_map_light_enabled_(devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true))
+  update_map_light_enabled_(devmode::ui_settings::load_bool(kUpdateMapLightSettingKey, true)),
+  sky_texture_path_(std::filesystem::path("SRC") / "misc_content" / "sky.png")
 {
     vibble::log::debug(std::string{"[SceneRenderer] Initializing for map '"} + map_id +
                        "' with screen " + std::to_string(screen_width_) + "x" + std::to_string(screen_height_) + ".");
@@ -1214,6 +1217,7 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
 
 SceneRenderer::~SceneRenderer() {
     destroy_darkness_overlay();
+    destroy_sky_texture();
     if (scene_composite_tex_) { SDL_DestroyTexture(scene_composite_tex_); scene_composite_tex_ = nullptr; }
     if (postprocess_tex_)     { SDL_DestroyTexture(postprocess_tex_);     postprocess_tex_     = nullptr; }
     if (blur_tex_)            { SDL_DestroyTexture(blur_tex_);            blur_tex_            = nullptr; }
@@ -1349,8 +1353,6 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
         base_sh,
         ref_sh,
         smoothing_key);
-    SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{ world_x, world_y });
-    ef.screen_position = screen;
 
     float center_x = ef.screen_position.x;
     if (assets_) {
@@ -1413,11 +1415,6 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
         base_sh,
         reference_screen_height,
         smoothing_key);
-    SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{
-        static_cast<float>(world_point.x),
-        static_cast<float>(world_point.y)
-    });
-    ef.screen_position = screen;
 
     float center_x = ef.screen_position.x;
     if (assets_ && assets_->player != parent) {
@@ -1552,6 +1549,10 @@ void SceneRenderer::render(){
         // Draw grid tiles first
         if (tile_renderer_) {
             tile_renderer_->render(renderer_, assets_->getView(), assets_->world_grid());
+        }
+
+        if (camera_state) {
+            render_sky_layer(*camera_state);
         }
 
         const int fg_max_opacity = std::clamp(cam_settings.foreground_texture_max_opacity, 0, 255);
@@ -2515,6 +2516,96 @@ void SceneRenderer::destroy_darkness_overlay() {
         darkness_overlay_width_   = 0;
         darkness_overlay_height_  = 0;
     }
+}
+
+bool SceneRenderer::ensure_sky_texture() {
+    if (sky_texture_ || sky_texture_failed_) {
+        return sky_texture_ != nullptr;
+    }
+    if (!renderer_) {
+        return false;
+    }
+
+    std::filesystem::path path = sky_texture_path_;
+    if (!path.is_absolute()) {
+        path = std::filesystem::current_path() / path;
+    }
+
+    const std::string path_str = path.string();
+    SDL_Texture* tex = IMG_LoadTexture(renderer_, path_str.c_str());
+    if (!tex) {
+        vibble::log::warn(std::string{"[SceneRenderer] Failed to load sky texture '"} +
+                          path_str + "': " + IMG_GetError());
+        sky_texture_failed_ = true;
+        return false;
+    }
+
+    int tex_w = 0;
+    int tex_h = 0;
+    if (SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
+        vibble::log::warn(std::string{"[SceneRenderer] Invalid sky texture '"} +
+                          path_str + "': " + SDL_GetError());
+        SDL_DestroyTexture(tex);
+        sky_texture_failed_ = true;
+        return false;
+    }
+
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+    sky_texture_        = tex;
+    sky_texture_width_  = tex_w;
+    sky_texture_height_ = tex_h;
+    return true;
+}
+
+void SceneRenderer::destroy_sky_texture() {
+    if (sky_texture_) {
+        SDL_DestroyTexture(sky_texture_);
+        sky_texture_ = nullptr;
+    }
+    sky_texture_width_  = 0;
+    sky_texture_height_ = 0;
+}
+
+void SceneRenderer::render_sky_layer(const camera& cam) {
+    if (!renderer_ || screen_width_ <= 0 || screen_height_ <= 0) {
+        return;
+    }
+
+    const double horizon_y = cam.horizon_screen_y_for_scale();
+    if (!std::isfinite(horizon_y)) {
+        return;
+    }
+    if (horizon_y < 0.0 || horizon_y > static_cast<double>(screen_height_)) {
+        return;
+    }
+
+    if (!ensure_sky_texture() || !sky_texture_) {
+        return;
+    }
+
+    const float tex_w = static_cast<float>(sky_texture_width_);
+    const float tex_h = static_cast<float>(sky_texture_height_);
+    if (tex_w <= 0.0f || tex_h <= 0.0f) {
+        return;
+    }
+
+    const float target_w = static_cast<float>(screen_width_);
+    const float scale    = target_w / tex_w;
+    const float target_h = tex_h * scale;
+    if (!std::isfinite(target_h) || target_h <= 0.0f || !std::isfinite(scale)) {
+        return;
+    }
+
+    SDL_FRect dst{
+        0.0f,
+        static_cast<float>(horizon_y) - target_h,
+        target_w,
+        target_h
+    };
+
+    SDL_SetTextureColorMod(sky_texture_, 255, 255, 255);
+    SDL_SetTextureAlphaMod(sky_texture_, 255);
+    SDL_RenderCopyF(renderer_, sky_texture_, nullptr, &dst);
 }
 
 void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds) {

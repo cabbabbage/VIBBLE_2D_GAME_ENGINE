@@ -1686,10 +1686,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             }
 
             const int major_interval = 8; // major line every N cells
-            constexpr float kMinHorizontalLineScreenSpacing = 6.0f;
             const int samples_per_line = 32;
             const float mid_world_x = (min_world_x + max_world_x) * 0.5f;
-            const bool apply_spacing_cutoff = cam.realism_enabled();
 
             // Vertical lines (sample along Y then warp through the camera + parallax)
             float start_x = std::floor(min_world_x / cell) * cell;
@@ -1719,7 +1717,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
             // Horizontal lines (sample along X; stop when screen spacing collapses near the horizon).
             float start_y = std::floor(max_world_y / cell) * cell;
-            float last_screen_y = std::numeric_limits<float>::quiet_NaN();
             for (float y = start_y; y >= min_world_y - cell; y -= cell) {
                 SDL_Point sample_world{
                     static_cast<int>(std::lround(mid_world_x)),
@@ -1727,17 +1724,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 };
                 SDL_FPoint sample_screen = grid.floor_warped_screen_position(cam, sample_world);
                 const float screen_y = sample_screen.y;
-                if (apply_spacing_cutoff && std::isfinite(last_screen_y)) {
-                    if (std::fabs(screen_y - last_screen_y) < kMinHorizontalLineScreenSpacing) {
-                        if (horizon_screen_y) {
-                            horizon_screen_y = std::min(*horizon_screen_y, screen_y);
-                        } else {
-                            horizon_screen_y = screen_y;
-                        }
-                        break;
-                    }
-                }
-                last_screen_y = screen_y;
 
                 std::vector<SDL_Point> polyline;
                 polyline.reserve(static_cast<std::size_t>(samples_per_line + 1));
@@ -1759,13 +1745,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                     SDL_Color c = is_major ? major : minor;
                     SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
                     SDL_RenderDrawLines(renderer, polyline.data(), static_cast<int>(polyline.size()));
-                }
-            }
-            if (apply_spacing_cutoff && std::isfinite(last_screen_y)) {
-                if (horizon_screen_y) {
-                    horizon_screen_y = std::min(*horizon_screen_y, last_screen_y);
-                } else {
-                    horizon_screen_y = last_screen_y;
                 }
             }
 

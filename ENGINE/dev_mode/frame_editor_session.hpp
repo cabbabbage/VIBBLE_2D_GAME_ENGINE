@@ -378,6 +378,7 @@ private:
     std::string current_hitbox_type() const;
     void refresh_hitbox_form() const;
     void copy_hit_box_to_next_frame();
+    float document_scale_factor() const;
     float asset_local_scale() const;
     SDL_Point asset_anchor_world() const;
     bool screen_to_local(SDL_Point screen, SDL_FPoint& out_local) const;

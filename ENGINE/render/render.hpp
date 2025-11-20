@@ -390,10 +390,13 @@ private:
         Uint8        depthcue_background_alpha   = 0;
     };
 
-        bool ensure_darkness_overlay();
-        void destroy_darkness_overlay();
-        void render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds);
-        bool has_dark_mask_overlay_sources();
+    bool ensure_darkness_overlay();
+    void destroy_darkness_overlay();
+    void render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds);
+    bool has_dark_mask_overlay_sources();
+    bool ensure_sky_texture();
+    void destroy_sky_texture();
+    void render_sky_layer(const camera& cam);
 
 
     SDL_Renderer*  renderer_;
@@ -446,6 +449,11 @@ private:
     std::uint64_t darkness_overlay_skipped_frames_  = 0;
     std::uint64_t darkness_overlay_rendered_frames_ = 0;
     bool          darkness_overlay_skip_logged_     = false;
+    std::filesystem::path sky_texture_path_;
+    SDL_Texture*          sky_texture_       = nullptr;
+    int                   sky_texture_width_ = 0;
+    int                   sky_texture_height_ = 0;
+    bool                  sky_texture_failed_ = false;
 };
 
 

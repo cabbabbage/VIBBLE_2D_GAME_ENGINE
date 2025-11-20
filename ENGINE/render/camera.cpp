@@ -7,6 +7,7 @@
 #include "utils/transform_smoothing_settings.hpp"
 #include "utils/log.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <algorithm>
 #include <vector>
@@ -21,7 +22,7 @@ namespace {
     constexpr double PI_D       = 3.14159265358979323846;
     constexpr double HALF_FOV_Y = PI_D / 4.0; // 45 deg half FOV (90 total)
     constexpr double RAD_TO_DEG = 180.0 / PI_D;
-    constexpr double kFocusCenteringFactor = 0.65; // 0 = free drift, 1 = force exact center
+    constexpr double kFocusBandNdc   = 1.0 / 3.0;  // focus stays within middle third vertically
     constexpr float  kDefaultPitchDegrees   = -30.0f;
 
     float sanitize_pitch_degrees(float raw_value, bool* clamped = nullptr) {
@@ -130,12 +131,23 @@ namespace {
         return Area(name, corners, resolution);
     }
 
+    double clamp_zoom_scale(double value) {
+        return std::clamp(
+            value,
+            0.0001,
+            static_cast<double>(camera::kMaxZoomAnchors));
+    }
+
     double interpolate_height_from_zoom(double zoom_value, const camera::RealismSettings& settings) {
-        const double low_zoom  = std::max(0.0001, static_cast<double>(settings.zoom_low));
+        const double low_zoom  = std::max(static_cast<double>(camera::kMinZoomAnchors),
+                                          static_cast<double>(settings.zoom_low));
         const double high_zoom = std::max(low_zoom + 1e-4, static_cast<double>(settings.zoom_high));
 
-        const double low_height  = std::max(1.0, static_cast<double>(settings.height_low_px));
-        const double high_height = std::max(1.0, static_cast<double>(settings.height_high_px));
+        double low_height  = std::isfinite(settings.height_low_px) ? static_cast<double>(settings.height_low_px) : 0.0;
+        double high_height = std::isfinite(settings.height_high_px) ? static_cast<double>(settings.height_high_px) : low_height;
+        if (high_height < low_height) {
+            std::swap(high_height, low_height);
+        }
 
         double t = (zoom_value - low_zoom) / std::max(1e-4, high_zoom - low_zoom);
         t = std::clamp(t, 0.0, 1.0);
@@ -171,21 +183,74 @@ camera::CameraGeometry camera::compute_geometry() const {
     g.focus_depth = 0.0; // measured in world units along +Y from anchor
 
     const double focus_to_anchor = std::max(0.0, g.anchor_world_y - static_cast<double>(smoothed_center_.y));
-    g.pitch_radians = compute_pitch_to_center_focus(g.camera_height, focus_to_anchor);
-    g.pitch_degrees = static_cast<float>(g.pitch_radians * RAD_TO_DEG);
+    const double min_pitch = camera::kMinPitchDegrees * (PI_D / 180.0);
+    const double max_pitch = camera::kMaxPitchDegrees * (PI_D / 180.0);
 
-    // Compute NDC offset needed to keep the focus point (smoothed_center_) at screen center.
-    const double dy_focus = static_cast<double>(smoothed_center_.y) - g.anchor_world_y;
-    const double cos_p = std::cos(g.pitch_radians);
-    const double sin_p = std::sin(g.pitch_radians);
-    const double tan_fov = std::tan(HALF_FOV_Y);
-    const double y_cam_focus = dy_focus * cos_p + g.camera_height * sin_p;
-    const double z_cam_focus = dy_focus * sin_p - g.camera_height * cos_p;
-    double z_forward = -z_cam_focus;
-    if (z_forward < 1e-3) {
-        z_forward = 1e-3;
+    const auto focus_ndc_for_pitch = [&](double pitch_rad) -> double {
+        const double dy_focus  = static_cast<double>(smoothed_center_.y) - g.anchor_world_y;
+        const double cos_p     = std::cos(pitch_rad);
+        const double sin_p     = std::sin(pitch_rad);
+        const double tan_fov   = std::tan(HALF_FOV_Y);
+        const double y_cam     = dy_focus * cos_p + g.camera_height * sin_p;
+        const double z_cam     = dy_focus * sin_p - g.camera_height * cos_p;
+        double forward         = -z_cam;
+        if (forward < 1e-3) {
+            forward = 1e-3;
+        }
+        return (y_cam / forward) / tan_fov;
+    };
+
+    const auto score_ndc = [&](double ndc) -> double {
+        const double outside = std::max(0.0, std::abs(ndc) - kFocusBandNdc);
+        // Strongly penalize leaving the center band, then minimize remaining offset.
+        return outside * outside * 8.0 + std::abs(ndc);
+    };
+
+    double best_pitch   = std::clamp(compute_pitch_to_center_focus(g.camera_height, focus_to_anchor),
+                                     min_pitch, max_pitch);
+    double best_ndc     = focus_ndc_for_pitch(best_pitch);
+    double best_score   = score_ndc(best_ndc);
+    bool   best_in_band = std::abs(best_ndc) <= kFocusBandNdc;
+
+    const auto consider_candidate = [&](double pitch, double ndc) {
+        if (!std::isfinite(ndc)) {
+            return;
+        }
+        const bool in_band = std::abs(ndc) <= kFocusBandNdc;
+        if (in_band) {
+            if (!best_in_band || std::abs(ndc) < std::abs(best_ndc)) {
+                best_in_band = true;
+                best_ndc     = ndc;
+                best_pitch   = pitch;
+                best_score   = score_ndc(ndc);
+            }
+            return;
+        }
+        if (best_in_band) {
+            return;
+        }
+        const double score = score_ndc(ndc);
+        if (score < best_score) {
+            best_score = score;
+            best_pitch = pitch;
+            best_ndc   = ndc;
+        }
+    };
+
+    consider_candidate(best_pitch, best_ndc);
+
+    // Sweep the allowed pitch range to keep the focus inside the center third without y-translation.
+    constexpr int kPitchSamples = 120;
+    for (int i = 0; i <= kPitchSamples; ++i) {
+        const double t     = static_cast<double>(i) / static_cast<double>(kPitchSamples);
+        const double pitch = min_pitch + (max_pitch - min_pitch) * t;
+        consider_candidate(pitch, focus_ndc_for_pitch(pitch));
     }
-    g.focus_ndc_offset = ((y_cam_focus / z_forward) / tan_fov) * kFocusCenteringFactor;
+
+    g.pitch_radians   = best_pitch;
+    g.pitch_degrees   = static_cast<float>(g.pitch_radians * RAD_TO_DEG);
+    // Keep the grid from being translated vertically; rely on pitch selection to hold focus in-band.
+    g.focus_ndc_offset = 0.0;
 
     g.valid = true;
     return g;
@@ -343,14 +408,23 @@ camera::camera(int screen_width, int screen_height, const Area& starting_zoom)
 
 void camera::set_realism_settings(const RealismSettings& settings) {
     settings_ = settings;
-    settings_.zoom_low = std::max(0.0001f, settings_.zoom_low);
-    settings_.zoom_high = std::max(settings_.zoom_low + 0.0001f, settings_.zoom_high);
+    settings_.zoom_low = std::clamp(settings_.zoom_low,
+                                    camera::kMinZoomAnchors,
+                                    camera::kMaxZoomAnchors);
+    const float min_high = std::min(camera::kMaxZoomAnchors, settings_.zoom_low + 0.0001f);
+    settings_.zoom_high = std::clamp(settings_.zoom_high, min_high, camera::kMaxZoomAnchors);
+    if (!std::isfinite(settings_.height_low_px)) {
+        settings_.height_low_px = 320.0f;
+    }
+    if (!std::isfinite(settings_.height_high_px)) {
+        settings_.height_high_px = settings_.height_low_px;
+    }
     if (settings_.height_high_px < settings_.height_low_px) {
         std::swap(settings_.height_high_px, settings_.height_low_px);
     }
-    settings_.height_low_px  = std::max(1.0f, settings_.height_low_px);
-    settings_.height_high_px = std::max(settings_.height_low_px, settings_.height_high_px);
-    settings_.grid_depth_offset_px = std::max(1.0f, settings_.grid_depth_offset_px);
+    if (!std::isfinite(settings_.grid_depth_offset_px)) {
+        settings_.grid_depth_offset_px = 0.0f;
+    }
     settings_.grid_pitch_degrees = sanitize_pitch_degrees(settings_.grid_pitch_degrees);
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
     if (settings_.parallax_smoothing.method == TransformSmoothingMethod::Lerp &&
@@ -399,7 +473,8 @@ void camera::set_screen_center(SDL_Point p) {
 }
 
 void camera::set_scale(float s) {
-    scale_ = (s > 0.0f) ? s : 0.0001f;
+    const double clamped = clamp_zoom_scale(static_cast<double>(s));
+    scale_ = static_cast<float>(clamped);
     zooming_     = false;
     steps_total_ = 0;
     steps_done_  = 0;
@@ -415,7 +490,7 @@ float camera::get_scale() const {
 }
 
 void camera::zoom_to_scale(double target_scale, int duration_steps) {
-    double clamped = (target_scale > 0.0) ? target_scale : 0.0001;
+    double clamped = clamp_zoom_scale(target_scale);
     if (duration_steps <= 0) {
         set_scale(static_cast<float>(clamped));
         return;
@@ -647,7 +722,7 @@ void camera::pan_and_zoom_to_point(SDL_Point world_pos, double zoom_scale_factor
     focus_point_    = world_pos;
 
     const double factor    = (zoom_scale_factor > 0.0) ? zoom_scale_factor : 1.0;
-    const double new_scale = std::max(0.0001, static_cast<double>(scale_) * factor);
+    const double new_scale = clamp_zoom_scale(static_cast<double>(scale_) * factor);
 
     if (duration_steps <= 0) {
         manual_zoom_override_ = true;
@@ -684,7 +759,7 @@ void camera::pan_and_zoom_to_asset(const Asset* a, double zoom_scale_factor, int
 
 void camera::animate_zoom_multiply(double factor, int duration_steps) {
     if (factor <= 0.0) factor = 1.0;
-    const double new_scale = std::max(0.0001, static_cast<double>(scale_) * factor);
+    const double new_scale = clamp_zoom_scale(static_cast<double>(scale_) * factor);
 
     if (duration_steps <= 0) {
         manual_zoom_override_ = true;
@@ -717,8 +792,8 @@ void camera::animate_zoom_towards_point(double factor, SDL_Point screen_point, i
         factor = 1.0;
     }
 
-    const double current_scale = std::max(0.0001, static_cast<double>(scale_));
-    const double new_scale     = std::max(0.0001, current_scale * factor);
+    const double current_scale = clamp_zoom_scale(static_cast<double>(scale_));
+    const double new_scale     = clamp_zoom_scale(current_scale * factor);
 
     int left = 0, top = 0, right = 0, bottom = 0;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
@@ -809,6 +884,12 @@ camera::RenderEffects camera::compute_render_effects(
     RenderEffects result;
     SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
     result.screen_position  = map_to_screen_f(world_f);
+    if (realism_enabled_) {
+        result.screen_position.y = warp_floor_screen_y(
+            world_f.y,
+            result.screen_position.y
+        );
+    }
     result.vertical_scale   = 1.0f;
     result.distance_scale   = 1.0f;
 
@@ -1088,6 +1169,10 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         settings_.height_high_px = 960.0f;
     }
 
+    if (!std::isfinite(settings_.grid_depth_offset_px)) {
+        settings_.grid_depth_offset_px = 0.0f;
+    }
+
     if (!std::isfinite(settings_.min_visible_screen_ratio) ||
         settings_.min_visible_screen_ratio < 0.0f) {
         settings_.min_visible_screen_ratio = 0.015f;
@@ -1109,13 +1194,14 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
 
-    settings_.zoom_low = std::max(0.0001f, settings_.zoom_low);
-    settings_.zoom_high = std::max(settings_.zoom_low + 0.0001f, settings_.zoom_high);
+    settings_.zoom_low = std::clamp(settings_.zoom_low,
+                                    camera::kMinZoomAnchors,
+                                    camera::kMaxZoomAnchors);
+    const float min_high = std::min(camera::kMaxZoomAnchors, settings_.zoom_low + 0.0001f);
+    settings_.zoom_high = std::clamp(settings_.zoom_high, min_high, camera::kMaxZoomAnchors);
     if (settings_.height_high_px < settings_.height_low_px) {
         std::swap(settings_.height_high_px, settings_.height_low_px);
     }
-    settings_.height_low_px  = std::max(1.0f, settings_.height_low_px);
-    settings_.height_high_px = std::max(settings_.height_low_px, settings_.height_high_px);
 
     auto align_quality = [](int percent) {
         constexpr int kOptions[] = {100, 75, 50, 25, 10};

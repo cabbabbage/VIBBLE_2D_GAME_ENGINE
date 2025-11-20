@@ -35,7 +35,8 @@ namespace {
 // Default dt when caller passes bad dt.
 constexpr float  kDefaultParallaxDt = 1.0f / 60.0f;
 constexpr double kParallaxEpsilon   = 1e-6;
-constexpr double kParallaxMax       = 4000.0;
+constexpr double kHalfFovY          = 3.14159265358979323846 / 4.0; // 45 deg vertical half-FOV
+constexpr double kParallaxMaxScreenRatio = 1.0 / 3.0; // player stays within ~1/3 screen, keep parallax subtle
 
 TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params) {
     TransformSmoothingParams out = params;
@@ -512,6 +513,33 @@ void Grid::update_parallax(const camera& cam, float dt) {
         return;
     }
 
+    const float  scale_value = cam.get_scale();
+    const double inv_scale   = (std::isfinite(scale_value) && scale_value > 1e-6f)
+        ? 1.0 / static_cast<double>(scale_value)
+        : 0.0;
+
+    const Area& view_area     = cam.get_camera_area();
+    const double view_w_world = static_cast<double>(width_from_area(view_area));
+    const double view_h_world = static_cast<double>(height_from_area(view_area));
+    if (inv_scale <= 0.0 || view_w_world <= kParallaxEpsilon || view_h_world <= kParallaxEpsilon) {
+        clear_parallax_state();
+        return;
+    }
+
+    const double screen_w_px = std::max(kParallaxEpsilon, view_w_world * inv_scale);
+    const double screen_h_px = std::max(kParallaxEpsilon, view_h_world * inv_scale);
+    if (screen_w_px <= kParallaxEpsilon || screen_h_px <= kParallaxEpsilon) {
+        clear_parallax_state();
+        return;
+    }
+
+    // Derive a simple pinhole projection so parallax is measured in real screen pixels.
+    const double aspect_ratio    = std::max(kParallaxEpsilon, screen_w_px / screen_h_px);
+    const double tan_fov_y       = std::tan(kHalfFovY);
+    const double tan_fov_x       = std::max(kParallaxEpsilon, tan_fov_y * aspect_ratio);
+    const double focal_px        = 0.5 * screen_w_px / tan_fov_x;
+    const double max_parallax_px = screen_w_px * kParallaxMaxScreenRatio; // player stays near center
+
     int world_min_x = origin_.x + active_min_i * chunk_step;
     int world_max_x = origin_.x + (active_max_i + 1) * chunk_step;
     int world_min_y = origin_.y + active_min_j * chunk_step;
@@ -540,14 +568,8 @@ void Grid::update_parallax(const camera& cam, float dt) {
     const double step_d     = static_cast<double>(parallax_step);
     const double origin_x_d = static_cast<double>(origin_.x);
     const double origin_y_d = static_cast<double>(origin_.y);
-
-    // Base parallax gain. Pitch makes it stronger as tilt increases.
-    constexpr double kParallaxAmountBase = 0.5;
-    const double pitch_gain              = 1.0 + 0.5 * std::sin(std::abs(pitch_rad));
-    const double parallax_amount         = kParallaxAmountBase * pitch_gain;
-    const double cos_p                   = std::cos(pitch_rad);
-    const double sin_p                   = std::sin(pitch_rad);
-    const double height_projection       = std::max(kParallaxEpsilon, camera_height * cos_p);
+    const double cos_p       = std::cos(pitch_rad);
+    const double sin_p       = std::sin(pitch_rad);
 
     for (int cell_j = cell_j_min; cell_j <= cell_j_max; ++cell_j) {
         const double cell_cy = origin_y_d + (static_cast<double>(cell_j) + 0.5) * step_d;
@@ -559,23 +581,29 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
             const double dx_world = cell_cx - base_x;
 
-            // Measure ground distance relative to the camera's anchor on the floor so
-            // rows closer to the camera gain stronger parallax than rows near the
-            // horizon.
             const double ground_distance = std::max(0.0, anchor_y - cell_cy);
 
-            // Project the ground point into camera space using the real camera height
-            // and pitch so the parallax gain matches the floor perspective.
-            const double y_cam = ground_distance * cos_p + camera_height * sin_p;
-            const double z_cam = ground_distance * sin_p - camera_height * cos_p;
-            const double forward_depth = std::max(kParallaxEpsilon, -z_cam);
+            const double forward_depth = std::max(
+                kParallaxEpsilon,
+                (camera_height * cos_p) - (ground_distance * sin_p));
 
-            // Depth based attenuation driven by real camera height and pitch. Parallax
-            // must shrink as world Y moves away from the anchor toward the horizon.
-            const double depth_gain  = height_projection / (forward_depth + depth_ref_effect);
+            const double depth_with_offset = std::max(
+                kParallaxEpsilon,
+                forward_depth + depth_ref_effect);
 
-            double parallax_px = dx_world * depth_gain * parallax_amount;
-            parallax_px = std::clamp(parallax_px, -kParallaxMax, kParallaxMax);
+            const double ortho_x_px = dx_world * inv_scale;
+
+            double parallax_px = 0.0;
+            if (focal_px > kParallaxEpsilon) {
+                const double projected_x_px = (dx_world / depth_with_offset) * focal_px;
+                parallax_px = (projected_x_px - ortho_x_px) * pitch_norm;
+            }
+
+            if (!std::isfinite(parallax_px)) {
+                parallax_px = 0.0;
+            }
+
+            parallax_px = std::clamp(parallax_px, -max_parallax_px, max_parallax_px);
             const float target = static_cast<float>(parallax_px);
 
             auto& entry = parallax_entries_[parallax_key(cell_i, cell_j)];

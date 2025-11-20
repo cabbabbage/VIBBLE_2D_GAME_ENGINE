@@ -22,15 +22,25 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
         const double eff = zoom_in ? mag : (1.0 / mag);
         const int dur = 10;
 
-        // If we are currently panning, lock focus to the pan center so
-        // wheel-zoom happens around that focus (stable “pan with zoom”).
-        if (panning_) {
-            cam.set_manual_zoom_override(true);
-            cam.set_focus_override(cam.get_screen_center());
-            cam.animate_zoom_multiply(eff, dur);
-        } else {
-            // Not panning: zoom toward the cursor.
-            cam.animate_zoom_towards_point(eff, mouse, dur);
+        const double base_scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
+        const double unclamped_target = base_scale * eff;
+        const double target_scale = std::clamp(
+            unclamped_target,
+            0.0001,
+            static_cast<double>(camera::kMaxZoomAnchors));
+        const double adjusted_eff = target_scale / base_scale;
+
+        if (std::abs(adjusted_eff - 1.0) > 1e-6) {
+            // If we are currently panning, lock focus to the pan center so
+            // wheel-zoom happens around that focus (stable pan with zoom).
+            if (panning_) {
+                cam.set_manual_zoom_override(true);
+                cam.set_focus_override(cam.get_screen_center());
+                cam.animate_zoom_multiply(adjusted_eff, dur);
+            } else {
+                // Not panning: zoom toward the cursor.
+                cam.animate_zoom_towards_point(adjusted_eff, mouse, dur);
+            }
         }
     }
 

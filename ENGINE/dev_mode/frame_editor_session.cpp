@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <iostream>
 #include <filesystem>
+#include <limits>
 
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
@@ -25,6 +26,7 @@
 #include "dev_mode/pan_and_zoom.hpp"
 #include "dev_mode/rebuildAnimation.hpp"
 #include "render/camera.hpp"
+#include "render/render.hpp"
 #include "utils/input.hpp"
 
 #include "asset_sections/animation_editor_window/AnimationDocument.hpp"
@@ -282,11 +284,15 @@ SDL_FRect child_preview_rect(Assets* assets,
                              SDL_FPoint child_world,
                              int fw,
                              int fh,
-                             const ChildPreviewContext& ctx) {
+                             const ChildPreviewContext& ctx,
+                             float scale_override = std::numeric_limits<float>::quiet_NaN()) {
     if (!assets || !parent || fw <= 0 || fh <= 0) {
         return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
     }
-    float base_scale = parent->smoothed_scale();
+    float base_scale = scale_override;
+    if (!std::isfinite(base_scale) || base_scale <= 0.0f) {
+        base_scale = parent->smoothed_scale();
+    }
     if (!std::isfinite(base_scale) || base_scale <= 0.0f) {
         base_scale = 1.0f;
     }
@@ -1693,6 +1699,12 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             render_label(renderer, child_assets_[i], marker.x + marker.w + 4, marker.y - 4);
         }
         // Overlay actual child textures at edited positions
+        const float doc_scale_factor = document_scale_factor();
+        float parent_scale = target_->smoothed_scale();
+        if (!std::isfinite(parent_scale) || parent_scale <= 0.0f) {
+            parent_scale = 1.0f;
+        }
+        const float scale_override_base = parent_scale * doc_scale_factor;
         const std::size_t preview_count = std::min({ child_assets_.size(), frame.children.size(), child_preview_slots_.size() });
         for (std::size_t i = 0; i < preview_count; ++i) {
             const auto& child = frame.children[i];
@@ -1712,7 +1724,30 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
                 static_cast<float>(target_->pos.y) + static_cast<float>(child.dy)
             };
 
-            SDL_FRect dst = child_preview_rect(assets_, target_, child_world, tw, th, preview_ctx);
+            SDL_FRect base_rect = child_preview_rect(assets_, target_, child_world, tw, th, preview_ctx, scale_override_base);
+            if (base_rect.w <= 0.0f || base_rect.h <= 0.0f) continue;
+
+            const int target_w = std::max(1, static_cast<int>(std::lround(base_rect.w)));
+            const int target_h = std::max(1, static_cast<int>(std::lround(base_rect.h)));
+            const auto& scale_steps = (slot.info && !slot.info->scale_variants.empty())
+                ? slot.info->scale_variants
+                : render_pipeline::ScalingLogic::DefaultScaleSteps();
+            const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(tw, th, target_w, target_h);
+            const auto selection = render_pipeline::ScalingLogic::Choose(desired_scale, scale_steps);
+
+            float variant_texture_scale = selection.stored_scale;
+            if (!std::isfinite(variant_texture_scale) || variant_texture_scale <= 0.0f) {
+                variant_texture_scale = 1.0f;
+            }
+            float remainder_scale = selection.remainder_scale;
+            if (!std::isfinite(remainder_scale) || remainder_scale <= 0.0f) {
+                remainder_scale = desired_scale;
+            }
+            const int variant_tw = std::max(1, static_cast<int>(std::lround(static_cast<double>(tw) * variant_texture_scale)));
+            const int variant_th = std::max(1, static_cast<int>(std::lround(static_cast<double>(th) * variant_texture_scale)));
+
+            const float scale_override_final = scale_override_base * remainder_scale;
+            SDL_FRect dst = child_preview_rect(assets_, target_, child_world, variant_tw, variant_th, preview_ctx, scale_override_final);
             if (dst.w <= 0.0f || dst.h <= 0.0f) continue;
             SDL_FPoint pivot{ dst.w * 0.5f, dst.h }; // bottom-middle pivot
             // Apply rotation around bottom-middle if any
@@ -3003,6 +3038,17 @@ float FrameEditorSession::asset_local_scale() const {
         }
     }
     return scale;
+}
+
+float FrameEditorSession::document_scale_factor() const {
+    if (!document_) {
+        return 1.0f;
+    }
+    double pct = document_->scale_percentage();
+    if (!std::isfinite(pct) || pct <= 0.0) {
+        return 1.0f;
+    }
+    return static_cast<float>(pct / 100.0);
 }
 
 SDL_Point FrameEditorSession::asset_anchor_world() const {

@@ -25,6 +25,8 @@ class camera {
 public:
     static constexpr float kMinPitchDegrees = -60.0f;
     static constexpr float kMaxPitchDegrees = 0.0f;
+    static constexpr float kMinZoomAnchors = 0.0f;
+    static constexpr float kMaxZoomAnchors = 20.0f;
 
     // Define BlurFalloffMethod here to avoid an extra include and ensure
     // BlurFalloffMethod::Linear is a valid name at compile time.
@@ -167,6 +169,7 @@ public:
     // New floor depth helpers for the warped grid
     FloorDepthParams compute_floor_depth_params() const;
     float warp_floor_screen_y(float world_y, float linear_screen_y) const;
+    double horizon_screen_y_for_scale() const;
 
     // Runtime camera geometry helpers (derived from zoom + offsets).
     float  current_pitch_degrees() const { return runtime_pitch_deg_; }
@@ -191,7 +194,6 @@ public:
 private:
     double view_height_world() const;
     double anchor_world_y() const;
-    double horizon_screen_y_for_scale() const;
 
     struct TransformSmoother1D {
         TransformSmoothingParams params{};
